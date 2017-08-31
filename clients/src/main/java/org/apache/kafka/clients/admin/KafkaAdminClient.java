@@ -300,7 +300,7 @@ public class KafkaAdminClient extends AdminClient {
             String metricGrpPrefix = "admin-client";
             channelBuilder = ClientUtils.createChannelBuilder(config);
             selector = new Selector(config.getLong(AdminClientConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
-                    metrics, time, metricGrpPrefix, channelBuilder);
+                    metrics, time, metricGrpPrefix, channelBuilder, logContext);
             networkClient = new NetworkClient(
                 selector,
                 metadata,

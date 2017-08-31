@@ -452,7 +452,8 @@ object AdminClient {
       metrics,
       time,
       "admin",
-      channelBuilder)
+      channelBuilder,
+      new LogContext())
 
     val networkClient = new NetworkClient(
       selector,

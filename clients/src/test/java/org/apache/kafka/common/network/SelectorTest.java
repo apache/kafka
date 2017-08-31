@@ -20,6 +20,7 @@ import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.memory.SimpleMemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.SecurityProtocol;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -77,7 +78,7 @@ public class SelectorTest {
         this.channelBuilder = new PlaintextChannelBuilder();
         this.channelBuilder.configure(configs);
         this.metrics = new Metrics();
-        this.selector = new Selector(5000, this.metrics, time, "MetricGroup", channelBuilder);
+        this.selector = new Selector(5000, this.metrics, time, "MetricGroup", channelBuilder, new LogContext());
     }
 
     @After
@@ -346,7 +347,7 @@ public class SelectorTest {
         selector.close();
         MemoryPool pool = new SimpleMemoryPool(900, 900, false, null);
         selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup",
-            new HashMap<String, String>(), true, false, channelBuilder, pool);
+            new HashMap<String, String>(), true, false, channelBuilder, pool, new LogContext());
 
         try (ServerSocketChannel ss = ServerSocketChannel.open()) {
             ss.bind(new InetSocketAddress(0));

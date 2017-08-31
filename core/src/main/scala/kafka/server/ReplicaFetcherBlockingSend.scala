@@ -66,7 +66,8 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
       "replica-fetcher",
       Map("broker-id" -> sourceBroker.id.toString, "fetcher-id" -> fetcherId.toString).asJava,
       false,
-      channelBuilder
+      channelBuilder,
+      logContext
     )
     new NetworkClient(
       selector,

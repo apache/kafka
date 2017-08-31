@@ -126,7 +126,8 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
         "controller-channel",
         Map("broker-id" -> broker.id.toString).asJava,
         false,
-        channelBuilder
+        channelBuilder,
+        logContext
       )
       new NetworkClient(
         selector,

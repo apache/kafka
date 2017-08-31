@@ -382,7 +382,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             Sensor throttleTimeSensor = Sender.throttleTimeSensor(metrics);
             NetworkClient client = new NetworkClient(
                     new Selector(config.getLong(ProducerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
-                            this.metrics, time, "producer", channelBuilder),
+                            this.metrics, time, "producer", channelBuilder, logContext),
                     this.metadata,
                     clientId,
                     maxInflightRequests,

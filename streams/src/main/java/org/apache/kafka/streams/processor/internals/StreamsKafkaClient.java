@@ -129,18 +129,21 @@ public class StreamsKafkaClient {
         final Metrics metrics = new Metrics(metricConfig, reporters, time);
 
         final ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(streamsConfig);
+        final String clientId = streamsConfig.getString(StreamsConfig.CLIENT_ID_CONFIG);
+        final LogContext logContext = createLogContext(clientId);
 
         final Selector selector = new Selector(
                 streamsConfig.getLong(StreamsConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
                 metrics,
                 time,
                 "kafka-client",
-                channelBuilder);
+                channelBuilder,
+                logContext);
 
         final KafkaClient kafkaClient = new NetworkClient(
                 selector,
                 metadata,
-                streamsConfig.getString(StreamsConfig.CLIENT_ID_CONFIG),
+                clientId,
                 MAX_INFLIGHT_REQUESTS, // a fixed large enough value will suffice
                 streamsConfig.getLong(StreamsConfig.RECONNECT_BACKOFF_MS_CONFIG),
                 streamsConfig.getLong(StreamsConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG),
@@ -150,8 +153,12 @@ public class StreamsKafkaClient {
                 time,
                 true,
                 new ApiVersions(),
-                new LogContext());
+                logContext);
         return new StreamsKafkaClient(streamsConfig, kafkaClient, reporters);
+    }
+
+    private static LogContext createLogContext(String clientId) {
+        return new LogContext("[StreamsKafkaClient clientId=" + clientId + "] ");
     }
 
     public static StreamsKafkaClient create(final StreamsConfig streamsConfig) {

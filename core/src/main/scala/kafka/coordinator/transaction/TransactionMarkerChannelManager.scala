@@ -61,7 +61,8 @@ object TransactionMarkerChannelManager {
       "txn-marker-channel",
       Map.empty[String, String].asJava,
       false,
-      channelBuilder
+      channelBuilder,
+      logContext
     )
     val networkClient = new NetworkClient(
       selector,
