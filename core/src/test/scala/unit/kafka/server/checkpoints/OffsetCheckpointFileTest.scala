@@ -16,6 +16,7 @@
   */
 package kafka.server.checkpoints
 
+import kafka.log.AbsoluteLogDir
 import kafka.server.LogDirFailureChannel
 import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.common.TopicPartition
@@ -94,7 +95,7 @@ class OffsetCheckpointFileTest extends JUnitSuite with Logging {
     val file = TestUtils.tempFile()
     val logDirFailureChannel = new LogDirFailureChannel(10)
     val checkpointFile = new CheckpointFile(file, OffsetCheckpointFile.CurrentVersion + 1,
-      OffsetCheckpointFile.Formatter, logDirFailureChannel, file.getParent)
+      OffsetCheckpointFile.Formatter, logDirFailureChannel, AbsoluteLogDir(file.getParent))
     checkpointFile.write(Seq(new TopicPartition("foo", 5) -> 10L))
     new OffsetCheckpointFile(checkpointFile.file, logDirFailureChannel).read()
   }

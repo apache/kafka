@@ -266,7 +266,7 @@ class LogCleaner(val config: CleanerConfig,
             case _: LogCleaningAbortedException => // task can be aborted, let it go.
             case e: IOException =>
               val msg = s"Failed to clean up log for ${cleanable.topicPartition} in dir ${cleanable.log.dir.getParent} due to IOException"
-              logDirFailureChannel.maybeAddOfflineLogDir(cleanable.log.dir.getParent, msg, e)
+              logDirFailureChannel.maybeAddOfflineLogDir(AbsoluteLogDir(cleanable.log.dir.getAbsoluteFile.getParent), msg, e)
           } finally {
             cleanerManager.doneCleaning(cleanable.topicPartition, cleanable.log.dir.getParentFile, endOffset)
           }

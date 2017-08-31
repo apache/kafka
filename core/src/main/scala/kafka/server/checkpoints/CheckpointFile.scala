@@ -20,6 +20,7 @@ import java.io._
 import java.nio.charset.StandardCharsets
 import java.nio.file.{FileAlreadyExistsException, Files, Paths}
 
+import kafka.log.AbsoluteLogDir
 import kafka.server.LogDirFailureChannel
 import kafka.utils.Logging
 import org.apache.kafka.common.errors.KafkaStorageException
@@ -37,7 +38,7 @@ class CheckpointFile[T](val file: File,
                         version: Int,
                         formatter: CheckpointFileFormatter[T],
                         logDirFailureChannel: LogDirFailureChannel,
-                        logDir: String) extends Logging {
+                        absoluteLogDir: AbsoluteLogDir) extends Logging {
   private val path = file.toPath.toAbsolutePath
   private val tempPath = Paths.get(path.toString + ".tmp")
   private val lock = new Object()
@@ -73,7 +74,7 @@ class CheckpointFile[T](val file: File,
       } catch {
         case e: IOException =>
           val msg = s"Error while writing to checkpoint file ${file.getAbsolutePath}"
-          logDirFailureChannel.maybeAddOfflineLogDir(logDir, msg, e)
+          logDirFailureChannel.maybeAddOfflineLogDir(absoluteLogDir, msg, e)
           throw new KafkaStorageException(msg, e)
       }
     }
@@ -121,7 +122,7 @@ class CheckpointFile[T](val file: File,
       } catch {
         case e: IOException =>
           val msg = s"Error while reading checkpoint file ${file.getAbsolutePath}"
-          logDirFailureChannel.maybeAddOfflineLogDir(logDir, msg, e)
+          logDirFailureChannel.maybeAddOfflineLogDir(absoluteLogDir, msg, e)
           throw new KafkaStorageException(msg, e)
       }
     }

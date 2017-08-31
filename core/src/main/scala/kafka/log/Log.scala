@@ -1600,7 +1600,7 @@ class Log(@volatile var dir: File,
       fun
     } catch {
       case e: IOException =>
-        logDirFailureChannel.maybeAddOfflineLogDir(dir.getParent, msg, e)
+        logDirFailureChannel.maybeAddOfflineLogDir(AbsoluteLogDir(dir.getAbsoluteFile.getParent), msg, e)
         throw new KafkaStorageException(msg, e)
     }
   }

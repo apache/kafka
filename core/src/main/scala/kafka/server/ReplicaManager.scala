@@ -24,13 +24,13 @@ import com.yammer.metrics.core.Gauge
 import kafka.api._
 import kafka.cluster.{Partition, Replica}
 import kafka.controller.KafkaController
-import kafka.log.{Log, LogAppendInfo, LogManager}
+import kafka.log.{AbsoluteLogDir, Log, LogAppendInfo, LogManager}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{KafkaStorageException, ControllerMovedException, CorruptRecordException, InvalidTimestampException, InvalidTopicException, NotEnoughReplicasException, NotLeaderForPartitionException, OffsetOutOfRangeException, PolicyViolationException, _}
+import org.apache.kafka.common.errors.{ControllerMovedException, CorruptRecordException, InvalidTimestampException, InvalidTopicException, KafkaStorageException, NotEnoughReplicasException, NotLeaderForPartitionException, OffsetOutOfRangeException, PolicyViolationException, _}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
@@ -1230,10 +1230,11 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  def handleLogDirFailure(dir: String) {
-    if (!logManager.isLogDirOnline(dir))
+  def handleLogDirFailure(absoluteLogDir: AbsoluteLogDir) {
+    if (!logManager.isLogDirOnline(absoluteLogDir))
       return
 
+    val dir = absoluteLogDir.path
     info(s"Stopping serving replicas in dir $dir")
     replicaStateChangeLock synchronized {
       val newOfflinePartitions = allPartitions.values.filter { partition =>
@@ -1264,7 +1265,7 @@ class ReplicaManager(val config: KafkaConfig,
       info("Broker %d stopped fetcher for partitions %s because they are in the failed log dir %s"
         .format(localBrokerId, newOfflinePartitions.mkString(", "), dir))
     }
-    logManager.handleLogDirFailure(dir)
+    logManager.handleLogDirFailure(absoluteLogDir)
     LogDirUtils.propagateLogDirEvent(zkUtils, localBrokerId)
     info(s"Stopped serving replicas in dir $dir")
   }

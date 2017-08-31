@@ -153,7 +153,8 @@ class LogManager(logDirs: Array[File],
     liveLogDirs
   }
 
-  def handleLogDirFailure(dir: String) {
+  def handleLogDirFailure(absoluteLogDir: AbsoluteLogDir) {
+    val dir = absoluteLogDir.path
     info(s"Stopping serving logs in dir $dir")
     logCreationOrDeletionLock synchronized {
       _liveLogDirs.remove(new File(dir))
@@ -194,7 +195,7 @@ class LogManager(logDirs: Array[File],
         Some(lock)
       } catch {
         case e: IOException =>
-          logDirFailureChannel.maybeAddOfflineLogDir(dir.getAbsolutePath, s"Disk error while locking directory $dir", e)
+          logDirFailureChannel.maybeAddOfflineLogDir(AbsoluteLogDir(dir.getAbsolutePath), s"Disk error while locking directory $dir", e)
           None
       }
     }
@@ -309,7 +310,7 @@ class LogManager(logDirs: Array[File],
         }
       }
       offlineDirs.foreach { case (dir, e) =>
-        logDirFailureChannel.maybeAddOfflineLogDir(dir, s"Error while deleting the clean shutdown file in dir $dir", e)
+        logDirFailureChannel.maybeAddOfflineLogDir(AbsoluteLogDir(dir), s"Error while deleting the clean shutdown file in dir $dir", e)
       }
     } catch {
       case e: ExecutionException => {
@@ -502,7 +503,7 @@ class LogManager(logDirs: Array[File],
         this.recoveryPointCheckpoints.get(dir).foreach(_.write(recoveryPoints.get.mapValues(_.recoveryPoint)))
       } catch {
         case e: IOException =>
-          logDirFailureChannel.maybeAddOfflineLogDir(dir.getAbsolutePath, s"Disk error while writing to recovery point file in directory $dir", e)
+          logDirFailureChannel.maybeAddOfflineLogDir(AbsoluteLogDir(dir.getAbsolutePath), s"Disk error while writing to recovery point file in directory $dir", e)
       }
     }
   }
@@ -519,7 +520,7 @@ class LogManager(logDirs: Array[File],
         ))
       } catch {
         case e: IOException =>
-          logDirFailureChannel.maybeAddOfflineLogDir(dir.getAbsolutePath, s"Disk error while writing to logStartOffset file in directory $dir", e)
+          logDirFailureChannel.maybeAddOfflineLogDir(AbsoluteLogDir(dir.getAbsolutePath), s"Disk error while writing to logStartOffset file in directory $dir", e)
       }
     }
   }
@@ -572,7 +573,7 @@ class LogManager(logDirs: Array[File],
         } catch {
           case e: IOException =>
             val msg = s"Error while creating log for $topicPartition in dir ${dataDir.getAbsolutePath}"
-            logDirFailureChannel.maybeAddOfflineLogDir(dataDir.getAbsolutePath, msg, e)
+            logDirFailureChannel.maybeAddOfflineLogDir(AbsoluteLogDir(dataDir.getAbsolutePath), msg, e)
             throw new KafkaStorageException(msg, e)
         }
       }
@@ -637,7 +638,7 @@ class LogManager(logDirs: Array[File],
       } catch {
         case e: IOException =>
           val msg = s"Error while deleting $topicPartition in dir ${removedLog.dir.getParent}."
-          logDirFailureChannel.maybeAddOfflineLogDir(removedLog.dir.getParent, msg, e)
+          logDirFailureChannel.maybeAddOfflineLogDir(AbsoluteLogDir(removedLog.dir.getAbsoluteFile.getParent), msg, e)
           throw new KafkaStorageException(msg, e)
       }
     } else if (offlineLogDirs.nonEmpty) {
@@ -701,11 +702,11 @@ class LogManager(logDirs: Array[File],
     }
   }
 
-  def isLogDirOnline(logDir: String): Boolean = {
-    if (!logDirs.exists(_.getAbsolutePath == logDir))
-      throw new RuntimeException(s"Log dir $logDir is not found in the config.")
+  def isLogDirOnline(absoluteLogDir: AbsoluteLogDir): Boolean = {
+    if (!logDirs.exists(_.getAbsolutePath == absoluteLogDir.path))
+      throw new RuntimeException(s"Log dir $absoluteLogDir is not found in the config.")
 
-    _liveLogDirs.contains(new File(logDir))
+    _liveLogDirs.contains(new File(absoluteLogDir.path))
   }
 
   /**
@@ -758,8 +759,8 @@ object LogManager {
       backOffMs = config.logCleanerBackoffMs,
       enableCleaner = config.logCleanerEnable)
 
-    new LogManager(logDirs = config.logDirs.map(new File(_)).toArray,
-      initialOfflineDirs = initialOfflineDirs.map(new File(_)).toArray,
+    new LogManager(logDirs = config.logDirs.map(new File(_).getAbsoluteFile).toArray,
+      initialOfflineDirs = initialOfflineDirs.map(new File(_).getAbsoluteFile).toArray,
       topicConfigs = topicConfigs,
       defaultConfig = defaultLogConfig,
       cleanerConfig = cleanerConfig,
@@ -776,3 +777,7 @@ object LogManager {
       time = time)
   }
 }
+
+// Wrap log directory path in LogDir whenever absolute log directory path is required
+case class AbsoluteLogDir(path: String)
+

@@ -21,6 +21,7 @@ package kafka.server
 import java.io.IOException
 import java.util.concurrent.{ArrayBlockingQueue, ConcurrentHashMap}
 
+import kafka.log.AbsoluteLogDir
 import kafka.utils.Logging
 
 /*
@@ -36,17 +37,17 @@ import kafka.utils.Logging
  */
 class LogDirFailureChannel(logDirNum: Int) extends Logging {
 
-  private val offlineLogDirs = new ConcurrentHashMap[String, String]
-  private val offlineLogDirQueue = new ArrayBlockingQueue[String](logDirNum)
+  private val offlineLogDirs = new ConcurrentHashMap[String, AbsoluteLogDir]
+  private val offlineLogDirQueue = new ArrayBlockingQueue[AbsoluteLogDir](logDirNum)
 
   /*
    * If the given logDir is not already offline, add it to the
    * set of offline log dirs and enqueue it to the logDirFailureEvent queue
    */
-  def maybeAddOfflineLogDir(logDir: String, msg: => String, e: IOException): Unit = {
+  def maybeAddOfflineLogDir(absoluteLogDir: AbsoluteLogDir, msg: => String, e: IOException): Unit = {
     error(msg, e)
-    if (offlineLogDirs.putIfAbsent(logDir, logDir) == null) {
-      offlineLogDirQueue.add(logDir)
+    if (offlineLogDirs.putIfAbsent(absoluteLogDir.path, absoluteLogDir) == null) {
+      offlineLogDirQueue.add(absoluteLogDir)
     }
   }
 
@@ -54,6 +55,6 @@ class LogDirFailureChannel(logDirNum: Int) extends Logging {
    * Get the next offline log dir from logDirFailureEvent queue.
    * The method will wait if necessary until a new offline log directory becomes available
    */
-  def takeNextOfflineLogDir(): String = offlineLogDirQueue.take()
+  def takeNextOfflineLogDir(): AbsoluteLogDir = offlineLogDirQueue.take()
 
 }
