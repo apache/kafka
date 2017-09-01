@@ -272,6 +272,23 @@ public class KafkaStreams {
         return true;
     }
 
+    private boolean setRunningFromCreated() {
+        synchronized (stateLock) {
+            if (state != State.CREATED) {
+                return false;
+            }
+            state = State.RUNNING;
+            stateLock.notifyAll();
+        }
+
+        // we need to call the user customized state listener outside the state lock to avoid potential deadlocks
+        if (stateListener != null) {
+            stateListener.onChange(State.RUNNING, State.CREATED);
+        }
+
+        return true;
+    }
+
     /**
      * Return the current {@link State} of this {@code KafkaStreams} instance.
      *
@@ -673,15 +690,9 @@ public class KafkaStreams {
     public synchronized void start() throws IllegalStateException, StreamsException {
         log.debug("{} Starting Streams client", logPrefix);
 
-        final State oldState = state();
-        final State runningState = State.RUNNING;
-        // this is a mandatory check and not covered by regular state transition checks (cf. KAFKA-5818)
-        if (!(oldState == State.CREATED)) {
-            throw new IllegalStateException(logPrefix + " Unexpected state transition from " + oldState + " to " + runningState);
-        }
         // first set state to RUNNING before kicking off the threads,
         // making sure the state will always transit to RUNNING before REBALANCING
-        if (setState(runningState)) {
+        if (setRunningFromCreated()) {
             checkBrokerVersionCompatibility();
 
             if (globalStreamThread != null) {
