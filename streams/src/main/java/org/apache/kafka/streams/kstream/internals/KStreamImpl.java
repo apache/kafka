@@ -658,6 +658,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public <VT, VR> KStream<K, VR> join(final KTable<K, VT> other, final ValueJoiner<? super V, ? super VT, ? extends VR> joiner, final Joined<K, V, VT> joined) {
+        Objects.requireNonNull(other, "other can't be null");
+        Objects.requireNonNull(joiner, "joiner can't be null");
+        Objects.requireNonNull(joined, "joined can't be null");
         if (repartitionRequired) {
             final KStreamImpl<K, V> thisStreamRepartitioned = repartitionForJoin(joined.keySerde(), joined.valueSerde());
             return thisStreamRepartitioned.doStreamTableJoin(other, joiner, false);
@@ -720,19 +723,29 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public <V1, R> KStream<K, R> leftJoin(final KTable<K, V1> other, final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
-        return leftJoin(other, joiner, null, null);
+        return leftJoin(other, joiner, Joined.<K, V, V1>with(null, null, null));
+    }
+
+    @Override
+    public <VT, VR> KStream<K, VR> leftJoin(final KTable<K, VT> other,
+                                            final ValueJoiner<? super V, ? super VT, ? extends VR> joiner,
+                                            final Joined<K, V, VT> joined) {
+        Objects.requireNonNull(other, "other can't be null");
+        Objects.requireNonNull(joiner, "joiner can't be null");
+        Objects.requireNonNull(joined, "joined can't be null");
+        if (repartitionRequired) {
+            final KStreamImpl<K, V> thisStreamRepartitioned = this.repartitionForJoin(joined.keySerde(), joined.valueSerde());
+            return thisStreamRepartitioned.doStreamTableJoin(other, joiner, true);
+        } else {
+            return doStreamTableJoin(other, joiner, true);
+        }
     }
 
     public <V1, R> KStream<K, R> leftJoin(final KTable<K, V1> other,
                                           final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
                                           final Serde<K> keySerde,
                                           final Serde<V> valueSerde) {
-        if (repartitionRequired) {
-            final KStreamImpl<K, V> thisStreamRepartitioned = this.repartitionForJoin(keySerde, valueSerde);
-            return thisStreamRepartitioned.doStreamTableJoin(other, joiner, true);
-        } else {
-            return doStreamTableJoin(other, joiner, true);
-        }
+        return leftJoin(other, joiner, Joined.<K, V, V1>with(keySerde, valueSerde, null));
     }
 
     @Override

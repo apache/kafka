@@ -375,4 +375,22 @@ public class KStreamImplTest {
                         null);
     }
 
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerOnLeftJoinWithTableWhenJoinedIsNull() {
+        testStream.leftJoin(builder.table(Serdes.String(), Serdes.String(), "blah"),
+                            MockValueJoiner.TOSTRING_JOINER,
+                            null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerOnJoinWithTableWhenJoinedIsNull() {
+        testStream.join(builder.table(Serdes.String(), Serdes.String(), "blah"),
+                            MockValueJoiner.TOSTRING_JOINER,
+                            null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerOnJoinWithStreamWhenJoinedIsNull() {
+        testStream.join(testStream, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(10), null);
+    }
 }
