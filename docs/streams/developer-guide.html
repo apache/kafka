@@ -26,7 +26,7 @@
                 <li><a href="#streams_processor_topology">1.2 Processor Topology</a>
                 <li><a href="#streams_processor_statestore">1.3 State Stores</a>
                 <li><a href="#restoration_progress">1.4 Monitoring the Restoration Progress of Fault-tolerant State Store</a>
-                <li><a href="#disable-chagelogs">1.5 Enable / Disable Fault Tolerance of State Stores (Store Changelogs)</a>
+                <li><a href="#disable-changelogs">1.5 Enable / Disable Fault Tolerance of State Stores (Store Changelogs)</a>
                 <li><a href="#implementing-custom-state-stores">1.6 Implementing Custom State Stores</a>
                 <li><a href="#connecting-processors-and-state-stores">1.7 Connecting Processors and State Stores</a>
                 <li><a href="#streams_processor_describe">1.5 Describe a Topology</a>
@@ -299,7 +299,7 @@ You set the <code>org.apache.kafka.streams.processor.StateRestoreListener</code>
 </p>
 </blockquote>
 
-<h4> <a id="disable-chagelogs" href="#disable-chagelogs">Enable / Disable Fault Tolerance of State Stores (Store Changelogs)</a></h4>
+<h4> <a id="disable-changelogs" href="#disable-changelogs">Enable / Disable Fault Tolerance of State Stores (Store Changelogs)</a></h4>
 
 <p>
   You can enable or disable fault tolerance for a state store by enabling or disabling, respectively, the changelogging of the store through <code>enableLogging()</code> and <code>disableLogging()</code>. 
