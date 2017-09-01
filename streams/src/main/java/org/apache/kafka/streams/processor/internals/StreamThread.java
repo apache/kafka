@@ -580,9 +580,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         this.standbyRecords = new HashMap<>();
         this.partitionGrouper = config.getConfiguredInstance(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
 
-        final LogContext logContext = new LogContext(logPrefix);
-
-        log = logContext.logger(getClass());
+        createLogContext(this.logPrefix);
 
         log.info("Creating consumer client");
         final Map<String, Object> consumerConfigs = config.getConsumerConfigs(this, applicationId, threadClientId);
@@ -1155,5 +1153,10 @@ public class StreamThread extends Thread implements ThreadDataProvider {
 
     private void refreshMetadataState() {
         streamsMetadataState.onChange(metadataProvider.getPartitionsByHostState(), metadataProvider.clusterMetadata());
+    }
+
+    private static void createLogContext(final String logPrefix) {
+        final LogContext logContext = new LogContext(logPrefix);
+        log = logContext.logger(StreamThread.class);
     }
 }
