@@ -38,8 +38,6 @@ abstract class AbstractStateStoreBuilder<K, V, T extends StateStore> implements 
                                      final Serde<V> valueSerde,
                                      final Time time) {
         Objects.requireNonNull(name, "name can't be null");
-        Objects.requireNonNull(keySerde, "keySerde can't be null");
-        Objects.requireNonNull(valueSerde, "valueSerde can't be null");
         Objects.requireNonNull(time, "time can't be null");
         this.name = name;
         this.keySerde = keySerde;
