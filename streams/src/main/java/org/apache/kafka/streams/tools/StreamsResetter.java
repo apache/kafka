@@ -17,28 +17,19 @@
 package org.apache.kafka.streams.tools;
 
 
-import joptsimple.OptionException;
-import joptsimple.OptionParser;
-import joptsimple.OptionSet;
-import joptsimple.OptionSpec;
-import joptsimple.OptionSpecBuilder;
-
+import joptsimple.*;
+import kafka.admin.ConsumerGroupCommand;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Exit;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
-import java.util.Set;
 
 /**
  * {@link StreamsResetter} resets the processing state of a Kafka Streams application so that, for example, you can reprocess its input from scratch.
@@ -156,10 +147,10 @@ public class StreamsResetter {
         final List<String> inputTopics = options.valuesOf(inputTopicsOption);
         final List<String> intermediateTopics = options.valuesOf(intermediateTopicsOption);
 
-        final List<String> notFoundInputTopics = new ArrayList<>();
+        /*final List<String> notFoundInputTopics = new ArrayList<>();
         final List<String> notFoundIntermediateTopics = new ArrayList<>();
 
-        String groupId = options.valueOf(applicationIdOption);
+        String groupId = options.valueOf(applicationIdOption);*/
 
         if (inputTopics.size() == 0 && intermediateTopics.size() == 0) {
             System.out.println("No input or intermediate topics specified. Skipping seek.");
@@ -173,7 +164,7 @@ public class StreamsResetter {
             System.out.println("Seek-to-end for intermediate topics " + intermediateTopics);
         }
 
-        final Set<String> topicsToSubscribe = new HashSet<>(inputTopics.size() + intermediateTopics.size());
+        /*final Set<String> topicsToSubscribe = new HashSet<>(inputTopics.size() + intermediateTopics.size());
 
         for (final String topic : inputTopics) {
             if (!allTopics.contains(topic)) {
@@ -188,22 +179,22 @@ public class StreamsResetter {
             } else {
                 topicsToSubscribe.add(topic);
             }
-        }
+        }*/
 
-        final Properties config = new Properties();
+        /*final Properties config = new Properties();
         config.putAll(consumerConfig);
         config.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        config.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        config.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");*/
 
-        try (final KafkaConsumer<byte[], byte[]> client = new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
-            client.subscribe(topicsToSubscribe);
-            client.poll(1);
+        try
+        //        (final KafkaConsumer<byte[], byte[]> client = new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()))
+        {
+            /*client.subscribe(topicsToSubscribe);
+            client.poll(1);*/
 
-            final Set<TopicPartition> partitions = client.assignment();
-            final Set<TopicPartition> inputTopicPartitions = new HashSet<>();
-            final Set<TopicPartition> intermediateTopicPartitions = new HashSet<>();
+            //final Set<TopicPartition> partitions = client.assignment();
 
-            for (final TopicPartition p : partitions) {
+            /*for (final TopicPartition p : partitions) {
                 final String topic = p.topic();
                 if (isInputTopic(topic)) {
                     inputTopicPartitions.add(p);
@@ -212,20 +203,20 @@ public class StreamsResetter {
                 } else {
                     System.err.println("Skipping invalid partition: " + p);
                 }
-            }
+            }*/
 
-            maybeSeekToBeginning(client, inputTopicPartitions);
+            maybeResetInputTopicPartitions(inputTopics);
 
-            maybeSeekToEnd(client, intermediateTopicPartitions);
+            maybeResetIntermediateTopicPartitions(intermediateTopics);
 
-            if (!dryRun) {
-                for (final TopicPartition p : partitions) {
+            //if (!dryRun) {
+                /*for (final TopicPartition p : partitions) {
                     client.position(p);
                 }
-                client.commitSync();
-            }
+                client.commitSync();*/
+            //}
 
-            if (notFoundInputTopics.size() > 0) {
+            /*if (notFoundInputTopics.size() > 0) {
                 System.out.println("Following input topics are not found, skipping them");
                 for (final String topic : notFoundInputTopics) {
                     System.out.println("Topic: " + topic);
@@ -237,7 +228,7 @@ public class StreamsResetter {
                 for (final String topic : notFoundIntermediateTopics) {
                     System.out.println("Topic:" + topic);
                 }
-            }
+            }*/
 
         } catch (final RuntimeException e) {
             System.err.println("ERROR: Resetting offsets failed.");
@@ -246,50 +237,67 @@ public class StreamsResetter {
         System.out.println("Done.");
     }
 
-    private void maybeSeekToEnd(final KafkaConsumer<byte[], byte[]> client, final Set<TopicPartition> intermediateTopicPartitions) {
+    private void maybeResetIntermediateTopicPartitions(final List<String> intermediateTopics) {
 
         final String groupId = options.valueOf(applicationIdOption);
-        final List<String> intermediateTopics = options.valuesOf(intermediateTopicsOption);
+        final String bootstrapServer = consumerConfig.getProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG);
 
-        if (intermediateTopicPartitions.size() > 0) {
+        if (intermediateTopics.size() > 0) {
             System.out.println("Following intermediate topics offsets will be reset to end (for consumer group " + groupId + ")");
+            StringBuilder intermediateTopicValue = new StringBuilder();
             for (final String topic : intermediateTopics) {
                 if (allTopics.contains(topic)) {
+                    intermediateTopicValue.append(topic).append(",");
                     System.out.println("Topic: " + topic);
                 }
             }
+            String inputTopicList = intermediateTopicValue.substring(0, intermediateTopicValue.length() - 1);
             if (!dryRun) {
-                client.seekToEnd(intermediateTopicPartitions);
+                //client.seekToEnd(intermediateTopics);
+                ConsumerGroupCommand.main(new String[]{"--reset-offsets",
+                        "--topic", inputTopicList,
+                        "--to-latest",
+                        "--group", groupId,
+                        "--bootstrap-server", bootstrapServer,
+                        "--execute"}); //TODO update the `ConsumerGroupCommand` to support `dry-run` option
             }
         }
     }
 
-    private void maybeSeekToBeginning(final KafkaConsumer<byte[], byte[]> client,
-                                      final Set<TopicPartition> inputTopicPartitions) {
+    private void maybeResetInputTopicPartitions(final List<String> inputTopics) {
 
-        final List<String> inputTopics = options.valuesOf(inputTopicsOption);
         final String groupId = options.valueOf(applicationIdOption);
+        final String bootstrapServer = consumerConfig.getProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG);
 
-        if (inputTopicPartitions.size() > 0) {
+        if (inputTopics.size() > 0) {
             System.out.println("Following input topics offsets will be reset to beginning (for consumer group " + groupId + ")");
+            StringBuilder inputTopicsValue = new StringBuilder();
             for (final String topic : inputTopics) {
                 if (allTopics.contains(topic)) {
+                    inputTopicsValue.append(topic).append(",");
                     System.out.println("Topic: " + topic);
                 }
             }
+            String inputTopicList = inputTopicsValue.substring(0, inputTopicsValue.length() - 1);
             if (!dryRun) {
-                client.seekToBeginning(inputTopicPartitions);
+                //client.seekToBeginning(inputTopicPartitions);
+                ConsumerGroupCommand.main(new String[]{"--reset-offsets",
+                        "--topic", inputTopicList,
+                        "--to-earliest",
+                        "--group", groupId,
+                        "--bootstrap-server", bootstrapServer,
+                        "--execute"}); //TODO update the `ConsumerGroupCommand` to support `dry-run` option
             }
         }
     }
 
-    private boolean isInputTopic(final String topic) {
+    /*private boolean isInputTopic(final String topic) {
         return options.valuesOf(inputTopicsOption).contains(topic);
     }
 
     private boolean isIntermediateTopic(final String topic) {
         return options.valuesOf(intermediateTopicsOption).contains(topic);
-    }
+    }*/
 
     private void maybeDeleteInternalTopics(AdminClient adminClient) {
 

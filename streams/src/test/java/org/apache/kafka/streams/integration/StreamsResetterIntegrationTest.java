@@ -63,7 +63,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
  * Tests local state store and global application cleanup.
  */
 @Category({IntegrationTest.class})
-public class ResetIntegrationTest {
+public class StreamsResetterIntegrationTest {
     private static final int NUM_BROKERS = 1;
 
     @ClassRule
@@ -152,8 +152,7 @@ public class ResetIntegrationTest {
         final List<KeyValue<Long, Long>> result2 = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
             resultTopicConsumerConfig,
             OUTPUT_TOPIC_2,
-            40
-        );
+            40);
 
         streams.close();
         TestUtils.waitForCondition(consumerGroupInactive, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT,
@@ -176,15 +175,16 @@ public class ResetIntegrationTest {
 
         // RE-RUN
         streams.start();
-        final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-            resultTopicConsumerConfig,
-            OUTPUT_TOPIC,
-            10);
-        final List<KeyValue<Long, Long>> resultRerun2 = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-            resultTopicConsumerConfig,
-            OUTPUT_TOPIC_2_RERUN,
-            40
-        );
+        final List<KeyValue<Long, Long>> resultRerun =
+                IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+                        resultTopicConsumerConfig,
+                        OUTPUT_TOPIC,
+                        10);
+        final List<KeyValue<Long, Long>> resultRerun2 =
+                IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+                        resultTopicConsumerConfig,
+                        OUTPUT_TOPIC_2_RERUN,
+                        40);
         streams.close();
 
         assertThat(resultRerun, equalTo(result));
