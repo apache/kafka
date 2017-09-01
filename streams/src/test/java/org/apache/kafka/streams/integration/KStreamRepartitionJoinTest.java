@@ -230,9 +230,7 @@ public class KStreamRepartitionJoinTest {
         map1.leftJoin(map2,
             TOSTRING_JOINER,
             getJoinWindow(),
-            Serdes.Integer(),
-            Serdes.Integer(),
-            Serdes.String())
+            Joined.with(Serdes.Integer(), Serdes.Integer(), Serdes.String()))
             .filterNot(new Predicate<Integer, String>() {
                 @Override
                 public boolean test(Integer key, String value) {
@@ -256,9 +254,7 @@ public class KStreamRepartitionJoinTest {
         final KStream<Integer, String> join = map1.join(map2,
             TOSTRING_JOINER,
             getJoinWindow(),
-            Serdes.Integer(),
-            Serdes.Integer(),
-            Serdes.String());
+            Joined.with(Serdes.Integer(), Serdes.Integer(), Serdes.String()));
 
         final String topic = "map-join-join-" + testNo;
         CLUSTER.createTopic(topic);

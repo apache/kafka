@@ -29,7 +29,7 @@ package org.apache.kafka.streams.kstream;
  * @see KStream#join(KStream, ValueJoiner, JoinWindows)
  * @see KStream#join(KStream, ValueJoiner, JoinWindows, Joined)
  * @see KStream#leftJoin(KStream, ValueJoiner, JoinWindows)
- * @see KStream#leftJoin(KStream, ValueJoiner, JoinWindows, org.apache.kafka.common.serialization.Serde, org.apache.kafka.common.serialization.Serde, org.apache.kafka.common.serialization.Serde)
+ * @see KStream#leftJoin(KStream, ValueJoiner, JoinWindows, Joined)
  * @see KStream#outerJoin(KStream, ValueJoiner, JoinWindows)
  * @see KStream#outerJoin(KStream, ValueJoiner, JoinWindows, org.apache.kafka.common.serialization.Serde, org.apache.kafka.common.serialization.Serde, org.apache.kafka.common.serialization.Serde)
  * @see KStream#join(KTable, ValueJoiner)

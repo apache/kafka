@@ -549,6 +549,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         Objects.requireNonNull(other, "other KStream can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
         Objects.requireNonNull(windows, "windows can't be null");
+        Objects.requireNonNull(joined, "joined can't be null");
 
         KStreamImpl<K, V> joinThis = this;
         KStreamImpl<K, V1> joinOther = (KStreamImpl<K, V1>) other;
@@ -633,7 +634,20 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public <V1, R> KStream<K, R> leftJoin(final KStream<K, V1> other,
                                           final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
                                           final JoinWindows windows) {
-        return leftJoin(other, joiner, windows, null, null, null);
+        return leftJoin(other, joiner, windows, Joined.<K, V, V1>with(null, null, null));
+    }
+
+    @Override
+    public <VO, VR> KStream<K, VR> leftJoin(final KStream<K, VO> other,
+                                            final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+                                            final JoinWindows windows,
+                                            final Joined<K, V, VO> joined) {
+        Objects.requireNonNull(joined, "joined can't be null");
+        return doJoin(other,
+                      joiner,
+                      windows,
+                      joined,
+                      new KStreamImplJoin(true, false));
     }
 
     @Override
