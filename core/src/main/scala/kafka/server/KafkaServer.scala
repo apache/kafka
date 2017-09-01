@@ -365,7 +365,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
     def doControlledShutdown(retries: Int): Boolean = {
       val metadataUpdater = new ManualMetadataUpdater()
-      val logContext = new LogContext("[KafkaServer clientId=" + config.brokerId.toString + "] ")
+      val logContext = new LogContext("[KafkaServer brokerId=" + config.brokerId.toString + "] ")
       val networkClient = {
         val channelBuilder = ChannelBuilders.clientChannelBuilder(
           config.interBrokerSecurityProtocol,

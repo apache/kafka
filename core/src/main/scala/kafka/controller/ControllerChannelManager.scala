@@ -108,7 +108,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
     val messageQueue = new LinkedBlockingQueue[QueueItem]
     debug("Controller %d trying to connect to broker %d".format(config.brokerId, broker.id))
     val brokerNode = broker.getNode(config.interBrokerListenerName)
-    val logContext = new LogContext("[ControllerChannelManager clientId=" + config.brokerId.toString + "] ")
+    val logContext = new LogContext("[ControllerChannelManager brokerId=" + config.brokerId.toString + "] ")
     val networkClient = {
       val channelBuilder = ChannelBuilders.clientChannelBuilder(
         config.interBrokerSecurityProtocol,
