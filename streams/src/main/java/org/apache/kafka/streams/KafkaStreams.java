@@ -272,6 +272,24 @@ public class KafkaStreams {
         return true;
     }
 
+    private boolean setRunningFromCreated() {
+        synchronized (stateLock) {
+            if (state != State.CREATED) {
+                log.error("{} Unexpected state transition from {} to {}", logPrefix, state, State.RUNNING);
+                throw new IllegalStateException(logPrefix + " Unexpected state transition from " + state + " to " + State.RUNNING);
+            }
+            state = State.RUNNING;
+            stateLock.notifyAll();
+        }
+
+        // we need to call the user customized state listener outside the state lock to avoid potential deadlocks
+        if (stateListener != null) {
+            stateListener.onChange(State.RUNNING, State.CREATED);
+        }
+
+        return true;
+    }
+
     /**
      * Return the current {@link State} of this {@code KafkaStreams} instance.
      *
@@ -675,7 +693,7 @@ public class KafkaStreams {
 
         // first set state to RUNNING before kicking off the threads,
         // making sure the state will always transit to RUNNING before REBALANCING
-        if (setState(State.RUNNING)) {
+        if (setRunningFromCreated()) {
             checkBrokerVersionCompatibility();
 
             if (globalStreamThread != null) {
