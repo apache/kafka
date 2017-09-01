@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.tools;
+package org.apache.kafka.streams.tools;
 
 
 import joptsimple.OptionException;
@@ -23,15 +23,12 @@ import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
 import joptsimple.OptionSpecBuilder;
 
-import kafka.admin.AdminClient;
-import kafka.admin.TopicCommand;
-import kafka.utils.ZkUtils;
-
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Exit;
 
@@ -70,7 +67,6 @@ public class StreamsResetter {
     private static final int EXIT_CODE_ERROR = 1;
 
     private static OptionSpec<String> bootstrapServerOption;
-    private static OptionSpec<String> zookeeperOption;
     private static OptionSpec<String> applicationIdOption;
     private static OptionSpec<String> inputTopicsOption;
     private static OptionSpec<String> intermediateTopicsOption;
@@ -89,54 +85,41 @@ public class StreamsResetter {
         consumerConfig.clear();
         consumerConfig.putAll(config);
 
+        parseArguments(args);
+
+        consumerConfig.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOption));
+
         int exitCode = EXIT_CODE_SUCCESS;
 
-        AdminClient adminClient = null;
-        ZkUtils zkUtils = null;
-        try {
-            parseArguments(args);
+        try (AdminClient adminClient = KafkaAdminClient.create(consumerConfig)){
             dryRun = options.has(dryRunOption);
 
-            adminClient = AdminClient.createSimplePlaintext(options.valueOf(bootstrapServerOption));
-            final String groupId = options.valueOf(applicationIdOption);
-
-
-            zkUtils = ZkUtils.apply(options.valueOf(zookeeperOption),
-                30000,
-                30000,
-                JaasUtils.isZkSecurityEnabled());
+            //final String groupId = options.valueOf(applicationIdOption);
 
             allTopics.clear();
-            allTopics.addAll(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics()));
+            allTopics.addAll(adminClient.listTopics().names().get());
 
-
-            if (!adminClient.describeConsumerGroup(groupId, 0).consumers().get().isEmpty()) {
+            /*if (!adminClient.describeConsumerGroup(groupId, 0).consumers().get().isEmpty()) {
                 throw new IllegalStateException("Consumer group '" + groupId + "' is still active. " +
                             "Make sure to stop all running application instances before running the reset tool.");
-            }
+            }*/
 
             if (dryRun) {
                 System.out.println("----Dry run displays the actions which will be performed when running Streams Reset Tool----");
             }
+
             maybeResetInputAndSeekToEndIntermediateTopicOffsets();
-            maybeDeleteInternalTopics(zkUtils);
+            maybeDeleteInternalTopics(adminClient);
 
         } catch (final Throwable e) {
             exitCode = EXIT_CODE_ERROR;
             System.err.println("ERROR: " + e.getMessage());
-        } finally {
-            if (adminClient != null) {
-                adminClient.close();
-            }
-            if (zkUtils != null) {
-                zkUtils.close();
-            }
         }
 
         return exitCode;
     }
 
-    private void parseArguments(final String[] args) throws IOException {
+    private void parseArguments(final String[] args) {
 
         final OptionParser optionParser = new OptionParser(false);
         applicationIdOption = optionParser.accepts("application-id", "The Kafka Streams application ID (application.id).")
@@ -144,16 +127,11 @@ public class StreamsResetter {
             .ofType(String.class)
             .describedAs("id")
             .required();
-        bootstrapServerOption = optionParser.accepts("bootstrap-servers", "Comma-separated list of broker urls with format: HOST1:PORT1,HOST2:PORT2")
+        bootstrapServerOption = optionParser.accepts("bootstrap-server", "Comma-separated list of broker urls with format: HOST1:PORT1,HOST2:PORT2")
             .withRequiredArg()
             .ofType(String.class)
             .defaultsTo("localhost:9092")
             .describedAs("urls");
-        zookeeperOption = optionParser.accepts("zookeeper", "Zookeeper url with format: HOST:POST")
-            .withRequiredArg()
-            .ofType(String.class)
-            .defaultsTo("localhost:2181")
-            .describedAs("url");
         inputTopicsOption = optionParser.accepts("input-topics", "Comma-separated list of user input topics. For these topics, the tool will reset the offset to the earliest available offset.")
             .withRequiredArg()
             .ofType(String.class)
@@ -177,7 +155,6 @@ public class StreamsResetter {
     private void maybeResetInputAndSeekToEndIntermediateTopicOffsets() {
         final List<String> inputTopics = options.valuesOf(inputTopicsOption);
         final List<String> intermediateTopics = options.valuesOf(intermediateTopicsOption);
-
 
         final List<String> notFoundInputTopics = new ArrayList<>();
         final List<String> notFoundIntermediateTopics = new ArrayList<>();
@@ -215,7 +192,6 @@ public class StreamsResetter {
 
         final Properties config = new Properties();
         config.putAll(consumerConfig);
-        config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOption));
         config.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         config.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
@@ -315,27 +291,26 @@ public class StreamsResetter {
         return options.valuesOf(intermediateTopicsOption).contains(topic);
     }
 
-    private void maybeDeleteInternalTopics(final ZkUtils zkUtils) {
+    private void maybeDeleteInternalTopics(AdminClient adminClient) {
 
         System.out.println("Deleting all internal/auto-created topics for application " + options.valueOf(applicationIdOption));
 
+        List<String> internalTopics = new ArrayList<>();
+
         for (final String topic : allTopics) {
             if (isInternalTopic(topic)) {
-                try {
-                    if (!dryRun) {
-                        final TopicCommand.TopicCommandOptions commandOptions = new TopicCommand.TopicCommandOptions(new String[]{
-                            "--zookeeper", options.valueOf(zookeeperOption),
-                            "--delete", "--topic", topic});
-                        TopicCommand.deleteTopic(zkUtils, commandOptions);
-                    } else {
-                        System.out.println("Topic: " + topic);
-                    }
-                } catch (final RuntimeException e) {
-                    System.err.println("ERROR: Deleting topic " + topic + " failed.");
-                    throw e;
-                }
+                internalTopics.add(topic);
             }
         }
+
+        if (!dryRun) {
+            adminClient.deleteTopics(internalTopics);
+        } else {
+            for (final String internalTopic : internalTopics){
+                System.out.println("Topic: " + internalTopic);
+            }
+        }
+
         System.out.println("Done.");
     }
 
@@ -344,7 +319,7 @@ public class StreamsResetter {
             && (topicName.endsWith("-changelog") || topicName.endsWith("-repartition"));
     }
 
-    private void printHelp(OptionParser parser) throws IOException {
+    private void printHelp(OptionParser parser) {
         System.err.println("The Streams Reset Tool allows you to quickly reset an application in order to reprocess "
                 + "its data from scratch.\n"
                 + "* This tool resets offsets of input topics to the earliest available offset and it skips to the end of "
@@ -361,7 +336,11 @@ public class StreamsResetter {
                 + "*** Important! You will get wrong output if you don't clean up the local stores after running the "
                 + "reset tool!\n\n"
         );
-        parser.printHelpOn(System.err);
+        try {
+            parser.printHelpOn(System.err);
+        } catch (IOException e) {
+            System.err.println("ERROR: " + e.getMessage());
+        }
     }
 
     public static void main(final String[] args) {

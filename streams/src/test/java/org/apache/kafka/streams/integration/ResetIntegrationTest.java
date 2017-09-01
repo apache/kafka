@@ -18,7 +18,7 @@ package org.apache.kafka.streams.integration;
 
 import kafka.admin.AdminClient;
 import kafka.server.KafkaConfig$;
-import kafka.tools.StreamsResetter;
+import org.apache.kafka.streams.tools.StreamsResetter;
 import kafka.utils.MockTime;
 import kafka.utils.ZkUtils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -341,16 +341,14 @@ public class ResetIntegrationTest {
         if (intermediateUserTopic != null) {
             parameters = new String[]{
                 "--application-id", APP_ID + testNo,
-                "--bootstrap-servers", CLUSTER.bootstrapServers(),
-                "--zookeeper", CLUSTER.zKConnectString(),
+                "--bootstrap-server", CLUSTER.bootstrapServers(),
                 "--input-topics", INPUT_TOPIC,
                 "--intermediate-topics", INTERMEDIATE_USER_TOPIC
             };
         } else {
             parameters = new String[]{
                 "--application-id", APP_ID + testNo,
-                "--bootstrap-servers", CLUSTER.bootstrapServers(),
-                "--zookeeper", CLUSTER.zKConnectString(),
+                "--bootstrap-server", CLUSTER.bootstrapServers(),
                 "--input-topics", INPUT_TOPIC
             };
         }
