@@ -161,11 +161,11 @@ public class WindowedStreamPartitionerTest {
         props.put("deserializer.inner.class", "org.apache.kafka.common.serialization.ByteArrayDeserializer");
         //test for deserializer expected window end time
         final long randomLong = 5000000;
-        byte[] byteValues = stringSerializer.serialize(topicName, "dummy string"); //dummy string, serves no real purpose
+        final byte[] byteValues = stringSerializer.serialize(topicName, "dummy string"); //dummy string, serves no real purpose
         final WindowedDeserializer<StringSerializer> windowedDeserializer1 = 
             new WindowedDeserializer<>(windowedDeserializer.innerDeserializer(), randomLong);
         windowedDeserializer1.configure(props, false);
-        Windowed<?> windowed = windowedDeserializer1.deserialize(topicName, byteValues);
+        final Windowed<?> windowed = windowedDeserializer1.deserialize(topicName, byteValues);
         final long actualSize = windowed.window().end() - windowed.window().start(); //find actual window time
         assertEquals(randomLong, actualSize); //testing if window size matches up with expected one
         windowedDeserializer.close();
