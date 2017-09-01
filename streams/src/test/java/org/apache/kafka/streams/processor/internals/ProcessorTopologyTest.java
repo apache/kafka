@@ -63,7 +63,6 @@ public class ProcessorTopologyTest {
     private static final String OUTPUT_TOPIC_2 = "output-topic-2";
     private static final String THROUGH_TOPIC_1 = "through-topic-1";
 
-    private static long timestamp = 1000L;
     private final TopologyBuilder builder = new TopologyBuilder();
     private final MockProcessorSupplier mockProcessorSupplier = new MockProcessorSupplier();
 
@@ -315,20 +314,43 @@ public class ProcessorTopologyTest {
         assertThat(result, containsString("child-two:\n\t\tchildren:\t[child-two-one]"));
     }
 
-    private void assertNextOutputRecord(String topic, String key, String value) {
-        ProducerRecord<String, String> record = driver.readOutput(topic, STRING_DESERIALIZER, STRING_DESERIALIZER);
-        assertEquals(topic, record.topic());
-        assertEquals(key, record.key());
-        assertEquals(value, record.value());
-        assertNull(record.partition());
+    @Test
+    public void shouldConsiderTimeStamps() throws Exception {
+        final int partition = 10;
+        driver = new ProcessorTopologyTestDriver(config, createSimpleTopology(partition).internalTopologyBuilder);
+        driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER, 10L);
+        driver.process(INPUT_TOPIC_1, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER, 20L);
+        driver.process(INPUT_TOPIC_1, "key3", "value3", STRING_SERIALIZER, STRING_SERIALIZER, 30L);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", partition, 10L);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2", partition, 20L);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key3", "value3", partition, 30L);
     }
 
-    private void assertNextOutputRecord(String topic, String key, String value, Integer partition) {
+
+    private void assertNextOutputRecord(final String topic,
+                                        final String key,
+                                        final String value) {
+        assertNextOutputRecord(topic, key, value, null, 0L);
+    }
+
+    private void assertNextOutputRecord(final String topic,
+                                        final String key,
+                                        final String value,
+                                        final Integer partition) {
+        assertNextOutputRecord(topic, key, value, partition, 0L);
+    }
+
+    private void assertNextOutputRecord(final String topic,
+                                        final String key,
+                                        final String value,
+                                        final Integer partition,
+                                        final Long timestamp) {
         ProducerRecord<String, String> record = driver.readOutput(topic, STRING_DESERIALIZER, STRING_DESERIALIZER);
         assertEquals(topic, record.topic());
         assertEquals(key, record.key());
         assertEquals(value, record.value());
         assertEquals(partition, record.partition());
+        assertEquals(timestamp, record.timestamp());
     }
 
     private void assertNoOutputRecord(String topic) {
@@ -543,18 +565,20 @@ public class ProcessorTopologyTest {
 
     /**
      * A custom timestamp extractor that extracts the timestamp from the record's value if the value is in ".*@[0-9]+"
-     * format. Otherwise, it returns the record's timestamp or the default timestamp if the record's timestamp is zero.
+     * format. Otherwise, it returns the record's timestamp or the default timestamp if the record's timestamp is negative.
     */
     public static class CustomTimestampExtractor implements TimestampExtractor {
+        private static final long DEFAULT_TIMESTAMP = 1000L;
+
         @Override
         public long extract(final ConsumerRecord<Object, Object> record, final long previousTimestamp) {
             if (record.value().toString().matches(".*@[0-9]+"))
                 return Long.parseLong(record.value().toString().split("@")[1]);
 
-            if (record.timestamp() > 0L)
+            if (record.timestamp() >= 0L)
                 return record.timestamp();
 
-            return timestamp;
+            return DEFAULT_TIMESTAMP;
         }
     }
 }
