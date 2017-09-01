@@ -229,25 +229,6 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
   protected def isRunning: Boolean = alive.get
 
   /**
-   * Close the connection identified by `connectionId` and decrement the connection count.
-   * The channel will be immediately removed from the selector's `channels` or `closingChannels`
-   * and no further disconnect notifications will be sent for this channel by the selector.
-   */
-  def close(selector: KSelector, connectionId: String): Unit = {
-    openOrClosingChannel(selector, connectionId).foreach { channel =>
-      debug(s"Closing selector connection $connectionId")
-      val address = channel.socketAddress
-      if (address != null)
-        connectionQuotas.dec(address)
-      selector.close(connectionId)
-    }
-  }
-
-  private[network] def openOrClosingChannel(selector: KSelector, connectionId: String): Option[KafkaChannel] = {
-    Option(selector.channel(connectionId)).orElse(Option(selector.closingChannel(connectionId)))
-  }
-
-  /**
    * Close `channel` and decrement the connection count.
    */
   def close(channel: SocketChannel): Unit = {
@@ -436,7 +417,8 @@ private[kafka] class Processor(val id: Int,
     Map("networkProcessor" -> id.toString)
   )
 
-  private val selector = createSelector(ChannelBuilders.serverChannelBuilder(listenerName, securityProtocol, config, credentialProvider.credentialCache))
+  private val selector = createSelector(
+      ChannelBuilders.serverChannelBuilder(listenerName, securityProtocol, config, credentialProvider.credentialCache))
   // Visible to override for testing
   protected[network] def createSelector(channelBuilder: ChannelBuilder): KSelector = new KSelector(
     maxRequestSize,
@@ -472,9 +454,9 @@ private[kafka] class Processor(val id: Int,
           // We catch all the throwables here to prevent the processor thread from exiting. We do this because
           // letting a processor exit might cause a bigger impact on the broker. This behavior might need to be
           // reviewed if we see an exception that needs the entire broker to stop. Usually the exceptions thrown would
-          // be either associated with a specific socket channel or a bad request. These exceptions are caught and processed
-          // by the individual methods above which close the failing channel and continue processing other channels.
-          // So this catch block should only ever see ControlThrowables.
+          // be either associated with a specific socket channel or a bad request. These exceptions are caught and
+          // processed by the individual methods above which close the failing channel and continue processing other
+          // channels. So this catch block should only ever see ControlThrowables.
           case e: Throwable => processException("Processor got uncaught exception.", e)
         }
       }
@@ -493,11 +475,10 @@ private[kafka] class Processor(val id: Int,
   }
 
   private def processChannelException(channelId: String, errorMessage: String, throwable: Throwable) {
-    openOrClosingChannel(channelId).foreach(_ => {
+    if (openOrClosingChannel(channelId).isDefined) {
       error(s"Closing socket for ${channelId} because of error", throwable)
-      close(selector, channelId)
-      inflightResponses.remove(channelId).foreach(response => updateRequestMetrics(response.request))
-    })
+      close(channelId)
+    }
     processException(errorMessage, throwable)
   }
 
@@ -520,7 +501,7 @@ private[kafka] class Processor(val id: Int,
           case RequestChannel.CloseConnectionAction =>
             updateRequestMetrics(curr)
             trace("Closing socket connection actively according to the response code.")
-            close(selector, channelId)
+            close(channelId)
         }
       } catch {
         case e: Throwable =>
@@ -551,8 +532,9 @@ private[kafka] class Processor(val id: Int,
     try selector.poll(300)
     catch {
       case e @ (_: IllegalStateException | _: IOException) =>
+        // The exception is not re-thrown and any completed sends/receives/connections/disconnections
+        // from this poll will be processed.
         error(s"Processor $id poll failed due to illegal state or IO exception")
-        throw e
     }
   }
 
@@ -571,11 +553,13 @@ private[kafka] class Processor(val id: Int,
             selector.mute(receive.source)
           case None =>
             // This should never happen since completed receives are processed immediately after `poll()`
-            throw new IllegalStateException("Channel removed from selector before processing completed receive")
+            throw new IllegalStateException(s"Channel ${receive.source} removed from selector before processing completed receive")
         }
       } catch {
-        // note that even though we got an exception, we can assume that receive.source is valid. Issues with constructing a valid receive object were handled earlier
-        case e: Throwable => processChannelException(receive.source, s"Exception while processing request from ${receive.source}", e)
+        // note that even though we got an exception, we can assume that receive.source is valid.
+        // Issues with constructing a valid receive object were handled earlier
+        case e: Throwable =>
+          processChannelException(receive.source, s"Exception while processing request from ${receive.source}", e)
       }
     }
   }
@@ -589,7 +573,8 @@ private[kafka] class Processor(val id: Int,
         updateRequestMetrics(resp.request)
         selector.unmute(send.destination)
       } catch {
-        case e: Throwable => processChannelException(send.destination, s"Exception while processing completed send to ${send.destination}", e)
+        case e: Throwable => processChannelException(send.destination,
+            s"Exception while processing completed send to ${send.destination}", e)
       }
       updateRequestMetrics(resp)
       selector.unmute(send.destination)
@@ -614,6 +599,25 @@ private[kafka] class Processor(val id: Int,
       } catch {
         case e: Throwable => processException(s"Exception while processing disconnection of $connectionId", e)
       }
+    }
+  }
+
+  /**
+   * Close the connection identified by `connectionId` and decrement the connection count.
+   * The channel will be immediately removed from the selector's `channels` or `closingChannels`
+   * and no further disconnect notifications will be sent for this channel by the selector.
+   * If responses are pending for the channel, they are dropped and metrics is updated.
+   * If the channel has already been removed from selector, no action is taken.
+   */
+  private def close(connectionId: String): Unit = {
+    openOrClosingChannel(connectionId).foreach { channel =>
+      debug(s"Closing selector connection $connectionId")
+      val address = channel.socketAddress
+      if (address != null)
+        connectionQuotas.dec(address)
+      selector.close(connectionId)
+
+      inflightResponses.remove(connectionId).foreach(response => updateRequestMetrics(response.request))
     }
   }
 
@@ -650,7 +654,7 @@ private[kafka] class Processor(val id: Int,
    */
   private def closeAll() {
     selector.channels.asScala.foreach { channel =>
-      close(selector, channel.id)
+      close(channel.id)
     }
     selector.close()
   }
@@ -671,7 +675,8 @@ private[kafka] class Processor(val id: Int,
 
   // Visible for testing
   // Only methods that are safe to call on a disconnected channel should be invoked on 'openOrClosingChannel'.
-  private[network] def openOrClosingChannel(connectionId: String): Option[KafkaChannel] = openOrClosingChannel(selector, connectionId)
+  private[network] def openOrClosingChannel(connectionId: String): Option[KafkaChannel] =
+     Option(selector.channel(connectionId)).orElse(Option(selector.closingChannel(connectionId)))
 
   /* For test usage */
   private[network] def channel(connectionId: String): Option[KafkaChannel] =
