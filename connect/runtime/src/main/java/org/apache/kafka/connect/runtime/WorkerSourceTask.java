@@ -113,7 +113,7 @@ class WorkerSourceTask extends WorkerTask {
         try {
             this.taskConfig = taskConfig.originalsStrings();
         } catch (Throwable t) {
-            log.error("Task {} failed initialization and will not be started.", t);
+            log.error("{} Task failed initialization and will not be started.", this, t);
             onFailure(t);
         }
     }
@@ -140,7 +140,7 @@ class WorkerSourceTask extends WorkerTask {
         try {
             task.initialize(new WorkerSourceTaskContext(offsetReader));
             task.start(taskConfig);
-            log.info("Source task {} finished initialization and start", this);
+            log.info("{} Source task finished initialization and start", this);
             synchronized (this) {
                 if (startedShutdownBeforeStartCompleted) {
                     task.stop();
@@ -159,12 +159,12 @@ class WorkerSourceTask extends WorkerTask {
                 }
 
                 if (toSend == null) {
-                    log.debug("Nothing to send to Kafka. Polling source for additional records");
+                    log.debug("{} Nothing to send to Kafka. Polling source for additional records", this);
                     toSend = task.poll();
                 }
                 if (toSend == null)
                     continue;
-                log.debug("About to send " + toSend.size() + " records to Kafka");
+                log.debug("{} About to send " + toSend.size() + " records to Kafka", this);
                 if (!sendRecords())
                     stopRequestedLatch.await(SEND_FAILED_BACKOFF_MS, TimeUnit.MILLISECONDS);
             }
@@ -198,7 +198,7 @@ class WorkerSourceTask extends WorkerTask {
             byte[] value = valueConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
             final ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(record.topic(), record.kafkaPartition(),
                     ConnectUtils.checkAndConvertTimestamp(record.timestamp()), key, value);
-            log.trace("Appending record with key {}, value {}", record.key(), record.value());
+            log.trace("{} Appending record with key {}, value {}", this, record.key(), record.value());
             // We need this queued first since the callback could happen immediately (even synchronously in some cases).
             // Because of this we need to be careful about handling retries -- we always save the previously attempted
             // record as part of toSend and need to use a flag to track whether we should actually add it to the outstanding
@@ -227,10 +227,11 @@ class WorkerSourceTask extends WorkerTask {
                                     // timeouts, callbacks with exceptions should never be invoked in practice. If the
                                     // user overrode these settings, the best we can do is notify them of the failure via
                                     // logging.
-                                    log.error("{} failed to send record to {}: {}", id, topic, e);
-                                    log.debug("Failed record: {}", preTransformRecord);
+                                    log.error("{} failed to send record to {}: {}", this, topic, e);
+                                    log.debug("{} Failed record: {}", this, preTransformRecord);
                                 } else {
-                                    log.trace("Wrote record successfully: topic {} partition {} offset {}",
+                                    log.trace("{} Wrote record successfully: topic {} partition {} offset {}",
+                                            this,
                                             recordMetadata.topic(), recordMetadata.partition(),
                                             recordMetadata.offset());
                                     commitTaskRecord(preTransformRecord);
@@ -240,7 +241,7 @@ class WorkerSourceTask extends WorkerTask {
                         });
                 lastSendFailed = false;
             } catch (RetriableException e) {
-                log.warn("Failed to send {}, backing off before retrying:", producerRecord, e);
+                log.warn("{} Failed to send {}, backing off before retrying:", this, producerRecord, e);
                 toSend = toSend.subList(processed, toSend.size());
                 lastSendFailed = true;
                 return false;
@@ -256,10 +257,8 @@ class WorkerSourceTask extends WorkerTask {
     private void commitTaskRecord(SourceRecord record) {
         try {
             task.commitRecord(record);
-        } catch (InterruptedException e) {
-            log.error("Exception thrown", e);
         } catch (Throwable t) {
-            log.error("Exception thrown while calling task.commitRecord()", t);
+            log.error("{} Exception thrown while calling task.commitRecord()", this, t);
         }
     }
 
@@ -270,8 +269,7 @@ class WorkerSourceTask extends WorkerTask {
             removed = outstandingMessagesBacklog.remove(record);
         // But if neither one had it, something is very wrong
         if (removed == null) {
-            log.error("CRITICAL Saw callback for record that was not present in the outstanding message set: "
-                    + "{}", record);
+            log.error("{} CRITICAL Saw callback for record that was not present in the outstanding message set: {}", this, record);
         } else if (flushing && outstandingMessages.isEmpty()) {
             // flush thread may be waiting on the outstanding messages to clear
             this.notifyAll();
@@ -281,7 +279,7 @@ class WorkerSourceTask extends WorkerTask {
     public boolean commitOffsets() {
         long commitTimeoutMs = workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
 
-        log.debug("{} Committing offsets", this);
+        log.info("{} Committing offsets", this);
 
         long started = time.milliseconds();
         long timeout = started + commitTimeoutMs;
@@ -298,12 +296,12 @@ class WorkerSourceTask extends WorkerTask {
             // to persistent storage
 
             // Next we need to wait for all outstanding messages to finish sending
-            log.debug("{} flushing {} outstanding messages for offset commit", this, outstandingMessages.size());
+            log.info("{} flushing {} outstanding messages for offset commit", this, outstandingMessages.size());
             while (!outstandingMessages.isEmpty()) {
                 try {
                     long timeoutMs = timeout - time.milliseconds();
                     if (timeoutMs <= 0) {
-                        log.error("Failed to flush {}, timed out while waiting for producer to flush outstanding {} messages", this, outstandingMessages.size());
+                        log.error("{} Failed to flush, timed out while waiting for producer to flush outstanding {} messages", this, outstandingMessages.size());
                         finishFailedFlush();
                         return false;
                     }
@@ -324,7 +322,7 @@ class WorkerSourceTask extends WorkerTask {
                 // flush time, which can be used for monitoring even if the connector doesn't record any
                 // offsets.
                 finishSuccessfulFlush();
-                log.debug("Finished {} offset commitOffsets successfully in {} ms",
+                log.debug("{} Finished offset commitOffsets successfully in {} ms",
                         this, time.milliseconds() - started);
 
                 commitSourceTask();
@@ -337,9 +335,9 @@ class WorkerSourceTask extends WorkerTask {
             @Override
             public void onCompletion(Throwable error, Void result) {
                 if (error != null) {
-                    log.error("Failed to flush {} offsets to storage: ", this, error);
+                    log.error("{} Failed to flush offsets to storage: ", this, error);
                 } else {
-                    log.trace("Finished flushing {} offsets to storage", this);
+                    log.trace("{} Finished flushing offsets to storage", this);
                 }
             }
         });
@@ -356,21 +354,21 @@ class WorkerSourceTask extends WorkerTask {
             // errors, is only wasteful in this minor edge case, and the worst result is that the log
             // could look a little confusing.
         } catch (InterruptedException e) {
-            log.warn("Flush of {} offsets interrupted, cancelling", this);
+            log.warn("{} Flush of offsets interrupted, cancelling", this);
             finishFailedFlush();
             return false;
         } catch (ExecutionException e) {
-            log.error("Flush of {} offsets threw an unexpected exception: ", this, e);
+            log.error("{} Flush of offsets threw an unexpected exception: ", this, e);
             finishFailedFlush();
             return false;
         } catch (TimeoutException e) {
-            log.error("Timed out waiting to flush {} offsets to storage", this);
+            log.error("{} Timed out waiting to flush offsets to storage", this);
             finishFailedFlush();
             return false;
         }
 
         finishSuccessfulFlush();
-        log.info("Finished {} commitOffsets successfully in {} ms",
+        log.info("{} Finished commitOffsets successfully in {} ms",
                 this, time.milliseconds() - started);
 
         commitSourceTask();
@@ -381,10 +379,8 @@ class WorkerSourceTask extends WorkerTask {
     private void commitSourceTask() {
         try {
             this.task.commit();
-        } catch (InterruptedException ex) {
-            log.warn("Commit interrupted", ex);
         } catch (Throwable t) {
-            log.error("Exception thrown while calling task.commit()", t);
+            log.error("{} Exception thrown while calling task.commit()", this, t);
         }
     }
 

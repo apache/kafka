@@ -42,9 +42,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @Test
   def testHeaders() {
     val numRecords = 1
-    val record = new ProducerRecord(tp.topic(), tp.partition(), null, s"key".getBytes, s"value".getBytes)
+    val record = new ProducerRecord(tp.topic, tp.partition, null, "key".getBytes, "value".getBytes)
     
-    record.headers().add(s"headerKey", s"headerValue".getBytes)
+    record.headers().add("headerKey", "headerValue".getBytes)
     
     this.producers.head.send(record)
     
@@ -59,22 +59,22 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     for (i <- 0 until numRecords) {
       val record = records(i)
-      val header = record.headers().lastHeader(s"headerKey")
-      assertEquals(s"headerValue", if (header == null) null else new String(header.value()))
+      val header = record.headers().lastHeader("headerKey")
+      assertEquals("headerValue", if (header == null) null else new String(header.value()))
     }
   }
   
   @Test
   def testHeadersExtendedSerializerDeserializer() {
     val numRecords = 1
-    val record = new ProducerRecord(tp.topic(), tp.partition(), null, s"key".getBytes, s"value".getBytes)
+    val record = new ProducerRecord(tp.topic, tp.partition, null, "key".getBytes, "value".getBytes)
 
     val extendedSerializer = new ExtendedSerializer[Array[Byte]] {
       
       var serializer = new ByteArraySerializer()
       
       override def serialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
-        headers.add(s"content-type", s"application/octet-stream".getBytes)
+        headers.add("content-type", "application/octet-stream".getBytes)
         serializer.serialize(topic, data)
       }
 
@@ -94,8 +94,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       var deserializer = new ByteArrayDeserializer()
       
       override def deserialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
-        var header = headers.lastHeader(s"content-type")
-        assertEquals(s"application/octet-stream", if (header == null) null else new String(header.value()))
+        val header = headers.lastHeader("content-type")
+        assertEquals("application/octet-stream", if (header == null) null else new String(header.value()))
         deserializer.deserialize(topic, data)
       }
 

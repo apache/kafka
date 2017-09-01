@@ -24,7 +24,7 @@ import org.apache.kafka.common.TopicPartition
 
 import scala.collection.{Seq, immutable, mutable}
 
-private[group] sealed trait GroupState { def state: Byte }
+private[group] sealed trait GroupState
 
 /**
  * Group is preparing to rebalance
@@ -39,7 +39,7 @@ private[group] sealed trait GroupState { def state: Byte }
  *             all members have left the group => Empty
  *             group is removed by partition emigration => Dead
  */
-private[group] case object PreparingRebalance extends GroupState { val state: Byte = 1 }
+private[group] case object PreparingRebalance extends GroupState
 
 /**
  * Group is awaiting state assignment from the leader
@@ -54,7 +54,7 @@ private[group] case object PreparingRebalance extends GroupState { val state: By
  *             member failure detected => PreparingRebalance
  *             group is removed by partition emigration => Dead
  */
-private[group] case object AwaitingSync extends GroupState { val state: Byte = 5}
+private[group] case object AwaitingSync extends GroupState
 
 /**
  * Group is stable
@@ -70,7 +70,7 @@ private[group] case object AwaitingSync extends GroupState { val state: Byte = 5
  *             follower join-group with new metadata => PreparingRebalance
  *             group is removed by partition emigration => Dead
  */
-private[group] case object Stable extends GroupState { val state: Byte = 3 }
+private[group] case object Stable extends GroupState
 
 /**
  * Group has no more members and its metadata is being removed
@@ -83,7 +83,7 @@ private[group] case object Stable extends GroupState { val state: Byte = 3 }
  *         allow offset fetch requests
  * transition: Dead is a final state before group metadata is cleaned up, so there are no transitions
  */
-private[group] case object Dead extends GroupState { val state: Byte = 4 }
+private[group] case object Dead extends GroupState
 
 /**
   * Group has no more members, but lingers until all offsets have expired. This state
@@ -100,7 +100,7 @@ private[group] case object Dead extends GroupState { val state: Byte = 4 }
   *             group is removed by partition emigration => Dead
   *             group is removed by expiration => Dead
   */
-private[group] case object Empty extends GroupState { val state: Byte = 5 }
+private[group] case object Empty extends GroupState
 
 
 private object GroupMetadata {

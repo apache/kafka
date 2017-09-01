@@ -26,7 +26,7 @@ import java.util.Map;
 /**
  * {@code KafkaClientSupplier} can be used to provide custom Kafka clients to a {@link KafkaStreams} instance.
  *
- * @see KafkaStreams#KafkaStreams(org.apache.kafka.streams.processor.TopologyBuilder, StreamsConfig, KafkaClientSupplier)
+ * @see KafkaStreams#KafkaStreams(org.apache.kafka.streams.Topology, StreamsConfig, KafkaClientSupplier)
  */
 public interface KafkaClientSupplier {
     /**

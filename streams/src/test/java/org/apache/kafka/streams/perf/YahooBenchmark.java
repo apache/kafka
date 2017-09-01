@@ -26,9 +26,9 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
@@ -36,13 +36,13 @@ import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 import java.util.UUID;
-import java.util.List;
-import java.util.ArrayList;
 import java.util.concurrent.CountDownLatch;
 
 
@@ -280,7 +280,7 @@ public class YahooBenchmark {
         serdeProps.put("JsonPOJOClass", ProjectedEvent.class);
         projectedEventDeserializer.configure(serdeProps, false);
 
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, ProjectedEvent> kEvents = builder.stream(Serdes.String(),
             Serdes.serdeFrom(projectedEventSerializer, projectedEventDeserializer), eventsTopic);
         final KTable<String, String> kCampaigns = builder.table(Serdes.String(), Serdes.String(),
@@ -356,6 +356,6 @@ public class YahooBenchmark {
             .groupByKey(Serdes.String(), Serdes.String())
             .count(TimeWindows.of(10 * 1000), "time-windows");
 
-        return new KafkaStreams(builder, streamConfig);
+        return new KafkaStreams(builder.build(), streamConfig);
     }
 }

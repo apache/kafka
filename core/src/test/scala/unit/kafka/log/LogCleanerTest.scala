@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -23,7 +23,7 @@ import java.nio.file.Paths
 import java.util.Properties
 
 import kafka.common._
-import kafka.server.BrokerTopicStats
+import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record._
@@ -86,6 +86,31 @@ class LogCleanerTest extends JUnitSuite {
     val shouldRemain = keysInLog(log).filter(!keys.contains(_))
     assertEquals(shouldRemain, keysInLog(log))
     assertEquals(expectedBytesRead, stats.bytesRead)
+  }
+
+  @Test
+  def testSizeTrimmedForPreallocatedAndCompactedTopic(): Unit = {
+    val originalMaxFileSize = 1024;
+    val cleaner = makeCleaner(2)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, originalMaxFileSize: java.lang.Integer)
+    logProps.put(LogConfig.CleanupPolicyProp, "compact": java.lang.String)
+    logProps.put(LogConfig.PreAllocateEnableProp, "true": java.lang.String)
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    log.appendAsLeader(record(0,0), leaderEpoch = 0) // offset 0
+    log.appendAsLeader(record(1,1), leaderEpoch = 0) // offset 1
+    log.appendAsLeader(record(0,0), leaderEpoch = 0) // offset 2
+    log.appendAsLeader(record(1,1), leaderEpoch = 0) // offset 3
+    log.appendAsLeader(record(0,0), leaderEpoch = 0) // offset 4
+    // roll the segment, so we can clean the messages already appended
+    log.roll()
+
+    // clean the log with only one message removed
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 2, log.activeSegment.baseOffset))
+
+    assertTrue("Cleaned segment file should be trimmed to its real size.",
+      log.logSegments.iterator.next.log.channel().size() < originalMaxFileSize)
   }
 
   @Test
@@ -856,7 +881,7 @@ class LogCleanerTest extends JUnitSuite {
     checkSegmentOrder(groups)
   }
 
-  /** 
+  /**
    * Following the loading of a log segment where the index file is zero sized,
    * the index returned would be the base offset.  Sometimes the log file would
    * contain data with offsets in excess of the baseOffset which would cause
@@ -1213,7 +1238,9 @@ class LogCleanerTest extends JUnitSuite {
 
   private def makeLog(dir: File = dir, config: LogConfig = logConfig, recoveryPoint: Long = 0L) =
     Log(dir = dir, config = config, logStartOffset = 0L, recoveryPoint = recoveryPoint, scheduler = time.scheduler,
-      time = time, brokerTopicStats = new BrokerTopicStats)
+      time = time, brokerTopicStats = new BrokerTopicStats, maxProducerIdExpirationMs = 60 * 60 * 1000,
+      producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
+      logDirFailureChannel = new LogDirFailureChannel(10))
 
   private def noOpCheckDone(topicPartition: TopicPartition) { /* do nothing */  }
 
@@ -1299,7 +1326,7 @@ class FakeOffsetMap(val slots: Int) extends OffsetMap {
     lastOffset = offset
     map.put(keyFor(key), offset)
   }
-  
+
   override def get(key: ByteBuffer): Long = {
     val k = keyFor(key)
     if(map.containsKey(k))
@@ -1307,9 +1334,9 @@ class FakeOffsetMap(val slots: Int) extends OffsetMap {
     else
       -1L
   }
-  
+
   override def clear(): Unit = map.clear()
-  
+
   override def size: Int = map.size
 
   override def latestOffset: Long = lastOffset

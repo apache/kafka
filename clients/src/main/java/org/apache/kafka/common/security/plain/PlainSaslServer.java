@@ -50,7 +50,7 @@ public class PlainSaslServer implements SaslServer {
     private final JaasContext jaasContext;
 
     private boolean complete;
-    private String authorizationID;
+    private String authorizationId;
 
     public PlainSaslServer(JaasContext jaasContext) {
         this.jaasContext = jaasContext;
@@ -79,7 +79,7 @@ public class PlainSaslServer implements SaslServer {
         }
         if (tokens.length != 3)
             throw new SaslException("Invalid SASL/PLAIN response: expected 3 tokens, got " + tokens.length);
-        authorizationID = tokens[0];
+        String authorizationIdFromClient = tokens[0];
         String username = tokens[1];
         String password = tokens[2];
 
@@ -89,14 +89,18 @@ public class PlainSaslServer implements SaslServer {
         if (password.isEmpty()) {
             throw new SaslException("Authentication failed: password not specified");
         }
-        if (authorizationID.isEmpty())
-            authorizationID = username;
 
         String expectedPassword = jaasContext.configEntryOption(JAAS_USER_PREFIX + username,
                 PlainLoginModule.class.getName());
         if (!password.equals(expectedPassword)) {
             throw new SaslException("Authentication failed: Invalid username or password");
         }
+
+        if (!authorizationIdFromClient.isEmpty() && !authorizationIdFromClient.equals(username))
+            throw new SaslException("Authentication failed: Client requested an authorization id that is different from username");
+
+        this.authorizationId = username;
+
         complete = true;
         return new byte[0];
     }
@@ -105,7 +109,7 @@ public class PlainSaslServer implements SaslServer {
     public String getAuthorizationID() {
         if (!complete)
             throw new IllegalStateException("Authentication exchange has not completed");
-        return authorizationID;
+        return authorizationId;
     }
 
     @Override

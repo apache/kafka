@@ -63,6 +63,7 @@ import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -129,13 +130,12 @@ public class KafkaConsumerTest {
         final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
         try {
             new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+            Assert.fail("should have caught an exception and returned");
         } catch (KafkaException e) {
             assertEquals(oldInitCount + 1, MockMetricsReporter.INIT_COUNT.get());
             assertEquals(oldCloseCount + 1, MockMetricsReporter.CLOSE_COUNT.get());
             assertEquals("Failed to construct kafka consumer", e.getMessage());
-            return;
         }
-        Assert.fail("should have caught an exception and returned");
     }
 
     @Test
@@ -1191,23 +1191,17 @@ public class KafkaConsumerTest {
 
     @Test(expected = IllegalStateException.class)
     public void testPollWithEmptySubscription() {
-        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
-        consumer.subscribe(Collections.<String>emptyList());
-        try {
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer()) {
+            consumer.subscribe(Collections.<String>emptyList());
             consumer.poll(0);
-        } finally {
-            consumer.close();
         }
     }
 
     @Test(expected = IllegalStateException.class)
     public void testPollWithEmptyUserAssignment() {
-        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
-        consumer.assign(Collections.<TopicPartition>emptySet());
-        try {
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer()) {
+            consumer.assign(Collections.<TopicPartition>emptySet());
             consumer.poll(0);
-        } finally {
-            consumer.close();
         }
     }
 
@@ -1628,8 +1622,11 @@ public class KafkaConsumerTest {
         ConsumerMetrics metricsRegistry = new ConsumerMetrics(metricGroupPrefix);
 
         SubscriptionState subscriptions = new SubscriptionState(autoResetStrategy);
-        ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(client, metadata, time, retryBackoffMs, requestTimeoutMs);
+        LogContext loggerFactory = new LogContext();
+        ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(loggerFactory, client, metadata, time,
+                retryBackoffMs, requestTimeoutMs);
         ConsumerCoordinator consumerCoordinator = new ConsumerCoordinator(
+                loggerFactory,
                 consumerClient,
                 groupId,
                 rebalanceTimeoutMs,
@@ -1649,6 +1646,7 @@ public class KafkaConsumerTest {
                 true);
 
         Fetcher<String, String> fetcher = new Fetcher<>(
+                loggerFactory,
                 consumerClient,
                 minBytes,
                 maxBytes,
@@ -1667,6 +1665,7 @@ public class KafkaConsumerTest {
                 IsolationLevel.READ_UNCOMMITTED);
 
         return new KafkaConsumer<>(
+                loggerFactory,
                 clientId,
                 consumerCoordinator,
                 keyDeserializer,
@@ -1679,8 +1678,7 @@ public class KafkaConsumerTest {
                 subscriptions,
                 metadata,
                 retryBackoffMs,
-                requestTimeoutMs
-        );
+                requestTimeoutMs);
     }
 
     private static class FetchInfo {

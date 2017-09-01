@@ -89,6 +89,8 @@ public class WindowedStreamPartitionerTest {
                 assertEquals(expected, actual);
             }
         }
+
+        defaultPartitioner.close();
     }
 
     @Test
@@ -113,6 +115,8 @@ public class WindowedStreamPartitionerTest {
         Serializer<?> inner1 = windowedSerializer1.innerSerializer();
         assertNotNull("Inner serializer should be not null", inner1);
         assertTrue("Inner serializer type should be ByteArraySerializer", inner1 instanceof ByteArraySerializer);
+        windowedSerializer.close();
+        windowedSerializer1.close();
     }
 
     @Test
@@ -137,5 +141,7 @@ public class WindowedStreamPartitionerTest {
         Deserializer<?> inner1 = windowedDeserializer1.innerDeserializer();
         assertNotNull("Inner deserializer should be not null", inner1);
         assertTrue("Inner deserializer type should be ByteArrayDeserializer", inner1 instanceof ByteArrayDeserializer);
+        windowedDeserializer.close();
+        windowedDeserializer1.close();
     }
 }

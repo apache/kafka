@@ -49,11 +49,9 @@ import org.apache.kafka.common.record.RecordBatch
  * No attempt is made to checksum the contents of this file, in the event of a crash it is rebuilt.
  *
  */
-class TimeIndex(file: File,
-                baseOffset: Long,
-                maxIndexSize: Int = -1,
-                writable: Boolean = true)
-    extends AbstractIndex[Long, Long](file, baseOffset, maxIndexSize, writable) with Logging {
+// Avoid shadowing mutable file in AbstractIndex
+class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true)
+    extends AbstractIndex[Long, Long](_file, baseOffset, maxIndexSize, writable) with Logging {
 
   override def entrySize = 12
 
@@ -128,7 +126,7 @@ class TimeIndex(file: File,
         mmap.putLong(timestamp)
         mmap.putInt((offset - baseOffset).toInt)
         _entries += 1
-        require(_entries * entrySize == mmap.position, _entries + " entries but file position in index is " + mmap.position + ".")
+        require(_entries * entrySize == mmap.position(), _entries + " entries but file position in index is " + mmap.position() + ".")
       }
     }
   }
@@ -206,5 +204,4 @@ class TimeIndex(file: File,
       "Time index file " + file.getAbsolutePath + " is corrupt, found " + len +
           " bytes which is not positive or not a multiple of 12.")
   }
-
 }

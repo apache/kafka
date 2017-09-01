@@ -39,7 +39,7 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
   // If required, override properties by mutating the passed Properties object
   protected def propertyOverrides(properties: Properties) {}
 
-  def generateConfigs() = {
+  def generateConfigs = {
     val props = TestUtils.createBrokerConfigs(numBrokers, zkConnect,
       enableControlledShutdown = false, enableDeleteTopic = true,
       interBrokerSecurityProtocol = Some(securityProtocol),
@@ -155,7 +155,7 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
 
   def nextRequestHeader(apiKey: ApiKeys, apiVersion: Short): RequestHeader = {
     correlationId += 1
-    new RequestHeader(apiKey.id, apiVersion, "client-id", correlationId)
+    new RequestHeader(apiKey, apiVersion, "client-id", correlationId)
   }
 
 }

@@ -233,9 +233,9 @@ public class RocksDBSessionStoreTest {
     public void shouldThrowNullPointerExceptionOnPutNullKey() throws Exception {
         sessionStore.put(null, 1L);
     }
-
-    static List<KeyValue<Windowed<String>, Long>> toList(final KeyValueIterator<Windowed<String>, Long> iterator) {
-        final List<KeyValue<Windowed<String>, Long>> results = new ArrayList<>();
+    
+    static <K, V> List<KeyValue<Windowed<K>, V>> toList(final KeyValueIterator<Windowed<K>, V> iterator) {
+        final List<KeyValue<Windowed<K>, V>> results = new ArrayList<>();
         while (iterator.hasNext()) {
             results.add(iterator.next());
         }

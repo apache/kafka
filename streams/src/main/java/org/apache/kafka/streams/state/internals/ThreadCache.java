@@ -77,6 +77,38 @@ public class ThreadCache {
     }
 
     /**
+     * The thread cache maintains a set of {@link NamedCache}s whose names are a concatenation of the task ID and the
+     * underlying store name. This method creates those names.
+     * @param taskIDString Task ID
+     * @param underlyingStoreName Underlying store name
+     * @return
+     */
+    public static String nameSpaceFromTaskIdAndStore(final String taskIDString, final String underlyingStoreName) {
+        return taskIDString + "-" + underlyingStoreName;
+    }
+
+    /**
+     * Given a cache name of the form taskid-storename, return the task ID.
+     * @param cacheName
+     * @return
+     */
+    public static String taskIDfromCacheName(final String cacheName) {
+        String[] tokens = cacheName.split("-");
+        return tokens[0];
+    }
+
+    /**
+     * Given a cache name of the form taskid-storename, return the store name.
+     * @param cacheName
+     * @return
+     */
+    public static String underlyingStoreNamefromCacheName(final String cacheName) {
+        String[] tokens = cacheName.split("-");
+        return tokens[1];
+    }
+
+
+    /**
      * Add a listener that is called each time an entry is evicted from the cache or an explicit flush is called
      *
      * @param namespace
@@ -96,9 +128,10 @@ public class ThreadCache {
         }
         cache.flush();
 
-        if (log.isTraceEnabled())
+        if (log.isTraceEnabled()) {
             log.trace("{} Cache stats on flush: #puts={}, #gets={}, #evicts={}, #flushes={}",
-                    logPrefix, puts(), gets(), evicts(), flushes());
+                logPrefix, puts(), gets(), evicts(), flushes());
+        }
     }
 
     public LRUCacheEntry get(final String namespace, Bytes key) {
@@ -216,8 +249,9 @@ public class ThreadCache {
             numEvicts++;
             numEvicted++;
         }
-
-        log.debug("{} Evicted {} entries from cache {}", logPrefix, numEvicted, namespace);
+        if (log.isTraceEnabled()) {
+            log.trace("{} Evicted {} entries from cache {}", logPrefix, numEvicted, namespace);
+        }
     }
 
     private synchronized NamedCache getCache(final String namespace) {

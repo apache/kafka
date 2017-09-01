@@ -158,6 +158,12 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
   }
 
   @Test
+  def testOffsetsForTimesWhenOffsetNotFound() {
+    val consumer = consumers.head
+    assertNull(consumer.offsetsForTimes(Map(tp -> new JLong(0L)).asJava).get(tp))
+  }
+
+  @Test
   def testOffsetsForTimesAfterDeleteRecords() {
     val consumer = consumers.head
     subscribeAndWaitForAssignment(topic, consumer)

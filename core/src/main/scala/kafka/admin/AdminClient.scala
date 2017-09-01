@@ -34,7 +34,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion
 import org.apache.kafka.common.requests.DescribeGroupsResponse.GroupMetadata
 import org.apache.kafka.common.requests.OffsetFetchResponse
-import org.apache.kafka.common.utils.{KafkaThread, Time, Utils}
+import org.apache.kafka.common.utils.{LogContext, KafkaThread, Time, Utils}
 import org.apache.kafka.common.{Cluster, Node, TopicPartition}
 
 import scala.collection.JavaConverters._
@@ -66,7 +66,7 @@ class AdminClient(val time: Time,
       } finally {
         pendingFutures.asScala.foreach { future =>
           try {
-            future.raise(Errors.UNKNOWN)
+            future.raise(Errors.UNKNOWN_SERVER_ERROR)
           } catch {
             case _: IllegalStateException => // It is OK if the future has been completed
           }
@@ -469,6 +469,7 @@ object AdminClient {
       new ApiVersions)
 
     val highLevelClient = new ConsumerNetworkClient(
+      new LogContext(),
       networkClient,
       metadata,
       time,

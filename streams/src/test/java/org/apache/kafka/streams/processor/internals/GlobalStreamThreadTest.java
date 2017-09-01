@@ -27,6 +27,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
@@ -35,9 +36,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 
+import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.RUNNING;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -107,7 +110,7 @@ public class GlobalStreamThreadTest {
 
 
     @Test
-    public void shouldBeRunningAfterSuccesulStart() throws Exception {
+    public void shouldBeRunningAfterSuccessfulStart() throws Exception {
         initializeConsumer();
         globalStreamThread.start();
         assertTrue(globalStreamThread.stillRunning());
@@ -117,8 +120,9 @@ public class GlobalStreamThreadTest {
     public void shouldStopRunningWhenClosedByUser() throws Exception {
         initializeConsumer();
         globalStreamThread.start();
-        globalStreamThread.close();
+        globalStreamThread.shutdown();
         globalStreamThread.join();
+        assertEquals(GlobalStreamThread.State.DEAD, globalStreamThread.state());
     }
 
     @Test
@@ -127,10 +131,52 @@ public class GlobalStreamThreadTest {
         globalStreamThread.start();
         final StateStore globalStore = builder.globalStateStores().get("bar");
         assertTrue(globalStore.isOpen());
-        globalStreamThread.close();
+        globalStreamThread.shutdown();
         globalStreamThread.join();
         assertFalse(globalStore.isOpen());
     }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldTransitionToDeadOnClose() throws InterruptedException {
+
+        initializeConsumer();
+        globalStreamThread.start();
+        globalStreamThread.shutdown();
+        globalStreamThread.join();
+
+        assertEquals(GlobalStreamThread.State.DEAD, globalStreamThread.state());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldStayDeadAfterTwoCloses() throws InterruptedException {
+
+        initializeConsumer();
+        globalStreamThread.start();
+        globalStreamThread.shutdown();
+        globalStreamThread.join();
+        globalStreamThread.shutdown();
+
+        assertEquals(GlobalStreamThread.State.DEAD, globalStreamThread.state());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldTransitiontoRunningOnStart() throws InterruptedException {
+
+        initializeConsumer();
+        globalStreamThread.start();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return globalStreamThread.state() == RUNNING;
+            }
+        }, 10 * 1000, "Thread never started.");
+        globalStreamThread.shutdown();
+    }
+
+
 
     private void initializeConsumer() {
         mockConsumer.updatePartitions("foo", Collections.singletonList(new PartitionInfo("foo",

@@ -18,17 +18,24 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.ProcessorContext;
 
 import static java.lang.String.format;
+import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
 
 class SourceNodeRecordDeserializer implements RecordDeserializer {
     private final SourceNode sourceNode;
+    private final DeserializationExceptionHandler deserializationExceptionHandler;
 
-    SourceNodeRecordDeserializer(final SourceNode sourceNode) {
+    SourceNodeRecordDeserializer(final SourceNode sourceNode,
+                                 final DeserializationExceptionHandler deserializationExceptionHandler) {
         this.sourceNode = sourceNode;
+        this.deserializationExceptionHandler = deserializationExceptionHandler;
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public ConsumerRecord<Object, Object> deserialize(final ConsumerRecord<byte[], byte[]> rawRecord) {
         final Object key;
@@ -53,5 +60,31 @@ class SourceNodeRecordDeserializer implements RecordDeserializer {
                                     rawRecord.serializedKeySize(),
                                     rawRecord.serializedValueSize(), key, value);
 
+    }
+
+    public ConsumerRecord<Object, Object> tryDeserialize(final ProcessorContext processorContext,
+                                                         ConsumerRecord<byte[], byte[]> rawRecord) {
+
+        // catch and process if we have a deserialization handler
+        try {
+            return deserialize(rawRecord);
+        } catch (Exception e) {
+            final DeserializationExceptionHandler.DeserializationHandlerResponse response =
+                    deserializationExceptionHandler.handle(processorContext, rawRecord, e);
+            if (response == DeserializationExceptionHandler.DeserializationHandlerResponse.FAIL) {
+                throw new StreamsException("Deserialization exception handler is set to fail upon" +
+                        " a deserialization error. If you would rather have the streaming pipeline" +
+                        " continue after a deserialization error, please set the " +
+                        DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.",
+                        e);
+            } else {
+                sourceNode.nodeMetrics.sourceNodeSkippedDueToDeserializationError.record();
+            }
+        }
+        return null;
+    }
+
+    public SourceNode sourceNode() {
+        return sourceNode;
     }
 }

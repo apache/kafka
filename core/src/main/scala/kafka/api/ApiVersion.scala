@@ -69,7 +69,10 @@ object ApiVersion {
     "0.11.0-IV1" -> KAFKA_0_11_0_IV1,
     // Introduced leader epoch fetches to the replica fetcher via KIP-101
     "0.11.0-IV2" -> KAFKA_0_11_0_IV2,
-    "0.11.0" -> KAFKA_0_11_0_IV2
+    "0.11.0" -> KAFKA_0_11_0_IV2,
+    // Introduced LeaderAndIsrRequest V1, UpdateMetadataRequest V4 and FetchRequest V6 via KIP-112
+    "1.0-IV0" -> KAFKA_1_0_IV0,
+    "1.0" -> KAFKA_1_0_IV0
   )
 
   private val versionPattern = "\\.".r
@@ -171,3 +174,10 @@ case object KAFKA_0_11_0_IV2 extends ApiVersion {
   val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V2
   val id: Int = 12
 }
+
+case object KAFKA_1_0_IV0 extends ApiVersion {
+  val version: String = "1.0-IV0"
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V2
+  val id: Int = 13
+}
+

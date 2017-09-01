@@ -31,11 +31,12 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -132,7 +133,7 @@ public class ResetIntegrationTest {
     public void testReprocessingFromScratchAfterResetWithIntermediateUserTopic() throws Exception {
         CLUSTER.createTopic(INTERMEDIATE_USER_TOPIC);
 
-        final Properties streamsConfiguration = prepareTest();
+        final Properties streamsConfiguration = prepareTest(4);
         final Properties resultTopicConsumerConfig = TestUtils.consumerConfig(
             CLUSTER.bootstrapServers(),
             APP_ID + "-standard-consumer-" + OUTPUT_TOPIC,
@@ -198,7 +199,7 @@ public class ResetIntegrationTest {
 
     @Test
     public void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic() throws Exception {
-        final Properties streamsConfiguration = prepareTest();
+        final Properties streamsConfiguration = prepareTest(1);
         final Properties resultTopicConsumerConfig = TestUtils.consumerConfig(
                 CLUSTER.bootstrapServers(),
                 APP_ID + "-standard-consumer-" + OUTPUT_TOPIC,
@@ -241,14 +242,14 @@ public class ResetIntegrationTest {
         cleanGlobal(null);
     }
 
-    private Properties prepareTest() throws Exception {
+    private Properties prepareTest(final int threads) throws Exception {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + testNo);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 4);
+        streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, threads);
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
         streamsConfiguration.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
@@ -288,8 +289,8 @@ public class ResetIntegrationTest {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(1L, "jjj")), producerConfig, mockTime.milliseconds());
     }
 
-    private KStreamBuilder setupTopologyWithIntermediateUserTopic(final String outputTopic2) {
-        final KStreamBuilder builder = new KStreamBuilder();
+    private Topology setupTopologyWithIntermediateUserTopic(final String outputTopic2) {
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Long, String> input = builder.stream(INPUT_TOPIC);
 
@@ -316,11 +317,11 @@ public class ResetIntegrationTest {
             })
             .to(Serdes.Long(), Serdes.Long(), outputTopic2);
 
-        return builder;
+        return builder.build();
     }
 
-    private KStreamBuilder setupTopologyWithoutIntermediateUserTopic() {
-        final KStreamBuilder builder = new KStreamBuilder();
+    private Topology setupTopologyWithoutIntermediateUserTopic() {
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Long, String> input = builder.stream(INPUT_TOPIC);
 
@@ -332,7 +333,7 @@ public class ResetIntegrationTest {
             }
         }).to(Serdes.Long(), Serdes.Long(), OUTPUT_TOPIC);
 
-        return builder;
+        return builder.build();
     }
 
     private void cleanGlobal(final String intermediateUserTopic) {

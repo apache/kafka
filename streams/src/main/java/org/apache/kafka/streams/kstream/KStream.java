@@ -21,14 +21,15 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.internals.WindowedSerializer;
 import org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
-import org.apache.kafka.streams.processor.TopologyBuilder;
 
 /**
  * {@code KStream} is an abstraction of a <i>record stream</i> of {@link KeyValue} pairs, i.e., each record is an
@@ -36,13 +37,13 @@ import org.apache.kafka.streams.processor.TopologyBuilder;
  * For example a user X might buy two items I1 and I2, and thus there might be two records {@code <K:I1>, <K:I2>}
  * in the stream.
  * <p>
- * A {@code KStream} is either {@link KStreamBuilder#stream(String...) defined from one or multiple Kafka topics} that
+ * A {@code KStream} is either {@link StreamsBuilder#stream(String...) defined from one or multiple Kafka topics} that
  * are consumed message by message or the result of a {@code KStream} transformation.
  * A {@link KTable} can also be {@link KTable#toStream() converted} into a {@code KStream}.
  * <p>
  * A {@code KStream} can be transformed record by record, joined with another {@code KStream}, {@link KTable},
  * {@link GlobalKTable}, or can be aggregated into a {@link KTable}.
- * Kafka Streams DSL can be mixed-and-matched with Processor API (PAPI) (c.f. {@link TopologyBuilder}) via
+ * Kafka Streams DSL can be mixed-and-matched with Processor API (PAPI) (c.f. {@link Topology}) via
  * {@link #process(ProcessorSupplier, String...) process(...)},
  * {@link #transform(TransformerSupplier, String...) transform(...)}, and
  * {@link #transformValues(ValueTransformerSupplier, String...) transformValues(...)}.
@@ -51,9 +52,8 @@ import org.apache.kafka.streams.processor.TopologyBuilder;
  * @param <V> Type of values
  * @see KTable
  * @see KGroupedStream
- * @see KStreamBuilder#stream(String...)
+ * @see StreamsBuilder#stream(String...)
  */
-@SuppressWarnings("unused")
 @InterfaceStability.Evolving
 public interface KStream<K, V> {
 
@@ -122,7 +122,7 @@ public interface KStream<K, V> {
      * The example below normalizes the String key to upper-case letters and counts the number of token of the value string.
      * <pre>{@code
      * KStream<String, String> inputStream = builder.stream("topic");
-     * KStream<Integer, String> outputStream = inputStream.map(new KeyValueMapper<String, String, KeyValue<String, Integer>> {
+     * KStream<String, Integer> outputStream = inputStream.map(new KeyValueMapper<String, String, KeyValue<String, Integer>> {
      *     KeyValue<String, Integer> apply(String key, String value) {
      *         return new KeyValue<>(key.toUpperCase(), value.split(" ").length);
      *     }
@@ -287,9 +287,9 @@ public interface KStream<K, V> {
      * Implementors will need to override {@code toString()} for keys and values that are not of type {@link String},
      * {@link Integer} etc. to get meaningful information.
      *
-     * @param streamName the name used to label the key/value pairs printed to the console
+     * @param label the name used to label the key/value pairs printed to the console
      */
-    void print(final String streamName);
+    void print(final String label);
 
     /**
      * Print the records of this stream to {@code System.out}.
@@ -319,11 +319,111 @@ public interface KStream<K, V> {
      *
      * @param keySerde   key serde used to deserialize key if type is {@code byte[]},
      * @param valSerde   value serde used to deserialize value if type is {@code byte[]},
-     * @param streamName the name used to label the key/value pairs printed to the console
+     * @param label the name used to label the key/value pairs printed to the console
      */
     void print(final Serde<K> keySerde,
                final Serde<V> valSerde,
-               final String streamName);
+               final String label);
+
+    /**
+     * Print the customized output with {@code System.out}.
+     * <p>
+     * The default serde will be use to deserialize key or value if type is {@code byte[]}.
+     * The user provided {@link KeyValueMapper} which customizes output is used to print with {@code System.out}
+     * <p>
+     * The example below shows the way to customize output data.
+     * <pre>{@code
+     * final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
+     *     @Override
+     *     public String apply(Integer key, String value) {
+     *         return String.format("(%d, %s)", key, value);
+     *     }
+     * };
+     * }</pre>
+     * <p>
+     * The KeyValueMapper's mapped value type must be {@code String}.
+     *
+     * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
+     */
+    void print(final KeyValueMapper<? super K, ? super V, String> mapper);
+
+    /**
+     * Print the customized output with {@code System.out}.
+     * <p>
+     * The default serde will be used to deserialize key or value if type is {@code byte[]}.
+     * The user provided {@link KeyValueMapper} which customizes output is used to print with {@code System.out}
+     * <p>
+     * The example below shows the way to customize output data.
+     * <pre>{@code
+     * final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
+     *     @Override
+     *     public String apply(Integer key, String value) {
+     *         return String.format("(%d, %s)", key, value);
+     *     }
+     * };
+     * }</pre>
+     * <p>
+     * The KeyValueMapper's mapped value type must be {@code String}.
+     *
+     * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
+     * @param label The given name which labels output will be printed.
+     */
+    void print(final KeyValueMapper<? super K, ? super V, String> mapper, final String label);
+
+    /**
+     * Print the customized output with {@code System.out}.
+     * <p>
+     * The user provided {@link KeyValueMapper} which customizes output is used to print with {@code System.out}
+     * The provided serde will be use to deserialize key or value if type is {@code byte[]}.
+     * <p>
+     * The example below shows the way to customize output data.
+     * <pre>{@code
+     * final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
+     *     @Override
+     *     public String apply(Integer key, String value) {
+     *         return String.format("(%d, %s)", key, value);
+     *     }
+     * };
+     * }</pre>
+     * <p>
+     * The provided KeyValueMapper's mapped value type must be {@code String}.
+     * <p>
+     * Implementors will need to override {@code toString()} for keys and values that are not of type {@link String},
+     * {@link Integer} etc. to get meaningful information.
+     *
+     * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
+     * @param keySerde a {@link Serde<K>} used to deserialize key if type is {@code byte[]}.
+     * @param valSerde a {@link Serde<V>} used to deserialize value if type is {@code byte[]}.
+     */
+    void print(final KeyValueMapper<? super K, ? super V, String> mapper, final Serde<K> keySerde, final Serde<V> valSerde);
+
+    /**
+     * Print the customized output with {@code System.out}.
+     * <p>
+     * The user provided {@link KeyValueMapper} which customizes output is used to print with {@code System.out}.
+     * The provided serde will be use to deserialize key or value if type is {@code byte[]}.
+     * <p>
+     * The example below shows the way to customize output data.
+     * <pre>{@code
+     * final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
+     *     @Override
+     *     public String apply(Integer key, String value) {
+     *         return String.format("(%d, %s)", key, value);
+     *     }
+     * };
+     * }</pre>
+     * <p>
+     * The provided KeyValueMapper's mapped value type must be {@code String}.
+     * <p>
+     * Implementors will need to override {@code toString()} for keys and values that are not of type {@link String},
+     * {@link Integer} etc. to get meaningful information.
+     *
+     * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
+     * @param keySerde a {@link Serde<K>} used to deserialize key if type is {@code byte[]}.
+     * @param valSerde a {@link Serde<V>} used to deserialize value if type is {@code byte[]}.
+     * @param label The given name which labels output will be printed.
+     */
+    void print(final KeyValueMapper<? super K, ? super V, String> mapper, final Serde<K> keySerde, final Serde<V> valSerde, final String label);
 
     /**
      * Write the records of this stream to a file at the given path.
@@ -351,10 +451,10 @@ public interface KStream<K, V> {
      * {@link Integer} etc. to get meaningful information.
      *
      * @param filePath   name of the file to write to
-     * @param streamName the name used to label the key/value pairs written to the file
+     * @param label the name used to label the key/value pairs written to the file
      */
     void writeAsText(final String filePath,
-                     final String streamName);
+                     final String label);
 
     /**
      * Write the records of this stream to a file at the given path.
@@ -386,14 +486,126 @@ public interface KStream<K, V> {
      * {@link Integer} etc. to get meaningful information.
      *
      * @param filePath   name of the file to write to
-     * @param streamName the name used to label the key/value pairs written to the file
+     * @param label the name used to label the key/value pairs written to the file
      * @param keySerde   key serde used to deserialize key if type is {@code byte[]},
      * @param valSerde   value serde used deserialize value if type is {@code byte[]},
      */
     void writeAsText(final String filePath,
-                     final String streamName,
+                     final String label,
                      final Serde<K> keySerde,
                      final Serde<V> valSerde);
+
+    /**
+     * Write the customised output to a given file path.
+     * <p>
+     * The user provided {@link KeyValueMapper} which customizes output is used to write to file.
+     * This function will use default name of stream to label records.
+     * <p>
+     * The default key and value serde will used to deserialize {@code byte[]} records before calling {@code toString()}.
+     * <p>
+     * The example below shows the way to customize output data.
+     * <pre>{@code
+     * final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
+     *     @Override
+     *     public String apply(Integer key, String value) {
+     *         return String.format("(%d, %s)", key, value);
+     *     }
+     * };
+     * }</pre>
+     * <p>
+     * The KeyValueMapper's mapped value type must be {@code String}.
+     *
+     * @param filePath path of the file to write to.
+     * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
+     */
+    void writeAsText(final String filePath, final KeyValueMapper<? super K, ? super V, String> mapper);
+
+    /**
+     * Write the customised output to a given file path.
+     * <p>
+     * The user provided {@link KeyValueMapper} which customizes output is used to write to file.
+     * This function will use given name of stream to label records.
+     * <p>
+     * The default key and value serde will used to deserialize {@code byte[]} records before calling {@code toString()}.
+     * <p>
+     * The example below shows the way to customize output data.
+     * <pre>{@code
+     * final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
+     *     @Override
+     *     public String apply(Integer key, String value) {
+     *         return String.format("(%d, %s)", key, value);
+     *     }
+     * };
+     * }</pre>
+     * <p>
+     * The KeyValueMapper's mapped value type must be {@code String}.
+     *
+     * @param filePath path of the file to write to.
+     * @param label the name used to label records written to file.
+     * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
+     */
+    void writeAsText(final String filePath, final String label, final KeyValueMapper<? super K, ? super V, String> mapper);
+
+    /**
+     * Write the customised output to a given file path.
+     * <p>
+     * The user provided {@link KeyValueMapper} which customizes output is used to write to file.
+     * This function will use default name of stream to label records.
+     * <p>
+     * The given key and value serde will be used to deserialize {@code byte[]} records before calling {@code toString()}.
+     * <p>
+     * The example below shows the way to customize output data.
+     * <pre>{@code
+     * final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
+     *     @Override
+     *     public String apply(Integer key, String value) {
+     *         return String.format("(%d, %s)", key, value);
+     *     }
+     * };
+     * }</pre>
+     * <p>
+     * The KeyValueMapper's mapped value type must be {@code String}.
+     * <p>
+     * Implementors will need to override {@code toString()} for keys and values that are not of type {@link String},
+     * {@link Integer} etc. to get meaningful information.
+     *
+     * @param filePath path of the file to write to.
+     * @param keySerde key serde used to deserialize key if type is {@code byte[]}.
+     * @param valSerde value serde used to deserialize value if type is {@code byte[]}.
+     * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
+     */
+    void writeAsText(final String filePath, final Serde<K> keySerde, final Serde<V> valSerde, final KeyValueMapper<? super K, ? super V, String> mapper);
+
+    /**
+     * Write the customised output to a given file path.
+     * <p>
+     * The user provided {@link KeyValueMapper} which customizes output is used to write to file.
+     * This function will use given name of stream to label records.
+     * <p>
+     * The given key and value serde will be used to deserialize {@code byte[]} records before calling {@code toString()}.
+     * <p>
+     * The example below shows the way to customize output data.
+     * <pre>{@code
+     * final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
+     *     @Override
+     *     public String apply(Integer key, String value) {
+     *         return String.format("(%d, %s)", key, value);
+     *     }
+     * };
+     * }</pre>
+     * <p>
+     * The KeyValueMapper's mapped value type must be {@code String}.
+     * <p>
+     * Implementors will need to override {@code toString()} for keys and values that are not of type {@link String},
+     * {@link Integer} etc. to get meaningful information.
+     *
+     * @param filePath path of the file to write to.
+     * @param label the name used to label records written to file.
+     * @param keySerde key serde used to deserialize key if type is {@code byte[]}.
+     * @param valSerde value serde used to deserialize value if type is {@code byte[]}.
+     * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
+     */
+    void writeAsText(final String filePath, final String label, final Serde<K> keySerde, final Serde<V> valSerde, final KeyValueMapper<? super K, ? super V, String> mapper);
 
     /**
      * Perform an action on each record of {@code KStream}.
@@ -441,8 +653,9 @@ public interface KStream<K, V> {
      * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
      * started).
      * <p>
-     * This is equivalent to calling {@link #to(String) #to(someTopicName)} and {@link KStreamBuilder#stream(String...)
-     * KStreamBuilder#stream(someTopicName)}.
+     * This is equivalent to calling {@link #to(String) #to(someTopicName)} and
+     * {@link org.apache.kafka.streams.StreamsBuilder#stream(String...)
+     * StreamsBuilder#stream(someTopicName)}.
      *
      * @param topic the topic name
      * @return a {@code KStream} that contains the exact same (and potentially repartitioned) records as this {@code KStream}
@@ -456,7 +669,7 @@ public interface KStream<K, V> {
      * started).
      * <p>
      * This is equivalent to calling {@link #to(StreamPartitioner, String) #to(StreamPartitioner, someTopicName)} and
-     * {@link KStreamBuilder#stream(String...) KStreamBuilder#stream(someTopicName)}.
+     * {@link StreamsBuilder#stream(String...) StreamsBuilder#stream(someTopicName)}.
      *
      * @param partitioner the function used to determine how records are distributed among partitions of the topic,
      *                    if not specified producer's {@link DefaultPartitioner} will be used
@@ -475,7 +688,7 @@ public interface KStream<K, V> {
      * used&mdash;otherwise producer's {@link DefaultPartitioner} is used.
      * <p>
      * This is equivalent to calling {@link #to(Serde, Serde, String) #to(keySerde, valSerde, someTopicName)} and
-     * {@link KStreamBuilder#stream(Serde, Serde, String...) KStreamBuilder#stream(keySerde, valSerde, someTopicName)}.
+     * {@link StreamsBuilder#stream(Serde, Serde, String...) StreamsBuilder#stream(keySerde, valSerde, someTopicName)}.
      *
      * @param keySerde key serde used to send key-value pairs,
      *                 if not specified the default key serde defined in the configuration will be used
@@ -495,8 +708,8 @@ public interface KStream<K, V> {
      * started).
      * <p>
      * This is equivalent to calling {@link #to(Serde, Serde, StreamPartitioner, String) #to(keySerde, valSerde,
-     * StreamPartitioner, someTopicName)} and {@link KStreamBuilder#stream(Serde, Serde, String...)
-     * KStreamBuilder#stream(keySerde, valSerde, someTopicName)}.
+     * StreamPartitioner, someTopicName)} and {@link StreamsBuilder#stream(Serde, Serde, String...)
+     * StreamsBuilder#stream(keySerde, valSerde, someTopicName)}.
      *
      * @param keySerde    key serde used to send key-value pairs,
      *                    if not specified the default key serde defined in the configuration will be used
@@ -582,7 +795,7 @@ public interface KStream<K, V> {
      * computes zero or more output records.
      * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K':V'>, <K'':V''>, ...}.
      * This is a stateful record-by-record operation (cf. {@link #flatMap(KeyValueMapper)}).
-     * Furthermore, via {@link Transformer#punctuate(long)} the processing progress can be observed and additional
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can be observed and additional
      * periodic actions can be performed.
      * <p>
      * In order to assign a state, the state must be created and registered beforehand:
@@ -602,9 +815,9 @@ public interface KStream<K, V> {
      * <p>
      * Within the {@link Transformer}, the state is obtained via the
      * {@link  ProcessorContext}.
-     * To trigger periodic actions via {@link Transformer#punctuate(long) punctuate()}, a schedule must be registered.
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()}, a schedule must be registered.
      * The {@link Transformer} must return a {@link KeyValue} type in {@link Transformer#transform(Object, Object)
-     * transform()} and {@link Transformer#punctuate(long) punctuate()}.
+     * transform()} and {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()}.
      * <pre>{@code
      * new TransformerSupplier() {
      *     Transformer get() {
@@ -615,19 +828,15 @@ public interface KStream<K, V> {
      *             void init(ProcessorContext context) {
      *                 this.context = context;
      *                 this.state = context.getStateStore("myTransformState");
-     *                 context.schedule(1000); // call #punctuate() each 1000ms
+     *                 // punctuate each 1000ms; can access this.state
+     *                 // can emit as many new KeyValue pairs as required via this.context#forward()
+     *                 context.schedule(1000, PunctuationType.SYSTEM_TIME, new Punctuator(..));
      *             }
      *
      *             KeyValue transform(K key, V value) {
      *                 // can access this.state
      *                 // can emit as many new KeyValue pairs as required via this.context#forward()
      *                 return new KeyValue(key, value); // can emit a single value via return -- can also be null
-     *             }
-     *
-     *             KeyValue punctuate(long timestamp) {
-     *                 // can access this.state
-     *                 // can emit as many new KeyValue pairs as required via this.context#forward()
-     *                 return null; // don't return result -- can also be "new KeyValue()"
      *             }
      *
      *             void close() {
@@ -661,7 +870,7 @@ public interface KStream<K, V> {
      * record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
      * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper)}).
-     * Furthermore, via {@link ValueTransformer#punctuate(long)} the processing progress can be observed and additional
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can be observed and additional
      * periodic actions get be performed.
      * <p>
      * In order to assign a state, the state must be created and registered beforehand:
@@ -681,7 +890,7 @@ public interface KStream<K, V> {
      * <p>
      * Within the {@link ValueTransformer}, the state is obtained via the
      * {@link ProcessorContext}.
-     * To trigger periodic actions via {@link ValueTransformer#punctuate(long) punctuate()}, a schedule must be
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()}, a schedule must be
      * registered.
      * In contrast to {@link #transform(TransformerSupplier, String...) transform()}, no additional {@link KeyValue}
      * pairs should be emitted via {@link ProcessorContext#forward(Object, Object)
@@ -694,17 +903,12 @@ public interface KStream<K, V> {
      *
      *             void init(ProcessorContext context) {
      *                 this.state = context.getStateStore("myValueTransformState");
-     *                 context.schedule(1000); // call #punctuate() each 1000ms
+     *                 context.schedule(1000, PunctuationType.SYSTEM_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
      *             }
      *
      *             NewValueType transform(V value) {
      *                 // can access this.state
      *                 return new NewValueType(); // or null
-     *             }
-     *
-     *             NewValueType punctuate(long timestamp) {
-     *                 // can access this.state
-     *                 return null; // don't return result -- can also be "new NewValueType()" (current key will be used to build KeyValue pair)
      *             }
      *
      *             void close() {
@@ -734,7 +938,7 @@ public interface KStream<K, V> {
      * Process all records in this stream, one record at a time, by applying a {@link Processor} (provided by the given
      * {@link ProcessorSupplier}).
      * This is a stateful record-by-record operation (cf. {@link #foreach(ForeachAction)}).
-     * Furthermore, via {@link Processor#punctuate(long)} the processing progress can be observed and additional
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can be observed and additional
      * periodic actions can be performed.
      * Note that this is a terminal operation that returns void.
      * <p>
@@ -755,7 +959,7 @@ public interface KStream<K, V> {
      * <p>
      * Within the {@link Processor}, the state is obtained via the
      * {@link ProcessorContext}.
-     * To trigger periodic actions via {@link Processor#punctuate(long) punctuate()},
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
      * a schedule must be registered.
      * <pre>{@code
      * new ProcessorSupplier() {
@@ -765,14 +969,10 @@ public interface KStream<K, V> {
      *
      *             void init(ProcessorContext context) {
      *                 this.state = context.getStateStore("myProcessorState");
-     *                 context.schedule(1000); // call #punctuate() each 1000ms
+     *                 context.schedule(1000, PunctuationType.SYSTEM_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
      *             }
      *
      *             void process(K key, V value) {
-     *                 // can access this.state
-     *             }
-     *
-     *             void punctuate(long timestamp) {
      *                 // can access this.state
      *             }
      *
@@ -1234,7 +1434,7 @@ public interface KStream<K, V> {
                                      final Serde<VO> otherValueSerde);
 
     /**
-     * Join records of this stream with another {@code KStream}'s records using windowed left equi join with default
+     * Join records of this stream with another {@code KStream}'s records using windowed outer equi join with default
      * serializers and deserializers.
      * In contrast to {@link #join(KStream, ValueJoiner, JoinWindows) inner-join} or
      * {@link #leftJoin(KStream, ValueJoiner, JoinWindows) left-join}, all records from both streams will produce at
@@ -1315,7 +1515,7 @@ public interface KStream<K, V> {
                                       final JoinWindows windows);
 
     /**
-     * Join records of this stream with another {@code KStream}'s records using windowed left equi join.
+     * Join records of this stream with another {@code KStream}'s records using windowed outer equi join.
      * In contrast to {@link #join(KStream, ValueJoiner, JoinWindows, Serde, Serde, Serde) inner-join} or
      * {@link #leftJoin(KStream, ValueJoiner, JoinWindows, Serde, Serde, Serde) left-join}, all records from both
      * streams will produce at least one output record (cf. below).

@@ -128,7 +128,7 @@ public final class ProducerBatch {
             return false;
         } else {
             // No need to get the CRC.
-            this.recordsBuilder.append(timestamp, key, value);
+            this.recordsBuilder.append(timestamp, key, value, headers);
             this.maxRecordSize = Math.max(this.maxRecordSize, AbstractRecords.estimateSizeInBytesUpperBound(magic(),
                     recordsBuilder.compressionType(), key, value, headers));
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,

@@ -31,7 +31,7 @@ import kafka.utils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.Time
 import org.easymock.{EasyMock, IAnswer}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -92,6 +92,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
     log.flush()
 
+    log.onHighWatermarkIncremented(log.logEndOffset)
     log.maybeIncrementLogStartOffset(3)
     log.deleteOldSegments()
 
@@ -181,7 +182,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     AdminUtils.createTopic(zkUtils, topic, 3, 1)
 
     val logManager = server.getLogManager
-    val log = logManager.createLog(new TopicPartition(topic, part), logManager.defaultConfig)
+    val log = logManager.getOrCreateLog(new TopicPartition(topic, part), logManager.defaultConfig)
 
     for (_ <- 0 until 20)
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
@@ -210,7 +211,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     AdminUtils.createTopic(zkUtils, topic, 3, 1)
 
     val logManager = server.getLogManager
-    val log = logManager.createLog(new TopicPartition(topic, part), logManager.defaultConfig)
+    val log = logManager.getOrCreateLog(new TopicPartition(topic, part), logManager.defaultConfig)
     for (_ <- 0 until 20)
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
     log.flush()

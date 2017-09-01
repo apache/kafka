@@ -44,7 +44,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   val overridingProps = new Properties
   overridingProps.put(KafkaConfig.NumPartitionsProp, numParts.toString)
 
-  def generateConfigs() =
+  def generateConfigs =
     TestUtils.createBrokerConfigs(numNodes, zkConnect, enableDeleteTopic=true).map(KafkaConfig.fromProps(_, overridingProps))
 
   val nMessages = 2
@@ -154,6 +154,17 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     TestUtils.consumeTopicRecords(servers, topic, nMessages * 2)
 
     assertTrue(meterCount(bytesOut) > initialBytesOut)
+  }
+
+  @Test
+  def testControllerMetrics(): Unit = {
+    val metrics = Metrics.defaultRegistry.allMetrics
+    
+    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=ActiveControllerCount"), 1)
+    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=OfflinePartitionsCount"), 1)
+    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=PreferredReplicaImbalanceCount"), 1)
+    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=GlobalTopicCount"), 1)
+    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=GlobalPartitionCount"), 1)
   }
 
   private def meterCount(metricName: String): Long = {

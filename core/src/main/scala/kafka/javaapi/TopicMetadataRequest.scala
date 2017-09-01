@@ -39,7 +39,7 @@ class TopicMetadataRequest(val versionId: Short,
 
   def writeTo(buffer: ByteBuffer) = underlying.writeTo(buffer)
 
-  def sizeInBytes: Int = underlying.sizeInBytes()
+  def sizeInBytes: Int = underlying.sizeInBytes
 
   override def toString: String = {
     describe(true)

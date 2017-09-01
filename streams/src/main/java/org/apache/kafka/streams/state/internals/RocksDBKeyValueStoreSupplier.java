@@ -47,38 +47,33 @@ public class RocksDBKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K,
     }
 
     public KeyValueStore get() {
-        if (!cached && !logged) {
-            return new MeteredKeyValueStore<>(
-                    new RocksDBStore<>(name, keySerde, valueSerde), METRICS_SCOPE, time);
-        }
-
-        // when cached, logged, or both we use a bytes store as the inner most store
         final RocksDBStore<Bytes, byte[]> rocks = new RocksDBStore<>(name,
                                                                      Serdes.Bytes(),
                                                                      Serdes.ByteArray());
 
+        if (!cached && !logged) {
+            return new MeteredKeyValueBytesStore<>(
+                    rocks, METRICS_SCOPE, time, keySerde, valueSerde);
+        }
+
+
         if (cached && logged) {
-            return new CachingKeyValueStore<>(
-                    new MeteredKeyValueStore<>(
-                            new ChangeLoggingKeyValueBytesStore(rocks),
-                            METRICS_SCOPE,
-                            time),
-                    keySerde,
-                    valueSerde);
+            final KeyValueStore<Bytes, byte[]> caching = new CachingKeyValueStore<>(new ChangeLoggingKeyValueBytesStore(rocks), keySerde, valueSerde);
+            return new MeteredKeyValueBytesStore<>(caching, METRICS_SCOPE, time, keySerde, valueSerde);
         }
 
         if (cached) {
-            return new CachingKeyValueStore<>(
-                    new MeteredKeyValueStore<>(rocks, METRICS_SCOPE, time),
-                    keySerde,
-                    valueSerde);
+            final KeyValueStore<Bytes, byte[]> caching = new CachingKeyValueStore<>(rocks, keySerde, valueSerde);
+            return new MeteredKeyValueBytesStore<>(caching, METRICS_SCOPE, time, keySerde, valueSerde);
 
         } else {
             // logged
-            return new MeteredKeyValueStore<>(
-                    new ChangeLoggingKeyValueStore<>(rocks, keySerde, valueSerde),
+            return new MeteredKeyValueBytesStore<>(
+                    new ChangeLoggingKeyValueBytesStore(rocks),
                     METRICS_SCOPE,
-                    time);
+                    time,
+                    keySerde,
+                    valueSerde);
         }
 
     }

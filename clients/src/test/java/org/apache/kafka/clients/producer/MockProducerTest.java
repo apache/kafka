@@ -25,6 +25,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.test.MockSerializer;
+import org.junit.After;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -47,14 +48,23 @@ import static org.junit.Assert.fail;
 public class MockProducerTest {
 
     private final String topic = "topic";
-    private final MockProducer<byte[], byte[]> producer = new MockProducer<>(true, new MockSerializer(), new MockSerializer());
+    private MockProducer<byte[], byte[]> producer;
     private final ProducerRecord<byte[], byte[]> record1 = new ProducerRecord<>(topic, "key1".getBytes(), "value1".getBytes());
     private final ProducerRecord<byte[], byte[]> record2 = new ProducerRecord<>(topic, "key2".getBytes(), "value2".getBytes());
 
+    private void buildMockProducer(boolean autoComplete) {
+        this.producer = new MockProducer<>(autoComplete, new MockSerializer(), new MockSerializer());
+    }
+
+    @After
+    public void cleanup() {
+        if (this.producer != null && !this.producer.closed())
+            this.producer.close();
+    }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void testAutoCompleteMock() throws Exception {
+        buildMockProducer(true);
         Future<RecordMetadata> metadata = producer.send(record1);
         assertTrue("Send should be immediately complete", metadata.isDone());
         assertFalse("Send should be successful", isError(metadata));
@@ -77,11 +87,12 @@ public class MockProducerTest {
         assertEquals("Partition should be correct", 1, metadata.get().partition());
         producer.clear();
         assertEquals("Clear should erase our history", 0, producer.history().size());
+        producer.close();
     }
 
     @Test
     public void testManualCompletion() throws Exception {
-        MockProducer<byte[], byte[]> producer = new MockProducer<>(false, new MockSerializer(), new MockSerializer());
+        buildMockProducer(false);
         Future<RecordMetadata> md1 = producer.send(record1);
         assertFalse("Send shouldn't have completed", md1.isDone());
         Future<RecordMetadata> md2 = producer.send(record2);
@@ -98,7 +109,7 @@ public class MockProducerTest {
             assertEquals(e, err.getCause());
         }
         assertFalse("No more requests to complete", producer.completeNext());
-        
+
         Future<RecordMetadata> md3 = producer.send(record1);
         Future<RecordMetadata> md4 = producer.send(record2);
         assertTrue("Requests should not be completed.", !md3.isDone() && !md4.isDone());
@@ -108,12 +119,14 @@ public class MockProducerTest {
 
     @Test
     public void shouldInitTransactions() {
+        buildMockProducer(true);
         producer.initTransactions();
         assertTrue(producer.transactionInitialized());
     }
 
     @Test
     public void shouldThrowOnInitTransactionIfProducerAlreadyInitializedForTransactions() {
+        buildMockProducer(true);
         producer.initTransactions();
         try {
             producer.initTransactions();
@@ -123,11 +136,13 @@ public class MockProducerTest {
 
     @Test(expected = IllegalStateException.class)
     public void shouldThrowOnBeginTransactionIfTransactionsNotInitialized() {
+        buildMockProducer(true);
         producer.beginTransaction();
     }
 
     @Test
     public void shouldBeginTransactions() {
+        buildMockProducer(true);
         producer.initTransactions();
         producer.beginTransaction();
         assertTrue(producer.transactionInFlight());
@@ -135,11 +150,13 @@ public class MockProducerTest {
 
     @Test(expected = IllegalStateException.class)
     public void shouldThrowOnSendOffsetsToTransactionIfTransactionsNotInitialized() {
+        buildMockProducer(true);
         producer.sendOffsetsToTransaction(null, null);
     }
 
     @Test
     public void shouldThrowOnSendOffsetsToTransactionTransactionIfNoTransactionGotStarted() {
+        buildMockProducer(true);
         producer.initTransactions();
         try {
             producer.sendOffsetsToTransaction(null, null);
@@ -149,11 +166,13 @@ public class MockProducerTest {
 
     @Test(expected = IllegalStateException.class)
     public void shouldThrowOnCommitIfTransactionsNotInitialized() {
+        buildMockProducer(true);
         producer.commitTransaction();
     }
 
     @Test
     public void shouldThrowOnCommitTransactionIfNoTransactionGotStarted() {
+        buildMockProducer(true);
         producer.initTransactions();
         try {
             producer.commitTransaction();
@@ -163,6 +182,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldCommitEmptyTransaction() {
+        buildMockProducer(true);
         producer.initTransactions();
         producer.beginTransaction();
         producer.commitTransaction();
@@ -173,6 +193,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldCountCommittedTransaction() {
+        buildMockProducer(true);
         producer.initTransactions();
         producer.beginTransaction();
 
@@ -183,6 +204,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldNotCountAbortedTransaction() {
+        buildMockProducer(true);
         producer.initTransactions();
 
         producer.beginTransaction();
@@ -195,11 +217,13 @@ public class MockProducerTest {
 
     @Test(expected = IllegalStateException.class)
     public void shouldThrowOnAbortIfTransactionsNotInitialized() {
+        buildMockProducer(true);
         producer.abortTransaction();
     }
 
     @Test
     public void shouldThrowOnAbortTransactionIfNoTransactionGotStarted() {
+        buildMockProducer(true);
         producer.initTransactions();
         try {
             producer.abortTransaction();
@@ -209,6 +233,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldAbortEmptyTransaction() {
+        buildMockProducer(true);
         producer.initTransactions();
         producer.beginTransaction();
         producer.abortTransaction();
@@ -219,6 +244,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldAbortInFlightTransactionOnClose() {
+        buildMockProducer(true);
         producer.initTransactions();
         producer.beginTransaction();
         producer.close();
@@ -229,11 +255,13 @@ public class MockProducerTest {
 
     @Test(expected = IllegalStateException.class)
     public void shouldThrowFenceProducerIfTransactionsNotInitialized() {
+        buildMockProducer(true);
         producer.fenceProducer();
     }
 
     @Test
     public void shouldThrowOnBeginTransactionsIfProducerGotFenced() {
+        buildMockProducer(true);
         producer.initTransactions();
         producer.fenceProducer();
         try {
@@ -244,6 +272,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldThrowOnSendIfProducerGotFenced() {
+        buildMockProducer(true);
         producer.initTransactions();
         producer.fenceProducer();
         try {
@@ -254,6 +283,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldThrowOnFlushIfProducerGotFenced() {
+        buildMockProducer(true);
         producer.initTransactions();
         producer.fenceProducer();
         try {
@@ -264,6 +294,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldThrowOnSendOffsetsToTransactionIfProducerGotFenced() {
+        buildMockProducer(true);
         producer.initTransactions();
         producer.fenceProducer();
         try {
@@ -274,6 +305,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldThrowOnCommitTransactionIfProducerGotFenced() {
+        buildMockProducer(true);
         producer.initTransactions();
         producer.fenceProducer();
         try {
@@ -284,6 +316,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldThrowOnAbortTransactionIfProducerGotFenced() {
+        buildMockProducer(true);
         producer.initTransactions();
         producer.fenceProducer();
         try {
@@ -294,6 +327,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldPublishMessagesOnlyAfterCommitIfTransactionsAreEnabled() {
+        buildMockProducer(true);
         producer.initTransactions();
         producer.beginTransaction();
 
@@ -313,7 +347,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldFlushOnCommitForNonAutoCompleteIfTransactionsAreEnabled() {
-        MockProducer<byte[], byte[]> producer = new MockProducer<>(false, new MockSerializer(), new MockSerializer());
+        buildMockProducer(false);
         producer.initTransactions();
         producer.beginTransaction();
 
@@ -331,6 +365,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldDropMessagesOnAbortIfTransactionsAreEnabled() {
+        buildMockProducer(true);
         producer.initTransactions();
 
         producer.beginTransaction();
@@ -346,7 +381,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldThrowOnAbortForNonAutoCompleteIfTransactionsAreEnabled() throws Exception {
-        MockProducer<byte[], byte[]> producer = new MockProducer<>(false, new MockSerializer(), new MockSerializer());
+        buildMockProducer(false);
         producer.initTransactions();
         producer.beginTransaction();
 
@@ -359,6 +394,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldPreserveCommittedMessagesOnAbortIfTransactionsAreEnabled() {
+        buildMockProducer(true);
         producer.initTransactions();
 
         producer.beginTransaction();
@@ -378,6 +414,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldPublishConsumerGroupOffsetsOnlyAfterCommitIfTransactionsAreEnabled() {
+        buildMockProducer(true);
         producer.initTransactions();
         producer.beginTransaction();
 
@@ -410,6 +447,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldThrowOnNullConsumerGroupIdWhenSendOffsetsToTransaction() {
+        buildMockProducer(true);
         producer.initTransactions();
         producer.beginTransaction();
 
@@ -421,6 +459,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldIgnoreEmptyOffsetsWhenSendOffsetsToTransaction() {
+        buildMockProducer(true);
         producer.initTransactions();
         producer.beginTransaction();
         producer.sendOffsetsToTransaction(Collections.<TopicPartition, OffsetAndMetadata>emptyMap(), "groupId");
@@ -429,6 +468,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldAddOffsetsWhenSendOffsetsToTransaction() {
+        buildMockProducer(true);
         producer.initTransactions();
         producer.beginTransaction();
 
@@ -445,6 +485,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldResetSentOffsetsFlagOnlyWhenBeginningNewTransaction() {
+        buildMockProducer(true);
         producer.initTransactions();
         producer.beginTransaction();
 
@@ -465,6 +506,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldPublishLatestAndCumulativeConsumerGroupOffsetsOnlyAfterCommitIfTransactionsAreEnabled() {
+        buildMockProducer(true);
         producer.initTransactions();
         producer.beginTransaction();
 
@@ -501,6 +543,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldDropConsumerGroupOffsetsOnAbortIfTransactionsAreEnabled() {
+        buildMockProducer(true);
         producer.initTransactions();
         producer.beginTransaction();
 
@@ -521,6 +564,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldPreserveCommittedConsumerGroupsOffsetsOnAbortIfTransactionsAreEnabled() {
+        buildMockProducer(true);
         producer.initTransactions();
         producer.beginTransaction();
 
@@ -545,6 +589,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldThrowOnInitTransactionIfProducerIsClosed() {
+        buildMockProducer(true);
         producer.close();
         try {
             producer.initTransactions();
@@ -554,6 +599,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldThrowOnSendIfProducerIsClosed() {
+        buildMockProducer(true);
         producer.close();
         try {
             producer.send(null);
@@ -563,6 +609,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldThrowOnBeginTransactionIfProducerIsClosed() {
+        buildMockProducer(true);
         producer.close();
         try {
             producer.beginTransaction();
@@ -572,6 +619,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldThrowSendOffsetsToTransactionIfProducerIsClosed() {
+        buildMockProducer(true);
         producer.close();
         try {
             producer.sendOffsetsToTransaction(null, null);
@@ -581,6 +629,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldThrowOnCommitTransactionIfProducerIsClosed() {
+        buildMockProducer(true);
         producer.close();
         try {
             producer.commitTransaction();
@@ -590,6 +639,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldThrowOnAbortTransactionIfProducerIsClosed() {
+        buildMockProducer(true);
         producer.close();
         try {
             producer.abortTransaction();
@@ -599,6 +649,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldThrowOnCloseIfProducerIsClosed() {
+        buildMockProducer(true);
         producer.close();
         try {
             producer.close();
@@ -608,6 +659,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldThrowOnFenceProducerIfProducerIsClosed() {
+        buildMockProducer(true);
         producer.close();
         try {
             producer.fenceProducer();
@@ -617,6 +669,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldThrowOnFlushProducerIfProducerIsClosed() {
+        buildMockProducer(true);
         producer.close();
         try {
             producer.flush();
@@ -626,25 +679,27 @@ public class MockProducerTest {
 
     @Test
     public void shouldBeFlushedIfNoBufferedRecords() {
+        buildMockProducer(true);
         assertTrue(producer.flushed());
     }
 
     @Test
     public void shouldBeFlushedWithAutoCompleteIfBufferedRecords() {
+        buildMockProducer(true);
         producer.send(record1);
         assertTrue(producer.flushed());
     }
 
     @Test
     public void shouldNotBeFlushedWithNoAutoCompleteIfBufferedRecords() {
-        MockProducer<byte[], byte[]> producer = new MockProducer<>(false, new MockSerializer(), new MockSerializer());
+        buildMockProducer(false);
         producer.send(record1);
         assertFalse(producer.flushed());
     }
 
     @Test
     public void shouldNotBeFlushedAfterFlush() {
-        MockProducer<byte[], byte[]> producer = new MockProducer<>(false, new MockSerializer(), new MockSerializer());
+        buildMockProducer(false);
         producer.send(record1);
         producer.flush();
         assertTrue(producer.flushed());

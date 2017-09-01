@@ -17,9 +17,32 @@
 package kafka.utils
 
 import org.junit.Assert._
-import org.junit.{Test, After, Before}
+import org.junit.Test
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.node._
+import kafka.utils.json.JsonValue
+import scala.collection.JavaConverters._
 
 class JsonTest {
+
+  @Test
+  def testJsonParse() {
+    val jnf = JsonNodeFactory.instance
+
+    assertEquals(Json.parseFull("{}"), Some(JsonValue(new ObjectNode(jnf))))
+
+    assertEquals(Json.parseFull("""{"foo":"bar"s}"""), None)
+
+    val objectNode = new ObjectNode(
+      jnf,
+      Map[String, JsonNode]("foo" -> new TextNode("bar"), "is_enabled" -> BooleanNode.TRUE).asJava
+    )
+    assertEquals(Json.parseFull("""{"foo":"bar", "is_enabled":true}"""), Some(JsonValue(objectNode)))
+
+    val arrayNode = new ArrayNode(jnf)
+    Vector(1, 2, 3).map(new IntNode(_)).foreach(arrayNode.add)
+    assertEquals(Json.parseFull("[1, 2, 3]"), Some(JsonValue(arrayNode)))
+  }
 
   @Test
   def testJsonEncoding() {

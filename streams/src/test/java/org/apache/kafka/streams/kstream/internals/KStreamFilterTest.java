@@ -17,12 +17,12 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.junit.After;
+import org.junit.Rule;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -30,16 +30,9 @@ import static org.junit.Assert.assertEquals;
 public class KStreamFilterTest {
 
     private String topicName = "topic";
-
-    private KStreamTestDriver driver = null;
-
-    @After
-    public void cleanup() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
-    }
+  
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
 
     private Predicate<Integer, String> isMultipleOfThree = new Predicate<Integer, String>() {
         @Override
@@ -50,7 +43,7 @@ public class KStreamFilterTest {
 
     @Test
     public void testFilter() {
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
 
         KStream<Integer, String> stream;
@@ -60,7 +53,7 @@ public class KStreamFilterTest {
         stream = builder.stream(Serdes.Integer(), Serdes.String(), topicName);
         stream.filter(isMultipleOfThree).process(processor);
 
-        driver = new KStreamTestDriver(builder);
+        driver.setUp(builder);
         for (int expectedKey : expectedKeys) {
             driver.process(topicName, expectedKey, "V" + expectedKey);
         }
@@ -70,7 +63,7 @@ public class KStreamFilterTest {
 
     @Test
     public void testFilterNot() {
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
 
         KStream<Integer, String> stream;
@@ -80,7 +73,7 @@ public class KStreamFilterTest {
         stream = builder.stream(Serdes.Integer(), Serdes.String(), topicName);
         stream.filterNot(isMultipleOfThree).process(processor);
 
-        driver = new KStreamTestDriver(builder);
+        driver.setUp(builder);
         for (int expectedKey : expectedKeys) {
             driver.process(topicName, expectedKey, "V" + expectedKey);
         }
@@ -89,7 +82,7 @@ public class KStreamFilterTest {
     }
 
     @Test
-    public void testTypeVariance() throws Exception {
+    public void testTypeVariance() {
         Predicate<Number, Object> numberKeyPredicate = new Predicate<Number, Object>() {
             @Override
             public boolean test(Number key, Object value) {
@@ -97,10 +90,11 @@ public class KStreamFilterTest {
             }
         };
 
-        new KStreamBuilder()
+        new StreamsBuilder()
             .<Integer, String>stream("empty")
             .filter(numberKeyPredicate)
             .filterNot(numberKeyPredicate)
             .to("nirvana");
+        
     }
 }

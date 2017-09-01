@@ -18,9 +18,13 @@ package kafka.server.checkpoints
 
 import java.io._
 import java.nio.charset.StandardCharsets
-import java.nio.file.{FileAlreadyExistsException, FileSystems, Files, Paths}
-import kafka.utils.{Exit, Logging}
+import java.nio.file.{FileAlreadyExistsException, Files, Paths}
+
+import kafka.server.LogDirFailureChannel
+import kafka.utils.Logging
+import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.utils.Utils
+
 import scala.collection.{Seq, mutable}
 
 trait CheckpointFileFormatter[T]{
@@ -29,86 +33,96 @@ trait CheckpointFileFormatter[T]{
   def fromLine(line: String): Option[T]
 }
 
-class CheckpointFile[T](val file: File, version: Int, formatter: CheckpointFileFormatter[T]) extends Logging {
+class CheckpointFile[T](val file: File,
+                        version: Int,
+                        formatter: CheckpointFileFormatter[T],
+                        logDirFailureChannel: LogDirFailureChannel,
+                        logDir: String) extends Logging {
   private val path = file.toPath.toAbsolutePath
   private val tempPath = Paths.get(path.toString + ".tmp")
   private val lock = new Object()
-  
+
   try Files.createFile(file.toPath) // create the file if it doesn't exist
   catch { case _: FileAlreadyExistsException => }
 
   def write(entries: Seq[T]) {
     lock synchronized {
-      // write to temp file and then swap with the existing file
-      val fileOutputStream = new FileOutputStream(tempPath.toFile)
-      val writer = new BufferedWriter(new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))
       try {
-        writer.write(version.toString)
-        writer.newLine()
-
-        writer.write(entries.size.toString)
-        writer.newLine()
-
-        entries.foreach { entry =>
-          writer.write(formatter.toLine(entry))
+        // write to temp file and then swap with the existing file
+        val fileOutputStream = new FileOutputStream(tempPath.toFile)
+        val writer = new BufferedWriter(new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))
+        try {
+          writer.write(version.toString)
           writer.newLine()
+
+          writer.write(entries.size.toString)
+          writer.newLine()
+
+          entries.foreach { entry =>
+            writer.write(formatter.toLine(entry))
+            writer.newLine()
+          }
+
+          writer.flush()
+          fileOutputStream.getFD().sync()
+        } finally {
+          writer.close()
         }
 
-        writer.flush()
-        fileOutputStream.getFD().sync()
+        Utils.atomicMoveWithFallback(tempPath, path)
       } catch {
-        case e: FileNotFoundException =>
-          if (FileSystems.getDefault.isReadOnly) {
-            fatal(s"Halting writes to checkpoint file (${file.getAbsolutePath}) because the underlying file system is inaccessible: ", e)
-            Exit.halt(1)
-          }
-          throw e
-      } finally {
-        writer.close()
+        case e: IOException =>
+          val msg = s"Error while writing to checkpoint file ${file.getAbsolutePath}"
+          logDirFailureChannel.maybeAddOfflineLogDir(logDir, msg, e)
+          throw new KafkaStorageException(msg, e)
       }
-
-      Utils.atomicMoveWithFallback(tempPath, path)
     }
   }
 
   def read(): Seq[T] = {
     def malformedLineException(line: String) =
       new IOException(s"Malformed line in checkpoint file (${file.getAbsolutePath}): $line'")
-
     lock synchronized {
-      val reader = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))
-      var line: String = null
       try {
-        line = reader.readLine()
-        if (line == null)
-          return Seq.empty
-        line.toInt match {
-          case fileVersion if fileVersion == version =>
-            line = reader.readLine()
-            if (line == null)
-              return Seq.empty
-            val expectedSize = line.toInt
-            val entries = mutable.Buffer[T]()
-            line = reader.readLine()
-            while (line != null) {
-              val entry = formatter.fromLine(line)
-              entry match {
-                case Some(e) =>
-                  entries += e
-                  line = reader.readLine()
-                case _ => throw malformedLineException(line)
+        val reader = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))
+        var line: String = null
+        try {
+          line = reader.readLine()
+          if (line == null)
+            return Seq.empty
+          line.toInt match {
+            case fileVersion if fileVersion == version =>
+              line = reader.readLine()
+              if (line == null)
+                return Seq.empty
+              val expectedSize = line.toInt
+              val entries = mutable.Buffer[T]()
+              line = reader.readLine()
+              while (line != null) {
+                val entry = formatter.fromLine(line)
+                entry match {
+                  case Some(e) =>
+                    entries += e
+                    line = reader.readLine()
+                  case _ => throw malformedLineException(line)
+                }
               }
-            }
-            if (entries.size != expectedSize)
-              throw new IOException(s"Expected $expectedSize entries in checkpoint file (${file.getAbsolutePath}), but found only ${entries.size}")
-            entries
-          case _ =>
-            throw new IOException(s"Unrecognized version of the checkpoint file (${file.getAbsolutePath}): " + version)
+              if (entries.size != expectedSize)
+                throw new IOException(s"Expected $expectedSize entries in checkpoint file (${file.getAbsolutePath}), but found only ${entries.size}")
+              entries
+            case _ =>
+              throw new IOException(s"Unrecognized version of the checkpoint file (${file.getAbsolutePath}): " + version)
+          }
+        } catch {
+          case _: NumberFormatException => throw malformedLineException(line)
+        } finally {
+          reader.close()
         }
       } catch {
-        case _: NumberFormatException => throw malformedLineException(line)
-      } finally {
-        reader.close()
+        case e: IOException =>
+          val msg = s"Error while reading checkpoint file ${file.getAbsolutePath}"
+          logDirFailureChannel.maybeAddOfflineLogDir(logDir, msg, e)
+          throw new KafkaStorageException(msg, e)
       }
     }
   }

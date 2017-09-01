@@ -39,6 +39,7 @@ import javax.net.ssl.SSLParameters;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.metrics.Metrics;
@@ -580,7 +581,7 @@ public class SslTransportLayerTest {
     public void testNetworkThreadTimeRecorded() throws Exception {
         selector.close();
         this.selector = new Selector(NetworkReceive.UNLIMITED, 5000, new Metrics(), Time.SYSTEM,
-                "MetricGroup", new HashMap<String, String>(), false, true, channelBuilder);
+                "MetricGroup", new HashMap<String, String>(), false, true, channelBuilder, MemoryPool.NONE);
 
         String node = "0";
         server = createEchoServer(SecurityProtocol.SSL);
