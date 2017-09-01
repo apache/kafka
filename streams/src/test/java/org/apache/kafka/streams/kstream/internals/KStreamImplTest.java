@@ -24,6 +24,7 @@ import org.apache.kafka.streams.StreamsBuilderTest;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.JoinWindows;
+import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
@@ -127,19 +128,20 @@ public class KStreamImplTest {
         );
 
         final int anyWindowSize = 1;
+        final Joined<String, Integer, Integer> joined = Joined.with(stringSerde, intSerde, intSerde);
         KStream<String, Integer> stream4 = streams2[0].join(streams3[0], new ValueJoiner<Integer, Integer, Integer>() {
             @Override
             public Integer apply(Integer value1, Integer value2) {
                 return value1 + value2;
             }
-        }, JoinWindows.of(anyWindowSize), stringSerde, intSerde, intSerde);
+        }, JoinWindows.of(anyWindowSize), joined);
 
-        KStream<String, Integer> stream5 = streams2[1].join(streams3[1], new ValueJoiner<Integer, Integer, Integer>() {
+        streams2[1].join(streams3[1], new ValueJoiner<Integer, Integer, Integer>() {
             @Override
             public Integer apply(Integer value1, Integer value2) {
                 return value1 + value2;
             }
-        }, JoinWindows.of(anyWindowSize), stringSerde, intSerde, intSerde);
+        }, JoinWindows.of(anyWindowSize), joined);
 
         stream4.to("topic-5");
 
@@ -190,11 +192,11 @@ public class KStreamImplTest {
                             }
                         });
         stream.join(kStream,
-                valueJoiner,
-                JoinWindows.of(windowSize).until(3 * windowSize),
-                Serdes.String(),
-                Serdes.String(),
-                Serdes.String())
+                    valueJoiner,
+                    JoinWindows.of(windowSize).until(3 * windowSize),
+                    Joined.with(Serdes.String(),
+                                Serdes.String(),
+                                Serdes.String()))
                 .to(Serdes.String(), Serdes.String(), "output-topic");
 
         ProcessorTopology processorTopology = builder.setApplicationId("X").build(null);

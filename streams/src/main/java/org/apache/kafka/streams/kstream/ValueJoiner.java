@@ -27,13 +27,13 @@ package org.apache.kafka.streams.kstream;
  * @param <V2> second value type
  * @param <VR> joined value type
  * @see KStream#join(KStream, ValueJoiner, JoinWindows)
- * @see KStream#join(KStream, ValueJoiner, JoinWindows, org.apache.kafka.common.serialization.Serde, org.apache.kafka.common.serialization.Serde, org.apache.kafka.common.serialization.Serde)
+ * @see KStream#join(KStream, ValueJoiner, JoinWindows, Joined)
  * @see KStream#leftJoin(KStream, ValueJoiner, JoinWindows)
  * @see KStream#leftJoin(KStream, ValueJoiner, JoinWindows, org.apache.kafka.common.serialization.Serde, org.apache.kafka.common.serialization.Serde, org.apache.kafka.common.serialization.Serde)
  * @see KStream#outerJoin(KStream, ValueJoiner, JoinWindows)
  * @see KStream#outerJoin(KStream, ValueJoiner, JoinWindows, org.apache.kafka.common.serialization.Serde, org.apache.kafka.common.serialization.Serde, org.apache.kafka.common.serialization.Serde)
  * @see KStream#join(KTable, ValueJoiner)
- * @see KStream#join(KTable, ValueJoiner, org.apache.kafka.common.serialization.Serde, org.apache.kafka.common.serialization.Serde)
+ * @see KStream#join(KTable, ValueJoiner, Joined)
  * @see KStream#leftJoin(KTable, ValueJoiner)
  * @see KStream#leftJoin(KTable, ValueJoiner, org.apache.kafka.common.serialization.Serde, org.apache.kafka.common.serialization.Serde)
  * @see KTable#join(KTable, ValueJoiner)

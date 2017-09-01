@@ -32,6 +32,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.JoinWindows;
+import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
@@ -212,9 +213,7 @@ public class KStreamRepartitionJoinTest {
             .join(streamOne.map(keyMapper),
                 TOSTRING_JOINER,
                 getJoinWindow(),
-                Serdes.Integer(),
-                Serdes.String(),
-                Serdes.Integer())
+                Joined.with(Serdes.Integer(), Serdes.String(), Serdes.Integer()))
             .to(Serdes.Integer(), Serdes.String(), output);
 
         return new ExpectedOutputOnTopic(Arrays.asList("A:1", "B:2", "C:3", "D:4", "E:5"), output);
@@ -267,9 +266,7 @@ public class KStreamRepartitionJoinTest {
             .join(streamFour.map(kvMapper),
                 TOSTRING_JOINER,
                 getJoinWindow(),
-                Serdes.Integer(),
-                Serdes.String(),
-                Serdes.String())
+                Joined.with(Serdes.Integer(), Serdes.String(), Serdes.String()))
             .to(Serdes.Integer(), Serdes.String(), topic);
 
 
@@ -387,11 +384,9 @@ public class KStreamRepartitionJoinTest {
                         final String outputTopic) throws InterruptedException {
         CLUSTER.createTopic(outputTopic);
         lhs.join(rhs,
-            TOSTRING_JOINER,
-            getJoinWindow(),
-            Serdes.Integer(),
-            Serdes.Integer(),
-            Serdes.String())
+                 TOSTRING_JOINER,
+                 getJoinWindow(),
+                 Joined.with(Serdes.Integer(), Serdes.Integer(), Serdes.String()))
             .to(Serdes.Integer(), Serdes.String(), outputTopic);
     }
 
