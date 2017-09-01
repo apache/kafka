@@ -641,7 +641,28 @@ class SocketServerTest extends JUnitSuite {
       testableServer.testableSelector.failures += SelectorOperation.Send -> new IllegalStateException("Test exception for Selector.send()")
       val request = receiveRequest(requestChannel)
       processRequest(requestChannel, request)
-      testableServer.waitForChannelException(request.context.connectionId, socket, SelectorOperation.Send)
+      testableServer.waitForChannelClose(request.context.connectionId, socket, SelectorOperation.Send)
+
+      assertProcessorHealthy(testableServer)
+    } finally {
+      testableServer.shutdown()
+      testableServer.metrics.close()
+    }
+  }
+
+  @Test
+  def sendCancelledKeyException(): Unit = {
+    val testableServer = startTestableServer()
+    try {
+      val socket = connect(testableServer)
+      sendRequest(socket, producerRequestBytes)
+      val requestChannel = testableServer.requestChannel
+
+      val request = receiveRequest(requestChannel)
+      // `KafkaChannel.disconnect()` cancels the selection key, triggering CancelledKeyException during send
+      testableServer.testableSelector.channels().get(0).disconnect()
+      processRequest(requestChannel, request)
+      testableServer.waitForChannelClose(request.context.connectionId, socket, SelectorOperation.Send, locallyClosed = false)
 
       assertProcessorHealthy(testableServer)
     } finally {
@@ -660,7 +681,7 @@ class SocketServerTest extends JUnitSuite {
       testableServer.testableSelector.failures += SelectorOperation.Send -> new IllegalStateException("Test exception during Selector.send()")
       socket.close()
       processRequest(testableServer.requestChannel, request)
-      testableServer.waitForChannelException(request.context.connectionId, socket, SelectorOperation.Send)
+      testableServer.waitForChannelClose(request.context.connectionId, socket, SelectorOperation.Send)
 
       assertProcessorHealthy(testableServer)
     } finally {
@@ -679,7 +700,7 @@ class SocketServerTest extends JUnitSuite {
       sendRequest(socket, producerRequestBytes)
       val requestChannel = testableServer.requestChannel
       val request = receiveRequest(requestChannel)
-      testableServer.waitForChannelException(request.context.connectionId, socket, SelectorOperation.Mute)
+      testableServer.waitForChannelClose(request.context.connectionId, socket, SelectorOperation.Mute)
 
       assertProcessorHealthy(testableServer)
     } finally {
@@ -699,7 +720,7 @@ class SocketServerTest extends JUnitSuite {
       testableServer.testableSelector.failures += SelectorOperation.Unmute -> new IllegalStateException("Test exception during Selector.unmute()")
       val request = receiveRequest(requestChannel)
       processRequest(requestChannel, request)
-      testableServer.waitForChannelException(request.context.connectionId, socket, SelectorOperation.Unmute)
+      testableServer.waitForChannelClose(request.context.connectionId, socket, SelectorOperation.Unmute)
 
       assertProcessorHealthy(testableServer)
     } finally {
@@ -802,15 +823,20 @@ class SocketServerTest extends JUnitSuite {
     }
     def testableSelector = selector.getOrElse(throw new IllegalStateException("Selector not created"))
 
-    def waitForChannelException(connectionId: String, socket: Socket, operation: SelectorOperation): Unit = {
+    def waitForChannelClose(connectionId: String, socket: Socket, operation: SelectorOperation, locallyClosed: Boolean = true): Unit = {
       val selector = testableSelector
       selector.waitForOperations(operation, 1)
-      TestUtils.waitUntilTrue(() =>  selector.allLocallyClosedChannels.contains(connectionId), "Channel not closed")
-      assertEquals(0, connectionCount(socket.getLocalAddress))
-      assertEquals("Inflight responses not cleared", 0, processor(0).inflightResponseCount)
+      if (locallyClosed) {
+        TestUtils.waitUntilTrue(() => selector.allLocallyClosedChannels.contains(connectionId), "Channel not closed")
+        assertTrue("Unexpected disconnect notification",testableSelector.allDisconnectedChannels.isEmpty)
+      } else {
+        TestUtils.waitUntilTrue(() => selector.allDisconnectedChannels.contains(connectionId), "Disconnect notification not received")
+        assertTrue("Channel closed locally",testableSelector.allLocallyClosedChannels.isEmpty)
+      }
+      TestUtils.waitUntilTrue(() => connectionCount(socket.getLocalAddress) == 0, "Connection count not decremented")
+      TestUtils.waitUntilTrue(() => processor(0).inflightResponseCount == 0, "Inflight responses not cleared")
       assertNull("Channel not removed", selector.channel(connectionId))
       assertNull("Closing channel not removed", selector.closingChannel(connectionId))
-      assertTrue("Unexpected disconnect notification",testableSelector.allDisconnectedChannels.isEmpty)
     }
   }
 
