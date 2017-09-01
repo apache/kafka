@@ -22,7 +22,7 @@ import com.yammer.metrics.core.Gauge
 import kafka.admin.{AdminUtils, PreferredReplicaLeaderElectionCommand}
 import kafka.api._
 import kafka.cluster.Broker
-import kafka.common.{TopicAndPartition, _}
+import kafka.common._
 import kafka.log.LogConfig
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server._
@@ -88,7 +88,7 @@ class ControllerContext(val zkUtils: ZkUtils) {
     brokerIds.flatMap { brokerId =>
       partitionReplicaAssignment.collect {
         case (topicAndPartition, replicas) if replicas.contains(brokerId) =>
-          new PartitionAndReplica(topicAndPartition.topic, topicAndPartition.partition, brokerId)
+          PartitionAndReplica(topicAndPartition.topic, topicAndPartition.partition, brokerId)
       }
     }.toSet
   }
@@ -98,7 +98,7 @@ class ControllerContext(val zkUtils: ZkUtils) {
       .filter { case (topicAndPartition, _) => topicAndPartition.topic == topic }
       .flatMap { case (topicAndPartition, replicas) =>
         replicas.map { r =>
-          new PartitionAndReplica(topicAndPartition.topic, topicAndPartition.partition, r)
+          PartitionAndReplica(topicAndPartition.topic, topicAndPartition.partition, r)
         }
       }.toSet
   }
@@ -115,7 +115,7 @@ class ControllerContext(val zkUtils: ZkUtils) {
   def replicasForPartition(partitions: collection.Set[TopicAndPartition]): collection.Set[PartitionAndReplica] = {
     partitions.flatMap { p =>
       val replicas = partitionReplicaAssignment(p)
-      replicas.map(r => new PartitionAndReplica(p.topic, p.partition, r))
+      replicas.map(r => PartitionAndReplica(p.topic, p.partition, r))
     }
   }
 
@@ -129,7 +129,7 @@ class ControllerContext(val zkUtils: ZkUtils) {
 
 
 object KafkaController extends Logging {
-  val stateChangeLogger = new StateChangeLogger("state.change.logger")
+  val stateChangeLogger = StateChangeLogger("state.change.logger")
   val InitialControllerEpoch = 1
   val InitialControllerEpochZkVersion = 1
 
@@ -561,7 +561,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
       val oldReplicas = controllerContext.partitionReplicaAssignment(topicAndPartition).toSet -- reassignedReplicas.toSet
       //5. replicas in RAR -> OnlineReplica
       reassignedReplicas.foreach { replica =>
-        replicaStateMachine.handleStateChanges(Set(new PartitionAndReplica(topicAndPartition.topic, topicAndPartition.partition,
+        replicaStateMachine.handleStateChanges(Set(PartitionAndReplica(topicAndPartition.topic, topicAndPartition.partition,
           replica)), OnlineReplica)
       }
       //6. Set AR to RAR in memory.
@@ -768,9 +768,9 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
     partitionsToReassign ++= partitionsBeingReassigned
     partitionsToReassign --= reassignedPartitions
     controllerContext.partitionsBeingReassigned ++= partitionsToReassign
-    info("Partitions being reassigned: %s".format(partitionsBeingReassigned.toString()))
-    info("Partitions already reassigned: %s".format(reassignedPartitions.toString()))
-    info("Resuming reassignment of partitions: %s".format(partitionsToReassign.toString()))
+    info(s"Partitions being reassigned: $partitionsBeingReassigned")
+    info(s"Partitions already reassigned: $reassignedPartitions")
+    info(s"Resuming reassignment of partitions: $partitionsToReassign")
   }
 
   private def fetchTopicDeletionsInProgress(): (Set[String], Set[String]) = {
@@ -803,9 +803,9 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
   }
 
   private def areReplicasInIsr(topic: String, partition: Int, replicas: Seq[Int]): Boolean = {
-    zkUtils.getLeaderAndIsrForPartition(topic, partition).map { leaderAndIsr =>
+    zkUtils.getLeaderAndIsrForPartition(topic, partition).exists { leaderAndIsr =>
       replicas.forall(leaderAndIsr.isr.contains)
-    }.getOrElse(false)
+    }
   }
 
   private def moveReassignedPartitionLeaderIfRequired(topicAndPartition: TopicAndPartition,
@@ -1168,7 +1168,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
     preferredReplicasForTopicsByBrokers.foreach { case (leaderBroker, topicAndPartitionsForBroker) =>
       val topicsNotInPreferredReplica = topicAndPartitionsForBroker.filter { case (topicPartition, _) =>
         val leadershipInfo = controllerContext.partitionLeadershipInfo.get(topicPartition)
-        leadershipInfo.map(_.leaderAndIsr.leader != leaderBroker).getOrElse(false)
+        leadershipInfo.exists(_.leaderAndIsr.leader != leaderBroker)
       }
       debug(s"Topics not in preferred replica $topicsNotInPreferredReplica")
 
@@ -1263,7 +1263,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
           .format(partitionsToBeAdded.map(_._1.partition).mkString(","), topic))
       else {
         if (partitionsToBeAdded.nonEmpty) {
-          info("New partitions to be added %s".format(partitionsToBeAdded))
+          info(s"New partitions to be added $partitionsToBeAdded")
           controllerContext.partitionReplicaAssignment.++=(partitionsToBeAdded)
           onNewPartitionCreation(partitionsToBeAdded.keySet)
         }
@@ -1277,16 +1277,16 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
 
     override def process(): Unit = {
       if (!isActive) return
-      debug("Delete topics listener fired for topics %s to be deleted".format(topicsToBeDeleted.mkString(",")))
+      debug(s"Delete topics listener fired for topics ${topicsToBeDeleted.mkString(",")} to be deleted")
       val nonExistentTopics = topicsToBeDeleted -- controllerContext.allTopics
       if (nonExistentTopics.nonEmpty) {
-        warn("Ignoring request to delete non-existing topics " + nonExistentTopics.mkString(","))
+        warn(s"Ignoring request to delete non-existing topics ${nonExistentTopics.mkString(",")}")
         nonExistentTopics.foreach(topic => zkUtils.deletePathRecursive(getDeleteTopicPath(topic)))
       }
       topicsToBeDeleted --= nonExistentTopics
       if (config.deleteTopicEnable) {
         if (topicsToBeDeleted.nonEmpty) {
-          info("Starting topic deletion for topics " + topicsToBeDeleted.mkString(","))
+          info(s"Starting topic deletion for topics ${topicsToBeDeleted.mkString(",")}")
           // mark topic ineligible for deletion if other state changes are in progress
           topicsToBeDeleted.foreach { topic =>
             val partitionReassignmentInProgress =
@@ -1300,7 +1300,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
       } else {
         // If delete topic is disabled remove entries under zookeeper path : /admin/delete_topics
         for (topic <- topicsToBeDeleted) {
-          info("Removing " + getDeleteTopicPath(topic) + " since delete topic is disabled")
+          info(s"Removing ${getDeleteTopicPath(topic)} since delete topic is disabled")
           zkUtils.deletePath(getDeleteTopicPath(topic))
         }
       }

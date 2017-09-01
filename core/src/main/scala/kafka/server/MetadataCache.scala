@@ -229,11 +229,11 @@ class MetadataCache(brokerId: Int) extends Logging {
   def contains(tp: TopicPartition): Boolean = getPartitionInfo(tp.topic, tp.partition).isDefined
 
   private def removePartitionInfo(topic: String, partitionId: Int): Boolean = {
-    cache.get(topic).map { infos =>
+    cache.get(topic).exists { infos =>
       infos.remove(partitionId)
       if (infos.isEmpty) cache.remove(topic)
       true
-    }.getOrElse(false)
+    }
   }
 
 }
