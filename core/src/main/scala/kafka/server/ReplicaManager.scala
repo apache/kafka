@@ -1230,6 +1230,7 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
+  // logDir should be an absolute path
   def handleLogDirFailure(dir: String) {
     if (!logManager.isLogDirOnline(dir))
       return
