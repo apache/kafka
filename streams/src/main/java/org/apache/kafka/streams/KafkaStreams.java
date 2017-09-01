@@ -275,7 +275,8 @@ public class KafkaStreams {
     private boolean setRunningFromCreated() {
         synchronized (stateLock) {
             if (state != State.CREATED) {
-                return false;
+                log.error("{} Unexpected state transition from {} to {}", logPrefix, state, State.RUNNING);
+                throw new IllegalStateException(logPrefix + " Unexpected state transition from " + state + " to " + State.RUNNING);
             }
             state = State.RUNNING;
             stateLock.notifyAll();
