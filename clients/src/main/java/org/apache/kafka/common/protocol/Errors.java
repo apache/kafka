@@ -516,7 +516,7 @@ public enum Errors {
             public ApiException build(String message) {
                 return new LogDirNotFoundException(message);
             }
-        });
+    });
 
     private interface ApiExceptionBuilder {
         ApiException build(String message);
