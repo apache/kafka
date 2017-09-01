@@ -393,4 +393,9 @@ public class KStreamImplTest {
     public void shouldThrowNullPointerOnJoinWithStreamWhenJoinedIsNull() {
         testStream.join(testStream, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(10), null);
     }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerOnOuterJoinJoinedIsNull() {
+        testStream.outerJoin(testStream, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(10), null);
+    }
 }

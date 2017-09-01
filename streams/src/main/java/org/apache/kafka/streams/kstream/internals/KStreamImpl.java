@@ -531,14 +531,22 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                            final Serde<K> keySerde,
                                            final Serde<V> thisValueSerde,
                                            final Serde<V1> otherValueSerde) {
-        return doJoin(other, joiner, windows, Joined.with(keySerde, thisValueSerde, otherValueSerde), new KStreamImplJoin(true, true));
+        return outerJoin(other, joiner, windows, Joined.with(keySerde, thisValueSerde, otherValueSerde));
     }
 
     @Override
     public <V1, R> KStream<K, R> outerJoin(final KStream<K, V1> other,
                                            final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
                                            final JoinWindows windows) {
-        return outerJoin(other, joiner, windows, null, null, null);
+        return outerJoin(other, joiner, windows, Joined.<K, V, V1>with(null, null, null));
+    }
+
+    @Override
+    public <VO, VR> KStream<K, VR> outerJoin(final KStream<K, VO> other,
+                                             final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+                                             final JoinWindows windows,
+                                             final Joined<K, V, VO> joined) {
+        return doJoin(other, joiner, windows, joined, new KStreamImplJoin(true, true));
     }
 
     private <V1, R> KStream<K, R> doJoin(final KStream<K, V1> other,
