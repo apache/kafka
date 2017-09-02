@@ -1672,10 +1672,12 @@ public class KafkaAdminClient extends AdminClient {
                 public void handleResponse(AbstractResponse abstractResponse) {
                     DescribeLogDirsResponse response = (DescribeLogDirsResponse) abstractResponse;
                     KafkaFutureImpl<Map<String, DescribeLogDirsResponse.LogDirInfo>> future = futures.get(brokerId);
-                    if (response.logDirInfos().size() > 0)
+                    if (response.logDirInfos().size() > 0) {
                         future.complete(response.logDirInfos());
-                    else
+                    } else {
+                        // response.logDirInfos() will be empty if and only if the user is not authorized to describe clsuter resource.
                         future.completeExceptionally(Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
+                    }
                 }
                 @Override
                 void handleFailure(Throwable throwable) {
@@ -1726,8 +1728,13 @@ public class KafkaAdminClient extends AdminClient {
                     for (Map.Entry<String, DescribeLogDirsResponse.LogDirInfo> responseEntry: response.logDirInfos().entrySet()) {
                         String logDir = responseEntry.getKey();
                         DescribeLogDirsResponse.LogDirInfo logDirInfo = responseEntry.getValue();
-                        if (logDirInfo.error != Errors.NONE)
+
+                        // No replica info will be provided if the log directory is offline
+                        if (logDirInfo.error == Errors.KAFKA_STORAGE_ERROR)
                             continue;
+                        else if (logDirInfo.error != Errors.NONE)
+                            handleFailure(new IllegalArgumentException(
+                                "The error " + logDirInfo.error + " for log directory " + logDir + " in the response from broker " + brokerId + " is illegal"));
 
                         for (Map.Entry<TopicPartition, DescribeLogDirsResponse.ReplicaInfo> replicaInfoEntry: logDirInfo.replicaInfos.entrySet()) {
                             TopicPartition tp = replicaInfoEntry.getKey();
