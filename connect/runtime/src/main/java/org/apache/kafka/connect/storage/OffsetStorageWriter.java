@@ -72,7 +72,6 @@ public class OffsetStorageWriter {
     // Offset data in Connect format
     private Map<Map<String, Object>, Map<String, Object>> data = new HashMap<>();
 
-    // Not synchronized, should only be accessed by flush thread
     private Map<Map<String, Object>, Map<String, Object>> toFlush = null;
     // Unique ID for each flush request to handle callbacks after timeouts
     private long currentFlushId = 0;
@@ -128,7 +127,7 @@ public class OffsetStorageWriter {
      *
      * @return a Future, or null if there are no offsets to commitOffsets
      */
-    public Future<Void> doFlush(final Callback<Void> callback) {
+    public synchronized Future<Void> doFlush(final Callback<Void> callback) {
         final long flushId = currentFlushId;
 
         // Serialize
