@@ -14,35 +14,44 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.util.Map;
 
+
 /**
- * Options for {@link AdminClient#alterConfigs(Map)}.
- *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * The result of {@link AdminClient#alterReplicaDir(Map, AlterReplicaDirOptions)}.
  */
 @InterfaceStability.Evolving
-public class AlterConfigsOptions extends AbstractOptions<AlterConfigsOptions> {
+public class AlterReplicaDirResult {
+    private final Map<TopicPartitionReplica, KafkaFuture<Void>> futures;
 
-    private boolean validateOnly = false;
-
-    /**
-     * Return true if the request should be validated without altering the configs.
-     */
-    public boolean shouldValidateOnly() {
-        return validateOnly;
+    AlterReplicaDirResult(Map<TopicPartitionReplica, KafkaFuture<Void>> futures) {
+        this.futures = futures;
     }
 
     /**
-     * Set to true if the request should be validated without altering the configs.
+     *
+     * Return a map from replica to future which can be used to check the status of individual replica movement.
+     *
+     * Possible error code:
+     *
+     * LOG_DIR_NOT_FOUND (57)
+     * KAFKA_STORAGE_ERROR (56)
+     * REPLICA_NOT_AVAILABLE (9)
+     * UNKNOWN (-1)
      */
-    public AlterConfigsOptions validateOnly(boolean validateOnly) {
-        this.validateOnly = validateOnly;
-        return this;
+    public Map<TopicPartitionReplica, KafkaFuture<Void>> values() {
+        return futures;
+    }
+
+    /**
+     * Return a future which succeeds if all the replica movement have succeeded
+     */
+    public KafkaFuture<Void> all() {
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
     }
 }
