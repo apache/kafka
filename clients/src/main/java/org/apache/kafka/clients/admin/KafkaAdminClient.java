@@ -1426,62 +1426,74 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DescribeConfigsResult describeConfigs(Collection<ConfigResource> configResources, final DescribeConfigsOptions options) {
-        final Map<ConfigResource, KafkaFutureImpl<Config>> singleRequestFutures = new HashMap<>();
-        final Collection<Resource> singleRequestResources = new ArrayList<>(configResources.size());
-
+        final Map<ConfigResource, KafkaFutureImpl<Config>> unifiedRequestFutures = new HashMap<>();
         final Map<ConfigResource, KafkaFutureImpl<Config>> brokerFutures = new HashMap<>(configResources.size());
+
+        // The BROKER resources which we want to describe.  We must make a separate DescribeConfigs
+        // request for every BROKER resource we want to describe.
         final Collection<Resource> brokerResources = new ArrayList<>();
 
+        // The non-BROKER resources which we want to describe.  These resources can be described by a
+        // single, unified DescribeConfigs request.
+        final Collection<Resource> unifiedRequestResources = new ArrayList<>(configResources.size());
+
         for (ConfigResource resource : configResources) {
-            if (resource.type() != ConfigResource.Type.BROKER) {
-                singleRequestFutures.put(resource, new KafkaFutureImpl<Config>());
-                singleRequestResources.add(configResourceToResource(resource));
-            } else {
+            if (resource.type() == ConfigResource.Type.BROKER) {
                 brokerFutures.put(resource, new KafkaFutureImpl<Config>());
                 brokerResources.add(configResourceToResource(resource));
+            } else {
+                unifiedRequestFutures.put(resource, new KafkaFutureImpl<Config>());
+                unifiedRequestResources.add(configResourceToResource(resource));
             }
         }
 
         final long now = time.milliseconds();
-        runnable.call(new Call("describeConfigs", calcDeadlineMs(now, options.timeoutMs()),
+        if (!unifiedRequestResources.isEmpty()) {
+            runnable.call(new Call("describeConfigs", calcDeadlineMs(now, options.timeoutMs()),
                 new LeastLoadedNodeProvider()) {
 
-            @Override
-            AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new DescribeConfigsRequest.Builder(singleRequestResources);
-            }
-
-            @Override
-            void handleResponse(AbstractResponse abstractResponse) {
-                DescribeConfigsResponse response = (DescribeConfigsResponse) abstractResponse;
-                for (Map.Entry<ConfigResource, KafkaFutureImpl<Config>> entry : singleRequestFutures.entrySet()) {
-                    ConfigResource configResource = entry.getKey();
-                    KafkaFutureImpl<Config> future = entry.getValue();
-                    DescribeConfigsResponse.Config config = response.config(configResourceToResource(configResource));
-                    if (config.error().isFailure()) {
-                        future.completeExceptionally(config.error().exception());
-                        continue;
-                    }
-                    List<ConfigEntry> configEntries = new ArrayList<>();
-                    for (DescribeConfigsResponse.ConfigEntry configEntry : config.entries()) {
-                        configEntries.add(new ConfigEntry(configEntry.name(), configEntry.value(),
-                                configEntry.isDefault(), configEntry.isSensitive(), configEntry.isReadOnly()));
-                    }
-                    future.complete(new Config(configEntries));
+                @Override
+                AbstractRequest.Builder createRequest(int timeoutMs) {
+                    return new DescribeConfigsRequest.Builder(unifiedRequestResources);
                 }
-            }
 
-            @Override
-            void handleFailure(Throwable throwable) {
-                completeAllExceptionally(singleRequestFutures.values(), throwable);
-            }
-        }, now);
+                @Override
+                void handleResponse(AbstractResponse abstractResponse) {
+                    DescribeConfigsResponse response = (DescribeConfigsResponse) abstractResponse;
+                    for (Map.Entry<ConfigResource, KafkaFutureImpl<Config>> entry : unifiedRequestFutures.entrySet()) {
+                        ConfigResource configResource = entry.getKey();
+                        KafkaFutureImpl<Config> future = entry.getValue();
+                        DescribeConfigsResponse.Config config = response.config(configResourceToResource(configResource));
+                        if (config == null) {
+                            future.completeExceptionally(new UnknownServerException(
+                                "Malformed broker response: missing config for " + configResource));
+                            continue;
+                        }
+                        if (config.error().isFailure()) {
+                            future.completeExceptionally(config.error().exception());
+                            continue;
+                        }
+                        List<ConfigEntry> configEntries = new ArrayList<>();
+                        for (DescribeConfigsResponse.ConfigEntry configEntry : config.entries()) {
+                            configEntries.add(new ConfigEntry(configEntry.name(), configEntry.value(),
+                                configEntry.isDefault(), configEntry.isSensitive(), configEntry.isReadOnly()));
+                        }
+                        future.complete(new Config(configEntries));
+                    }
+                }
+
+                @Override
+                void handleFailure(Throwable throwable) {
+                    completeAllExceptionally(unifiedRequestFutures.values(), throwable);
+                }
+            }, now);
+        }
 
         for (Map.Entry<ConfigResource, KafkaFutureImpl<Config>> entry : brokerFutures.entrySet()) {
             final KafkaFutureImpl<Config> brokerFuture = entry.getValue();
             final Resource resource = configResourceToResource(entry.getKey());
-            int nodeId = Integer.parseInt(resource.name());
-            runnable.call(new Call("describeConfigs", calcDeadlineMs(now, options.timeoutMs()),
+            final int nodeId = Integer.parseInt(resource.name());
+            runnable.call(new Call("describeBrokerConfigs", calcDeadlineMs(now, options.timeoutMs()),
                     new ConstantNodeIdProvider(nodeId)) {
 
                 @Override
@@ -1494,13 +1506,18 @@ public class KafkaAdminClient extends AdminClient {
                     DescribeConfigsResponse response = (DescribeConfigsResponse) abstractResponse;
                     DescribeConfigsResponse.Config config = response.configs().get(resource);
 
+                    if (config == null) {
+                        brokerFuture.completeExceptionally(new UnknownServerException(
+                            "Malformed broker response: missing config for " + resource));
+                        return;
+                    }
                     if (config.error().isFailure())
                         brokerFuture.completeExceptionally(config.error().exception());
                     else {
                         List<ConfigEntry> configEntries = new ArrayList<>();
                         for (DescribeConfigsResponse.ConfigEntry configEntry : config.entries()) {
                             configEntries.add(new ConfigEntry(configEntry.name(), configEntry.value(),
-                                    configEntry.isDefault(), configEntry.isSensitive(), configEntry.isReadOnly()));
+                                configEntry.isDefault(), configEntry.isSensitive(), configEntry.isReadOnly()));
                         }
                         brokerFuture.complete(new Config(configEntries));
                     }
@@ -1508,15 +1525,14 @@ public class KafkaAdminClient extends AdminClient {
 
                 @Override
                 void handleFailure(Throwable throwable) {
-                    completeAllExceptionally(singleRequestFutures.values(), throwable);
+                    brokerFuture.completeExceptionally(throwable);
                 }
             }, now);
         }
-
-        Map<ConfigResource, KafkaFutureImpl<Config>> allFutures = new HashMap<>(configResources.size());
-        allFutures.putAll(singleRequestFutures);
+        final Map<ConfigResource, KafkaFuture<Config>> allFutures = new HashMap<>();
         allFutures.putAll(brokerFutures);
-        return new DescribeConfigsResult(new HashMap<ConfigResource, KafkaFuture<Config>>(allFutures));
+        allFutures.putAll(unifiedRequestFutures);
+        return new DescribeConfigsResult(allFutures);
     }
 
     private Resource configResourceToResource(ConfigResource configResource) {
