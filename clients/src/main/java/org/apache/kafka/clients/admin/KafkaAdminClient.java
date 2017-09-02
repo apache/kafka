@@ -24,6 +24,7 @@ import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResult;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.common.Cluster;
@@ -58,6 +59,9 @@ import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.AlterConfigsRequest;
 import org.apache.kafka.common.requests.AlterConfigsResponse;
+import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.requests.ApiVersionsRequest;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.CreateAclsRequest;
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation;
 import org.apache.kafka.common.requests.CreateAclsResponse;
@@ -72,7 +76,6 @@ import org.apache.kafka.common.requests.DeleteTopicsRequest;
 import org.apache.kafka.common.requests.DeleteTopicsResponse;
 import org.apache.kafka.common.requests.DescribeAclsRequest;
 import org.apache.kafka.common.requests.DescribeAclsResponse;
-import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.DescribeConfigsRequest;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
@@ -1578,5 +1581,47 @@ public class KafkaAdminClient extends AdminClient {
             }
         }, now);
         return new AlterConfigsResult(new HashMap<ConfigResource, KafkaFuture<Void>>(futures));
+    }
+
+    @Override
+    public ListBrokersVersionInfoResult listBrokersVersionInfo() {
+        List<Node> nodes = metadata.fetch().nodes();
+        final Map<Node, KafkaFutureImpl<NodeApiVersions>> brokerVersionsInfoFutures = new HashMap<>();
+        for (final Node node : nodes) {
+            final KafkaFutureImpl<NodeApiVersions> nodeApiVersionsKafkaFuture = new KafkaFutureImpl<>();
+            brokerVersionsInfoFutures.put(node, nodeApiVersionsKafkaFuture);
+            final long now = time.milliseconds();
+            runnable.call(new Call("listBrokersVersionInfo", calcDeadlineMs(now, null),
+                    new NodeProvider() {
+                        @Override
+                        public Node provide() {
+                            return node;
+                        }
+                    }) {
+
+                @Override
+                public AbstractRequest.Builder createRequest(int timeoutMs) {
+                    return new ApiVersionsRequest.Builder();
+                }
+
+                @Override
+                public void handleResponse(AbstractResponse abstractResponse) {
+                    ApiVersionsResponse response = (ApiVersionsResponse) abstractResponse;
+                    ApiException exception = response.error().exception();
+                    if (exception != null)
+                        nodeApiVersionsKafkaFuture.completeExceptionally(exception);
+                    else
+                        nodeApiVersionsKafkaFuture.complete(new NodeApiVersions(response.apiVersions()));
+                }
+
+                @Override
+                void handleFailure(Throwable throwable) {
+                    completeAllExceptionally(brokerVersionsInfoFutures.values(), throwable);
+                }
+            }, now);
+        }
+
+
+        return new ListBrokersVersionInfoResult(brokerVersionsInfoFutures);
     }
 }

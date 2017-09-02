@@ -346,4 +346,17 @@ public abstract class AdminClient implements AutoCloseable {
      * @return                The AlterConfigsResult
      */
     public abstract AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options);
+
+
+    /**
+     * Get all brokers version info.
+     *
+     * This operation is supported by brokers with version 0.11.0.0 or higher.
+     *
+     * @param configs         The resources with their configs (topic is the only resource type with configs that can
+     *                        be updated currently)
+     * @param options         The options to use when describing configs
+     * @return                The AlterConfigsResult
+     */
+    public abstract ListBrokersVersionInfoResult listBrokersVersionInfo();
 }
