@@ -120,7 +120,7 @@ public class GlobalStreamThreadTest {
     public void shouldStopRunningWhenClosedByUser() throws Exception {
         initializeConsumer();
         globalStreamThread.start();
-        globalStreamThread.close();
+        globalStreamThread.shutdown();
         globalStreamThread.join();
         assertEquals(GlobalStreamThread.State.DEAD, globalStreamThread.state());
     }
@@ -131,7 +131,7 @@ public class GlobalStreamThreadTest {
         globalStreamThread.start();
         final StateStore globalStore = builder.globalStateStores().get("bar");
         assertTrue(globalStore.isOpen());
-        globalStreamThread.close();
+        globalStreamThread.shutdown();
         globalStreamThread.join();
         assertFalse(globalStore.isOpen());
     }
@@ -142,7 +142,7 @@ public class GlobalStreamThreadTest {
 
         initializeConsumer();
         globalStreamThread.start();
-        globalStreamThread.close();
+        globalStreamThread.shutdown();
         globalStreamThread.join();
 
         assertEquals(GlobalStreamThread.State.DEAD, globalStreamThread.state());
@@ -154,9 +154,9 @@ public class GlobalStreamThreadTest {
 
         initializeConsumer();
         globalStreamThread.start();
-        globalStreamThread.close();
+        globalStreamThread.shutdown();
         globalStreamThread.join();
-        globalStreamThread.close();
+        globalStreamThread.shutdown();
 
         assertEquals(GlobalStreamThread.State.DEAD, globalStreamThread.state());
     }
@@ -173,7 +173,7 @@ public class GlobalStreamThreadTest {
                 return globalStreamThread.state() == RUNNING;
             }
         }, 10 * 1000, "Thread never started.");
-        globalStreamThread.close();
+        globalStreamThread.shutdown();
     }
 
 

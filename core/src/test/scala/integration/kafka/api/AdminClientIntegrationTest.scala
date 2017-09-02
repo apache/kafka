@@ -27,12 +27,12 @@ import kafka.log.LogConfig
 import kafka.server.{Defaults, KafkaConfig, KafkaServer}
 import org.apache.kafka.clients.admin._
 import kafka.utils.{Logging, TestUtils, ZkUtils}
+import kafka.utils.Implicits._
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.common.KafkaFuture
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{InvalidRequestException, SecurityDisabledException, TimeoutException, TopicExistsException, UnknownTopicOrPartitionException}
-import org.apache.kafka.common.protocol.ApiKeys
 import org.junit.{After, Before, Rule, Test}
 import org.apache.kafka.common.requests.MetadataResponse
 import org.apache.kafka.common.resource.{Resource, ResourceType}
@@ -235,8 +235,8 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     val brokerResource1 = new ConfigResource(ConfigResource.Type.BROKER, servers(1).config.brokerId.toString)
     val brokerResource2 = new ConfigResource(ConfigResource.Type.BROKER, servers(2).config.brokerId.toString)
     val configResources = Seq(topicResource1, topicResource2, brokerResource1, brokerResource2)
-    var describeResult = client.describeConfigs(configResources.asJava)
-    var configs = describeResult.all.get
+    val describeResult = client.describeConfigs(configResources.asJava)
+    val configs = describeResult.all.get
 
     assertEquals(4, configs.size)
 
@@ -378,7 +378,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
       if (!config.containsKey(KafkaConfig.SslTruststorePasswordProp))
         config.setProperty(KafkaConfig.SslTruststorePasswordProp, "some.invalid.pass")
     }
-    cfgs.foreach(_.putAll(serverConfig))
+    cfgs.foreach(_ ++= serverConfig)
     cfgs.map(KafkaConfig.fromProps)
   }
 
@@ -392,12 +392,13 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     val factory = new KafkaAdminClientTest.FailureInjectingTimeoutProcessorFactory()
     val client = KafkaAdminClientTest.createInternal(new AdminClientConfig(config), factory)
     val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1)).asJava,
-        new CreateTopicsOptions().validateOnly(true))
+        new CreateTopicsOptions().validateOnly(true)).all()
+    assertFutureExceptionTypeEquals(future, classOf[TimeoutException])
     val future2 = client.createTopics(Seq("mytopic3", "mytopic4").map(new NewTopic(_, 1, 1)).asJava,
-        new CreateTopicsOptions().validateOnly(true))
-    future.all().get
-    future2.all().get
+      new CreateTopicsOptions().validateOnly(true)).all()
+    future2.get
     client.close()
+    assertEquals(1, factory.failuresInjected)
   }
 }
 

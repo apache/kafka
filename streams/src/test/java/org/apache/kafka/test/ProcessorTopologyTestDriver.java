@@ -222,14 +222,13 @@ public class ProcessorTopologyTestDriver {
                                   consumer,
                                   new StoreChangelogReader(
                                       createRestoreConsumer(topology.storeToChangelogTopic()),
-                                      Time.SYSTEM,
-                                      5000,
                                       stateRestoreListener),
                                   config,
                                   streamsMetrics, stateDirectory,
                                   cache,
                                   new MockTime(),
                                   producer);
+            task.initialize();
         }
     }
 
@@ -241,7 +240,7 @@ public class ProcessorTopologyTestDriver {
      * @param value the raw message value
      * @param timestamp the raw message timestamp
      */
-    private void process(final String topicName,
+    public void process(final String topicName,
                          final byte[] key,
                          final byte[] value,
                          final long timestamp) {
@@ -310,7 +309,26 @@ public class ProcessorTopologyTestDriver {
                                final V value,
                                final Serializer<K> keySerializer,
                                final Serializer<V> valueSerializer) {
-        process(topicName, keySerializer.serialize(topicName, key), valueSerializer.serialize(topicName, value));
+        process(topicName, key, value, keySerializer, valueSerializer, 0L);
+    }
+
+    /**
+     * Send an input message with the given key and value and timestamp on the specified topic to the topology.
+     *
+     * @param topicName the name of the topic on which the message is to be sent
+     * @param key the raw message key
+     * @param value the raw message value
+     * @param keySerializer the serializer for the key
+     * @param valueSerializer the serializer for the value
+     * @param timestamp the raw message timestamp
+     */
+    public <K, V> void process(final String topicName,
+                               final K key,
+                               final V value,
+                               final Serializer<K> keySerializer,
+                               final Serializer<V> valueSerializer,
+                               final long timestamp) {
+        process(topicName, keySerializer.serialize(topicName, key), valueSerializer.serialize(topicName, value), timestamp);
     }
 
     /**

@@ -24,7 +24,7 @@ import kafka.server.{ConfigEntityName, QuotaId}
 import kafka.utils.{Logging, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 
-import org.apache.kafka.common.security.scram.{ScramCredential, ScramCredentialUtils, ScramMechanism}
+import org.apache.kafka.common.security.scram.ScramCredentialUtils
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test

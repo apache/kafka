@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
 from ducktape.cluster.remoteaccount import RemoteCommandError
 from ducktape.utils.util import wait_until
 from kafkatest.version import get_version, V_0_11_0_0, DEV_BRANCH
@@ -25,7 +27,7 @@ class JmxMixin(object):
     - we assume the service using JmxMixin also uses KafkaPathResolverMixin
     - this uses the --wait option for JmxTool, so the list of object names must be explicit; no patterns are permitted
     """
-    def __init__(self, num_nodes, jmx_object_names=None, jmx_attributes=None):
+    def __init__(self, num_nodes, jmx_object_names=None, jmx_attributes=None, root="/mnt"):
         self.jmx_object_names = jmx_object_names
         self.jmx_attributes = jmx_attributes or []
         self.jmx_port = 9192
@@ -35,12 +37,13 @@ class JmxMixin(object):
         self.maximum_jmx_value = {}  # map from object_attribute_name to maximum value observed over time
         self.average_jmx_value = {}  # map from object_attribute_name to average value observed over time
 
-        self.jmx_tool_log = "/mnt/jmx_tool.log"
-        self.jmx_tool_err_log = "/mnt/jmx_tool.err.log"
+        self.jmx_tool_log = os.path.join(root, "jmx_tool.log")
+        self.jmx_tool_err_log = os.path.join(root, "jmx_tool.err.log")
 
     def clean_node(self, node):
-        node.account.kill_process("jmx", clean_shutdown=False, allow_fail=True)
-        node.account.ssh("rm -rf %s" % self.jmx_tool_log, allow_fail=False)
+        node.account.kill_java_processes(self.jmx_class_name(), clean_shutdown=False,
+                                         allow_fail=True)
+        node.account.ssh("rm -f -- %s %s" % (self.jmx_tool_log, self.jmx_tool_err_log), allow_fail=False)
 
     def start_jmx_tool(self, idx, node):
         if self.jmx_object_names is None:
@@ -65,7 +68,8 @@ class JmxMixin(object):
         use_jmxtool_version = get_version(node)
         if use_jmxtool_version <= V_0_11_0_0:
             use_jmxtool_version = DEV_BRANCH
-        cmd = "%s kafka.tools.JmxTool " % self.path.script("kafka-run-class.sh", use_jmxtool_version)
+        cmd = "%s %s " % (self.path.script("kafka-run-class.sh", use_jmxtool_version),
+                          self.jmx_class_name())
         cmd += "--reporting-interval 1000 --jmx-url service:jmx:rmi:///jndi/rmi://127.0.0.1:%d/jmxrmi" % self.jmx_port
         cmd += " --wait"
         for jmx_object_name in self.jmx_object_names:
@@ -83,10 +87,10 @@ class JmxMixin(object):
     def _jmx_has_output(self, node):
         """Helper used as a proxy to determine whether jmx is running by that jmx_tool_log contains output."""
         try:
-            node.account.ssh("test -z \"$(cat %s)\"" % self.jmx_tool_log, allow_fail=False)
-            return False
-        except RemoteCommandError:
+            node.account.ssh("test -s %s" % self.jmx_tool_log, allow_fail=False)
             return True
+        except RemoteCommandError:
+            return False
 
     def read_jmx_output(self, idx, node):
         if not self.started[idx-1]:
@@ -129,3 +133,6 @@ class JmxMixin(object):
     def read_jmx_output_all_nodes(self):
         for node in self.nodes:
             self.read_jmx_output(self.idx(node), node)
+
+    def jmx_class_name(self):
+        return "kafka.tools.JmxTool"

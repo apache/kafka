@@ -174,7 +174,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
   /**
    * The total number of bytes in this message set, including any partial trailing messages
    */
-  def sizeInBytes: Int = buffer.limit
+  def sizeInBytes: Int = buffer.limit()
 
   /**
    * The total number of bytes in this message set not including any partial, trailing messages

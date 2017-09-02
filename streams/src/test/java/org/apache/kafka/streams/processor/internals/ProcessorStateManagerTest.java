@@ -22,7 +22,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
@@ -36,10 +35,7 @@ import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.channels.FileChannel;
-import java.nio.channels.FileLock;
 import java.nio.charset.Charset;
-import java.nio.file.StandardOpenOption;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -433,33 +429,6 @@ public class ProcessorStateManagerTest {
         assertThat(read, equalTo(Collections.<TopicPartition, Long>emptyMap()));
     }
 
-    @Test
-    public void shouldThrowLockExceptionIfFailedToLockStateDirectory() throws Exception {
-        final File taskDirectory = stateDirectory.directoryForTask(taskId);
-        final FileChannel channel = FileChannel.open(new File(taskDirectory,
-                                                              StateDirectory.LOCK_FILE_NAME).toPath(),
-                                                     StandardOpenOption.CREATE,
-                                                     StandardOpenOption.WRITE);
-        // lock the task directory
-        final FileLock lock = channel.lock();
-
-        try {
-            new ProcessorStateManager(
-                taskId,
-                noPartitions,
-                false,
-                stateDirectory,
-                Collections.<String, String>emptyMap(),
-                changelogReader,
-                false);
-            fail("Should have thrown LockException");
-        } catch (final LockException e) {
-           // pass
-        } finally {
-            lock.release();
-            channel.close();
-        }
-    }
 
     @Test
     public void shouldThrowIllegalArgumentExceptionIfStoreNameIsSameAsCheckpointFileName() throws Exception {

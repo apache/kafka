@@ -71,8 +71,8 @@ public class SaslChannelBuilderTest {
         TestJaasConfig jaasConfig = new TestJaasConfig();
         jaasConfig.addEntry("jaasContext", PlainLoginModule.class.getName(), new HashMap<String, Object>());
         JaasContext jaasContext = new JaasContext("jaasContext", JaasContext.Type.SERVER, jaasConfig);
-        return new SaslChannelBuilder(Mode.CLIENT, jaasContext, securityProtocol, "PLAIN",
-                true, null);
+        return new SaslChannelBuilder(Mode.CLIENT, jaasContext, securityProtocol, new ListenerName("PLAIN"),
+                "PLAIN", true, null);
     }
 
 }

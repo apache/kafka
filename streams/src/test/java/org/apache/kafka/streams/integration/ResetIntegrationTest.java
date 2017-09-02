@@ -133,7 +133,7 @@ public class ResetIntegrationTest {
     public void testReprocessingFromScratchAfterResetWithIntermediateUserTopic() throws Exception {
         CLUSTER.createTopic(INTERMEDIATE_USER_TOPIC);
 
-        final Properties streamsConfiguration = prepareTest();
+        final Properties streamsConfiguration = prepareTest(4);
         final Properties resultTopicConsumerConfig = TestUtils.consumerConfig(
             CLUSTER.bootstrapServers(),
             APP_ID + "-standard-consumer-" + OUTPUT_TOPIC,
@@ -199,7 +199,7 @@ public class ResetIntegrationTest {
 
     @Test
     public void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic() throws Exception {
-        final Properties streamsConfiguration = prepareTest();
+        final Properties streamsConfiguration = prepareTest(1);
         final Properties resultTopicConsumerConfig = TestUtils.consumerConfig(
                 CLUSTER.bootstrapServers(),
                 APP_ID + "-standard-consumer-" + OUTPUT_TOPIC,
@@ -242,14 +242,14 @@ public class ResetIntegrationTest {
         cleanGlobal(null);
     }
 
-    private Properties prepareTest() throws Exception {
+    private Properties prepareTest(final int threads) throws Exception {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + testNo);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 4);
+        streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, threads);
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
         streamsConfiguration.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);

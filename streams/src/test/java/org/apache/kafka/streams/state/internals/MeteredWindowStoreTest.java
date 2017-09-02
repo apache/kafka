@@ -24,10 +24,12 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
-import org.apache.kafka.test.SegmentedBytesStoreStub;
 import org.apache.kafka.test.TestUtils;
+import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -39,10 +41,11 @@ import java.util.Set;
 
 import static org.junit.Assert.assertTrue;
 
-public class MeteredSegmentedBytesStoreTest {
+public class MeteredWindowStoreTest {
     private MockProcessorContext context;
-    private final SegmentedBytesStoreStub bytesStore = new SegmentedBytesStoreStub();
-    private final MeteredSegmentedBytesStore store = new MeteredSegmentedBytesStore(bytesStore, "scope", new MockTime());
+    @SuppressWarnings("unchecked")
+    private final WindowStore<Bytes, byte[]> innerStoreMock = EasyMock.createNiceMock(WindowStore.class);
+    private final MeteredWindowStore<String, String> store = new MeteredWindowStore<>(innerStoreMock, "scope", new MockTime(), Serdes.String(), Serdes.String());
     private final Set<String> latencyRecorded = new HashSet<>();
     private final Set<String> throughputRecorded = new HashSet<>();
 
@@ -105,60 +108,81 @@ public class MeteredSegmentedBytesStoreTest {
                 return streamsMetrics;
             }
         };
-        store.init(context, store);
+        EasyMock.expect(innerStoreMock.name()).andReturn("store").anyTimes();
     }
 
     @After
     public void after() {
         context.close();
-        store.close();
     }
 
     @Test
     public void shouldRecordRestoreLatencyOnInit() throws Exception {
+        innerStoreMock.init(context, store);
+        EasyMock.expectLastCall();
+        EasyMock.replay(innerStoreMock);
+        store.init(context, store);
         assertTrue(latencyRecorded.contains("restore"));
-        assertTrue(bytesStore.initialized);
     }
 
     @Test
     public void shouldRecordPutLatency() throws Exception {
-        store.put(Bytes.wrap(new byte[0]), new byte[0]);
+        final byte[] bytes = "a".getBytes();
+        innerStoreMock.put(EasyMock.eq(Bytes.wrap(bytes)), EasyMock.<byte[]>anyObject(), EasyMock.eq(context.timestamp()));
+        EasyMock.expectLastCall();
+        EasyMock.replay(innerStoreMock);
+
+        store.init(context, store);
+        store.put("a", "a");
         assertTrue(latencyRecorded.contains("put"));
-        assertTrue(bytesStore.putCalled);
+        EasyMock.verify(innerStoreMock);
     }
 
     @Test
     public void shouldRecordFetchLatency() throws Exception {
-        store.fetch(Bytes.wrap(new byte[0]), 1, 1).close(); // recorded on close;
+        EasyMock.expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 1, 1)).andReturn(KeyValueIterators.<byte[]>emptyWindowStoreIterator());
+        EasyMock.replay(innerStoreMock);
+
+        store.init(context, store);
+        store.fetch("a", 1, 1).close(); // recorded on close;
         assertTrue(latencyRecorded.contains("fetch"));
-        assertTrue(bytesStore.fetchCalled);
+        EasyMock.verify(innerStoreMock);
     }
 
     @Test
-    public void shouldRecordRemoveLatency() throws Exception {
-        store.remove(null);
-        assertTrue(latencyRecorded.contains("remove"));
-        assertTrue(bytesStore.removeCalled);
+    public void shouldRecordFetchRangeLatency() throws Exception {
+        EasyMock.expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), Bytes.wrap("b".getBytes()), 1, 1)).andReturn(KeyValueIterators.<Windowed<Bytes>, byte[]>emptyIterator());
+        EasyMock.replay(innerStoreMock);
+
+        store.init(context, store);
+        store.fetch("a", "b", 1, 1).close(); // recorded on close;
+        assertTrue(latencyRecorded.contains("fetch"));
+        EasyMock.verify(innerStoreMock);
     }
+
 
     @Test
     public void shouldRecordFlushLatency() throws Exception {
+        innerStoreMock.flush();
+        EasyMock.expectLastCall();
+        EasyMock.replay(innerStoreMock);
+
+        store.init(context, store);
         store.flush();
         assertTrue(latencyRecorded.contains("flush"));
-        assertTrue(bytesStore.flushed);
+        EasyMock.verify(innerStoreMock);
     }
 
-    @Test
-    public void shouldRecordGetLatency() throws Exception {
-        store.get(null);
-        assertTrue(latencyRecorded.contains("get"));
-        assertTrue(bytesStore.getCalled);
-    }
 
     @Test
     public void shouldCloseUnderlyingStore() throws Exception {
+        innerStoreMock.close();
+        EasyMock.expectLastCall();
+        EasyMock.replay(innerStoreMock);
+
+        store.init(context, store);
         store.close();
-        assertTrue(bytesStore.closed);
+        EasyMock.verify(innerStoreMock);
     }
 
 

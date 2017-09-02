@@ -25,63 +25,105 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.TestUtils;
+import org.easymock.EasyMock;
+import org.junit.Before;
 import org.junit.Test;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.junit.Assert.fail;
+
 public class AbstractTaskTest {
+
+    private final TaskId id = new TaskId(0, 0);
+    private StateDirectory stateDirectory  = EasyMock.createMock(StateDirectory.class);
+
+    @Before
+    public void before() {
+        EasyMock.expect(stateDirectory.directoryForTask(id)).andReturn(TestUtils.tempDirectory());
+    }
 
     @Test(expected = ProcessorStateException.class)
     public void shouldThrowProcessorStateExceptionOnInitializeOffsetsWhenAuthorizationException() throws Exception {
         final Consumer consumer = mockConsumer(new AuthorizationException("blah"));
-        final AbstractTask task = createTask(consumer);
+        final AbstractTask task = createTask(consumer, Collections.<StateStore>emptyList());
         task.updateOffsetLimits();
     }
 
     @Test(expected = ProcessorStateException.class)
     public void shouldThrowProcessorStateExceptionOnInitializeOffsetsWhenKafkaException() throws Exception {
         final Consumer consumer = mockConsumer(new KafkaException("blah"));
-        final AbstractTask task = createTask(consumer);
+        final AbstractTask task = createTask(consumer, Collections.<StateStore>emptyList());
         task.updateOffsetLimits();
     }
 
     @Test(expected = WakeupException.class)
     public void shouldThrowWakeupExceptionOnInitializeOffsetsWhenWakeupException() throws Exception {
         final Consumer consumer = mockConsumer(new WakeupException());
-        final AbstractTask task = createTask(consumer);
+        final AbstractTask task = createTask(consumer, Collections.<StateStore>emptyList());
         task.updateOffsetLimits();
     }
 
-    private AbstractTask createTask(final Consumer consumer) {
-        final MockTime time = new MockTime();
+    @Test
+    public void shouldThrowLockExceptionIfFailedToLockStateDirectoryWhenTopologyHasStores() throws IOException {
+        final Consumer consumer = EasyMock.createNiceMock(Consumer.class);
+        final StateStore store = EasyMock.createNiceMock(StateStore.class);
+        EasyMock.expect(stateDirectory.lock(id, 5)).andReturn(false);
+        EasyMock.replay(stateDirectory);
+
+        final AbstractTask task = createTask(consumer, Collections.singletonList(store));
+
+        try {
+            task.initializeStateStores();
+            fail("Should have thrown LockException");
+        } catch (final LockException e) {
+            // ok
+        }
+
+    }
+
+    @Test
+    public void shouldNotAttemptToLockIfNoStores() throws IOException {
+        final Consumer consumer = EasyMock.createNiceMock(Consumer.class);
+        EasyMock.replay(stateDirectory);
+
+        final AbstractTask task = createTask(consumer, Collections.<StateStore>emptyList());
+
+        task.initializeStateStores();
+
+        // should fail if lock is called
+        EasyMock.verify(stateDirectory);
+    }
+
+    private AbstractTask createTask(final Consumer consumer, final List<StateStore> stateStores) {
         final Properties properties = new Properties();
         properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-id");
         properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummyhost:9092");
         final StreamsConfig config = new StreamsConfig(properties);
-        return new AbstractTask(new TaskId(0, 0),
+        return new AbstractTask(id,
                                 "app",
                                 Collections.singletonList(new TopicPartition("t", 0)),
                                 new ProcessorTopology(Collections.<ProcessorNode>emptyList(),
                                                       Collections.<String, SourceNode>emptyMap(),
                                                       Collections.<String, SinkNode>emptyMap(),
-                                                      Collections.<StateStore>emptyList(),
+                                                      stateStores,
                                                       Collections.<String, String>emptyMap(),
                                                       Collections.<StateStore>emptyList()),
                                 consumer,
-                                new StoreChangelogReader(consumer, Time.SYSTEM, 5000, new MockStateRestoreListener()),
+                                new StoreChangelogReader(consumer, new MockStateRestoreListener()),
                                 false,
-                                new StateDirectory("app", TestUtils.tempDirectory().getPath(), time),
+                                stateDirectory,
                                 config) {
             @Override
             public void resume() {}
@@ -111,6 +153,11 @@ public class AbstractTaskTest {
             }
 
             @Override
+            public boolean commitNeeded() {
+                return false;
+            }
+
+            @Override
             public boolean maybePunctuateStreamTime() {
                 return false;
             }
@@ -131,7 +178,7 @@ public class AbstractTaskTest {
             }
 
             @Override
-            public boolean commitNeeded() {
+            public boolean initialize() {
                 return false;
             }
         };

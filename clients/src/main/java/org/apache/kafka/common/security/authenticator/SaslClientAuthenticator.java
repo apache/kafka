@@ -159,7 +159,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 // fetch supported versions.
                 String clientId = (String) configs.get(CommonClientConfigs.CLIENT_ID_CONFIG);
                 SaslHandshakeRequest handshakeRequest = new SaslHandshakeRequest(mechanism);
-                currentRequestHeader = new RequestHeader(ApiKeys.SASL_HANDSHAKE.id,
+                currentRequestHeader = new RequestHeader(ApiKeys.SASL_HANDSHAKE,
                         handshakeRequest.version(), clientId, correlationId++);
                 send(handshakeRequest.toSend(node, currentRequestHeader));
                 setSaslState(SaslState.RECEIVE_HANDSHAKE_RESPONSE);
@@ -308,20 +308,18 @@ public class SaslClientAuthenticator implements Authenticator {
 
     private void handleKafkaResponse(RequestHeader requestHeader, byte[] responseBytes) {
         AbstractResponse response;
-        ApiKeys apiKey;
         try {
             response = NetworkClient.parseResponse(ByteBuffer.wrap(responseBytes), requestHeader);
-            apiKey = ApiKeys.forId(requestHeader.apiKey());
         } catch (SchemaException | IllegalArgumentException e) {
             LOG.debug("Invalid SASL mechanism response, server may be expecting only GSSAPI tokens");
             throw new AuthenticationException("Invalid SASL mechanism response", e);
         }
-        switch (apiKey) {
+        switch (requestHeader.apiKey()) {
             case SASL_HANDSHAKE:
                 handleSaslHandshakeResponse((SaslHandshakeResponse) response);
                 break;
             default:
-                throw new IllegalStateException("Unexpected API key during handshake: " + apiKey);
+                throw new IllegalStateException("Unexpected API key during handshake: " + requestHeader.apiKey());
         }
     }
 

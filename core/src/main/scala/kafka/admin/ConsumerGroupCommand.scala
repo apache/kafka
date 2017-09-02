@@ -17,7 +17,7 @@
 
 package kafka.admin
 
-import java.text.SimpleDateFormat
+import java.text.{ParseException, SimpleDateFormat}
 import java.util.{Date, Properties}
 import javax.xml.datatype.DatatypeFactory
 
@@ -25,6 +25,7 @@ import joptsimple.{OptionParser, OptionSpec}
 import kafka.api.{OffsetFetchRequest, OffsetFetchResponse, OffsetRequest, PartitionOffsetRequestInfo}
 import kafka.client.ClientUtils
 import kafka.common.{OffsetMetadataAndError, TopicAndPartition}
+import kafka.utils.Implicits._
 import kafka.consumer.SimpleConsumer
 import kafka.utils._
 import org.I0Itec.zkclient.exception.ZkNoNodeException
@@ -514,7 +515,8 @@ object ConsumerGroupCommand extends Logging {
       properties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "30000")
       properties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, deserializer)
       properties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, deserializer)
-      if (opts.options.has(opts.commandConfigOpt)) properties.putAll(Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt)))
+      if (opts.options.has(opts.commandConfigOpt))
+        properties ++= Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
 
       new KafkaConsumer(properties)
     }
@@ -665,13 +667,18 @@ object ConsumerGroupCommand extends Logging {
       }
     }
 
-    private def getDateTime: java.lang.Long = {
+    private[admin] def getDateTime: java.lang.Long = {
       val datetime: String = opts.options.valueOf(opts.resetToDatetimeOpt) match {
         case ts if ts.split("T")(1).contains("+") || ts.split("T")(1).contains("-") || ts.split("T")(1).contains("Z") => ts.toString
         case ts => s"${ts}Z"
       }
-      val format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX")
-      val date = format.parse(datetime)
+      val date = {
+        try {
+          new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX").parse(datetime)
+        } catch {
+          case e: ParseException => new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX").parse(datetime)
+        }
+      }
       date.getTime
     }
 

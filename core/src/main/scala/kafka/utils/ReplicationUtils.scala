@@ -18,7 +18,6 @@
 package kafka.utils
 
 import kafka.api.LeaderAndIsr
-import kafka.common.TopicAndPartition
 import kafka.controller.{IsrChangeNotificationListener, LeaderIsrAndControllerEpoch}
 import kafka.utils.ZkUtils._
 import org.apache.kafka.common.TopicPartition
