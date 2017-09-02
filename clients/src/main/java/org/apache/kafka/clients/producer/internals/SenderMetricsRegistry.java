@@ -25,6 +25,9 @@ import org.apache.kafka.common.MetricNameTemplate;
 
 public class SenderMetricsRegistry {
 
+    final static String METRIC_GROUP_NAME = "producer-metrics";
+    final static String TOPIC_METRIC_GROUP_NAME = "producer-topic-metrics";
+
     public MetricNameTemplate batchSizeAvg;
     public MetricNameTemplate batchSizeMax;
     public MetricNameTemplate compressionRateAvg;
@@ -56,38 +59,36 @@ public class SenderMetricsRegistry {
     public SenderMetricsRegistry(Set<String> tags) {
 
         /* ***** Client level *****/
-        String metricGrpName = "producer-metrics";
         
-        this.batchSizeAvg = new MetricNameTemplate("batch-size-avg", metricGrpName, "The average number of bytes sent per partition per-request.", tags);
-        this.batchSizeMax = new MetricNameTemplate("batch-size-max", metricGrpName, "The max number of bytes sent per partition per-request.", tags);
-        this.compressionRateAvg = new MetricNameTemplate("compression-rate-avg", metricGrpName, "The average compression rate of record batches.", tags);
-        this.recordQueueTimeAvg = new MetricNameTemplate("record-queue-time-avg", metricGrpName, "The average time in ms record batches spent in the record accumulator.", tags);
-        this.recordQueueTimeMax = new MetricNameTemplate("record-queue-time-max", metricGrpName, "The maximum time in ms record batches spent in the record accumulator.", tags);
-        this.requestLatencyAvg = new MetricNameTemplate("request-latency-avg", metricGrpName, "The average request latency in ms", tags);
-        this.requestLatencyMax = new MetricNameTemplate("request-latency-max", metricGrpName, "The maximum request latency in ms", tags);
-        this.recordSendRate = new MetricNameTemplate("record-send-rate", metricGrpName, "The average number of records sent per second.", tags);
-        this.recordsPerRequestAvg = new MetricNameTemplate("records-per-request-avg", metricGrpName, "The average number of records per request.", tags);
-        this.recordRetryRate = new MetricNameTemplate("record-retry-rate", metricGrpName, "The average per-second number of retried record sends", tags);
-        this.recordErrorRate = new MetricNameTemplate("record-error-rate", metricGrpName, "The average per-second number of record sends that resulted in errors", tags);
-        this.recordSizeMax = new MetricNameTemplate("record-size-max", metricGrpName, "The maximum record size", tags);
-        this.recordSizeAvg = new MetricNameTemplate("record-size-avg", metricGrpName, "The average record size", tags);
-        this.requestsInFlight = new MetricNameTemplate("requests-in-flight", metricGrpName, "The current number of in-flight requests awaiting a response.", tags);
-        this.metadataAge = new MetricNameTemplate("metadata-age", metricGrpName, "The age in seconds of the current producer metadata being used.", tags);
-        this.batchSplitRate = new MetricNameTemplate("batch-split-rate", metricGrpName, "The average number of batch splits per second", tags);
+        this.batchSizeAvg = new MetricNameTemplate("batch-size-avg", METRIC_GROUP_NAME, "The average number of bytes sent per partition per-request.", tags);
+        this.batchSizeMax = new MetricNameTemplate("batch-size-max", METRIC_GROUP_NAME, "The max number of bytes sent per partition per-request.", tags);
+        this.compressionRateAvg = new MetricNameTemplate("compression-rate-avg", METRIC_GROUP_NAME, "The average compression rate of record batches.", tags);
+        this.recordQueueTimeAvg = new MetricNameTemplate("record-queue-time-avg", METRIC_GROUP_NAME, "The average time in ms record batches spent in the send buffer.", tags);
+        this.recordQueueTimeMax = new MetricNameTemplate("record-queue-time-max", METRIC_GROUP_NAME, "The maximum time in ms record batches spent in the send buffer.", tags);
+        this.requestLatencyAvg = new MetricNameTemplate("request-latency-avg", METRIC_GROUP_NAME, "The average request latency in ms", tags);
+        this.requestLatencyMax = new MetricNameTemplate("request-latency-max", METRIC_GROUP_NAME, "The maximum request latency in ms", tags);
+        this.recordSendRate = new MetricNameTemplate("record-send-rate", METRIC_GROUP_NAME, "The average number of records sent per second.", tags);
+        this.recordsPerRequestAvg = new MetricNameTemplate("records-per-request-avg", METRIC_GROUP_NAME, "The average number of records per request.", tags);
+        this.recordRetryRate = new MetricNameTemplate("record-retry-rate", METRIC_GROUP_NAME, "The average per-second number of retried record sends", tags);
+        this.recordErrorRate = new MetricNameTemplate("record-error-rate", METRIC_GROUP_NAME, "The average per-second number of record sends that resulted in errors", tags);
+        this.recordSizeMax = new MetricNameTemplate("record-size-max", METRIC_GROUP_NAME, "The maximum record size", tags);
+        this.recordSizeAvg = new MetricNameTemplate("record-size-avg", METRIC_GROUP_NAME, "The average record size", tags);
+        this.requestsInFlight = new MetricNameTemplate("requests-in-flight", METRIC_GROUP_NAME, "The current number of in-flight requests awaiting a response.", tags);
+        this.metadataAge = new MetricNameTemplate("metadata-age", METRIC_GROUP_NAME, "The age in seconds of the current producer metadata being used.", tags);
+        this.batchSplitRate = new MetricNameTemplate("batch-split-rate", METRIC_GROUP_NAME, "The average number of batch splits per second", tags);
 
-        this.produceThrottleTimeAvg = new MetricNameTemplate("produce-throttle-time-avg", metricGrpName, "The average time in ms a request was throttled by a broker", tags);
-        this.produceThrottleTimeMax = new MetricNameTemplate("produce-throttle-time-max", metricGrpName, "The maximum time in ms a request was throttled by a broker", tags);
+        this.produceThrottleTimeAvg = new MetricNameTemplate("produce-throttle-time-avg", METRIC_GROUP_NAME, "The average time in ms a request was throttled by a broker", tags);
+        this.produceThrottleTimeMax = new MetricNameTemplate("produce-throttle-time-max", METRIC_GROUP_NAME, "The maximum time in ms a request was throttled by a broker", tags);
 
         /* ***** Topic level *****/
-        String topicMetricGrpName = "producer-topic-metrics";
         Set<String> topicTags = new HashSet<String>(tags);
         topicTags.add("topic");
 
-        this.topicRecordSendRate = new MetricNameTemplate("record-send-rate", topicMetricGrpName, "The average number of records sent per second for a topic.", topicTags);
-        this.topicByteRate = new MetricNameTemplate("byte-rate", topicMetricGrpName, "The average number of bytes sent per second for a topic.", topicTags);
-        this.topicCompressionRate = new MetricNameTemplate("compression-rate", topicMetricGrpName, "The average compression rate of record batches for a topic.", topicTags);
-        this.topicRecordRetryRate = new MetricNameTemplate("record-retry-rate", topicMetricGrpName, "The average per-second number of retried record sends for a topic", topicTags);
-        this.topicRecordErrorRate = new MetricNameTemplate("record-error-rate", topicMetricGrpName, "The average per-second number of record sends that resulted in errors for a topic", topicTags);
+        this.topicRecordSendRate = new MetricNameTemplate("record-send-rate", TOPIC_METRIC_GROUP_NAME, "The average number of records sent per second for a topic.", topicTags);
+        this.topicByteRate = new MetricNameTemplate("byte-rate", TOPIC_METRIC_GROUP_NAME, "The average number of bytes sent per second for a topic.", topicTags);
+        this.topicCompressionRate = new MetricNameTemplate("compression-rate", TOPIC_METRIC_GROUP_NAME, "The average compression rate of record batches for a topic.", topicTags);
+        this.topicRecordRetryRate = new MetricNameTemplate("record-retry-rate", TOPIC_METRIC_GROUP_NAME, "The average per-second number of retried record sends for a topic", topicTags);
+        this.topicRecordErrorRate = new MetricNameTemplate("record-error-rate", TOPIC_METRIC_GROUP_NAME, "The average per-second number of record sends that resulted in errors for a topic", topicTags);
 
     }
 
