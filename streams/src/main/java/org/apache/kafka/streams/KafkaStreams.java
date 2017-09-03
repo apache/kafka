@@ -276,7 +276,7 @@ public class KafkaStreams {
         return true;
     }
 
-    private boolean setRunningFromCreated() {
+    private void setRunningFromCreated() {
         synchronized (stateLock) {
             if (state != State.CREATED) {
                 log.error("{} Unexpected state transition from {} to {}", logPrefix, state, State.RUNNING);
@@ -290,8 +290,6 @@ public class KafkaStreams {
         if (stateListener != null) {
             stateListener.onChange(State.RUNNING, State.CREATED);
         }
-
-        return true;
     }
 
     /**
@@ -522,8 +520,8 @@ public class KafkaStreams {
         if (globalTaskTopology != null) {
             globalStreamThread.setStateListener(streamStateListener);
         }
-        for (int i = 0; i < threads.length; i++) {
-            threads[i].setStateListener(streamStateListener);
+        for (final StreamThread thread :  threads) {
+            thread.setStateListener(streamStateListener);
         }
         final GlobalStateStoreProvider globalStateStoreProvider = new GlobalStateStoreProvider(builder.globalStateStores());
         queryableStoreProvider = new QueryableStoreProvider(storeProviders, globalStateStoreProvider);
@@ -575,9 +573,8 @@ public class KafkaStreams {
 
     private void validateStartOnce() {
         try {
-            if (setRunningFromCreated()) {
-                return;
-            }
+            setRunningFromCreated();
+            return;
         } catch (StreamsException e) {
             // do nothing, will throw
         }
