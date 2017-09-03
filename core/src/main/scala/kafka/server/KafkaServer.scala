@@ -101,6 +101,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   private val jmxPrefix: String = "kafka.server"
 
+  private var logContext: LogContext = null
+
   var metrics: Metrics = null
 
   val brokerState: BrokerState = new BrokerState
@@ -198,7 +200,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         /* generate brokerId */
         val (brokerId, initialOfflineDirs) = getBrokerIdAndOfflineDirs
         config.brokerId = brokerId
-        this.logIdent = "[Kafka Server " + config.brokerId + "], "
+        logContext = new LogContext("[Kafka Server " + config.brokerId + "] ")
+        this.logIdent = logContext.logPrefix()
 
         /* create and configure metrics */
         val reporters = config.getConfiguredInstances(KafkaConfig.MetricReporterClassesProp, classOf[MetricsReporter],
@@ -365,7 +368,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
     def doControlledShutdown(retries: Int): Boolean = {
       val metadataUpdater = new ManualMetadataUpdater()
-      val logContext = new LogContext("[KafkaServer brokerId=" + config.brokerId.toString + "] ")
       val networkClient = {
         val channelBuilder = ChannelBuilders.clientChannelBuilder(
           config.interBrokerSecurityProtocol,

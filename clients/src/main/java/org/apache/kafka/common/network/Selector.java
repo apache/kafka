@@ -114,7 +114,7 @@ public class Selector implements Selectable, AutoCloseable {
 
     /**
      * Create a new nioSelector
-     *  @param maxReceiveSize Max size in bytes of a single network receive (use {@link NetworkReceive#UNLIMITED} for no limit)
+     * @param maxReceiveSize Max size in bytes of a single network receive (use {@link NetworkReceive#UNLIMITED} for no limit)
      * @param connectionMaxIdleMs Max idle connection time (use {@link #NO_IDLE_TIMEOUT_MS} to disable idle timeout)
      * @param metrics Registry for Selector metrics
      * @param time Time implementation

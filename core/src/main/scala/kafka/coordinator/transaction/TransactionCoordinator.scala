@@ -27,7 +27,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.TransactionResult
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{LogContext, Time}
 
 object TransactionCoordinator {
 
@@ -54,9 +54,11 @@ object TransactionCoordinator {
     // we do not need to turn on reaper thread since no tasks will be expired and there are no completed tasks to be purged
     val txnMarkerPurgatory = DelayedOperationPurgatory[DelayedTxnMarker]("txn-marker-purgatory", config.brokerId, reaperEnabled = false, timerEnabled = false)
     val txnStateManager = new TransactionStateManager(config.brokerId, zkUtils, scheduler, replicaManager, txnConfig, time)
-    val txnMarkerChannelManager = TransactionMarkerChannelManager(config, metrics, metadataCache, txnStateManager, txnMarkerPurgatory, time)
 
-    new TransactionCoordinator(config.brokerId, scheduler, producerIdManager, txnStateManager, txnMarkerChannelManager, time)
+    val logContext = new LogContext("[Transaction Coordinator " + config.brokerId + "] ")
+    val txnMarkerChannelManager = TransactionMarkerChannelManager(config, metrics, metadataCache, txnStateManager, txnMarkerPurgatory, time, logContext)
+
+    new TransactionCoordinator(config.brokerId, scheduler, producerIdManager, txnStateManager, txnMarkerChannelManager, time, logContext)
   }
 
   private def initTransactionError(error: Errors): InitProducerIdResult = {
@@ -81,8 +83,9 @@ class TransactionCoordinator(brokerId: Int,
                              producerIdManager: ProducerIdManager,
                              txnManager: TransactionStateManager,
                              txnMarkerChannelManager: TransactionMarkerChannelManager,
-                             time: Time) extends Logging {
-  this.logIdent = "[Transaction Coordinator " + brokerId + "]: "
+                             time: Time,
+                             logContext: LogContext) extends Logging {
+  this.logIdent = logContext.logPrefix()
 
   import TransactionCoordinator._
 

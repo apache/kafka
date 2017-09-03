@@ -43,13 +43,13 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
                                  metrics: Metrics,
                                  time: Time,
                                  fetcherId: Int,
-                                 clientId: String) extends BlockingSend {
+                                 clientId: String,
+                                 logContext: LogContext) extends BlockingSend {
 
   private val sourceNode = new Node(sourceBroker.id, sourceBroker.host, sourceBroker.port)
   private val socketTimeout: Int = brokerConfig.replicaSocketTimeoutMs
 
   private val networkClient = {
-    val logContext = new LogContext("[ReplicaFetcherBlockingSend clientId=" + clientId + "] ")
     val channelBuilder = ChannelBuilders.clientChannelBuilder(
       brokerConfig.interBrokerSecurityProtocol,
       JaasContext.Type.SERVER,

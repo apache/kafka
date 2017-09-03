@@ -43,8 +43,8 @@ object TransactionMarkerChannelManager {
             metadataCache: MetadataCache,
             txnStateManager: TransactionStateManager,
             txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker],
-            time: Time): TransactionMarkerChannelManager = {
-    val logContext = new LogContext("[TransactionMarkerChannelManager brokerId=" + config.brokerId + "] ")
+            time: Time,
+            logContext: LogContext): TransactionMarkerChannelManager = {
     val channelBuilder = ChannelBuilders.clientChannelBuilder(
       config.interBrokerSecurityProtocol,
       JaasContext.Type.SERVER,
