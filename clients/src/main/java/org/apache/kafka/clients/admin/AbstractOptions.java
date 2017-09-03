@@ -17,15 +17,30 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.acl.AclBindingFilter;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
-/**
- * Options for {@link AdminClient#describeAcls(AclBindingFilter)}.
- *
- * The API of this class is evolving, see {@link AdminClient} for details.
+/*
+ * This class implements the common APIs that are shared by Options classes for various AdminClient commands
  */
-@InterfaceStability.Evolving
-public class DescribeAclsOptions extends AbstractOptions<DescribeAclsOptions> {
+public abstract class AbstractOptions<T extends AbstractOptions> {
+
+    private Integer timeoutMs = null;
+
+    /**
+     * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
+     * AdminClient should be used.
+     */
+    public T timeoutMs(Integer timeoutMs) {
+        this.timeoutMs = timeoutMs;
+        return (T) this;
+    }
+
+    /**
+     * The request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
+     * AdminClient should be used.
+     */
+    public Integer timeoutMs() {
+        return timeoutMs;
+    }
+
 
 }

@@ -197,19 +197,23 @@ object TestUtils extends Logging {
     *
     * Note that if `interBrokerSecurityProtocol` is defined, the listener for the `SecurityProtocol` will be enabled.
     */
-  def createBrokerConfig(nodeId: Int, zkConnect: String,
-    enableControlledShutdown: Boolean = true,
-    enableDeleteTopic: Boolean = false,
-    port: Int = RandomPort,
-    interBrokerSecurityProtocol: Option[SecurityProtocol] = None,
-    trustStoreFile: Option[File] = None,
-    saslProperties: Option[Properties] = None,
-    enablePlaintext: Boolean = true,
-    enableSaslPlaintext: Boolean = false, saslPlaintextPort: Int = RandomPort,
-    enableSsl: Boolean = false, sslPort: Int = RandomPort,
-    enableSaslSsl: Boolean = false, saslSslPort: Int = RandomPort, rack: Option[String] = None, logDirCount: Int = 1)
-  : Properties = {
-
+  def createBrokerConfig(nodeId: Int,
+                         zkConnect: String,
+                         enableControlledShutdown: Boolean = true,
+                         enableDeleteTopic: Boolean = false,
+                         port: Int = RandomPort,
+                         interBrokerSecurityProtocol: Option[SecurityProtocol] = None,
+                         trustStoreFile: Option[File] = None,
+                         saslProperties: Option[Properties] = None,
+                         enablePlaintext: Boolean = true,
+                         enableSaslPlaintext: Boolean = false,
+                         saslPlaintextPort: Int = RandomPort,
+                         enableSsl: Boolean = false,
+                         sslPort: Int = RandomPort,
+                         enableSaslSsl: Boolean = false,
+                         saslSslPort: Int = RandomPort,
+                         rack: Option[String] = None,
+                         logDirCount: Int = 1): Properties = {
     def shouldEnable(protocol: SecurityProtocol) = interBrokerSecurityProtocol.fold(false)(_ == protocol)
 
     val protocolAndPorts = ArrayBuffer[(SecurityProtocol, Int)]()
