@@ -52,6 +52,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 @Category({IntegrationTest.class})
 public class KafkaStreamsTest {
@@ -229,29 +230,29 @@ public class KafkaStreamsTest {
             closeCount, MockMetricsReporter.CLOSE_COUNT.get());
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void testCannotStartOnceClosed() throws Exception {
         streams.start();
         streams.close();
         try {
             streams.start();
-        } catch (final IllegalStateException e) {
-            Assert.assertEquals("Cannot start again.", e.getMessage());
-            throw e;
+            fail("Should have thrown IllegalStateException.");
+        } catch (final IllegalStateException expected) {
+            // ignore
         } finally {
             streams.close();
         }
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void testCannotStartTwice() throws Exception {
         streams.start();
 
         try {
             streams.start();
-        } catch (final IllegalStateException e) {
-            Assert.assertEquals("Cannot start again.", e.getMessage());
-            throw e;
+            fail("Should have thrown IllegalStateException.");
+        } catch (final IllegalStateException expected) {
+            // ignore
         } finally {
             streams.close();
         }
@@ -265,15 +266,18 @@ public class KafkaStreamsTest {
         assertEquals(metrics.size(), 16);
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testIllegalMetricsConfig() {
         final Properties props = new Properties();
         props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "illegalConfig");
         final KStreamBuilder builder = new KStreamBuilder();
-        final KafkaStreams streams = new KafkaStreams(builder, props);
 
+        try {
+            new KafkaStreams(builder, props);
+            fail("Should have thrown ConfigException.");
+        } catch (final ConfigException expected) { /* ignore */ }
     }
 
     @Test
@@ -389,7 +393,7 @@ public class KafkaStreamsTest {
         streams.cleanUp();
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void testCannotCleanupWhileRunning() throws Exception {
         final Properties props = new Properties();
         props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "testCannotCleanupWhileRunning");
@@ -401,9 +405,9 @@ public class KafkaStreamsTest {
         streams.start();
         try {
             streams.cleanUp();
-        } catch (final IllegalStateException e) {
-            assertEquals("Cannot clean up while running.", e.getMessage());
-            throw e;
+            fail("Should have thrown IllegalStateException.");
+        } catch (final IllegalStateException expected) {
+            // ignore
         } finally {
             streams.close();
         }

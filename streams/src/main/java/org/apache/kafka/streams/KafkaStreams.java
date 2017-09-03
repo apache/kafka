@@ -79,7 +79,6 @@ import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.streams.KafkaStreams.State.ERROR;
 import static org.apache.kafka.streams.KafkaStreams.State.NOT_RUNNING;
 import static org.apache.kafka.streams.KafkaStreams.State.PENDING_SHUTDOWN;
-import static org.apache.kafka.streams.KafkaStreams.State.RUNNING;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.PROCESSING_GUARANTEE_CONFIG;
 
@@ -275,6 +274,22 @@ public class KafkaStreams {
         }
 
         return true;
+    }
+
+    private void setRunningFromCreated() {
+        synchronized (stateLock) {
+            if (state != State.CREATED) {
+                log.error("{} Unexpected state transition from {} to {}", logPrefix, state, State.RUNNING);
+                throw new IllegalStateException(logPrefix + " Unexpected state transition from " + state + " to " + State.RUNNING);
+            }
+            state = State.RUNNING;
+            stateLock.notifyAll();
+        }
+
+        // we need to call the user customized state listener outside the state lock to avoid potential deadlocks
+        if (stateListener != null) {
+            stateListener.onChange(State.RUNNING, State.CREATED);
+        }
     }
 
     /**
@@ -505,8 +520,8 @@ public class KafkaStreams {
         if (globalTaskTopology != null) {
             globalStreamThread.setStateListener(streamStateListener);
         }
-        for (int i = 0; i < threads.length; i++) {
-            threads[i].setStateListener(streamStateListener);
+        for (final StreamThread thread :  threads) {
+            thread.setStateListener(streamStateListener);
         }
         final GlobalStateStoreProvider globalStateStoreProvider = new GlobalStateStoreProvider(builder.globalStateStores());
         queryableStoreProvider = new QueryableStoreProvider(storeProviders, globalStateStoreProvider);
@@ -558,9 +573,8 @@ public class KafkaStreams {
 
     private void validateStartOnce() {
         try {
-            if (setState(RUNNING)) {
-                return;
-            }
+            setRunningFromCreated();
+            return;
         } catch (StreamsException e) {
             // do nothing, will throw
         }
