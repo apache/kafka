@@ -87,6 +87,9 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * Create a batch of new topics with the default options.
      *
+     * Similar to #{@link AdminClient#createTopics(Collection, CreateTopicsOptions)},
+     * but uses the default options. See {@link #createTopics(Collection, CreateTopicsOptions)} for more details.
+     *
      * This operation is supported by brokers with version 0.10.1.0 or higher.
      *
      * @param newTopics         The new topics to create.
@@ -98,6 +101,8 @@ public abstract class AdminClient implements AutoCloseable {
 
     /**
      * Create a batch of new topics.
+     *
+     * This operation is not transactional so it may succeed for some topics while fail for others.
      *
      * It may take several seconds after AdminClient#createTopics returns
      * success for all the brokers to become aware that the topics have been created.
@@ -115,8 +120,8 @@ public abstract class AdminClient implements AutoCloseable {
                                                     CreateTopicsOptions options);
 
     /**
-     * Similar to #{@link AdminClient#deleteTopics(Collection<String>, DeleteTopicsOptions)},
-     * but uses the default options.
+     * Similar to #{@link AdminClient#deleteTopics(Collection, DeleteTopicsOptions)},
+     * but uses the default options. See {@link #deleteTopics(Collection, DeleteTopicsOptions)} for more details.
      *
      * This operation is supported by brokers with version 0.10.1.0 or higher.
      *
@@ -129,6 +134,8 @@ public abstract class AdminClient implements AutoCloseable {
 
     /**
      * Delete a batch of topics.
+     *
+     * This operation is not transactional so it may succeed for some topics while fail for others.
      *
      * It may take several seconds after AdminClient#deleteTopics returns
      * success for all the brokers to become aware that the topics are gone.
@@ -150,6 +157,8 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * List the topics available in the cluster with the default options.
      *
+     * Similar to #{@link AdminClient#listTopics(ListTopicsOptions)}, but uses the default options.
+     *
      * @return                  The ListTopicsResult.
      */
     public ListTopicsResult listTopics() {
@@ -167,7 +176,7 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * Describe some topics in the cluster, with the default options.
      *
-     * See {@link AdminClient#describeTopics(Collection<String>, DescribeTopicsOptions)}
+     * Similar to #{@link AdminClient#describeTopics(Collection, DescribeTopicsOptions)}, but uses the default options.
      *
      * @param topicNames        The names of the topics to describe.
      *
@@ -191,6 +200,8 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * Get information about the nodes in the cluster, using the default options.
      *
+     * Similar to #{@link AdminClient#describeCluster(DescribeClusterOptions)}, but uses the default options.
+     *
      * @return                  The DescribeClusterResult.
      */
     public DescribeClusterResult describeCluster() {
@@ -207,7 +218,7 @@ public abstract class AdminClient implements AutoCloseable {
 
     /**
      * Similar to #{@link AdminClient#describeAcls(AclBindingFilter, DescribeAclsOptions)},
-     * but uses the default options.
+     * but uses the default options. See {@link #describeAcls(AclBindingFilter, DescribeAclsOptions)} for more details
      *
      * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
@@ -234,7 +245,7 @@ public abstract class AdminClient implements AutoCloseable {
 
     /**
      * Similar to #{@link AdminClient#createAcls(Collection<AclBinding>, CreateAclsOptions)},
-     * but uses the default options.
+     * but uses the default options. See {@link #createAcls(Collection, CreateAclsOptions)} for more details.
      *
      * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
@@ -247,6 +258,8 @@ public abstract class AdminClient implements AutoCloseable {
 
     /**
      * Creates access control lists (ACLs) which are bound to specific resources.
+     *
+     * This operation is not transactional so it may succeed for some ACLs while fail for others.
      *
      * If you attempt to add an ACL that duplicates an existing ACL, no error will be raised, but
      * no changes will be made.
@@ -261,7 +274,7 @@ public abstract class AdminClient implements AutoCloseable {
 
     /**
      * Similar to #{@link AdminClient#deleteAcls(Collection<AclBinding>, DeleteAclsOptions)},
-     * but uses the default options.
+     * but uses the default options. See {@link #deleteAcls(Collection, DeleteAclsOptions)} for more details.
      *
      * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
@@ -275,6 +288,8 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * Deletes access control lists (ACLs) according to the supplied filters.
      *
+     * This operation is not transactional so it may succeed for some ACLs while fail for others.
+     *
      * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
      * @param filters           The filters to use.
@@ -284,12 +299,13 @@ public abstract class AdminClient implements AutoCloseable {
     public abstract DeleteAclsResult deleteAcls(Collection<AclBindingFilter> filters, DeleteAclsOptions options);
 
 
-     /**
+    /**
      * Get the configuration for the specified resources with the default options.
      *
-     * See {@link #describeConfigs(Collection, DescribeConfigsOptions)} for more details.
-      *
-      * This operation is supported by brokers with version 0.11.0.0 or higher.
+     * Similar to #{@link AdminClient#describeConfigs(Collection, DescribeConfigsOptions)},
+     * but uses the default options. See {@link #describeConfigs(Collection, DescribeConfigsOptions)} for more details
+     *
+     * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
      * @param resources         The resources (topic and broker resource types are currently supported)
      * @return                  The DescribeConfigsResult
@@ -321,7 +337,8 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * Update the configuration for the specified resources with the default options.
      *
-     * See {@link #alterConfigs(Map, AlterConfigsOptions)} for more details.
+     * Similar to #{@link AdminClient#alterConfigs(Map, AlterConfigsOptions)},
+     * but uses the default options. See {@link #alterConfigs(Map, AlterConfigsOptions)} for more details
      *
      * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
@@ -335,6 +352,9 @@ public abstract class AdminClient implements AutoCloseable {
 
     /**
      * Update the configuration for the specified resources with the default options.
+     *
+     * Updates are not transactional so they may succeed for some resources while fail for others. The configs for
+     * a particular resource are updated atomically.
      *
      * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
@@ -350,7 +370,10 @@ public abstract class AdminClient implements AutoCloseable {
      * before the replica has been created on the broker. It will support moving replicas that have already been created after
      * KIP-113 is fully implemented.
      *
-     * This operation is supported by brokers with version 1.0.0 or higher.
+     * Similar to #{@link AdminClient#alterReplicaDir(Map, AlterReplicaDirOptions)},
+     * but uses the default options. See {@link #alterReplicaDir(Map, AlterReplicaDirOptions)} for more details
+     *
+     * This operation is supported by brokers with version 1.0 or higher.
      *
      * @param replicaAssignment  The replicas with their log directory absolute path
      * @return                   The AlterReplicaDirResult
@@ -364,7 +387,9 @@ public abstract class AdminClient implements AutoCloseable {
      * before the replica has been created on the broker. It will support moving replicas that have already been created after
      * KIP-113 is fully implemented.
      *
-     * This operation is supported by brokers with version 1.0.0 or higher.
+     * This operation is not transactional so it may succeed for some replicas while fail for others.
+     *
+     * This operation is supported by brokers with version 1.0 or higher.
      *
      * @param replicaAssignment  The replicas with their log directory absolute path
      * @param options            The options to use when changing replica dir
@@ -375,7 +400,10 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * Query the information of all log directories on the given set of brokers
      *
-     * This operation is supported by brokers with version 1.0.0 or higher.
+     * Similar to #{@link AdminClient#describeLogDirs(Collection, DescribeLogDirsOptions)},
+     * but uses the default options.
+     *
+     * This operation is supported by brokers with version 1.0 or higher.
      *
      * @param brokers     A list of brokers
      * @return            The DescribeLogDirsResult
@@ -387,7 +415,7 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * Query the information of all log directories on the given set of brokers
      *
-     * This operation is supported by brokers with version 1.0.0 or higher.
+     * This operation is supported by brokers with version 1.0 or higher.
      *
      * @param brokers     A list of brokers
      * @param options     The options to use when querying log dir info
@@ -398,7 +426,10 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * Query the replica log directory information for the specified replicas.
      *
-     * This operation is supported by brokers with version 1.0.0 or higher.
+     * Similar to #{@link AdminClient#describeReplicaLogDir(Collection, DescribeReplicaLogDirOptions)},
+     * but uses the default options.
+     *
+     * This operation is supported by brokers with version 1.0 or higher.
      *
      * @param replicas      The replicas to query
      * @return              The DescribeReplicaLogDirResult
@@ -410,7 +441,7 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * Query the replica log directory information for the specified replicas.
      *
-     * This operation is supported by brokers with version 1.0.0 or higher.
+     * This operation is supported by brokers with version 1.0 or higher.
      *
      * @param replicas      The replicas to query
      * @param options       The options to use when querying replica log dir info
