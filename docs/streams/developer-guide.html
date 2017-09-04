@@ -19,7 +19,57 @@
 
 <script id="content-template" type="text/x-handlebars-template">
     <h1>Developer Manual</h1>
-
+    <ul class="toc">
+        <li><a href="#streams_processor">1. Low-level Processor API</a>
+            <ul>
+                <li><a href="#streams_processor_process">1.1 Processor</a>
+                <li><a href="#streams_processor_topology">1.2 Processor Topology</a>
+                <li><a href="#streams_processor_statestore">1.3 State Stores</a>
+                <li><a href="#restoration_progress">1.4 Monitoring the Restoration Progress of Fault-tolerant State Store</a>
+                <li><a href="#disable-changelogs">1.5 Enable / Disable Fault Tolerance of State Stores (Store Changelogs)</a>
+                <li><a href="#implementing-custom-state-stores">1.6 Implementing Custom State Stores</a>
+                <li><a href="#connecting-processors-and-state-stores">1.7 Connecting Processors and State Stores</a>
+                <li><a href="#streams_processor_describe">1.5 Describe a Topology</a>
+            </ul>
+        </li>
+        <li><a href="#streams_dsl">2. High-Level Streams DSL</a>
+            <ul>
+                <li><a href="#streams_duality">2.1 Duality of Streams and Tables</a>
+                <li><a href="#streams_dsl_source">2.2 Creating Source Streams from Kafka</a>
+                <li><a href="#streams_dsl_transform">2.3 Transform a stream</a>
+                <li><a href="#streams_dsl_sink">2.4 Write streams back to Kafka</a>
+                <li><a href="#streams_dsl_build">2.5 Generate the processor topology</a>
+            </ul>
+        </li>
+        <li><a href="#streams_interactive_queries">3. Interactive Queries</a>
+            <ul>
+                <li><a href="#streams_developer-guide_interactive-queries_your_app">3.1 Your application and interactive queries</a>
+                <li><a href="#streams_developer-guide_interactive-queries_local-stores">3.2 Querying local state stores (for an application instance)</a>
+                <li><a href="#streams_developer-guide_interactive-queries_local-key-value-stores">3.3 Querying local key-value stores</a>
+                <li><a href="#streams_developer-guide_interactive-queries_local-window-stores">3.4 Querying local window stores</a>
+                <li><a href="#streams_developer-guide_interactive-queries_custom-stores">3.5 Querying local custom state stores</a>
+                <li><a href="#streams_developer-guide_interactive-queries_discovery">3.6 Querying remote state stores (for the entire application)</a>
+                <li><a href="#streams_developer-guide_interactive-queries_rpc-layer">3.7 Adding an RPC layer to your application</a>
+                <li><a href="#streams_developer-guide_interactive-queries_expose-rpc">3.8 Exposing the RPC endpoints of your application</a>
+                <li><a href="#streams_developer-guide_interactive-queries_discover-app-instances-and-stores">3.9 Discovering and accessing application instances and their respective local state stores</a>
+            </ul>
+        </li>
+        <li><a href="#streams_developer-guide_memory-management">4. Memory Management</a>
+            <ul>
+                <li><a href="#streams_developer-guide_memory-management_record-cache">4.1 Record caches in the DSL</a>
+                <li><a href="#streams_developer-guide_memory-management_state-store-cache">4.2 State store caches in the Processor API</a>
+                <li><a href="#streams_developer-guide_memory-management_other_memory_usage">4.3 Other memory usage</a>
+            </ul>
+        </li>
+        <li><a href="#streams_configure_execute">5. Application Configuration and Execution</a>
+            <ul>
+                <li><a href="#streams_client_config">5.1 Producer and Consumer Configuration</a>
+                <li><a href="#streams_broker_config">5.2 Broker Configuration</a>
+                <li><a href="#streams_topic_config">5.3 Internal Topic Configuration</a>
+                <li><a href="#streams_execute">5.4 Executing Your Kafka Streams Application</a>
+            </ul>
+        </li>
+    </ul>
     <p>
         There is a <a href="/{{version}}/documentation/#quickstart_kafkastreams">quickstart</a> example that provides how to run a stream processing program coded in the Kafka Streams library.
         This section focuses on how to write, configure, and execute a Kafka Streams application.
@@ -186,7 +236,7 @@ With deletion enabled, old windows that have expired will be cleaned up by Kafka
 The default retention setting is <code>Windows#maintainMs()</code> + 1 day. This setting can be overriden by specifying <code>StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG</code> in the <code>StreamsConfig</code>.
 </p>
 
-<h4><a id="monitoring-the-restoration-progress-of-fault-tolerant-state-stores" href="#restoration_progress">Monitoring the Restoration Progress of Fault-tolerant State Stores</a></h4>
+<h4><a id="restoration_progress" href="#restoration_progress">Monitoring the Restoration Progress of Fault-tolerant State Stores</a></h4>
 
 <p>
 When starting up your application any fault-tolerant state stores don't need a restoration process as the persisted state is read from local disk. 
@@ -250,7 +300,7 @@ You set the <code>org.apache.kafka.streams.processor.StateRestoreListener</code>
 </p>
 </blockquote>
 
-<h4> <a id="enable-disable-fault-tolerance-of-state-stores-store-changelogs" href="#disable-chagelogs">Enable / Disable Fault Tolerance of State Stores (Store Changelogs)</a></h4>
+<h4> <a id="disable-changelogs" href="#disable-changelogs">Enable / Disable Fault Tolerance of State Stores (Store Changelogs)</a></h4>
 
 <p>
   You can enable or disable fault tolerance for a state store by enabling or disabling, respectively, the changelogging of the store through <code>enableLogging()</code> and <code>disableLogging()</code>. 
@@ -300,7 +350,7 @@ You set the <code>org.apache.kafka.streams.processor.StateRestoreListener</code>
 
 </pre>
 
-<h4><a id="implementing-custom-state-stores" href="#implement-custom-store">Implementing custom State Stores</a></h4>
+<h4><a id="implementing-custom-state-stores" href="#implementing-custom-state-stores">Implementing custom State Stores</a></h4>
 
 <p>
  Apart from using the built-in state store types, you can also implement your own. 
@@ -332,7 +382,7 @@ You set the <code>org.apache.kafka.streams.processor.StateRestoreListener</code>
   The <code>StateRestoreListener</code> in this case is per state store instance and is used for internal purposes such as updating config settings based on the status of the restoration process.
 </p>
 
-<h4><a id="connecting-processors-and-state-stores" href="#connecting-processors-state-stores">Connecting Processors and State Stores</a></h4>
+<h4><a id="connecting-processors-and-state-stores" href="#connecting-processors-and-state-stores">Connecting Processors and State Stores</a></h4>
 
 <p>
 Now that we have defined a processor (WordCountProcessor) and the state stores, we can now construct the processor topology by connecting these processors and state stores together by using the <code>Topology</code> instance. 
@@ -1957,7 +2007,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
         </li>
     </ul>
 
-    <h4><a id="treams_developer-guide_interactive-queries_your_app" href="#treams_developer-guide_interactive-queries_your_app">Your application and interactive queries</a></h4>
+    <h4><a id="streams_developer-guide_interactive-queries_your_app" href="#streams_developer-guide_interactive-queries_your_app">Your application and interactive queries</a></h4>
     <p>
         Interactive queries allow you to tap into the <i>state</i> of your application, and notably to do that from outside your application.
         However, an application is not interactively queryable out of the box: you make it queryable by leveraging the API of Kafka Streams.
@@ -2647,7 +2697,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
     StreamsConfig config = new StreamsConfig(settings);
     </pre>
 
-    <h4><a id="streams_client_config" href="#streams_clients_config">Producer and Consumer Configuration</a></h4>
+    <h4><a id="streams_client_config" href="#streams_client_config">Producer and Consumer Configuration</a></h4>
     <p>
         Apart from Kafka Streams' own configuration parameters you can also specify parameters for the Kafka consumers and producers that are used internally,
         depending on the needs of your application. Similar to the Streams settings you define any such consumer and/or producer settings via <code>StreamsConfig</code>.
