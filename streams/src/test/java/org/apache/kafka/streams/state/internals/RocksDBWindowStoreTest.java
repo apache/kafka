@@ -107,7 +107,8 @@ public class RocksDBWindowStoreTest {
     @After
     public void closeStore() {
         context.close();
-        windowStore.close();
+        if (windowStore != null)
+            windowStore.close();
     }
 
     @SuppressWarnings("unchecked")
@@ -776,6 +777,36 @@ public class RocksDBWindowStoreTest {
         assertThat(toList(windowStore.fetch(key2, 0, Long.MAX_VALUE)), equalTo(expectedKey2));
         final List expectedKey3 = Utils.mkList("3", "6", "9");
         assertThat(toList(windowStore.fetch(key3, 0, Long.MAX_VALUE)), equalTo(expectedKey3));
+    }
+
+    @Test
+    public void should() {
+        final RocksDBSegmentedBytesStore segmentedBytesStore = new RocksDBSegmentedBytesStore(
+                "bench",
+                retentionPeriod,
+                numSegments,
+                new WindowKeySchema()
+        );
+        final RocksDBWindowStore<Bytes, byte[]> innerStore = RocksDBWindowStore.bytesStore(segmentedBytesStore,
+                                                                                           false,
+                                                                                           WINDOW_SIZE);
+        innerStore.init(context, innerStore);
+        final List<KeyValue<byte[], byte[]>> data  = new ArrayList<>();
+        long timestamp = 0;
+        for(int i = 0; i < 1000000; i++) {
+            byte[] bytes = TestUtils.randomBytes(100);
+            Bytes key = WindowStoreUtils.toBinaryKey(bytes, timestamp, 0);
+            data.add(KeyValue.pair(key.get(), bytes));
+            if (i % 10000 == 0) {
+                timestamp += 60000;
+            }
+        }
+
+        final long start = System.currentTimeMillis();
+        context.restore("bench", data);
+        final long took = System.currentTimeMillis() - start;
+        innerStore.close();
+        System.out.println("Restoration took: " + took);
     }
 
     private void putFirstBatch(final WindowStore<Integer, String> store, final long startTime, final MockProcessorContext context) {

@@ -66,7 +66,7 @@ class Segments {
     }
 
     String segmentName(long segmentId) {
-        return name + "-" + formatter.format(new Date(segmentId * segmentInterval));
+        return name + ":" + segmentId;
     }
 
     Segment getSegmentForTimestamp(final long timestamp) {
@@ -101,7 +101,7 @@ class Segments {
                 if (list != null) {
                     long[] segmentIds = new long[list.length];
                     for (int i = 0; i < list.length; i++)
-                        segmentIds[i] = segmentIdFromSegmentName(list[i]);
+                        segmentIds[i] = segmentIdFromSegmentName(list[i], dir);
 
                     // open segments in the id order
                     Arrays.sort(segmentIds);
@@ -185,10 +185,25 @@ class Segments {
         }
     }
 
-    private long segmentIdFromSegmentName(String segmentName) {
+    private long segmentIdFromSegmentName(String segmentName, final File parent) {
         try {
-            Date date = formatter.parse(segmentName.substring(name.length() + 1));
-            return date.getTime() / segmentInterval;
+            // old style segment name with date
+            if (segmentName.charAt(name.length()) == '-') {
+                final String datePart = segmentName.substring(name.length() + 1);
+                final Date date = formatter.parse(datePart);
+                final long segmentId = date.getTime() / segmentInterval;
+                final File newName = new File(parent, segmentName(segmentId));
+                final File oldName = new File(parent, segmentName);
+                if (!oldName.renameTo(newName)) {
+                    throw new ProcessorStateException("Unable to rename old style segment from: "
+                                                              + oldName
+                                                              + " to new name: "
+                                                              + newName);
+                }
+                return segmentId;
+            } else {
+                return Long.parseLong(segmentName.substring(name.length() + 1));
+            }
         } catch (Exception ex) {
             return -1L;
         }
