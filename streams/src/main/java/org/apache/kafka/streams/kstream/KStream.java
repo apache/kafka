@@ -735,11 +735,12 @@ public interface KStream<K, V> {
 
     /**
      * Materialize this stream to a topic and creates a new {@code KStream} from the topic using the
-     * {@link Produced} instance for configuration of the key {@link Serde}, value {@link Serde}, and {@link StreamPartitioner}
+     * {@link Produced} instance for configuration of the key {@link Serde key serde}, value {@link Serde value serde},
+     * and {@link StreamPartitioner}.
      * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
      * started).
      * <p>
-     * This is equivalent to calling {@link #to(String, Produced) #to(String, Produced)}
+     * This is equivalent to calling {@link #to(String, Produced) to(someTopic, Produced.with(keySerde, valueSerde)}
      * and {@link StreamsBuilder#stream(Serde, Serde, String...)
      * StreamsBuilder#stream(keySerde, valSerde, someTopicName)}.
      *
@@ -747,7 +748,8 @@ public interface KStream<K, V> {
      * @param produced
      * @return a {@code KStream} that contains the exact same (and potentially repartitioned) records as this {@code KStream}
      */
-    KStream<K, V> through(final String topic, final Produced<K, V> produced);
+    KStream<K, V> through(final String topic,
+                          final Produced<K, V> produced);
 
     /**
      * Materialize this stream to a topic using default serializers specified in the config and producer's
@@ -817,15 +819,16 @@ public interface KStream<K, V> {
             final String topic);
 
     /**
-     * Materialize this stream to a topic using the provided {@link Produced} instance
+     * Materialize this stream to a topic using the provided {@link Produced} instance.
      * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
      * started).
      *
-     * @param produced    the options to use when producing to the topic
+     * @param produced    the options to use when producing to the topic;
      *                    if not specified the default serde defined in the configs will be used
      * @param topic       the topic name
      */
-    void to(final String topic, final Produced<K, V> produced);
+    void to(final String topic,
+            final Produced<K, V> produced);
 
     /**
      * Transform each record of the input stream into zero or more records in the output stream (both key and value type

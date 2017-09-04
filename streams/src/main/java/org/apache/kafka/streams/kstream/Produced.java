@@ -24,7 +24,7 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 
 /**
  * This class is used to provide the optional parameters when producing to new topics
- * using {@link KStream#through(String, Produced)} or {@link KStream#to(String, Produced}
+ * using {@link KStream#through(String, Produced)} or {@link KStream#to(String, Produced)}.
  * @param <K> key type
  * @param <V> value type
  */
@@ -34,37 +34,39 @@ public class Produced<K, V> {
     private Serde<V> valueSerde;
     private StreamPartitioner<? super K, ? super V> partitioner;
 
-    private Produced(final Serde<K> keySerde, final Serde<V> valueSerde, final StreamPartitioner<? super K, ? super V> partitioner) {
+    private Produced(final Serde<K> keySerde,
+                     final Serde<V> valueSerde,
+                     final StreamPartitioner<? super K, ? super V> partitioner) {
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.partitioner = partitioner;
     }
 
     /**
-     * Create a Produced instance with provided keySerde and valueSerde
+     * Create a Produced instance with provided keySerde and valueSerde.
      * @param keySerde      Serde to use for serializing the key
      * @param valueSerde    Serde to use for serializing the value
      * @param <K>           key type
      * @param <V>           value type
-     * @return  A new Produced instance configured with keySerde and valueSerde
+     * @return  A new {@link Produced} instance configured with keySerde and valueSerde
      * @see KStream#through(String, Produced)
      * @see KStream#to(String, Produced)
      */
-    public static <K, V> Produced<K, V> with(final Serde<K> keySerde, final Serde<V> valueSerde) {
+    public static <K, V> Produced<K, V> with(final Serde<K> keySerde,
+                                             final Serde<V> valueSerde) {
         return new Produced<>(keySerde, valueSerde, null);
     }
 
     /**
-     * Create a Produced instance with provided keySerde, valueSerde, and partitioner
+     * Create a Produced instance with provided keySerde, valueSerde, and partitioner.
      * @param keySerde      Serde to use for serializing the key
      * @param valueSerde    Serde to use for serializing the value
      * @param partitioner   the function used to determine how records are distributed among partitions of the topic,
-     *                      if not specified and {@code keySerde} provides a {@link  WindowedSerializer} for the key
-     *                      {@link WindowedStreamPartitioner} will be used&mdash;otherwise {@link DefaultPartitioner} will
-     *                      be used
+     *                      if not specified and {@code keySerde} provides a {@link WindowedSerializer} for the key
+     *                      {@link WindowedStreamPartitioner} will be used&mdash;otherwise {@link DefaultPartitioner} wil be used
      * @param <K>           key type
      * @param <V>           value type
-     * @return  A new Produced instance configured with keySerde, valueSerde, and partitioner
+     * @return  A new {@link Produced} instance configured with keySerde, valueSerde, and partitioner
      * @see KStream#through(String, Produced)
      * @see KStream#to(String, Produced)
      */
@@ -75,11 +77,11 @@ public class Produced<K, V> {
     }
 
     /**
-     * Create a Produced instance with provided keySerde
+     * Create a Produced instance with provided keySerde.
      * @param keySerde      Serde to use for serializing the key
      * @param <K>           key type
      * @param <V>           value type
-     * @return  A new Produced instance configured with keySerde
+     * @return  A new {@link Produced} instance configured with keySerde
      * @see KStream#through(String, Produced)
      * @see KStream#to(String, Produced)
      */
@@ -88,11 +90,11 @@ public class Produced<K, V> {
     }
 
     /**
-     * Create a Produced instance with provided valueSerde
-     * @param valueSerde     Serde to use for serializing the key
+     * Create a Produced instance with provided valueSerde.
+     * @param valueSerde    Serde to use for serializing the key
      * @param <K>           key type
      * @param <V>           value type
-     * @return  A new Produced instance configured with valueSerde
+     * @return  A new {@link Produced} instance configured with valueSerde
      * @see KStream#through(String, Produced)
      * @see KStream#to(String, Produced)
      */
@@ -101,14 +103,13 @@ public class Produced<K, V> {
     }
 
     /**
-     * Create a Produced instance with provided partitioner
+     * Create a Produced instance with provided partitioner.
      * @param partitioner   the function used to determine how records are distributed among partitions of the topic,
-     *                      if not specified and the key serde provides a {@link  WindowedSerializer} for the key
-     *                      {@link WindowedStreamPartitioner} will be used&mdash;otherwise {@link DefaultPartitioner} will
-     *                      be used
+     *                      if not specified and the key serde provides a {@link WindowedSerializer} for the key
+     *                      {@link WindowedStreamPartitioner} will be used&mdash;otherwise {@link DefaultPartitioner} will be used
      * @param <K>           key type
      * @param <V>           value type
-     * @return  A new Produced instance configured with partitioner
+     * @return  A new {@link Produced} instance configured with partitioner
      * @see KStream#through(String, Produced)
      * @see KStream#to(String, Produced)
      */
@@ -117,11 +118,10 @@ public class Produced<K, V> {
     }
 
     /**
-     * Produce records using the provided partitioner
+     * Produce records using the provided partitioner.
      * @param partitioner   the function used to determine how records are distributed among partitions of the topic,
-     *                      if not specified and the key serde provides a {@link  WindowedSerializer} for the key
-     *                      {@link WindowedStreamPartitioner} will be used&mdash;otherwise {@link DefaultPartitioner} will
-     *                      be used
+     *                      if not specified and the key serde provides a {@link WindowedSerializer} for the key
+     *                      {@link WindowedStreamPartitioner} will be used&mdash;otherwise {@link DefaultPartitioner} wil be used
      * @return this
      */
     public Produced<K, V> withStreamPartitioner(final StreamPartitioner<? super K, ? super V> partitioner) {
@@ -130,7 +130,7 @@ public class Produced<K, V> {
     }
 
     /**
-     * Produce records using the provided valueSerde
+     * Produce records using the provided valueSerde.
      * @param valueSerde    Serde to use for serializing the value
      * @return this
      */
@@ -140,7 +140,7 @@ public class Produced<K, V> {
     }
 
     /**
-     * Produce records using the provided keySerde
+     * Produce records using the provided keySerde.
      * @param keySerde    Serde to use for serializing the key
      * @return this
      */
