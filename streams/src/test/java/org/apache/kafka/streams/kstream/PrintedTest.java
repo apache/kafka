@@ -69,7 +69,7 @@ public class PrintedTest {
     public void shouldCreateProcessorThatPrintsToStdOut() throws UnsupportedEncodingException {
         final ProcessorSupplier<String, Integer> supplier = sysOutPrinter.build("processor");
         supplier.get().process("good", 2);
-        assertThat(new String(sysOut.toByteArray(), StandardCharsets.UTF_8.name()), equalTo("[processor]: good, 2\n"));
+        assertThat(sysOut.toString(StandardCharsets.UTF_8.name()), equalTo("[processor]: good, 2\n"));
     }
 
     @Test
@@ -80,7 +80,7 @@ public class PrintedTest {
                 .get();
 
         processor.process("hello", 3);
-        assertThat(new String(sysOut.toByteArray(), StandardCharsets.UTF_8.name()), equalTo("[label]: hello, 3\n"));
+        assertThat(sysOut.toString(StandardCharsets.UTF_8.name()), equalTo("[label]: hello, 3\n"));
     }
 
     @Test
@@ -93,7 +93,7 @@ public class PrintedTest {
         }).build("processor")
                 .get();
         processor.process("hello", 1);
-        assertThat(new String(sysOut.toByteArray(), StandardCharsets.UTF_8.name()), equalTo("[processor]: hello -> 1\n"));
+        assertThat(sysOut.toString(StandardCharsets.UTF_8.name()), equalTo("[processor]: hello -> 1\n"));
     }
 
     @Test(expected = NullPointerException.class)

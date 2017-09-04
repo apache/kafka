@@ -443,7 +443,7 @@ public interface KStream<K, V> {
 
     /**
      * Print the records of this KStream using the options provided by {@link Printed}
-     * @param printed   options for printing
+     * @param printed options for printing
      */
     void print(final Printed<K, V> printed);
 

@@ -27,7 +27,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
 /**
- * An object to define the options used when printing a {@link KStream}
+ * An object to define the options used when printing a {@link KStream}.
  *
  * @param <K> key type
  * @param <V> value type
@@ -38,7 +38,7 @@ public class Printed<K, V> {
     private String label;
     private KeyValueMapper<? super K, ? super V, String> mapper = new KeyValueMapper<K, V, String>() {
         @Override
-        public String apply(K key, V value) {
+        public String apply(final K key, final V value) {
             return String.format("%s, %s", key, value);
         }
     };
@@ -48,16 +48,16 @@ public class Printed<K, V> {
     }
 
     /**
-     * Builds the {@link ProcessorSupplier} that will be used to print the records flowing through a {@link KStream}
+     * Builds the {@link ProcessorSupplier} that will be used to print the records flowing through a {@link KStream}.
      *
-     * @return the ProcessorSupplier to be used for printing
+     * @return the {@code ProcessorSupplier} to be used for printing
      */
     public ProcessorSupplier<K, V> build(final String processorName) {
         return new KStreamPrint<>(new PrintForeachAction<>(printWriter, mapper, label != null ? label : processorName));
     }
 
     /**
-     * Print the records of a {@link KStream} to a file
+     * Print the records of a {@link KStream} to a file.
      *
      * @param filePath path of the file
      * @param <K>      key type
@@ -71,13 +71,13 @@ public class Printed<K, V> {
         }
         try {
             return new Printed<>(new PrintWriter(filePath, StandardCharsets.UTF_8.name()));
-        } catch (FileNotFoundException | UnsupportedEncodingException e) {
+        } catch (final FileNotFoundException | UnsupportedEncodingException e) {
             throw new TopologyException("Unable to write stream to file at [" + filePath + "] " + e.getMessage());
         }
     }
 
     /**
-     * Print the records of a {@link KStream} to system out
+     * Print the records of a {@link KStream} to system out.
      *
      * @param <K> key type
      * @param <V> value type
@@ -88,7 +88,7 @@ public class Printed<K, V> {
     }
 
     /**
-     * Print the records of a {@link KStream} with the provided label
+     * Print the records of a {@link KStream} with the provided label.
      *
      * @param label label to use
      * @return this
@@ -112,7 +112,7 @@ public class Printed<K, V> {
      *     }
      * };
      * }</pre>
-     * <p>
+     *
      * Implementors will need to override {@code toString()} for keys and values that are not of type {@link String},
      * {@link Integer} etc. to get meaningful information.
      *
