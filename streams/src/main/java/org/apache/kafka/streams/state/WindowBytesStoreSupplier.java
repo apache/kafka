@@ -24,27 +24,27 @@ import org.apache.kafka.common.utils.Bytes;
 public interface WindowBytesStoreSupplier extends StoreSupplier<WindowStore<Bytes, byte[]>> {
     /**
      * The number of segments the store has. If your store is segmented then this should be the number of segments
-     * in the underlying store. It is also used to reduce the amount of data that is scanned when caching is enabled
+     * in the underlying store. It is also used to reduce the amount of data that is scanned when caching is enabled.
      *
      * @return number of segments
      */
     int segments();
 
     /**
-     * The size of the windows any store created from this supplier is creating
+     * The size of the windows any store created from this supplier is creating.
      * @return window size
      */
     long windowSize();
 
     /**
      * Whether or not this store is retaining duplicate keys. Usually only true if the store is being used
-     * for joins. Note this should return false if caching is enabled
+     * for joins. Note this should return false if caching is enabled.
      * @return true if duplicates should be retained
      */
     boolean retainDuplicates();
 
     /**
-     * The time period for which the {@link WindowStore} will retain historic data
+     * The time period for which the {@link WindowStore} will retain historic data.
      * @return retentionPeriod
      */
     long retentionPeriod();

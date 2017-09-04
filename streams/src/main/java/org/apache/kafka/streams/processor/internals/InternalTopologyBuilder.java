@@ -535,7 +535,12 @@ public class InternalTopologyBuilder {
                                      final ProcessorSupplier stateUpdateSupplier) {
         Objects.requireNonNull(storeSupplier, "store supplier must not be null");
         final String name = storeSupplier.name();
-        validateGlobalStoreArguments(sourceName, topic, processorName, stateUpdateSupplier, name, storeSupplier.loggingEnabled());
+        validateGlobalStoreArguments(sourceName,
+                                     topic,
+                                     processorName,
+                                     stateUpdateSupplier,
+                                     name,
+                                     storeSupplier.loggingEnabled());
         validateTopicNotAlreadyRegistered(topic);
         addGlobalStore(sourceName,
                        timestampExtractor,
@@ -558,7 +563,12 @@ public class InternalTopologyBuilder {
                                      final String processorName,
                                      final ProcessorSupplier stateUpdateSupplier) {
         Objects.requireNonNull(storeBuilder, "store builder must not be null");
-        validateGlobalStoreArguments(sourceName, topic, processorName, stateUpdateSupplier, storeBuilder.name(), storeBuilder.loggingEnabled());
+        validateGlobalStoreArguments(sourceName,
+                                     topic,
+                                     processorName,
+                                     stateUpdateSupplier,
+                                     storeBuilder.name(),
+                                     storeBuilder.loggingEnabled());
         validateTopicNotAlreadyRegistered(topic);
 
         addGlobalStore(sourceName,
@@ -669,9 +679,16 @@ public class InternalTopologyBuilder {
                                 final KeyValueStore store) {
         final String[] topics = {topic};
         final String[] predecessors = {sourceName};
-        final ProcessorNodeFactory nodeFactory = new ProcessorNodeFactory(processorName, predecessors, stateUpdateSupplier);
+        final ProcessorNodeFactory nodeFactory = new ProcessorNodeFactory(processorName,
+                                                                          predecessors,
+                                                                          stateUpdateSupplier);
         globalTopics.add(topic);
-        nodeFactories.put(sourceName, new SourceNodeFactory(sourceName, topics, null, timestampExtractor, keyDeserializer, valueDeserializer));
+        nodeFactories.put(sourceName, new SourceNodeFactory(sourceName,
+                                                            topics,
+                                                            null,
+                                                            timestampExtractor,
+                                                            keyDeserializer,
+                                                            valueDeserializer));
         nodeToSourceTopics.put(sourceName, Arrays.asList(topics));
         nodeGrouper.add(sourceName);
         nodeFactory.addStateStore(name);
@@ -1053,7 +1070,9 @@ public class InternalTopologyBuilder {
     private InternalTopicConfig createInternalTopicConfig(final StateStoreFactory factory,
                                                           final String name) {
         if (!factory.isWindowStore()) {
-            return new InternalTopicConfig(name, Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), factory.logConfig());
+            return new InternalTopicConfig(name,
+                                           Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
+                                           factory.logConfig());
         }
 
         final InternalTopicConfig config = new InternalTopicConfig(name,

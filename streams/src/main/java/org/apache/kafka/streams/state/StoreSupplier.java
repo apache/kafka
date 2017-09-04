@@ -40,7 +40,7 @@ public interface StoreSupplier<T extends StateStore> {
     T get();
 
     /**
-     * Return a String that is used as the scope for metrics recorded by Metered stores
+     * Return a String that is used as the scope for metrics recorded by Metered stores.
      * @return metricsScope
      */
     String metricsScope();

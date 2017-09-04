@@ -25,7 +25,7 @@ public interface SessionBytesStoreSupplier extends StoreSupplier<SessionStore<By
 
     /**
      * The size of a segment, in milliseconds. Used when caching is enabled to segment the cache
-     * and reduce the amount of data that needs to be scanned when performing range queries
+     * and reduce the amount of data that needs to be scanned when performing range queries.
      *
      * @return segmentInterval in milliseconds
      */

@@ -21,7 +21,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import java.util.Map;
 
 /**
- * Build a {@link StateStore} wrapped with optional caching and logging
+ * Build a {@link StateStore} wrapped with optional caching and logging.
  * @param <T>  the type of store to build
  */
 public interface StateStoreBuilder<T extends StateStore> {
@@ -34,14 +34,14 @@ public interface StateStoreBuilder<T extends StateStore> {
 
     /**
      * Maintain a changelog for any changes made to the store. Use the provided
-     * config to set the config of the changelog topic
+     * config to set the config of the changelog topic.
      * @param config  config applied to the changelog topic
      * @return this
      */
     StateStoreBuilder<T> withLoggingEnabled(final Map<String, String> config);
 
     /**
-     * Build the store as defined by the builder
+     * Build the store as defined by the builder.
      *
      * @return the built {@link StateStore}
      */
@@ -49,7 +49,7 @@ public interface StateStoreBuilder<T extends StateStore> {
 
 
     /**
-     * Returns a Map containing any log configs that will be used when creating the changelog for the {@link StateStore}
+     * Returns a Map containing any log configs that will be used when creating the changelog for the {@link StateStore}.
      * <p>
      * Note: any unrecognized configs will be ignored by the Kafka brokers.
      *

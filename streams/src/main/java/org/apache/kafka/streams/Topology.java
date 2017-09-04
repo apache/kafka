@@ -595,7 +595,7 @@ public class Topology {
      * records forwarded from the {@link SourceNode}.
      * This {@link ProcessorNode} should be used to keep the {@link StateStore} up-to-date.
      *
-     * @param storeSupplier         user defined state store supplier
+     * @param storeBuilder          user defined key value store builder
      * @param sourceName            name of the {@link SourceNode} that will be automatically added
      * @param timestampExtractor    the stateless timestamp extractor used for this source,
      *                              if not specified the default extractor defined in the configs will be used

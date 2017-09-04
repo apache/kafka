@@ -33,10 +33,10 @@ abstract class AbstractStateStoreBuilder<K, V, T extends StateStore> implements 
     boolean enableCaching;
     boolean enableLogging;
 
-    public AbstractStateStoreBuilder(final String name,
-                                     final Serde<K> keySerde,
-                                     final Serde<V> valueSerde,
-                                     final Time time) {
+    AbstractStateStoreBuilder(final String name,
+                              final Serde<K> keySerde,
+                              final Serde<V> valueSerde,
+                              final Time time) {
         Objects.requireNonNull(name, "name can't be null");
         Objects.requireNonNull(time, "time can't be null");
         this.name = name;
