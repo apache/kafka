@@ -470,9 +470,9 @@ class ProducerStateManager(val topicPartition: TopicPartition,
 
   def isEmpty: Boolean = producers.isEmpty && unreplicatedTxns.isEmpty
 
-  private def loadFromSnapshot(logStartOffset: Long, currentTime: Long) {
+  private def loadFromSnapshot(logStartOffset: Long, maxSnapshotOffset: Long, currentTime: Long) {
     while (true) {
-      latestSnapshotFile match {
+      latestSnapshotFile(maxSnapshotOffset) match {
         case Some(file) =>
           try {
             info(s"Loading producer state from snapshot file '$file' for partition $topicPartition")
@@ -522,20 +522,20 @@ class ProducerStateManager(val topicPartition: TopicPartition,
    * snapshot in range (if there is one). Note that the log end offset is assumed to be less than
    * or equal to the high watermark.
    */
-  def truncateAndReload(logStartOffset: Long, logEndOffset: Long, currentTimeMs: Long) {
+  def truncateAndReload(logStartOffset: Long, maxSnapshotOffset: Long, currentTimeMs: Long, deleteFilesAboveMaxSnapshotOffset: Boolean) {
     // remove all out of range snapshots
     deleteSnapshotFiles { snapOffset =>
-      snapOffset > logEndOffset || snapOffset <= logStartOffset
+      snapOffset <= logStartOffset || (snapOffset > maxSnapshotOffset && deleteFilesAboveMaxSnapshotOffset)
     }
 
-    if (logEndOffset != mapEndOffset) {
+    if (maxSnapshotOffset != mapEndOffset) {
       producers.clear()
       ongoingTxns.clear()
 
       // since we assume that the offset is less than or equal to the high watermark, it is
       // safe to clear the unreplicated transactions
       unreplicatedTxns.clear()
-      loadFromSnapshot(logStartOffset, currentTimeMs)
+      loadFromSnapshot(logStartOffset, maxSnapshotOffset, currentTimeMs)
     } else {
       truncateHead(logStartOffset)
     }
@@ -588,7 +588,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   /**
    * Get the last offset (exclusive) of the latest snapshot file.
    */
-  def latestSnapshotOffset: Option[Long] = latestSnapshotFile.map(file => offsetFromFilename(file.getName))
+  def latestSnapshotOffset: Option[Long] = latestSnapshotFile(Long.MaxValue).map(file => offsetFromFilename(file.getName))
 
   /**
    * Get the last offset (exclusive) of the oldest snapshot file.
@@ -696,8 +696,8 @@ class ProducerStateManager(val topicPartition: TopicPartition,
       None
   }
 
-  private def latestSnapshotFile: Option[File] = {
-    val files = listSnapshotFiles
+  private def latestSnapshotFile(maxSnapshotOffset: Long): Option[File] = {
+    val files = listSnapshotFiles.filter(file => offsetFromFilename(file.getName) <= maxSnapshotOffset)
     if (files.nonEmpty)
       Some(files.maxBy(file => offsetFromFilename(file.getName)))
     else

@@ -339,7 +339,7 @@ class Log(@volatile var dir: File,
 
   private def recoverSegment(segment: LogSegment, leaderEpochCache: Option[LeaderEpochCache] = None): Int = lock synchronized {
     val stateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
-    stateManager.truncateAndReload(logStartOffset, segment.baseOffset, time.milliseconds)
+    stateManager.truncateAndReload(logStartOffset, segment.baseOffset, time.milliseconds, deleteFilesAboveMaxSnapshotOffset = false)
     logSegments(stateManager.mapEndOffset, segment.baseOffset).foreach { segment =>
       val startOffset = math.max(segment.baseOffset, stateManager.mapEndOffset)
       val fetchDataInfo = segment.read(startOffset, None, Int.MaxValue)
@@ -441,6 +441,7 @@ class Log(@volatile var dir: File,
             val startOffset = segment.baseOffset
             warn("Found invalid offset during recovery for log " + dir.getName +". Deleting the corrupt segment and " +
                  "creating an empty one with starting offset " + startOffset)
+            loadProducerState(startOffset, reloadFromCleanShutdown = false)
             segment.truncateTo(startOffset)
         }
       if(truncatedBytes > 0) {
@@ -482,7 +483,7 @@ class Log(@volatile var dir: File,
       }
     } else {
       val isEmptyBeforeTruncation = producerStateManager.isEmpty && producerStateManager.mapEndOffset >= lastOffset
-      producerStateManager.truncateAndReload(logStartOffset, lastOffset, time.milliseconds())
+      producerStateManager.truncateAndReload(logStartOffset, lastOffset, time.milliseconds(), deleteFilesAboveMaxSnapshotOffset = true)
 
       // Only do the potentially expensive reloading if the last snapshot offset is lower than the log end
       // offset (which would be the case on first startup) and there were active producers prior to truncation

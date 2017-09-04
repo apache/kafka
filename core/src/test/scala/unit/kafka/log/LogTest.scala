@@ -217,7 +217,7 @@ class LogTest {
     stateManager.takeSnapshot()
     EasyMock.expectLastCall().anyTimes()
 
-    stateManager.truncateAndReload(EasyMock.eq(0L), EasyMock.eq(0L), EasyMock.anyLong)
+    stateManager.truncateAndReload(EasyMock.eq(0L), EasyMock.eq(0L), EasyMock.anyLong, EasyMock.anyBoolean)
     EasyMock.expectLastCall()
 
     EasyMock.expect(stateManager.firstUnstableOffset).andStubReturn(None)
@@ -262,7 +262,7 @@ class LogTest {
     EasyMock.expect(stateManager.latestSnapshotOffset).andReturn(None)
     EasyMock.expect(stateManager.isEmpty).andStubReturn(true)
     EasyMock.expect(stateManager.mapEndOffset).andReturn(2L)
-    stateManager.truncateAndReload(EasyMock.eq(0L), EasyMock.eq(1L), EasyMock.anyLong)
+    stateManager.truncateAndReload(EasyMock.eq(0L), EasyMock.eq(1L), EasyMock.anyLong, EasyMock.anyBoolean)
     EasyMock.expectLastCall()
     // Truncation causes the map end offset to reset to 0
     EasyMock.expect(stateManager.mapEndOffset).andReturn(0L)
