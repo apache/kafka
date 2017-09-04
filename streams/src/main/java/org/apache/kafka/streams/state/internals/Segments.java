@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -186,26 +187,30 @@ class Segments {
     }
 
     private long segmentIdFromSegmentName(String segmentName, final File parent) {
-        try {
-            // old style segment name with date
-            if (segmentName.charAt(name.length()) == '-') {
-                final String datePart = segmentName.substring(name.length() + 1);
-                final Date date = formatter.parse(datePart);
-                final long segmentId = date.getTime() / segmentInterval;
-                final File newName = new File(parent, segmentName(segmentId));
-                final File oldName = new File(parent, segmentName);
-                if (!oldName.renameTo(newName)) {
-                    throw new ProcessorStateException("Unable to rename old style segment from: "
-                                                              + oldName
-                                                              + " to new name: "
-                                                              + newName);
-                }
-                return segmentId;
-            } else {
-                return Long.parseLong(segmentName.substring(name.length() + 1));
+        // old style segment name with date
+        if (segmentName.charAt(name.length()) == '-') {
+            final String datePart = segmentName.substring(name.length() + 1);
+            final Date date;
+            try {
+                date = formatter.parse(datePart);
+            } catch (ParseException e) {
+                throw new ProcessorStateException("Unable to parse segmentName:"
+                                                          + segmentName
+                                                          + " to a date");
             }
-        } catch (Exception ex) {
-            return -1L;
+            final long segmentId = date.getTime() / segmentInterval;
+            final File newName = new File(parent, segmentName(segmentId));
+            final File oldName = new File(parent, segmentName);
+            if (!oldName.renameTo(newName)) {
+                throw new ProcessorStateException("Unable to rename old style segment from: "
+                                                          + oldName
+                                                          + " to new name: "
+                                                          + newName);
+            }
+            return segmentId;
+        } else {
+            return Long.parseLong(segmentName.substring(name.length() + 1));
         }
+
     }
 }
