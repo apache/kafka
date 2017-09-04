@@ -1021,7 +1021,7 @@ public interface KStream<K, V> {
 
     /**
      * Group the records by their current key into a {@link KGroupedStream} while preserving the original values
-     * and using the serializers as defined by {@link Serialized}
+     * and using the serializers as defined by {@link Serialized}.
      * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedStream}).
      * If a record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}.
@@ -1038,7 +1038,6 @@ public interface KStream<K, V> {
      * For this case, all data of this stream will be redistributed through the repartitioning topic by writing all
      * records to it, and rereading all records from it, such that the resulting {@link KGroupedStream} is partitioned
      * correctly on its key.
-     * If the last key changing operator changed the key type, it is recommended to use
      *
      * @return a {@link KGroupedStream} that contains the grouped records of the original {@code KStream}
      * @see #groupBy(KeyValueMapper)
@@ -1103,11 +1102,11 @@ public interface KStream<K, V> {
 
     /**
      * Group the records of this {@code KStream} on a new key that is selected using the provided {@link KeyValueMapper}
-     * and {@link Serde}s as specified by {@link Serialized}
+     * and {@link Serde}s as specified by {@link Serialized}.
      * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedStream}).
      * The {@link KeyValueMapper} selects a new key (with should be of the same type) while preserving the original values.
-     * If the new record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}
+     * If the new record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}.
      * <p>
      * Because a new key is selected, an internal repartitioning topic will be created in Kafka.
      * This topic will be named "${applicationId}-XXX-repartition", where "applicationId" is user-specified in

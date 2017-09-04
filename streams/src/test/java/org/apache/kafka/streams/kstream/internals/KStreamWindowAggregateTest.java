@@ -61,8 +61,7 @@ public class KStreamWindowAggregateTest {
 
         KStream<String, String> stream1 = builder.stream(strSerde, strSerde, topic1);
         KTable<Windowed<String>, String> table2 =
-            stream1.groupByKey(Serialized.with(strSerde,
-                                               strSerde))
+            stream1.groupByKey(Serialized.with(strSerde, strSerde))
                 .aggregate(MockInitializer.STRING_INIT,
                            MockAggregator.TOSTRING_ADDER,
                            TimeWindows.of(10).advanceBy(5),

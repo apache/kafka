@@ -20,7 +20,7 @@ import org.apache.kafka.common.serialization.Serde;
 
 /**
  * The class that is used to capture the key and value {@link Serde}s used when performing
- * {@link KStream#groupBy(KeyValueMapper, Serialized)} and {@link KStream#groupByKey(Serialized)} operations
+ * {@link KStream#groupBy(KeyValueMapper, Serialized)} and {@link KStream#groupByKey(Serialized)} operations.
  *
  * @param <K> the key type
  * @param <V> the value type
@@ -30,7 +30,8 @@ public class Serialized<K, V> {
     private Serde<K> keySerde;
     private Serde<V> valueSerde;
 
-    private Serialized(final Serde<K> keySerde, final Serde<V> valueSerde) {
+    private Serialized(final Serde<K> keySerde,
+                       final Serde<V> valueSerde) {
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
     }
@@ -44,8 +45,8 @@ public class Serialized<K, V> {
     }
 
     /**
-     * Construct a {@code Serialized} instance with the provided key and value {@link Serde}s
-     * If the {@link Serde} params are null the default serdes defined in the configs will be used
+     * Construct a {@code Serialized} instance with the provided key and value {@link Serde}s.
+     * If the {@link Serde} params are {@code null} the default serdes defined in the configs will be used.
      *
      * @param keySerde   keySerde that will be used to materialize a stream
      *                   if not specified the default serdes defined in the configs will be used
@@ -53,31 +54,32 @@ public class Serialized<K, V> {
      *                   if not specified the default serdes defined in the configs will be used
      * @param <K>        the key type
      * @param <V>        the value type
-     * @return a new instance of {@code Serialized} configured with the provided serdes
+     * @return a new instance of {@link Serialized} configured with the provided serdes
      */
-    public static <K, V> Serialized<K, V> with(final Serde<K> keySerde, final Serde<V> valueSerde) {
+    public static <K, V> Serialized<K, V> with(final Serde<K> keySerde,
+                                               final Serde<V> valueSerde) {
         return new Serialized<>(keySerde, valueSerde);
     }
 
     /**
-     * Construct a {@code Serialized} instance with the provided key {@link Serde}
-     * If the {@link Serde} params are null the default serdes defined in the configs will be used
+     * Construct a {@code Serialized} instance with the provided key {@link Serde}.
+     * If the {@link Serde} params are null the default serdes defined in the configs will be used.
      *
      * @param keySerde keySerde that will be used to materialize a stream
      *                 if not specified the default serdes defined in the configs will be used
-     * @return a new instance of {@code Serialized} configured with the provided key serde
+     * @return a new instance of {@link Serialized} configured with the provided key serde
      */
     public Serialized<K, V> withKeySerde(final Serde<K> keySerde) {
         return new Serialized<>(keySerde, null);
     }
 
     /**
-     * Construct a {@code Serialized} instance with the provided value {@link Serde}
-     * If the {@link Serde} params are null the default serdes defined in the configs will be used
+     * Construct a {@code Serialized} instance with the provided value {@link Serde}.
+     * If the {@link Serde} params are null the default serdes defined in the configs will be used.
      *
-     * @param valueSerde keySerde that will be used to materialize a stream
+     * @param valueSerde valueSerde that will be used to materialize a stream
      *                   if not specified the default serdes defined in the configs will be used
-     * @return a new instance of {@code Serialized} configured with the provided key serde
+     * @return a new instance of {@link Serialized} configured with the provided key serde
      */
     public Serialized<K, V> withValueSerde(final Serde<V> valueSerde) {
         return new Serialized<>(null, valueSerde);

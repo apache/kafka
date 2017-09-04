@@ -843,8 +843,8 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                        KGroupedTable&lt;String, Integer&gt; groupedTable = table.groupBy(
                            (key, value) -> KeyValue.pair(value, value.length()),
                            Serialized.with(
-                            Serdes.String(), /* key (note: type was modified) */
-                            Serdes.Integer()) /* value (note: type was modified) */
+                               Serdes.String(), /* key (note: type was modified) */
+                               Serdes.Integer()) /* value (note: type was modified) */
                        );
 
 

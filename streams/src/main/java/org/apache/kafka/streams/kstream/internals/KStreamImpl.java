@@ -728,7 +728,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                         selectName,
                                         sourceNodes,
                                         serialized.keySerde(),
-                                        serialized.valueSerde(), true);
+                                        serialized.valueSerde(),
+                                        true);
     }
 
     @Override
