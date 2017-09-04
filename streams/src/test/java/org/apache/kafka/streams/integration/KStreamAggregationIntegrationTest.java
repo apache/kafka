@@ -25,6 +25,7 @@ import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -110,7 +111,7 @@ public class KStreamAggregationIntegrationTest {
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
 
         final KeyValueMapper<Integer, String, String> mapper = MockKeyValueMapper.SelectValueMapper();
-        stream = builder.stream(Serdes.Integer(), Serdes.String(), streamOneInput);
+        stream = builder.stream(streamOneInput, Consumed.with(Serdes.Integer(), Serdes.String()));
         groupedStream = stream
             .groupBy(
                 mapper,
@@ -512,7 +513,7 @@ public class KStreamAggregationIntegrationTest {
 
         final Map<Windowed<String>, Long> results = new HashMap<>();
         final CountDownLatch latch = new CountDownLatch(11);
-        builder.stream(Serdes.String(), Serdes.String(), userSessionsStream)
+        builder.stream(userSessionsStream, Consumed.with(Serdes.String(), Serdes.String()))
                 .groupByKey(Serdes.String(), Serdes.String())
                 .count(SessionWindows.with(sessionGap).until(maintainMillis), "UserSessionsStore")
                 .toStream()
@@ -599,7 +600,7 @@ public class KStreamAggregationIntegrationTest {
         final Map<Windowed<String>, String> results = new HashMap<>();
         final CountDownLatch latch = new CountDownLatch(11);
         final String userSessionsStore = "UserSessionsStore";
-        builder.stream(Serdes.String(), Serdes.String(), userSessionsStream)
+        builder.stream(userSessionsStream, Consumed.with(Serdes.String(), Serdes.String()))
                 .groupByKey(Serdes.String(), Serdes.String())
                 .reduce(new Reducer<String>() {
                     @Override

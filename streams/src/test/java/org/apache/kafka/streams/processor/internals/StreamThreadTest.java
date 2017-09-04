@@ -30,6 +30,7 @@ import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilderTest;
@@ -757,8 +758,8 @@ public class StreamThreadTest {
 
     @Test
     public void shouldCloseSuspendedTasksThatAreNoLongerAssignedToThisStreamThreadBeforeCreatingNewTasks() throws Exception {
-        internalStreamsBuilder.stream(null, null, null, null, "t1").groupByKey().count("count-one");
-        internalStreamsBuilder.stream(null, null, null, null, "t2").groupByKey().count("count-two");
+        internalStreamsBuilder.stream(Collections.singleton("t1"), Consumed.with(null, null)).groupByKey().count("count-one");
+        internalStreamsBuilder.stream(Collections.singleton("t2"), Consumed.with(null, null)).groupByKey().count("count-two");
 
         final StreamThread thread = createStreamThread(clientId, config, false);
         final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;

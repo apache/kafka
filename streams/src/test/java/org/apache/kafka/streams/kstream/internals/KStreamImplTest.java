@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsBuilderTest;
@@ -40,6 +41,7 @@ import org.apache.kafka.test.MockValueJoiner;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.concurrent.TimeUnit;
 
@@ -65,9 +67,10 @@ public class KStreamImplTest {
     public void testNumProcesses() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        KStream<String, String> source1 = builder.stream(stringSerde, stringSerde, "topic-1", "topic-2");
+        final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
+        KStream<String, String> source1 = builder.stream(Arrays.asList("topic-1", "topic-2"), consumed);
 
-        KStream<String, String> source2 = builder.stream(stringSerde, stringSerde, "topic-3", "topic-4");
+        KStream<String, String> source2 = builder.stream(Arrays.asList("topic-3", "topic-4"), consumed);
 
         KStream<String, String> stream1 =
             source1.filter(new Predicate<String, String>() {
@@ -161,8 +164,9 @@ public class KStreamImplTest {
     @Test
     public void shouldUseRecordMetadataTimestampExtractorWithThrough() {
         final StreamsBuilder builder = new StreamsBuilder();
-        KStream<String, String> stream1 = builder.stream(stringSerde, stringSerde, "topic-1", "topic-2");
-        KStream<String, String> stream2 = builder.stream(stringSerde, stringSerde, "topic-3", "topic-4");
+        final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
+        KStream<String, String> stream1 = builder.stream(Arrays.asList("topic-1", "topic-2"), consumed);
+        KStream<String, String> stream2 = builder.stream(Arrays.asList("topic-3", "topic-4"), consumed);
 
         stream1.to("topic-5");
         stream2.through("topic-6");
@@ -212,7 +216,8 @@ public class KStreamImplTest {
     @Test
     public void testToWithNullValueSerdeDoesntNPE() {
         final StreamsBuilder builder = new StreamsBuilder();
-        final KStream<String, String> inputStream = builder.stream(stringSerde, stringSerde, "input");
+        final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
+        final KStream<String, String> inputStream = builder.stream(Collections.singleton("input"), consumed);
         inputStream.to(stringSerde, null, "output");
     }
 

@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.ForeachAction;
@@ -379,7 +380,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                  final StreamPartitioner<? super K, ? super V> partitioner, String topic) {
         to(keySerde, valSerde, partitioner, topic);
 
-        return builder.stream(null, new FailOnInvalidTimestamp(), keySerde, valSerde, topic);
+        return builder.stream(Collections.singleton(topic),
+                              Consumed.with(keySerde,
+                                            valSerde,
+                                            new FailOnInvalidTimestamp(),
+                                            null));
     }
 
     @Override
