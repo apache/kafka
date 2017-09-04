@@ -41,6 +41,13 @@ public interface StateStoreBuilder<T extends StateStore> {
     StateStoreBuilder<T> withLoggingEnabled(final Map<String, String> config);
 
     /**
+     * Disable the changelog for store built by this {@link StateStoreBuilder}.
+     * This will turn off fault-tolerance for your store. By default the changelog is enabled
+     * @return this
+     */
+    StateStoreBuilder<T> withLoggingDisabled();
+
+    /**
      * Build the store as defined by the builder.
      *
      * @return the built {@link StateStore}

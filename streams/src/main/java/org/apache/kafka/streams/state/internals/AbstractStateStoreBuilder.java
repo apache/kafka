@@ -21,17 +21,18 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.StateStoreBuilder;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
 abstract class AbstractStateStoreBuilder<K, V, T extends StateStore> implements StateStoreBuilder<T> {
     private final String name;
+    private Map<String, String> logConfig = new HashMap<>();
     final Serde<K> keySerde;
     final Serde<V> valueSerde;
     final Time time;
-    Map<String, String> logConfig;
     boolean enableCaching;
-    boolean enableLogging;
+    boolean enableLogging = true;
 
     AbstractStateStoreBuilder(final String name,
                               final Serde<K> keySerde,
@@ -51,8 +52,15 @@ abstract class AbstractStateStoreBuilder<K, V, T extends StateStore> implements 
     }
 
     public StateStoreBuilder<T> withLoggingEnabled(final Map<String, String> config) {
+        Objects.requireNonNull(config, "config can't be null");
         enableLogging = true;
         logConfig = config;
+        return this;
+    }
+
+    public StateStoreBuilder<T> withLoggingDisabled() {
+        enableLogging = false;
+        logConfig.clear();
         return this;
     }
 

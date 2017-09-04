@@ -63,7 +63,20 @@ public class WindowStateStoreBuilderTest {
     public void shouldHaveMeteredStoreAsOuterStore() {
         final WindowStore<String, String> store = builder.build();
         assertThat(store, instanceOf(MeteredWindowStore.class));
-        assertThat(((WrappedStateStore) store).wrappedStore(), CoreMatchers.<StateStore>equalTo(inner));
+    }
+
+    @Test
+    public void shouldHaveChangeLoggingStoreByDefault() {
+        final WindowStore<String, String> store = builder.build();
+        final StateStore next = ((WrappedStateStore) store).wrappedStore();
+        assertThat(next, instanceOf(ChangeLoggingWindowBytesStore.class));
+    }
+
+    @Test
+    public void shouldNotHaveChangeLoggingStoreWhenDisabled() {
+        final WindowStore<String, String> store = builder.withLoggingDisabled().build();
+        final StateStore next = ((WrappedStateStore) store).wrappedStore();
+        assertThat(next, CoreMatchers.<StateStore>equalTo(inner));
     }
 
     @Test
@@ -72,7 +85,6 @@ public class WindowStateStoreBuilderTest {
         final StateStore wrapped = ((WrappedStateStore) store).wrappedStore();
         assertThat(store, instanceOf(MeteredWindowStore.class));
         assertThat(wrapped, instanceOf(CachingWindowStore.class));
-        assertThat(((WrappedStateStore) wrapped).wrappedStore(), CoreMatchers.<StateStore>equalTo(inner));
     }
 
     @Test

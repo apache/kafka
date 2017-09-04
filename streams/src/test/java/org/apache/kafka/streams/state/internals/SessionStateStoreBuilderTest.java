@@ -64,7 +64,20 @@ public class SessionStateStoreBuilderTest {
     public void shouldHaveMeteredStoreAsOuterStore() {
         final SessionStore<String, String> store = builder.build();
         assertThat(store, instanceOf(MeteredSessionStore.class));
-        assertThat(((WrappedStateStore) store).wrappedStore(), CoreMatchers.<StateStore>equalTo(inner));
+    }
+
+    @Test
+    public void shouldHaveChangeLoggingStoreByDefault() {
+        final SessionStore<String, String> store = builder.build();
+        final StateStore next = ((WrappedStateStore) store).wrappedStore();
+        assertThat(next, instanceOf(ChangeLoggingSessionBytesStore.class));
+    }
+
+    @Test
+    public void shouldNotHaveChangeLoggingStoreWhenDisabled() {
+        final SessionStore<String, String> store = builder.withLoggingDisabled().build();
+        final StateStore next = ((WrappedStateStore) store).wrappedStore();
+        assertThat(next, CoreMatchers.<StateStore>equalTo(inner));
     }
 
     @Test
@@ -73,7 +86,6 @@ public class SessionStateStoreBuilderTest {
         final StateStore wrapped = ((WrappedStateStore) store).wrappedStore();
         assertThat(store, instanceOf(MeteredSessionStore.class));
         assertThat(wrapped, instanceOf(CachingSessionStore.class));
-        assertThat(((WrappedStateStore) wrapped).wrappedStore(), CoreMatchers.<StateStore>equalTo(inner));
     }
 
     @Test

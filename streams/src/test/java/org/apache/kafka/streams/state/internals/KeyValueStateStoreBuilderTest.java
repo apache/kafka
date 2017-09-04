@@ -63,7 +63,21 @@ public class KeyValueStateStoreBuilderTest {
     public void shouldHaveMeteredStoreAsOuterStore() {
         final KeyValueStore<String, String> store = builder.build();
         assertThat(store, instanceOf(MeteredKeyValueBytesStore.class));
-        assertThat(((WrappedStateStore) store).wrappedStore(), CoreMatchers.<StateStore>equalTo(inner));
+    }
+
+    @Test
+    public void shouldHaveChangeLoggingStoreByDefault() {
+        final KeyValueStore<String, String> store = builder.build();
+        assertThat(store, instanceOf(MeteredKeyValueBytesStore.class));
+        final StateStore next = ((WrappedStateStore) store).wrappedStore();
+        assertThat(next, instanceOf(ChangeLoggingKeyValueBytesStore.class));
+    }
+
+    @Test
+    public void shouldNotHaveChangeLoggingStoreWhenDisabled() {
+        final KeyValueStore<String, String> store = builder.withLoggingDisabled().build();
+        final StateStore next = ((WrappedStateStore) store).wrappedStore();
+        assertThat(next, CoreMatchers.<StateStore>equalTo(inner));
     }
 
     @Test
@@ -72,7 +86,6 @@ public class KeyValueStateStoreBuilderTest {
         final StateStore wrapped = ((WrappedStateStore) store).wrappedStore();
         assertThat(store, instanceOf(MeteredKeyValueBytesStore.class));
         assertThat(wrapped, instanceOf(CachingKeyValueStore.class));
-        assertThat(((WrappedStateStore) wrapped).wrappedStore(), CoreMatchers.<StateStore>equalTo(inner));
     }
 
     @Test
