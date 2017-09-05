@@ -50,10 +50,10 @@ public class Consumed<K, V> {
     /**
      * Create an instance of {@link Consumed} with the supplied arguments. {@code null} values are acceptable.
      *
-     * @param keySerde           the key serde. If null the default key serde from config will be used
-     * @param valueSerde         the value serde. If null the default value serde from config will be used
-     * @param timestampExtractor the timestamp extractor to used. If null the default timestamp extractor from config will be used
-     * @param resetPolicy        the offset reset policy to be used. If null the default reset policy from config will be used
+     * @param keySerde           the key serde. If {@code null} the default key serde from config will be used
+     * @param valueSerde         the value serde. If {@code null} the default value serde from config will be used
+     * @param timestampExtractor the timestamp extractor to used. If {@code null} the default timestamp extractor from config will be used
+     * @param resetPolicy        the offset reset policy to be used. If {@code null} the default reset policy from config will be used
      * @param <K>                key type
      * @param <V>                value type
      * @return a new instance of {@link Consumed}
@@ -69,8 +69,8 @@ public class Consumed<K, V> {
     /**
      * Create an instance of {@link Consumed} with key and value {@link Serde}s.
      *
-     * @param keySerde   the key serde. If null the default key serde from config will be used
-     * @param valueSerde the value serde. If null the default value serde from config will be used
+     * @param keySerde   the key serde. If {@code null}the default key serde from config will be used
+     * @param valueSerde the value serde. If {@code null} the default value serde from config will be used
      * @param <K>        key type
      * @param <V>        value type
      * @return a new instance of {@link Consumed}
@@ -83,7 +83,7 @@ public class Consumed<K, V> {
     /**
      * Create an instance of {@link Consumed} with a {@link TimestampExtractor}.
      *
-     * @param timestampExtractor the timestamp extractor to used. If null the default timestamp extractor from config will be used
+     * @param timestampExtractor the timestamp extractor to used. If {@code null} the default timestamp extractor from config will be used
      * @param <K>                key type
      * @param <V>                value type
      * @return a new instance of {@link Consumed}
@@ -95,7 +95,7 @@ public class Consumed<K, V> {
     /**
      * Create an instance of {@link Consumed} with a {@link Topology.AutoOffsetReset}.
      *
-     * @param resetPolicy the offset reset policy to be used. If null the default reset policy from config will be used
+     * @param resetPolicy the offset reset policy to be used. If {@code null} the default reset policy from config will be used
      * @param <K>         key type
      * @param <V>         value type
      * @return a new instance of {@link Consumed}
@@ -107,7 +107,7 @@ public class Consumed<K, V> {
     /**
      * Configure the instance of {@link Consumed} with a key {@link Serde}.
      *
-     * @param keySerde the key serde. If null the default key serde from config will be used
+     * @param keySerde the key serde. If {@code null}the default key serde from config will be used
      * @return this
      */
     public Consumed<K, V> withKeySerde(final Serde<K> keySerde) {
@@ -118,7 +118,7 @@ public class Consumed<K, V> {
     /**
      * Configure the instance of {@link Consumed} with a value {@link Serde}.
      *
-     * @param valueSerde the value serde. If null the default value serde from config will be used
+     * @param valueSerde the value serde. If {@code null} the default value serde from config will be used
      * @return this
      */
     public Consumed<K, V> withValueSerde(final Serde<V> valueSerde) {
@@ -129,7 +129,7 @@ public class Consumed<K, V> {
     /**
      * Configure the instance of {@link Consumed} with a {@link TimestampExtractor}.
      *
-     * @param timestampExtractor the timestamp extractor to used. If null the default timestamp extractor from config will be used
+     * @param timestampExtractor the timestamp extractor to used. If {@code null} the default timestamp extractor from config will be used
      * @return this
      */
     public Consumed<K, V> withTimestampExtractor(final TimestampExtractor timestampExtractor) {
@@ -140,7 +140,7 @@ public class Consumed<K, V> {
     /**
      * Configure the instance of {@link Consumed} with a {@link Topology.AutoOffsetReset}.
      *
-     * @param resetPolicy the offset reset policy to be used. If null the default reset policy from config will be used
+     * @param resetPolicy the offset reset policy to be used. If {@code null} the default reset policy from config will be used
      * @return this
      */
     public Consumed<K, V> withOffsetResetPolicy(final Topology.AutoOffsetReset resetPolicy) {

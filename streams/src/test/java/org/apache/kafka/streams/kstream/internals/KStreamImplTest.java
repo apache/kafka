@@ -56,6 +56,7 @@ public class KStreamImplTest {
     final private Serde<Integer> intSerde = Serdes.Integer();
     private KStream<String, String> testStream;
     private StreamsBuilder builder;
+    private final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
 
     @Before
     public void before() {
@@ -67,7 +68,6 @@ public class KStreamImplTest {
     public void testNumProcesses() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
         KStream<String, String> source1 = builder.stream(Arrays.asList("topic-1", "topic-2"), consumed);
 
         KStream<String, String> source2 = builder.stream(Arrays.asList("topic-3", "topic-4"), consumed);

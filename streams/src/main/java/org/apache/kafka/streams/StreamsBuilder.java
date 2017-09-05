@@ -68,7 +68,7 @@ public class StreamsBuilder {
      * If this is not the case it is the user's responsibility to repartition the data before any key based operation
      * (like aggregation or join) is applied to the returned {@link KStream}.
      *
-     * @param topic the topic names; must contain at least one topic name
+     * @param topic the topic name; cannot be {@code null}
      * @return a {@link KStream} for the specified topics
      */
     public synchronized <K, V> KStream<K, V> stream(final String topic) {
@@ -84,7 +84,7 @@ public class StreamsBuilder {
      * If this is not the case it is the user's responsibility to repartition the data before any key based operation
      * (like aggregation or join) is applied to the returned {@link KStream}.
      *
-     * @param topic the topic names; must contain at least one topic name
+     * @param topic the topic names; cannot be {@code null}
      * @param consumed      the instance of {@link Consumed} used to define optional parameters
      * @return a {@link KStream} for the specified topics
      */
