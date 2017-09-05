@@ -62,11 +62,13 @@ class Segments {
         this.formatter.setTimeZone(new SimpleTimeZone(0, "UTC"));
     }
 
-    long segmentId(long timestamp) {
+    long segmentId(final long timestamp) {
         return timestamp / segmentInterval;
     }
 
-    String segmentName(long segmentId) {
+    String segmentName(final long segmentId) {
+        // previous format used - as a separator so if this changes in the future
+        // then we should use something different.
         return name + ":" + segmentId;
     }
 
@@ -186,7 +188,8 @@ class Segments {
         }
     }
 
-    private long segmentIdFromSegmentName(String segmentName, final File parent) {
+    private long segmentIdFromSegmentName(final String segmentName,
+                                          final File parent) {
         // old style segment name with date
         if (segmentName.charAt(name.length()) == '-') {
             final String datePart = segmentName.substring(name.length() + 1);
@@ -209,7 +212,11 @@ class Segments {
             }
             return segmentId;
         } else {
-            return Long.parseLong(segmentName.substring(name.length() + 1));
+            try {
+                return Long.parseLong(segmentName.substring(name.length() + 1));
+            } catch (NumberFormatException e) {
+                throw new ProcessorStateException("Unable to parse segment id as long from segmentName: " + segmentName);
+            }
         }
 
     }
