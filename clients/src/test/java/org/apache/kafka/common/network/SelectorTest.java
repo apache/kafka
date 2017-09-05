@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.network;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.memory.SimpleMemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
@@ -87,6 +88,10 @@ public class SelectorTest {
         this.selector.close();
         this.server.close();
         this.metrics.close();
+    }
+
+    public SecurityProtocol securityProtocol() {
+        return SecurityProtocol.PLAINTEXT;
     }
 
     /**
@@ -281,6 +286,31 @@ public class SelectorTest {
         } while (selector.completedReceives().isEmpty());
         assertEquals("We should have only one response", 1, selector.completedReceives().size());
         assertEquals("The response should be from the previously muted node", "1", selector.completedReceives().get(0).source());
+    }
+
+    @Test
+    public void registerFailure() throws Exception {
+        ChannelBuilder channelBuilder = new PlaintextChannelBuilder() {
+            @Override
+            public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize,
+                    MemoryPool memoryPool) throws KafkaException {
+                throw new RuntimeException("Test exception");
+            }
+            @Override
+            public void close() {
+            }
+        };
+        Selector selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder);
+        SocketChannel socketChannel = SocketChannel.open();
+        socketChannel.configureBlocking(false);
+        try {
+            selector.register("1", socketChannel);
+            fail("Register did not fail");
+        } catch (IOException e) {
+            assertTrue("Unexpected exception: " + e, e.getCause().getMessage().contains("Test exception"));
+            assertFalse("Socket not closed", socketChannel.isOpen());
+        }
+        selector.close();
     }
 
     @Test

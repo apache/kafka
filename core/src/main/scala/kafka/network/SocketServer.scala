@@ -641,7 +641,7 @@ private[kafka] class Processor(val id: Int,
       } catch {
         // We explicitly catch all exceptions and close the socket to avoid a socket leak.
         case e: Throwable =>
-          val remoteAddress = channel.getRemoteAddress
+          val remoteAddress = channel.socket.getRemoteSocketAddress
           // need to close the channel here to avoid a socket leak.
           close(channel)
           processException(s"Processor $id closed connection from $remoteAddress", e)

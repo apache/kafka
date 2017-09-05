@@ -20,7 +20,6 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.channels.CancelledKeyException;
-import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.UnresolvedAddressException;
@@ -216,19 +215,7 @@ public class Selector implements Selectable, AutoCloseable {
             throw e;
         }
         SelectionKey key = socketChannel.register(nioSelector, SelectionKey.OP_CONNECT);
-        KafkaChannel channel;
-        try {
-            channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool);
-        } catch (Exception e) {
-            try {
-                socketChannel.close();
-            } finally {
-                key.cancel();
-            }
-            throw new IOException("Channel could not be created for socket " + socketChannel, e);
-        }
-        key.attach(channel);
-        this.channels.put(id, channel);
+        KafkaChannel channel = buildChannel(socketChannel, id, key);
 
         if (connected) {
             // OP_CONNECT won't trigger for immediately connected channels
@@ -249,16 +236,31 @@ public class Selector implements Selectable, AutoCloseable {
      * the same remote host:port is processed.
      * </p>
      */
-    public void register(String id, SocketChannel socketChannel) throws ClosedChannelException {
+    public void register(String id, SocketChannel socketChannel) throws IOException {
         if (this.channels.containsKey(id))
             throw new IllegalStateException("There is already a connection for id " + id);
         if (this.closingChannels.containsKey(id))
             throw new IllegalStateException("There is already a connection for id " + id + " that is still being closed");
 
         SelectionKey key = socketChannel.register(nioSelector, SelectionKey.OP_READ);
-        KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool);
+        buildChannel(socketChannel, id, key);
+    }
+
+    private KafkaChannel buildChannel(SocketChannel socketChannel, String id, SelectionKey key) throws IOException {
+        KafkaChannel channel;
+        try {
+            channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool);
+        } catch (Exception e) {
+            try {
+                socketChannel.close();
+            } finally {
+                key.cancel();
+            }
+            throw new IOException("Channel could not be created for socket " + socketChannel, e);
+        }
         key.attach(channel);
         this.channels.put(id, channel);
+        return channel;
     }
 
     /**
