@@ -20,12 +20,18 @@ package org.apache.kafka.trogdor.agent;
 import org.apache.kafka.common.utils.MockScheduler;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Scheduler;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.trogdor.basic.BasicNode;
 import org.apache.kafka.trogdor.basic.BasicPlatform;
 import org.apache.kafka.trogdor.basic.BasicTopology;
 import org.apache.kafka.trogdor.common.ExpectedTasks;
 import org.apache.kafka.trogdor.common.ExpectedTasks.ExpectedTaskBuilder;
 import org.apache.kafka.trogdor.common.Node;
+import org.apache.kafka.trogdor.fault.FilesUnreadableFaultSpec;
+import org.apache.kafka.trogdor.fault.Kibosh;
+import org.apache.kafka.trogdor.fault.Kibosh.KiboshControlFile;
+import org.apache.kafka.trogdor.fault.Kibosh.KiboshFilesUnreadableFaultSpec;
 import org.apache.kafka.trogdor.rest.AgentStatusResponse;
 
 import org.apache.kafka.trogdor.rest.CreateWorkerRequest;
@@ -36,10 +42,16 @@ import org.apache.kafka.trogdor.rest.WorkerDone;
 import org.apache.kafka.trogdor.rest.WorkerRunning;
 import org.apache.kafka.trogdor.task.NoOpTaskSpec;
 import org.apache.kafka.trogdor.task.SampleTaskSpec;
+import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.rules.Timeout;
 import org.junit.Test;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.TreeMap;
@@ -234,5 +246,71 @@ public class AgentTest {
                 workerState(new WorkerDone(barSpec, 0, 2, "", "baz")).
                 build()).
             waitFor(client);
+    }
+
+    private static class MockKibosh implements AutoCloseable {
+        private final File tempDir;
+        private final Path controlFile;
+
+        MockKibosh() throws IOException {
+            tempDir = TestUtils.tempDirectory();
+            controlFile = Paths.get(tempDir.toPath().toString(), Kibosh.KIBOSH_CONTROL);
+            KiboshControlFile.EMPTY.write(controlFile);
+        }
+
+        KiboshControlFile read() throws IOException {
+            return KiboshControlFile.read(controlFile);
+        }
+
+        @Override
+        public void close() throws Exception {
+            Utils.delete(tempDir);
+        }
+    }
+
+    @Test
+    public void testKiboshFaults() throws Exception {
+        MockTime time = new MockTime(0, 0, 0);
+        MockScheduler scheduler = new MockScheduler(time);
+        Agent agent = createAgent(scheduler);
+        AgentClient client = new AgentClient(10, "localhost", agent.port());
+        new ExpectedTasks().waitFor(client);
+
+        try (MockKibosh mockKibosh = new MockKibosh()) {
+            Assert.assertEquals(KiboshControlFile.EMPTY, mockKibosh.read());
+            FilesUnreadableFaultSpec fooSpec = new FilesUnreadableFaultSpec(0, 900000,
+                Collections.singleton("myAgent"), mockKibosh.tempDir.getPath().toString(), "/foo", 123);
+            client.createWorker(new CreateWorkerRequest("foo", fooSpec));
+            new ExpectedTasks().
+                addTask(new ExpectedTaskBuilder("foo").
+                    workerState(new WorkerRunning(fooSpec, 0, "")).
+                    build()).
+                waitFor(client);
+            Assert.assertEquals(new KiboshControlFile(Collections.<Kibosh.KiboshFaultSpec>singletonList(
+                new KiboshFilesUnreadableFaultSpec("/foo", 123))), mockKibosh.read());
+            FilesUnreadableFaultSpec barSpec = new FilesUnreadableFaultSpec(0, 900000,
+                Collections.singleton("myAgent"), mockKibosh.tempDir.getPath().toString(), "/bar", 456);
+            client.createWorker(new CreateWorkerRequest("bar", barSpec));
+            new ExpectedTasks().
+                addTask(new ExpectedTaskBuilder("foo").
+                    workerState(new WorkerRunning(fooSpec, 0, "")).build()).
+                addTask(new ExpectedTaskBuilder("bar").
+                    workerState(new WorkerRunning(barSpec, 0, "")).build()).
+                waitFor(client);
+            Assert.assertEquals(new KiboshControlFile(new ArrayList<Kibosh.KiboshFaultSpec>() {{
+                    add(new KiboshFilesUnreadableFaultSpec("/foo", 123));
+                    add(new KiboshFilesUnreadableFaultSpec("/bar", 456));
+                }}), mockKibosh.read());
+            time.sleep(1);
+            client.stopWorker(new StopWorkerRequest("foo"));
+            new ExpectedTasks().
+                addTask(new ExpectedTaskBuilder("foo").
+                    workerState(new WorkerDone(fooSpec, 0, 1, "", "")).build()).
+                addTask(new ExpectedTaskBuilder("bar").
+                    workerState(new WorkerRunning(barSpec, 0, "")).build()).
+                waitFor(client);
+            Assert.assertEquals(new KiboshControlFile(Collections.<Kibosh.KiboshFaultSpec>singletonList(
+                new KiboshFilesUnreadableFaultSpec("/bar", 456))), mockKibosh.read());
+        }
     }
 };
