@@ -30,7 +30,7 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StateStoreBuilder;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 
 import java.util.Locale;
@@ -126,7 +126,7 @@ public class WordCountProcessorDemo {
 
         builder.addProcessor("Process", new MyProcessorSupplier(), "Source");
         KeyValueBytesStoreSupplier counts = Stores.inMemoryKeyValueStore("Counts");
-        StateStoreBuilder<KeyValueStore<String, Integer>> storeBuilder =
+        StoreBuilder<KeyValueStore<String, Integer>> storeBuilder =
                 Stores.keyValueStoreBuilder(counts, Serdes.String(), Serdes.Integer());
         builder.addStateStore(storeBuilder, "Process");
 

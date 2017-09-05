@@ -23,8 +23,8 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.state.StateStoreBuilder;
-import org.apache.kafka.streams.state.internals.KeyValueStateStoreBuilder;
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockStateStoreSupplier;
 import org.apache.kafka.test.ProcessorTopologyTestDriver;
@@ -44,8 +44,8 @@ import static org.junit.Assert.fail;
 
 public class TopologyTest {
 
-    private final StateStoreBuilder storeBuilder = EasyMock.createNiceMock(StateStoreBuilder.class);
-    private final KeyValueStateStoreBuilder globalStoreBuilder = EasyMock.createNiceMock(KeyValueStateStoreBuilder.class);
+    private final StoreBuilder storeBuilder = EasyMock.createNiceMock(StoreBuilder.class);
+    private final KeyValueStoreBuilder globalStoreBuilder = EasyMock.createNiceMock(KeyValueStoreBuilder.class);
     private final Topology topology = new Topology();
     private final InternalTopologyBuilder.TopologyDescription expectedDescription = new InternalTopologyBuilder.TopologyDescription();
 
@@ -633,7 +633,7 @@ public class TopologyTest {
         topology.addProcessor(processorName, new MockProcessorSupplier(), parentNames);
         if (newStores) {
             for (final String store : storeNames) {
-                final StateStoreBuilder storeBuilder = EasyMock.createNiceMock(StateStoreBuilder.class);
+                final StoreBuilder storeBuilder = EasyMock.createNiceMock(StoreBuilder.class);
                 EasyMock.expect(storeBuilder.name()).andReturn(store).anyTimes();
                 EasyMock.replay(storeBuilder);
                 topology.addStateStore(storeBuilder, processorName);
@@ -676,7 +676,7 @@ public class TopologyTest {
                                                                 final String sourceName,
                                                                 final String globalTopicName,
                                                                 final String processorName) {
-        final KeyValueStateStoreBuilder globalStoreBuilder = EasyMock.createNiceMock(KeyValueStateStoreBuilder.class);
+        final KeyValueStoreBuilder globalStoreBuilder = EasyMock.createNiceMock(KeyValueStoreBuilder.class);
         EasyMock.expect(globalStoreBuilder.name()).andReturn(globalStoreName).anyTimes();
         EasyMock.replay(globalStoreBuilder);
         topology.addGlobalStore(

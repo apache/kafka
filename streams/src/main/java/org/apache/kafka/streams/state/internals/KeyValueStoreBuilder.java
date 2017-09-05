@@ -23,15 +23,15 @@ import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import java.util.Objects;
 
-public class KeyValueStateStoreBuilder<K, V> extends AbstractStateStoreBuilder<K, V, KeyValueStore<K, V>> {
+public class KeyValueStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, KeyValueStore<K, V>> {
 
     private final KeyValueBytesStoreSupplier storeSupplier;
 
 
-    public KeyValueStateStoreBuilder(final KeyValueBytesStoreSupplier storeSupplier,
-                                     final Serde<K> keySerde,
-                                     final Serde<V> valueSerde,
-                                     final Time time) {
+    public KeyValueStoreBuilder(final KeyValueBytesStoreSupplier storeSupplier,
+                                final Serde<K> keySerde,
+                                final Serde<V> valueSerde,
+                                final Time time) {
         super(storeSupplier.name(), keySerde, valueSerde, time);
         Objects.requireNonNull(storeSupplier, "bytesStoreSupplier can't be null");
         this.storeSupplier = storeSupplier;

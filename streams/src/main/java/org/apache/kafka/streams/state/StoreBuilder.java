@@ -24,13 +24,13 @@ import java.util.Map;
  * Build a {@link StateStore} wrapped with optional caching and logging.
  * @param <T>  the type of store to build
  */
-public interface StateStoreBuilder<T extends StateStore> {
+public interface StoreBuilder<T extends StateStore> {
 
     /**
      * Enable caching on the store.
      * @return  this
      */
-    StateStoreBuilder<T> withCachingEnabled();
+    StoreBuilder<T> withCachingEnabled();
 
     /**
      * Maintain a changelog for any changes made to the store.
@@ -38,15 +38,15 @@ public interface StateStoreBuilder<T extends StateStore> {
      * @param config  config applied to the changelog topic
      * @return this
      */
-    StateStoreBuilder<T> withLoggingEnabled(final Map<String, String> config);
+    StoreBuilder<T> withLoggingEnabled(final Map<String, String> config);
 
     /**
-     * Disable the changelog for store built by this {@link StateStoreBuilder}.
+     * Disable the changelog for store built by this {@link StoreBuilder}.
      * This will turn off fault-tolerance for your store.
      * By default the changelog is enabled.
      * @return this
      */
-    StateStoreBuilder<T> withLoggingDisabled();
+    StoreBuilder<T> withLoggingDisabled();
 
     /**
      * Build the store as defined by the builder.

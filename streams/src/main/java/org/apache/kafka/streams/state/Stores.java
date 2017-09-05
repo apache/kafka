@@ -25,7 +25,7 @@ import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryLRUCacheStoreSupplier;
-import org.apache.kafka.streams.state.internals.KeyValueStateStoreBuilder;
+import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.MemoryNavigableLRUCache;
 import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDBSessionStoreSupplier;
@@ -33,8 +33,8 @@ import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbKeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbSessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
-import org.apache.kafka.streams.state.internals.SessionStateStoreBuilder;
-import org.apache.kafka.streams.state.internals.WindowStateStoreBuilder;
+import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
+import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -141,48 +141,48 @@ public class Stores {
 
 
     /**
-     * Creates a {@link StateStoreBuilder} that can be used to build a {@link WindowStore}.
+     * Creates a {@link StoreBuilder} that can be used to build a {@link WindowStore}.
      * @param supplier      a {@link WindowBytesStoreSupplier}
      * @param keySerde      the key serde to use
      * @param valueSerde    the value serde to use
      * @param <K>           key type
      * @param <V>           value type
-     * @return an instance of {@link StateStoreBuilder} than can build a {@link WindowStore}
+     * @return an instance of {@link StoreBuilder} than can build a {@link WindowStore}
      */
-    public static <K, V> StateStoreBuilder<WindowStore<K, V>> windowStoreBuilder(final WindowBytesStoreSupplier supplier,
-                                                                                 final Serde<K> keySerde,
-                                                                                 final Serde<V> valueSerde) {
-        return new WindowStateStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+    public static <K, V> StoreBuilder<WindowStore<K, V>> windowStoreBuilder(final WindowBytesStoreSupplier supplier,
+                                                                            final Serde<K> keySerde,
+                                                                            final Serde<V> valueSerde) {
+        return new WindowStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
     }
 
     /**
-     * Creates a {@link StateStoreBuilder} than can be used to build a {@link KeyValueStore}.
+     * Creates a {@link StoreBuilder} than can be used to build a {@link KeyValueStore}.
      * @param supplier      a {@link KeyValueBytesStoreSupplier}
      * @param keySerde      the key serde to use
      * @param valueSerde    the value serde to use
      * @param <K>           key type
      * @param <V>           value type
-     * @return an instance of a {@link StateStoreBuilder} that can build a {@link KeyValueStore}
+     * @return an instance of a {@link StoreBuilder} that can build a {@link KeyValueStore}
      */
-    public static <K, V> StateStoreBuilder<KeyValueStore<K, V>> keyValueStoreBuilder(final KeyValueBytesStoreSupplier supplier,
-                                                                                     final Serde<K> keySerde,
-                                                                                     final Serde<V> valueSerde) {
-        return new KeyValueStateStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+    public static <K, V> StoreBuilder<KeyValueStore<K, V>> keyValueStoreBuilder(final KeyValueBytesStoreSupplier supplier,
+                                                                                final Serde<K> keySerde,
+                                                                                final Serde<V> valueSerde) {
+        return new KeyValueStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
     }
 
     /**
-     * Creates a {@link StateStoreBuilder} that can be used to build a {@link SessionStore}.
+     * Creates a {@link StoreBuilder} that can be used to build a {@link SessionStore}.
      * @param supplier      a {@link SessionBytesStoreSupplier}
      * @param keySerde      the key serde to use
      * @param valueSerde    the value serde to use
      * @param <K>           key type
      * @param <V>           value type
-     * @return an instance of {@link StateStoreBuilder} than can build a {@link SessionStore}
+     * @return an instance of {@link StoreBuilder} than can build a {@link SessionStore}
      * */
-    public static <K, V> StateStoreBuilder<SessionStore<K, V>> sessionStoreBuilder(final SessionBytesStoreSupplier supplier,
-                                                                                   final Serde<K> keySerde,
-                                                                                   final Serde<V> valueSerde) {
-        return new SessionStateStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+    public static <K, V> StoreBuilder<SessionStore<K, V>> sessionStoreBuilder(final SessionBytesStoreSupplier supplier,
+                                                                              final Serde<K> keySerde,
+                                                                              final Serde<V> valueSerde) {
+        return new SessionStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
     }
 
     /**

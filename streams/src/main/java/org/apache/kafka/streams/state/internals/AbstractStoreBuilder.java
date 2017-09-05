@@ -19,13 +19,13 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.state.StateStoreBuilder;
+import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
-abstract class AbstractStateStoreBuilder<K, V, T extends StateStore> implements StateStoreBuilder<T> {
+abstract class AbstractStoreBuilder<K, V, T extends StateStore> implements StoreBuilder<T> {
     private final String name;
     private Map<String, String> logConfig = new HashMap<>();
     final Serde<K> keySerde;
@@ -34,10 +34,10 @@ abstract class AbstractStateStoreBuilder<K, V, T extends StateStore> implements 
     boolean enableCaching;
     boolean enableLogging = true;
 
-    AbstractStateStoreBuilder(final String name,
-                              final Serde<K> keySerde,
-                              final Serde<V> valueSerde,
-                              final Time time) {
+    AbstractStoreBuilder(final String name,
+                         final Serde<K> keySerde,
+                         final Serde<V> valueSerde,
+                         final Time time) {
         Objects.requireNonNull(name, "name can't be null");
         Objects.requireNonNull(time, "time can't be null");
         this.name = name;
@@ -47,13 +47,13 @@ abstract class AbstractStateStoreBuilder<K, V, T extends StateStore> implements 
     }
 
     @Override
-    public StateStoreBuilder<T> withCachingEnabled() {
+    public StoreBuilder<T> withCachingEnabled() {
         enableCaching = true;
         return this;
     }
 
     @Override
-    public StateStoreBuilder<T> withLoggingEnabled(final Map<String, String> config) {
+    public StoreBuilder<T> withLoggingEnabled(final Map<String, String> config) {
         Objects.requireNonNull(config, "config can't be null");
         enableLogging = true;
         logConfig = config;
@@ -61,7 +61,7 @@ abstract class AbstractStateStoreBuilder<K, V, T extends StateStore> implements 
     }
 
     @Override
-    public StateStoreBuilder<T> withLoggingDisabled() {
+    public StoreBuilder<T> withLoggingDisabled() {
         enableLogging = false;
         logConfig.clear();
         return this;

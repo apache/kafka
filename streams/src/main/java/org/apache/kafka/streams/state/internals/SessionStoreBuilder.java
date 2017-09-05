@@ -23,14 +23,14 @@ import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 
 
-public class SessionStateStoreBuilder<K, V> extends AbstractStateStoreBuilder<K, V, SessionStore<K, V>> {
+public class SessionStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, SessionStore<K, V>> {
 
     private final SessionBytesStoreSupplier storeSupplier;
 
-    public SessionStateStoreBuilder(final SessionBytesStoreSupplier storeSupplier,
-                                    final Serde<K> keySerde,
-                                    final Serde<V> valueSerde,
-                                    final Time time) {
+    public SessionStoreBuilder(final SessionBytesStoreSupplier storeSupplier,
+                               final Serde<K> keySerde,
+                               final Serde<V> valueSerde,
+                               final Time time) {
         super(storeSupplier.name(), keySerde, valueSerde, time);
         this.storeSupplier = storeSupplier;
     }

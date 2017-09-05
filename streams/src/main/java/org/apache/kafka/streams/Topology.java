@@ -31,8 +31,8 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
-import org.apache.kafka.streams.state.StateStoreBuilder;
-import org.apache.kafka.streams.state.internals.KeyValueStateStoreBuilder;
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 
 import java.util.regex.Pattern;
 
@@ -431,7 +431,7 @@ public class Topology {
      * <p>
      * The sink will also use the specified {@link StreamPartitioner} to determine how records are distributed among
      * the named Kafka topic's partitions.
-     * Such control is often useful with topologies that use {@link #addStateStore(StateStoreBuilder, String...) state
+     * Such control is often useful with topologies that use {@link #addStateStore(StoreBuilder, String...) state
      * stores} in its processors.
      * In most other cases, however, a partitioner needs not be specified and Kafka will automatically distribute
      * records among partitions using Kafka's default partitioning logic.
@@ -542,7 +542,7 @@ public class Topology {
      * @return itself
      * @throws TopologyException if state store supplier is already added
      */
-    public synchronized Topology addStateStore(final StateStoreBuilder storeBuilder,
+    public synchronized Topology addStateStore(final StoreBuilder storeBuilder,
                                                final String... processorNames) {
         internalTopologyBuilder.addStateStore(storeBuilder, processorNames);
         return this;
@@ -571,7 +571,7 @@ public class Topology {
      * @return itself
      * @throws TopologyException if the processor of state is already registered
      */
-    public synchronized Topology addGlobalStore(final KeyValueStateStoreBuilder storeBuilder,
+    public synchronized Topology addGlobalStore(final KeyValueStoreBuilder storeBuilder,
                                                 final String sourceName,
                                                 final Deserializer keyDeserializer,
                                                 final Deserializer valueDeserializer,
@@ -607,7 +607,7 @@ public class Topology {
      * @return itself
      * @throws TopologyException if the processor of state is already registered
      */
-    public synchronized Topology addGlobalStore(final KeyValueStateStoreBuilder storeBuilder,
+    public synchronized Topology addGlobalStore(final KeyValueStoreBuilder storeBuilder,
                                                 final String sourceName,
                                                 final TimestampExtractor timestampExtractor,
                                                 final Deserializer keyDeserializer,

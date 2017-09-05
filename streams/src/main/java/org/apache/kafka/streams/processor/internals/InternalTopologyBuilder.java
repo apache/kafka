@@ -28,9 +28,9 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor.SubscriptionUpdates;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StateStoreBuilder;
-import org.apache.kafka.streams.state.internals.KeyValueStateStoreBuilder;
-import org.apache.kafka.streams.state.internals.WindowStateStoreBuilder;
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
+import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -202,12 +202,12 @@ public class InternalTopologyBuilder {
     }
 
     private static class StateStoreBuilderFactory extends AbstractStateStoreFactory {
-        private final StateStoreBuilder builder;
+        private final StoreBuilder builder;
 
-        StateStoreBuilderFactory(final StateStoreBuilder<?> builder) {
+        StateStoreBuilderFactory(final StoreBuilder<?> builder) {
             super(builder.name(),
                   builder.loggingEnabled(),
-                  builder instanceof WindowStateStoreBuilder,
+                  builder instanceof WindowStoreBuilder,
                   builder.logConfig());
             this.builder = builder;
         }
@@ -222,7 +222,7 @@ public class InternalTopologyBuilder {
             if (!isWindowStore()) {
                 throw new IllegalStateException("retentionPeriod is not supported when not a window store");
             }
-            return ((WindowStateStoreBuilder) builder).retentionPeriod();
+            return ((WindowStoreBuilder) builder).retentionPeriod();
         }
     }
 
@@ -510,7 +510,7 @@ public class InternalTopologyBuilder {
         }
     }
 
-    public final void addStateStore(final StateStoreBuilder storeBuilder,
+    public final void addStateStore(final StoreBuilder storeBuilder,
                                     final String... processorNames) {
         Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
         if (stateFactories.containsKey(storeBuilder.name())) {
@@ -555,7 +555,7 @@ public class InternalTopologyBuilder {
     }
 
 
-    public final void addGlobalStore(final KeyValueStateStoreBuilder storeBuilder,
+    public final void addGlobalStore(final KeyValueStoreBuilder storeBuilder,
                                      final String sourceName,
                                      final TimestampExtractor timestampExtractor,
                                      final Deserializer keyDeserializer,

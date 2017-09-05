@@ -38,23 +38,23 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 
 @RunWith(EasyMockRunner.class)
-public class KeyValueStateStoreBuilderTest {
+public class KeyValueStoreBuilderTest {
 
     @Mock(type = MockType.NICE)
     private KeyValueBytesStoreSupplier supplier;
     @Mock(type = MockType.NICE)
     private KeyValueStore<Bytes, byte[]> inner;
-    private KeyValueStateStoreBuilder<String, String> builder;
+    private KeyValueStoreBuilder<String, String> builder;
 
     @Before
     public void setUp() throws Exception {
         EasyMock.expect(supplier.get()).andReturn(inner);
         EasyMock.expect(supplier.name()).andReturn("name");
         EasyMock.replay(supplier);
-        builder = new KeyValueStateStoreBuilder<>(supplier,
-                                                  Serdes.String(),
-                                                  Serdes.String(),
-                                                  new MockTime()
+        builder = new KeyValueStoreBuilder<>(supplier,
+                                             Serdes.String(),
+                                             Serdes.String(),
+                                             new MockTime()
         );
 
     }
@@ -115,27 +115,27 @@ public class KeyValueStateStoreBuilderTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerIfInnerIsNull() {
-        new KeyValueStateStoreBuilder<>(null, Serdes.String(), Serdes.String(), new MockTime());
+        new KeyValueStoreBuilder<>(null, Serdes.String(), Serdes.String(), new MockTime());
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerIfKeySerdeIsNull() {
-        new KeyValueStateStoreBuilder<>(supplier, null, Serdes.String(), new MockTime());
+        new KeyValueStoreBuilder<>(supplier, null, Serdes.String(), new MockTime());
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerIfValueSerdeIsNull() {
-        new KeyValueStateStoreBuilder<>(supplier, Serdes.String(), null, new MockTime());
+        new KeyValueStoreBuilder<>(supplier, Serdes.String(), null, new MockTime());
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerIfTimeIsNull() {
-        new KeyValueStateStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), null);
+        new KeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerIfMetricsScopeIsNull() {
-        new KeyValueStateStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime());
+        new KeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime());
     }
 
 }

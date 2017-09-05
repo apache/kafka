@@ -23,14 +23,14 @@ import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 
 
-public class WindowStateStoreBuilder<K, V> extends AbstractStateStoreBuilder<K, V, WindowStore<K, V>> {
+public class WindowStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, WindowStore<K, V>> {
 
     private final WindowBytesStoreSupplier storeSupplier;
 
-    public WindowStateStoreBuilder(final WindowBytesStoreSupplier storeSupplier,
-                                   final Serde<K> keySerde,
-                                   final Serde<V> valueSerde,
-                                   final Time time) {
+    public WindowStoreBuilder(final WindowBytesStoreSupplier storeSupplier,
+                              final Serde<K> keySerde,
+                              final Serde<V> valueSerde,
+                              final Time time) {
         super(storeSupplier.name(), keySerde, valueSerde, time);
         this.storeSupplier = storeSupplier;
     }
