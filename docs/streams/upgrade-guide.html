@@ -60,7 +60,7 @@
         The two main classes to specify a topology via the DSL (<code>KStreamBuilder</code>)
         or the Processor API (<code>TopologyBuilder</code>) were deprecated and replaced by
         <code>StreamsBuilder</code> and <code>Topology<code> (both new classes are located in
-        package <code>org.apache.kafka.streams</code>.
+        package <code>org.apache.kafka.streams</code>).
         Note, that <code>StreamsBuilder</code> does not extend <code>Topology</code>, i.e.,
         the class hierarchy is different now.
         The new classes have basically the same methods as the old ones to build a topology via DSL or Processor API.
@@ -81,7 +81,8 @@
         Additionally, a new class <code>org.apache.kafka.streams.TopologyDescription</code>
         (and some more dependent classes) were added.
         Those can be used to get a detailed description of the specified topology
-        and can be obtained by calling <code>Topology#describe()</code>. 
+        and can be obtained by calling <code>Topology#describe()</code>.
+        An example using this new API is shown in the <a href="/{{version}}/documentation/streams/quickstart">quickstart section</a>.
     </p>
 
     <p>
