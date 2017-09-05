@@ -32,6 +32,7 @@ import org.apache.kafka.streams.state.internals.WindowStoreSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -1088,21 +1089,21 @@ public class InternalTopologyBuilder {
         return false;
     }
 
-    private static class NodeComparator implements Comparator<org.apache.kafka.streams.TopologyDescription.Node>, Serializable {
+    private static class NodeComparator implements Comparator<TopologyDescription.Node>, Serializable {
 
         @Override
-        public int compare(final org.apache.kafka.streams.TopologyDescription.Node node1,
-                           final org.apache.kafka.streams.TopologyDescription.Node node2) {
+        public int compare(final TopologyDescription.Node node1,
+                           final TopologyDescription.Node node2) {
             final int size1 = ((AbstractNode) node1).size;
             final int size2 = ((AbstractNode) node2).size;
 
             // it is possible that two nodes have the same sub-tree size (think two nodes connected via state stores)
             // in this case default to processor name string
-            if (size1 != size2)
+            if (size1 != size2) {
                 return size2 - size1;
-            else
+            } else {
                 return node1.name().compareTo(node2.name());
-
+            }
         }
     }
 
@@ -1138,8 +1139,8 @@ public class InternalTopologyBuilder {
         }
 
         description.addSubtopology(new Subtopology(
-            subtopologyId,
-            new HashSet<TopologyDescription.Node>(nodesByName.values())));
+                subtopologyId,
+                new HashSet<TopologyDescription.Node>(nodesByName.values())));
     }
 
     private void describeGlobalStores(final TopologyDescription description) {
@@ -1390,15 +1391,12 @@ public class InternalTopologyBuilder {
 
     public final static class Subtopology implements org.apache.kafka.streams.TopologyDescription.Subtopology {
         private final int id;
-        private final Set<org.apache.kafka.streams.TopologyDescription.Node> nodes;
+        private final Set<TopologyDescription.Node> nodes;
 
-        public Subtopology(final int id,
-                    final Set<org.apache.kafka.streams.TopologyDescription.Node> nodes) {
+        public Subtopology(final int id, final Set<TopologyDescription.Node> nodes) {
             this.id = id;
             this.nodes = new TreeSet<>(NODE_COMPARATOR);
-            for (final TopologyDescription.Node node : nodes) {
-                this.nodes.add(node);
-            }
+            this.nodes.addAll(nodes);
         }
 
         @Override
@@ -1407,7 +1405,7 @@ public class InternalTopologyBuilder {
         }
 
         @Override
-        public Set<org.apache.kafka.streams.TopologyDescription.Node> nodes() {
+        public Set<TopologyDescription.Node> nodes() {
             return Collections.unmodifiableSet(nodes);
         }
 
@@ -1418,7 +1416,7 @@ public class InternalTopologyBuilder {
 
         private String nodesAsString() {
             final StringBuilder sb = new StringBuilder();
-            for (final org.apache.kafka.streams.TopologyDescription.Node node : nodes) {
+            for (final TopologyDescription.Node node : nodes) {
                 sb.append("    ");
                 sb.append(node);
                 sb.append('\n');
@@ -1489,20 +1487,20 @@ public class InternalTopologyBuilder {
         }
     }
 
-    private static class GlobalStoreComparator implements Comparator<org.apache.kafka.streams.TopologyDescription.GlobalStore>, Serializable {
+    private static class GlobalStoreComparator implements Comparator<TopologyDescription.GlobalStore>, Serializable {
         @Override
-        public int compare(final org.apache.kafka.streams.TopologyDescription.GlobalStore globalStore1,
-                           final org.apache.kafka.streams.TopologyDescription.GlobalStore globalStore2) {
+        public int compare(final TopologyDescription.GlobalStore globalStore1,
+                           final TopologyDescription.GlobalStore globalStore2) {
             return globalStore1.source().name().compareTo(globalStore2.source().name());
         }
     }
 
     private final static GlobalStoreComparator GLOBALSTORE_COMPARATOR = new GlobalStoreComparator();
 
-    private static class SubtopologyComparator implements Comparator<org.apache.kafka.streams.TopologyDescription.Subtopology>, Serializable {
+    private static class SubtopologyComparator implements Comparator<TopologyDescription.Subtopology>, Serializable {
         @Override
-        public int compare(final org.apache.kafka.streams.TopologyDescription.Subtopology subtopology1,
-                           final org.apache.kafka.streams.TopologyDescription.Subtopology subtopology2) {
+        public int compare(final TopologyDescription.Subtopology subtopology1,
+                           final TopologyDescription.Subtopology subtopology2) {
             return subtopology1.id() - subtopology2.id();
         }
     }
@@ -1510,24 +1508,24 @@ public class InternalTopologyBuilder {
     private final static SubtopologyComparator SUBTOPOLOGY_COMPARATOR = new SubtopologyComparator();
 
     public final static class TopologyDescription implements org.apache.kafka.streams.TopologyDescription {
-        private final Set<org.apache.kafka.streams.TopologyDescription.Subtopology> subtopologies = new TreeSet<>(SUBTOPOLOGY_COMPARATOR);
-        private final Set<org.apache.kafka.streams.TopologyDescription.GlobalStore> globalStores = new TreeSet<>(GLOBALSTORE_COMPARATOR);
+        private final Set<TopologyDescription.Subtopology> subtopologies = new TreeSet<>(SUBTOPOLOGY_COMPARATOR);
+        private final Set<TopologyDescription.GlobalStore> globalStores = new TreeSet<>(GLOBALSTORE_COMPARATOR);
 
-        public void addSubtopology(final org.apache.kafka.streams.TopologyDescription.Subtopology subtopology) {
+        public void addSubtopology(final TopologyDescription.Subtopology subtopology) {
             subtopologies.add(subtopology);
         }
 
-        public void addGlobalStore(final org.apache.kafka.streams.TopologyDescription.GlobalStore globalStore) {
+        public void addGlobalStore(final TopologyDescription.GlobalStore globalStore) {
             globalStores.add(globalStore);
         }
 
         @Override
-        public Set<org.apache.kafka.streams.TopologyDescription.Subtopology> subtopologies() {
+        public Set<TopologyDescription.Subtopology> subtopologies() {
             return Collections.unmodifiableSet(subtopologies);
         }
 
         @Override
-        public Set<org.apache.kafka.streams.TopologyDescription.GlobalStore> globalStores() {
+        public Set<TopologyDescription.GlobalStore> globalStores() {
             return Collections.unmodifiableSet(globalStores);
         }
 
@@ -1542,7 +1540,7 @@ public class InternalTopologyBuilder {
             if (subtopologies.isEmpty()) {
                 sb.append("  none\n");
             } else {
-                for (final org.apache.kafka.streams.TopologyDescription.Subtopology st : subtopologies) {
+                for (final TopologyDescription.Subtopology st : subtopologies) {
                     sb.append("  ");
                     sb.append(st);
                 }
@@ -1556,7 +1554,7 @@ public class InternalTopologyBuilder {
             if (globalStores.isEmpty()) {
                 sb.append("  none\n");
             } else {
-                for (final org.apache.kafka.streams.TopologyDescription.GlobalStore gs : globalStores) {
+                for (final TopologyDescription.GlobalStore gs : globalStores) {
                     sb.append("  ");
                     sb.append(gs);
                 }
