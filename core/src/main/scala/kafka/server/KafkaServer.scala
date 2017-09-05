@@ -200,7 +200,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         /* generate brokerId */
         val (brokerId, initialOfflineDirs) = getBrokerIdAndOfflineDirs
         config.brokerId = brokerId
-        logContext = new LogContext("[Kafka Server " + config.brokerId + "] ")
+        logContext = new LogContext(s"[KafkaServer id=${config.brokerId}] ")
         this.logIdent = logContext.logPrefix()
 
         /* create and configure metrics */

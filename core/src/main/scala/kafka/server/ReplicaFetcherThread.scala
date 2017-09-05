@@ -54,7 +54,7 @@ class ReplicaFetcherThread(name: String,
   type REQ = FetchRequest
   type PD = PartitionData
 
-  private val logContext = new LogContext(s"[ReplicaFetcherThread brokerId=${brokerConfig.brokerId}] ")
+  private val logContext = new LogContext(s"[ReplicaFetcher brokerId=${brokerConfig.brokerId}, sourceBrokerId=${sourceBroker.id}, fetcherId=$fetcherId] ")
   this.logIdent = logContext.logPrefix()
   private val leaderEndpoint = leaderEndpointBlockingSend.getOrElse(
     new ReplicaFetcherBlockingSend(sourceBroker, brokerConfig, metrics, time, fetcherId, s"broker-${brokerConfig.brokerId}-fetcher-$fetcherId", logContext))
@@ -281,7 +281,7 @@ class ReplicaFetcherThread(name: String,
       .filter { case (_, state) => state.isTruncatingLog }
       .map { case (tp, _) => tp -> epochCache(tp).latestEpoch }.toMap
 
-    debug(s"Build leaderEpoch request $result for broker $sourceBroker")
+    debug(s"Build leaderEpoch request $result")
 
     result
   }
@@ -294,7 +294,7 @@ class ReplicaFetcherThread(name: String,
       try {
         val response = leaderEndpoint.sendRequest(epochRequest)
         result = response.responseBody.asInstanceOf[OffsetsForLeaderEpochResponse].responses.asScala
-        debug(s"Receive leaderEpoch response $result from broker $sourceBroker")
+        debug(s"Receive leaderEpoch response $result")
       } catch {
         case t: Throwable =>
           warn(s"Error when sending leader epoch request for $partitions", t)
