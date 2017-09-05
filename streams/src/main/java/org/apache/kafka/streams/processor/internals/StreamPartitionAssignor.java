@@ -200,6 +200,11 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
     public void configure(Map<String, ?> configs) {
         numStandbyReplicas = (Integer) configs.get(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
 
+        //Initializing the logger without threadDataProvider name because provider name is not known/verified at this point
+        logPrefix = String.format("stream-thread ");
+        LogContext logContext = new LogContext(logPrefix);
+        this.log = logContext.logger(getClass());
+
         Object o = configs.get(StreamsConfig.InternalConfig.STREAM_THREAD_INSTANCE);
         if (o == null) {
             KafkaException ex = new KafkaException("StreamThread is not specified");
@@ -216,10 +221,9 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
         threadDataProvider = (ThreadDataProvider) o;
         threadDataProvider.setThreadMetadataProvider(this);
 
+        //Reassigning the logger with threadDataProvider name
         logPrefix = String.format("stream-thread [%s] ", threadDataProvider.name());
-
-        final LogContext logContext = new LogContext(logPrefix);
-
+        logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
 
         String userEndPoint = (String) configs.get(StreamsConfig.APPLICATION_SERVER_CONFIG);

@@ -615,6 +615,8 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                                                                                                               threadClientId));
 
         final String logPrefix = String.format("stream-thread [%s] ", threadClientId);
+        createLogContext(logPrefix);
+
         if (config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) < 0) {
             log.warn("Negative cache size passed in thread. Reverting to cache size of 0 bytes");
         }
