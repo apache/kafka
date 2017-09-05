@@ -64,8 +64,23 @@
     // keep the processor context locally because we need it in punctuate() and commit()
     this.context = context;
 
-    // call this processor's punctuate() method every 1000 milliseconds.
-    this.context.schedule(1000);
+    // schedule a punctuation method every 1000 milliseconds.
+    this.context.schedule(1000, PunctuationType.SYSTEM_TIME, new Punctuator() {
+        @Override
+        public void punctuate(long timestamp) {
+            KeyValueIterator&lt;String, Long&gt; iter = this.kvStore.all();
+
+            while (iter.hasNext()) {
+                KeyValue&lt;String, Long&gt; entry = iter.next();
+                context.forward(entry.key, entry.value.toString());
+            }
+
+            iter.close();
+
+            // commit the current processing progress
+            context.commit();
+        }
+        });
 
     // retrieve the key-value store named "Counts"
     this.kvStore = (KeyValueStore&lt;String, Long&gt;) context.getStateStore("Counts");
@@ -87,20 +102,6 @@
     }
 
     @Override
-    public void punctuate(long timestamp) {
-    KeyValueIterator&lt;String, Long&gt; iter = this.kvStore.all();
-
-    while (iter.hasNext()) {
-        KeyValue&lt;String, Long&gt; entry = iter.next();
-        context.forward(entry.key, entry.value.toString());
-    }
-
-    iter.close();
-    // commit the current processing progress
-    context.commit();
-    }
-
-    @Override
     public void close() {
     // close any resources managed by this processor.
     // Note: Do not close any StateStores as these are managed
@@ -116,7 +117,7 @@
     <ul>
         <li>In the <code>init</code> method, schedule the punctuation every 1 second and retrieve the local state store by its name "Counts".</li>
         <li>In the <code>process</code> method, upon each received record, split the value string into words, and update their counts into the state store (we will talk about this feature later in the section).</li>
-        <li>In the <code>punctuate</code> method, iterate the local state store and send the aggregated counts to the downstream processor, and commit the current stream state.</li>
+        <li>In the scheduled <code>punctuate</code> method, iterate the local state store and send the aggregated counts to the downstream processor, and commit the current stream state.</li>
     </ul>
 
 
@@ -365,7 +366,7 @@ In addition, users can add <em>source processors</em> with the specified Kafka t
 
 <p>
 In this topology, the &quot;Process&quot; stream processor node is considered a downstream processor of the &quot;Source&quot; node, and an upstream processor of the &quot;Sink&quot; node. 
-As a result, whenever the &quot;Source&quot; node forward a newly fetched record from Kafka to its downstream &quot;Process&quot; node, <code>WordCountProcessor#process()</code> method is triggered to process the record and update the associated state store; and whenever <code>context#forward()</code> is called in the <code>WordCountProcessor#punctuate()</code> method, the aggregate key-value pair will be sent via the &quot;Sink&quot; processor node to the Kafka topic &quot;sink-topic&quot;. 
+As a result, whenever the &quot;Source&quot; node forward a newly fetched record from Kafka to its downstream &quot;Process&quot; node, <code>WordCountProcessor#process()</code> method is triggered to process the record and update the associated state store; and whenever <code>context#forward()</code> is called in the <code>Punctuator#punctuate()</code> method, the aggregate key-value pair will be sent via the &quot;Sink&quot; processor node to the Kafka topic &quot;sink-topic&quot;.
 Note that in the <code>WordCountProcessor</code> implementation, users need to refer to the same store name &quot;Counts&quot; when accessing the key-value store; otherwise an exception will be thrown at runtime, indicating that the state store cannot be found; also, if the state store itself is not associated with the processor in the <code>Topology</code> code, accessing it in the processor's <code>init()</code> method will also throw an exception at runtime, indicating the state store is not accessible from this processor.
 </p>
 
@@ -728,7 +729,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
             </td>
         </tr>
         <tr>
-            <td><b>Foreach</b>: <code>KStream &rarr; void or KTable &rarr; void </code></td>
+            <td><b>Foreach</b>: <code>KStream &rarr; void </code></td>
             <td>
                 <p>
                 Terminal operation. Performs a stateless action on each record.
@@ -934,7 +935,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
             </td>
         </tr>
         <tr>
-            <td><b>Print</b>: <code>KStream &rarr; void or KTable &rarr; void</code></td>
+            <td><b>Print</b>: <code>KStream &rarr; void </code></td>
             <td>
                 <p>
                 Terminal operation. Prints the records to <code>System.out</code>. See Javadocs for serde and <code>toString()</code> caveats.
@@ -942,7 +943,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                 <pre class="brush: java;">
                        KStream&lt;byte[], String&gt; stream = ...;
                        stream.print();
-
+                    
                        // You can also override how and where the data is printed, i.e, to file:
                        stream.print(Printed.toFile("stream.out"));
 
@@ -998,7 +999,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
             </td>
         </tr>
         <tr>
-            <td><b>WriteAsText</b>: <code>KStream &rarr; void or KTable &rarr; void</code></td>
+            <td><b>WriteAsText</b>: <code>KStream &rarr; void </code></td>
             <td>
                 <p>
                 Terminal operation. Write the records to a file. See Javadocs for serde and <code>toString()</code> caveats.

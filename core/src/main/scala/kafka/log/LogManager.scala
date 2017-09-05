@@ -153,6 +153,7 @@ class LogManager(logDirs: Array[File],
     liveLogDirs
   }
 
+  // dir should be an absolute path
   def handleLogDirFailure(dir: String) {
     info(s"Stopping serving logs in dir $dir")
     logCreationOrDeletionLock synchronized {
@@ -701,6 +702,7 @@ class LogManager(logDirs: Array[File],
     }
   }
 
+  // logDir should be an absolute path
   def isLogDirOnline(logDir: String): Boolean = {
     if (!logDirs.exists(_.getAbsolutePath == logDir))
       throw new RuntimeException(s"Log dir $logDir is not found in the config.")
@@ -758,8 +760,8 @@ object LogManager {
       backOffMs = config.logCleanerBackoffMs,
       enableCleaner = config.logCleanerEnable)
 
-    new LogManager(logDirs = config.logDirs.map(new File(_)).toArray,
-      initialOfflineDirs = initialOfflineDirs.map(new File(_)).toArray,
+    new LogManager(logDirs = config.logDirs.map(new File(_).getAbsoluteFile).toArray,
+      initialOfflineDirs = initialOfflineDirs.map(new File(_).getAbsoluteFile).toArray,
       topicConfigs = topicConfigs,
       defaultConfig = defaultLogConfig,
       cleanerConfig = cleanerConfig,
