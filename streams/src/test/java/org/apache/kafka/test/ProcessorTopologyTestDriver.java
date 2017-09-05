@@ -411,7 +411,7 @@ public class ProcessorTopologyTestDriver {
      */
     public void close() {
         if (task != null) {
-            task.close(true);
+            task.close(true, false);
         }
         if (globalStateTask != null) {
             try {

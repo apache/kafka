@@ -160,7 +160,7 @@ public class AssignedTasksTest {
     @Test
     public void shouldCloseRestoringTasks() {
         EasyMock.expect(t1.initialize()).andReturn(false);
-        t1.close(false);
+        t1.close(false, false);
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
 
@@ -170,7 +170,7 @@ public class AssignedTasksTest {
 
     @Test
     public void shouldClosedUnInitializedTasksOnSuspend() {
-        t1.close(false);
+        t1.close(false, false);
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
 
@@ -196,7 +196,7 @@ public class AssignedTasksTest {
         mockTaskInitialization();
         t1.suspend();
         EasyMock.expectLastCall().andThrow(new RuntimeException("KABOOM!"));
-        t1.close(false);
+        t1.close(false, false);
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
 
@@ -210,7 +210,7 @@ public class AssignedTasksTest {
         mockTaskInitialization();
         t1.suspend();
         EasyMock.expectLastCall().andThrow(new ProducerFencedException("KABOOM!"));
-        t1.close(false);
+        t1.close(false, true);
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
 
@@ -259,7 +259,7 @@ public class AssignedTasksTest {
         mockTaskInitialization();
         t1.commit();
         EasyMock.expectLastCall().andThrow(new ProducerFencedException(""));
-        t1.close(false);
+        t1.close(false, true);
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
         addAndInitTask();
@@ -319,7 +319,7 @@ public class AssignedTasksTest {
         EasyMock.expect(t1.commitNeeded()).andReturn(true);
         t1.commit();
         EasyMock.expectLastCall().andThrow(new ProducerFencedException(""));
-        t1.close(false);
+        t1.close(false, true);
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
         addAndInitTask();

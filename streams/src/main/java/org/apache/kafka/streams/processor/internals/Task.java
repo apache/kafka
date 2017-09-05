@@ -34,7 +34,7 @@ public interface Task {
 
     void suspend();
 
-    void close(boolean clean);
+    void close(boolean clean, boolean isZombie);
 
     TaskId id();
 
@@ -48,7 +48,7 @@ public interface Task {
 
     StateStore getStore(String name);
 
-    void closeSuspended(boolean clean, RuntimeException e);
+    void closeSuspended(boolean clean, boolean isZombie, RuntimeException e);
 
     Map<TopicPartition, Long> checkpointedOffsets();
 
