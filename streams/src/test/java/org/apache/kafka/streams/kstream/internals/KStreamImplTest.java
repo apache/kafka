@@ -47,6 +47,7 @@ import java.util.concurrent.TimeUnit;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 
 
 public class KStreamImplTest {
@@ -375,18 +376,30 @@ public class KStreamImplTest {
                         null);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnLeftJoinWithTableWhenJoinedIsNull() {
-        testStream.leftJoin(builder.table(Serdes.String(), Serdes.String(), "blah"),
-                            MockValueJoiner.TOSTRING_JOINER,
-                            null);
+        final KTable<String, String> table = builder.table(Serdes.String(), Serdes.String(), "blah");
+        try {
+            testStream.leftJoin(table,
+                                MockValueJoiner.TOSTRING_JOINER,
+                                null);
+            fail("Should have thrown NullPointerException");
+        } catch (final NullPointerException e) {
+            // ok
+        }
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnJoinWithTableWhenJoinedIsNull() {
-        testStream.join(builder.table(Serdes.String(), Serdes.String(), "blah"),
+        final KTable<String, String> table = builder.table(Serdes.String(), Serdes.String(), "blah");
+        try {
+            testStream.join(table,
                             MockValueJoiner.TOSTRING_JOINER,
                             null);
+            fail("Should have thrown NullPointerException");
+        } catch (final NullPointerException e) {
+            // ok
+        }
     }
 
     @Test(expected = NullPointerException.class)

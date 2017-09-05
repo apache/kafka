@@ -19,8 +19,8 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.common.serialization.Serde;
 
 /**
- * The Joined class represents Optional params that can be passed to
- * {@link KStream#join}, {@link KStream#leftJoin}, and  {@link KStream#outerJoin} operations
+ * The {@code Joined} class represents optional params that can be passed to
+ * {@link KStream#join}, {@link KStream#leftJoin}, and  {@link KStream#outerJoin} operations.
  */
 public class Joined<K, V, VO> {
 
@@ -28,33 +28,37 @@ public class Joined<K, V, VO> {
     private Serde<V> valueSerde;
     private Serde<VO> otherValueSerde;
 
-    private Joined(final Serde<K> keySerde, final Serde<V> valueSerde, final Serde<VO> otherValueSerde) {
+    private Joined(final Serde<K> keySerde,
+                   final Serde<V> valueSerde,
+                   final Serde<VO> otherValueSerde) {
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.otherValueSerde = otherValueSerde;
     }
 
     /**
-     * Create an instance of {@code Joined} with key, value, and otherValue {@link Serde} instances. Null values are
-     * accepted and will be replaced by the default serdes as defined in config
+     * Create an instance of {@code Joined} with key, value, and otherValue {@link Serde} instances.
+     * {@code null} values are accepted and will be replaced by the default serdes as defined in config.
      *
-     * @param keySerde        the key serde to use. If null the default key serde from config will be used
-     * @param valueSerde      the value serde to use. If null the default value serde from config will be used
-     * @param otherValueSerde the otherValue serde to use. If null the default value serde from config will be used
+     * @param keySerde        the key serde to use. If {@code null} the default key serde from config will be used
+     * @param valueSerde      the value serde to use. If {@code null} the default value serde from config will be used
+     * @param otherValueSerde the otherValue serde to use. If {@code null} the default value serde from config will be used
      * @param <K>             key type
      * @param <V>             value type
      * @param <VO>            other value type
      * @return new {@code Joined} instance with the provided serdes
      */
-    public static <K, V, VO> Joined<K, V, VO> with(final Serde<K> keySerde, final Serde<V> valueSerde, final Serde<VO> otherValueSerde) {
+    public static <K, V, VO> Joined<K, V, VO> with(final Serde<K> keySerde,
+                                                   final Serde<V> valueSerde,
+                                                   final Serde<VO> otherValueSerde) {
         return new Joined<>(keySerde, valueSerde, otherValueSerde);
     }
 
     /**
-     * Create an instance of {@code Joined} with  a key {@link Serde}. Null values are
-     * accepted and will be replaced by the default key serde as defined in config
+     * Create an instance of {@code Joined} with  a key {@link Serde}.
+     * {@code null} values are accepted and will be replaced by the default key serde as defined in config.
      *
-     * @param keySerde the key serde to use. If null the default key serde from config will be used
+     * @param keySerde the key serde to use. If {@code null} the default key serde from config will be used
      * @param <K>      key type
      * @param <V>      value type
      * @param <VO>     other value type
@@ -65,10 +69,10 @@ public class Joined<K, V, VO> {
     }
 
     /**
-     * Create an instance of {@code Joined} with a value {@link Serde}. Null values are
-     * accepted and will be replaced by the default value serde as defined in config
+     * Create an instance of {@code Joined} with a value {@link Serde}.
+     * {@code null} values are accepted and will be replaced by the default value serde as defined in config.
      *
-     * @param valueSerde the value serde to use. If null the default value serde from config will be used
+     * @param valueSerde the value serde to use. If {@code null} the default value serde from config will be used
      * @param <K>        key type
      * @param <V>        value type
      * @param <VO>       other value type
@@ -79,10 +83,10 @@ public class Joined<K, V, VO> {
     }
 
     /**
-     * Create an instance of {@code Joined} with an other value {@link Serde}. Null values are
-     * accepted and will be replaced by the default value serde as defined in config
+     * Create an instance of {@code Joined} with an other value {@link Serde}.
+     * {@code null} values are accepted and will be replaced by the default value serde as defined in config.
      *
-     * @param otherValueSerde the otherValue serde to use. If null the default value serde from config will be used
+     * @param otherValueSerde the otherValue serde to use. If {@code null} the default value serde from config will be used
      * @param <K>             key type
      * @param <V>             value type
      * @param <VO>            other value type

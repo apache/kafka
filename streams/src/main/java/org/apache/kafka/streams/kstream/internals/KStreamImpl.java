@@ -665,7 +665,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public <VT, VR> KStream<K, VR> join(final KTable<K, VT> other, final ValueJoiner<? super V, ? super VT, ? extends VR> joiner, final Joined<K, V, VT> joined) {
+    public <VT, VR> KStream<K, VR> join(final KTable<K, VT> other,
+                                        final ValueJoiner<? super V, ? super VT, ? extends VR> joiner,
+                                        final Joined<K, V, VT> joined) {
         Objects.requireNonNull(other, "other can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
         Objects.requireNonNull(joined, "joined can't be null");
