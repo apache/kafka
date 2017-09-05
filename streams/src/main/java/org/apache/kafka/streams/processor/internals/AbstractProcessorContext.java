@@ -41,8 +41,8 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     private final ThreadCache cache;
     private final Serde valueSerde;
     private boolean initialized;
-    private RecordContext recordContext;
-    private ProcessorNode currentNode;
+    protected RecordContext recordContext;
+    protected ProcessorNode currentNode;
     final StateManager stateManager;
 
     public AbstractProcessorContext(final TaskId taskId,

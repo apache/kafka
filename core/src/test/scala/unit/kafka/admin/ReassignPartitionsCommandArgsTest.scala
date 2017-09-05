@@ -17,7 +17,7 @@
 package kafka.admin
 
 import kafka.utils.Exit
-import org.junit.Assert.assertTrue
+import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.scalatest.junit.JUnitSuite
 
@@ -73,6 +73,17 @@ class ReassignPartitionsCommandArgsTest extends JUnitSuite {
       "--throttle", "100",
       "--reassignment-json-file", "myfile.json")
     ReassignPartitionsCommand.validateAndParseArgs(args)
+  }
+
+  @Test
+  def shouldUseDefaultsIfEnabled(): Unit = {
+    val args = Array(
+      "--zookeeper", "localhost:1234",
+      "--execute",
+      "--reassignment-json-file", "myfile.json")
+    val opts = ReassignPartitionsCommand.validateAndParseArgs(args)
+    assertEquals(10000L, opts.options.valueOf(opts.timeoutOpt))
+    assertEquals(-1L, opts.options.valueOf(opts.throttleOpt))
   }
 
   /**

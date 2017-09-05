@@ -27,24 +27,6 @@ import java.util.Collection;
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
 @InterfaceStability.Evolving
-public class DeleteTopicsOptions {
-    private Integer timeoutMs = null;
-
-    /**
-     * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
-     * AdminClient should be used.
-     */
-    public DeleteTopicsOptions timeoutMs(Integer timeoutMs) {
-        this.timeoutMs = timeoutMs;
-        return this;
-    }
-
-    /**
-     * The request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
-     * AdminClient should be used.
-     */
-    public Integer timeoutMs() {
-        return timeoutMs;
-    }
+public class DeleteTopicsOptions extends AbstractOptions<DeleteTopicsOptions> {
 
 }

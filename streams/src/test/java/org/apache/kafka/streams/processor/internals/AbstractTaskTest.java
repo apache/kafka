@@ -135,12 +135,10 @@ public class AbstractTaskTest {
             public void suspend() {}
 
             @Override
-            public void close(final boolean clean) {}
+            public void close(final boolean clean, final boolean isZombie) {}
 
             @Override
-            public void closeSuspended(final boolean clean, final RuntimeException e) {
-
-            }
+            public void closeSuspended(final boolean clean, final boolean isZombie, final RuntimeException e) {}
 
             @Override
             public Map<TopicPartition, Long> checkpointedOffsets() {
