@@ -107,6 +107,11 @@ popd
 popd
 popd
 
+# Speed up ssh logins
+if ! grep -q 'Speed up login' /etc/ssh/sshd_config; then
+    bash -c "echo -e '\\n# Speed up login\\nGSSAPIAuthentication no\\nUseDNS no' >> /etc/ssh/sshd_config"
+fi
+
 # Test multiple Kafka versions
 # We want to use the latest Scala version per Kafka version
 # Previously we could not pull in Scala 2.12 builds, because Scala 2.12 requires Java 8 and we were running the system
