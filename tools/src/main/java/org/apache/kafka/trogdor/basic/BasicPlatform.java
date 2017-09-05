@@ -23,6 +23,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.trogdor.common.Node;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.common.Topology;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -30,6 +32,8 @@ import java.io.IOException;
  * Defines a cluster topology
  */
 public class BasicPlatform implements Platform {
+    private static final Logger log = LoggerFactory.getLogger(BasicPlatform.class);
+
     private final Node curNode;
     private final BasicTopology topology;
     private final CommandRunner commandRunner;
@@ -41,7 +45,14 @@ public class BasicPlatform implements Platform {
     public static class ShellCommandRunner implements CommandRunner {
         @Override
         public String run(Node curNode, String[] command) throws IOException {
-            return Shell.execCommand(command);
+            try {
+                String result = Shell.execCommand(command);
+                log.info("RUN: {}. RESULT: [{}]", Utils.join(command, " "), result);
+                return result;
+            } catch (RuntimeException | IOException e) {
+                log.info("RUN: {}. ERROR: [{}]", Utils.join(command, " "), e.getMessage());
+                throw e;
+            }
         }
     }
 
