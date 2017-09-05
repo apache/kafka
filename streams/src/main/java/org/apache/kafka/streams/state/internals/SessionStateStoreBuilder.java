@@ -22,7 +22,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 
-import java.util.Objects;
 
 public class SessionStateStoreBuilder<K, V> extends AbstractStateStoreBuilder<K, V, SessionStore<K, V>> {
 

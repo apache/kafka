@@ -22,7 +22,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 
-import java.util.Objects;
 
 public class WindowStateStoreBuilder<K, V> extends AbstractStateStoreBuilder<K, V, WindowStore<K, V>> {
 
