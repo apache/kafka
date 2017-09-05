@@ -127,7 +127,7 @@ public class OffsetStorageWriter {
      *
      * @return a Future, or null if there are no offsets to commitOffsets
      */
-    public synchronized Future<Void> doFlush(final Callback<Void> callback) {
+    public Future<Void> doFlush(final Callback<Void> callback) {
 
         final long flushId;
         // Serialize
