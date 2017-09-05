@@ -251,7 +251,7 @@ public class StreamsKafkaClient {
             throw new BrokerNotFoundException("Could not find any available broker. " +
                 "Check your StreamsConfig setting '" + StreamsConfig.BOOTSTRAP_SERVERS_CONFIG + "'. " +
                 "This error might also occur, if you try to connect to pre-0.10 brokers. " +
-                "Kafka Streams requires broker version 0.10.1.x or higher.");
+                "Kafka Streams requires broker version 0.10.0.x or higher.");
         }
         return brokerId;
     }

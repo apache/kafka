@@ -110,7 +110,7 @@ class TaskManager {
                         newTasks.put(taskId, partitions);
                     }
                 } catch (final StreamsException e) {
-                    log.error("Failed to create an active task {} due to the following error:", taskId, e);
+                    log.error("Failed to resume an active task {} due to the following error:", taskId, e);
                     throw e;
                 }
             } else {
@@ -122,6 +122,7 @@ class TaskManager {
             return;
         }
 
+        // CANNOT FIND RETRY AND BACKOFF LOGIC
         // create all newly assigned tasks (guard against race condition with other thread via backoff and retry)
         // -> other thread will call removeSuspendedTasks(); eventually
         log.trace("New active tasks to be created: {}", newTasks);
@@ -194,7 +195,7 @@ class TaskManager {
 
     private RuntimeException unAssignChangeLogPartitions() {
         try {
-            // un-assign the change log partitions
+            // TODO verify: this call is save an cannot throw; code can be simplified
             restoreConsumer.assign(Collections.<TopicPartition>emptyList());
         } catch (final RuntimeException e) {
             log.error("Failed to un-assign change log partitions due to the following error:", e);
@@ -215,9 +216,9 @@ class TaskManager {
             log.error("Failed to close KafkaStreamClient due to the following error:", e);
         }
         // remove the changelog partitions from restore consumer
-        unAssignChangeLogPartitions();
+        unAssignChangeLogPartitions(); // TODO this returns an exception -- should we really swallow?
         taskCreator.close();
-
+        standbyTaskCreator.close();
     }
 
     Set<TaskId> suspendedActiveTaskIds() {

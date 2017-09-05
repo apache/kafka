@@ -185,7 +185,9 @@ public class StoreChangelogReader implements ChangelogReader {
         needsRestoring.putAll(initialized);
     }
 
-    private void logRestoreOffsets(final TopicPartition partition, final long startingOffset, final Long endOffset) {
+    private void logRestoreOffsets(final TopicPartition partition,
+                                   final long startingOffset,
+                                   final Long endOffset) {
         log.debug("Restoring partition {} from offset {} to endOffset {}",
                   partition,
                   startingOffset,
@@ -229,7 +231,7 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     private void restorePartition(final ConsumerRecords<byte[], byte[]> allRecords,
-                                    final TopicPartition topicPartition) {
+                                  final TopicPartition topicPartition) {
         final StateRestorer restorer = stateRestorers.get(topicPartition);
         final Long endOffset = endOffsets.get(topicPartition);
         final long pos = processNext(allRecords.records(topicPartition), restorer, endOffset);
@@ -255,7 +257,8 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     private long processNext(final List<ConsumerRecord<byte[], byte[]>> records,
-                             final StateRestorer restorer, final Long endOffset) {
+                             final StateRestorer restorer,
+                             final Long endOffset) {
         final List<KeyValue<byte[], byte[]>> restoreRecords = new ArrayList<>();
         long nextPosition = -1;
 
