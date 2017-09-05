@@ -234,7 +234,8 @@ public class KafkaStreamsTest {
         streams.close();
         try {
             streams.start();
-        } catch (final IllegalStateException e) {
+            fail("Should have throw IllegalStateException");
+        } catch (final IllegalStateException expected) {
             // this is ok
         } finally {
             streams.close();
@@ -301,14 +302,18 @@ public class KafkaStreamsTest {
         assertEquals(metrics.size(), 16);
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testIllegalMetricsConfig() {
         final Properties props = new Properties();
         props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "illegalConfig");
         final StreamsBuilder builder = new StreamsBuilder();
-        new KafkaStreams(builder.build(), props);
+
+        try {
+            new KafkaStreams(builder.build(), props);
+            fail("Should have throw ConfigException");
+        } catch (final ConfigException expected) { /* expected */ }
     }
 
     @Test
@@ -423,7 +428,7 @@ public class KafkaStreamsTest {
         streams.cleanUp();
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void testCannotCleanupWhileRunning() throws Exception {
         final Properties props = new Properties();
         props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "testCannotCleanupWhileRunning");
@@ -441,9 +446,9 @@ public class KafkaStreamsTest {
         }, 10 * 1000, "Streams never started.");
         try {
             streams.cleanUp();
-        } catch (final IllegalStateException e) {
-            assertEquals("Cannot clean up while running.", e.getMessage());
-            throw e;
+            fail("Should have thrown IllegalStateException");
+        } catch (final IllegalStateException expected) {
+            assertEquals("Cannot clean up while running.", expected.getMessage());
         } finally {
             streams.close();
         }
