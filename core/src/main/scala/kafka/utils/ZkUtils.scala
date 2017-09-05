@@ -29,7 +29,7 @@ import kafka.server.ConfigType
 import kafka.utils.ZkUtils._
 import org.I0Itec.zkclient.exception.{ZkBadVersionException, ZkException, ZkMarshallingError, ZkNoNodeException, ZkNodeExistsException}
 import org.I0Itec.zkclient.serialize.ZkSerializer
-import org.I0Itec.zkclient.{ZkClient, ZkConnection}
+import org.I0Itec.zkclient.{ZkClient, ZkConnection, IZkDataListener, IZkChildListener, IZkStateListener}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.zookeeper.AsyncCallback.{DataCallback, StringCallback}
 import org.apache.zookeeper.KeeperException.Code
@@ -166,8 +166,8 @@ object ZkUtils {
     DeleteTopicsPath + "/" + topic
 
   // Parses without deduplicating keys so the data can be checked before allowing reassignment to proceed
-  def parsePartitionReassignmentDataWithoutDedup(jsonData: String): Seq[(TopicAndPartition, Seq[Int])] = {
-    for {
+  def parsePartitionReassignmentData(jsonData: String): Map[TopicAndPartition, Seq[Int]] = {
+    val seq = for {
       js <- Json.parseFull(jsonData).toSeq
       partitionsSeq <- js.asJsonObject.get("partitions").toSeq
       p <- partitionsSeq.asJsonArray.iterator
@@ -178,10 +178,8 @@ object ZkUtils {
       val newReplicas = partitionFields("replicas").to[Seq[Int]]
       TopicAndPartition(topic, partition) -> newReplicas
     }
+    seq.toMap
   }
-
-  def parsePartitionReassignmentData(jsonData: String): Map[TopicAndPartition, Seq[Int]] =
-    parsePartitionReassignmentDataWithoutDedup(jsonData).toMap
 
   def parseTopicsData(jsonData: String): Seq[String] = {
     for {
@@ -613,6 +611,24 @@ class ZkUtils(val zkClient: ZkClient,
   def deletePathRecursive(path: String) {
     zkClient.deleteRecursive(path)
   }
+
+  def subscribeDataChanges(path: String, listener: IZkDataListener): Unit =
+    zkClient.subscribeDataChanges(path, listener)
+
+  def unsubscribeDataChanges(path: String, dataListener: IZkDataListener): Unit =
+    zkClient.unsubscribeDataChanges(path, dataListener)
+
+  def subscribeStateChanges(listener: IZkStateListener): Unit =
+    zkClient.subscribeStateChanges(listener)
+
+  def subscribeChildChanges(path: String, listener: IZkChildListener): Option[Seq[String]] =
+    Option(zkClient.subscribeChildChanges(path, listener)).map(_.asScala)
+
+  def unsubscribeChildChanges(path: String, childListener: IZkChildListener): Unit =
+    zkClient.unsubscribeChildChanges(path, childListener)
+
+  def unsubscribeAll(): Unit =
+    zkClient.unsubscribeAll()
 
   def readData(path: String): (String, Stat) = {
     val stat: Stat = new Stat()

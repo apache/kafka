@@ -171,7 +171,7 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
       2000, 0).topicsMetadata
     assertEquals(Errors.NONE, topicsMetadata.head.error)
     assertEquals(Errors.NONE, topicsMetadata.head.partitionsMetadata.head.error)
-    var partitionMetadata = topicsMetadata.head.partitionsMetadata
+    val partitionMetadata = topicsMetadata.head.partitionsMetadata
     assertEquals("Expecting metadata for 1 partition", 1, partitionMetadata.size)
     assertEquals("Expecting partition id to be 0", 0, partitionMetadata.head.partitionId)
     assertEquals(1, partitionMetadata.head.replicas.size)

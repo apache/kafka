@@ -18,7 +18,6 @@ package org.apache.kafka.streams.examples.wordcount;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -40,7 +39,7 @@ import java.util.concurrent.CountDownLatch;
  * Demonstrates, using the low-level Processor APIs, how to implement the WordCount program
  * that computes a simple word occurrence histogram from an input text.
  *
- * In this example, the input stream reads from a topic named "streams-file-input", where the values of messages
+ * In this example, the input stream reads from a topic named "streams-plaintext-input", where the values of messages
  * represent lines of text; and the histogram output is written to topic "streams-wordcount-processor-output" where each record
  * is an updated count of a single word.
  *
@@ -121,7 +120,7 @@ public class WordCountProcessorDemo {
 
         Topology builder = new Topology();
 
-        builder.addSource("Source", "streams-wordcount-input");
+        builder.addSource("Source", "streams-plaintext-input");
 
         builder.addProcessor("Process", new MyProcessorSupplier(), "Source");
         builder.addStateStore(Stores.create("Counts").withStringKeys().withIntegerValues().inMemory().build(), "Process");
@@ -144,8 +143,8 @@ public class WordCountProcessorDemo {
             streams.start();
             latch.await();
         } catch (Throwable e) {
-            Exit.exit(1);
+            System.exit(1);
         }
-        Exit.exit(0);
+        System.exit(0);
     }
 }

@@ -22,6 +22,7 @@ import java.util.Properties
 
 import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.utils.{MockTime, Pool, TestUtils}
+import kafka.utils.Implicits._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 import org.junit.After
@@ -66,7 +67,7 @@ abstract class AbstractLogCleanerIntegrationTest {
     props.put(LogConfig.MinCleanableDirtyRatioProp, minCleanableDirtyRatio: java.lang.Float)
     props.put(LogConfig.MessageTimestampDifferenceMaxMsProp, Long.MaxValue.toString)
     props.put(LogConfig.MinCompactionLagMsProp, compactionLag: java.lang.Long)
-    props.putAll(propertyOverrides)
+    props ++= propertyOverrides
     props
   }
 

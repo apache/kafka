@@ -18,6 +18,9 @@
 package kafka.log
 
 import java.io.File
+import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
+import java.nio.file.StandardOpenOption
 
 import kafka.server.LogOffsetMetadata
 import kafka.utils.TestUtils
@@ -606,6 +609,61 @@ class ProducerStateManagerTest extends JUnitSuite {
 
     // append from old coordinator should be rejected
     appendEndTxnMarker(stateManager, producerId, producerEpoch, ControlRecordType.COMMIT, offset = 100, coordinatorEpoch = 0)
+  }
+
+  @Test
+  def testLoadFromEmptySnapshotFile(): Unit = {
+    testLoadFromCorruptSnapshot { file =>
+      file.truncate(0L)
+    }
+  }
+
+  @Test
+  def testLoadFromTruncatedSnapshotFile(): Unit = {
+    testLoadFromCorruptSnapshot { file =>
+      // truncate to some arbitrary point in the middle of the snapshot
+      assertTrue(file.size > 2)
+      file.truncate(file.size / 2)
+    }
+  }
+
+  @Test
+  def testLoadFromCorruptSnapshotFile(): Unit = {
+    testLoadFromCorruptSnapshot { file =>
+      // write some garbage somewhere in the file
+      assertTrue(file.size > 2)
+      file.write(ByteBuffer.wrap(Array[Byte](37)), file.size / 2)
+    }
+  }
+
+  private def testLoadFromCorruptSnapshot(makeFileCorrupt: FileChannel => Unit): Unit = {
+    val epoch = 0.toShort
+    val producerId = 1L
+
+    append(stateManager, producerId, epoch, seq = 0, offset = 0L)
+    stateManager.takeSnapshot()
+
+    append(stateManager, producerId, epoch, seq = 1, offset = 1L)
+    stateManager.takeSnapshot()
+
+    // Truncate the last snapshot
+    val latestSnapshotOffset = stateManager.latestSnapshotOffset
+    assertEquals(Some(2L), latestSnapshotOffset)
+    val snapshotToTruncate = Log.producerSnapshotFile(logDir, latestSnapshotOffset.get)
+    val channel = FileChannel.open(snapshotToTruncate.toPath, StandardOpenOption.WRITE)
+    try {
+      makeFileCorrupt(channel)
+    } finally {
+      channel.close()
+    }
+
+    // Ensure that the truncated snapshot is deleted and producer state is loaded from the previous snapshot
+    val reloadedStateManager = new ProducerStateManager(partition, logDir, maxPidExpirationMs)
+    reloadedStateManager.truncateAndReload(0L, 20L, time.milliseconds())
+    assertFalse(snapshotToTruncate.exists())
+
+    val loadedProducerState = reloadedStateManager.activeProducers(producerId)
+    assertEquals(0L, loadedProducerState.lastOffset)
   }
 
   private def appendEndTxnMarker(mapping: ProducerStateManager,

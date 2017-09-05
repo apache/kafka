@@ -21,6 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.test.MockBatchingStateRestoreListener;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.junit.Test;
 
@@ -39,9 +40,7 @@ import static org.junit.Assert.assertTrue;
 public class CompositeRestoreListenerTest {
 
     private final MockStateRestoreCallback stateRestoreCallback = new MockStateRestoreCallback();
-    private final MockBatchingStateRestoreCallback
-        batchingStateRestoreCallback =
-        new MockBatchingStateRestoreCallback();
+    private final MockBatchingStateRestoreListener batchingStateRestoreCallback = new MockBatchingStateRestoreListener();
     private final MockNoListenBatchingStateRestoreCallback
         noListenBatchingStateRestoreCallback =
         new MockNoListenBatchingStateRestoreCallback();
@@ -71,7 +70,7 @@ public class CompositeRestoreListenerTest {
     public void shouldRestoreInBatchMode() {
         setUpCompositeRestoreListener(batchingStateRestoreCallback);
         compositeRestoreListener.restoreAll(records);
-        assertThat(batchingStateRestoreCallback.restoredRecords, is(records));
+        assertThat(batchingStateRestoreCallback.getRestoredRecords(), is(records));
     }
 
     @Test
@@ -132,7 +131,7 @@ public class CompositeRestoreListenerTest {
         compositeRestoreListener.onBatchRestored(topicPartition, storeName, batchOffset, numberRestored);
         compositeRestoreListener.onRestoreEnd(topicPartition, storeName, numberRestored);
 
-        assertThat(batchingStateRestoreCallback.restoredRecords, is(records));
+        assertThat(batchingStateRestoreCallback.getRestoredRecords(), is(records));
         assertStateRestoreOnEndNotification(batchingStateRestoreCallback);
     }
 
@@ -193,23 +192,6 @@ public class CompositeRestoreListenerTest {
         public void restore(final byte[] key, final byte[] value) {
             restoredKey = key;
             restoredValue = value;
-        }
-    }
-
-    private static class MockBatchingStateRestoreCallback extends MockStateRestoreListener
-        implements BatchingStateRestoreCallback {
-
-        Collection<KeyValue<byte[], byte[]>> restoredRecords;
-
-        @Override
-        public void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
-            restoredRecords = records;
-        }
-
-        @Override
-        public void restore(final byte[] key, final byte[] value) {
-            throw new IllegalStateException("Should not be called");
-
         }
     }
 

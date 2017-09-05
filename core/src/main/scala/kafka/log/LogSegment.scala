@@ -380,6 +380,17 @@ class LogSegment(val log: FileRecords,
   }
 
   /**
+   * Update the directory reference for the log and indices in this segment. This would typically be called after a
+   * directory is renamed.
+   */
+  def updateDir(dir: File): Unit = {
+    log.setFile(new File(dir, log.file.getName))
+    index.file = new File(dir, index.file.getName)
+    timeIndex.file = new File(dir, timeIndex.file.getName)
+    txnIndex.file = new File(dir, txnIndex.file.getName)
+  }
+
+  /**
    * Change the suffix for the index and log file for this log segment
    * IOException from this method should be handled by the caller
    */

@@ -23,12 +23,14 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
 import org.apache.kafka.streams.processor.internals.StreamThread;
+import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.MockStateRestoreListener;
@@ -45,6 +47,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -53,6 +56,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.Assert.assertNotNull;
 
 @Category({IntegrationTest.class})
 public class KafkaStreamsTest {
@@ -107,7 +111,7 @@ public class KafkaStreamsTest {
         final StateListenerStub stateListener = new StateListenerStub();
         streams.setStateListener(stateListener);
         streams.close();
-        Assert.assertEquals(streams.state(), KafkaStreams.State.NOT_RUNNING);
+        Assert.assertEquals(KafkaStreams.State.NOT_RUNNING, streams.state());
     }
 
     @Test
@@ -138,7 +142,7 @@ public class KafkaStreamsTest {
 
         for (int i = 0; i < numThreads; i++) {
             final StreamThread tmpThread = threads[i];
-            tmpThread.close();
+            tmpThread.shutdown();
             TestUtils.waitForCondition(new TestCondition() {
                 @Override
                 public boolean conditionMet() {
@@ -187,7 +191,7 @@ public class KafkaStreamsTest {
         final java.lang.reflect.Field globalThreadField = streams.getClass().getDeclaredField("globalStreamThread");
         globalThreadField.setAccessible(true);
         final GlobalStreamThread globalStreamThread = (GlobalStreamThread) globalThreadField.get(streams);
-        globalStreamThread.close();
+        globalStreamThread.shutdown();
         TestUtils.waitForCondition(new TestCondition() {
             @Override
             public boolean conditionMet() {
@@ -228,29 +232,28 @@ public class KafkaStreamsTest {
             closeCount, MockMetricsReporter.CLOSE_COUNT.get());
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void testCannotStartOnceClosed() throws Exception {
         streams.start();
         streams.close();
         try {
             streams.start();
-        } catch (final IllegalStateException e) {
-            Assert.assertEquals("Cannot start again.", e.getMessage());
-            throw e;
+            fail("Should have throw IllegalStateException");
+        } catch (final IllegalStateException expected) {
+            // this is ok
         } finally {
             streams.close();
         }
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void testCannotStartTwice() throws Exception {
         streams.start();
 
         try {
             streams.start();
         } catch (final IllegalStateException e) {
-            Assert.assertEquals("Cannot start again.", e.getMessage());
-            throw e;
+            // this is ok
         } finally {
             streams.close();
         }
@@ -303,14 +306,18 @@ public class KafkaStreamsTest {
         assertEquals(metrics.size(), 16);
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testIllegalMetricsConfig() {
         final Properties props = new Properties();
         props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "illegalConfig");
         final StreamsBuilder builder = new StreamsBuilder();
-        new KafkaStreams(builder.build(), props);
+
+        try {
+            new KafkaStreams(builder.build(), props);
+            fail("Should have throw ConfigException");
+        } catch (final ConfigException expected) { /* expected */ }
     }
 
     @Test
@@ -400,6 +407,26 @@ public class KafkaStreamsTest {
         }
     }
 
+    @Test
+    public void shouldReturnThreadMetadata() {
+        final Properties props = new Properties();
+        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
+        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.INFO.toString());
+        props.setProperty(StreamsConfig.NUM_STREAM_THREADS_CONFIG, "2");
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
+        streams.start();
+        Set<ThreadMetadata> threadMetadata = streams.localThreadsMetadata();
+        assertNotNull(threadMetadata);
+        assertEquals(2, threadMetadata.size());
+        for (ThreadMetadata metadata : threadMetadata) {
+            assertTrue(Utils.mkList("RUNNING", "CREATED").contains(metadata.threadState()));
+            assertEquals(0, metadata.standbyTasks().size());
+            assertEquals(0, metadata.activeTasks().size());
+        }
+        streams.close();
+    }
+
 
     private KafkaStreams createKafkaStreams() {
         final Properties props = new Properties();
@@ -425,7 +452,7 @@ public class KafkaStreamsTest {
         streams.cleanUp();
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void testCannotCleanupWhileRunning() throws Exception {
         final Properties props = new Properties();
         props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "testCannotCleanupWhileRunning");
@@ -443,9 +470,9 @@ public class KafkaStreamsTest {
         }, 10 * 1000, "Streams never started.");
         try {
             streams.cleanUp();
-        } catch (final IllegalStateException e) {
-            assertEquals("Cannot clean up while running.", e.getMessage());
-            throw e;
+            fail("Should have thrown IllegalStateException");
+        } catch (final IllegalStateException expected) {
+            assertEquals("Cannot clean up while running.", expected.getMessage());
         } finally {
             streams.close();
         }
@@ -478,7 +505,7 @@ public class KafkaStreamsTest {
         CLUSTER.createTopic(topic);
         final StreamsBuilder builder = new StreamsBuilder();
 
-        builder.stream(Serdes.String(), Serdes.String(), topic);
+        builder.table(Serdes.String(), Serdes.String(), topic, topic);
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
         final CountDownLatch latch = new CountDownLatch(1);

@@ -21,7 +21,6 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
@@ -33,7 +32,7 @@ import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StoreChangelogReader;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
-import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
+import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
@@ -42,6 +41,7 @@ import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.TestUtils;
+import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -54,7 +54,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.UUID;
 
 import static org.apache.kafka.streams.state.QueryableStoreTypes.windowStore;
 import static org.junit.Assert.assertEquals;
@@ -66,9 +65,11 @@ public class StreamThreadStateStoreProviderTest {
     private StreamThreadStateStoreProvider provider;
     private StateDirectory stateDirectory;
     private File stateDir;
-    private boolean storesAvailable;
     private final String topicName = "topic";
+    private StreamThread threadMock;
+    private Map<TaskId, Task> tasks;
 
+    @SuppressWarnings("deprecation")
     @Before
     public void before() throws IOException {
         final TopologyBuilder builder = new TopologyBuilder();
@@ -100,41 +101,22 @@ public class StreamThreadStateStoreProviderTest {
 
         builder.setApplicationId(applicationId);
         final ProcessorTopology topology = builder.build(null);
-        final Map<TaskId, StreamTask> tasks = new HashMap<>();
+        tasks = new HashMap<>();
         stateDirectory = new StateDirectory(applicationId, stateConfigDir, new MockTime());
         taskOne = createStreamsTask(applicationId, streamsConfig, clientSupplier, topology,
                                     new TaskId(0, 0));
+        taskOne.initialize();
         tasks.put(new TaskId(0, 0),
                   taskOne);
         taskTwo = createStreamsTask(applicationId, streamsConfig, clientSupplier, topology,
                                     new TaskId(0, 1));
+        taskTwo.initialize();
         tasks.put(new TaskId(0, 1),
                   taskTwo);
 
-        storesAvailable = true;
-        provider = new StreamThreadStateStoreProvider(
-            new StreamThread(
-                    builder.internalTopologyBuilder,
-                    streamsConfig,
-                    clientSupplier,
-                    applicationId,
-                    "clientId",
-                    UUID.randomUUID(),
-                    new Metrics(),
-                    Time.SYSTEM,
-                    new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
-                    0, stateDirectory) {
+        threadMock = EasyMock.createNiceMock(StreamThread.class);
+        provider = new StreamThreadStateStoreProvider(threadMock);
 
-                @Override
-                public Map<TaskId, StreamTask> tasks() {
-                    return tasks;
-                }
-
-                @Override
-                public boolean isInitialized() {
-                    return storesAvailable;
-                }
-            });
     }
 
     @After
@@ -144,6 +126,7 @@ public class StreamThreadStateStoreProviderTest {
     
     @Test
     public void shouldFindKeyValueStores() throws Exception {
+        mockThread(true);
         final List<ReadOnlyKeyValueStore<String, String>> kvStores =
             provider.stores("kv-store", QueryableStoreTypes.<String, String>keyValueStore());
         assertEquals(2, kvStores.size());
@@ -151,6 +134,7 @@ public class StreamThreadStateStoreProviderTest {
 
     @Test
     public void shouldFindWindowStores() throws Exception {
+        mockThread(true);
         final List<ReadOnlyWindowStore<Object, Object>>
             windowStores =
             provider.stores("window-store", windowStore());
@@ -159,18 +143,21 @@ public class StreamThreadStateStoreProviderTest {
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionIfWindowStoreClosed() throws Exception {
+        mockThread(true);
         taskOne.getStore("window-store").close();
         provider.stores("window-store", QueryableStoreTypes.windowStore());
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionIfKVStoreClosed() throws Exception {
+        mockThread(true);
         taskOne.getStore("kv-store").close();
         provider.stores("kv-store", QueryableStoreTypes.keyValueStore());
     }
 
     @Test
     public void shouldReturnEmptyListIfNoStoresFoundWithName() throws Exception {
+        mockThread(true);
         assertEquals(Collections.emptyList(), provider.stores("not-a-store", QueryableStoreTypes
             .keyValueStore()));
     }
@@ -178,13 +165,14 @@ public class StreamThreadStateStoreProviderTest {
 
     @Test
     public void shouldReturnEmptyListIfStoreExistsButIsNotOfTypeValueStore() throws Exception {
+        mockThread(true);
         assertEquals(Collections.emptyList(), provider.stores("window-store",
                                                               QueryableStoreTypes.keyValueStore()));
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionIfNotAllStoresAvailable() throws Exception {
-        storesAvailable = false;
+        mockThread(false);
         provider.stores("kv-store", QueryableStoreTypes.keyValueStore());
     }
 
@@ -199,7 +187,7 @@ public class StreamThreadStateStoreProviderTest {
             Collections.singletonList(new TopicPartition(topicName, taskId.partition)),
             topology,
             clientSupplier.consumer,
-            new StoreChangelogReader(clientSupplier.restoreConsumer, Time.SYSTEM, 5000, new MockStateRestoreListener()),
+            new StoreChangelogReader(clientSupplier.restoreConsumer, new MockStateRestoreListener()),
             streamsConfig,
             new MockStreamsMetrics(new Metrics()),
             stateDirectory,
@@ -210,6 +198,12 @@ public class StreamThreadStateStoreProviderTest {
             @Override
             protected void updateOffsetLimits() {}
         };
+    }
+
+    private void mockThread(final boolean initialized) {
+        EasyMock.expect(threadMock.isRunningAndNotRebalancing()).andReturn(initialized);
+        EasyMock.expect(threadMock.tasks()).andStubReturn(tasks);
+        EasyMock.replay(threadMock);
     }
 
     private void configureRestoreConsumer(final MockClientSupplier clientSupplier,

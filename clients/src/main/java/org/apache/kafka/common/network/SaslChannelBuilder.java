@@ -43,6 +43,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
     private static final Logger log = LoggerFactory.getLogger(SaslChannelBuilder.class);
 
     private final SecurityProtocol securityProtocol;
+    private final ListenerName listenerName;
     private final String clientSaslMechanism;
     private final Mode mode;
     private final JaasContext jaasContext;
@@ -54,12 +55,17 @@ public class SaslChannelBuilder implements ChannelBuilder {
     private Map<String, ?> configs;
     private KerberosShortNamer kerberosShortNamer;
 
-    public SaslChannelBuilder(Mode mode, JaasContext jaasContext, SecurityProtocol securityProtocol,
+    public SaslChannelBuilder(Mode mode,
+                              JaasContext jaasContext,
+                              SecurityProtocol securityProtocol,
+                              ListenerName listenerName,
                               String clientSaslMechanism,
-                              boolean handshakeRequestEnable, CredentialCache credentialCache) {
+                              boolean handshakeRequestEnable,
+                              CredentialCache credentialCache) {
         this.mode = mode;
         this.jaasContext = jaasContext;
         this.securityProtocol = securityProtocol;
+        this.listenerName = listenerName;
         this.handshakeRequestEnable = handshakeRequestEnable;
         this.clientSaslMechanism = clientSaslMechanism;
         this.credentialCache = credentialCache;
@@ -109,8 +115,8 @@ public class SaslChannelBuilder implements ChannelBuilder {
             Authenticator authenticator;
             if (mode == Mode.SERVER)
                 authenticator = new SaslServerAuthenticator(id, jaasContext, loginManager.subject(),
-                        kerberosShortNamer, socketChannel.socket().getLocalAddress().getHostName(), maxReceiveSize,
-                        credentialCache);
+                        kerberosShortNamer, socketChannel.socket().getLocalAddress(), credentialCache,
+                        listenerName, securityProtocol);
             else
                 authenticator = new SaslClientAuthenticator(id, loginManager.subject(), loginManager.serviceName(),
                         socketChannel.socket().getInetAddress().getHostName(), clientSaslMechanism, handshakeRequestEnable);
@@ -161,8 +167,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
         }
         getInstanceMethod = classRef.getMethod("getInstance", new Class[0]);
         kerbConf = getInstanceMethod.invoke(classRef, new Object[0]);
-        getDefaultRealmMethod = classRef.getDeclaredMethod("getDefaultRealm",
-                new Class[0]);
+        getDefaultRealmMethod = classRef.getDeclaredMethod("getDefaultRealm", new Class[0]);
         return (String) getDefaultRealmMethod.invoke(kerbConf, new Object[0]);
     }
 }

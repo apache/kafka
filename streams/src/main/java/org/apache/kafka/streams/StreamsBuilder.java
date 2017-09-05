@@ -63,7 +63,7 @@ public class StreamsBuilder {
      * If multiple topics are specified there is no ordering guarantee for records from different topics.
      * <p>
      * Note that the specified input topics must be partitioned by key.
-     * If this is not the case it is the user's responsibility to repartition the date before any key based operation
+     * If this is not the case it is the user's responsibility to repartition the data before any key based operation
      * (like aggregation or join) is applied to the returned {@link KStream}.
      *
      * @param topics the topic names; must contain at least one topic name
@@ -81,7 +81,7 @@ public class StreamsBuilder {
      * If multiple topics are specified there is no ordering guarantee for records from different topics.
      * <p>
      * Note that the specified input topics must be partitioned by key.
-     * If this is not the case it is the user's responsibility to repartition the date before any key based operation
+     * If this is not the case it is the user's responsibility to repartition the data before any key based operation
      * (like aggregation or join) is applied to the returned {@link KStream}.
      *
      * @param offsetReset the {@code "auto.offset.reset"} policy to use for the specified topics if no valid committed
@@ -103,7 +103,7 @@ public class StreamsBuilder {
      * them and there is no ordering guarantee between records from different topics.
      * <p>
      * Note that the specified input topics must be partitioned by key.
-     * If this is not the case it is the user's responsibility to repartition the date before any key based operation
+     * If this is not the case it is the user's responsibility to repartition the data before any key based operation
      * (like aggregation or join) is applied to the returned {@link KStream}.
      *
      * @param topicPattern the pattern to match for topic names
@@ -122,7 +122,7 @@ public class StreamsBuilder {
      * them and there is no ordering guarantee between records from different topics.
      * <p>
      * Note that the specified input topics must be partitioned by key.
-     * If this is not the case it is the user's responsibility to repartition the date before any key based operation
+     * If this is not the case it is the user's responsibility to repartition the data before any key based operation
      * (like aggregation or join) is applied to the returned {@link KStream}.
      *
      * @param offsetReset  the {@code "auto.offset.reset"} policy to use for the matched topics if no valid committed
@@ -143,7 +143,7 @@ public class StreamsBuilder {
      * If multiple topics are specified there is no ordering guarantee for records from different topics.
      * <p>
      * Note that the specified input topics must be partitioned by key.
-     * If this is not the case it is the user's responsibility to repartition the date before any key based operation
+     * If this is not the case it is the user's responsibility to repartition the data before any key based operation
      * (like aggregation or join) is applied to the returned {@link KStream}.
      *
      * @param keySerde   key serde used to read this source {@link KStream},
@@ -166,7 +166,7 @@ public class StreamsBuilder {
      * If multiple topics are specified there is no ordering guarantee for records from different topics.
      * <p>
      * Note that the specified input topics must be partitioned by key.
-     * If this is not the case it is the user's responsibility to repartition the date before any key based operation
+     * If this is not the case it is the user's responsibility to repartition the data before any key based operation
      * (like aggregation or join) is applied to the returned {@link KStream}.
      *
      * @param offsetReset the {@code "auto.offset.reset"} policy to use for the specified topics if no valid committed
@@ -192,7 +192,7 @@ public class StreamsBuilder {
      * If multiple topics are specified there is no ordering guarantee for records from different topics.
      * <p>
      * Note that the specified input topics must be partitioned by key.
-     * If this is not the case it is the user's responsibility to repartition the date before any key based operation
+     * If this is not the case it is the user's responsibility to repartition the data before any key based operation
      * (like aggregation or join) is applied to the returned {@link KStream}.
      *
      * @param timestampExtractor the stateless timestamp extractor used for this source {@link KStream},
@@ -217,7 +217,7 @@ public class StreamsBuilder {
      * If multiple topics are specified there is no ordering guarantee for records from different topics.
      * <p>
      * Note that the specified input topics must be partitioned by key.
-     * If this is not the case it is the user's responsibility to repartition the date before any key based operation
+     * If this is not the case it is the user's responsibility to repartition the data before any key based operation
      * (like aggregation or join) is applied to the returned {@link KStream}.
      *
      * @param offsetReset        the {@code "auto.offset.reset"} policy to use for the specified topics
@@ -248,7 +248,7 @@ public class StreamsBuilder {
      * them and there is no ordering guarantee between records from different topics.
      * <p>
      * Note that the specified input topics must be partitioned by key.
-     * If this is not the case it is the user's responsibility to repartition the date before any key based operation
+     * If this is not the case it is the user's responsibility to repartition the data before any key based operation
      * (like aggregation or join) is applied to the returned {@link KStream}.
      *
      * @param keySerde     key serde used to read this source {@link KStream},
@@ -272,7 +272,7 @@ public class StreamsBuilder {
      * them and there is no ordering guarantee between records from different topics.
      * <p>
      * Note that the specified input topics must be partitioned by key.
-     * If this is not the case it is the user's responsibility to repartition the date before any key based operation
+     * If this is not the case it is the user's responsibility to repartition the data before any key based operation
      * (like aggregation or join) is applied to the returned {@link KStream}.
      *
      * @param offsetReset  the {@code "auto.offset.reset"} policy to use for the matched topics if no valid committed
@@ -299,7 +299,7 @@ public class StreamsBuilder {
      * them and there is no ordering guarantee between records from different topics.
      * <p>
      * Note that the specified input topics must be partitioned by key.
-     * If this is not the case it is the user's responsibility to repartition the date before any key based operation
+     * If this is not the case it is the user's responsibility to repartition the data before any key based operation
      * (like aggregation or join) is applied to the returned {@link KStream}.
      *
      * @param timestampExtractor the stateless timestamp extractor used for this source {@link KStream},
@@ -325,7 +325,7 @@ public class StreamsBuilder {
      * them and there is no ordering guarantee between records from different topics.
      * <p>
      * Note that the specified input topics must be partitioned by key.
-     * If this is not the case it is the user's responsibility to repartition the date before any key based operation
+     * If this is not the case it is the user's responsibility to repartition the data before any key based operation
      * (like aggregation or join) is applied to the returned {@link KStream}.
      *
      * @param offsetReset        the {@code "auto.offset.reset"} policy to use for the matched topics if no valid

@@ -25,6 +25,7 @@ import scala.collection.Map
 import kafka.common.TopicAndPartition
 import kafka.api.ApiUtils._
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 object ProducerResponse {
   // readFrom assumes that the response is written using V2 format
   def readFrom(buffer: ByteBuffer): ProducerResponse = {
@@ -49,6 +50,7 @@ object ProducerResponse {
 
 case class ProducerResponseStatus(var error: Errors, offset: Long, timestamp: Long = Message.NoTimestamp)
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 case class ProducerResponse(correlationId: Int,
                             status: Map[TopicAndPartition, ProducerResponseStatus],
                             requestVersion: Int = 0,

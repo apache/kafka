@@ -18,7 +18,7 @@ package org.apache.kafka.streams.examples.wordcount;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.GlobalKTable;
@@ -31,12 +31,13 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
 
 /**
  * Demonstrates, using the high-level KStream DSL, how to implement the WordCount program
  * that computes a simple word occurrence histogram from an input text.
  *
- * In this example, the input stream reads from a topic named "streams-file-input", where the values of messages
+ * In this example, the input stream reads from a topic named "streams-plaintext-input", where the values of messages
  * represent lines of text; and the histogram output is written to topic "streams-wordcount-output" where each record
  * is an updated count of a single word.
  *
@@ -61,7 +62,7 @@ public class WordCountDemo {
 
         StreamsBuilder builder = new StreamsBuilder();
 
-        KStream<String, String> source = builder.stream("streams-wordcount-input", "dummy");
+        KStream<String, String> source = builder.stream("streams-plaintext-input");
 
         KTable<String, Long> counts = source
                 .flatMapValues(new ValueMapper<String, Iterable<String>>() {
@@ -69,13 +70,13 @@ public class WordCountDemo {
                     public Iterable<String> apply(String value) {
                         return Arrays.asList(value.toLowerCase(Locale.getDefault()).split(" "));
                     }
-                }).map(new KeyValueMapper<String, String, KeyValue<String, String>>() {
+                })
+                .groupBy(new KeyValueMapper<String, String, String>() {
                     @Override
-                    public KeyValue<String, String> apply(String key, String value) {
-                        return new KeyValue<>(value, value);
+                    public String apply(String key, String value) {
+                        return value;
                     }
                 })
-                .groupByKey()
                 .count("Counts");
 
         // need to override value serde to Long type
@@ -95,9 +96,6 @@ public class WordCountDemo {
             }
         });
 
-        System.out.println(builder.build().describe());
-
-        /*
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
         final CountDownLatch latch = new CountDownLatch(1);
 
@@ -114,9 +112,8 @@ public class WordCountDemo {
             streams.start();
             latch.await();
         } catch (Throwable e) {
-            Exit.exit(1);
+            System.exit(1);
         }
-        Exit.exit(0);
-        */
+        System.exit(0);
     }
 }

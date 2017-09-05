@@ -21,10 +21,11 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.errors.LockException;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
+import org.apache.kafka.test.MockBatchingStateRestoreListener;
 import org.apache.kafka.test.MockChangelogReader;
 import org.apache.kafka.test.MockStateStoreSupplier;
 import org.apache.kafka.test.TestUtils;
@@ -34,9 +35,7 @@ import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.channels.FileChannel;
-import java.nio.channels.FileLock;
-import java.nio.file.StandardOpenOption;
+import java.nio.charset.Charset;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -44,6 +43,7 @@ import java.util.Set;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -68,6 +68,10 @@ public class ProcessorStateManagerTest {
     private final TaskId taskId = new TaskId(0, 1);
     private final MockChangelogReader changelogReader = new MockChangelogReader();
     private final MockStateStoreSupplier.MockStateStore mockStateStore = new MockStateStoreSupplier.MockStateStore(storeName, true);
+    private final byte[] key = new byte[]{0x0, 0x0, 0x0, 0x1};
+    private final byte[] value = "the-value".getBytes(Charset.forName("UTF-8"));
+    private final ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>(changelogTopic, 0, 0, key, value);
+
     private File baseDir;
     private File checkpointFile;
     private OffsetCheckpoint checkpoint;
@@ -88,11 +92,48 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
+    public void shouldRestoreStoreWithBatchingRestoreSpecification() throws Exception {
+        final TaskId taskId = new TaskId(0, 2);
+        final MockBatchingStateRestoreListener batchingRestoreCallback = new MockBatchingStateRestoreListener();
+
+        final KeyValue<byte[], byte[]> expectedKeyValue = KeyValue.pair(key, value);
+
+        final MockStateStoreSupplier.MockStateStore persistentStore = getPersistentStore();
+        final ProcessorStateManager stateMgr = getStandByStateManager(taskId);
+
+        try {
+            stateMgr.register(persistentStore, true, batchingRestoreCallback);
+            stateMgr.updateStandbyStates(persistentStorePartition, Collections.singletonList(consumerRecord));
+            assertThat(batchingRestoreCallback.getRestoredRecords().size(), is(1));
+            assertTrue(batchingRestoreCallback.getRestoredRecords().contains(expectedKeyValue));
+        } finally {
+            stateMgr.close(Collections.<TopicPartition, Long>emptyMap());
+        }
+    }
+
+    @Test
+    public void shouldRestoreStoreWithSinglePutRestoreSpecification() throws Exception {
+        final TaskId taskId = new TaskId(0, 2);
+        final Integer intKey = 1;
+
+        final MockStateStoreSupplier.MockStateStore persistentStore = getPersistentStore();
+        final ProcessorStateManager stateMgr = getStandByStateManager(taskId);
+
+        try {
+            stateMgr.register(persistentStore, true, persistentStore.stateRestoreCallback);
+            stateMgr.updateStandbyStates(persistentStorePartition, Collections.singletonList(consumerRecord));
+            assertThat(persistentStore.keys.size(), is(1));
+            assertTrue(persistentStore.keys.contains(intKey));
+        } finally {
+            stateMgr.close(Collections.<TopicPartition, Long>emptyMap());
+        }
+    }
+
+    @Test
     public void testRegisterPersistentStore() throws IOException {
         final TaskId taskId = new TaskId(0, 2);
 
-        final MockStateStoreSupplier.MockStateStore persistentStore
-            = new MockStateStoreSupplier.MockStateStore("persistentStore", true); // persistent store
+        final MockStateStoreSupplier.MockStateStore persistentStore = getPersistentStore();
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             taskId,
             noPartitions,
@@ -316,7 +357,6 @@ public class ProcessorStateManagerTest {
             false);
         stateMgr.register(persistentStore, true, persistentStore.stateRestoreCallback);
 
-
         stateMgr.checkpoint(Collections.singletonMap(persistentStorePartition, 10L));
         final Map<TopicPartition, Long> read = checkpoint.read();
         assertThat(read, equalTo(Collections.singletonMap(persistentStorePartition, 11L)));
@@ -389,33 +429,6 @@ public class ProcessorStateManagerTest {
         assertThat(read, equalTo(Collections.<TopicPartition, Long>emptyMap()));
     }
 
-    @Test
-    public void shouldThrowLockExceptionIfFailedToLockStateDirectory() throws Exception {
-        final File taskDirectory = stateDirectory.directoryForTask(taskId);
-        final FileChannel channel = FileChannel.open(new File(taskDirectory,
-                                                              StateDirectory.LOCK_FILE_NAME).toPath(),
-                                                     StandardOpenOption.CREATE,
-                                                     StandardOpenOption.WRITE);
-        // lock the task directory
-        final FileLock lock = channel.lock();
-
-        try {
-            new ProcessorStateManager(
-                taskId,
-                noPartitions,
-                false,
-                stateDirectory,
-                Collections.<String, String>emptyMap(),
-                changelogReader,
-                false);
-            fail("Should have thrown LockException");
-        } catch (final LockException e) {
-           // pass
-        } finally {
-            lock.release();
-            channel.close();
-        }
-    }
 
     @Test
     public void shouldThrowIllegalArgumentExceptionIfStoreNameIsSameAsCheckpointFileName() throws Exception {
@@ -507,6 +520,25 @@ public class ProcessorStateManagerTest {
                 stateManager.close(null);
             }
         }
+    }
+
+    private ProcessorStateManager getStandByStateManager(TaskId taskId) throws IOException {
+        return new ProcessorStateManager(
+            taskId,
+            noPartitions,
+            true,
+            stateDirectory,
+            new HashMap<String, String>() {
+                {
+                    put(persistentStoreName, persistentStoreTopicName);
+                }
+            },
+            changelogReader,
+            false);
+    }
+
+    private MockStateStoreSupplier.MockStateStore getPersistentStore() {
+        return new MockStateStoreSupplier.MockStateStore("persistentStore", true);
     }
 
 }

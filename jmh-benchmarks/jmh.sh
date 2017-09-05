@@ -19,7 +19,7 @@ jmh_project_name="jmh-benchmarks"
 
 if [ ${base_dir} == "." ]; then
      gradlew_dir=".."
-elif [ ${base_dir} == ${jmh_project_name} ]; then
+elif [ ${base_dir##./} == "${jmh_project_name}" ]; then
      gradlew_dir="."
 else
     echo "JMH Benchmarks need to be run from the root of the kafka repository or the 'jmh-benchmarks' directory"

@@ -1035,10 +1035,9 @@ public class TransactionManager {
                 } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                     abortableError(new GroupAuthorizationException(builder.consumerGroupId()));
                     return;
-                } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
-                    fatalError(error.exception());
-                    return;
-                } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
+                } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED
+                        || error == Errors.INVALID_PRODUCER_EPOCH
+                        || error == Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT) {
                     fatalError(error.exception());
                     return;
                 } else {
