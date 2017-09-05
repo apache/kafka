@@ -62,7 +62,7 @@ class AssignedTasks<T extends AbstractTask> {
     }
 
     void addNewTask(final T task) {
-        log.trace("{} add new {} {}", logPrefix, taskTypeName, task.id());
+        log.trace("{} Add newly created {} {} with assigned partitions {}", logPrefix,  taskTypeName, task.id(), task.partitions());
         created.put(task.id(), task);
     }
 
@@ -219,7 +219,7 @@ class AssignedTasks<T extends AbstractTask> {
             final T task = suspended.get(taskId);
             if (task.partitions().equals(partitions)) {
                 suspended.remove(taskId);
-                log.trace("{} Resuming suspended {} {}", logPrefix, taskTypeName, taskId);
+                log.trace("{} Resuming suspended {} {} with assigned partitions {}", logPrefix, taskTypeName, taskId, partitions);
                 task.resume();
                 transitionToRunning(task);
                 return true;
