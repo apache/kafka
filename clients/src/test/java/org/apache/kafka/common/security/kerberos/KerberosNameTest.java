@@ -55,4 +55,33 @@ public class KerberosNameTest {
         assertEquals("REALM.COM", name.realm());
         assertEquals("user", shortNamer.shortName(name));
     }
+
+    @Test
+    public void testToLowerCase() throws Exception {
+        List<String> rules = new ArrayList<>(Arrays.asList(
+            "RULE:[1:$1]/L",
+            "RULE:[2:$1](Test.*)s/ABC///L",
+            "RULE:[2:$1](ABC.*)s/ABC/XYZ/g/L",
+            "RULE:[2:$1](App\\..*)s/App\\.(.*)/$1/g/L",
+            "RULE:[2:$1]/L",
+            "DEFAULT"
+        ));
+
+        KerberosShortNamer shortNamer = KerberosShortNamer.fromUnparsedRules("REALM.COM", rules);
+
+        KerberosName name = KerberosName.parse("User@REALM.COM");
+        assertEquals("user", shortNamer.shortName(name));
+
+        name = KerberosName.parse("TestABC/host@FOO.COM");
+        assertEquals("test", shortNamer.shortName(name));
+
+        name = KerberosName.parse("ABC_User_ABC/host@FOO.COM");
+        assertEquals("xyz_user_xyz", shortNamer.shortName(name));
+
+        name = KerberosName.parse("App.SERVICE-name/example.com@REALM.COM");
+        assertEquals("service-name", shortNamer.shortName(name));
+
+        name = KerberosName.parse("User/root@REALM.COM");
+        assertEquals("user", shortNamer.shortName(name));
+    }
 }

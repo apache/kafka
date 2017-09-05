@@ -33,7 +33,7 @@ public class KerberosShortNamer {
     /**
      * A pattern for parsing a auth_to_local rule.
      */
-    private static final Pattern RULE_PARSER = Pattern.compile("((DEFAULT)|(RULE:\\[(\\d*):([^\\]]*)](\\(([^)]*)\\))?(s/([^/]*)/([^/]*)/(g)?)?))");
+    private static final Pattern RULE_PARSER = Pattern.compile("((DEFAULT)|(RULE:\\[(\\d*):([^\\]]*)](\\(([^)]*)\\))?(s/([^/]*)/([^/]*)/(g)?)?))/?(L)?");
 
     /* Rules for the translation of the principal name into an operating system name */
     private final List<KerberosRule> principalToLocalRules;
@@ -65,7 +65,8 @@ public class KerberosShortNamer {
                         matcher.group(7),
                         matcher.group(9),
                         matcher.group(10),
-                        "g".equals(matcher.group(11))));
+                        "g".equals(matcher.group(11)),
+                        "L".equals(matcher.group(12))));
 
             }
         }
