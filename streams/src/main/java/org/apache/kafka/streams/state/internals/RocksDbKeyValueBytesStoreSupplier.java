@@ -37,8 +37,8 @@ public class RocksDbKeyValueBytesStoreSupplier implements KeyValueBytesStoreSupp
     @Override
     public KeyValueStore<Bytes, byte[]> get() {
         return new RocksDBStore<>(name,
-                           Serdes.Bytes(),
-                           Serdes.ByteArray());
+                                  Serdes.Bytes(),
+                                  Serdes.ByteArray());
     }
 
     @Override

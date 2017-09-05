@@ -27,14 +27,14 @@ import java.util.Map;
 public interface StateStoreBuilder<T extends StateStore> {
 
     /**
-     * Enable caching on the store
+     * Enable caching on the store.
      * @return  this
      */
     StateStoreBuilder<T> withCachingEnabled();
 
     /**
-     * Maintain a changelog for any changes made to the store. Use the provided
-     * config to set the config of the changelog topic.
+     * Maintain a changelog for any changes made to the store.
+     * Use the provided config to set the config of the changelog topic.
      * @param config  config applied to the changelog topic
      * @return this
      */
@@ -42,7 +42,8 @@ public interface StateStoreBuilder<T extends StateStore> {
 
     /**
      * Disable the changelog for store built by this {@link StateStoreBuilder}.
-     * This will turn off fault-tolerance for your store. By default the changelog is enabled
+     * This will turn off fault-tolerance for your store.
+     * By default the changelog is enabled.
      * @return this
      */
     StateStoreBuilder<T> withLoggingDisabled();
@@ -66,13 +67,13 @@ public interface StateStoreBuilder<T extends StateStore> {
     Map<String, String> logConfig();
 
     /**
-     * @return true if the {@link StateStore} should have logging enabled
+     * @return {@code true} if the {@link StateStore} should have logging enabled
      */
     boolean loggingEnabled();
 
     /**
      * Return the name of this state store builder.
-     * This must be a valid Kafka topic name; valid characters are ASCII alphanumerics, '.', '_' and '-'
+     * This must be a valid Kafka topic name; valid characters are ASCII alphanumerics, '.', '_' and '-'.
      *
      * @return the name of this state store builder
      */

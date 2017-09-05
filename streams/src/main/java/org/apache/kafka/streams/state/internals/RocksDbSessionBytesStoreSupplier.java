@@ -27,7 +27,8 @@ public class RocksDbSessionBytesStoreSupplier implements SessionBytesStoreSuppli
     private final String name;
     private final long retentionPeriod;
 
-    public RocksDbSessionBytesStoreSupplier(final String name, final long retentionPeriod) {
+    public RocksDbSessionBytesStoreSupplier(final String name,
+                                            final long retentionPeriod) {
         this.name = name;
         this.retentionPeriod = retentionPeriod;
     }
@@ -39,11 +40,10 @@ public class RocksDbSessionBytesStoreSupplier implements SessionBytesStoreSuppli
 
     @Override
     public SessionStore<Bytes, byte[]> get() {
-        final SessionKeySchema keySchema = new SessionKeySchema();
         final RocksDBSegmentedBytesStore segmented = new RocksDBSegmentedBytesStore(name,
                                                                                     retentionPeriod,
                                                                                     NUM_SEGMENTS,
-                                                                                    keySchema);
+                                                                                    new SessionKeySchema());
         return new RocksDBSessionStore<>(segmented, Serdes.Bytes(), Serdes.ByteArray());
     }
 
@@ -53,7 +53,7 @@ public class RocksDbSessionBytesStoreSupplier implements SessionBytesStoreSuppli
     }
 
     @Override
-    public long segmentInterval() {
+    public long segmentIntervalMs() {
         return Segments.segmentInterval(retentionPeriod, NUM_SEGMENTS);
     }
 }

@@ -26,7 +26,7 @@ import org.apache.kafka.streams.processor.StateStore;
 public interface StoreSupplier<T extends StateStore> {
     /**
      * Return the name of this state store supplier.
-     * This must be a valid Kafka topic name; valid characters are ASCII alphanumerics, '.', '_' and '-'
+     * This must be a valid Kafka topic name; valid characters are ASCII alphanumerics, '.', '_' and '-'.
      *
      * @return the name of this state store supplier
      */

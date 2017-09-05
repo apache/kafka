@@ -46,11 +46,13 @@ abstract class AbstractStateStoreBuilder<K, V, T extends StateStore> implements 
         this.time = time;
     }
 
+    @Override
     public StateStoreBuilder<T> withCachingEnabled() {
         enableCaching = true;
         return this;
     }
 
+    @Override
     public StateStoreBuilder<T> withLoggingEnabled(final Map<String, String> config) {
         Objects.requireNonNull(config, "config can't be null");
         enableLogging = true;
@@ -58,16 +60,19 @@ abstract class AbstractStateStoreBuilder<K, V, T extends StateStore> implements 
         return this;
     }
 
+    @Override
     public StateStoreBuilder<T> withLoggingDisabled() {
         enableLogging = false;
         logConfig.clear();
         return this;
     }
 
+    @Override
     public Map<String, String> logConfig() {
         return logConfig;
     }
 
+    @Override
     public boolean loggingEnabled() {
         return enableLogging;
     }

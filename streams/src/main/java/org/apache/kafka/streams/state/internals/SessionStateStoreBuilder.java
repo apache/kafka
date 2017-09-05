@@ -33,7 +33,6 @@ public class SessionStateStoreBuilder<K, V> extends AbstractStateStoreBuilder<K,
                                     final Serde<V> valueSerde,
                                     final Time time) {
         super(storeSupplier.name(), keySerde, valueSerde, time);
-        Objects.requireNonNull(storeSupplier, "bytesStoreSupplier can't be null");
         this.storeSupplier = storeSupplier;
     }
 
@@ -53,7 +52,7 @@ public class SessionStateStoreBuilder<K, V> extends AbstractStateStoreBuilder<K,
         return new CachingSessionStore<>(inner,
                                          keySerde,
                                          valueSerde,
-                                         storeSupplier.segmentInterval());
+                                         storeSupplier.segmentIntervalMs());
     }
 
     private SessionStore<Bytes, byte[]> maybeWrapLogging(final SessionStore<Bytes, byte[]> inner) {

@@ -19,7 +19,7 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.common.utils.Bytes;
 
 /**
- * A store supplier that can be used to create one or more {@link SessionStore} instances of type &lt;Byte, byte[]&gt;
+ * A store supplier that can be used to create one or more {@link SessionStore SessionStore<Bytes, byte[]>>} instances of type &lt;Byte, byte[]&gt;.
  */
 public interface SessionBytesStoreSupplier extends StoreSupplier<SessionStore<Bytes, byte[]>> {
 
@@ -29,5 +29,5 @@ public interface SessionBytesStoreSupplier extends StoreSupplier<SessionStore<By
      *
      * @return segmentInterval in milliseconds
      */
-    long segmentInterval();
+    long segmentIntervalMs();
 }

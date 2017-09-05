@@ -34,7 +34,6 @@ public class WindowStateStoreBuilder<K, V> extends AbstractStateStoreBuilder<K, 
                                    final Time time) {
         super(storeSupplier.name(), keySerde, valueSerde, time);
         this.storeSupplier = storeSupplier;
-        Objects.requireNonNull(storeSupplier, "bytesStoreSupplier can't be null");
     }
 
     @Override

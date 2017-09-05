@@ -186,6 +186,7 @@ public class InternalTopologyBuilder {
             this.supplier = supplier;
 
         }
+
         @Override
         public StateStore build() {
             return supplier.get();
