@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.internals.KStreamPrint;
+import org.apache.kafka.streams.kstream.internals.PrintForeachAction;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 import java.io.FileNotFoundException;
