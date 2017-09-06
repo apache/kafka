@@ -201,10 +201,10 @@ public class InternalTopologyBuilder {
         }
     }
 
-    private static class StateStoreBuilderFactory extends AbstractStateStoreFactory {
+    private static class StoreBuilderFactory extends AbstractStateStoreFactory {
         private final StoreBuilder builder;
 
-        StateStoreBuilderFactory(final StoreBuilder<?> builder) {
+        StoreBuilderFactory(final StoreBuilder<?> builder) {
             super(builder.name(),
                   builder.loggingEnabled(),
                   builder instanceof WindowStoreBuilder,
@@ -517,7 +517,7 @@ public class InternalTopologyBuilder {
             throw new TopologyException("StateStore " + storeBuilder.name() + " is already added.");
         }
 
-        stateFactories.put(storeBuilder.name(), new StateStoreBuilderFactory(storeBuilder));
+        stateFactories.put(storeBuilder.name(), new StoreBuilderFactory(storeBuilder));
 
         if (processorNames != null) {
             for (final String processorName : processorNames) {

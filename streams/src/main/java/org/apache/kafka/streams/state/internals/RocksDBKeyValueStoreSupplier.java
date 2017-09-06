@@ -17,8 +17,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.KeyValueStore;
 
@@ -34,48 +32,29 @@ import java.util.Map;
 
 public class RocksDBKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, KeyValueStore> {
 
-    private static final String METRICS_SCOPE = "rocksdb-state";
-    private final boolean cached;
+    private final KeyValueStoreBuilder<K, V> builder;
 
     public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, boolean logged, Map<String, String> logConfig, boolean cached) {
-        this(name, keySerde, valueSerde, null, logged, logConfig, cached);
+        this(name, keySerde, valueSerde, Time.SYSTEM, logged, logConfig, cached);
     }
 
     public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, Time time, boolean logged, Map<String, String> logConfig, boolean cached) {
         super(name, keySerde, valueSerde, time, logged, logConfig);
-        this.cached = cached;
+        builder = new KeyValueStoreBuilder<>(new RocksDbKeyValueBytesStoreSupplier(name),
+                                             keySerde,
+                                             valueSerde,
+                                             time);
+        if (cached) {
+            builder.withCachingEnabled();
+        }
+        // logged by default so we only need to worry about when it is disabled.
+        if (!logged) {
+            builder.withLoggingDisabled();
+        }
     }
 
     public KeyValueStore get() {
-        final RocksDBStore<Bytes, byte[]> rocks = new RocksDBStore<>(name,
-                                                                     Serdes.Bytes(),
-                                                                     Serdes.ByteArray());
-
-        if (!cached && !logged) {
-            return new MeteredKeyValueBytesStore<>(
-                    rocks, METRICS_SCOPE, time, keySerde, valueSerde);
-        }
-
-
-        if (cached && logged) {
-            final KeyValueStore<Bytes, byte[]> caching = new CachingKeyValueStore<>(new ChangeLoggingKeyValueBytesStore(rocks), keySerde, valueSerde);
-            return new MeteredKeyValueBytesStore<>(caching, METRICS_SCOPE, time, keySerde, valueSerde);
-        }
-
-        if (cached) {
-            final KeyValueStore<Bytes, byte[]> caching = new CachingKeyValueStore<>(rocks, keySerde, valueSerde);
-            return new MeteredKeyValueBytesStore<>(caching, METRICS_SCOPE, time, keySerde, valueSerde);
-
-        } else {
-            // logged
-            return new MeteredKeyValueBytesStore<>(
-                    new ChangeLoggingKeyValueBytesStore(rocks),
-                    METRICS_SCOPE,
-                    time,
-                    keySerde,
-                    valueSerde);
-        }
-
+        return builder.build();
     }
 
 

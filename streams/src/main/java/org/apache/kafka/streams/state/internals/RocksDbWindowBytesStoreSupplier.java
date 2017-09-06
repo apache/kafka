@@ -20,6 +20,8 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 
+import static org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier.MIN_SEGMENTS;
+
 public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier {
     private final String name;
     private final long retentionPeriod;
@@ -32,6 +34,9 @@ public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier
                                            final int segments,
                                            final long windowSize,
                                            final boolean retainDuplicates) {
+        if (segments < MIN_SEGMENTS) {
+            throw new IllegalArgumentException("numSegments must be >= " + MIN_SEGMENTS);
+        }
         this.name = name;
         this.retentionPeriod = retentionPeriod;
         this.segments = segments;

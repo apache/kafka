@@ -125,10 +125,11 @@ public class WordCountProcessorDemo {
         builder.addSource("Source", "streams-plaintext-input");
 
         builder.addProcessor("Process", new MyProcessorSupplier(), "Source");
-        KeyValueBytesStoreSupplier counts = Stores.inMemoryKeyValueStore("Counts");
-        StoreBuilder<KeyValueStore<String, Integer>> storeBuilder =
-                Stores.keyValueStoreBuilder(counts, Serdes.String(), Serdes.Integer());
-        builder.addStateStore(storeBuilder, "Process");
+        builder.addStateStore(Stores.keyValueStoreBuilder(
+                Stores.inMemoryKeyValueStore("Counts"),
+                Serdes.String(),
+                Serdes.Integer()),
+                              "Process");
 
         builder.addSink("Sink", "streams-wordcount-processor-output", "Process");
 
