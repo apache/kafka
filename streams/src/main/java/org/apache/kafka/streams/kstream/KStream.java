@@ -735,7 +735,7 @@ public interface KStream<K, V> {
 
     /**
      * Materialize this stream to a topic and creates a new {@code KStream} from the topic using the
-     * {@link Produced} instance for configuration of the key {@link Serde key serde}, value {@link Serde value serde},
+     * {@link Produced} instance for configuration of the {@link Serde key serde}, {@link Serde value serde},
      * and {@link StreamPartitioner}.
      * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
      * started).
@@ -823,8 +823,7 @@ public interface KStream<K, V> {
      * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
      * started).
      *
-     * @param produced    the options to use when producing to the topic;
-     *                    if not specified the default serde defined in the configs will be used
+     * @param produced    the options to use when producing to the topic
      * @param topic       the topic name
      */
     void to(final String topic,
