@@ -28,6 +28,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.Reducer;
+import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -68,7 +69,7 @@ public class KGroupedStreamImplTest {
     @Before
     public void before() {
         final KStream<String, String> stream = builder.stream(Serdes.String(), Serdes.String(), TOPIC);
-        groupedStream = stream.groupByKey(Serdes.String(), Serdes.String());
+        groupedStream = stream.groupByKey(Serialized.with(Serdes.String(), Serdes.String()));
     }
 
     @Test(expected = NullPointerException.class)

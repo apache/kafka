@@ -116,9 +116,11 @@ public class StandbyTask extends AbstractTask {
      * <pre>
      * @param clean ignored by {@code StandbyTask} as it can always try to close cleanly
      *              (ie, commit, flush, and write checkpoint file)
+     * @param isZombie ignored by {@code StandbyTask} as it can never be a zombie
      */
     @Override
-    public void close(final boolean clean) {
+    public void close(final boolean clean,
+                      final boolean isZombie) {
         if (!taskInitialized) {
             return;
         }
@@ -133,8 +135,10 @@ public class StandbyTask extends AbstractTask {
     }
 
     @Override
-    public void closeSuspended(final boolean clean, final RuntimeException e) {
-        close(clean);
+    public void closeSuspended(final boolean clean,
+                               final boolean isZombie,
+                               final RuntimeException e) {
+        close(clean, isZombie);
     }
 
     @Override

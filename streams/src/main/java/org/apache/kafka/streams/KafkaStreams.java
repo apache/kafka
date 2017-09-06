@@ -51,6 +51,7 @@ import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidat
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.StreamsMetadata;
+import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.state.internals.GlobalStateStoreProvider;
 import org.apache.kafka.streams.state.internals.QueryableStoreProvider;
 import org.apache.kafka.streams.state.internals.StateStoreProvider;
@@ -267,6 +268,24 @@ public class KafkaStreams {
         // we need to call the user customized state listener outside the state lock to avoid potential deadlocks
         if (stateListener != null) {
             stateListener.onChange(state, oldState);
+        }
+
+        return true;
+    }
+
+    private boolean setRunningFromCreated() {
+        synchronized (stateLock) {
+            if (state != State.CREATED) {
+                log.error("{} Unexpected state transition from {} to {}", logPrefix, state, State.RUNNING);
+                throw new IllegalStateException(logPrefix + " Unexpected state transition from " + state + " to " + State.RUNNING);
+            }
+            state = State.RUNNING;
+            stateLock.notifyAll();
+        }
+
+        // we need to call the user customized state listener outside the state lock to avoid potential deadlocks
+        if (stateListener != null) {
+            stateListener.onChange(State.RUNNING, State.CREATED);
         }
 
         return true;
@@ -675,7 +694,7 @@ public class KafkaStreams {
 
         // first set state to RUNNING before kicking off the threads,
         // making sure the state will always transit to RUNNING before REBALANCING
-        if (setState(State.RUNNING)) {
+        if (setRunningFromCreated()) {
             checkBrokerVersionCompatibility();
 
             if (globalStreamThread != null) {
@@ -793,8 +812,11 @@ public class KafkaStreams {
      * {@link Topology} and {@link StreamsBuilder}).
      *
      * @return A string representation of the Kafka Streams instance.
+     *
+     * @deprecated Use {@link #localThreadsMetadata()} to retrieve runtime information.
      */
     @Override
+    @Deprecated
     public String toString() {
         return toString("");
     }
@@ -806,7 +828,10 @@ public class KafkaStreams {
      *
      * @param indent the top-level indent for each line
      * @return A string representation of the Kafka Streams instance.
+     *
+     * @deprecated Use {@link #localThreadsMetadata()} to retrieve runtime information.
      */
+    @Deprecated
     public String toString(final String indent) {
         final StringBuilder sb = new StringBuilder()
             .append(indent)
@@ -959,5 +984,19 @@ public class KafkaStreams {
     public <T> T store(final String storeName, final QueryableStoreType<T> queryableStoreType) {
         validateIsRunning();
         return queryableStoreProvider.getStore(storeName, queryableStoreType);
+    }
+
+    /**
+     * Returns runtime information about the local threads of this {@link KafkaStreams} instance.
+     *
+     * @return the set of {@link ThreadMetadata}.
+     */
+    public Set<ThreadMetadata> localThreadsMetadata() {
+        validateIsRunning();
+        final Set<ThreadMetadata> threadMetadata = new HashSet<>();
+        for (StreamThread thread : threads) {
+            threadMetadata.add(thread.threadMetadata());
+        }
+        return threadMetadata;
     }
 }
