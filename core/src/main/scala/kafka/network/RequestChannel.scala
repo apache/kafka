@@ -105,15 +105,15 @@ object RequestChannel extends Logging {
       if (apiRemoteCompleteTimeNanos < 0)
         apiRemoteCompleteTimeNanos = responseCompleteTimeNanos
 
-      def nanosToMs(nanos: Long) = math.max(TimeUnit.NANOSECONDS.toMillis(nanos), 0)
+      def nanosToMs(nanos: Long) = math.max(nanos, 0).toDouble / TimeUnit.MILLISECONDS.toNanos(1)
 
-      val requestQueueTime = nanosToMs(requestDequeueTimeNanos - startTimeNanos)
-      val apiLocalTime = nanosToMs(apiLocalCompleteTimeNanos - requestDequeueTimeNanos)
-      val apiRemoteTime = nanosToMs(apiRemoteCompleteTimeNanos - apiLocalCompleteTimeNanos)
-      val apiThrottleTime = nanosToMs(responseCompleteTimeNanos - apiRemoteCompleteTimeNanos)
-      val responseQueueTime = nanosToMs(responseDequeueTimeNanos - responseCompleteTimeNanos)
-      val responseSendTime = nanosToMs(endTimeNanos - responseDequeueTimeNanos)
-      val totalTime = nanosToMs(endTimeNanos - startTimeNanos)
+      val requestQueueTimeMs = nanosToMs(requestDequeueTimeNanos - startTimeNanos)
+      val apiLocalTimeMs = nanosToMs(apiLocalCompleteTimeNanos - requestDequeueTimeNanos)
+      val apiRemoteTimeMs = nanosToMs(apiRemoteCompleteTimeNanos - apiLocalCompleteTimeNanos)
+      val apiThrottleTimeMs = nanosToMs(responseCompleteTimeNanos - apiRemoteCompleteTimeNanos)
+      val responseQueueTimeMs = nanosToMs(responseDequeueTimeNanos - responseCompleteTimeNanos)
+      val responseSendTimeMs = nanosToMs(endTimeNanos - responseDequeueTimeNanos)
+      val totalTimeMs = nanosToMs(endTimeNanos - startTimeNanos)
       val fetchMetricNames =
         if (header.apiKey == ApiKeys.FETCH) {
           val isFromFollower = body[FetchRequest].isFromFollower
@@ -127,13 +127,13 @@ object RequestChannel extends Logging {
       metricNames.foreach { metricName =>
         val m = RequestMetrics.metricsMap(metricName)
         m.requestRate.mark()
-        m.requestQueueTimeHist.update(requestQueueTime)
-        m.localTimeHist.update(apiLocalTime)
-        m.remoteTimeHist.update(apiRemoteTime)
-        m.throttleTimeHist.update(apiThrottleTime)
-        m.responseQueueTimeHist.update(responseQueueTime)
-        m.responseSendTimeHist.update(responseSendTime)
-        m.totalTimeHist.update(totalTime)
+        m.requestQueueTimeHist.update(Math.round(requestQueueTimeMs))
+        m.localTimeHist.update(Math.round(apiLocalTimeMs))
+        m.remoteTimeHist.update(Math.round(apiRemoteTimeMs))
+        m.throttleTimeHist.update(Math.round(apiThrottleTimeMs))
+        m.responseQueueTimeHist.update(Math.round(responseQueueTimeMs))
+        m.responseSendTimeHist.update(Math.round(responseSendTimeMs))
+        m.totalTimeHist.update(Math.round(totalTimeMs))
       }
 
       // Records network handler thread usage. This is included towards the request quota for the
@@ -146,15 +146,6 @@ object RequestChannel extends Logging {
 
       if (isRequestLoggingEnabled) {
         val detailsEnabled = requestLogger.isTraceEnabled
-        def nanosToMs(nanos: Long) = TimeUnit.NANOSECONDS.toMicros(math.max(nanos, 0)).toDouble / TimeUnit.MILLISECONDS.toMicros(1)
-        val totalTimeMs = nanosToMs(endTimeNanos - startTimeNanos)
-        val requestQueueTimeMs = nanosToMs(requestDequeueTimeNanos - startTimeNanos)
-        val apiLocalTimeMs = nanosToMs(apiLocalCompleteTimeNanos - requestDequeueTimeNanos)
-        val apiRemoteTimeMs = nanosToMs(apiRemoteCompleteTimeNanos - apiLocalCompleteTimeNanos)
-        val apiThrottleTimeMs = nanosToMs(responseCompleteTimeNanos - apiRemoteCompleteTimeNanos)
-        val responseQueueTimeMs = nanosToMs(responseDequeueTimeNanos - responseCompleteTimeNanos)
-        val responseSendTimeMs = nanosToMs(endTimeNanos - responseDequeueTimeNanos)
-
 
         val builder = new StringBuilder(256)
         builder.append("Completed request:").append(requestDesc(detailsEnabled))
