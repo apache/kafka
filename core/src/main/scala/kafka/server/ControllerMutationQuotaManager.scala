@@ -166,7 +166,7 @@ class ControllerMutationQuotaManager(private val config: ClientQuotaManagerConfi
                                      private val time: Time,
                                      private val threadNamePrefix: String,
                                      private val quotaCallback: Option[ClientQuotaCallback])
-    extends ClientQuotaManager(config, metrics, QuotaType.ControllerMutation, time, threadNamePrefix, quotaCallback) {
+    extends ClientQuotaManager(config, metrics, QuotaType.ControllerMutation, time, None, threadNamePrefix, quotaCallback) {
 
   override protected def clientQuotaMetricName(quotaMetricTags: Map[String, String]): MetricName = {
     metrics.metricName("tokens", QuotaType.ControllerMutation.toString,

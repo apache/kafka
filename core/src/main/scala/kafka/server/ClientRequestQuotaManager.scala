@@ -19,7 +19,7 @@ package kafka.server
 import java.util.concurrent.TimeUnit
 
 import kafka.network.RequestChannel
-import kafka.utils.QuotaUtils
+import kafka.utils.{QuotaUtils, KafkaScheduler}
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.utils.Time
@@ -37,9 +37,10 @@ object ClientRequestQuotaManager {
 class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
                                 private val metrics: Metrics,
                                 private val time: Time,
+                                private val schedulerOpt: Option[KafkaScheduler],
                                 private val threadNamePrefix: String,
                                 private val quotaCallback: Option[ClientQuotaCallback])
-    extends ClientQuotaManager(config, metrics, QuotaType.Request, time, threadNamePrefix, quotaCallback) {
+    extends ClientQuotaManager(config, metrics, QuotaType.Request, time, schedulerOpt, threadNamePrefix, quotaCallback) {
 
   private val maxThrottleTimeMs = TimeUnit.SECONDS.toMillis(this.config.quotaWindowSizeSeconds)
   private val exemptMetricName = metrics.metricName("exempt-request-time",
