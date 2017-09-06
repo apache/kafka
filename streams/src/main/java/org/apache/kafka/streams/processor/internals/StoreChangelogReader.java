@@ -129,8 +129,6 @@ public class StoreChangelogReader implements ChangelogReader {
                 } else if (restorer.offsetLimit() == 0 || endOffset == 0) {
                     restorer.setRestoredOffset(0);
                     iter.remove();
-                } else {
-                    restorer.setEndingOffset(endOffset);
                 }
                 needsInitializing.remove(topicPartition);
             } else {
