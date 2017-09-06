@@ -24,6 +24,7 @@ import org.apache.kafka.streams.StreamsBuilderTest;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.JoinWindows;
+import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
@@ -50,6 +51,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 
 
 public class KStreamImplTest {
@@ -134,19 +136,20 @@ public class KStreamImplTest {
         );
 
         final int anyWindowSize = 1;
+        final Joined<String, Integer, Integer> joined = Joined.with(stringSerde, intSerde, intSerde);
         KStream<String, Integer> stream4 = streams2[0].join(streams3[0], new ValueJoiner<Integer, Integer, Integer>() {
             @Override
             public Integer apply(Integer value1, Integer value2) {
                 return value1 + value2;
             }
-        }, JoinWindows.of(anyWindowSize), stringSerde, intSerde, intSerde);
+        }, JoinWindows.of(anyWindowSize), joined);
 
-        KStream<String, Integer> stream5 = streams2[1].join(streams3[1], new ValueJoiner<Integer, Integer, Integer>() {
+        streams2[1].join(streams3[1], new ValueJoiner<Integer, Integer, Integer>() {
             @Override
             public Integer apply(Integer value1, Integer value2) {
                 return value1 + value2;
             }
-        }, JoinWindows.of(anyWindowSize), stringSerde, intSerde, intSerde);
+        }, JoinWindows.of(anyWindowSize), joined);
 
         stream4.to("topic-5");
 
@@ -224,11 +227,11 @@ public class KStreamImplTest {
                             }
                         });
         stream.join(kStream,
-                valueJoiner,
-                JoinWindows.of(windowSize).until(3 * windowSize),
-                Serdes.String(),
-                Serdes.String(),
-                Serdes.String())
+                    valueJoiner,
+                    JoinWindows.of(windowSize).until(3 * windowSize),
+                    Joined.with(Serdes.String(),
+                                Serdes.String(),
+                                Serdes.String()))
                 .to(Serdes.String(), Serdes.String(), "output-topic");
 
         ProcessorTopology processorTopology = builder.setApplicationId("X").build(null);
@@ -407,6 +410,7 @@ public class KStreamImplTest {
                         null);
     }
 
+
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnThroughWhenProducedIsNull() {
         testStream.through("topic", null);
@@ -415,6 +419,43 @@ public class KStreamImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnToWhenProducedIsNull() {
         testStream.to("topic", null);
+    }
+
+
+    @Test
+    public void shouldThrowNullPointerOnLeftJoinWithTableWhenJoinedIsNull() {
+        final KTable<String, String> table = builder.table(Serdes.String(), Serdes.String(), "blah");
+        try {
+            testStream.leftJoin(table,
+                                MockValueJoiner.TOSTRING_JOINER,
+                                null);
+            fail("Should have thrown NullPointerException");
+        } catch (final NullPointerException e) {
+            // ok
+        }
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnJoinWithTableWhenJoinedIsNull() {
+        final KTable<String, String> table = builder.table(Serdes.String(), Serdes.String(), "blah");
+        try {
+            testStream.join(table,
+                            MockValueJoiner.TOSTRING_JOINER,
+                            null);
+            fail("Should have thrown NullPointerException");
+        } catch (final NullPointerException e) {
+            // ok
+        }
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerOnJoinWithStreamWhenJoinedIsNull() {
+        testStream.join(testStream, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(10), null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerOnOuterJoinJoinedIsNull() {
+        testStream.outerJoin(testStream, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(10), null);
     }
 
 }

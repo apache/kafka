@@ -19,6 +19,7 @@ package kafka.api
 import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent.{ExecutionException, TimeUnit}
+import java.io.File
 
 import org.apache.kafka.clients.admin.KafkaAdminClientTest
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -29,16 +30,17 @@ import org.apache.kafka.clients.admin._
 import kafka.utils.{Logging, TestUtils, ZkUtils}
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.admin.NewTopic
-import org.apache.kafka.common.KafkaFuture
-import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
+import org.apache.kafka.common.{KafkaFuture, TopicPartition, TopicPartitionReplica}
+import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.errors.{InvalidRequestException, SecurityDisabledException, TimeoutException, TopicExistsException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.errors._
 import org.junit.{After, Before, Rule, Test}
 import org.apache.kafka.common.requests.MetadataResponse
 import org.apache.kafka.common.resource.{Resource, ResourceType}
 import org.junit.rules.Timeout
 import org.junit.Assert._
 
+import scala.util.Random
 import scala.collection.JavaConverters._
 
 /**
@@ -216,6 +218,77 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
   }
 
   @Test
+  def testDescribeLogDirs(): Unit = {
+    client = AdminClient.create(createConfig())
+    val topic = "topic"
+    val leaderByPartition = TestUtils.createTopic(zkUtils, topic, 10, 1, servers, new Properties())
+    val partitionsByBroker = leaderByPartition.groupBy { case (partitionId, leaderId) => leaderId }.mapValues(_.keys.toSeq)
+    val brokers = (0 until brokerCount).map(Integer.valueOf)
+    val logDirInfosByBroker = client.describeLogDirs(brokers.asJava).all.get
+
+    (0 until brokerCount).foreach { brokerId =>
+      val server = servers.find(_.config.brokerId == brokerId).get
+      val expectedPartitions = partitionsByBroker(brokerId)
+      val logDirInfos = logDirInfosByBroker.get(brokerId)
+      val replicaInfos = logDirInfos.asScala.flatMap { case (logDir, logDirInfo) => logDirInfo.replicaInfos.asScala }.filterKeys(_.topic == topic)
+
+      assertEquals(expectedPartitions.toSet, replicaInfos.keys.map(_.partition).toSet)
+      logDirInfos.asScala.foreach { case (logDir, logDirInfo) =>
+        logDirInfo.replicaInfos.asScala.keys.foreach(tp =>
+          assertEquals(server.logManager.getLog(tp).get.dir.getParent, logDir)
+        )
+      }
+    }
+
+    client.close()
+  }
+
+  @Test
+  def testDescribeReplicaLogDir(): Unit = {
+    client = AdminClient.create(createConfig())
+    val topic = "topic"
+    val leaderByPartition = TestUtils.createTopic(zkUtils, topic, 10, 1, servers, new Properties())
+    val replicas = leaderByPartition.map { case (partition, brokerId) => new TopicPartitionReplica(topic, partition, brokerId) }.toSeq
+
+    val replicaDirInfos = client.describeReplicaLogDir(replicas.asJavaCollection).all.get
+    replicaDirInfos.asScala.foreach { case (topicPartitionReplica, replicaDirInfo) =>
+      val server = servers.find(_.config.brokerId == topicPartitionReplica.brokerId()).get
+      val tp = new TopicPartition(topicPartitionReplica.topic(), topicPartitionReplica.partition())
+      assertEquals(server.logManager.getLog(tp).get.dir.getParent, replicaDirInfo.getCurrentReplicaLogDir)
+    }
+
+    client.close()
+  }
+
+  @Test
+  def testAlterReplicaLogDirBeforeTopicCreation(): Unit = {
+    val adminClient = AdminClient.create(createConfig())
+    val topic = "topic"
+    val tp = new TopicPartition(topic, 0)
+
+    val replicaAssignment = servers.map { server =>
+      val logDir = new File(server.config.logDirs(Random.nextInt(2))).getAbsolutePath
+      new TopicPartitionReplica(topic, 0, server.config.brokerId) -> logDir
+    }.toMap
+
+    adminClient.alterReplicaDir(replicaAssignment.asJava, new AlterReplicaDirOptions()).values().asScala.values.foreach { future =>
+      try {
+        future.get()
+        fail("Future should fail with ReplicaNotAvailableException")
+      } catch {
+        case e: ExecutionException => assertTrue(e.getCause.isInstanceOf[ReplicaNotAvailableException])
+      }
+    }
+
+    TestUtils.createTopic(zkUtils, topic, 1, brokerCount, servers, new Properties())
+    servers.foreach { server =>
+      val logDir = server.logManager.getLog(tp).get.dir.getParent
+      assertEquals(replicaAssignment(new TopicPartitionReplica(topic, 0, server.config.brokerId)), logDir)
+    }
+    adminClient.close()
+  }
+
+  @Test
   def testDescribeAndAlterConfigs(): Unit = {
     client = AdminClient.create(createConfig)
 
@@ -366,7 +439,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
 
   override def generateConfigs = {
     val cfgs = TestUtils.createBrokerConfigs(brokerCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties)
+      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = 2)
     cfgs.foreach { config =>
       config.setProperty(KafkaConfig.ListenersProp, s"${listenerName.value}://localhost:${TestUtils.RandomPort}")
       config.remove(KafkaConfig.InterBrokerSecurityProtocolProp)

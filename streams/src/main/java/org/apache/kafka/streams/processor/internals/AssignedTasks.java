@@ -192,7 +192,7 @@ class AssignedTasks {
         RuntimeException exception = null;
         for (final Task task : tasks) {
             try {
-                task.close(false);
+                task.close(false, false);
             } catch (final RuntimeException e) {
                 log.error("{} Failed to close {}, {}", logPrefix, taskTypeName, task.id(), e);
                 if (exception == null) {
@@ -220,7 +220,7 @@ class AssignedTasks {
             } catch (final RuntimeException e) {
                 log.error("{} Suspending {} {} failed due to the following error:", logPrefix, taskTypeName, task.id(), e);
                 try {
-                    task.close(false);
+                    task.close(false, false);
                 } catch (final Exception f) {
                     log.error("{} After suspending failed, closing the same {} {} failed again due to the following error:", logPrefix, taskTypeName, task.id(), f);
                 }
@@ -235,7 +235,7 @@ class AssignedTasks {
     private void closeZombieTask(final Task task) {
         log.warn("{} Producer of task {} fenced; closing zombie task", logPrefix, task.id());
         try {
-            task.close(false);
+            task.close(false, true);
         } catch (final Exception e) {
             log.warn("{} Failed to close zombie {} due to {}, ignore and proceed", taskTypeName, logPrefix, e);
         }
@@ -420,7 +420,7 @@ class AssignedTasks {
             if (!newAssignment.containsKey(suspendedTask.id()) || !suspendedTask.partitions().equals(newAssignment.get(suspendedTask.id()))) {
                 log.debug("{} Closing suspended and not re-assigned {} {}", logPrefix, taskTypeName, suspendedTask.id());
                 try {
-                    suspendedTask.closeSuspended(true, null);
+                    suspendedTask.closeSuspended(true, false, null);
                 } catch (final Exception e) {
                     log.error("{} Failed to remove suspended {} {} due to the following error:", logPrefix, taskTypeName, suspendedTask.id(), e);
                 } finally {
@@ -439,7 +439,7 @@ class AssignedTasks {
     private void close(final Collection<Task> tasks, final boolean clean) {
         for (final Task task : tasks) {
             try {
-                task.close(clean);
+                task.close(clean, false);
             } catch (final Throwable t) {
                 log.error("{} Failed while closing {} {} due to the following error:",
                           logPrefix,

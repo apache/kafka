@@ -82,7 +82,7 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
         start_cmd += "%s/zookeeper.properties &>> %s &" % (ZookeeperService.ROOT, self.logs["zk_log"]["path"])
         node.account.ssh(start_cmd)
 
-        wait_until(lambda: self.listening(node), timeout_sec=10, err_msg="Zookeeper node failed to start")
+        wait_until(lambda: self.listening(node), timeout_sec=30, err_msg="Zookeeper node failed to start")
 
     def listening(self, node):
         try:
