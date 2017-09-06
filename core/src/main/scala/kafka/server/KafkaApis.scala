@@ -2001,16 +2001,19 @@ class KafkaApis(val requestChannel: RequestChannel,
   private def closeConnection(request: RequestChannel.Request): Unit = {
     // This case is used when the request handler has encountered an error, but the client
     // does not expect a response (e.g. when produce request has acks set to 0)
-    requestChannel.sendResponse(new RequestChannel.Response(request, None, CloseConnectionAction))
+    requestChannel.sendResponse(new RequestChannel.Response(request, None, CloseConnectionAction, None))
   }
 
   private def sendResponse(request: RequestChannel.Request, responseOpt: Option[AbstractResponse]): Unit = {
     responseOpt match {
       case Some(response) =>
         val responseSend = request.context.buildResponse(response)
-        requestChannel.sendResponse(new RequestChannel.Response(request, Some(responseSend), SendAction))
+        val responseString =
+          if (RequestChannel.isRequestLoggingEnabled) Some(response.toString(request.context.header.apiVersion))
+          else None
+        requestChannel.sendResponse(new RequestChannel.Response(request, Some(responseSend), SendAction, responseString))
       case None =>
-        requestChannel.sendResponse(new RequestChannel.Response(request, None, NoOpAction))
+        requestChannel.sendResponse(new RequestChannel.Response(request, None, NoOpAction, None))
     }
   }
 
