@@ -54,14 +54,14 @@ class KafkaRequestHandler(id: Int,
 
       req match {
         case RequestChannel.ShutdownRequest =>
-          debug("Kafka request handler %d on broker %d received shut down command".format(id, brokerId))
+          debug(s"Kafka request handler $id on broker $brokerId received shut down command")
           latch.countDown()
           return
 
         case request: RequestChannel.Request =>
           try {
             request.requestDequeueTimeNanos = endTime
-            trace("Kafka request handler %d on broker %d handling request %s".format(id, brokerId, request))
+            trace(s"Kafka request handler $id on broker $brokerId handling request $request")
             apis.handle(request)
           } catch {
             case e: FatalExitError =>
