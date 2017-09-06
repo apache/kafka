@@ -32,7 +32,7 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
                                 private val time: Time,
                                 threadNamePrefix: String,
                                 quotaCallback: Option[ClientQuotaCallback])
-                                extends ClientQuotaManager(config, metrics, QuotaType.Request, time, threadNamePrefix, quotaCallback) {
+                                extends ClientQuotaManager(config, metrics, QuotaType.Request, time, None, threadNamePrefix, quotaCallback) {
   val maxThrottleTimeMs = TimeUnit.SECONDS.toMillis(this.config.quotaWindowSizeSeconds)
   def exemptSensor = getOrCreateSensor(exemptSensorName, exemptMetricName)
 

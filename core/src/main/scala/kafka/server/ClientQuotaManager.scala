@@ -23,7 +23,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import kafka.network.RequestChannel
 import kafka.network.RequestChannel._
 import kafka.server.ClientQuotaManager._
-import kafka.utils.{Logging, ShutdownableThread}
+import kafka.utils.{KafkaScheduler, Logging, ShutdownableThread}
 import org.apache.kafka.common.{Cluster, MetricName}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.Metrics
@@ -160,6 +160,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
                          private val metrics: Metrics,
                          private val quotaType: QuotaType,
                          private val time: Time,
+                         private val schedulerOpt: Option[KafkaScheduler],
                          threadNamePrefix: String,
                          clientQuotaCallback: Option[ClientQuotaCallback] = None) extends Logging {
   private val staticConfigClientIdQuota = Quota.upperBound(config.quotaBytesPerSecondDefault)
@@ -183,6 +184,11 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   start() // Use start method to keep spotbugs happy
   private def start(): Unit = {
     throttledChannelReaper.start()
+    schedulerOpt match {
+      case Some(scheduler) =>
+        scheduler.schedule("quota-metrics-logger-%s".format(quotaType), logQuotaMetrics, 60, 60, TimeUnit.SECONDS)
+      case _ =>
+    }
   }
 
   /**
@@ -200,6 +206,19 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
         // Notify the socket server that throttling is done for this channel, so that it can try to unmute the channel.
         throttledChannel.notifyThrottlingDone()
       }
+    }
+  }
+
+  def logQuotaMetrics(): Unit = {
+    import scala.collection.JavaConverters._
+    val metricsMap = metrics.metrics().asScala;
+    metricsMap.foreach {
+      case (metricName: MetricName, kafkaMetric: KafkaMetric) =>
+        if (metricName.group().equals(quotaType.toString) &&
+          (metricName.name().equals("byte-rate") || metricName.name().equals("throttle-time")) &&
+          metricName.tags().containsKey("client-id")) {
+          info("Metric name (" + metricName + ") has value (" + kafkaMetric.value() + ")")
+        }
     }
   }
 
