@@ -842,8 +842,9 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                        // When the key and/or value types do not match the configured
                        // default serdes, we must explicitly specify serdes.
                        KGroupedStream&lt;byte[], String&gt; groupedStream = stream.groupByKey(
-                           Serdes.ByteArray(), /* key */
-                           Serdes.String()     /* value */
+                           Serialized.with(
+                                Serdes.ByteArray(), /* key */
+                                Serdes.String())     /* value */
                        );
                 </pre>
             </td>
@@ -883,15 +884,17 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                        // Group the stream by a new key and key type
                        KGroupedStream&lt;String, String&gt; groupedStream = stream.groupBy(
                            (key, value) -> value,
-                           Serdes.String(), /* key (note: type was modified) */
-                           Serdes.String()  /* value */
+                           Serialize.with(
+                                Serdes.String(), /* key (note: type was modified) */
+                                Serdes.String())  /* value */
                        );
 
                        // Group the table by a new key and key type, and also modify the value and value type.
                        KGroupedTable&lt;String, Integer&gt; groupedTable = table.groupBy(
                            (key, value) -> KeyValue.pair(value, value.length()),
-                           Serdes.String(), /* key (note: type was modified) */
-                           Serdes.Integer() /* value (note: type was modified) */
+                           Serialized.with(
+                               Serdes.String(), /* key (note: type was modified) */
+                               Serdes.Integer()) /* value (note: type was modified) */
                        );
 
 
@@ -905,8 +908,9 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                                   return value;
                                }
                            },
-                           Serdes.String(), /* key (note: type was modified) */
-                           Serdes.String()  /* value */
+                           Serialized.with(
+                                Serdes.String(), /* key (note: type was modified) */
+                                Serdes.String())  /* value */
                        );
 
                        // Group the table by a new key and key type, and also modify the value and value type.
@@ -917,8 +921,9 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                                    return KeyValue.pair(value, value.length());
                                 }
                             },
-                            Serdes.String(), /* key (note: type was modified) */
-                            Serdes.Integer() /* value (note: type was modified) */
+                            Serialized.with(
+                                Serdes.String(), /* key (note: type was modified) */
+                                Serdes.Integer()) /* value (note: type was modified) */
                        );
                 </pre>
             </td>
@@ -1659,7 +1664,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
         KStream&lt;String, Integer&gt; wordCounts = ...;
 
         KGroupedStream&lt;String, Integer&gt; groupedStream = wordCounts
-            .groupByKey(Serdes.String(), Serdes.Integer());
+            .groupByKey(Serialized.with(Serdes.String(), Serdes.Integer()));
 
         KTable&lt;String, Integer&gt; aggregated = groupedStream.aggregate(
             () -> 0, /* initializer */
@@ -1763,7 +1768,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
         // its prime purpose in this example is to show the *effects* of the grouping
         // in the subsequent aggregation.
         KGroupedTable&lt;String, Integer&gt; groupedTable = userProfiles
-            .groupBy((user, region) -> KeyValue.pair(region, user.length()), Serdes.String(), Serdes.Integer());
+            .groupBy((user, region) -> KeyValue.pair(region, user.length()), Serialized.with(Serdes.String(), Serdes.Integer()));
 
         KTable&lt;String, Integer&gt; aggregated = groupedTable.aggregate(
             () -> 0, /* initializer */
@@ -2117,7 +2122,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
           // Define the processing topology (here: WordCount)
           KGroupedStream&lt;String, String&gt; groupedByWord = textLines
             .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))
-            .groupBy((key, word) -> word, stringSerde, stringSerde);
+            .groupBy((key, word) -> word, Serialized.with(stringSerde, stringSerde));
 
           // Create a key-value store named "CountsKeyValueStore" for the all-time word counts
           groupedByWord.count("CountsKeyValueStore");
@@ -2173,7 +2178,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
           // Define the processing topology (here: WordCount)
           KGroupedStream&lt;String, String&gt; groupedByWord = textLines
             .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))
-            .groupBy((key, word) -> word, stringSerde, stringSerde);
+            .groupBy((key, word) -> word, Serialized.with(stringSerde, stringSerde));
 
           // Create a window state store named "CountsWindowStore" that contains the word counts for every minute
           groupedByWord.count(TimeWindows.of(60000), "CountsWindowStore");
@@ -2396,7 +2401,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
 
           KGroupedStream&lt;String, String&gt; groupedByWord = textLines
               .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))
-              .groupBy((key, word) -> word, stringSerde, stringSerde);
+              .groupBy((key, word) -> word, Serialized.with(stringSerde, stringSerde));
 
           // This call to `count()` creates a state store named "word-count".
           // The state store is discoverable and can be queried interactively.

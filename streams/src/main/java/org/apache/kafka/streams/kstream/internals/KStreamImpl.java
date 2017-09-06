@@ -30,6 +30,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.PrintForeachAction;
+import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
@@ -714,7 +715,21 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public <K1> KGroupedStream<K1, V> groupBy(final KeyValueMapper<? super K, ? super V, K1> selector) {
-        return groupBy(selector, null, null);
+        return groupBy(selector, Serialized.<K1, V>with(null, null));
+    }
+
+    @Override
+    public <KR> KGroupedStream<KR, V> groupBy(final KeyValueMapper<? super K, ? super V, KR> selector,
+                                              final Serialized<KR, V> serialized) {
+        Objects.requireNonNull(selector, "selector can't be null");
+        Objects.requireNonNull(serialized, "serialized can't be null");
+        String selectName = internalSelectKey(selector);
+        return new KGroupedStreamImpl<>(builder,
+                                        selectName,
+                                        sourceNodes,
+                                        serialized.keySerde(),
+                                        serialized.valueSerde(),
+                                        true);
     }
 
     @Override
@@ -722,28 +737,29 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                               final Serde<K1> keySerde,
                                               final Serde<V> valSerde) {
         Objects.requireNonNull(selector, "selector can't be null");
-        String selectName = internalSelectKey(selector);
-        return new KGroupedStreamImpl<>(builder,
-                                        selectName,
-                                        sourceNodes,
-                                        keySerde,
-                                        valSerde, true);
+        return groupBy(selector, Serialized.with(keySerde, valSerde));
     }
 
     @Override
     public KGroupedStream<K, V> groupByKey() {
-        return groupByKey(null, null);
+        return groupByKey(Serialized.<K, V>with(null, null));
+    }
+
+    @Override
+    public KGroupedStream<K, V> groupByKey(final Serialized<K, V> serialized) {
+        return new KGroupedStreamImpl<>(builder,
+                                        this.name,
+                                        sourceNodes,
+                                        serialized.keySerde(),
+                                        serialized.valueSerde(),
+                                        this.repartitionRequired);
+
     }
 
     @Override
     public KGroupedStream<K, V> groupByKey(final Serde<K> keySerde,
                                            final Serde<V> valSerde) {
-        return new KGroupedStreamImpl<>(builder,
-                                        this.name,
-                                        sourceNodes,
-                                        keySerde,
-                                        valSerde,
-                                        this.repartitionRequired);
+        return groupByKey(Serialized.with(keySerde, valSerde));
     }
 
     private static <K, V> StateStoreSupplier createWindowedStateStore(final JoinWindows windows,

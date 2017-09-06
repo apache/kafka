@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -60,8 +61,7 @@ public class KStreamWindowAggregateTest {
 
         KStream<String, String> stream1 = builder.stream(strSerde, strSerde, topic1);
         KTable<Windowed<String>, String> table2 =
-            stream1.groupByKey(strSerde,
-                               strSerde)
+            stream1.groupByKey(Serialized.with(strSerde, strSerde))
                 .aggregate(MockInitializer.STRING_INIT,
                            MockAggregator.TOSTRING_ADDER,
                            TimeWindows.of(10).advanceBy(5),
@@ -153,7 +153,7 @@ public class KStreamWindowAggregateTest {
 
         KStream<String, String> stream1 = builder.stream(strSerde, strSerde, topic1);
         KTable<Windowed<String>, String> table1 =
-            stream1.groupByKey(strSerde, strSerde)
+            stream1.groupByKey(Serialized.with(strSerde, strSerde))
                 .aggregate(MockInitializer.STRING_INIT,
                            MockAggregator.TOSTRING_ADDER,
                            TimeWindows.of(10).advanceBy(5),
@@ -164,7 +164,7 @@ public class KStreamWindowAggregateTest {
 
         KStream<String, String> stream2 = builder.stream(strSerde, strSerde, topic2);
         KTable<Windowed<String>, String> table2 =
-            stream2.groupByKey(strSerde, strSerde)
+            stream2.groupByKey(Serialized.with(strSerde, strSerde))
                 .aggregate(MockInitializer.STRING_INIT,
                            MockAggregator.TOSTRING_ADDER,
                            TimeWindows.of(10).advanceBy(5),
