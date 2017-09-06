@@ -40,15 +40,15 @@ public class WindowedDeserializer<T> implements Deserializer<Windowed<T>> {
     
     // Default constructor needed by Kafka
     public WindowedDeserializer() {
-        this.windowSize = Long.MAX_VALUE;
+        this(null, Long.MAX_VALUE);
     }
 
     public WindowedDeserializer(Deserializer<T> inner) {
-        this.inner = inner;
-        this.windowSize = Long.MAX_VALUE;
+        this(inner, Long.MAX_VALUE);
     }
 
-    public WindowedDeserializer(Deserializer<T> inner, final long windowSize) {
+    public WindowedDeserializer(final Deserializer<T> inner,
+            final long windowSize) {
         this.inner = inner;
         this.windowSize = windowSize;
     }

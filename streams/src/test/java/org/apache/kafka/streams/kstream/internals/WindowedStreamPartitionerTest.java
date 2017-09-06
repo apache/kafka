@@ -138,7 +138,7 @@ public class WindowedStreamPartitionerTest {
         props.remove("value.deserializer.inner.class");
         WindowedDeserializer<?> windowedDeserializer1 = new WindowedDeserializer<>();
         windowedDeserializer1.configure(props, false);
-        Deserializer<?> inner1 = windowedDeserializer1.innerDeserializer();
+        final Deserializer<?> inner1 = windowedDeserializer1.innerDeserializer();
         assertNotNull("Inner deserializer should be not null", inner1);
         assertTrue("Inner deserializer type should be ByteArrayDeserializer", inner1 instanceof ByteArrayDeserializer);
         windowedDeserializer.close();
