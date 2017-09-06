@@ -31,7 +31,7 @@ class ConsumerPerformanceTest {
   @Test
   def testDetailedHeaderMatchBody(): Unit = {
     testHeaderMatchContent(detailed = true, useOldConsumer = false, 2, () => ConsumerPerformance.printProgressMessage(1, 1024 * 1024, 0, 1, 0, 0, 1,
-      dateFormat, Some(1L), Some(1L)))
+      dateFormat, Some(1L), Some(1L), Some(1L)))
     testHeaderMatchContent(detailed = true, useOldConsumer = true, 4, () => ConsumerPerformance.printProgressMessage(1, 1024 * 1024, 0, 1, 0, 0, 1,
       dateFormat))
   }

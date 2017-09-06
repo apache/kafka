@@ -65,8 +65,7 @@ object ConsumerPerformance {
       val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](config.props)
       consumer.subscribe(Collections.singletonList(config.topic))
       startMs = System.currentTimeMillis
-      consume(consumer, List(config.topic), config.numMessages, 1000,
-        config, totalMessagesRead, totalBytesRead, joinGroupTimeInMs, startMs)
+      consume(consumer, List(config.topic), config.numMessages, 1000, config, totalMessagesRead, totalBytesRead, joinGroupTimeInMs, startMs)
       endMs = System.currentTimeMillis
 
       if (config.printMetrics) {
@@ -125,11 +124,12 @@ object ConsumerPerformance {
   }
 
   private[tools] def printHeader(showDetailedStats: Boolean, useOldConsumer: Boolean): Unit = {
-    val newFieldsInHeader = s"${if (!useOldConsumer) ", rebalance.time.ms, fetch.time.ms, fetch.MB.sec, fetch.nMsg.sec" else ""}"
+    val newFieldsInHeader = s"${if (!useOldConsumer) ", total.rebalance.time.ms, fetch.time.ms, fetch.MB.sec, fetch.nMsg.sec" else ""}"
     if (!showDetailedStats) {
         println("start.time, end.time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec" + newFieldsInHeader)
       } else {
-        println("time, threadId, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec" + newFieldsInHeader)
+        println("time, threadId, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec" +
+          s"${if (useOldConsumer) "" else ", rebalance.time.ms" + newFieldsInHeader}")
     }
   }
 
@@ -147,6 +147,7 @@ object ConsumerPerformance {
     var lastBytesRead = 0L
     var lastMessagesRead = 0L
     var joinStart = 0L
+    var joinTimeMsInSingleRound = 0L
 
     // Wait for group join, metadata fetch, etc
     val joinTimeout = 10000
@@ -155,6 +156,7 @@ object ConsumerPerformance {
       def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) {
         isAssigned.set(true)
         joinTime.addAndGet(System.currentTimeMillis - joinStart)
+        joinTimeMsInSingleRound = System.currentTimeMillis - joinStart
       }
       def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) {
         isAssigned.set(false)
@@ -190,7 +192,8 @@ object ConsumerPerformance {
         if (currentTimeMillis - lastReportTime >= config.reportingInterval) {
           if (config.showDetailedStats)
             printProgressMessage(0, bytesRead, lastBytesRead, messagesRead, lastMessagesRead,
-              lastReportTime, currentTimeMillis, config.dateFormat, Some(testStartTime), Some(joinTime.get))
+              lastReportTime, currentTimeMillis, config.dateFormat, Some(testStartTime), Some(joinTime.get), Some(joinTimeMsInSingleRound))
+          joinTimeMsInSingleRound = 0L
           lastReportTime = currentTimeMillis
           lastMessagesRead = messagesRead
           lastBytesRead = bytesRead
@@ -211,7 +214,8 @@ object ConsumerPerformance {
                            endMs: Long,
                            dateFormat: SimpleDateFormat,
                            beginTime: Option[Long] = None,
-                           joinTimeOpt: Option[Long] = None) = {
+                           joinTimeOpt: Option[Long] = None,
+                           periodicJoinTimeInMs: Option[Long] = None) = {
     val elapsedMs: Double = endMs - startMs
     val totalMBRead = (bytesRead * 1.0) / (1024 * 1024)
     val mbRead = ((bytesRead - lastBytesRead) * 1.0) / (1024 * 1024)
@@ -220,7 +224,8 @@ object ConsumerPerformance {
     joinTimeOpt match {
       case Some(joinTime) =>
         val fetchTimeMs = endMs - beginTime.getOrElse(startMs) - joinTime
-        println(", %d, %d, %.4f, %.4f".format(joinTime, fetchTimeMs, (bytesRead * 1.0 / (1024 * 1024) / (fetchTimeMs / 1000.0)),
+        println(", %d, %d, %d, %.4f, %.4f".format(
+          periodicJoinTimeInMs.getOrElse(0L), joinTime, fetchTimeMs, (bytesRead * 1.0 / (1024 * 1024) / (fetchTimeMs / 1000.0)),
           messagesRead / (fetchTimeMs / 1000.0)))
       case None => println()
     }
