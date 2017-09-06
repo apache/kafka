@@ -555,15 +555,18 @@ public class SenderTest {
         assertEquals(-1, transactionManager.lastAckedSequence(tp0));
         assertEquals(1, client.inFlightRequestCount());
 
-        sender.run(time.milliseconds()); // resend request 1
+        sender.run(time.milliseconds()); // Do nothing, we are reduced to one in flight request during retries.
 
-        assertEquals(2, client.inFlightRequestCount());
+        assertEquals(1, client.inFlightRequestCount());
 
         assertEquals(-1, transactionManager.lastAckedSequence(tp0));
 
         sendIdempotentProducerResponse(0, tp0, Errors.NONE, 0L);
         sender.run(time.milliseconds());  // receive response 0
-
+        assertEquals(0, transactionManager.lastAckedSequence(tp0));
+        assertEquals(0, client.inFlightRequestCount());
+        sender.run(time.milliseconds()); // send request 1
+        assertEquals(1, client.inFlightRequestCount());
         sendIdempotentProducerResponse(1, tp0, Errors.NONE, 1L);
         sender.run(time.milliseconds());  // receive response 1
 
@@ -906,12 +909,12 @@ public class SenderTest {
             responseMap.put(tp, new ProduceResponse.PartitionResponse(Errors.MESSAGE_TOO_LARGE));
             client.respond(new ProduceResponse(responseMap));
             sender.run(time.milliseconds()); // split and reenqueue
-            assertEquals("The next sequence should have been reset to 0", 0, txnManager.sequenceNumber(tp).longValue());
+            assertEquals("The next sequence should be 2", 2, txnManager.sequenceNumber(tp).longValue());
             // The compression ratio should have been improved once.
             assertEquals(CompressionType.GZIP.rate - CompressionRatioEstimator.COMPRESSION_RATIO_IMPROVING_STEP,
                     CompressionRatioEstimator.estimation(topic, CompressionType.GZIP), 0.01);
             sender.run(time.milliseconds()); // send the first produce request
-            assertEquals("The next sequence number should be 1", 1, txnManager.sequenceNumber(tp).longValue());
+            assertEquals("The next sequence number should be 2", 2, txnManager.sequenceNumber(tp).longValue());
             assertFalse("The future shouldn't have been done.", f1.isDone());
             assertFalse("The future shouldn't have been done.", f2.isDone());
             id = client.requests().peek().destination();
@@ -926,7 +929,7 @@ public class SenderTest {
 
             sender.run(time.milliseconds()); // receive
             assertTrue("The future should have been done.", f1.isDone());
-            assertEquals("The next sequence number should still be 1", 1, txnManager.sequenceNumber(tp).longValue());
+            assertEquals("The next sequence number should still be 2", 2, txnManager.sequenceNumber(tp).longValue());
             assertEquals("The last ack'd sequence number should be 0", 0, txnManager.lastAckedSequence(tp));
             assertFalse("The future shouldn't have been done.", f2.isDone());
             assertEquals("Offset of the first message should be 0", 0L, f1.get().offset());

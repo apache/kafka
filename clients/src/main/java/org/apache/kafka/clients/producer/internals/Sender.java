@@ -228,6 +228,12 @@ public class Sender implements Runnable {
 
     private long sendProducerData(long now) {
         Cluster cluster = metadata.fetch();
+
+
+        if (transactionManager != null && transactionManager.maybeResolveSequences()) {
+            transactionManager.resetProducerId();
+            return 0;
+        }
         // get the list of partitions with data ready to send
         RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(cluster, now);
 
@@ -264,25 +270,18 @@ public class Sender implements Runnable {
         }
 
         List<ProducerBatch> expiredBatches = this.accumulator.expiredBatches(this.requestTimeout, now);
-        boolean needsTransactionStateReset = false;
         // Reset the producer id if an expired batch has previously been sent to the broker. Also update the metrics
         // for expired batches. see the documentation of @TransactionState.resetProducerId to understand why
         // we need to reset the producer id here.
         if (!expiredBatches.isEmpty())
             log.trace("Expired {} batches in accumulator", expiredBatches.size());
         for (ProducerBatch expiredBatch : expiredBatches) {
-            failBatch(expiredBatch, -1, NO_TIMESTAMP, expiredBatch.timeoutException());
+            failBatch(expiredBatch, -1, NO_TIMESTAMP, expiredBatch.timeoutException(), false);
             if (transactionManager != null && expiredBatch.inRetry()) {
-                // transition to unknown state. mute partition.
-                needsTransactionStateReset = true;
+                // This ensures that no new batches are drained until the current in flight batches are fully resolved.
+                transactionManager.markSequenceUnresolved(expiredBatch.topicPartition);
             }
             this.sensors.recordErrors(expiredBatch.topicPartition.topic(), expiredBatch.recordCount);
-        }
-
-        metadata.fetch().leaderFor(new TopicPartition("fo", 1)).idString();
-        if (needsTransactionStateReset) {
-            transactionManager.resetProducerId();
-            return 0;
         }
 
         sensors.updateProduceRequestMetrics(batches);
@@ -495,8 +494,6 @@ public class Sender implements Runnable {
     private void completeBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response, long correlationId,
                                long now) {
         Errors error = response.error;
-        if (error != Errors.NONE)
-            maybeResetNextSequenceForPartition(batch.topicPartition, batch.baseSequence());
 
         if (error == Errors.MESSAGE_TOO_LARGE && batch.recordCount > 1 &&
                 (batch.magic() >= RecordBatch.MAGIC_VALUE_V2 || batch.isCompressed())) {
@@ -507,6 +504,8 @@ public class Sender implements Runnable {
                      batch.topicPartition,
                      this.retries - batch.attempts(),
                      error);
+            if (transactionManager != null)
+                transactionManager.stopTrackingBatch(batch);
             this.accumulator.splitAndReenqueue(batch);
             this.accumulator.deallocate(batch);
             this.sensors.recordBatchSplit();
@@ -528,7 +527,7 @@ public class Sender implements Runnable {
                 } else {
                     failBatch(batch, response, new OutOfOrderSequenceException("Attempted to retry sending a " +
                             "batch but the producer id changed from " + batch.producerId() + " to " +
-                            transactionManager.producerIdAndEpoch().producerId + " in the mean time. This batch will be dropped."));
+                            transactionManager.producerIdAndEpoch().producerId + " in the mean time. This batch will be dropped."), false);
                     this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
                 }
             } else {
@@ -540,7 +539,7 @@ public class Sender implements Runnable {
                 else
                     exception = error.exception();
                 // tell the user the result of their request
-                failBatch(batch, response, exception);
+                failBatch(batch, response, exception, true);
                 this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
             }
             if (error.exception() instanceof InvalidMetadataException) {
@@ -559,15 +558,6 @@ public class Sender implements Runnable {
             this.accumulator.unmutePartition(batch.topicPartition);
     }
 
-    private void maybeResetNextSequenceForPartition(TopicPartition topicPartition, int nextSequence) {
-        if (transactionManager != null)
-            if (transactionManager.isNextSequence(topicPartition, nextSequence))
-                // If we are retrying the first in flight request, then reset the next sequence number to be the
-                // the last ack'd sequence + 1. Subsequent batches will get the succeeding sequence numbers.
-                transactionManager.setNextSequence(topicPartition, nextSequence);
-
-    }
-
     private void reenqueueBatch(ProducerBatch batch, long currentTimeMs) {
         if (transactionManager != null)
             // Reset the sequence number for the retried batch. It will be set again on the next drain.
@@ -577,21 +567,25 @@ public class Sender implements Runnable {
     }
 
     private void completeBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response) {
-        if (transactionManager != null && transactionManager.hasProducerIdAndEpoch(batch.producerId(), batch.producerEpoch())) {
-            transactionManager.setLastAckedSequence(batch.topicPartition, batch.baseSequence() + batch.recordCount - 1);
-            log.debug("ProducerId: {}; Set last ack'd sequence number for topic-partition {} to {}", batch.producerId(), batch.topicPartition,
-                    transactionManager.lastAckedSequence(batch.topicPartition));
+        if (transactionManager != null) {
+            if (transactionManager.hasProducerIdAndEpoch(batch.producerId(), batch.producerEpoch())) {
+                transactionManager.setLastAckedSequence(batch.topicPartition, batch.baseSequence() + batch.recordCount - 1);
+                log.debug("ProducerId: {}; Set last ack'd sequence number for topic-partition {} to {}", batch.producerId(), batch.topicPartition,
+                        transactionManager.lastAckedSequence(batch.topicPartition));
+            }
+            transactionManager.stopTrackingBatch(batch);
         }
 
         batch.done(response.baseOffset, response.logAppendTime, null);
+
         this.accumulator.deallocate(batch);
     }
 
-    private void failBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response, RuntimeException exception) {
-        failBatch(batch, response.baseOffset, response.logAppendTime, exception);
+    private void failBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response, RuntimeException exception, boolean adjustSequenceNumbers) {
+        failBatch(batch, response.baseOffset, response.logAppendTime, exception, adjustSequenceNumbers);
     }
 
-    private void failBatch(ProducerBatch batch, long baseOffset, long logAppendTime, RuntimeException exception) {
+    private void failBatch(ProducerBatch batch, long baseOffset, long logAppendTime, RuntimeException exception, boolean adjustSequenceNumbers) {
         if (transactionManager != null) {
             if (exception instanceof OutOfOrderSequenceException
                     && !transactionManager.isTransactional()
@@ -612,6 +606,9 @@ public class Sender implements Runnable {
             } else if (transactionManager.isTransactional()) {
                 transactionManager.transitionToAbortableError(exception);
             }
+            transactionManager.stopTrackingBatch(batch);
+            if (adjustSequenceNumbers)
+                transactionManager.adjustSequencesDueToFailedBatch(batch);
         }
 
         batch.done(baseOffset, logAppendTime, exception);
@@ -624,8 +621,12 @@ public class Sender implements Runnable {
      * batches are certain to fail with an OutOfOrderSequence exception.
      */
     private boolean canRetry(ProducerBatch batch, Errors error) {
-        return (batch.attempts() < this.retries && error.exception() instanceof RetriableException) ||
-                (error.exception() instanceof OutOfOrderSequenceException && !transactionManager.isNextSequence(batch.topicPartition, batch.baseSequence()));
+        return batch.attempts() < this.retries &&
+                ((error.exception() instanceof RetriableException) ||
+                        (error.exception() instanceof OutOfOrderSequenceException &&
+                                transactionManager.hasProducerId(batch.producerId()) &&
+                                !transactionManager.partitionHasUnresolvedSequence(batch.topicPartition) &&
+                                !transactionManager.isNextSequence(batch.topicPartition, batch.baseSequence())));
     }
 
     /**

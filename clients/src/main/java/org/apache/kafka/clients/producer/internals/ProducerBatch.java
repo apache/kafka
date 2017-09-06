@@ -249,6 +249,16 @@ public final class ProducerBatch {
 
         produceFuture.set(ProduceResponse.INVALID_OFFSET, NO_TIMESTAMP, new RecordBatchTooLargeException());
         produceFuture.done();
+
+        if (hasSequence()) {
+            int sequence = baseSequence();
+            ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId(), producerEpoch());
+            for (ProducerBatch newBatch : batches) {
+                newBatch.setProducerState(producerIdAndEpoch, sequence, isTransactional());
+                newBatch.retry = true;
+                sequence += newBatch.recordCount;
+            }
+        }
         return batches;
     }
 
@@ -442,4 +452,11 @@ public final class ProducerBatch {
         return recordsBuilder.baseSequence();
     }
 
+    public boolean hasSequence() {
+        return baseSequence() != RecordBatch.NO_SEQUENCE;
+    }
+
+    public boolean isTransactional() {
+        return recordsBuilder.isTransactional();
+    }
 }

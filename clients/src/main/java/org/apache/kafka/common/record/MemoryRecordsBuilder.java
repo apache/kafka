@@ -280,10 +280,6 @@ public class MemoryRecordsBuilder {
     }
 
     public void unsetProducerState() {
-        this.producerId = RecordBatch.NO_PRODUCER_ID;
-        this.producerEpoch = RecordBatch.NO_PRODUCER_EPOCH;
-        this.baseSequence = RecordBatch.NO_SEQUENCE;
-        this.isTransactional = false;
         builtRecords = null;
     }
 

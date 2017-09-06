@@ -256,11 +256,10 @@ public final class RecordAccumulator {
         ProducerBatch last = deque.peekLast();
         if (last != null) {
             FutureRecordMetadata future = last.tryAppend(timestamp, key, value, headers, callback, time.milliseconds());
-            if (future == null) {
+            if (future == null)
                 last.closeForRecordAppends();
-            } else {
+            else
                 return new RecordAppendResult(future, deque.size() > 1 || last.isFull(), false);
-            }
         }
         return null;
     }
@@ -311,6 +310,7 @@ public final class RecordAccumulator {
         Deque<ProducerBatch> deque = getOrCreateDeque(batch.topicPartition);
         synchronized (deque) {
             deque.addFirst(batch);
+            maybeEnsureQueueIsOrdered(deque, batch);
         }
     }
 
@@ -333,9 +333,51 @@ public final class RecordAccumulator {
             // We treat the newly split batches as if they are not even tried.
             synchronized (partitionDequeue) {
                 partitionDequeue.addFirst(batch);
+                if (transactionManager != null) {
+                    // We should track the newly created batches since they already have assigned sequences.
+                    transactionManager.startTrackingBatch(batch);
+                    maybeEnsureQueueIsOrdered(partitionDequeue, batch);
+                }
             }
         }
         return numSplitBatches;
+    }
+
+    private void maybeEnsureQueueIsOrdered(Deque<ProducerBatch> deque, ProducerBatch batch) {
+        if (transactionManager != null) {
+            // When we are requeing and have enabled idempotence, the reenqueued batch must always have a sequence.
+            if (batch.baseSequence() == RecordBatch.NO_SEQUENCE)
+                throw new IllegalStateException("Trying to reenqueue a batch which doesn't have a sequence even " +
+                        "though idempotence is enabled.");
+
+            if (batch.baseSequence() != transactionManager.nextBatchBySequence(batch.topicPartition).baseSequence()) {
+                // The head of the queues have diverged. This means that the incoming batch should be placed somewhere further back.
+                // We need to find the right place for the incoming batch and insert it there.
+                // We will only enter this branch if we have multiple inflights sent to different brokers, perhaps
+                // because a leadership change occurred in between the drains. In this scenario, responses can come
+                // back out of order, requiring us to re order the batches ourselves rather than relying on the
+                // implicit ordering guarantees of the network client which are only on a per connection basis.
+
+                ProducerBatch incomingBatch = deque.pollFirst();
+                List<ProducerBatch> orderedBatches = new ArrayList<>();
+                while (deque.peekFirst() != null && deque.peekFirst().hasSequence() && deque.peekFirst().baseSequence() < incomingBatch.baseSequence())
+                    orderedBatches.add(deque.pollFirst());
+
+                log.debug("Reordered incoming batch with sequence {} for partition {}. It was placed in the queue at " +
+                        "position {}" + incomingBatch.baseSequence(), incomingBatch.topicPartition, orderedBatches.size());
+                // Either we have reached a point where there are batches without a sequence (ie. never been drained
+                // and are hence in order by default), or the batch at the front of the queue has a sequence greater
+                // than the incoming batch. This is the right place to add the incoming batch.
+                deque.addFirst(incomingBatch);
+
+                // Now we have to re insert the previously queued batches in the right order.
+                for (int i = orderedBatches.size() - 1; i >= 0; --i) {
+                    deque.addFirst(orderedBatches.get(i));
+                }
+
+                // At this point, the incoming batch has been queued in the correct place according to its sequence.
+            }
+        }
     }
 
     /**
@@ -470,10 +512,24 @@ public final class RecordAccumulator {
                                                 break;
 
                                             isTransactional = transactionManager.isTransactional();
+
+                                            if (!first.hasSequence() && transactionManager.partitionHasUnresolvedSequence(first.topicPartition))
+                                                // Don't drain any new batches while the state of previous sequence numbers
+                                                // is unknown. The previous batches would be unknown if they were aborted
+                                                // on the client after being sent to the broker at least once.
+                                                break;
+
+                                            if (first.hasSequence() && !first.equals(transactionManager.nextBatchBySequence(first.topicPartition)))
+                                                // If the queued batch already has an assigned sequence, then it is being
+                                                // retried. In this case, we wait until the next immediate batch is ready
+                                                // and drain that. We only move on when the next in line batch is complete (either successfully
+                                                // or due to a fatal broker error). This effectively reduces our
+                                                // in flight request count to 1.
+                                                break;
                                         }
 
                                         ProducerBatch batch = deque.pollFirst();
-                                        if (producerIdAndEpoch != null) {
+                                        if (producerIdAndEpoch != null && !batch.hasSequence()) {
                                             // If the batch is in retry, then we should not change the producer id and
                                             // sequence number, since this may introduce duplicates. In particular,
                                             // the previous attempt may actually have been accepted, and if we change
@@ -492,6 +548,8 @@ public final class RecordAccumulator {
                                             log.debug("Assigned producerId {} and producerEpoch {} to batch with sequence " +
                                                             "{} being sent to partition {}", producerIdAndEpoch.producerId,
                                                     producerIdAndEpoch.epoch, batch.baseSequence(), tp);
+
+                                            transactionManager.startTrackingBatch(batch);
                                         }
                                         batch.close();
                                         size += batch.records().sizeInBytes();
@@ -643,7 +701,7 @@ public final class RecordAccumulator {
             Deque<ProducerBatch> dq = getDeque(batch.topicPartition);
             boolean aborted = false;
             synchronized (dq) {
-                if (!batch.isClosed()) {
+                if ((transactionManager != null && !batch.hasSequence()) || (transactionManager == null && !batch.isClosed())) {
                     aborted = true;
                     batch.abortRecordAppends();
                     dq.remove(batch);
