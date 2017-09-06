@@ -696,12 +696,14 @@ class SocketServerTest extends JUnitSuite {
       val requestChannel = testableServer.requestChannel
 
       val requests = sockets.map(_ => receiveRequest(requestChannel))
+      val failedConnectionId = requests(0).context.connectionId
       // `KafkaChannel.disconnect()` cancels the selection key, triggering CancelledKeyException during send
-      testableSelector.channel(requests(0).context.connectionId).disconnect()
+      testableSelector.channel(failedConnectionId).disconnect()
       requests.foreach(processRequest(requestChannel, _))
-      testableServer.waitForChannelClose(requests(0).context.connectionId, SelectorOperation.Send, locallyClosed = false)
+      testableServer.waitForChannelClose(failedConnectionId, SelectorOperation.Send, locallyClosed = false)
 
-      assertProcessorHealthy(testableServer, Seq(sockets(1)))
+      val successfulSocket = if (isSocketConnectionId(failedConnectionId, sockets(0))) sockets(1) else sockets(0)
+      assertProcessorHealthy(testableServer, Seq(successfulSocket))
     })
   }
 
@@ -882,6 +884,10 @@ class SocketServerTest extends JUnitSuite {
     socket.close()
     TestUtils.waitUntilTrue(() => testableServer.connectionCount(localAddress) == 0, "Channels not removed")
   }
+
+  // Since all sockets use the same local host, it is sufficient to check the local port
+  def isSocketConnectionId(connectionId: String, socket: Socket): Boolean =
+    connectionId.contains(s":${socket.getLocalPort}-")
 
   class TestableSocketServer extends SocketServer(KafkaConfig.fromProps(props),
       new Metrics, Time.SYSTEM, credentialProvider) {
@@ -1087,9 +1093,7 @@ class SocketServerTest extends JUnitSuite {
     def notFailed(sockets: Seq[Socket]): Seq[Socket] = {
       assertEquals(1, allFailedChannels.size)
       val failedConnectionId = allFailedChannels.head
-      // Since all sockets use the same local host, it is sufficient to check the local port
-      val notFailedSockets = sockets.filterNot(socket => failedConnectionId.contains(s":${socket.getLocalPort}-"))
-      notFailedSockets
+      sockets.filterNot(socket => isSocketConnectionId(failedConnectionId, socket))
     }
   }
 }
