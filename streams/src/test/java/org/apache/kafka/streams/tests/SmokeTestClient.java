@@ -219,8 +219,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         // test repartition
         Agg agg = new Agg();
         cntTable.groupBy(agg.selector(),
-                         stringSerde,
-                         longSerde
+                         Serialized.with(stringSerde, longSerde)
         ).aggregate(agg.init(),
                     agg.adder(),
                     agg.remover(),
