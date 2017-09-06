@@ -18,10 +18,14 @@
 package kafka.log
 
 import java.io._
+import java.nio.ReadOnlyBufferException
+
 import org.junit.Assert._
-import java.util.{Collections, Arrays}
+import java.util.{Arrays, Collections}
+
 import org.junit._
 import org.scalatest.junit.JUnitSuite
+
 import scala.collection._
 import scala.util.Random
 import kafka.utils.TestUtils
@@ -164,6 +168,15 @@ class OffsetIndexTest extends JUnitSuite {
     idx.truncate()
     assertEquals("Full truncation should leave no entries", 0, idx.entries)
     idx.append(0, 0)
+  }
+
+  @Test
+  def testMakeReadOnly(): Unit = {
+    val idx = new OffsetIndex(nonExistantTempFile(), baseOffset = 0L, maxIndexSize = 10 * 8)
+    idx.append(1, 1)
+
+    idx.makeReadOnly()
+    assertWriteFails("Append should fail on read-only index", idx, 2, classOf[ReadOnlyBufferException])
   }
   
   def assertWriteFails[T](message: String, idx: OffsetIndex, offset: Int, klass: Class[T]) {

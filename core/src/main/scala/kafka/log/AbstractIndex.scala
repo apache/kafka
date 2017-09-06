@@ -185,6 +185,17 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   }
 
   /**
+    * Make the memory map read only
+    */
+  def makeReadOnly(): Unit = {
+    inLock(lock) {
+      val duplicate = mmap;
+      mmap = mmap.asReadOnlyBuffer().asInstanceOf[MappedByteBuffer];
+      CoreUtils.swallow(forceUnmap(duplicate))
+    }
+  }
+
+  /**
    * Do a basic sanity check on this index to detect obvious problems
    *
    * @throws IllegalArgumentException if any problems are found
