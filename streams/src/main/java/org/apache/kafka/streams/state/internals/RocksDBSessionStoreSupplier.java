@@ -56,35 +56,27 @@ public class RocksDBSessionStoreSupplier<K, V> extends AbstractStoreSupplier<K, 
                                                                                     NUM_SEGMENTS,
                                                                                     keySchema);
 
-        if (cached && logged) {
-            final ChangeLoggingSegmentedBytesStore logged = new ChangeLoggingSegmentedBytesStore(segmented);
-            final MeteredSegmentedBytesStore metered = new MeteredSegmentedBytesStore(logged,
-                                                                                      METRIC_SCOPE, time);
-            final RocksDBSessionStore<Bytes, byte[]> sessionStore
-                    = RocksDBSessionStore.bytesStore(metered);
+        final RocksDBSessionStore<Bytes, byte[]> bytesStore = RocksDBSessionStore.bytesStore(segmented);
+        return new MeteredSessionStore<>(maybeWrapCaching(maybeWrapLogged(bytesStore), segmentInterval),
+                                         METRIC_SCOPE,
+                                         keySerde,
+                                         valueSerde,
+                                         time);
 
-            return new CachingSessionStore<>(sessionStore, keySerde, valueSerde, segmentInterval);
+    }
+
+    private SessionStore<Bytes, byte[]> maybeWrapLogged(final SessionStore<Bytes, byte[]> inner) {
+        if (!logged) {
+            return inner;
         }
+        return new ChangeLoggingSessionBytesStore(inner);
+    }
 
-        if (cached) {
-            final MeteredSegmentedBytesStore metered = new MeteredSegmentedBytesStore(segmented,
-                                                                                      METRIC_SCOPE, time);
-            final RocksDBSessionStore<Bytes, byte[]> sessionStore
-                    = RocksDBSessionStore.bytesStore(metered);
-
-            return new CachingSessionStore<>(sessionStore, keySerde, valueSerde, segmentInterval);
+    private SessionStore<Bytes, byte[]> maybeWrapCaching(final SessionStore<Bytes, byte[]> inner, final long segmentInterval) {
+        if (!cached) {
+            return inner;
         }
-
-        if (logged) {
-            final ChangeLoggingSegmentedBytesStore logged = new ChangeLoggingSegmentedBytesStore(segmented);
-            final MeteredSegmentedBytesStore metered = new MeteredSegmentedBytesStore(logged,
-                                                                                      METRIC_SCOPE, time);
-            return new RocksDBSessionStore<>(metered, keySerde, valueSerde);
-        }
-
-        return new RocksDBSessionStore<>(
-                new MeteredSegmentedBytesStore(segmented, METRIC_SCOPE, time), keySerde, valueSerde);
-
+        return new CachingSessionStore<>(inner, keySerde, valueSerde, segmentInterval);
     }
 
     public long retentionPeriod() {

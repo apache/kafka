@@ -65,6 +65,7 @@ import java.util.concurrent.Future;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.requests.ResourceType.TOPIC;
+import static org.apache.kafka.common.requests.ResourceType.BROKER;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -357,6 +358,22 @@ public class KafkaAdminClientTest {
         }
     }
 
+    @Test
+    public void testDescribeConfigs() throws Exception {
+        try (MockKafkaAdminClientEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
+            env.kafkaClient().setNode(env.cluster().controller());
+            env.kafkaClient().prepareResponse(new DescribeConfigsResponse(0,
+                Collections.singletonMap(new org.apache.kafka.common.requests.Resource(BROKER, "0"),
+                    new DescribeConfigsResponse.Config(ApiError.NONE,
+                        Collections.<DescribeConfigsResponse.ConfigEntry>emptySet()))));
+            DescribeConfigsResult result2 = env.adminClient().describeConfigs(Collections.singleton(
+                new ConfigResource(ConfigResource.Type.BROKER, "0")));
+            result2.all().get();
+        }
+    }
+
     private static <T> void assertCollectionIs(Collection<T> collection, T... elements) {
         for (T element : elements) {
             assertTrue("Did not find " + element, collection.contains(element));
@@ -372,6 +389,8 @@ public class KafkaAdminClientTest {
     public static class FailureInjectingTimeoutProcessorFactory extends KafkaAdminClient.TimeoutProcessorFactory {
 
         private int numTries = 0;
+
+        private int failuresInjected = 0;
         
         @Override
         public KafkaAdminClient.TimeoutProcessor create(long now) {
@@ -380,7 +399,15 @@ public class KafkaAdminClientTest {
 
         synchronized boolean shouldInjectFailure() {
             numTries++;
-            return numTries == 3;
+            if (numTries == 1) {
+                failuresInjected++;
+                return true;
+            }
+            return false;
+        }
+
+        public synchronized int failuresInjected() {
+            return failuresInjected;
         }
 
         public final class FailureInjectingTimeoutProcessor extends KafkaAdminClient.TimeoutProcessor {

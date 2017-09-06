@@ -64,7 +64,6 @@ public class ScramSaslServer implements SaslServer {
     private String username;
     private ClientFirstMessage clientFirstMessage;
     private ServerFirstMessage serverFirstMessage;
-    private String serverNonce;
     private ScramCredential scramCredential;
 
     public ScramSaslServer(ScramMechanism mechanism, Map<String, ?> props, CallbackHandler callbackHandler) throws NoSuchAlgorithmException {
@@ -80,7 +79,7 @@ public class ScramSaslServer implements SaslServer {
             switch (state) {
                 case RECEIVE_CLIENT_FIRST_MESSAGE:
                     this.clientFirstMessage = new ClientFirstMessage(response);
-                    serverNonce = formatter.secureRandomString();
+                    String serverNonce = formatter.secureRandomString();
                     try {
                         String saslName = clientFirstMessage.saslName();
                         this.username = formatter.username(saslName);
@@ -90,6 +89,10 @@ public class ScramSaslServer implements SaslServer {
                         this.scramCredential = credentialCallback.scramCredential();
                         if (scramCredential == null)
                             throw new SaslException("Authentication failed: Invalid user credentials");
+                        String authorizationIdFromClient = clientFirstMessage.authorizationId();
+                        if (!authorizationIdFromClient.isEmpty() && !authorizationIdFromClient.equals(username))
+                            throw new SaslException("Authentication failed: Client requested an authorization id that is different from username");
+
                         if (scramCredential.iterations() < mechanism.minIterations())
                             throw new SaslException("Iterations " + scramCredential.iterations() +  " is less than the minimum " + mechanism.minIterations() + " for " + mechanism);
                         this.serverFirstMessage = new ServerFirstMessage(clientFirstMessage.nonce(),
@@ -109,6 +112,7 @@ public class ScramSaslServer implements SaslServer {
                         byte[] serverKey = scramCredential.serverKey();
                         byte[] serverSignature = formatter.serverSignature(serverKey, clientFirstMessage, serverFirstMessage, clientFinalMessage);
                         ServerFinalMessage serverFinalMessage = new ServerFinalMessage(null, serverSignature);
+                        clearCredentials();
                         setState(State.COMPLETE);
                         return serverFinalMessage.toBytes();
                     } catch (InvalidKeyException e) {
@@ -119,6 +123,7 @@ public class ScramSaslServer implements SaslServer {
                     throw new IllegalSaslStateException("Unexpected challenge in Sasl server state " + state);
             }
         } catch (SaslException e) {
+            clearCredentials();
             setState(State.FAILED);
             throw e;
         }
@@ -128,8 +133,7 @@ public class ScramSaslServer implements SaslServer {
     public String getAuthorizationID() {
         if (!isComplete())
             throw new IllegalStateException("Authentication exchange has not completed");
-        String authzId = clientFirstMessage.authorizationId();
-        return authzId == null || authzId.length() == 0 ? username : authzId;
+        return username;
     }
 
     @Override
@@ -182,6 +186,12 @@ public class ScramSaslServer implements SaslServer {
         } catch (InvalidKeyException e) {
             throw new SaslException("Sasl client verification failed", e);
         }
+    }
+
+    private void clearCredentials() {
+        scramCredential = null;
+        clientFirstMessage = null;
+        serverFirstMessage = null;
     }
 
     public static class ScramSaslServerFactory implements SaslServerFactory {

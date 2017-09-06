@@ -145,16 +145,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         partitionGroup = new PartitionGroup(partitionQueues);
         this.time = time;
-        log.debug("{} Initializing", logPrefix);
-        initializeStateStores();
+
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
         if (eosEnabled) {
             this.producer.initTransactions();
             this.producer.beginTransaction();
             transactionInFlight = true;
         }
-        initTopology();
-        processorContext.initialized();
     }
 
     /**
@@ -331,7 +328,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
     }
 
-    private void initTopology() {
+    void initTopology() {
         // initialize the task by initializing all its processor nodes in the topology
         log.trace("{} Initializing processor nodes of the topology", logPrefix);
         for (final ProcessorNode node : topology.processors()) {
@@ -384,14 +381,16 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         // close the processors
         // make sure close() is called for each node even when there is a RuntimeException
         RuntimeException exception = null;
-        for (final ProcessorNode node : topology.processors()) {
-            processorContext.setCurrentNode(node);
-            try {
-                node.close();
-            } catch (final RuntimeException e) {
-                exception = e;
-            } finally {
-                processorContext.setCurrentNode(null);
+        if (taskInitialized) {
+            for (final ProcessorNode node : topology.processors()) {
+                processorContext.setCurrentNode(node);
+                try {
+                    node.close();
+                } catch (final RuntimeException e) {
+                    exception = e;
+                } finally {
+                    processorContext.setCurrentNode(null);
+                }
             }
         }
 
@@ -401,7 +400,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     // helper to avoid calling suspend() twice if a suspended task is not reassigned and closed
-    public void closeSuspended(boolean clean, RuntimeException firstException) {
+    @Override
+    public void closeSuspended(boolean clean,
+                               final boolean isZombie,
+                               RuntimeException firstException) {
         try {
             closeStateManager(clean);
         } catch (final RuntimeException e) {
@@ -419,14 +421,18 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             if (eosEnabled) {
                 if (!clean) {
                     try {
-                        producer.abortTransaction();
+                        if (!isZombie) {
+                            producer.abortTransaction();
+                        }
                         transactionInFlight = false;
                     } catch (final ProducerFencedException e) {
                         // can be ignored: transaction got already aborted by brokers/transactional-coordinator if this happens
                     }
                 }
                 try {
-                    recordCollector.close();
+                    if (!isZombie) {
+                        recordCollector.close();
+                    }
                 } catch (final Throwable e) {
                     log.error("{} Failed to close producer due to the following error:", logPrefix, e);
                 }
@@ -456,9 +462,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * </pre>
      * @param clean shut down cleanly (ie, incl. flush and commit) if {@code true} --
      *              otherwise, just close open resources
+     * @param isZombie {@code true} is this task is a zombie or not
      */
     @Override
-    public void close(boolean clean) {
+    public void close(boolean clean,
+                      final boolean isZombie) {
         log.debug("{} Closing", logPrefix);
 
         RuntimeException firstException = null;
@@ -470,7 +478,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             log.error("{} Could not close task due to the following error:", logPrefix, e);
         }
 
-        closeSuspended(clean, firstException);
+        closeSuspended(clean, isZombie, firstException);
     }
 
     /**
@@ -590,6 +598,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     // visible for testing only
     RecordCollector createRecordCollector() {
         return new RecordCollectorImpl(producer, id.toString());
+    }
+
+    public boolean initialize() {
+        log.debug("{} Initializing", logPrefix);
+        initializeStateStores();
+        initTopology();
+        processorContext.initialized();
+        taskInitialized = true;
+        return topology.stateStores().isEmpty();
     }
 
 }

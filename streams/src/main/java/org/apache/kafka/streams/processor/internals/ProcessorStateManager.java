@@ -51,7 +51,6 @@ public class ProcessorStateManager implements StateManager {
     private final TaskId taskId;
     private final String logPrefix;
     private final boolean isStandby;
-    private final StateDirectory stateDirectory;
     private final ChangelogReader changelogReader;
     private final Map<String, StateStore> stores;
     private final Map<String, StateStore> globalStores;
@@ -60,6 +59,7 @@ public class ProcessorStateManager implements StateManager {
     private final Map<TopicPartition, Long> checkpointedOffsets;
     private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks, keyed by state topic name
     private final Map<String, String> storeToChangelogTopic;
+    private final List<TopicPartition> changelogPartitions = new ArrayList<>();
 
     // TODO: this map does not work with customized grouper where multiple partitions
     // of the same topic can be assigned to the same topic.
@@ -77,9 +77,8 @@ public class ProcessorStateManager implements StateManager {
                                  final StateDirectory stateDirectory,
                                  final Map<String, String> storeToChangelogTopic,
                                  final ChangelogReader changelogReader,
-                                 final boolean eosEnabled) throws LockException, IOException {
+                                 final boolean eosEnabled) throws IOException {
         this.taskId = taskId;
-        this.stateDirectory = stateDirectory;
         this.changelogReader = changelogReader;
         logPrefix = String.format("task [%s]", taskId);
 
@@ -95,10 +94,6 @@ public class ProcessorStateManager implements StateManager {
         restoreCallbacks = isStandby ? new HashMap<String, StateRestoreCallback>() : null;
         this.storeToChangelogTopic = storeToChangelogTopic;
 
-        if (!stateDirectory.lock(taskId, 5)) {
-            throw new LockException(String.format("%s Failed to lock the state directory for task %s",
-                logPrefix, taskId));
-        }
         // get a handle on the parent/base directory of the task directory
         // note that the parent directory could have been accidentally deleted here,
         // so catch that exception if that is the case
@@ -162,7 +157,6 @@ public class ProcessorStateManager implements StateManager {
         }
 
         final TopicPartition storePartition = new TopicPartition(topic, getPartition(topic));
-        changelogReader.validatePartitionExists(storePartition, store.name());
 
         if (isStandby) {
             if (store.persistent()) {
@@ -178,8 +172,10 @@ public class ProcessorStateManager implements StateManager {
                                                              offsetLimit(storePartition),
                                                              store.persistent(),
                                                              store.name());
+
             changelogReader.register(restorer);
         }
+        changelogPartitions.add(storePartition);
 
         stores.put(store.name(), store);
     }
@@ -279,38 +275,26 @@ public class ProcessorStateManager implements StateManager {
     @Override
     public void close(final Map<TopicPartition, Long> ackedOffsets) throws ProcessorStateException {
         RuntimeException firstException = null;
-        try {
-            // attempting to close the stores, just in case they
-            // are not closed by a ProcessorNode yet
-            if (!stores.isEmpty()) {
-                log.debug("{} Closing its state manager and all the registered state stores", logPrefix);
-                for (final Map.Entry<String, StateStore> entry : stores.entrySet()) {
-                    log.debug("{} Closing storage engine {}", logPrefix, entry.getKey());
-                    try {
-                        entry.getValue().close();
-                    } catch (final Exception e) {
-                        if (firstException == null) {
-                            firstException = new ProcessorStateException(String.format("%s Failed to close state store %s", logPrefix, entry.getKey()), e);
-                        }
-                        log.error("{} Failed to close state store {}: ", logPrefix, entry.getKey(), e);
+        // attempting to close the stores, just in case they
+        // are not closed by a ProcessorNode yet
+        if (!stores.isEmpty()) {
+            log.debug("{} Closing its state manager and all the registered state stores", logPrefix);
+            for (final Map.Entry<String, StateStore> entry : stores.entrySet()) {
+                log.debug("{} Closing storage engine {}", logPrefix, entry.getKey());
+                try {
+                    entry.getValue().close();
+                } catch (final Exception e) {
+                    if (firstException == null) {
+                        firstException = new ProcessorStateException(String.format("%s Failed to close state store %s", logPrefix, entry.getKey()), e);
                     }
+                    log.error("{} Failed to close state store {}: ", logPrefix, entry.getKey(), e);
                 }
-
-                if (ackedOffsets != null) {
-                    checkpoint(ackedOffsets);
-                }
-
             }
-        } finally {
-            // release the state directory directoryLock
-            try {
-                stateDirectory.unlock(taskId);
-            } catch (final IOException e) {
-                if (firstException == null) {
-                    firstException = new ProcessorStateException(String.format("%s Failed to release state dir lock", logPrefix), e);
-                }
-                log.error("{} Failed to release state dir lock: ", logPrefix, e);
+
+            if (ackedOffsets != null) {
+                checkpoint(ackedOffsets);
             }
+
         }
 
         if (firstException != null) {
@@ -372,5 +356,9 @@ public class ProcessorStateManager implements StateManager {
         }
 
         return new WrappedBatchingStateRestoreCallback(callback);
+    }
+
+    Collection<TopicPartition> changelogPartitions() {
+        return changelogPartitions;
     }
 }

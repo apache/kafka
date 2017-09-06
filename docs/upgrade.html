@@ -76,6 +76,16 @@
     <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-112%3A+Handle+disk+failure+for+JBOD">KIP-112</a>: FetchResponse v6 introduces error code for KafkaStorageException. </li>
 </ul>
 
+<h5><a id="upgrade_100_streams" href="#upgrade_100_streams">Upgrading a 1.0.0 Kafka Streams Application</a></h5>
+<ul>
+    <li> Upgrading your Streams application from 0.11.0 to 1.0.0 does not require a broker upgrade.
+        A Kafka Streams 1.0.0 application can connect to 0.11.0, 0.10.2 and 0.10.1 brokers (it is not possible to connect to 0.10.0 brokers though). </li>
+    <li> If you are monitoring on streams metrics, you will need make some changes to the metrics names in your reporting and monitoring code, because the metrics sensor hierarchy was changed. </li>
+    <li> There are a few public APIs including <code>ProcessorContext#schedule()</code>, <code>Processor#punctuate()</code> and <code>KStreamBuilder</code>, <code>TopologyBuilder</code> are being deprecated by new APIs.
+        We recommend making corresponding code changes, which should be very minor since the new APIs look quite similar, when you upgrade.
+    <li> See <a href="/{{version}}/documentation/streams#streams_api_changes_100">Streams API changes in 1.0.0</a> for more details. </li>
+</ul>
+
 <h4><a id="upgrade_11_0_0" href="#upgrade_11_0_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x, 0.10.1.x or 0.10.2.x to 0.11.0.0</a></h4>
 <p>Kafka 0.11.0.0 introduces a new message format version as well as wire protocol changes. By following the recommended rolling upgrade plan below,
   you guarantee no downtime during the upgrade. However, please review the <a href="#upgrade_1100_notable">notable changes in 0.11.0.0</a> before upgrading.
@@ -276,8 +286,6 @@ Kafka cluster before upgrading your clients. Version 0.10.2 brokers support 0.8.
   <li> The default values for two configurations of the StreamsConfig class were changed to improve the resiliency of Kafka Streams applications. The internal Kafka Streams producer <code>retries</code> default value was changed from 0 to 10. The internal Kafka Streams consumer <code>max.poll.interval.ms</code>  default value was changed from 300000 to <code>Integer.MAX_VALUE</code>.
   </li>
 </ul>
-
-
 
 <h5><a id="upgrade_1020_notable" href="#upgrade_1020_notable">Notable changes in 0.10.2.0</a></h5>
 <ul>

@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.internals.ChangelogReader;
 import org.apache.kafka.streams.processor.internals.StateRestorer;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
@@ -29,18 +30,13 @@ public class MockChangelogReader implements ChangelogReader {
     private final Set<TopicPartition> registered = new HashSet<>();
 
     @Override
-    public void validatePartitionExists(final TopicPartition topicPartition, final String storeName) {
-
+    public void register(final StateRestorer restorer) {
+        registered.add(restorer.partition());
     }
 
     @Override
-    public void register(final StateRestorer restorationInfo) {
-        registered.add(restorationInfo.partition());
-    }
-
-    @Override
-    public void restore() {
-
+    public Collection<TopicPartition> restore() {
+        return registered;
     }
 
     @Override
@@ -49,7 +45,7 @@ public class MockChangelogReader implements ChangelogReader {
     }
 
     @Override
-    public void clear() {
+    public void reset() {
         registered.clear();
     }
 

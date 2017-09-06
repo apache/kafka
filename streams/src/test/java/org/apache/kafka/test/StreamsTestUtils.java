@@ -17,14 +17,19 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.kstream.Windowed;
 
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
+
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 public class StreamsTestUtils {
 
@@ -63,5 +68,23 @@ public class StreamsTestUtils {
             results.add(iterator.next());
         }
         return results;
+    }
+
+    public static <K> void verifyKeyValueList(final List<KeyValue<K, byte[]>> expected, final List<KeyValue<K, byte[]>> actual) {
+        assertThat(actual.size(), equalTo(expected.size()));
+        for (int i = 0; i < actual.size(); i++) {
+            final KeyValue<K, byte[]> expectedKv = expected.get(i);
+            final KeyValue<K, byte[]> actualKv = actual.get(i);
+            assertThat(actualKv.key, equalTo(expectedKv.key));
+            assertThat(actualKv.value, equalTo(expectedKv.value));
+        }
+    }
+
+    public static void verifyWindowedKeyValue(final KeyValue<Windowed<Bytes>, byte[]> actual,
+                                              final Windowed<Bytes> expectedKey,
+                                              final String expectedValue) {
+        assertThat(actual.key.window(), equalTo(expectedKey.window()));
+        assertThat(actual.key.key(), equalTo(expectedKey.key()));
+        assertThat(actual.value, equalTo(expectedValue.getBytes()));
     }
 }

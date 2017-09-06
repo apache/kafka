@@ -1830,6 +1830,56 @@ public class Protocol {
     public static final Schema[] DELETE_ACLS_REQUEST = {DELETE_ACLS_REQUEST_V0};
     public static final Schema[] DELETE_ACLS_RESPONSE = {DELETE_ACLS_RESPONSE_V0};
 
+    public static final Schema ALTER_REPLICA_DIR_REQUEST_V0 = new Schema(
+        new Field("log_dirs", new ArrayOf(new Schema(
+                new Field("log_dir", STRING, "The absolute log directory path."),
+                new Field("topics", new ArrayOf(new Schema(
+                    new Field("topic", STRING, "The name of the topic."),
+                    new Field("partitions", new ArrayOf(INT32), "List of partition ids of the topic.")
+                )))
+        ))));
+
+    public static final Schema ALTER_REPLICA_DIR_RESPONSE_V0 = new Schema(
+        newThrottleTimeField(),
+        new Field("topics", new ArrayOf(new Schema(
+                new Field("topic", STRING, "The name of the topic."),
+                new Field("partitions", new ArrayOf(new Schema(
+                    new Field("partition", INT32, "The id of the partition."),
+                    new Field("error_code", INT16, "The error code for the partition.")
+                )))
+        ))));
+
+    public static final Schema[] ALTER_REPLICA_DIR_REQUEST = {ALTER_REPLICA_DIR_REQUEST_V0};
+    public static final Schema[] ALTER_REPLICA_DIR_RESPONSE = {ALTER_REPLICA_DIR_RESPONSE_V0};
+
+    public static final Schema DESCRIBE_LOG_DIRS_REQUEST_V0 = new Schema(
+        new Field("topics", ArrayOf.nullable(new Schema(
+            new Field("topic", STRING, "The name of the topic."),
+            new Field("partitions", new ArrayOf(INT32), "List of partition ids of the topic.")
+        )))
+    );
+
+    public static final Schema DESCRIBE_LOG_DIRS_RESPONSE_V0 = new Schema(
+        newThrottleTimeField(),
+        new Field("log_dirs",
+            new ArrayOf(new Schema(
+                new Field("error_code", INT16, "The error code for the log directory."),
+                new Field("log_dir", STRING, "The absolute log directory path."),
+                new Field("topics", new ArrayOf(new Schema(
+                    new Field("topic", STRING, "The name of the topic."),
+                    new Field("partitions", new ArrayOf(new Schema(
+                        new Field("partition", INT32, "The id of the partition."),
+                        new Field("size", INT64, "The size of the log segments of the partition in bytes."),
+                        new Field("offset_lag", INT64,
+                            "The lag of the log's LEO w.r.t. partition's HW (if it is the current log for the partition) or current replica's LEO (if it is the future log for the partition)"),
+                        new Field("is_future", BOOLEAN, "True if this log is created by AlterReplicaDirRequest and will replace the current log of the replica in the future.")
+                    )))
+                )))
+            ))));
+
+    public static final Schema[] DESCRIBE_LOG_DIRS_REQUEST = {DESCRIBE_LOG_DIRS_REQUEST_V0};
+    public static final Schema[] DESCRIBE_LOG_DIRS_RESPONSE = {DESCRIBE_LOG_DIRS_RESPONSE_V0};
+
     /* an array of all requests and responses with all schema versions; a null value in the inner array means that the
      * particular version is not supported */
     public static final Schema[][] REQUESTS = new Schema[ApiKeys.MAX_API_KEY + 1][];
@@ -1875,6 +1925,8 @@ public class Protocol {
         REQUESTS[ApiKeys.DELETE_ACLS.id] = DELETE_ACLS_REQUEST;
         REQUESTS[ApiKeys.DESCRIBE_CONFIGS.id] = DESCRIBE_CONFIGS_REQUEST;
         REQUESTS[ApiKeys.ALTER_CONFIGS.id] = ALTER_CONFIGS_REQUEST;
+        REQUESTS[ApiKeys.ALTER_REPLICA_DIR.id] = ALTER_REPLICA_DIR_REQUEST;
+        REQUESTS[ApiKeys.DESCRIBE_LOG_DIRS.id] = DESCRIBE_LOG_DIRS_REQUEST;
 
         RESPONSES[ApiKeys.PRODUCE.id] = PRODUCE_RESPONSE;
         RESPONSES[ApiKeys.FETCH.id] = FETCH_RESPONSE;
@@ -1910,6 +1962,8 @@ public class Protocol {
         RESPONSES[ApiKeys.DELETE_ACLS.id] = DELETE_ACLS_RESPONSE;
         RESPONSES[ApiKeys.DESCRIBE_CONFIGS.id] = DESCRIBE_CONFIGS_RESPONSE;
         RESPONSES[ApiKeys.ALTER_CONFIGS.id] = ALTER_CONFIGS_RESPONSE;
+        RESPONSES[ApiKeys.ALTER_REPLICA_DIR.id] = ALTER_REPLICA_DIR_RESPONSE;
+        RESPONSES[ApiKeys.DESCRIBE_LOG_DIRS.id] = DESCRIBE_LOG_DIRS_RESPONSE;
 
         /* set the minimum and maximum version of each api */
         for (ApiKeys api : ApiKeys.values()) {
@@ -1988,7 +2042,7 @@ public class Protocol {
     public static boolean requiresDelayedDeallocation(int apiKey) {
         return DELAYED_DEALLOCATION_REQUESTS.contains(ApiKeys.forId(apiKey));
     }
-    
+
     public static Schema requestHeaderSchema(short apiKey, short version) {
         if (apiKey == ApiKeys.CONTROLLED_SHUTDOWN_KEY.id && version == 0)
             // This will be removed once we remove support for v0 of ControlledShutdownRequest, which

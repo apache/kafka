@@ -34,7 +34,6 @@ import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
@@ -115,7 +114,7 @@ public class StreamTaskTest {
     private final MockProducer<byte[], byte[]> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer);
     private final MockConsumer<byte[], byte[]> restoreStateConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final StateRestoreListener stateRestoreListener = new MockStateRestoreListener();
-    private final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreStateConsumer, Time.SYSTEM, 5000, stateRestoreListener);
+    private final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreStateConsumer, stateRestoreListener);
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
     private final String applicationId = "applicationId";
@@ -125,6 +124,7 @@ public class StreamTaskTest {
     private final MockTime time = new MockTime();
     private File baseDir = TestUtils.tempDirectory();
     private StateDirectory stateDirectory;
+    private final RecordCollectorImpl recordCollector = new RecordCollectorImpl(producer, "taskId");
     private StreamsConfig config;
     private StreamsConfig eosConfig;
     private StreamTask task;
@@ -164,13 +164,14 @@ public class StreamTaskTest {
         stateDirectory = new StateDirectory("applicationId", baseDir.getPath(), new MockTime());
         task = new StreamTask(taskId00, applicationId, partitions, topology, consumer,
                               changelogReader, config, streamsMetrics, stateDirectory, null, time, producer);
+        task.initialize();
     }
 
     @After
     public void cleanup() throws IOException {
         try {
             if (task != null) {
-                task.close(true);
+                task.close(true, false);
             }
         } finally {
             Utils.delete(baseDir);
@@ -452,10 +453,11 @@ public class StreamTaskTest {
                                                                  Collections.<String, String>emptyMap(),
                                                                  Collections.<StateStore>emptyList());
 
-        task.close(true);
+        task.close(true, false);
 
         task = new StreamTask(taskId00, applicationId, partitions, topology, consumer, changelogReader, config,
             streamsMetrics, stateDirectory, null, time, producer);
+        task.initialize();
         final int offset = 20;
         task.addRecords(partition1, Collections.singletonList(
                 new ConsumerRecord<>(partition1.topic(), partition1.partition(), offset, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
@@ -613,6 +615,7 @@ public class StreamTaskTest {
                 };
             }
         };
+        streamTask.initialize();
 
         time.sleep(config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));
 
@@ -737,10 +740,11 @@ public class StreamTaskTest {
 
     @Test
     public void shouldThrowExceptionIfAnyExceptionsRaisedDuringCloseButStillCloseAllProcessorNodesTopology() throws Exception {
-        task.close(true);
+        task.close(true, false);
         task = createTaskThatThrowsExceptionOnClose();
+        task.initialize();
         try {
-            task.close(true);
+            task.close(true, false);
             fail("should have thrown runtime exception");
         } catch (final RuntimeException e) {
             task = null;
@@ -877,9 +881,20 @@ public class StreamTaskTest {
         task = new StreamTask(taskId00, applicationId, partitions, topology, consumer, changelogReader,
             eosConfig, streamsMetrics, stateDirectory, null, time, producer);
 
-        task.close(false);
+        task.close(false, false);
         task = null;
         assertTrue(producer.transactionAborted());
+    }
+
+    @Test
+    public void shouldNotAbortTransactionOnZombieClosedIfEosEnabled() throws Exception {
+        final MockProducer producer = new MockProducer();
+        task = new StreamTask(taskId00, applicationId, partitions, topology, consumer, changelogReader,
+            eosConfig, streamsMetrics, stateDirectory, null, time, producer);
+
+        task.close(false, true);
+        task = null;
+        assertFalse(producer.transactionAborted());
     }
 
     @Test
@@ -888,7 +903,7 @@ public class StreamTaskTest {
         task = new StreamTask(taskId00, applicationId, partitions, topology, consumer, changelogReader,
             config, streamsMetrics, stateDirectory, null, time, producer);
 
-        task.close(false);
+        task.close(false, false);
         assertFalse(producer.transactionAborted());
     }
 
@@ -900,7 +915,7 @@ public class StreamTaskTest {
         task = new StreamTask(taskId00, applicationId, partitions, topology, consumer,
             changelogReader, eosConfig, streamsMetrics, stateDirectory, null, time, producer);
 
-        task.close(true);
+        task.close(true, false);
         task = null;
         assertTrue(producer.closed());
     }
@@ -955,7 +970,7 @@ public class StreamTaskTest {
         final StreamTask task = new StreamTask(taskId00, applicationId, Utils.mkSet(partition1), topology, consumer,
                                                changelogReader, eosConfig, streamsMetrics, stateDirectory, null, time, producer);
 
-
+        task.initialize();
         try {
             task.suspend();
             fail("should have thrown an exception");
@@ -984,12 +999,22 @@ public class StreamTaskTest {
         };
 
         try {
-            streamTask.close(true);
+            streamTask.close(true, false);
             fail("should have thrown an exception");
         } catch (Exception e) {
             // all good
         }
         assertTrue(stateManagerCloseCalled.get());
+    }
+
+    @Test
+    public void shouldNotCloseTopologyProcessorNodesIfNotInitialized() {
+        final StreamTask task = createTaskThatThrowsExceptionOnClose();
+        try {
+            task.close(true, false);
+        } catch (Exception e) {
+            fail("should have not closed unitialized topology");
+        }
     }
 
     @SuppressWarnings("unchecked")

@@ -192,6 +192,11 @@ public interface ProcessorContext {
      *
      * The config properties are defined in the {@link org.apache.kafka.streams.StreamsConfig}
      * object and associated to the ProcessorContext.
+     * <p>
+     * The type of the values is dependent on the {@link org.apache.kafka.common.config.ConfigDef.Type type} of the property
+     * (e.g. the value of {@link org.apache.kafka.streams.StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG DEFAULT_KEY_SERDE_CLASS_CONFIG}
+     * will be of type {@link Class}, even if it was specified as a String to
+     * {@link org.apache.kafka.streams.StreamsConfig#StreamsConfig(Map) StreamsConfig(Map)}).
      *
      * @return all the key/values from the StreamsConfig properties
      */

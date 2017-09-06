@@ -27,6 +27,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -36,7 +37,7 @@ import java.util.Map;
 public class StandbyTask extends AbstractTask {
 
     private static final Logger log = LoggerFactory.getLogger(StandbyTask.class);
-    private final Map<TopicPartition, Long> checkpointedOffsets;
+    private Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
 
     /**
      * Create {@link StandbyTask} with its assigned partitions
@@ -63,11 +64,6 @@ public class StandbyTask extends AbstractTask {
 
         // initialize the topology with its own context
         processorContext = new StandbyContextImpl(id, applicationId, config, stateMgr, metrics);
-
-        log.debug("{} Initializing", logPrefix);
-        initializeStateStores();
-        processorContext.initialized();
-        checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointed());
     }
 
     /**
@@ -120,9 +116,14 @@ public class StandbyTask extends AbstractTask {
      * <pre>
      * @param clean ignored by {@code StandbyTask} as it can always try to close cleanly
      *              (ie, commit, flush, and write checkpoint file)
+     * @param isZombie ignored by {@code StandbyTask} as it can never be a zombie
      */
     @Override
-    public void close(final boolean clean) {
+    public void close(final boolean clean,
+                      final boolean isZombie) {
+        if (!taskInitialized) {
+            return;
+        }
         log.debug("{} Closing", logPrefix);
         boolean committedSuccessfully = false;
         try {
@@ -134,8 +135,10 @@ public class StandbyTask extends AbstractTask {
     }
 
     @Override
-    public void closeSuspended(final boolean clean, final RuntimeException e) {
-        throw new UnsupportedOperationException("closeSuspended not supported by StandbyTask");
+    public void closeSuspended(final boolean clean,
+                               final boolean isZombie,
+                               final RuntimeException e) {
+        close(clean, isZombie);
     }
 
     @Override
@@ -166,7 +169,7 @@ public class StandbyTask extends AbstractTask {
 
     @Override
     public int addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
-        throw new UnsupportedOperationException("addRecords not supported by StandbyTask");
+        throw new UnsupportedOperationException("add records not supported by StandbyTasks");
     }
 
     public Map<TopicPartition, Long> checkpointedOffsets() {
@@ -175,7 +178,15 @@ public class StandbyTask extends AbstractTask {
 
     @Override
     public boolean process() {
-        throw new UnsupportedOperationException("process not supported by StandbyTask");
+        throw new UnsupportedOperationException("process not supported by StandbyTasks");
+    }
+
+    public boolean initialize() {
+        initializeStateStores();
+        checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointed());
+        processorContext.initialized();
+        taskInitialized = true;
+        return true;
     }
 
 }

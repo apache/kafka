@@ -19,7 +19,57 @@
 
 <script id="content-template" type="text/x-handlebars-template">
     <h1>Developer Manual</h1>
-
+    <ul class="toc">
+        <li><a href="#streams_processor">1. Low-level Processor API</a>
+            <ul>
+                <li><a href="#streams_processor_process">1.1 Processor</a>
+                <li><a href="#streams_processor_topology">1.2 Processor Topology</a>
+                <li><a href="#streams_processor_statestore">1.3 State Stores</a>
+                <li><a href="#restoration_progress">1.4 Monitoring the Restoration Progress of Fault-tolerant State Store</a>
+                <li><a href="#disable-changelogs">1.5 Enable / Disable Fault Tolerance of State Stores (Store Changelogs)</a>
+                <li><a href="#implementing-custom-state-stores">1.6 Implementing Custom State Stores</a>
+                <li><a href="#connecting-processors-and-state-stores">1.7 Connecting Processors and State Stores</a>
+                <li><a href="#streams_processor_describe">1.5 Describe a Topology</a>
+            </ul>
+        </li>
+        <li><a href="#streams_dsl">2. High-Level Streams DSL</a>
+            <ul>
+                <li><a href="#streams_duality">2.1 Duality of Streams and Tables</a>
+                <li><a href="#streams_dsl_source">2.2 Creating Source Streams from Kafka</a>
+                <li><a href="#streams_dsl_transform">2.3 Transform a stream</a>
+                <li><a href="#streams_dsl_sink">2.4 Write streams back to Kafka</a>
+                <li><a href="#streams_dsl_build">2.5 Generate the processor topology</a>
+            </ul>
+        </li>
+        <li><a href="#streams_interactive_queries">3. Interactive Queries</a>
+            <ul>
+                <li><a href="#streams_developer-guide_interactive-queries_your_app">3.1 Your application and interactive queries</a>
+                <li><a href="#streams_developer-guide_interactive-queries_local-stores">3.2 Querying local state stores (for an application instance)</a>
+                <li><a href="#streams_developer-guide_interactive-queries_local-key-value-stores">3.3 Querying local key-value stores</a>
+                <li><a href="#streams_developer-guide_interactive-queries_local-window-stores">3.4 Querying local window stores</a>
+                <li><a href="#streams_developer-guide_interactive-queries_custom-stores">3.5 Querying local custom state stores</a>
+                <li><a href="#streams_developer-guide_interactive-queries_discovery">3.6 Querying remote state stores (for the entire application)</a>
+                <li><a href="#streams_developer-guide_interactive-queries_rpc-layer">3.7 Adding an RPC layer to your application</a>
+                <li><a href="#streams_developer-guide_interactive-queries_expose-rpc">3.8 Exposing the RPC endpoints of your application</a>
+                <li><a href="#streams_developer-guide_interactive-queries_discover-app-instances-and-stores">3.9 Discovering and accessing application instances and their respective local state stores</a>
+            </ul>
+        </li>
+        <li><a href="#streams_developer-guide_memory-management">4. Memory Management</a>
+            <ul>
+                <li><a href="#streams_developer-guide_memory-management_record-cache">4.1 Record caches in the DSL</a>
+                <li><a href="#streams_developer-guide_memory-management_state-store-cache">4.2 State store caches in the Processor API</a>
+                <li><a href="#streams_developer-guide_memory-management_other_memory_usage">4.3 Other memory usage</a>
+            </ul>
+        </li>
+        <li><a href="#streams_configure_execute">5. Application Configuration and Execution</a>
+            <ul>
+                <li><a href="#streams_client_config">5.1 Producer and Consumer Configuration</a>
+                <li><a href="#streams_broker_config">5.2 Broker Configuration</a>
+                <li><a href="#streams_topic_config">5.3 Internal Topic Configuration</a>
+                <li><a href="#streams_execute">5.4 Executing Your Kafka Streams Application</a>
+            </ul>
+        </li>
+    </ul>
     <p>
         There is a <a href="/{{version}}/documentation/#quickstart_kafkastreams">quickstart</a> example that provides how to run a stream processing program coded in the Kafka Streams library.
         This section focuses on how to write, configure, and execute a Kafka Streams application.
@@ -64,8 +114,23 @@
     // keep the processor context locally because we need it in punctuate() and commit()
     this.context = context;
 
-    // call this processor's punctuate() method every 1000 milliseconds.
-    this.context.schedule(1000);
+    // schedule a punctuation method every 1000 milliseconds.
+    this.context.schedule(1000, PunctuationType.SYSTEM_TIME, new Punctuator() {
+        @Override
+        public void punctuate(long timestamp) {
+            KeyValueIterator&lt;String, Long&gt; iter = this.kvStore.all();
+
+            while (iter.hasNext()) {
+                KeyValue&lt;String, Long&gt; entry = iter.next();
+                context.forward(entry.key, entry.value.toString());
+            }
+
+            iter.close();
+
+            // commit the current processing progress
+            context.commit();
+        }
+        });
 
     // retrieve the key-value store named "Counts"
     this.kvStore = (KeyValueStore&lt;String, Long&gt;) context.getStateStore("Counts");
@@ -87,20 +152,6 @@
     }
 
     @Override
-    public void punctuate(long timestamp) {
-    KeyValueIterator&lt;String, Long&gt; iter = this.kvStore.all();
-
-    while (iter.hasNext()) {
-        KeyValue&lt;String, Long&gt; entry = iter.next();
-        context.forward(entry.key, entry.value.toString());
-    }
-
-    iter.close();
-    // commit the current processing progress
-    context.commit();
-    }
-
-    @Override
     public void close() {
     // close any resources managed by this processor.
     // Note: Do not close any StateStores as these are managed
@@ -116,7 +167,7 @@
     <ul>
         <li>In the <code>init</code> method, schedule the punctuation every 1 second and retrieve the local state store by its name "Counts".</li>
         <li>In the <code>process</code> method, upon each received record, split the value string into words, and update their counts into the state store (we will talk about this feature later in the section).</li>
-        <li>In the <code>punctuate</code> method, iterate the local state store and send the aggregated counts to the downstream processor, and commit the current stream state.</li>
+        <li>In the scheduled <code>punctuate</code> method, iterate the local state store and send the aggregated counts to the downstream processor, and commit the current stream state.</li>
     </ul>
 
 
@@ -185,7 +236,7 @@ With deletion enabled, old windows that have expired will be cleaned up by Kafka
 The default retention setting is <code>Windows#maintainMs()</code> + 1 day. This setting can be overriden by specifying <code>StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG</code> in the <code>StreamsConfig</code>.
 </p>
 
-<h4><a id="monitoring-the-restoration-progress-of-fault-tolerant-state-stores" href="#restoration_progress">Monitoring the Restoration Progress of Fault-tolerant State Stores</a></h4>
+<h4><a id="restoration_progress" href="#restoration_progress">Monitoring the Restoration Progress of Fault-tolerant State Stores</a></h4>
 
 <p>
 When starting up your application any fault-tolerant state stores don't need a restoration process as the persisted state is read from local disk. 
@@ -249,7 +300,7 @@ You set the <code>org.apache.kafka.streams.processor.StateRestoreListener</code>
 </p>
 </blockquote>
 
-<h4> <a id="enable-disable-fault-tolerance-of-state-stores-store-changelogs" href="#disable-chagelogs">Enable / Disable Fault Tolerance of State Stores (Store Changelogs)</a></h4>
+<h4> <a id="disable-changelogs" href="#disable-changelogs">Enable / Disable Fault Tolerance of State Stores (Store Changelogs)</a></h4>
 
 <p>
   You can enable or disable fault tolerance for a state store by enabling or disabling, respectively, the changelogging of the store through <code>enableLogging()</code> and <code>disableLogging()</code>. 
@@ -299,7 +350,7 @@ You set the <code>org.apache.kafka.streams.processor.StateRestoreListener</code>
 
 </pre>
 
-<h4><a id="implementing-custom-state-stores" href="#implement-custom-store">Implementing custom State Stores</a></h4>
+<h4><a id="implementing-custom-state-stores" href="#implementing-custom-state-stores">Implementing custom State Stores</a></h4>
 
 <p>
  Apart from using the built-in state store types, you can also implement your own. 
@@ -331,7 +382,7 @@ You set the <code>org.apache.kafka.streams.processor.StateRestoreListener</code>
   The <code>StateRestoreListener</code> in this case is per state store instance and is used for internal purposes such as updating config settings based on the status of the restoration process.
 </p>
 
-<h4><a id="connecting-processors-and-state-stores" href="#connecting-processors-state-stores">Connecting Processors and State Stores</a></h4>
+<h4><a id="connecting-processors-and-state-stores" href="#connecting-processors-and-state-stores">Connecting Processors and State Stores</a></h4>
 
 <p>
 Now that we have defined a processor (WordCountProcessor) and the state stores, we can now construct the processor topology by connecting these processors and state stores together by using the <code>Topology</code> instance. 
@@ -365,7 +416,7 @@ In addition, users can add <em>source processors</em> with the specified Kafka t
 
 <p>
 In this topology, the &quot;Process&quot; stream processor node is considered a downstream processor of the &quot;Source&quot; node, and an upstream processor of the &quot;Sink&quot; node. 
-As a result, whenever the &quot;Source&quot; node forward a newly fetched record from Kafka to its downstream &quot;Process&quot; node, <code>WordCountProcessor#process()</code> method is triggered to process the record and update the associated state store; and whenever <code>context#forward()</code> is called in the <code>WordCountProcessor#punctuate()</code> method, the aggregate key-value pair will be sent via the &quot;Sink&quot; processor node to the Kafka topic &quot;sink-topic&quot;. 
+As a result, whenever the &quot;Source&quot; node forward a newly fetched record from Kafka to its downstream &quot;Process&quot; node, <code>WordCountProcessor#process()</code> method is triggered to process the record and update the associated state store; and whenever <code>context#forward()</code> is called in the <code>Punctuator#punctuate()</code> method, the aggregate key-value pair will be sent via the &quot;Sink&quot; processor node to the Kafka topic &quot;sink-topic&quot;.
 Note that in the <code>WordCountProcessor</code> implementation, users need to refer to the same store name &quot;Counts&quot; when accessing the key-value store; otherwise an exception will be thrown at runtime, indicating that the state store cannot be found; also, if the state store itself is not associated with the processor in the <code>Topology</code> code, accessing it in the processor's <code>init()</code> method will also throw an exception at runtime, indicating the state store is not accessible from this processor.
 </p>
 
@@ -448,25 +499,1387 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
     ("alice", 1) --> ("alice", 3)
     </pre>
 
-    If these records a KStream and the stream processing application were to sum the values it would return <code>4</code>. If these records were a KTable or GlobalKTable, the return would be <code>3</code>, since the last record would be considered as an update.
+    If the stream is defined as a KStream and the stream processing application were to sum the values it would return <code>4</code>. If the stream is defined as a KTable or GlobalKTable, the return would be <code>3</code>, since the last record would be considered as an update.
 
-    <h4><a id="streams_dsl_source" href="#streams_dsl_source">Create Source Streams from Kafka</a></h4>
+    <h4><a id="streams_dsl_source" href="#streams_dsl_source">Creating Source Streams from Kafka</a></h4>
 
     <p>
-        Either a <b>record stream</b> (defined as <code>KStream</code>) or a <b>changelog stream</b> (defined as <code>KTable</code> or <code>GlobalKTable</code>)
-        can be created as a source stream from one or more Kafka topics (for <code>KTable</code> and <code>GlobalKTable</code> you can only create the source stream
-        from a single topic).
+    You can easily read data from Kafka topics into your application. We support the following operations.
     </p>
+    <table class="data-table" border="1">
+        <tbody><tr>
+            <th>Reading from Kafka</th>
+            <th>Description</th>
+        </tr>
+        <tr>
+            <td><b>Stream</b>: input topic(s) &rarr; <code>KStream</code></td>
+            <td>Create a <code>KStream</code> from the specified Kafka input topic(s), interpreting the data as a record stream.
+                A <code>KStream</code> represents a partitioned record stream.
+                <p>
+                    Slightly simplified, in the case of a KStream, the local KStream instance of every application instance will be populated
+                    with data from only a <b>subset</b> of the partitions of the input topic. Collectively, i.e. across all application instances,
+                    all the partitions of the input topic will be read and processed.
+                </p>
+                <pre class="brush: java;">
+                    import org.apache.kafka.common.serialization.Serdes;
+                    import org.apache.kafka.streams.StreamsBuilder;
+                    import org.apache.kafka.streams.kstream.KStream;
 
+                    StreamsBuilder builder = new StreamsBuilder();
+
+                    KStream&lt;String, Long&gt; wordCounts = builder.stream(
+                        Serdes.String(), /* key serde */
+                        Serdes.Long(),   /* value serde */
+                        "word-counts-input-topic" /* input topic */);
+                </pre>
+                When to provide serdes explicitly:
+                <ul>
+                    <li>If you do not specify serdes explicitly, the default serdes from the configuration are used.</li>
+                    <li>You must specificy serdes explicitly if the key and/or value types of the records in the Kafka input topic(s) do not match
+                        the configured default serdes. </li>
+                </ul>
+                Several variants of <code>stream</code> exist to e.g. specify a regex pattern for input topics to read from.</td>
+        </tr>
+        <tr>
+            <td><b>Table</b>: input topic(s) &rarr; <code>KTable</code></td>
+            <td>
+                Reads the specified Kafka input topic into a <code>KTable</code>. The topic is interpreted as a changelog stream,
+                where records with the same key are interpreted as UPSERT aka INSERT/UPDATE (when the record value is not <code>null</code>) or
+                as DELETE (when the value is null) for that key.
+                <p>
+                    Slightly simplified, in the case of a KTable, the local KTable instance of every application instance will be populated
+                    with data from only a subset of the partitions of the input topic. Collectively, i.e. across all application instances, all
+                    the partitions of the input topic will be read and processed.
+                </p>
+                <p>
+                You may provide an optional name for the table (more precisely, for the internal state store that backs the table).
+                When a name is provided, the table can be queryied using <a href="#streams_interactive_queries">interactive queries</a>.
+                When a name is not provided the table will not queryable and an internal name will be provided for the state store.
+                </p>
+                <pre class="brush: java;">
+                    import org.apache.kafka.common.serialization.Serdes;
+                    import org.apache.kafka.streams.StreamsBuilder;
+                    import org.apache.kafka.streams.kstream.KTable;
+
+                    StreamsBuilder builder = new StreamsBuilder();
+
+                    KTable&lt;String, Long&gt; wordCounts = builder.table(
+                        Serdes.String(), /* key serde */
+                        Serdes.Long(),   /* value serde */
+                        "word-counts-input-topic", /* input topic */
+                        "word-counts-partitioned-store" /* table/store name */);
+                </pre>
+
+                When to provide serdes explicitly:
+                <ul>
+                    <li>If you do not specify serdes explicitly, the default serdes from the configuration are used.</li>
+                    <li>You must specificy serdes explicitly if the key and/or value types of the records in the Kafka input topic do not
+                        match the configured default serdes.</li>
+                </ul>
+
+                Several variants of <code>table</code> exist to e.g. specify the <code>auto.offset.reset</code>
+                policy to be used when reading from the input topic.
+            </td>
+        <tr>
+            <td><b>Global Table</b>: input topic &rarr; <code>GlobalKTable</code></td>
+            <td>
+                Reads the specified Kafka input topic into a <code>GlobalKTable</code>. The topic is interpreted as a changelog stream, where records
+                with the same key are interpreted as UPSERT aka INSERT/UPDATE (when the record value is not <code>null</code>) or as DELETE (when the
+                value is <code>null</code>) for that key.
+                <p>
+                    Slightly simplified, in the case of a GlobalKTable, the local GlobalKTable instance of every application instance will be
+                    populated with data from all the partitions of the input topic. In other words, when using a global table, every application
+                    instance will get its own, full copy of the topic's data.
+                </p>
+                <p>
+                You may provide an optional name for the table (more precisely, for the internal state store that backs the table).
+                When a name is provided, the table can be queryied using <a href="#streams_interactive_queries">interactive queries</a>.
+                When a name is not provided the table will not queryable and an internal name will be provided for the state store.
+                </p>
+                <pre class="brush: java;">
+                    import org.apache.kafka.common.serialization.Serdes;
+                    import org.apache.kafka.streams.StreamsBuilder;
+                    import org.apache.kafka.streams.kstream.GlobalKTable;
+
+                    StreamsBuilder builder = new StreamsBuilder();
+
+                    GlobalKTable&lt;String, Long&gt; wordCounts = builder.globalTable(
+                        Serdes.String(), /* key serde */
+                        Serdes.Long(),   /* value serde */
+                        "word-counts-input-topic", /* input topic */
+                        "word-counts-global-store" /* table/store name */);
+                </pre>
+
+                When to provide serdes explicitly:
+                <ul>
+                    <li>If you do not specify serdes explicitly, the default serdes from the configuration are used.</li>
+                    <li>You must specificy serdes explicitly if the key and/or value types of the records in the Kafka input topic do not
+                        match the configured default serdes.</li>
+                </ul>
+                Several variants of <code>globalTable</code> exist to e.g. specify explicit serdes.
+
+            </td>
+        </tbody>
+    </table>
+
+    <h4><a id="streams_dsl_transform" href="#streams_dsl_transform">Transform a stream</a></h4>
+    <p>
+    <code>KStream</code> and <code>KTable</code> support a variety of transformation operations. Each of these operations
+    can be translated into one or more connected processors into the underlying processor topology. Since <code>KStream</code>
+    and <code>KTable</code> are strongly typed, all these transformation operations are defined as generic functions where
+    users could specify the input and output data types.
+    </p>
+    <p>
+    Some <code>KStream</code> transformations may generate one or more <code>KStream</code> objects (e.g., filter and
+    map on <code>KStream</code> generate another <code>KStream</code>, while branch on <code>KStream</code> can generate
+    multiple <code>KStream</code> instances) while some others may generate a <code>KTable</code> object (e.g., aggregation) interpreted
+    as the changelog stream to the resulted relation. This allows Kafka Streams to continuously update the computed value upon arrival
+    of late records after it has already been produced to the downstream transformation operators. As for <code>KTable</code>,
+    all its transformation operations can only generate another <code>KTable</code> (though the Kafka Streams DSL does
+    provide a special function to convert a <code>KTable</code> representation into a <code>KStream</code>, which we will
+    describe later). Nevertheless, all these transformation methods can be chained together to compose a complex processor topology.
+    </p>
+    <p>
+    We describe these transformation operations in the following subsections, categorizing them into two categories:
+    stateless and stateful transformations.
+    </p>
+    <h5><a id="streams_dsl_transformations_stateless" href="#streams_dsl_transformations_stateless">Stateless transformations</a></h5>
+    <p>
+    Stateless transformations, by definition, do not depend on any state for processing, and hence implementation-wise they do not
+    require a state store associated with the stream processor.
+    </p>
+    <table class="data-table" border="1">
+        <tbody><tr>
+            <th>Transformation</th>
+            <th>Description</th>
+        </tr>
+        <tr>
+            <td><b>Branch</b>: <code>KStream &rarr; KStream</code></td>
+            <td>
+                <p>
+                Branch (or split) a <code>KStream</code> based on the supplied predicates into one or more <code>KStream</code> instances.
+                </p>
+                <p>
+                Predicates are evaluated in order. A record is placed to one and only one output stream on the first match:
+                if the n-th predicate evaluates to true, the record is placed to n-th stream. If no predicate matches,
+                the record is dropped.
+                </p>
+                <p>
+                Branching is useful, for example, to route records to different downstream topics.
+                </p>
+                <pre class="brush: java;">
+                    KStream&lt;String, Long&gt; stream = ...;
+                    KStream&lt;String, Long&gt;[] branches = stream.branch(
+                            (key, value) -> key.startsWith("A"), /* first predicate  */
+                            (key, value) -> key.startsWith("B"), /* second predicate */
+                            (key, value) -> true                 /* third predicate  */
+                    );
+                    // KStream branches[0] contains all records whose keys start with "A"
+                    // KStream branches[1] contains all records whose keys start with "B"
+                    // KStream branches[2] contains all other records
+                    // Java 7 example: cf. `filter` for how to create `Predicate` instances
+	        </pre>
+            </td>
+        </tr>
+        <tr>
+            <td><b>Filter</b>: <code>KStream &rarr; KStream or KTable &rarr; KTable</code></td>
+            <td>
+                <p>
+                Evaluates a boolean function for each element and retains those for which the function returns true.
+                </p>
+                <pre class="brush: java;">
+                     KStream&lt;String, Long&gt; stream = ...;
+
+                     // A filter that selects (keeps) only positive numbers
+                     // Java 8+ example, using lambda expressions
+                     KStream&lt;String, Long&gt; onlyPositives = stream.filter((key, value) -> value > 0);
+
+                     // Java 7 example
+                     KStream&lt;String, Long&gt; onlyPositives = stream.filter(
+                       new Predicate&lt;String, Long&gt;() {
+                         @Override
+                         public boolean test(String key, Long value) {
+                           return value > 0;
+                         }
+                       });
+	            </pre>
+            </td>
+        </tr>
+        <tr>
+            <td><b>Inverse Filter</b>: <code>KStream &rarr; KStream or KTable &rarr; KTable</code></td>
+            <td>
+                <p>
+                Evaluates a boolean function for each element and drops those for which the function returns true.
+                </p>
+                <pre class="brush: java;">
+                     KStream&lt;String, Long&gt; stream = ...;
+
+                     // An inverse filter that discards any negative numbers or zero
+                     // Java 8+ example, using lambda expressions
+                     KStream&lt;String, Long&gt; onlyPositives = stream.filterNot((key, value) -> value <= 0);
+
+                     // Java 7 example
+                     KStream&lt;String, Long&gt; onlyPositives = stream.filterNot(
+                      new Predicate&lt;String, Long&gt;() {
+                        @Override
+                        public boolean test(String key, Long value) {
+                            return value <= 0;
+                        }
+                     });
+                </pre>
+            </td>
+        </tr>
+        <tr>
+            <td><b>FlatMap</b>: <code>KStream &rarr; KStream </code></td>
+            <td>
+                <p>
+                Takes one record and produces zero, one, or more records. You can modify the record keys and values,
+                including their types.
+                </p>
+
+                <p>
+                Marks the stream for data re-partitioning: Applying a grouping or a join after <code>flatMap</code> will result in
+                re-partitioning of the records. If possible use <code>flatMapValues</code> instead, which will not cause data re-partitioning.
+                </p>
+                <pre class="brush: java;">
+                     KStream&lt;Long, String> stream = ...;
+                     KStream&lt;String, Integer&gt; transformed = stream.flatMap(
+                         // Here, we generate two output records for each input record.
+                         // We also change the key and value types.
+                         // Example: (345L, "Hello") -> ("HELLO", 1000), ("hello", 9000)
+                         (key, value) -> {
+                             List&lt;KeyValue&lt;String, Integer&gt;&gt; result = new LinkedList&lt;&gt;();
+                             result.add(KeyValue.pair(value.toUpperCase(), 1000));
+                             result.add(KeyValue.pair(value.toLowerCase(), 9000));
+                             return result;
+                         }
+                     );
+                     // Java 7 example: cf. `map` for how to create `KeyValueMapper` instances
+                </pre>
+            </td>
+        </tr>
+        <tr>
+            <td><b>FlatMap (values only)</b>: <code>KStream &rarr; KStream </code></td>
+            <td>
+                <p>
+                Takes one record and produces zero, one, or more records, while retaining the key of the original record.
+                You can modify the record values and the value type.
+                </p>
+                <p>
+                <code>flatMapValues</code> is preferable to <code>flatMap</code> because it will not cause data re-partitioning. However,
+                it does not allow you to modify the key or key type like <code>flatMap</code> does.
+                </p>
+                <pre class="brush: java;">
+                   // Split a sentence into words.
+                   KStream&lt;byte[], String&gt; sentences = ...;
+                   KStream&lt;byte[], String&gt; words = sentences.flatMapValues(value -> Arrays.asList(value.split("\\s+")));
+
+                   // Java 7 example: cf. `mapValues` for how to create `ValueMapper` instances
+               </pre>
+            </td>
+        </tr>
+        <tr>
+            <td><b>Foreach</b>: <code>KStream &rarr; void </code></td>
+            <td>
+                <p>
+                Terminal operation. Performs a stateless action on each record.
+                </p>
+                <p>
+                Note on processing guarantees: Any side effects of an action (such as writing to external systems)
+                are not trackable by Kafka, which means they will typically not benefit from Kafka's processing guarantees.
+                </p>
+                <pre class="brush: java;">
+                       KStream&lt;String, Long&gt; stream = ...;
+
+                       // Print the contents of the KStream to the local console.
+                       // Java 8+ example, using lambda expressions
+                       stream.foreach((key, value) -> System.out.println(key + " => " + value));
+
+                       // Java 7 example
+                       stream.foreach(
+                           new ForeachAction&lt;String, Long&gt;() {
+                               @Override
+                               public void apply(String key, Long value) {
+                                 System.out.println(key + " => " + value);
+                               }
+                       });
+                </pre>
+            </td>
+        </tr>
+        <tr>
+            <td><b>GroupByKey</b>: <code>KStream &rarr; KGroupedStream </code></td>
+            <td>
+                <p>
+                Groups the records by the existing key.
+                </p>
+                <p>
+                Grouping is a prerequisite for aggregating a stream or a table and ensures that data is properly
+                partitioned ("keyed") for subsequent operations.
+                </p>
+                <p>
+                <b>When to set explicit serdes</b>: Variants of <code>groupByKey</code> exist to override the configured default serdes of
+                your application, which you must do if the key and/or value types of the resulting <code>KGroupedStream</code> do
+                not match the configured default serdes.
+                </p>
+                <p>
+                <b>Note:</b>
+                Grouping vs. Windowing: A related operation is windowing, which lets you control how to "sub-group" the
+                grouped records of the same key into so-called windows for stateful operations such as windowed aggregations
+                or windowed joins.
+                </p>
+                <p>
+                Causes data re-partitioning if and only if the stream was marked for re-partitioning. <code>groupByKey</code> is
+                preferable to <code>groupBy</code> because it re-partitions data only if the stream was already marked for re-partitioning.
+                However, <code>groupByKey</code> does not allow you to modify the key or key type like <code>groupBy</code> does.
+                </p>
+                <pre class="brush: java;">
+                       KStream&lt;byte[], String&gt; stream = ...;
+
+                       // Group by the existing key, using the application's configured
+                       // default serdes for keys and values.
+                       KGroupedStream&lt;byte[], String&gt; groupedStream = stream.groupByKey();
+
+                       // When the key and/or value types do not match the configured
+                       // default serdes, we must explicitly specify serdes.
+                       KGroupedStream&lt;byte[], String&gt; groupedStream = stream.groupByKey(
+                           Serdes.ByteArray(), /* key */
+                           Serdes.String()     /* value */
+                       );
+                </pre>
+            </td>
+        </tr>
+        <tr>
+            <td><b>GroupBy</b>: <code>KStream &rarr; KGroupedStream or KTable &rarr; KGroupedTable</code></td>
+            <td>
+                <p>
+                Groups the records by a new key, which may be of a different key type. When grouping a table,
+                you may also specify a new value and value type. groupBy is a shorthand for selectKey(...).groupByKey().
+                </p>
+                <p>
+                Grouping is a prerequisite for aggregating a stream or a table and ensures that data is properly
+                partitioned ("keyed") for subsequent operations.
+                </p>
+                <p>
+                <b>When to set explicit serdes</b>: Variants of groupBy exist to override the configured default serdes of your
+                application, which you must do if the key and/or value types of the resulting KGroupedStream or
+                KGroupedTable do not match the configured default serdes.
+                </p>
+                <p>
+                <b>Note:</b>
+                Grouping vs. Windowing: A related operation is windowing, which lets you control how to “sub-group” the
+                grouped records of the same key into so-called windows for stateful operations such as windowed aggregations
+                or windowed joins.
+                </p>
+                <p>
+                <b>Always causes data re-partitioning:</b> groupBy always causes data re-partitioning. If possible use groupByKey
+                instead, which will re-partition data only if required.
+                </p>
+                <pre class="brush: java;">
+                       KStream&lt;byte[], String&gt; stream = ...;
+                       KTable&lt;byte[], String&gt; table = ...;
+
+                       // Java 8+ examples, using lambda expressions
+
+                       // Group the stream by a new key and key type
+                       KGroupedStream&lt;String, String&gt; groupedStream = stream.groupBy(
+                           (key, value) -> value,
+                           Serdes.String(), /* key (note: type was modified) */
+                           Serdes.String()  /* value */
+                       );
+
+                       // Group the table by a new key and key type, and also modify the value and value type.
+                       KGroupedTable&lt;String, Integer&gt; groupedTable = table.groupBy(
+                           (key, value) -> KeyValue.pair(value, value.length()),
+                           Serdes.String(), /* key (note: type was modified) */
+                           Serdes.Integer() /* value (note: type was modified) */
+                       );
+
+
+                       // Java 7 examples
+
+                       // Group the stream by a new key and key type
+                       KGroupedStream&lt;String, String&gt; groupedStream = stream.groupBy(
+                           new KeyValueMapper&lt;byte[], String, String&gt;&gt;() {
+                               @Override
+                               public String apply(byte[] key, String value) {
+                                  return value;
+                               }
+                           },
+                           Serdes.String(), /* key (note: type was modified) */
+                           Serdes.String()  /* value */
+                       );
+
+                       // Group the table by a new key and key type, and also modify the value and value type.
+                       KGroupedTable&lt;String, Integer&gt; groupedTable = table.groupBy(
+                            new KeyValueMapper&lt;byte[], String, KeyValue&lt;String, Integer&gt;&gt;() {
+                            @Override
+                                public KeyValue&lt;String, Integer&gt; apply(byte[] key, String value) {
+                                   return KeyValue.pair(value, value.length());
+                                }
+                            },
+                            Serdes.String(), /* key (note: type was modified) */
+                            Serdes.Integer() /* value (note: type was modified) */
+                       );
+                </pre>
+            </td>
+        </tr>
+        <tr>
+            <td><b>Map</b>: <code>KStream &rarr; KStream</code></td>
+            <td>
+                <p>
+                Takes one record and produces one record. You can modify the record key and value, including their types.
+                </p>
+
+                <p>
+                <b>Marks the stream for data re-partitioning:</b> Applying a grouping or a join after <code>flatMap</code> will result in
+                re-partitioning of the records. If possible use <code>mapValues</code> instead, which will not cause data re-partitioning.
+                </p>
+
+                <pre class="brush: java;">
+                       KStream&lt;byte[], String&gt; stream = ...;
+
+                       // Java 8+ example, using lambda expressions
+                       // Note how we change the key and the key type (similar to `selectKey`)
+                       // as well as the value and the value type.
+                       KStream&lt;String, Integer&gt; transformed = stream.map(
+                           (key, value) -> KeyValue.pair(value.toLowerCase(), value.length()));
+
+                       // Java 7 example
+                       KStream&lt;String, Integer&gt; transformed = stream.map(
+                           new KeyValueMapper&lt;byte[], String, KeyValue&lt;String, Integer&gt;&gt;() {
+                           @Override
+                           public KeyValue&lt;String, Integer&gt; apply(byte[] key, String value) {
+                               return new KeyValue&lt;&gt;(value.toLowerCase(), value.length());
+                           }
+                       });
+                </pre>
+            </td>
+        </tr>
+        <tr>
+            <td><b>Map (values only)</b>: <code>KStream &rarr; KStream or KTable &rarr; KTable</code></td>
+            <td>
+                <p>
+                Takes one record and produces one record, while retaining the key of the original record. You can modify
+                the record value and the value type.
+                </p>
+                <p>
+                <code>mapValues</code> is preferable to <code>map</code> because it will not cause data re-partitioning. However, it does not
+                allow you to modify the key or key type like <code>map</code> does.
+                </p>
+
+                <pre class="brush: java;">
+                       KStream&lt;byte[], String> stream = ...;
+
+                       // Java 8+ example, using lambda expressions
+                       KStream&lt;byte[], String&gt; uppercased = stream.mapValues(value -> value.toUpperCase());
+
+                       // Java 7 example
+                       KStream&lt;byte[], String&gt; uppercased = stream.mapValues(
+                          new ValueMapper&lt;String&gt;() {
+                          @Override
+                          public String apply(String s) {
+                             return s.toUpperCase();
+                          }
+                       });
+                </pre>
+            </td>
+        </tr>
+        <tr>
+            <td><b>Print</b>: <code>KStream &rarr; void </code></td>
+            <td>
+                <p>
+                Terminal operation. Prints the records to <code>System.out</code>. See Javadocs for serde and <code>toString()</code> caveats.
+                </p>
+                <pre class="brush: java;">
+                       KStream&lt;byte[], String&gt; stream = ...;
+                       stream.print();
+
+                       // Several variants of `print` exist to e.g. override the default serdes for record keys
+                       // and record values, set a prefix label for the output string, etc
+                       stream.print(Serdes.ByteArray(), Serdes.String());
+                </pre>
+            </td>
+        </tr>
+        <tr>
+            <td><b>SelectKey</b>: <code>KStream &rarr; KStream</code></td>
+            <td>
+                <p>
+                Assigns a new key, possibly of a new key type, to each record.
+                </p>
+                <p>
+                Marks the stream for data re-partitioning: Applying a grouping or a join after <code>flatMap</code> will result in
+                re-partitioning of the records.
+                </p>
+
+                <pre class="brush: java;">
+                       KStream&lt;byte[], String&gt; stream = ...;
+
+                       // Derive a new record key from the record's value.  Note how the key type changes, too.
+                       // Java 8+ example, using lambda expressions
+                       KStream&lt;String, String&gt; rekeyed = stream.selectKey((key, value) -> value.split(" ")[0])
+
+                       // Java 7 example
+                       KStream&lt;String, String&gt; rekeyed = stream.selectKey(
+                           new KeyValueMapper&lt;byte[], String, String&gt;() {
+                           @Override
+                           public String apply(byte[] key, String value) {
+                              return value.split(" ")[0];
+                           }
+                         });
+                </pre>
+            </td>
+        </tr>
+        <tr>
+            <td><b>Table to Stream</b>: <code>KTable &rarr; KStream</code></td>
+            <td>
+                <p>
+                Converts this table into a stream.
+                </p>
+                <pre class="brush: java;">
+                       KTable&lt;byte[], String> table = ...;
+
+                       // Also, a variant of `toStream` exists that allows you
+                       // to select a new key for the resulting stream.
+                       KStream&lt;byte[], String> stream = table.toStream();
+                </pre>
+            </td>
+        </tr>
+        <tr>
+            <td><b>WriteAsText</b>: <code>KStream &rarr; void </code></td>
+            <td>
+                <p>
+                Terminal operation. Write the records to a file. See Javadocs for serde and <code>toString()</code> caveats.
+                </p>
+                <pre class="brush: java;">
+                       KStream&lt;byte[], String&gt; stream = ...;
+                       stream.writeAsText("/path/to/local/output.txt");
+
+                       // Several variants of `writeAsText` exist to e.g. override the
+                       // default serdes for record keys and record values.
+                       stream.writeAsText("/path/to/local/output.txt", Serdes.ByteArray(), Serdes.String());
+                </pre>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+
+
+    <h5><a id="streams_dsl_transformations_stateful" href="#streams_dsl_transformations_stateful">Stateful transformations</a></h5>
+    <h6><a id="streams_dsl_transformations_stateful_overview" href="#streams_dsl_transformations_stateful_overview">Overview</a></h6>
+    <p>
+        Stateful transformations, by definition, depend on state for processing inputs and producing outputs, and
+        hence implementation-wise they require a state store associated with the stream processor. For example,
+        in aggregating operations, a windowing state store is used to store the latest aggregation results per window;
+        in join operations, a windowing state store is used to store all the records received so far within the
+        defined window boundary.
+    </p>
+    <p>
+        Note, that state stores are fault-tolerant. In case of failure, Kafka Streams guarantees to fully restore
+        all state stores prior to resuming the processing.
+    </p>
+    <p>
+        Available stateful transformations in the DSL include:
+    <ul>
+        <li><a href=#streams_dsl_aggregations>Aggregating</a></li>
+        <li><a href="#streams_dsl_joins">Joining</a></li>
+        <li><a href="#streams_dsl_windowing">Windowing (as part of aggregations and joins)</a></li>
+        <li>Applying custom processors and transformers, which may be stateful, for Processor API integration</li>
+    </ul>
+    </p>
+    <p>
+        The following diagram shows their relationships:
+    </p>
+    <figure>
+        <img class="centered" src="/{{version}}/images/streams-stateful_operations.png" style="width:500pt;">
+        <figcaption style="text-align: center;"><i>Stateful transformations in the DSL</i></figcaption>
+    </figure>
+
+    <p>
+        We will discuss the various stateful transformations in detail in the subsequent sections. However, let's start
+        with a first example of a stateful application: the canonical WordCount algorithm.
+    </p>
+    <p>
+        WordCount example in Java 8+, using lambda expressions:
+    </p>
     <pre class="brush: java;">
-    StreamsBuilder builder = new StreamsBuilder();
+        // We assume record values represent lines of text.  For the sake of this example, we ignore
+        // whatever may be stored in the record keys.
+        KStream&lt;String, String&gt; textLines = ...;
 
-    KStream&lt;String, GenericRecord&gt; source1 = builder.stream("topic1", "topic2");
-    KTable&lt;String, GenericRecord&gt; source2 = builder.table("topic3", "stateStoreName");
-    GlobalKTable&lt;String, GenericRecord&gt; source2 = builder.globalTable("topic4", "globalStoreName");
+        KStream&lt;String, Long&gt; wordCounts = textLines
+            // Split each text line, by whitespace, into words.  The text lines are the record
+            // values, i.e. we can ignore whatever data is in the record keys and thus invoke
+            // `flatMapValues` instead of the more generic `flatMap`.
+            .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))
+            // Group the stream by word to ensure the key of the record is the word.
+            .groupBy((key, word) -> word)
+            // Count the occurrences of each word (record key).
+            //
+            // This will change the stream type from `KGroupedStream&lt;String, String&gt;` to
+            // `KTable&lt;String, Long&gt;` (word -> count).  We must provide a name for
+            // the resulting KTable, which will be used to name e.g. its associated
+            // state store and changelog topic.
+            .count("Counts")
+            // Convert the `KTable&lt;String, Long&gt;` into a `KStream&lt;String, Long&gt;`.
+            .toStream();
+    </pre>
+    <p>
+        WordCount example in Java 7:
+    </p>
+    <pre class="brush: java;">
+        // Code below is equivalent to the previous Java 8+ example above.
+        KStream&lt;String, String&gt; textLines = ...;
+
+        KStream&lt;String, Long&gt; wordCounts = textLines
+            .flatMapValues(new ValueMapper&lt;String, Iterable&lt;String&gt;&gt;() {
+                @Override
+                public Iterable&lt;String&gt; apply(String value) {
+                    return Arrays.asList(value.toLowerCase().split("\\W+"));
+                }
+            })
+            .groupBy(new KeyValueMapper&lt;String, String, String&gt;&gt;() {
+                @Override
+                public String apply(String key, String word) {
+                    return word;
+                }
+            })
+            .count("Counts")
+            .toStream();
     </pre>
 
-    <h4><a id="streams_dsl_windowing" href="#streams_dsl_windowing">Windowing a stream</a></h4>
+    <h6><a id="streams_dsl_aggregations" href="#streams_dsl_aggregations">Aggregate a stream</a></h6>
+    <p>
+        Once records are grouped by key via <code>groupByKey</code> or <code>groupBy</code> -- and
+        thus represented as either a <code>KGroupedStream</code> or a
+        <code>KGroupedTable</code> -- they can be aggregated via an operation such as
+        <code>reduce</code>. Aggregations are <i>key-based</i> operations, i.e.
+        they always operate over records (notably record values) <i>of the same key</i>. You may
+        choose to perform aggregations on
+        <a href="#streams_dsl_windowing">windowed</a> or non-windowed data.
+    </p>
+    <table class="data-table" border="1">
+        <tbody>
+        <tr>
+            <th>Transformation</th>
+            <th>Description</th>
+        </tr>
+        <tr>
+            <td><b>Aggregate</b>: <code>KGroupedStream &rarr; KTable</code> or <code>KGroupedTable
+                &rarr; KTable</code></td>
+            <td>
+                <p>
+                    <b>Rolling aggregation</b>. Aggregates the values of (non-windowed) records by
+                    the grouped key. Aggregating is a generalization of <code>reduce</code> and allows, for example, the
+                    aggregate value to have a different type than the input values.
+                </p>
+                <p>
+                    When aggregating a grouped stream, you must provide an initializer (think:
+                    <code>aggValue = 0</code>) and an "adder"
+                    aggregator (think: <code>aggValue + curValue</code>). When aggregating a <i>grouped</i>
+                    table, you must additionally provide a "subtractor" aggregator (think: <code>aggValue - oldValue</code>).
+                </p>
+                <p>
+                    Several variants of <code>aggregate</code> exist, see Javadocs for details.
+                </p>
+                <pre class="brush: java;">
+                    KGroupedStream&lt;byte[], String&gt; groupedStream = ...;
+                    KGroupedTable&lt;byte[], String&gt; groupedTable = ...;
+
+                    // Java 8+ examples, using lambda expressions
+
+                    // Aggregating a KGroupedStream (note how the value type changes from String to Long)
+                    KTable&lt;byte[], Long&gt; aggregatedStream = groupedStream.aggregate(
+                        () -> 0L, /* initializer */
+                        (aggKey, newValue, aggValue) -> aggValue + newValue.length(), /* adder */
+                        Serdes.Long(), /* serde for aggregate value */
+                        "aggregated-stream-store" /* state store name */);
+
+                    // Aggregating a KGroupedTable (note how the value type changes from String to Long)
+                    KTable&lt;byte[], Long&gt; aggregatedTable = groupedTable.aggregate(
+                        () -> 0L, /* initializer */
+                        (aggKey, newValue, aggValue) -> aggValue + newValue.length(), /* adder */
+                        (aggKey, oldValue, aggValue) -> aggValue - oldValue.length(), /* subtractor */
+                        Serdes.Long(), /* serde for aggregate value */
+                        "aggregated-table-store" /* state store name */);
+
+
+                    // Java 7 examples
+
+                    // Aggregating a KGroupedStream (note how the value type changes from String to Long)
+                    KTable&lt;byte[], Long&gt; aggregatedStream = groupedStream.aggregate(
+                        new Initializer&lt;Long&gt;() { /* initializer */
+                          @Override
+                          public Long apply() {
+                            return 0L;
+                          }
+                        },
+                        new Aggregator&lt;byte[], String, Long&gt;() { /* adder */
+                          @Override
+                          public Long apply(byte[] aggKey, String newValue, Long aggValue) {
+                            return aggValue + newValue.length();
+                          }
+                        },
+                        Serdes.Long(),
+                        "aggregated-stream-store");
+
+                    // Aggregating a KGroupedTable (note how the value type changes from String to Long)
+                    KTable&lt;byte[], Long&gt; aggregatedTable = groupedTable.aggregate(
+                        new Initializer&lt;Long&gt;() { /* initializer */
+                          @Override
+                          public Long apply() {
+                            return 0L;
+                          }
+                        },
+                        new Aggregator&lt;byte[], String, Long&gt;() { /* adder */
+                          @Override
+                          public Long apply(byte[] aggKey, String newValue, Long aggValue) {
+                            return aggValue + newValue.length();
+                          }
+                        },
+                        new Aggregator&lt;byte[], String, Long&gt;() { /* subtractor */
+                          @Override
+                          public Long apply(byte[] aggKey, String oldValue, Long aggValue) {
+                            return aggValue - oldValue.length();
+                          }
+                        },
+                        Serdes.Long(),
+                        "aggregated-table-store");
+                </pre>
+                <p>
+                    Detailed behavior of <code>KGroupedStream</code>:
+                </p>
+                <ul>
+                    <li>Input records with <code>null</code> keys are ignored in general.</li>
+                    <li>When a record key is received for the first time, the initializer is called
+                        (and called before the adder).</li>
+                    <li>Whenever a record with a non-null value is received, the adder is called.</li>
+                </ul>
+                <p>
+                    Detailed behavior of KGroupedTable:
+                </p>
+                <ul>
+                    <li>Input records with null keys are ignored in general.</li>
+                    <li>When a record key is received for the first time, the initializer is called
+                        (and called before the adder and subtractor). Note that, in contrast to <code>KGroupedStream</code>, over
+                        time the initializer may be called more
+                        than once for a key as a result of having received input tombstone records
+                        for that key (see below).</li>
+                    <li>When the first non-<code>null</code> value is received for a key (think:
+                        INSERT), then only the adder is called.</li>
+                    <li>When subsequent non-<code>null</code> values are received for a key (think:
+                        UPDATE), then (1) the subtractor is called
+                        with the old value as stored in the table and (2) the adder is called with
+                        the new value of the input record
+                        that was just received. The order of execution for the subtractor and adder
+                        is not defined.</li>
+                    <li>When a tombstone record -- i.e. a record with a <code>null</code> value -- is
+                        received for a key (think: DELETE), then
+                        only the subtractor is called. Note that, whenever the subtractor returns a
+                    <code>null</code> value itself, then the
+                    corresponding key is removed from the resulting KTable. If that happens, any
+                    next input record for that key will trigger the initializer again.</li>
+                </ul>
+                <p>
+                    See the example at the bottom of this section for a visualization of the
+                    aggregation semantics.
+                </p>
+            </td>
+        </tr>
+        <tr>
+            <td><b>Aggregate (windowed)</b>: <code>KGroupedStream &rarr; KTable</code></td>
+            <td>
+                <p>
+                    <b>Windowed aggregation</b>. Aggregates the values of records, per window, by
+                    the grouped key. Aggregating is a generalization of
+                    <code>reduce</code> and allows, for example, the aggregate value to have a
+                    different type than the input values.
+                </p>
+                <p>
+                    You must provide an initializer (think: <code>aggValue = 0</code>), "adder"
+                    aggregator (think: <code>aggValue + curValue</code>),
+                    and a window. When windowing based on sessions, you must additionally provide a
+                    "session merger" aggregator (think:
+                    <code>mergedAggValue = leftAggValue + rightAggValue</code>).
+                </p>
+                <p>
+                    The windowed <code>aggregate</code> turns a <code>KGroupedStream
+                    &lt;K , V&gt;</code> into a windowed <code>KTable&lt;Windowed&lt;K&gt;, V&gt;</code>.
+                </p>
+                <p>
+                    Several variants of <code>aggregate</code> exist, see Javadocs for details.
+                </p>
+
+                <pre class="brush: java;">
+                    import java.util.concurrent.TimeUnit;
+                    KGroupedStream&lt;String, Long&gt; groupedStream = ...;
+
+                    // Java 8+ examples, using lambda expressions
+
+                    // Aggregating with time-based windowing (here: with 5-minute tumbling windows)
+                    KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupedStream.aggregate(
+                        () -> 0L, /* initializer */
+                        (aggKey, newValue, aggValue) -> aggValue + newValue, /* adder */
+                        TimeWindows.of(TimeUnit.MINUTES.toMillis(5)), /* time-based window */
+                        Serdes.Long(), /* serde for aggregate value */
+                        "time-windowed-aggregated-stream-store" /* state store name */);
+
+                    // Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)
+                    KTable&lt;Windowed&lt;String&gt;, Long&gt; sessionizedAggregatedStream = groupedStream.aggregate(
+                        () -> 0L, /* initializer */
+                        (aggKey, newValue, aggValue) -> aggValue + newValue, /* adder */
+                        (aggKey, leftAggValue, rightAggValue) -> leftAggValue + rightAggValue, /* session merger */
+                        SessionWindows.with(TimeUnit.MINUTES.toMillis(5)), /* session window */
+                        Serdes.Long(), /* serde for aggregate value */
+                        "sessionized-aggregated-stream-store" /* state store name */);
+
+                    // Java 7 examples
+
+                    // Aggregating with time-based windowing (here: with 5-minute tumbling windows)
+                    KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupedStream.aggregate(
+                        new Initializer&lt;Long&gt;() { /* initializer */
+                          @Override
+                          public Long apply() {
+                            return 0L;
+                          }
+                        },
+                        new Aggregator&lt;String, Long, Long&gt;() { /* adder */
+                          @Override
+                          public Long apply(String aggKey, Long newValue, Long aggValue) {
+                            return aggValue + newValue;
+                          }
+                        },
+                        TimeWindows.of(TimeUnit.MINUTES.toMillis(5)), /* time-based window */
+                        Serdes.Long(), /* serde for aggregate value */
+                        "time-windowed-aggregated-stream-store" /* state store name */);
+
+                    // Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)
+                    KTable&lt;Windowed&lt;String&gt;, Long&gt; sessionizedAggregatedStream = groupedStream.aggregate(
+                        new Initializer&lt;Long&gt;() { /* initializer */
+                          @Override
+                          public Long apply() {
+                            return 0L;
+                          }
+                        },
+                        new Aggregator&lt;String, Long, Long&gt;() { /* adder */
+                          @Override
+                          public Long apply(String aggKey, Long newValue, Long aggValue) {
+                            return aggValue + newValue;
+                          }
+                        },
+                        new Merger&lt;String, Long&gt;() { /* session merger */
+                          @Override
+                          public Long apply(String aggKey, Long leftAggValue, Long rightAggValue) {
+                            return rightAggValue + leftAggValue;
+                          }
+                        },
+                        SessionWindows.with(TimeUnit.MINUTES.toMillis(5)), /* session window */
+                        Serdes.Long(), /* serde for aggregate value */
+                        "sessionized-aggregated-stream-store" /* state store name */);
+                </pre>
+
+                <p>
+                    Detailed behavior:
+                </p>
+                <ul>
+                    <li>The windowed aggregate behaves similar to the rolling aggregate described
+                        above. The additional twist is that the behavior applies per window.</li>
+                    <li>Input records with <code>null</code> keys are ignored in general.</li>
+                    <li>When a record key is received for the first time for a given window, the
+                        initializer is called (and called before the adder).</li>
+                    <li>Whenever a record with a non-<code>null</code> value is received for a given window, the
+                        adder is called.
+                        (Note: As a result of a known bug in Kafka 0.11.0.0, the adder is currently
+                        also called for <code>null</code> values. You can work around this, for example, by
+                        manually filtering out <code>null</code> values prior to grouping the stream.)</li>
+                    <li>When using session windows: the session merger is called whenever two
+                        sessions are being merged.</li>
+                </ul>
+                <p>
+                See the example at the bottom of this section for a visualization of the aggregation semantics.
+                </p>
+            </td>
+        </tr>
+        <tr>
+            <td><b>Count</b>: <code>KGroupedStream &rarr; KTable or KGroupedTable &rarr; KTable</code></td>
+            <td>
+                <p>
+                    <b>Rolling aggregation</b>. Counts the number of records by the grouped key.
+                    Several variants of <code>count</code> exist, see Javadocs for details.
+                </p>
+                <pre class="brush: java;">
+                    KGroupedStream&lt;String, Long&gt; groupedStream = ...;
+                    KGroupedTable&lt;String, Long&gt; groupedTable = ...;
+
+                    // Counting a KGroupedStream
+                    KTable&lt;String, Long&gt; aggregatedStream = groupedStream.count(
+                        "counted-stream-store" /* state store name */);
+
+                    // Counting a KGroupedTable
+                    KTable&lt;String, Long&gt; aggregatedTable = groupedTable.count(
+                        "counted-table-store" /* state store name */);
+                </pre>
+                <p>
+                    Detailed behavior for <code>KGroupedStream</code>:
+                </p>
+                <ul>
+                    <li>Input records with null keys or values are ignored.</li>
+                </ul>
+                <p>
+                    Detailed behavior for <code>KGroupedTable</code>:
+                </p>
+                <ul>
+                    <li>Input records with <code>null</code> keys are ignored. Records with <code>null</code>
+                        values are not ignored but interpreted as "tombstones" for the corresponding key, which
+                        indicate the deletion of the key from the table.</li>
+                </ul>
+            </td>
+        </tr>
+        <tr>
+            <td><b>Count (Windowed)</b>: <code>KGroupedStream &rarr; KTable</code></td>
+            <td>
+                <p>
+                    Windowed aggregation. Counts the number of records, per window, by the grouped key.
+                </p>
+                <p>
+                    The windowed <code>count</code> turns a <code>KGroupedStream<&lt;K, V&gt;</code> into a windowed <code>KTable&lt;Windowed&lt;K&gt;, V&gt;</code>.
+                </p>
+                <p>
+                    Several variants of count exist, see Javadocs for details.
+                </p>
+                <pre class="brush: java;">
+                    import java.util.concurrent.TimeUnit;
+                    KGroupedStream&lt;String, Long&gt; groupedStream = ...;
+
+                    // Counting a KGroupedStream with time-based windowing (here: with 5-minute tumbling windows)
+                    KTable&lt;Windowed&lt;String&gt;, Long&gt; aggregatedStream = groupedStream.count(
+                        TimeWindows.of(TimeUnit.MINUTES.toMillis(5)), /* time-based window */
+                        "time-windowed-counted-stream-store" /* state store name */);
+
+                    // Counting a KGroupedStream with session-based windowing (here: with 5-minute inactivity gaps)
+                    KTable&lt;Windowed&lt;String&gt;, Long&gt; aggregatedStream = groupedStream.count(
+                        SessionWindows.with(TimeUnit.MINUTES.toMillis(5)), /* session window */
+                        "sessionized-counted-stream-store" /* state store name */);
+                </pre>
+                <p>
+                    Detailed behavior:
+                </p>
+                <ul>
+                    <li>Input records with <code>null</code> keys or values are ignored. (Note: As a result of a known bug in Kafka 0.11.0.0,
+                        records with <code>null</code> values are not ignored yet. You can work around this, for example, by manually
+                        filtering out <code>null</code> values prior to grouping the stream.)</li>
+                </ul>
+            </td>
+        </tr>
+        <tr>
+            <td><b>Reduce</b>: <code>KGroupedStream &rarr; KTable or KGroupedTable &rarr; KTable</code></td>
+            <td>
+                <p>
+                <b>Rolling aggregation</b>. Combines the values of (non-windowed) records by the grouped key. The current record value is
+                combined with the last reduced value, and a new reduced value is returned. The result value type cannot be changed,
+                unlike <code>aggregate</code>.
+                </p>
+
+                <p>
+                When reducing a grouped stream, you must provide an "adder" reducer (think: <code>aggValue + curValue</code>).
+                When reducing a grouped table, you must additionally provide a "subtractor" reducer (think: <code>aggValue - oldValue</code>).
+                </p>
+                <p>
+                Several variants of <code>reduce</code> exist, see Javadocs for details.
+                </p>
+                <pre class="brush: java;">
+                    KGroupedStream&lt;String, Long&gt; groupedStream = ...;
+                    KGroupedTable&lt;String, Long&gt; groupedTable = ...;
+
+                    // Java 8+ examples, using lambda expressions
+
+                    // Reducing a KGroupedStream
+                    KTable&lt;String, Long&gt; aggregatedStream = groupedStream.reduce(
+                        (aggValue, newValue) -> aggValue + newValue, /* adder */
+                        "reduced-stream-store" /* state store name */);
+
+                    // Reducing a KGroupedTable
+                    KTable&lt;String, Long&gt; aggregatedTable = groupedTable.reduce(
+                        (aggValue, newValue) -> aggValue + newValue, /* adder */
+                        (aggValue, oldValue) -> aggValue - oldValue, /* subtractor */
+                        "reduced-table-store" /* state store name */);
+
+
+                    // Java 7 examples
+
+                    // Reducing a KGroupedStream
+                    KTable&lt;String, Long&gt; aggregatedStream = groupedStream.reduce(
+                        new Reducer&lt;Long&gt;() { /* adder */
+                          @Override
+                          public Long apply(Long aggValue, Long newValue) {
+                            return aggValue + newValue;
+                          }
+                        },
+                        "reduced-stream-store" /* state store name */);
+
+                    // Reducing a KGroupedTable
+                    KTable&lt;String, Long&gt; aggregatedTable = groupedTable.reduce(
+                        new Reducer&lt;Long&gt;() { /* adder */
+                          @Override
+                          public Long apply(Long aggValue, Long newValue) {
+                            return aggValue + newValue;
+                          }
+                        },
+                        new Reducer&lt;Long&gt;() { /* subtractor */
+                          @Override
+                          public Long apply(Long aggValue, Long oldValue) {
+                            return aggValue - oldValue;
+                          }
+                        },
+                        "reduced-table-store" /* state store name */);
+                </pre>
+                <p>
+                    Detailed behavior for <code>KGroupedStream</code>:
+                </p>
+                <ul>
+                    <li>Input records with <code>null</code> keys are ignored in general.</li>
+                    <li>When a record key is received for the first time, then the value of that
+                        record is used as the initial aggregate value.</li>
+                    <li>Whenever a record with a non-<code>null</code> value is received, the adder is called.</li>
+                </ul>
+                <p>
+                Detailed behavior for <code>KGroupedTable</code>:
+                </p>
+                <ul>
+                    <li>Input records with null keys are ignored in general.</li>
+                    <li>When a record key is received for the first time, then the value of that
+                        record is used as the initial aggregate value.
+                        Note that, in contrast to KGroupedStream, over time this initialization step
+                        may happen more than once for a key as a
+                        result of having received input tombstone records for that key (see below).</li>
+                    <li>When the first non-<code>null</code> value is received for a key (think: INSERT), then
+                        only the adder is called.</li>
+                    <li>When subsequent non-<code>null</code> values are received for a key (think: UPDATE), then
+                        (1) the subtractor is called with the
+                        old value as stored in the table and (2) the adder is called with the new
+                        value of the input record that was just received.
+                        The order of execution for the subtractor and adder is not defined.</li>
+                    <li>When a tombstone record -- i.e. a record with a <code>null</code> value -- is received
+                        for a key (think: DELETE), then only the
+                        subtractor is called. Note that, whenever the subtractor returns a <code>null</code>
+                        value itself, then the corresponding key
+                        is removed from the resulting KTable. If that happens, any next input
+                        record for that key will re-initialize its aggregate value.</li>
+                </ul>
+                <p>
+                See the example at the bottom of this section for a visualization of the
+                aggregation semantics.
+                <p>
+            </td>
+        </tr>
+        <tr>
+            <td><b>Reduce (windowed)</b>: <code>KGroupedStream &rarr; KTable</code></td>
+            <td>
+                <p>
+                Windowed aggregation. Combines the values of records, per window, by the grouped key. The current record value
+                is combined with the last reduced value, and a new reduced value is returned. Records with null key or value are
+                ignored. The result value type cannot be changed, unlike aggregate. (KGroupedStream details)
+                </p>
+                <p>
+                The windowed reduce turns a <code>KGroupedStream&lt;K, V&gt;</code> into a windowed <code>KTable&lt;Windowed&lt;K&gt;, V&gt;</code>.
+                </p>
+                <p>
+                Several variants of reduce exist, see Javadocs for details.
+                </p>
+                <pre class="brush: java;">
+                    import java.util.concurrent.TimeUnit;
+                    KGroupedStream&lt;String, Long&gt; groupedStream = ...;
+
+                    // Java 8+ examples, using lambda expressions
+
+                    // Aggregating with time-based windowing (here: with 5-minute tumbling windows)
+                    KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupedStream.reduce(
+                        (aggValue, newValue) -> aggValue + newValue, /* adder */
+                        TimeWindows.of(TimeUnit.MINUTES.toMillis(5)), /* time-based window */
+                        "time-windowed-reduced-stream-store" /* state store name */);
+
+                    // Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)
+                    KTable&lt;Windowed&lt;String&gt;, Long&gt; sessionzedAggregatedStream = groupedStream.reduce(
+                        (aggValue, newValue) -> aggValue + newValue, /* adder */
+                        SessionWindows.with(TimeUnit.MINUTES.toMillis(5)), /* session window */
+                        "sessionized-reduced-stream-store" /* state store name */);
+
+
+                    // Java 7 examples
+
+                    // Aggregating with time-based windowing (here: with 5-minute tumbling windows)
+                    KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupedStream.reduce(
+                        new Reducer&lt;Long&gt;() { /* adder */
+                          @Override
+                          public Long apply(Long aggValue, Long newValue) {
+                            return aggValue + newValue;
+                          }
+                        },
+                        TimeWindows.of(TimeUnit.MINUTES.toMillis(5)), /* time-based window */
+                        "time-windowed-reduced-stream-store" /* state store name */);
+
+                    // Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)
+                    KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupedStream.reduce(
+                        new Reducer&lt;Long&gt;() { /* adder */
+                          @Override
+                          public Long apply(Long aggValue, Long newValue) {
+                            return aggValue + newValue;
+                          }
+                        },
+                        SessionWindows.with(TimeUnit.MINUTES.toMillis(5)), /* session window */
+                        "sessionized-reduced-stream-store" /* state store name */);
+                </pre>
+
+                <p>
+                Detailed behavior:
+                </p>
+                <ul>
+                    <li>The windowed reduce behaves similar to the rolling reduce described above. The additional twist is that
+                        the behavior applies per window.</li>
+                    <li>Input records with <code>null</code> keys are ignored in general.</li>
+                    <li>When a record key is received for the first time for a given window, then the value of that record is
+                    used as the initial aggregate value.</li>
+                    <li>Whenever a record with a non-<code>null</code> value is received for a given window, the adder is called. (Note: As
+                    a result of a known bug in Kafka 0.11.0.0, the adder is currently also called for <code>null</code> values. You can work
+                    around this, for example, by manually filtering out <code>null</code> values prior to grouping the stream.)</li>
+                    <li>See the example at the bottom of this section for a visualization of the aggregation semantics.</li>
+                </ul>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+
+    <p>
+        <b>Example of semantics for stream aggregations</b>: A <code>KGroupedStream &rarr; KTable</code> example is shown below. The streams and the table are
+        initially empty. We use bold font in the column for "KTable <code>aggregated</code>" to highlight changed state. An entry such as <code>(hello, 1)</code>
+        denotes a record with key <code>hello</code> and value <code>1</code>. To improve the readability of the semantics table we assume that all records are
+        processed in timestamp order.
+    </p>
+    <pre class="brush: java;">
+        // Key: word, value: count
+        KStream&lt;String, Integer&gt; wordCounts = ...;
+
+        KGroupedStream&lt;String, Integer&gt; groupedStream = wordCounts
+            .groupByKey(Serdes.String(), Serdes.Integer());
+
+        KTable&lt;String, Integer&gt; aggregated = groupedStream.aggregate(
+            () -> 0, /* initializer */
+            (aggKey, newValue, aggValue) -> aggValue + newValue, /* adder */
+            Serdes.Integer(), /* serde for aggregate value */
+            "aggregated-stream-store" /* state store name */);
+    </pre>
+
+    <p>
+        <b>Impact of <a href=#streams_developer-guide_memory-management_record-cache>record caches</a></b>: For illustration purposes,
+        the column "KTable <code>aggregated</code>" below shows the table's state changes over
+        time in a very granular way. In practice, you would observe state changes in such a granular way only when record caches are
+        disabled (default: enabled). When record caches are enabled, what might happen for example is that the output results of the
+        rows with timestamps 4 and 5 would be compacted, and there would only be a single state update for the key <code>kafka</code> in the KTable
+        (here: from <code>(kafka 1)</code> directly to <code>(kafka, 3)</code>. Typically, you should only disable record caches for testing or debugging purposes
+        -- under normal circumstances it is better to leave record caches enabled.
+    </p>
+    <table class="data-table" border="1">
+        <thead>
+        <col>
+        <colgroup span="2"></colgroup>
+        <colgroup span="2"></colgroup>
+        <col>
+        <tr>
+            <th scope="col"></th>
+            <th colspan="2">KStream wordCounts</th>
+            <th colspan="2">KGroupedStream groupedStream</th>
+            <th scope="col">KTable aggregated</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr>
+            <th scope="col">Timestamp</th>
+            <th scope="col">Input record</th>
+            <th scope="col">Grouping</th>
+            <th scope="col">Initializer</th>
+            <th scope="col">Adder</th>
+            <th scope="col">State</th>
+        </tr>
+        <tr>
+            <td>1</td>
+            <td>(hello, 1)</td>
+            <td>(hello, 1)</td>
+            <td>0 (for hello)</td>
+            <td>(hello, 0 + 1)</td>
+            <td>(hello, 1)</td>
+        </tr>
+        <tr>
+            <td>2</td>
+            <td>(kafka, 1)</td>
+            <td>(kafka, 1)</td>
+            <td>0 (for kafka)</td>
+            <td>(kafka, 0 + 1)</td>
+            <td>(hello, 1), (kafka, 1)</td>
+        </tr>
+        <tr>
+            <td>3</td>
+            <td>(streams, 1)</td>
+            <td>(streams, 1)</td>
+            <td>0 (for streams)</td>
+            <td>(streams, 0 + 1)</td>
+            <td>(hello, 1), (kafka, 1), (streams, 1)</td>
+        </tr>
+        <tr>
+            <td>4</td>
+            <td>(kafka, 1)</td>
+            <td>(kafka, 1)</td>
+            <td></td>
+            <td>(kafka, 1 + 1)</td>
+            <td>(hello, 1), (kafka, 2), (streams, 1)</td>
+        </tr>
+        <tr>
+            <td>5</td>
+            <td>(kafka, 1)</td>
+            <td>(kafka, 1)</td>
+            <td></td>
+            <td>(kafka, 2 + 1)</td>
+            <td>(hello, 1), (kafka, 3), (streams, 1)</td>
+        </tr>
+        <tr>
+            <td>6</td>
+            <td>(streams, 1)</td>
+            <td>(streams, 1)</td>
+            <td></td>
+            <td>(streams, 1 + 1)</td>
+            <td>(hello, 1), (kafka, 3), (streams, 2)</td>
+        </tr>
+        </tbody>
+    </table>
+    <p>
+    Example of semantics for table aggregations: A <code>KGroupedTable &rarr; KTable</code> example is shown below. The tables are initially empty.
+    We use bold font in the column for "KTable <code>aggregated</code>" to highlight changed state. An entry such as <code>(hello, 1)</code> denotes a
+    record with key <code>hello</code> and value <code>1</code>. To improve the readability of the semantics table we assume that all records are processed
+    in timestamp order.
+    </p>
+    <pre class="brush: java;">
+        // Key: username, value: user region (abbreviated to "E" for "Europe", "A" for "Asia")
+        KTable&lt;String, String&gt; userProfiles = ...;
+
+        // Re-group `userProfiles`.  Don't read too much into what the grouping does:
+        // its prime purpose in this example is to show the *effects* of the grouping
+        // in the subsequent aggregation.
+        KGroupedTable&lt;String, Integer&gt; groupedTable = userProfiles
+            .groupBy((user, region) -> KeyValue.pair(region, user.length()), Serdes.String(), Serdes.Integer());
+
+        KTable&lt;String, Integer&gt; aggregated = groupedTable.aggregate(
+            () -> 0, /* initializer */
+            (aggKey, newValue, aggValue) -> aggValue + newValue, /* adder */
+            (aggKey, oldValue, aggValue) -> aggValue - oldValue, /* subtractor */
+            Serdes.Integer(), /* serde for aggregate value */
+            "aggregated-table-store" /* state store name */);
+    </pre>
+    <p>
+        <b>Impact of <a href=#streams_developer-guide_memory-management_record-cache>record caches</a></b>:
+        For illustration purposes, the column "KTable <code>aggregated</code>" below shows
+        the table's state changes over time in a very granular way. In practice, you would observe state changes
+        in such a granular way only when record caches are disabled (default: enabled). When record caches are enabled,
+        what might happen for example is that the output results of the rows with timestamps 4 and 5 would be
+        compacted, and there would only be a single state update for the key <code>kafka</code> in the KTable
+        (here: from <code>(kafka 1)</code> directly to <code>(kafka, 3)</code>. Typically, you should only disable
+        record caches for testing or debugging purposes -- under normal circumstances it is better to leave record caches enabled.
+    </p>
+    <table class="data-table" border="1">
+        <thead>
+        <col>
+        <colgroup span="2"></colgroup>
+        <colgroup span="2"></colgroup>
+        <col>
+        <tr>
+            <th scope="col"></th>
+            <th colspan="3">KTable userProfiles</th>
+            <th colspan="3">KGroupedTable groupedTable</th>
+            <th scope="col">KTable aggregated</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr>
+            <th scope="col">Timestamp</th>
+            <th scope="col">Input record</th>
+            <th scope="col">Interpreted as</th>
+            <th scope="col">Grouping</th>
+            <th scope="col">Initializer</th>
+            <th scope="col">Adder</th>
+            <th scope="col">Subtractor</th>
+            <th scope="col">State</th>
+        </tr>
+        <tr>
+            <td>1</td>
+            <td>(alice, E)</td>
+            <td>INSERT alice</td>
+            <td>(E, 5)</td>
+            <td>0 (for E)</td>
+            <td>(E, 0 + 5)</td>
+            <td></td>
+            <td>(E, 5)</td>
+        </tr>
+        <tr>
+            <td>2</td>
+            <td>(bob, A)</td>
+            <td>INSERT bob</td>
+            <td>(A, 3)</td>
+            <td>0 (for A)</td>
+            <td>(A, 0 + 3)</td>
+            <td></td>
+            <td>(A, 3), (E, 5)</td>
+        </tr>
+        <tr>
+            <td>3</td>
+            <td>(charlie, A)</td>
+            <td>INSERT charlie</td>
+            <td>(A, 7)</td>
+            <td></td>
+            <td>(A, 3 + 7)</td>
+            <td></td>
+            <td>(A, 10), (E, 5)</td>
+        </tr>
+        <tr>
+            <td>4</td>
+            <td>(alice, A)</td>
+            <td>UPDATE alice</td>
+            <td>(A, 5)</td>
+            <td></td>
+            <td>(A, 10 + 5)</td>
+            <td>(E, 5 - 5)</td>
+            <td>(A, 15), (E, 0)</td>
+        </tr>
+        <tr>
+            <td>5</td>
+            <td>(charlie, null)</td>
+            <td>DELETE charlie</td>
+            <td>(null, 7)</td>
+            <td></td>
+            <td></td>
+            <td>(A, 15 - 7)</td>
+            <td>(A, 8), (E, 0)</td>
+        </tr>
+        <tr>
+            <td>6</td>
+            <td>(null, E)</td>
+            <td>ignored</td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td>(A, 8), (E, 0)</td>
+        </tr>
+        <tr>
+            <td>7</td>
+            <td>(bob, E)</td>
+            <td>UPDATE bob</td>
+            <td>(E, 3)</td>
+            <td></td>
+            <td>(E, 0 + 3)</td>
+            <td>(A, 8 - 3)</td>
+            <td>(A, 5), (E, 3)</td>
+        </tr>
+        </tbody>
+    </table>
+
+    <h6><a id="streams_dsl_windowing" href="#streams_dsl_windowing">Windowing a stream</a></h6>
     A stream processor may need to divide data records into time buckets, i.e. to <b>window</b> the stream by time. This is usually needed for join and aggregation operations, etc. Kafka Streams currently defines the following types of windows:
     <ul>
         <li><b>Hopping time windows</b> are windows based on time intervals. They model fixed-sized, (possibly) overlapping windows. A hopping window is defined by two properties: the window's size and its advance interval (aka "hop"). The advance interval specifies by how much a window moves forward relative to the previous one. For example, you can configure a hopping window with a size 5 minutes and an advance interval of 1 minute. Since hopping windows can overlap a data record may belong to more than one such windows.</li>
@@ -492,7 +1905,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
         Kafka Streams is able to properly handle late-arriving records.
     </p>
 
-    <h4><a id="streams_dsl_joins" href="#streams_dsl_joins">Join multiple streams</a></h4>
+    <h6><a id="streams_dsl_joins" href="#streams_dsl_joins">Join multiple streams</a></h6>
     A <b>join</b> operation merges two streams based on the keys of their data records, and yields a new stream. A join over record streams usually needs to be performed on a windowing basis because otherwise the number of records that must be maintained for performing the join may grow indefinitely. In Kafka Streams, you may perform the following join operations:
     <ul>
         <li><b>KStream-to-KStream Joins</b> are always windowed joins, since otherwise the memory and state required to compute the join would grow infinitely in size. Here, a newly received record from one of the streams is joined with the other stream's records within the specified window interval to produce one result for each matching pair based on user-provided <code>ValueJoiner</code>. A new <code>KStream</code> instance representing the result stream of the join is returned from this operator.</li>
@@ -510,61 +1923,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
     Depending on the operands the following join operations are supported: <b>inner joins</b>, <b>outer joins</b> and <b>left joins</b>.
     Their <a href="https://cwiki.apache.org/confluence/display/KAFKA/Kafka+Streams+Join+Semantics">semantics</a> are similar to the corresponding operators in relational databases.
 
-    <h5><a id="streams_dsl_aggregations" href="#streams_dsl_aggregations">Aggregate a stream</a></h5>
-    An <b>aggregation</b> operation takes one input stream, and yields a new stream by combining multiple input records into a single output record. Examples of aggregations are computing counts or sum. An aggregation over record streams usually needs to be performed on a windowing basis because otherwise the number of records that must be maintained for performing the aggregation may grow indefinitely.
 
-    <p>
-        In the Kafka Streams DSL, an input stream of an aggregation can be a <code>KStream</code> or a <code>KTable</code>, but the output stream will always be a <code>KTable</code>.
-        This allows Kafka Streams to update an aggregate value upon the late arrival of further records after the value was produced and emitted.
-        When such late arrival happens, the aggregating <code>KStream</code> or <code>KTable</code> simply emits a new aggregate value. Because the output is a <code>KTable</code>, the new value is considered to overwrite the old value with the same key in subsequent processing steps.
-    </p>
-
-    <h4><a id="streams_dsl_transform" href="#streams_dsl_transform">Transform a stream</a></h4>
-
-    <p>
-        Besides join and aggregation operations, there is a list of other transformation operations provided for <code>KStream</code> and <code>KTable</code> respectively.
-        Each of these operations may generate either one or more <code>KStream</code> and <code>KTable</code> objects and
-        can be translated into one or more connected processors into the underlying processor topology.
-        All these transformation methods can be chained together to compose a complex processor topology.
-        Since <code>KStream</code> and <code>KTable</code> are strongly typed, all these transformation operations are defined as
-        generics functions where users could specify the input and output data types.
-    </p>
-
-    <p>
-        Among these transformations, <code>filter</code>, <code>map</code>, <code>mapValues</code>, etc, are stateless
-        transformation operations and can be applied to both <code>KStream</code> and <code>KTable</code>,
-        where users can usually pass a customized function to these functions as a parameter, such as <code>Predicate</code> for <code>filter</code>,
-        <code>KeyValueMapper</code> for <code>map</code>, etc:
-
-    </p>
-
-    <pre class="brush: java;">
-    // written in Java 8+, using lambda expressions
-    KStream&lt;String, GenericRecord&gt; mapped = source1.mapValue(record -> record.get("category"));
-    </pre>
-
-    <p>
-        Stateless transformations, by definition, do not depend on any state for processing, and hence implementation-wise
-        they do not require a state store associated with the stream processor; Stateful transformations, on the other hand,
-        require accessing an associated state for processing and producing outputs.
-        For example, in <code>join</code> and <code>aggregate</code> operations, a windowing state is usually used to store all the received records
-        within the defined window boundary so far. The operators can then access these accumulated records in the store and compute
-        based on them.
-    </p>
-
-    <pre class="brush: java;">
-    // written in Java 8+, using lambda expressions
-    KTable&lt;Windowed&lt;String&gt;, Long&gt; counts = source1.groupByKey().aggregate(
-    () -> 0L,  // initial value
-    (aggKey, value, aggregate) -> aggregate + 1L,   // aggregating value
-    TimeWindows.of("counts", 5000L).advanceBy(1000L), // intervals in milliseconds
-    Serdes.Long() // serde for aggregated value
-    );
-
-    KStream&lt;String, String&gt; joined = source1.leftJoin(source2,
-    (record1, record2) -> record1.get("user") + "-" + record2.get("region");
-    );
-    </pre>
 
     <h4><a id="streams_dsl_sink" href="#streams_dsl_sink">Write streams back to Kafka</a></h4>
 
@@ -615,7 +1974,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
 
 
     <figure>
-        <img class="centerd" src="/{{version}}/images/streams-interactive-queries-01.png" style="width:600pt;">
+        <img class="centered" src="/{{version}}/images/streams-interactive-queries-01.png" style="width:600pt;">
         <figcaption style="text-align: center;"><i>Without interactive queries: increased complexity and heavier footprint of architecture</i></figcaption>
     </figure>
 
@@ -648,7 +2007,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
         </li>
     </ul>
 
-    <h4><a id="treams_developer-guide_interactive-queries_your_app" href="#treams_developer-guide_interactive-queries_your_app">Your application and interactive queries</a></h4>
+    <h4><a id="streams_developer-guide_interactive-queries_your_app" href="#streams_developer-guide_interactive-queries_your_app">Your application and interactive queries</a></h4>
     <p>
         Interactive queries allow you to tap into the <i>state</i> of your application, and notably to do that from outside your application.
         However, an application is not interactively queryable out of the box: you make it queryable by leveraging the API of Kafka Streams.
@@ -713,7 +2072,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
     </p>
 
     <figure>
-        <img class="centerd" src="/{{version}}/images/streams-interactive-queries-api-01.png" style="width:500pt;">
+        <img class="centered" src="/{{version}}/images/streams-interactive-queries-api-01.png" style="width:500pt;">
         <figcaption style="text-align: center;"><i>Every application instance can directly query any of its local state stores</i></figcaption>
     </figure>
 
@@ -1338,7 +2697,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
     StreamsConfig config = new StreamsConfig(settings);
     </pre>
 
-    <h4><a id="streams_client_config" href="#streams_clients_config">Producer and Consumer Configuration</a></h4>
+    <h4><a id="streams_client_config" href="#streams_client_config">Producer and Consumer Configuration</a></h4>
     <p>
         Apart from Kafka Streams' own configuration parameters you can also specify parameters for the Kafka consumers and producers that are used internally,
         depending on the needs of your application. Similar to the Streams settings you define any such consumer and/or producer settings via <code>StreamsConfig</code>.

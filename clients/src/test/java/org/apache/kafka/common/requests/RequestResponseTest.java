@@ -456,10 +456,10 @@ public class RequestResponseTest {
     @Test
     public void verifyFetchResponseFullWrite() throws Exception {
         FetchResponse fetchResponse = createFetchResponse();
-        RequestHeader header = new RequestHeader(ApiKeys.FETCH.id, ApiKeys.FETCH.latestVersion(),
-                "client", 15);
+        short apiVersion = ApiKeys.FETCH.latestVersion();
+        int correlationId = 15;
 
-        Send send = fetchResponse.toSend("1", header);
+        Send send = fetchResponse.toSend("1", new ResponseHeader(correlationId), apiVersion);
         ByteBufferChannel channel = new ByteBufferChannel(send.size());
         send.writeTo(channel);
         channel.close();
@@ -472,11 +472,11 @@ public class RequestResponseTest {
 
         // read the header
         ResponseHeader responseHeader = ResponseHeader.parse(channel.buffer());
-        assertEquals(header.correlationId(), responseHeader.correlationId());
+        assertEquals(correlationId, responseHeader.correlationId());
 
         // read the body
-        Struct responseBody = ApiKeys.FETCH.responseSchema(header.apiVersion()).read(buf);
-        assertEquals(fetchResponse.toStruct(header.apiVersion()), responseBody);
+        Struct responseBody = ApiKeys.FETCH.responseSchema(apiVersion).read(buf);
+        assertEquals(fetchResponse.toStruct(apiVersion), responseBody);
 
         assertEquals(size, responseHeader.sizeOf() + responseBody.sizeOf());
     }
