@@ -131,13 +131,13 @@ public class OffsetStorageWriter {
 
         final long flushId;
         // Serialize
-        Map<ByteBuffer, ByteBuffer> offsetsSerialized;
+        final Map<ByteBuffer, ByteBuffer> offsetsSerialized;
 
         synchronized (this) {
             flushId = currentFlushId;
 
             try {
-                offsetsSerialized = new HashMap<>();
+                offsetsSerialized = new HashMap<>(toFlush.size());
                 for (Map.Entry<Map<String, Object>, Map<String, Object>> entry : toFlush.entrySet()) {
                     // Offsets are specified as schemaless to the converter, using whatever internal schema is appropriate
                     // for that data. The only enforcement of the format is here.
@@ -162,8 +162,7 @@ public class OffsetStorageWriter {
             }
 
             // And submit the data
-            log.debug("Submitting {} entries to backing store", offsetsSerialized.size());
-            log.debug("The offsets are: " + toFlush.toString());
+            log.debug("Submitting {} entries to backing store. The offsets are: {}", offsetsSerialized.size(), toFlush);
         }
 
         return backingStore.set(offsetsSerialized, new Callback<Void>() {
