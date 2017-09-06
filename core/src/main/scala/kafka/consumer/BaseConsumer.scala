@@ -73,7 +73,7 @@ class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: 
       case (Some(topic), None, None, None) =>
         consumer.subscribe(Collections.singletonList(topic))
       case (None, None, None, Some(whitelist)) =>
-        consumer.subscribe(Pattern.compile(whitelist), new NoOpConsumerRebalanceListener())
+        consumer.subscribe(Pattern.compile(whitelist))
       case _ =>
         throw new IllegalArgumentException("An invalid combination of arguments is provided. " +
             "Exactly one of 'topic' or 'whitelist' must be provided. " +
