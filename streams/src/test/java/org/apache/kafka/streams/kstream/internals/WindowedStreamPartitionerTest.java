@@ -92,7 +92,6 @@ public class WindowedStreamPartitionerTest {
 
         defaultPartitioner.close();
     }
-
     @Test
     public void testWindowedSerializerNoArgConstructors() {
         Map<String, String> props = new HashMap<>();
@@ -118,33 +117,6 @@ public class WindowedStreamPartitionerTest {
         windowedSerializer.close();
         windowedSerializer1.close();
     }
-
-    @Test
-    public void testWindowedDeserializerNoArgConstructors() {
-        Map<String, String> props = new HashMap<>();
-        // test key[value].deserializer.inner.class takes precedence over serializer.inner.class
-        WindowedDeserializer<StringSerializer> windowedDeserializer = new WindowedDeserializer<>();
-        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "host:1");
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
-        props.put("key.deserializer.inner.class", "org.apache.kafka.common.serialization.StringDeserializer");
-        props.put("deserializer.inner.class", "org.apache.kafka.common.serialization.StringDeserializer");
-        windowedDeserializer.configure(props, true);
-        Deserializer<?> inner = windowedDeserializer.innerDeserializer();
-        assertNotNull("Inner deserializer should be not null", inner);
-        assertTrue("Inner deserializer type should be StringDeserializer", inner instanceof StringDeserializer);
-        // test deserializer.inner.class
-        props.put("deserializer.inner.class", "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-        props.remove("key.deserializer.inner.class");
-        props.remove("value.deserializer.inner.class");
-        WindowedDeserializer<?> windowedDeserializer1 = new WindowedDeserializer<>();
-        windowedDeserializer1.configure(props, false);
-        final Deserializer<?> inner1 = windowedDeserializer1.innerDeserializer();
-        assertNotNull("Inner deserializer should be not null", inner1);
-        assertTrue("Inner deserializer type should be ByteArrayDeserializer", inner1 instanceof ByteArrayDeserializer);
-        windowedDeserializer.close();
-        windowedDeserializer1.close();
-    }
-    
     @Test
     public void testWindowedDeserializerWindowSize() {
         final Map<String, String> props = new HashMap<>();

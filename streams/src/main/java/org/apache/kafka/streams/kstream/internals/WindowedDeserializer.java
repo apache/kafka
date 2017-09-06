@@ -48,7 +48,7 @@ public class WindowedDeserializer<T> implements Deserializer<Windowed<T>> {
     }
 
     public WindowedDeserializer(final Deserializer<T> inner,
-            final long windowSize) {
+                                final long windowSize) {
         this.inner = inner;
         this.windowSize = windowSize;
     }
