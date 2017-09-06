@@ -234,6 +234,9 @@ public class Selector implements Selectable, AutoCloseable {
      * Kafka brokers add an incrementing index to the connection id to avoid reuse in the timing window
      * where an existing connection may not yet have been closed by the broker when a new connection with
      * the same remote host:port is processed.
+     * </p><p>
+     * If a `KafkaChannel` cannot be created for this connection, the `socketChannel` is closed
+     * and its selection key cancelled.
      * </p>
      */
     public void register(String id, SocketChannel socketChannel) throws IOException {
