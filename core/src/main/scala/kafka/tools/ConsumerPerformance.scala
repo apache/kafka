@@ -54,9 +54,10 @@ object ConsumerPerformance {
     val totalBytesRead = new AtomicLong(0)
     val consumerTimeout = new AtomicBoolean(false)
     var metrics: mutable.Map[MetricName, _ <: Metric] = null
+    val joinGroupTimeInMs = new AtomicLong(0L)
 
     if (!config.hideHeader) {
-      printHeader(!config.showDetailedStats)
+      printHeader(config.showDetailedStats, config.useOldConsumer)
     }
 
     var startMs, endMs = 0L
@@ -64,7 +65,7 @@ object ConsumerPerformance {
       val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](config.props)
       consumer.subscribe(Collections.singletonList(config.topic))
       startMs = System.currentTimeMillis
-      consume(consumer, List(config.topic), config.numMessages, 1000, config, totalMessagesRead, totalBytesRead)
+      consume(consumer, List(config.topic), config.numMessages, 1000, config, totalMessagesRead, totalBytesRead, joinGroupTimeInMs, startMs)
       endMs = System.currentTimeMillis
 
       if (config.printMetrics) {
@@ -95,10 +96,20 @@ object ConsumerPerformance {
       consumerConnector.shutdown()
     }
     val elapsedSecs = (endMs - startMs) / 1000.0
+    val fetchTimeInMs = (endMs - startMs) - joinGroupTimeInMs.get
     if (!config.showDetailedStats) {
       val totalMBRead = (totalBytesRead.get * 1.0) / (1024 * 1024)
-      println("%s, %s, %.4f, %.4f, %d, %.4f".format(config.dateFormat.format(startMs), config.dateFormat.format(endMs),
-        totalMBRead, totalMBRead / elapsedSecs, totalMessagesRead.get, totalMessagesRead.get / elapsedSecs))
+      print("%s, %s, %.4f, %.4f, %d, %.4f".format(
+        config.dateFormat.format(startMs),
+        config.dateFormat.format(endMs),
+        totalMBRead,
+        totalMBRead / elapsedSecs,
+        totalMessagesRead.get,
+        totalMessagesRead.get / elapsedSecs))
+        if (!config.useOldConsumer) {
+          print(", %d, %d, %.4f, %.4f".format(joinGroupTimeInMs.get, fetchTimeInMs, totalMBRead / (fetchTimeInMs / 1000.0),
+            totalMessagesRead.get / (fetchTimeInMs / 1000.0)))
+        }
     }
 
     if (metrics != null) {
@@ -107,11 +118,13 @@ object ConsumerPerformance {
 
   }
 
-  private[tools] def printHeader(showDetailedStats: Boolean): Unit = {
-    if (showDetailedStats)
-      println("start.time, end.time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
-    else
-      println("time, threadId, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
+  private[tools] def printHeader(showDetailedStats: Boolean, useOldConsumer: Boolean): Unit = {
+    val newFieldsInHeader = s"${if (!useOldConsumer) ", rebalance.time.ms, fetch.time.ms, fetch.MB.sec, fetch.nMsg.sec" else ""}"
+    if (!showDetailedStats) {
+      println("start.time, end.time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec" + newFieldsInHeader)
+    } else {
+      println("time, threadId, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec" + newFieldsInHeader)
+    }
   }
 
   def consume(consumer: KafkaConsumer[Array[Byte], Array[Byte]],
@@ -120,11 +133,14 @@ object ConsumerPerformance {
               timeout: Long,
               config: ConsumerPerfConfig,
               totalMessagesRead: AtomicLong,
-              totalBytesRead: AtomicLong) {
+              totalBytesRead: AtomicLong,
+              joinTime: AtomicLong,
+              testStartTime: Long) {
     var bytesRead = 0L
     var messagesRead = 0L
     var lastBytesRead = 0L
     var lastMessagesRead = 0L
+    var joinStart = 0L
 
     // Wait for group join, metadata fetch, etc
     val joinTimeout = 10000
@@ -132,13 +148,15 @@ object ConsumerPerformance {
     consumer.subscribe(topics.asJava, new ConsumerRebalanceListener {
       def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) {
         isAssigned.set(true)
+        joinTime.addAndGet(System.currentTimeMillis - joinStart)
       }
       def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) {
         isAssigned.set(false)
+        joinStart = System.currentTimeMillis
       }})
-    val joinStart = System.currentTimeMillis()
+    val joinStartForFirstTime = System.currentTimeMillis
     while (!isAssigned.get()) {
-      if (System.currentTimeMillis() - joinStart >= joinTimeout) {
+      if (System.currentTimeMillis() - joinStartForFirstTime >= joinTimeout) {
         throw new Exception("Timed out waiting for initial group join.")
       }
       consumer.poll(100)
@@ -165,7 +183,8 @@ object ConsumerPerformance {
 
         if (currentTimeMillis - lastReportTime >= config.reportingInterval) {
           if (config.showDetailedStats)
-            printProgressMessage(0, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, lastReportTime, currentTimeMillis, config.dateFormat)
+            printProgressMessage(0, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, lastReportTime,
+              currentTimeMillis, config.dateFormat, testStartTime, Some(joinTime.get))
           lastReportTime = currentTimeMillis
           lastMessagesRead = messagesRead
           lastBytesRead = bytesRead
@@ -184,12 +203,22 @@ object ConsumerPerformance {
                            lastMessagesRead: Long,
                            startMs: Long,
                            endMs: Long,
-                           dateFormat: SimpleDateFormat) = {
+                           dateFormat: SimpleDateFormat,
+                           beginTime: Long,
+                           joinTimeOpt: Option[Long] = None) = {
     val elapsedMs: Double = endMs - startMs
     val totalMBRead = (bytesRead * 1.0) / (1024 * 1024)
     val mbRead = ((bytesRead - lastBytesRead) * 1.0) / (1024 * 1024)
-    println("%s, %d, %.4f, %.4f, %d, %.4f".format(dateFormat.format(endMs), id, totalMBRead,
-        1000.0 * (mbRead / elapsedMs), messagesRead, ((messagesRead - lastMessagesRead) / elapsedMs) * 1000.0))
+    val commonFields = "%s, %d, %.4f, %.4f, %d, %.4f".format(dateFormat.format(endMs), id, totalMBRead,
+      1000.0 * (mbRead / elapsedMs), messagesRead, ((messagesRead - lastMessagesRead) / elapsedMs) * 1000.0)
+    joinTimeOpt match {
+      case Some(joinTime) =>
+        val fetchTimeMs = endMs - beginTime - joinTime
+        println("%s, %d, %d, %.4f, %.4f".format(commonFields, joinTime, fetchTimeMs, (bytesRead * 1.0 / (1024 * 1024) / (fetchTimeMs / 1000.0)),
+          messagesRead / (fetchTimeMs / 1000.0)))
+      case None =>
+        println(commonFields)
+    }
   }
 
   class ConsumerPerfConfig(args: Array[String]) extends PerfConfig(args) {
@@ -323,7 +352,7 @@ object ConsumerPerformance {
 
           if (currentTimeMillis - lastReportTime >= config.reportingInterval) {
             if (config.showDetailedStats)
-              printProgressMessage(threadId, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, lastReportTime, currentTimeMillis, config.dateFormat)
+              printProgressMessage(threadId, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, lastReportTime, currentTimeMillis, config.dateFormat, startMs)
             lastReportTime = currentTimeMillis
             lastMessagesRead = messagesRead
             lastBytesRead = bytesRead
@@ -339,7 +368,7 @@ object ConsumerPerformance {
       totalMessagesRead.addAndGet(messagesRead)
       totalBytesRead.addAndGet(bytesRead)
       if (config.showDetailedStats)
-        printProgressMessage(threadId, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, startMs, System.currentTimeMillis, config.dateFormat)
+        printProgressMessage(threadId, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, startMs, System.currentTimeMillis, config.dateFormat, startMs)
     }
 
   }
