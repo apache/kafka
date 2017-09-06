@@ -23,6 +23,7 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import com.yammer.metrics.core.Gauge
 import kafka.api._
 import kafka.cluster.{Partition, Replica}
+import kafka.common.TopicAndPartition
 import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log.{Log, LogAppendInfo, LogManager}
 import kafka.metrics.KafkaMetricsGroup
@@ -149,6 +150,7 @@ class ReplicaManager(val config: KafkaConfig,
                      val delayedProducePurgatory: DelayedOperationPurgatory[DelayedProduce],
                      val delayedFetchPurgatory: DelayedOperationPurgatory[DelayedFetch],
                      val delayedDeleteRecordsPurgatory: DelayedOperationPurgatory[DelayedDeleteRecords],
+                     val delayedElectPreferredLeaderPurgatory: DelayedOperationPurgatory[DelayedElectPreferredLeader],
                      threadNamePrefix: Option[String]) extends Logging with KafkaMetricsGroup {
 
   def this(config: KafkaConfig,
@@ -174,6 +176,8 @@ class ReplicaManager(val config: KafkaConfig,
       DelayedOperationPurgatory[DelayedDeleteRecords](
         purgatoryName = "DeleteRecords", brokerId = config.brokerId,
         purgeInterval = config.deleteRecordsPurgatoryPurgeIntervalRequests),
+      DelayedOperationPurgatory[DelayedElectPreferredLeader](
+        purgatoryName = "ElectPreferredLeader", brokerId = config.brokerId),
       threadNamePrefix)
   }
 
@@ -311,6 +315,13 @@ class ReplicaManager(val config: KafkaConfig,
   def tryCompleteDelayedDeleteRecords(key: DelayedOperationKey) {
     val completed = delayedDeleteRecordsPurgatory.checkAndComplete(key)
     debug("Request key %s unblocked %d DeleteRecordsRequest.".format(key.keyLabel, completed))
+  }
+
+  def hasDelayedElectionOperations = delayedElectPreferredLeaderPurgatory.delayed != 0
+
+  def tryCompleteElection(key: DelayedOperationKey): Unit = {
+    val completed = delayedElectPreferredLeaderPurgatory.checkAndComplete(key)
+    debug("Request key %s unblocked %d ElectPreferredLeader.".format(key.keyLabel, completed))
   }
 
   def startup() {
@@ -1411,6 +1422,7 @@ class ReplicaManager(val config: KafkaConfig,
     delayedFetchPurgatory.shutdown()
     delayedProducePurgatory.shutdown()
     delayedDeleteRecordsPurgatory.shutdown()
+    delayedElectPreferredLeaderPurgatory.shutdown()
     if (checkpointHW)
       checkpointHighWatermarks()
     info("Shut down completely")
@@ -1433,6 +1445,37 @@ class ReplicaManager(val config: KafkaConfig,
       }
       tp -> epochEndOffset
     }
+  }
+
+  def electPreferredLeaders(controller: KafkaController,
+                                  partitions: Set[TopicAndPartition],
+                                  responseCallback: Map[TopicAndPartition, ApiError] => Unit,
+                                  requestTimeout: Long): Unit = {
+    val partitionsFromZk = zkUtils.getPartitionsForTopics(partitions.map(_.topic).toSeq).flatMap { case (topic, partitions) =>
+      partitions.map(TopicAndPartition(topic, _))
+    }.toSet
+    val (validPartitions, invalidPartitions) = partitions.partition(partitionsFromZk.contains)
+    val invalidPartitionsResults = invalidPartitions.map(p => {
+      val msg = s"Skipping preferred replica leader election for partition ${p} since it doesn't exist."
+      logger.info(msg)
+      p -> new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, msg)
+    }).toMap
+
+    def electionCallback(waiting: Set[TopicAndPartition], results: Map[TopicAndPartition, ApiError]) = {
+      if (waiting.nonEmpty) {
+        // timeout
+        val watchKeys = waiting.map(p => new TopicPartitionOperationKey(p.topic, p.partition)).toSeq
+        delayedElectPreferredLeaderPurgatory.tryCompleteElseWatch(
+          new DelayedElectPreferredLeader(requestTimeout, waiting, results ++ invalidPartitionsResults,
+            this, controller.controllerContext, responseCallback),
+          watchKeys)
+      } else {
+          // There are no partitions actually being elected, so return immediately
+          responseCallback(results ++ invalidPartitionsResults)
+      }
+    }
+
+    controller.electPreferredLeaders(validPartitions, electionCallback)
   }
 }
 

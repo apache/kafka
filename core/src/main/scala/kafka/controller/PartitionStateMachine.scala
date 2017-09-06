@@ -81,7 +81,7 @@ class PartitionStateMachine(controller: KafkaController, stateChangeLogger: Stat
       for ((topicAndPartition, partitionState) <- partitionState
           if !controller.topicDeletionManager.isTopicQueuedUpForDeletion(topicAndPartition.topic)) {
         if (partitionState.equals(OfflinePartition) || partitionState.equals(NewPartition))
-          handleStateChange(topicAndPartition.topic, topicAndPartition.partition, OnlinePartition, controller.offlinePartitionSelector,
+          handleStateChange(topicAndPartition, OnlinePartition, controller.offlinePartitionSelector,
                             (new CallbackBuilder).build)
       }
       brokerRequestBatch.sendRequestsToBrokers(controller.epoch)
@@ -107,7 +107,7 @@ class PartitionStateMachine(controller: KafkaController, stateChangeLogger: Stat
     try {
       brokerRequestBatch.newBatch()
       partitions.foreach { topicAndPartition =>
-        handleStateChange(topicAndPartition.topic, topicAndPartition.partition, targetState, leaderSelector, callbacks)
+        handleStateChange(topicAndPartition, targetState, leaderSelector, callbacks)
       }
       brokerRequestBatch.sendRequestsToBrokers(controller.epoch)
     } catch {
@@ -115,6 +115,35 @@ class PartitionStateMachine(controller: KafkaController, stateChangeLogger: Stat
       // TODO: It is not enough to bail out and log an error, it is important to trigger state changes for those partitions
     }
   }
+
+  /**
+   * Attempt to put each of the given partitions into the given targetState, returning
+   * a map of partition to exception for those partitions where the attempt failed with an exception.
+   * @param partitions   The list of partitions that need to be transitioned to the target state
+   * @param targetState  The state that the partitions should be moved to
+   */
+  def handleStateChangesWithResults(partitions: Set[TopicAndPartition], targetState: PartitionState,
+                         leaderSelector: PartitionLeaderSelector = noOpPartitionLeaderSelector,
+                         callbacks: Callbacks = (new CallbackBuilder).build): Map[TopicAndPartition, Throwable] = {
+    info("Invoking state change to %s for partitions %s".format(targetState, partitions.mkString(",")))
+    val result = new mutable.HashMap[TopicAndPartition, Throwable]()
+    try {
+      brokerRequestBatch.newBatch()
+      partitions.foreach { topicAndPartition => {
+        handleStateChange(topicAndPartition, targetState, leaderSelector, callbacks) match {
+          case Some(exception) => result.put(topicAndPartition, exception)
+          case None =>
+        }
+      }}
+      brokerRequestBatch.sendRequestsToBrokers(controller.epoch)
+    } catch {
+      case e: Throwable =>
+        error("Error changing state of some partitions to %s state".format(targetState), e)
+        (partitions -- result.keySet).foreach(result.put(_, e))
+    }
+    result
+  }
+
 
   /**
    * This API exercises the partition's state machine. It ensures that every state transition happens from a legal
@@ -135,14 +164,14 @@ class PartitionStateMachine(controller: KafkaController, stateChangeLogger: Stat
    *
    * OfflinePartition -> NonExistentPartition
    * --nothing other than marking the partition state as NonExistentPartition
-   * @param topic       The topic of the partition for which the state transition is invoked
-   * @param partition   The partition for which the state transition is invoked
+   * @param topicAndPartition The topic and partition for which the state transition is invoked
    * @param targetState The end state that the partition should be moved to
+   * @param callbacks
+   * @return The exception, if the state transition failed, otherwise None
    */
-  private def handleStateChange(topic: String, partition: Int, targetState: PartitionState,
+  private def handleStateChange(topicAndPartition: TopicAndPartition, targetState: PartitionState,
                                 leaderSelector: PartitionLeaderSelector,
-                                callbacks: Callbacks) {
-    val topicAndPartition = TopicAndPartition(topic, partition)
+                                callbacks: Callbacks): Option[Throwable] = {
     val currState = partitionState.getOrElseUpdate(topicAndPartition, NonExistentPartition)
     val stateChangeLog = stateChangeLogger.withControllerEpoch(controller.epoch)
     try {
@@ -160,9 +189,9 @@ class PartitionStateMachine(controller: KafkaController, stateChangeLogger: Stat
               // initialize leader and isr path for new partition
               initializeLeaderAndIsrForPartition(topicAndPartition)
             case OfflinePartition =>
-              electLeaderForPartition(topic, partition, leaderSelector)
+              electLeaderForPartition(topicAndPartition.topic, topicAndPartition.partition, leaderSelector)
             case OnlinePartition => // invoked when the leader needs to be re-elected
-              electLeaderForPartition(topic, partition, leaderSelector)
+              electLeaderForPartition(topicAndPartition.topic, topicAndPartition.partition, leaderSelector)
             case _ => // should never come here since illegal previous states are checked above
           }
           partitionState.put(topicAndPartition, OnlinePartition)
@@ -179,10 +208,12 @@ class PartitionStateMachine(controller: KafkaController, stateChangeLogger: Stat
           partitionState.put(topicAndPartition, NonExistentPartition)
           // post: partition state is deleted from all brokers and zookeeper
       }
+      None
     } catch {
       case t: Throwable =>
         stateChangeLog.error(s"Initiated state change for partition $topicAndPartition from $currState to $targetState failed",
           t)
+        Some(t)
     }
   }
 

@@ -86,6 +86,8 @@ import org.apache.kafka.common.requests.DescribeConfigsRequest;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
 import org.apache.kafka.common.requests.DescribeLogDirsRequest;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
+import org.apache.kafka.common.requests.ElectPreferredLeadersRequest;
+import org.apache.kafka.common.requests.ElectPreferredLeadersResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.Resource;
@@ -1863,6 +1865,7 @@ public class KafkaAdminClient extends AdminClient {
                         future.completeExceptionally(result.getValue().exception());
                     }
                 }
+
             }
 
             @Override
@@ -1873,4 +1876,69 @@ public class KafkaAdminClient extends AdminClient {
         return new CreatePartitionsResult(new HashMap<String, KafkaFuture<Void>>(futures));
     }
 
+    public ElectPreferredLeadersResult electPreferredLeaders(final Collection<TopicPartition> partitions, ElectPreferredLeadersOptions options) {
+
+        final KafkaFutureImpl<Map<TopicPartition, KafkaFutureImpl<Void>>> futures = new KafkaFutureImpl<>();
+        final Map<TopicPartition, KafkaFutureImpl<Void>> mapOfFutures;
+        final List<TopicPartition> requestList;
+        final boolean knownPartitions = partitions != null;
+        if (knownPartitions) {
+            mapOfFutures = new HashMap<>(partitions.size());
+            for (TopicPartition partition : partitions) {
+                KafkaFutureImpl future = new KafkaFutureImpl<Void>();
+                mapOfFutures.put(partition, future);
+            }
+            futures.complete(mapOfFutures);
+            requestList = new ArrayList<>(partitions);
+        } else {
+            mapOfFutures = new HashMap<>();
+            requestList = null;
+        }
+
+        final long now = time.milliseconds();
+        runnable.call(new Call("electPreferredLeaders", calcDeadlineMs(now, options.timeoutMs()),
+                new ControllerNodeProvider()) {
+
+            @Override
+            public AbstractRequest.Builder createRequest(int timeoutMs) {
+                return new ElectPreferredLeadersRequest.Builder(requestList, timeoutMs);
+            }
+
+            @Override
+            public void handleResponse(AbstractResponse abstractResponse) {
+                ElectPreferredLeadersResponse response = (ElectPreferredLeadersResponse) abstractResponse;
+                // Iterate over the response partitions->errors because the argument partitions can be null
+                for (Map.Entry<TopicPartition, ApiError> entry : response.errors().entrySet()) {
+                    TopicPartition partition = entry.getKey();
+                    KafkaFutureImpl<Void> future;
+                    if (knownPartitions) {
+                        future = mapOfFutures.get(partition);
+                    } else {
+                        future = new KafkaFutureImpl<Void>();
+                        mapOfFutures.put(partition, future);
+                    }
+                    if (entry.getValue().isSuccess()) {
+                        future.complete(null);
+                    } else {
+                        ApiException exception = entry.getValue().exception();
+                        future.completeExceptionally(exception);
+                    }
+                }
+                if (!knownPartitions) {
+                    futures.complete(mapOfFutures);
+                }
+
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                if (knownPartitions) {
+                    completeAllExceptionally(mapOfFutures.values(), throwable);
+                } else {
+                    futures.completeExceptionally(throwable);
+                }
+            }
+        }, now);
+        return new ElectPreferredLeadersResult(futures);
+    }
 }

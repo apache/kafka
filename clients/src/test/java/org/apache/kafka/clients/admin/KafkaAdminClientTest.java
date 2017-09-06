@@ -22,6 +22,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBinding;
@@ -29,6 +30,7 @@ import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -43,6 +45,7 @@ import org.apache.kafka.common.requests.DeleteAclsResponse.AclDeletionResult;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
 import org.apache.kafka.common.requests.DescribeAclsResponse;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
+import org.apache.kafka.common.requests.ElectPreferredLeadersResponse;
 import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.resource.ResourceFilter;
 import org.apache.kafka.common.resource.ResourceType;
@@ -307,6 +310,38 @@ public class KafkaAdminClientTest {
             results = env.adminClient().deleteAcls(asList(FILTER1, FILTER2));
             Collection<AclBinding> deleted = results.all().get();
             assertCollectionIs(deleted, ACL1, ACL2);
+        }
+    }
+
+    @Test
+    public void testElectPreferredLeaders()  throws Exception {
+        TopicPartition topic1 = new TopicPartition("topic", 0);
+        TopicPartition topic2 = new TopicPartition("topic", 2);
+        try (MockKafkaAdminClientEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
+            env.kafkaClient().setNode(env.cluster().controller());
+
+            // Test a call where one partition has an error.
+            HashMap<TopicPartition, ApiError> map = new HashMap<>();
+            map.put(topic1, ApiError.NONE);
+            map.put(topic2, ApiError.fromThrowable(new ClusterAuthorizationException(null)));
+            env.kafkaClient().prepareResponse(new ElectPreferredLeadersResponse(0,
+                    map));
+            ElectPreferredLeadersResult results = env.adminClient().electPreferredLeaders(asList(topic1, topic2));
+            results.partitionResult(topic1).get();
+            assertFutureError(results.partitionResult(topic2), ClusterAuthorizationException.class);
+            assertFutureError(results.all(), ClusterAuthorizationException.class);
+
+            // Test a call where there are no errors.
+            map.put(topic1, ApiError.NONE);
+            map.put(topic2, ApiError.NONE);
+            env.kafkaClient().prepareResponse(new ElectPreferredLeadersResponse(0,
+                    map));
+
+            results = env.adminClient().electPreferredLeaders(asList(topic1, topic2));
+            results.partitionResult(topic1).get();
+            results.partitionResult(topic2).get();
         }
     }
 

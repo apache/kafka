@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
@@ -507,5 +508,31 @@ public abstract class AdminClient implements AutoCloseable {
      */
     public abstract CreatePartitionsResult createPartitions(Map<String, NewPartitions> newPartitions,
                                                             CreatePartitionsOptions options);
+
+    /*
+     * Elect the preferred replica of the given {@code partitions} as leader, or
+     * elect the preferred replica for all partitions as leader if the argument to {@code partitions} is null.
+     *
+     * This is a convenience method for {@link #electPreferredLeaders(Collection, ElectPreferredLeadersOptions)} with default options.
+     * See the overload for more details.
+     *
+     * @param partitions      The partitions for which the the preferred leader should be elected.
+     * @return                The ElectPreferredLeadersResult.
+     */
+    public ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions) {
+        return electPreferredLeaders(partitions, new ElectPreferredLeadersOptions());
+    }
+
+    /**
+     * Elect the preferred replica of the given {@code partitions} as leader, or
+     * elect the preferred replica for all partitions as leader if the argument to {@code partitions} is null.
+     *
+     * This operation is supported by brokers with version 1.0.0 or higher.
+     *
+     * @param partitions      The partitions for which the the preferred leader should be elected.
+     * @param options         The options to use when electing the preferred leaders.
+     * @return                The ElectPreferredLeadersResult.
+     */
+    public abstract ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions, ElectPreferredLeadersOptions options);
 
 }

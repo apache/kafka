@@ -16,11 +16,20 @@
  */
 package kafka.admin
 
+import java.util.Properties
+import java.util.concurrent.{ExecutionException, TimeUnit}
+
 import joptsimple.OptionParser
 import kafka.utils._
-import org.I0Itec.zkclient.ZkClient
+
+import collection.JavaConverters._
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
-import kafka.common.{TopicAndPartition, AdminCommandFailedException}
+import kafka.common.{AdminCommandFailedException, TopicAndPartition}
+import kafka.utils.CommandLineUtils.printUsageAndDie
+import org.apache.kafka.clients.admin.AdminClientConfig
+import org.apache.kafka.common.KafkaFuture
+import org.apache.kafka.common.errors.TimeoutException
+
 import collection._
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.security.JaasUtils
@@ -28,6 +37,17 @@ import org.apache.kafka.common.security.JaasUtils
 object PreferredReplicaLeaderElectionCommand extends Logging {
 
   def main(args: Array[String]): Unit = {
+    try {
+      run(args)
+    } catch {
+      case e: Throwable =>
+        println("Failed to start preferred replica election")
+        println(Utils.stackTrace(e))
+        System.exit(1);
+    }
+  }
+  /** Basically the same as main, but throws rather than calling System.exit */
+  def run(args: Array[String]): Unit = {
     val parser = new OptionParser(false)
     val jsonFileOpt = parser.accepts("path-to-json-file", "The JSON file with the list of partitions " +
       "for which preferred replica leader election should be done, in the following format - \n" +
@@ -36,66 +56,64 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       .withRequiredArg
       .describedAs("list of partitions for which preferred replica leader election needs to be triggered")
       .ofType(classOf[String])
-    val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the " +
-      "form host:port. Multiple URLS can be given to allow fail-over.")
+    val zkConnectOpt = parser.accepts("zookeeper", "DEPRECATED. The connection string for the zookeeper connection in the " +
+      "form host:port. Multiple URLS can be given to allow fail-over. REQUIRED unless --bootstrap-server is given.")
       .withRequiredArg
       .describedAs("urls")
+      .ofType(classOf[String])
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "A hostname and port for the broker to connect to, " +
+      "in the form host:port. Multiple URLs can be given. REQUIRED unless --zookeeper is given.")
+      .withRequiredArg
+      .describedAs("host:port")
       .ofType(classOf[String])
       
     if(args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "This tool causes leadership for each partition to be transferred back to the 'preferred replica'," + 
-                                                " it can be used to balance leadership among the servers.")
+                                                " it can be used to balance leadership among the servers." +
+                                                " The preferred replica is the first one in the replica assignment (see kafka-reassign-partitions.sh)." +
+                                                " Using this command is not necessary when the broker is configured with \"auto.leader.rebalance.enable=true\".")
 
     val options = parser.parse(args : _*)
 
-    CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
+    if (options.has(bootstrapServerOpt) && options.has(zkConnectOpt)
+      || !options.has(bootstrapServerOpt) && !options.has(zkConnectOpt)) {
+      printUsageAndDie(parser, "Exactly one of \"" + bootstrapServerOpt+ "\" or \"" + zkConnectOpt + "\" must be provided")
+    }
 
-    val zkConnect = options.valueOf(zkConnectOpt)
-    var zkClient: ZkClient = null
-    var zkUtils: ZkUtils = null
+    val partitionsForPreferredReplicaElection =
+      if (!options.has(jsonFileOpt))
+        None
+      else
+        Some(parsePreferredReplicaElectionData(Utils.readFileAsString(options.valueOf(jsonFileOpt))))
+
+    val preferredReplicaElectionCommand = if (options.has(zkConnectOpt)) {
+      Console.err.println(zkConnectOpt + " is deprecated and will be removed in a future version of Kafka.")
+      Console.err.println("Use " + bootstrapServerOpt + " instead to specify a broker to connect to.")
+      new ZkPreferredReplicaLeaderElectionCommand(ZkUtils(options.valueOf(zkConnectOpt),
+        30000,
+        30000,
+        JaasUtils.isZkSecurityEnabled()))
+    } else {
+      new AdminClientPreferredReplicaLeaderElectionCommand(options.valueOf(bootstrapServerOpt))
+    }
+
     try {
-      zkClient = ZkUtils.createZkClient(zkConnect, 30000, 30000)
-      zkUtils = ZkUtils(zkConnect, 
-                        30000,
-                        30000,
-                        JaasUtils.isZkSecurityEnabled())
-      val partitionsForPreferredReplicaElection =
-        if (!options.has(jsonFileOpt))
-          zkUtils.getAllPartitions()
-        else
-          parsePreferredReplicaElectionData(Utils.readFileAsString(options.valueOf(jsonFileOpt)))
-      val preferredReplicaElectionCommand = new PreferredReplicaLeaderElectionCommand(zkUtils, partitionsForPreferredReplicaElection)
-
-      preferredReplicaElectionCommand.moveLeaderToPreferredReplica()
-    } catch {
-      case e: Throwable =>
-        println("Failed to start preferred replica election")
-        println(Utils.stackTrace(e))
+      preferredReplicaElectionCommand.moveLeaderToPreferredReplica(partitionsForPreferredReplicaElection)
     } finally {
-      if (zkClient != null)
-        zkClient.close()
+      preferredReplicaElectionCommand.close()
     }
   }
 
   def parsePreferredReplicaElectionData(jsonString: String): immutable.Set[TopicAndPartition] = {
-    Json.parseFull(jsonString) match {
-      case Some(js) =>
-        js.asJsonObject.get("partitions") match {
-          case Some(partitionsList) =>
-            val partitionsRaw = partitionsList.asJsonArray.iterator.map(_.asJsonObject)
-            val partitions = partitionsRaw.map { p =>
-              val topic = p("topic").to[String]
-              val partition = p("partition").to[Int]
-              TopicAndPartition(topic, partition)
-            }.toBuffer
-            val duplicatePartitions = CoreUtils.duplicates(partitions)
-            if (duplicatePartitions.nonEmpty)
-              throw new AdminOperationException("Preferred replica election data contains duplicate partitions: %s".format(duplicatePartitions.mkString(",")))
-            partitions.toSet
-          case None => throw new AdminOperationException("Preferred replica election data is empty")
-        }
-      case None => throw new AdminOperationException("Preferred replica election data is empty")
+    val partitionsUndergoingPreferredReplicaElection =
+      ZkUtils.parsePreferredReplicaElectionDataWithoutDedup(jsonString)
+    if (partitionsUndergoingPreferredReplicaElection.isEmpty) {
+      throw new AdminOperationException("Preferred replica election data is empty")
     }
+    val duplicatePartitions = CoreUtils.duplicates(partitionsUndergoingPreferredReplicaElection)
+    if (duplicatePartitions.nonEmpty)
+      throw new AdminOperationException("Preferred replica election data contains duplicate partitions: %s".format(duplicatePartitions.mkString(",")))
+    return partitionsUndergoingPreferredReplicaElection.toSet
   }
 
   def writePreferredReplicaElectionData(zkUtils: ZkUtils,
@@ -116,15 +134,95 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
   }
 }
 
-class PreferredReplicaLeaderElectionCommand(zkUtils: ZkUtils, partitionsFromUser: scala.collection.Set[TopicAndPartition]) {
-  def moveLeaderToPreferredReplica() = {
+trait PreferredReplicaLeaderElectionCommand {
+  /**
+    * Move the given partitions to their preferred leader. If the given partitions are none then move all partitions.
+    */
+  def moveLeaderToPreferredReplica(partitionsFromUser: Option[scala.collection.Set[TopicAndPartition]]) : Unit
+  def close() : Unit
+}
+
+class AdminClientPreferredReplicaLeaderElectionCommand(bootstrapServers: String) extends PreferredReplicaLeaderElectionCommand with Logging {
+  val props = new Properties()
+  props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
+  val adminClient: org.apache.kafka.clients.admin.AdminClient = org.apache.kafka.clients.admin.AdminClient.create(props)
+
+  /**
+    * Wait until the given future has completed, then return whether it completed exceptionally.
+    * Because KafkaFuture.isCompletedExceptionally doesn't wait for a result
+    */
+  private def completedExceptionally[T](future: KafkaFuture[T]): Boolean = {
     try {
-      val topics = partitionsFromUser.map(_.topic).toSet
+      future.get()
+      false
+    } catch {
+      case (_: Throwable) =>
+        true
+    }
+  }
+
+  override def moveLeaderToPreferredReplica(partitionsFromUser: Option[Set[TopicAndPartition]]): Unit = {
+    val partitions = partitionsFromUser match {
+      case Some(partitionsFromUser) => partitionsFromUser.map(tp => tp.asTopicPartition).toSet.asJava
+      case None => null
+    }
+    debug(s"Calling AdminClient.electPreferredLeaders($partitions)")
+    val result = adminClient.electPreferredLeaders(partitions)
+    // wait for all results
+    val attemptedPartitions = try {
+      result.partitions().get.asScala
+    } catch {
+      case e: TimeoutException =>
+        // We timed out, or don't even know the attempted partitions
+        println("Timeout waiting for election results")
+        return
+      case e: Throwable =>
+        // We don't even know the attempted partitions
+        println("Error while making request")
+        e.printStackTrace()
+        return
+    }
+    val (exceptional, ok) = attemptedPartitions.map(tp => tp -> result.partitionResult(tp)).
+      partition{case (_, partitionResult) => completedExceptionally(partitionResult)}
+    if (!ok.isEmpty) {
+      println("Successfully completed preferred replica election for partitions %s".format(ok.map(_._1).mkString(", ")))
+    }
+    if (!exceptional.isEmpty) {
+      val adminException = new AdminCommandFailedException(s"${exceptional.size} preferred replica(s) could not be elected")
+      for ((partition, void) <- exceptional) {
+        val exception = try {
+          void.get()
+          new AdminCommandFailedException("Exceptional future with no exception")
+        } catch {
+          case e: ExecutionException => e.getCause
+        }
+        println(s"Error completing preferred replica election for partition $partition: $exception")
+        adminException.addSuppressed(exception)
+      }
+      throw adminException
+    }
+  }
+
+  override def close(): Unit = {
+    debug("Closing AdminClient")
+    adminClient.close()
+  }
+}
+
+class ZkPreferredReplicaLeaderElectionCommand(zkUtils: ZkUtils) extends PreferredReplicaLeaderElectionCommand {
+
+  override def moveLeaderToPreferredReplica(partitionsFromUser: Option[scala.collection.Set[TopicAndPartition]]) = {
+    try {
+      val partitions = partitionsFromUser match {
+        case Some(partitionsFromUser) => partitionsFromUser
+        case None => zkUtils.getAllPartitions()
+      }
+      val topics = partitions.map(_.topic).toSet
       val partitionsFromZk = zkUtils.getPartitionsForTopics(topics.toSeq).flatMap{ case (topic, partitions) =>
         partitions.map(TopicAndPartition(topic, _))
       }.toSet
 
-      val (validPartitions, invalidPartitions) = partitionsFromUser.partition(partitionsFromZk.contains)
+      val (validPartitions, invalidPartitions) = partitions.partition(partitionsFromZk.contains)
       PreferredReplicaLeaderElectionCommand.writePreferredReplicaElectionData(zkUtils, validPartitions)
 
       println("Successfully started preferred replica election for partitions %s".format(validPartitions))
@@ -132,5 +230,9 @@ class PreferredReplicaLeaderElectionCommand(zkUtils: ZkUtils, partitionsFromUser
     } catch {
       case e: Throwable => throw new AdminCommandFailedException("Admin command failed", e)
     }
+  }
+
+  override def close(): Unit = {
+    zkUtils.close()
   }
 }

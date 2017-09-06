@@ -206,6 +206,28 @@ object ZkUtils {
     Json.encode(Map("version" -> 1, "partitions" -> partitions.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition))))
   }
 
+  def parsePreferredReplicaElectionDataWithoutDedup(jsonString: String): Seq[TopicAndPartition] = {
+    Json.parseFull(jsonString) match {
+      case Some(js) =>
+        js.asJsonObject.get("partitions") match {
+          case Some(partitionsList) =>
+            val partitionsRaw = partitionsList.asJsonArray.iterator.map(_.asJsonObject)
+            val partitions = partitionsRaw.map { p =>
+              val topic = p("topic").to[String]
+              val partition = p("partition").to[Int]
+              TopicAndPartition(topic, partition)
+            }.toBuffer
+            partitions
+          case None => Seq.empty[TopicAndPartition]
+        }
+      case None => Seq.empty[TopicAndPartition]
+    }
+  }
+
+  def parsePreferredReplicaElectionData(jsonString: String): Set[TopicAndPartition] = {
+    parsePreferredReplicaElectionDataWithoutDedup(jsonString).toSet
+  }
+
   def formatAsReassignmentJson(partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]]): String = {
     Json.encode(Map(
       "version" -> 1,

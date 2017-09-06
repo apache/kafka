@@ -245,6 +245,11 @@ public class RequestResponseTest {
         checkRequest(createCreatePartitionsRequestWithAssignments());
         checkErrorResponse(createCreatePartitionsRequest(), new InvalidTopicException());
         checkResponse(createCreatePartitionsResponse(), 0);
+        checkRequest(createElectPreferredLeadersRequest());
+        checkRequest(createElectPreferredLeadersRequestNullPartitions());
+        checkErrorResponse(createElectPreferredLeadersRequest(), new UnknownServerException());
+        checkResponse(createElectPreferredLeadersResponse(), 0);
+
     }
 
     @Test
@@ -1080,6 +1085,23 @@ public class RequestResponseTest {
                 new InvalidReplicaAssignmentException("The assigned brokers included an unknown broker")));
         results.put("my_topic", ApiError.NONE);
         return new CreatePartitionsResponse(42, results);
+    }
+
+    private ElectPreferredLeadersRequest createElectPreferredLeadersRequestNullPartitions() {
+        return new ElectPreferredLeadersRequest.Builder(null, 100).build((short) 0);
+    }
+
+    private ElectPreferredLeadersRequest createElectPreferredLeadersRequest() {
+        return new ElectPreferredLeadersRequest.Builder(asList(
+                new TopicPartition("my_topic", 1),
+                new TopicPartition("my_topic", 2)), 100).build((short) 0);
+    }
+
+    private ElectPreferredLeadersResponse createElectPreferredLeadersResponse() {
+        Map<TopicPartition, ApiError> errors = new HashMap<>();
+        errors.put(new TopicPartition("my_topic", 0), ApiError.NONE);
+        errors.put(new TopicPartition("my_topic", 1), ApiError.fromThrowable(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception("blah")));
+        return new ElectPreferredLeadersResponse(200, errors);
     }
 
 }
