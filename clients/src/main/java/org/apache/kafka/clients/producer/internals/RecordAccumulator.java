@@ -530,22 +530,19 @@ public final class RecordAccumulator {
 
                                         ProducerBatch batch = deque.pollFirst();
                                         if (producerIdAndEpoch != null && !batch.hasSequence()) {
-                                            // If the batch is in retry, then we should not change the producer id and
+                                            // If the batch already has an assigned sequence, then we should not change the producer id and
                                             // sequence number, since this may introduce duplicates. In particular,
                                             // the previous attempt may actually have been accepted, and if we change
                                             // the producer id and sequence here, this attempt will also be accepted,
                                             // causing a duplicate.
-
-                                            // set the sequence to be the next sequence here, increment the next
-                                            // sequence by the record count of the batch.
                                             //
-                                            // If a batch errors out fatally, then the next sequence will be set to the sequence
-                                            // of that batch in the error handling step. Future batches will fail with an
-                                            // out of sequence error. Those batches will be 'reset' (retry bit cleared, etc.) and reenqueued.
-                                            // When they come here they will inherit the sequence of the lost batch and proceed.
+                                            // Additionally, we update the next sequence number bound for the partition,
+                                            // and also have the transaction manager track the batch so as to ensure
+                                            // that sequence ordering is maintained even if we receive out of order
+                                            // responses.
                                             batch.setProducerState(producerIdAndEpoch, transactionManager.sequenceNumber(batch.topicPartition), isTransactional);
                                             transactionManager.incrementSequenceNumber(batch.topicPartition, batch.recordCount);
-                                            log.debug("Assigned producerId {} and producerEpoch {} to batch with sequence " +
+                                            log.debug("Assigned producerId {} and producerEpoch {} to batch with base sequence " +
                                                             "{} being sent to partition {}", producerIdAndEpoch.producerId,
                                                     producerIdAndEpoch.epoch, batch.baseSequence(), tp);
 

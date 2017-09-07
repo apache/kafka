@@ -840,7 +840,7 @@ public class SenderTest {
 
         sender.run(time.milliseconds());  // send second request
         sendIdempotentProducerResponse(1, tp0, Errors.NONE, 1);
-        sender.run(time.milliseconds()); // receive second response.
+        sender.run(time.milliseconds()); // receive second response, the third request shouldn't be sent since we are in an unresolved state.
         assertNotNull(request2.get());
         Deque<ProducerBatch> batches = accumulator.batches().get(tp0);
 
@@ -856,6 +856,65 @@ public class SenderTest {
         assertEquals(0, batches.size());
         assertEquals(1, client.inFlightRequestCount());
         assertFalse(request3.isDone());
+    }
+
+    @Test
+    public void testExpiryOfFirstBatchShouldCauseResetIfFutureBatchesFail() throws Exception {
+        final long producerId = 343434L;
+        TransactionManager transactionManager = new TransactionManager();
+        setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
+
+        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+
+        // Send first ProduceRequest
+        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
+        sender.run(time.milliseconds());  // send request
+
+        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
+        sender.run(time.milliseconds());  // send request
+
+        assertEquals(2, client.inFlightRequestCount());
+
+        sendIdempotentProducerResponse(0, tp0, Errors.NOT_LEADER_FOR_PARTITION, -1);
+        sender.run(time.milliseconds());  // receive first response
+
+        Node node = this.cluster.nodes().get(0);
+        time.sleep(10000L);
+        client.disconnect(node.idString());
+        client.blackout(node, 10);
+
+        sender.run(time.milliseconds()); // now expire the first batch.
+        assertTrue(request1.isDone());
+        try {
+            request1.get();
+            fail("Should have raised timeout exception");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof TimeoutException);
+        }
+        assertTrue(transactionManager.partitionHasUnresolvedSequence(tp0));
+        // let's enqueue another batch, which should not be dequeued until the unresolved state is clear.
+        Future<RecordMetadata> request3 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
+
+        time.sleep(20);
+
+        assertFalse(request2.isDone());
+
+        sender.run(time.milliseconds());  // send second request
+        sendIdempotentProducerResponse(1, tp0, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, 1);
+        sender.run(time.milliseconds()); // receive second response, the third request shouldn't be sent since we are in an unresolved state.
+        assertTrue(request2.isDone());
+        Deque<ProducerBatch> batches = accumulator.batches().get(tp0);
+
+        // The second request should not be requeued.
+        assertEquals(1, batches.size());
+        assertFalse(batches.peekFirst().hasSequence());
+        assertFalse(client.hasInFlightRequests());
+
+        // The producer state should be reset.
+        assertFalse(transactionManager.hasProducerId());
+        assertFalse(transactionManager.partitionHasUnresolvedSequence(tp0));
     }
 
     @Test

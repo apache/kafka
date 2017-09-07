@@ -65,10 +65,27 @@ public class TransactionManager {
     private final String transactionalId;
     private final int transactionTimeoutMs;
 
-    private final Map<TopicPartition, Integer> sequenceNumbers;
+    // The base sequence of the next batch bound for a given partition.
+    private final Map<TopicPartition, Integer> nextSequence;
+
+    // The sequence of the last record of the last ack'd batch from the given partition. When there are no
+    // in flight requests for a partition, the lastAckedSequence(topicPartition) == nextSequence(topicPartition) - 1.
     private final Map<TopicPartition, Integer> lastAckedSequence;
-    private final Set<TopicPartition> partitionsWithUnresolvedSequenceNumbers;
+
+    // If a batch bound for a partition expired locally after being sent at least once, the partition has is considered
+    // to have an unresolved state. We keep track fo such partitions here, and cannot assign any more sequence numbers
+    // for this partition until the unresolved state gets cleared. This may happen if other inflight batches returned
+    // successfully (indicating that the expired batch actually made it to the broker). If we don't get any successful
+    // responses for the partition once the inflight request count falls to zero, we reset the producer id and
+    // consequently clear this data structure as well.
+    private final Set<TopicPartition> partitionsWithUnresolvedSequences;
+
+    // Keep track of the in flight batches bound for a partition, ordered by sequence. This helps us to ensure that
+    // we continue to order batches by the sequence numbers even when the responses come back out of order during
+    // leader failover. We add a batch to the queue when it is drained, and remove it when the batch completes
+    // (either successfully or through a fatal failure).
     private final Map<TopicPartition, PriorityQueue<ProducerBatch>> inflightBatchesBySequence;
+
     private final PriorityQueue<TxnRequestHandler> pendingRequests;
     private final Set<TopicPartition> newPartitionsInTransaction;
     private final Set<TopicPartition> pendingPartitionsInTransaction;
@@ -145,7 +162,7 @@ public class TransactionManager {
 
     public TransactionManager(LogContext logContext, String transactionalId, int transactionTimeoutMs, long retryBackoffMs) {
         this.producerIdAndEpoch = new ProducerIdAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
-        this.sequenceNumbers = new HashMap<>();
+        this.nextSequence = new HashMap<>();
         this.lastAckedSequence = new HashMap<>();
         this.transactionalId = transactionalId;
         this.log = logContext.logger(TransactionManager.class);
@@ -163,7 +180,7 @@ public class TransactionManager {
             }
         });
 
-        this.partitionsWithUnresolvedSequenceNumbers = new HashSet<>();
+        this.partitionsWithUnresolvedSequences = new HashSet<>();
         this.inflightBatchesBySequence = new HashMap<>();
 
         this.retryBackoffMs = retryBackoffMs;
@@ -177,7 +194,7 @@ public class TransactionManager {
         ensureTransactional();
         transitionTo(State.INITIALIZING);
         setProducerIdAndEpoch(ProducerIdAndEpoch.NONE);
-        this.sequenceNumbers.clear();
+        this.nextSequence.clear();
         InitProducerIdRequest.Builder builder = new InitProducerIdRequest.Builder(transactionalId, transactionTimeoutMs);
         InitProducerIdHandler handler = new InitProducerIdHandler(builder);
         enqueueRequest(handler);
@@ -369,31 +386,31 @@ public class TransactionManager {
             throw new IllegalStateException("Cannot reset producer state for a transactional producer. " +
                     "You must either abort the ongoing transaction or reinitialize the transactional producer instead");
         setProducerIdAndEpoch(ProducerIdAndEpoch.NONE);
-        this.sequenceNumbers.clear();
+        this.nextSequence.clear();
         this.lastAckedSequence.clear();
         this.inflightBatchesBySequence.clear();
-        this.partitionsWithUnresolvedSequenceNumbers.clear();
+        this.partitionsWithUnresolvedSequences.clear();
     }
 
     /**
      * Returns the next sequence number to be written to the given TopicPartition.
      */
     synchronized Integer sequenceNumber(TopicPartition topicPartition) {
-        Integer currentSequenceNumber = sequenceNumbers.get(topicPartition);
+        Integer currentSequenceNumber = nextSequence.get(topicPartition);
         if (currentSequenceNumber == null) {
             currentSequenceNumber = 0;
-            sequenceNumbers.put(topicPartition, currentSequenceNumber);
+            nextSequence.put(topicPartition, currentSequenceNumber);
         }
         return currentSequenceNumber;
     }
 
     synchronized void incrementSequenceNumber(TopicPartition topicPartition, int increment) {
-        Integer currentSequenceNumber = sequenceNumbers.get(topicPartition);
+        Integer currentSequenceNumber = nextSequence.get(topicPartition);
         if (currentSequenceNumber == null)
             throw new IllegalStateException("Attempt to increment sequence number for a partition with no current sequence.");
 
         currentSequenceNumber += increment;
-        sequenceNumbers.put(topicPartition, currentSequenceNumber);
+        nextSequence.put(topicPartition, currentSequenceNumber);
     }
 
     synchronized void startTrackingBatch(ProducerBatch batch) {
@@ -438,7 +455,7 @@ public class TransactionManager {
     // This method must only be called when we know that the batch is question has been unequivocally failed by the broker,
     // ie. it has received a confirmed fatal status code like 'Message Too Large' or something similar.
     synchronized void adjustSequencesDueToFailedBatch(ProducerBatch batch) {
-        if (!this.sequenceNumbers.containsKey(batch.topicPartition))
+        if (!this.nextSequence.containsKey(batch.topicPartition))
             // Sequence numbers are not being tracked for this partition. This could happen if the producer id was just
             // reset due to a previous OutOfOrderSequenceException.
             return;
@@ -465,25 +482,25 @@ public class TransactionManager {
     }
 
     synchronized boolean partitionHasUnresolvedSequence(TopicPartition topicPartition) {
-        return partitionsWithUnresolvedSequenceNumbers.contains(topicPartition);
+        return partitionsWithUnresolvedSequences.contains(topicPartition);
     }
 
     synchronized void markSequenceUnresolved(TopicPartition topicPartition) {
-        partitionsWithUnresolvedSequenceNumbers.add(topicPartition);
+        partitionsWithUnresolvedSequences.add(topicPartition);
     }
 
     // Checks if there are any partitions with unresolved partitions which may now be resolved. Returns true if
     // the producer id needs a reset, false otherwise.
 
     synchronized boolean maybeResolveSequences() {
-        for (TopicPartition topicPartition : partitionsWithUnresolvedSequenceNumbers) {
+        for (TopicPartition topicPartition : partitionsWithUnresolvedSequences) {
             if (!hasInflightBatches(topicPartition)) {
                 // The partition has been fully drained. At this point, the last ack'd sequence should be once less than
                 // next sequence destined for the partition. If so, the partition is fully resolved. If not, we should
                 // reset the sequence number if necessary.
                 if (lastAckedSequence(topicPartition) == sequenceNumber(topicPartition) - 1) {
                     // This would happen when a batch was expired, but subsequent batches succeeded.
-                    partitionsWithUnresolvedSequenceNumbers.remove(topicPartition);
+                    partitionsWithUnresolvedSequences.remove(topicPartition);
                 } else {
                     // We would enter this branch if all in flight batches were ultimately expired in the producer.
                     log.info("No inflight batches remaining for {}, last ack'd sequence for partition is {}, next sequence is {}. " +
@@ -501,10 +518,10 @@ public class TransactionManager {
     }
 
     synchronized  void setNextSequence(TopicPartition topicPartition, int sequence) {
-        if (!sequenceNumbers.containsKey(topicPartition) && sequence != 0)
+        if (!nextSequence.containsKey(topicPartition) && sequence != 0)
             throw new IllegalStateException("Trying to set the sequence number for " + topicPartition + " to " + sequence +
             ", but the sequence number was never set for this partition.");
-        sequenceNumbers.put(topicPartition, sequence);
+        nextSequence.put(topicPartition, sequence);
     }
 
     synchronized TxnRequestHandler nextRequestHandler(boolean hasIncompleteBatches) {

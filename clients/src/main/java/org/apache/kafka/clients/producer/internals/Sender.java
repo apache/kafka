@@ -281,7 +281,6 @@ public class Sender implements Runnable {
                 // This ensures that no new batches are drained until the current in flight batches are fully resolved.
                 transactionManager.markSequenceUnresolved(expiredBatch.topicPartition);
             }
-            this.sensors.recordErrors(expiredBatch.topicPartition.topic(), expiredBatch.recordCount);
         }
 
         sensors.updateProduceRequestMetrics(batches);
@@ -528,7 +527,6 @@ public class Sender implements Runnable {
                     failBatch(batch, response, new OutOfOrderSequenceException("Attempted to retry sending a " +
                             "batch but the producer id changed from " + batch.producerId() + " to " +
                             transactionManager.producerIdAndEpoch().producerId + " in the mean time. This batch will be dropped."), false);
-                    this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
                 }
             } else {
                 final RuntimeException exception;
@@ -540,7 +538,6 @@ public class Sender implements Runnable {
                     exception = error.exception();
                 // tell the user the result of their request
                 failBatch(batch, response, exception, true);
-                this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
             }
             if (error.exception() instanceof InvalidMetadataException) {
                 if (error.exception() instanceof UnknownTopicOrPartitionException)
@@ -577,7 +574,7 @@ public class Sender implements Runnable {
         }
 
         batch.done(response.baseOffset, response.logAppendTime, null);
-
+        this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
         this.accumulator.deallocate(batch);
     }
 
@@ -611,6 +608,7 @@ public class Sender implements Runnable {
                 transactionManager.adjustSequencesDueToFailedBatch(batch);
         }
 
+        this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
         batch.done(baseOffset, logAppendTime, exception);
         this.accumulator.deallocate(batch);
     }
