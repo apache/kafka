@@ -67,6 +67,7 @@ import org.junit.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -79,6 +80,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -623,6 +625,280 @@ public class SenderTest {
         }
     }
 
+    @Test
+    public void testCorrectHandlingOfOutOfOrderResponses() throws Exception {
+        final long producerId = 343434L;
+        TransactionManager transactionManager = new TransactionManager();
+        setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
+
+        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+
+        // Send first ProduceRequest
+        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
+        sender.run(time.milliseconds());
+        String nodeId = client.requests().peek().destination();
+        Node node = new Node(Integer.valueOf(nodeId), "localhost", 0);
+        assertEquals(1, client.inFlightRequestCount());
+        assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(-1, transactionManager.lastAckedSequence(tp0));
+
+        // Send second ProduceRequest
+        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
+        sender.run(time.milliseconds());
+        assertEquals(2, client.inFlightRequestCount());
+        assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(-1, transactionManager.lastAckedSequence(tp0));
+        assertFalse(request1.isDone());
+        assertFalse(request2.isDone());
+        assertTrue(client.isReady(node, time.milliseconds()));
+
+        ClientRequest firstClientRequest = client.requests().peek();
+        ClientRequest secondClientRequest = (ClientRequest) client.requests().toArray()[1];
+
+        client.respondToRequest(secondClientRequest, produceResponse(tp0, -1, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, -1));
+
+        sender.run(time.milliseconds()); // receive response 1
+        Deque<ProducerBatch> queuedBatches = accumulator.batches().get(tp0);
+
+        // Make sure that we are queueing the second batch first.
+        assertEquals(1, queuedBatches.size());
+        assertEquals(1, queuedBatches.peekFirst().baseSequence());
+        assertEquals(1, client.inFlightRequestCount());
+        assertEquals(-1, transactionManager.lastAckedSequence(tp0));
+
+        client.respondToRequest(firstClientRequest, produceResponse(tp0, -1, Errors.NOT_LEADER_FOR_PARTITION, -1));
+
+        sender.run(time.milliseconds()); // receive response 0
+
+        // Make sure we requeued both batches in the correct order.
+        assertEquals(2, queuedBatches.size());
+        assertEquals(0, queuedBatches.peekFirst().baseSequence());
+        assertEquals(1, queuedBatches.peekLast().baseSequence());
+        assertEquals(-1, transactionManager.lastAckedSequence(tp0));
+        assertEquals(0, client.inFlightRequestCount());
+
+        sender.run(time.milliseconds()); // send request 0
+        assertEquals(1, client.inFlightRequestCount());
+        sender.run(time.milliseconds()); // don't do anything, only one inflight allowed once we are retrying.
+
+        assertEquals(1, client.inFlightRequestCount());
+        assertEquals(-1, transactionManager.lastAckedSequence(tp0));
+
+        // Make sure that the requests are sent in order, even though the previous responses were not in order.
+        sendIdempotentProducerResponse(0, tp0, Errors.NONE, 0L);
+        sender.run(time.milliseconds());  // receive response 0
+        assertEquals(0, transactionManager.lastAckedSequence(tp0));
+        assertEquals(0, client.inFlightRequestCount());
+        sender.run(time.milliseconds()); // send request 1
+        assertEquals(1, client.inFlightRequestCount());
+        sendIdempotentProducerResponse(1, tp0, Errors.NONE, 1L);
+        sender.run(time.milliseconds());  // receive response 1
+
+        assertFalse(client.hasInFlightRequests());
+        assertEquals(1, transactionManager.lastAckedSequence(tp0));
+    }
+
+    @Test
+    public void testCorrectHandlingOfOutOfOrderResponsesWhenSecondSucceeds() throws Exception {
+        final long producerId = 343434L;
+        TransactionManager transactionManager = new TransactionManager();
+        setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
+
+        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+
+        // Send first ProduceRequest
+        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
+        sender.run(time.milliseconds());
+        String nodeId = client.requests().peek().destination();
+        Node node = new Node(Integer.valueOf(nodeId), "localhost", 0);
+        assertEquals(1, client.inFlightRequestCount());
+
+        // Send second ProduceRequest
+        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
+        sender.run(time.milliseconds());
+        assertEquals(2, client.inFlightRequestCount());
+        assertFalse(request1.isDone());
+        assertFalse(request2.isDone());
+        assertTrue(client.isReady(node, time.milliseconds()));
+
+        ClientRequest firstClientRequest = client.requests().peek();
+        ClientRequest secondClientRequest = (ClientRequest) client.requests().toArray()[1];
+
+        client.respondToRequest(secondClientRequest, produceResponse(tp0, 1, Errors.NONE, -1));
+
+        sender.run(time.milliseconds()); // receive response 1
+        assertNotNull(request2.get());
+        assertFalse(request1.isDone());
+        Deque<ProducerBatch> queuedBatches = accumulator.batches().get(tp0);
+
+        assertEquals(0, queuedBatches.size());
+        assertEquals(1, client.inFlightRequestCount());
+        assertEquals(1, transactionManager.lastAckedSequence(tp0));
+
+        client.respondToRequest(firstClientRequest, produceResponse(tp0, -1, Errors.REQUEST_TIMED_OUT, -1));
+
+        sender.run(time.milliseconds()); // receive response 0
+
+        // Make sure we requeued both batches in the correct order.
+        assertEquals(1, queuedBatches.size());
+        assertEquals(0, queuedBatches.peekFirst().baseSequence());
+        assertEquals(1, transactionManager.lastAckedSequence(tp0));
+        assertEquals(0, client.inFlightRequestCount());
+
+        sender.run(time.milliseconds()); // resend request 0
+        assertEquals(1, client.inFlightRequestCount());
+
+        assertEquals(1, client.inFlightRequestCount());
+        assertEquals(1, transactionManager.lastAckedSequence(tp0));
+
+        // Make sure we handle the out of order successful responses correctly.
+        sendIdempotentProducerResponse(0, tp0, Errors.NONE, 0L);
+        sender.run(time.milliseconds());  // receive response 0
+        assertEquals(0, queuedBatches.size());
+        assertEquals(1, transactionManager.lastAckedSequence(tp0));
+        assertEquals(0, client.inFlightRequestCount());
+
+        assertFalse(client.hasInFlightRequests());
+        assertNotNull(request1.get());
+    }
+
+    @Test
+    public void testExpiryOfUnsentBatchesShouldNotCauseUnresolvedSequences() throws Exception {
+        final long producerId = 343434L;
+        TransactionManager transactionManager = new TransactionManager();
+        setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
+
+        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+
+        // Send first ProduceRequest
+        Future<RecordMetadata> request1 = accumulator.append(tp0, 0L, "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
+        Node node = this.cluster.nodes().get(0);
+        time.sleep(10000L);
+        client.disconnect(node.idString());
+        client.blackout(node, 10);
+
+        sender.run(time.milliseconds());
+
+        assertTrue(request1.isDone());
+        try {
+            request1.get();
+            fail("Should have raised timeout exception");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof TimeoutException);
+        }
+        assertFalse(transactionManager.partitionHasUnresolvedSequence(tp0));
+    }
+
+    @Test
+    public void testExpiryOfFirstBatchShouldNotCauseUnresolvedSequencesIfFutureBatchesSucceed() throws Exception {
+        final long producerId = 343434L;
+        TransactionManager transactionManager = new TransactionManager();
+        setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
+
+        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+
+        // Send first ProduceRequest
+        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
+        sender.run(time.milliseconds());  // send request
+
+        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
+        sender.run(time.milliseconds());  // send request
+
+        assertEquals(2, client.inFlightRequestCount());
+
+        sendIdempotentProducerResponse(0, tp0, Errors.NOT_LEADER_FOR_PARTITION, -1);
+        sender.run(time.milliseconds());  // receive first response
+
+        Node node = this.cluster.nodes().get(0);
+        time.sleep(10000L);
+        client.disconnect(node.idString());
+        client.blackout(node, 10);
+
+        sender.run(time.milliseconds()); // now expire the first batch.
+        assertTrue(request1.isDone());
+        try {
+            request1.get();
+            fail("Should have raised timeout exception");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof TimeoutException);
+        }
+        assertTrue(transactionManager.partitionHasUnresolvedSequence(tp0));
+        // let's enqueue another batch, which should not be dequeued until the unresolved state is clear.
+        Future<RecordMetadata> request3 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
+
+        time.sleep(20);
+
+        assertFalse(request2.isDone());
+
+        sender.run(time.milliseconds());  // send second request
+        sendIdempotentProducerResponse(1, tp0, Errors.NONE, 1);
+        sender.run(time.milliseconds()); // receive second response.
+        assertNotNull(request2.get());
+        Deque<ProducerBatch> batches = accumulator.batches().get(tp0);
+
+        assertEquals(1, batches.size());
+        assertFalse(batches.peekFirst().hasSequence());
+        assertFalse(client.hasInFlightRequests());
+        assertEquals(2L, transactionManager.sequenceNumber(tp0).longValue());
+        assertTrue(transactionManager.partitionHasUnresolvedSequence(tp0));
+
+        sender.run(time.milliseconds());  // clear the unresolved state, send the pending request.
+        assertFalse(transactionManager.partitionHasUnresolvedSequence(tp0));
+        assertTrue(transactionManager.hasProducerId());
+        assertEquals(0, batches.size());
+        assertEquals(1, client.inFlightRequestCount());
+        assertFalse(request3.isDone());
+    }
+
+    @Test
+    public void testExpiryOfAllSentBatchesShouldCauseUnresolvedSequences() throws Exception {
+        final long producerId = 343434L;
+        TransactionManager transactionManager = new TransactionManager();
+        setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
+
+        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+
+        // Send first ProduceRequest
+        Future<RecordMetadata> request1 = accumulator.append(tp0, 0L, "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
+        sender.run(time.milliseconds());  // send request
+        sendIdempotentProducerResponse(0, tp0, Errors.NOT_LEADER_FOR_PARTITION, -1);
+        sender.run(time.milliseconds());  // receive response
+
+        assertEquals(1L, transactionManager.sequenceNumber(tp0).longValue());
+
+        Node node = this.cluster.nodes().get(0);
+        time.sleep(10000L);
+        client.disconnect(node.idString());
+        client.blackout(node, 10);
+
+        sender.run(time.milliseconds()); // now expire the batch.
+
+        assertTrue(request1.isDone());
+        try {
+            request1.get();
+            fail("Should have raised timeout exception");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof TimeoutException);
+        }
+        assertTrue(transactionManager.partitionHasUnresolvedSequence(tp0));
+        assertFalse(client.hasInFlightRequests());
+        Deque<ProducerBatch> batches = accumulator.batches().get(tp0);
+        assertEquals(0, batches.size());
+        assertTrue(transactionManager.hasProducerId());
+
+        sender.run(time.milliseconds());  // we should reset the producer state.
+        assertFalse(transactionManager.hasProducerId());
+    }
 
     void sendIdempotentProducerResponse(final int expectedSequence, TopicPartition tp, Errors responseError, long responseOffset) {
         client.respond(new MockClient.RequestMatcher() {
