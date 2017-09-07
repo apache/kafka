@@ -28,6 +28,9 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor.SubscriptionUpdates;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
+import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -119,14 +122,107 @@ public class InternalTopologyBuilder {
 
     private Map<Integer, Set<String>> nodeGroups = null;
 
-    private static class StateStoreFactory {
-        public final Set<String> users;
+    interface StateStoreFactory {
+        Set<String> users();
+        boolean loggingEnabled();
+        StateStore build();
+        String name();
+        boolean isWindowStore();
+        Map<String, String> logConfig();
+        long retentionPeriod();
+    }
 
-        public final StateStoreSupplier supplier;
+    private static abstract class AbstractStateStoreFactory implements StateStoreFactory {
+        private final Set<String> users = new HashSet<>();
+        private final String name;
+        private final boolean loggingEnabled;
+        private final boolean windowStore;
+        private final Map<String, String> logConfig;
 
-        StateStoreFactory(final StateStoreSupplier supplier) {
+        AbstractStateStoreFactory(final String name,
+                                  final boolean loggingEnabled,
+                                  final boolean windowStore,
+                                  final Map<String, String> logConfig) {
+            this.name = name;
+            this.loggingEnabled = loggingEnabled;
+            this.windowStore = windowStore;
+            this.logConfig = logConfig;
+        }
+
+        @Override
+        public Set<String> users() {
+            return users;
+        }
+
+        @Override
+        public boolean loggingEnabled() {
+            return loggingEnabled;
+        }
+
+        @Override
+        public String name() {
+            return name;
+        }
+
+        @Override
+        public boolean isWindowStore() {
+            return windowStore;
+        }
+
+        @Override
+        public Map<String, String> logConfig() {
+            return logConfig;
+        }
+    }
+
+    private static class StateStoreSupplierFactory extends AbstractStateStoreFactory {
+        private final StateStoreSupplier supplier;
+
+        StateStoreSupplierFactory(final StateStoreSupplier<?> supplier) {
+            super(supplier.name(),
+                  supplier.loggingEnabled(),
+                  supplier instanceof WindowStoreSupplier,
+                  supplier.logConfig());
             this.supplier = supplier;
-            users = new HashSet<>();
+
+        }
+
+        @Override
+        public StateStore build() {
+            return supplier.get();
+        }
+
+        @Override
+        public long retentionPeriod() {
+            if (!isWindowStore()) {
+                throw new IllegalStateException("retentionPeriod is not supported when not a window store");
+            }
+            return ((WindowStoreSupplier) supplier).retentionPeriod();
+        }
+    }
+
+    private static class StoreBuilderFactory extends AbstractStateStoreFactory {
+        private final StoreBuilder builder;
+
+        StoreBuilderFactory(final StoreBuilder<?> builder) {
+            super(builder.name(),
+                  builder.loggingEnabled(),
+                  builder instanceof WindowStoreBuilder,
+                  builder.logConfig());
+            this.builder = builder;
+        }
+
+        @Override
+        public StateStore build() {
+            return builder.build();
+        }
+
+        @Override
+        public long retentionPeriod() {
+            if (!isWindowStore()) {
+                throw new IllegalStateException("retentionPeriod is not supported when not a window store");
+            }
+            return ((WindowStoreBuilder) builder).retentionPeriod();
         }
     }
 
@@ -405,11 +501,27 @@ public class InternalTopologyBuilder {
             throw new TopologyException("StateStore " + supplier.name() + " is already added.");
         }
 
-        stateFactories.put(supplier.name(), new StateStoreFactory(supplier));
+        stateFactories.put(supplier.name(), new StateStoreSupplierFactory(supplier));
 
         if (processorNames != null) {
             for (final String processorName : processorNames) {
                 connectProcessorAndStateStore(processorName, supplier.name());
+            }
+        }
+    }
+
+    public final void addStateStore(final StoreBuilder storeBuilder,
+                                    final String... processorNames) {
+        Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
+        if (stateFactories.containsKey(storeBuilder.name())) {
+            throw new TopologyException("StateStore " + storeBuilder.name() + " is already added.");
+        }
+
+        stateFactories.put(storeBuilder.name(), new StoreBuilderFactory(storeBuilder));
+
+        if (processorNames != null) {
+            for (final String processorName : processorNames) {
+                connectProcessorAndStateStore(processorName, storeBuilder.name());
             }
         }
     }
@@ -423,43 +535,52 @@ public class InternalTopologyBuilder {
                                      final String processorName,
                                      final ProcessorSupplier stateUpdateSupplier) {
         Objects.requireNonNull(storeSupplier, "store supplier must not be null");
-        Objects.requireNonNull(sourceName, "sourceName must not be null");
-        Objects.requireNonNull(topic, "topic must not be null");
-        Objects.requireNonNull(stateUpdateSupplier, "supplier must not be null");
-        Objects.requireNonNull(processorName, "processorName must not be null");
-        if (nodeFactories.containsKey(sourceName)) {
-            throw new TopologyException("Processor " + sourceName + " is already added.");
-        }
-        if (nodeFactories.containsKey(processorName)) {
-            throw new TopologyException("Processor " + processorName + " is already added.");
-        }
-        if (stateFactories.containsKey(storeSupplier.name()) || globalStateStores.containsKey(storeSupplier.name())) {
-            throw new TopologyException("StateStore " + storeSupplier.name() + " is already added.");
-        }
-        if (storeSupplier.loggingEnabled()) {
-            throw new TopologyException("StateStore " + storeSupplier.name() + " for global table must not have logging enabled.");
-        }
-        if (sourceName.equals(processorName)) {
-            throw new TopologyException("sourceName and processorName must be different.");
-        }
+        final String name = storeSupplier.name();
+        validateGlobalStoreArguments(sourceName,
+                                     topic,
+                                     processorName,
+                                     stateUpdateSupplier,
+                                     name,
+                                     storeSupplier.loggingEnabled());
+        validateTopicNotAlreadyRegistered(topic);
+        addGlobalStore(sourceName,
+                       timestampExtractor,
+                       keyDeserializer,
+                       valueDeserializer,
+                       topic,
+                       processorName,
+                       stateUpdateSupplier,
+                       name,
+                       storeSupplier.get());
+    }
 
+
+    public final void addGlobalStore(final KeyValueStoreBuilder storeBuilder,
+                                     final String sourceName,
+                                     final TimestampExtractor timestampExtractor,
+                                     final Deserializer keyDeserializer,
+                                     final Deserializer valueDeserializer,
+                                     final String topic,
+                                     final String processorName,
+                                     final ProcessorSupplier stateUpdateSupplier) {
+        Objects.requireNonNull(storeBuilder, "store builder must not be null");
+        validateGlobalStoreArguments(sourceName,
+                                     topic,
+                                     processorName,
+                                     stateUpdateSupplier,
+                                     storeBuilder.name(),
+                                     storeBuilder.loggingEnabled());
         validateTopicNotAlreadyRegistered(topic);
 
-        globalTopics.add(topic);
-        final String[] topics = {topic};
-        nodeFactories.put(sourceName, new SourceNodeFactory(sourceName, topics, null, timestampExtractor, keyDeserializer, valueDeserializer));
-        nodeToSourceTopics.put(sourceName, Arrays.asList(topics));
-        nodeGrouper.add(sourceName);
-
-        final String[] predecessors = {sourceName};
-        final ProcessorNodeFactory nodeFactory = new ProcessorNodeFactory(processorName, predecessors, stateUpdateSupplier);
-        nodeFactory.addStateStore(storeSupplier.name());
-        nodeFactories.put(processorName, nodeFactory);
-        nodeGrouper.add(processorName);
-        nodeGrouper.unite(processorName, predecessors);
-
-        globalStateStores.put(storeSupplier.name(), storeSupplier.get());
-        connectSourceStoreAndTopic(storeSupplier.name(), topic);
+        addGlobalStore(sourceName,
+                       timestampExtractor,
+                       keyDeserializer,
+                       valueDeserializer,
+                       topic,
+                       processorName,
+                       stateUpdateSupplier,
+                       storeBuilder.name(),
+                       storeBuilder.build());
     }
 
     private void validateTopicNotAlreadyRegistered(final String topic) {
@@ -521,6 +642,64 @@ public class InternalTopologyBuilder {
         copartitionSourceGroups.add(Collections.unmodifiableSet(new HashSet<>(sourceNodes)));
     }
 
+    private void validateGlobalStoreArguments(final String sourceName,
+                                              final String topic,
+                                              final String processorName,
+                                              final ProcessorSupplier stateUpdateSupplier,
+                                              final String storeName,
+                                              final boolean loggingEnabled) {
+        Objects.requireNonNull(sourceName, "sourceName must not be null");
+        Objects.requireNonNull(topic, "topic must not be null");
+        Objects.requireNonNull(stateUpdateSupplier, "supplier must not be null");
+        Objects.requireNonNull(processorName, "processorName must not be null");
+        if (nodeFactories.containsKey(sourceName)) {
+            throw new TopologyException("Processor " + sourceName + " is already added.");
+        }
+        if (nodeFactories.containsKey(processorName)) {
+            throw new TopologyException("Processor " + processorName + " is already added.");
+        }
+        if (stateFactories.containsKey(storeName) || globalStateStores.containsKey(storeName)) {
+            throw new TopologyException("StateStore " + storeName + " is already added.");
+        }
+        if (loggingEnabled) {
+            throw new TopologyException("StateStore " + storeName + " for global table must not have logging enabled.");
+        }
+        if (sourceName.equals(processorName)) {
+            throw new TopologyException("sourceName and processorName must be different.");
+        }
+    }
+
+    private void addGlobalStore(final String sourceName,
+                                final TimestampExtractor timestampExtractor,
+                                final Deserializer keyDeserializer,
+                                final Deserializer valueDeserializer,
+                                final String topic,
+                                final String processorName,
+                                final ProcessorSupplier stateUpdateSupplier,
+                                final String name,
+                                final KeyValueStore store) {
+        final String[] topics = {topic};
+        final String[] predecessors = {sourceName};
+        final ProcessorNodeFactory nodeFactory = new ProcessorNodeFactory(processorName,
+                                                                          predecessors,
+                                                                          stateUpdateSupplier);
+        globalTopics.add(topic);
+        nodeFactories.put(sourceName, new SourceNodeFactory(sourceName,
+                                                            topics,
+                                                            null,
+                                                            timestampExtractor,
+                                                            keyDeserializer,
+                                                            valueDeserializer));
+        nodeToSourceTopics.put(sourceName, Arrays.asList(topics));
+        nodeGrouper.add(sourceName);
+        nodeFactory.addStateStore(name);
+        nodeFactories.put(processorName, nodeFactory);
+        nodeGrouper.add(processorName);
+        nodeGrouper.unite(processorName, predecessors);
+        globalStateStores.put(name, store);
+        connectSourceStoreAndTopic(name, topic);
+    }
+
     private void connectProcessorAndStateStore(final String processorName,
                                                final String stateStoreName) {
         if (!stateFactories.containsKey(stateStoreName)) {
@@ -531,12 +710,12 @@ public class InternalTopologyBuilder {
         }
 
         final StateStoreFactory stateStoreFactory = stateFactories.get(stateStoreName);
-        final Iterator<String> iter = stateStoreFactory.users.iterator();
+        final Iterator<String> iter = stateStoreFactory.users().iterator();
         if (iter.hasNext()) {
             final String user = iter.next();
             nodeGrouper.unite(user, processorName);
         }
-        stateStoreFactory.users.add(processorName);
+        stateStoreFactory.users().add(processorName);
 
         final NodeFactory nodeFactory = nodeFactories.get(processorName);
         if (nodeFactory instanceof ProcessorNodeFactory) {
@@ -723,22 +902,20 @@ public class InternalTopologyBuilder {
                     }
                     for (final String stateStoreName : ((ProcessorNodeFactory) factory).stateStoreNames) {
                         if (!stateStoreMap.containsKey(stateStoreName)) {
-                            final StateStore stateStore;
-
                             if (stateFactories.containsKey(stateStoreName)) {
-                                final StateStoreSupplier supplier = stateFactories.get(stateStoreName).supplier;
-                                stateStore = supplier.get();
+                                final StateStoreFactory stateStoreFactory = stateFactories.get(stateStoreName);
 
                                 // remember the changelog topic if this state store is change-logging enabled
-                                if (supplier.loggingEnabled() && !storeToChangelogTopic.containsKey(stateStoreName)) {
+                                if (stateStoreFactory.loggingEnabled() && !storeToChangelogTopic.containsKey(stateStoreName)) {
                                     final String changelogTopic = ProcessorStateManager.storeChangelogTopic(applicationId, stateStoreName);
                                     storeToChangelogTopic.put(stateStoreName, changelogTopic);
                                 }
+                                stateStoreMap.put(stateStoreName, stateStoreFactory.build());
                             } else {
-                                stateStore = globalStateStores.get(stateStoreName);
+                                stateStoreMap.put(stateStoreName, globalStateStores.get(stateStoreName));
                             }
 
-                            stateStoreMap.put(stateStoreName, stateStore);
+
                         }
                     }
                 } else if (factory instanceof SourceNodeFactory) {
@@ -839,10 +1016,9 @@ public class InternalTopologyBuilder {
 
                 // if the node is connected to a state, add to the state topics
                 for (final StateStoreFactory stateFactory : stateFactories.values()) {
-                    final StateStoreSupplier supplier = stateFactory.supplier;
-                    if (supplier.loggingEnabled() && stateFactory.users.contains(node)) {
-                        final String name = ProcessorStateManager.storeChangelogTopic(applicationId, supplier.name());
-                        final InternalTopicConfig internalTopicConfig = createInternalTopicConfig(supplier, name);
+                    if (stateFactory.loggingEnabled() && stateFactory.users().contains(node)) {
+                        final String name = ProcessorStateManager.storeChangelogTopic(applicationId, stateFactory.name());
+                        final InternalTopicConfig internalTopicConfig = createInternalTopicConfig(stateFactory, name);
                         stateChangelogTopics.put(name, internalTopicConfig);
                     }
                 }
@@ -891,19 +1067,20 @@ public class InternalTopologyBuilder {
             }
         }
     }
-    
-    private InternalTopicConfig createInternalTopicConfig(final StateStoreSupplier<?> supplier,
+
+    private InternalTopicConfig createInternalTopicConfig(final StateStoreFactory factory,
                                                           final String name) {
-        if (!(supplier instanceof WindowStoreSupplier)) {
-            return new InternalTopicConfig(name, Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), supplier.logConfig());
+        if (!factory.isWindowStore()) {
+            return new InternalTopicConfig(name,
+                                           Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
+                                           factory.logConfig());
         }
 
-        final WindowStoreSupplier windowStoreSupplier = (WindowStoreSupplier) supplier;
         final InternalTopicConfig config = new InternalTopicConfig(name,
                                                                    Utils.mkSet(InternalTopicConfig.CleanupPolicy.compact,
                                                                            InternalTopicConfig.CleanupPolicy.delete),
-                                                                   supplier.logConfig());
-        config.setRetentionMs(windowStoreSupplier.retentionPeriod());
+                                                                   factory.logConfig());
+        config.setRetentionMs(factory.retentionPeriod());
         return config;
     }
 
