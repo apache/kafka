@@ -174,7 +174,7 @@ public class AbstractCoordinatorTest {
 
         mockClient.setNode(null);
         RequestFuture<Void> noBrokersAvailableFuture = coordinator.lookupCoordinator();
-        assertTrue("Failed future expected", noBrokersAvailableFuture.failed());
+        assertTrue("Failed future expected", noBrokersAvailableFuture.failed() == RequestFuture.Status.FAILED);
 
         mockClient.setNode(node);
         RequestFuture<Void> future = coordinator.lookupCoordinator();

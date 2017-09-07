@@ -191,7 +191,7 @@ public class RequestFutureTest {
         future.complete("hello");
 
         assertTrue(composed.isDone());
-        assertTrue(composed.succeeded());
+        assertTrue(composed.succeeded() == RequestFuture.Status.SUCCEEDED);
         assertEquals(5, (int) composed.value());
     }
 
@@ -209,7 +209,7 @@ public class RequestFutureTest {
         future.raise(e);
 
         assertTrue(composed.isDone());
-        assertTrue(composed.failed());
+        assertTrue(composed.failed() == RequestFuture.Status.FAILED);
         assertEquals(e, composed.exception());
     }
 

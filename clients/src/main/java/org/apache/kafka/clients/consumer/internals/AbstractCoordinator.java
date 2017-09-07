@@ -217,8 +217,8 @@ public abstract class AbstractCoordinator implements Closeable {
             RequestFuture<Void> future = lookupCoordinator();
             client.poll(future, remainingMs);
 
-            if (future.failed()) {
-                if (future.isRetriable()) {
+            if (future.failed() == RequestFuture.Status.FAILED) {
+                if (future.isRetriable() == RequestFuture.Status.RETRY) {
                     remainingMs = timeoutMs - (time.milliseconds() - startTimeMs);
                     if (remainingMs <= 0)
                         break;
@@ -362,9 +362,8 @@ public abstract class AbstractCoordinator implements Closeable {
             RequestFuture<ByteBuffer> future = initiateJoinGroup();
             client.poll(future);
 
-            if (future.succeeded()) {
+            if (future.succeeded() == RequestFuture.Status.SUCCEEDED) {
                 onJoinComplete(generation.generationId, generation.memberId, generation.protocol, future.value());
-
                 // We reset the join group future only after the completion callback returns. This ensures
                 // that if the callback is woken up, we will retry it on the next joinGroupIfNeeded.
                 resetJoinGroupFuture();
@@ -376,7 +375,7 @@ public abstract class AbstractCoordinator implements Closeable {
                         exception instanceof RebalanceInProgressException ||
                         exception instanceof IllegalGenerationException)
                     continue;
-                else if (!future.isRetriable())
+                else if (future.isRetriable() != RequestFuture.Status.RETRY)
                     throw exception;
                 time.sleep(retryBackoffMs);
             }
@@ -931,7 +930,7 @@ public abstract class AbstractCoordinator implements Closeable {
                         long now = time.milliseconds();
 
                         if (coordinatorUnknown()) {
-                            if (findCoordinatorFuture != null || lookupCoordinator().failed())
+                            if (findCoordinatorFuture != null || lookupCoordinator().failed() == RequestFuture.Status.FAILED)
                                 // the immediate future check ensures that we backoff properly in the case that no
                                 // brokers are available to connect to.
                                 AbstractCoordinator.this.wait(retryBackoffMs);

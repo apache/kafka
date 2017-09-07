@@ -48,7 +48,9 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
     private final AtomicReference<Object> result = new AtomicReference<>(INCOMPLETE_SENTINEL);
     private final ConcurrentLinkedQueue<RequestFutureListener<T>> listeners = new ConcurrentLinkedQueue<>();
     private final CountDownLatch completedLatch = new CountDownLatch(1);
-
+    public enum Status {
+        SUCCEEDED, FAILED, RETRY, NOT_RETRY
+    }
     /**
      * Check whether the response is ready to be handled
      * @return true if the response is ready, false otherwise
@@ -68,35 +70,44 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
      */
     @SuppressWarnings("unchecked")
     public T value() {
-        if (!succeeded())
+        if (succeeded() != Status.SUCCEEDED)
             throw new IllegalStateException("Attempt to retrieve value from future which hasn't successfully completed");
         return (T) result.get();
     }
 
     /**
      * Check if the request succeeded;
-     * @return true if the request completed and was successful
+     * @return Status.SUCCEEDED if the request completed and was successful
      */
-    public boolean succeeded() {
-        return isDone() && !failed();
+    public Status succeeded() {
+        if (isDone() && failed() != Status.FAILED) {
+            return Status.SUCCEEDED;
+        }
+        return Status.FAILED;
     }
 
     /**
      * Check if the request failed.
-     * @return true if the request completed with a failure
+     * @return Status.FAILED if the request completed with a failure
      */
-    public boolean failed() {
-        return result.get() instanceof RuntimeException;
+    public Status failed() {
+        if (result.get() instanceof RuntimeException) {
+            return Status.FAILED;
+        }
+        return Status.SUCCEEDED;
     }
 
     /**
      * Check if the request is retriable (convenience method for checking if
      * the exception is an instance of {@link RetriableException}.
-     * @return true if it is retriable, false otherwise
+     * @return Status.RETRY if it is retriable, Status.NOT_RETRY otherwise
      * @throws IllegalStateException if the future is not complete or completed successfully
      */
-    public boolean isRetriable() {
-        return exception() instanceof RetriableException;
+    public Status isRetriable() {
+        if (exception() instanceof RetriableException) {
+            return Status.RETRY;
+        }
+        return Status.NOT_RETRY;
     }
 
     /**
@@ -105,7 +116,7 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
      * @throws IllegalStateException if the future is not complete or completed successfully
      */
     public RuntimeException exception() {
-        if (!failed())
+        if (failed() != Status.FAILED)
             throw new IllegalStateException("Attempt to retrieve exception from future which hasn't failed");
         return (RuntimeException) result.get();
     }
@@ -184,9 +195,9 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
      */
     public void addListener(RequestFutureListener<T> listener) {
         this.listeners.add(listener);
-        if (failed())
+        if (failed() == Status.FAILED)
             fireFailure();
-        else if (succeeded())
+        else if (succeeded() == Status.SUCCEEDED)
             fireSuccess();
     }
 

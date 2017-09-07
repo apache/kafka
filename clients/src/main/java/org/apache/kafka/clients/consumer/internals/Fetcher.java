@@ -313,10 +313,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             RequestFuture<ClientResponse> future = sendMetadataRequest(request);
             client.poll(future, remaining);
 
-            if (future.failed() && !future.isRetriable())
+            if (future.failed() == RequestFuture.Status.FAILED && future.isRetriable() != RequestFuture.Status.RETRY)
                 throw future.exception();
 
-            if (future.succeeded()) {
+            if (future.succeeded() == RequestFuture.Status.SUCCEEDED) {
                 MetadataResponse response = (MetadataResponse) future.value().responseBody();
                 Cluster cluster = response.cluster();
 
@@ -458,10 +458,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             if (!future.isDone())
                 break;
 
-            if (future.succeeded())
+            if (future.succeeded() == RequestFuture.Status.SUCCEEDED)
                 return future.value();
 
-            if (!future.isRetriable())
+            if (future.isRetriable() != RequestFuture.Status.RETRY)
                 throw future.exception();
 
             long elapsed = time.milliseconds() - startMs;

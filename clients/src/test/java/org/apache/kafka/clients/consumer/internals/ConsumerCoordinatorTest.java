@@ -154,7 +154,7 @@ public class ConsumerCoordinatorTest {
         consumerClient.poll(0);
 
         assertTrue(future.isDone());
-        assertTrue(future.succeeded());
+        assertTrue(future.succeeded() == RequestFuture.Status.SUCCEEDED);
     }
 
     @Test(expected = GroupAuthorizationException.class)
@@ -191,7 +191,7 @@ public class ConsumerCoordinatorTest {
         consumerClient.poll(0);
 
         assertTrue(future.isDone());
-        assertTrue(future.failed());
+        assertTrue(future.failed() == RequestFuture.Status.FAILED);
         assertEquals(Errors.COORDINATOR_NOT_AVAILABLE.exception(), future.exception());
         assertTrue(coordinator.coordinatorUnknown());
     }
@@ -212,7 +212,7 @@ public class ConsumerCoordinatorTest {
         consumerClient.poll(0);
 
         assertTrue(future.isDone());
-        assertTrue(future.failed());
+        assertTrue(future.failed() == RequestFuture.Status.FAILED);
         assertEquals(Errors.NOT_COORDINATOR.exception(), future.exception());
         assertTrue(coordinator.coordinatorUnknown());
     }
@@ -236,7 +236,7 @@ public class ConsumerCoordinatorTest {
         consumerClient.poll(0);
 
         assertTrue(future.isDone());
-        assertTrue(future.failed());
+        assertTrue(future.failed() == RequestFuture.Status.FAILED);
         assertEquals(Errors.ILLEGAL_GENERATION.exception(), future.exception());
         assertTrue(coordinator.needRejoin());
     }
@@ -260,7 +260,7 @@ public class ConsumerCoordinatorTest {
         consumerClient.poll(0);
 
         assertTrue(future.isDone());
-        assertTrue(future.failed());
+        assertTrue(future.failed() == RequestFuture.Status.FAILED);
         assertEquals(Errors.UNKNOWN_MEMBER_ID.exception(), future.exception());
         assertTrue(coordinator.needRejoin());
     }
@@ -281,7 +281,7 @@ public class ConsumerCoordinatorTest {
         consumerClient.poll(0);
 
         assertTrue(future.isDone());
-        assertTrue(future.failed());
+        assertTrue(future.failed() == RequestFuture.Status.FAILED);
         assertTrue(future.exception() instanceof DisconnectException);
         assertTrue(coordinator.coordinatorUnknown());
     }

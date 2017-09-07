@@ -473,10 +473,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             RequestFuture<Map<TopicPartition, OffsetAndMetadata>> future = sendOffsetFetchRequest(partitions);
             client.poll(future);
 
-            if (future.succeeded())
+            if (future.succeeded() == RequestFuture.Status.SUCCEEDED)
                 return future.value();
 
-            if (!future.isRetriable())
+            if (future.isRetriable() != RequestFuture.Status.RETRY)
                 throw future.exception();
 
             time.sleep(retryBackoffMs);
@@ -600,19 +600,19 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
             RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
             client.poll(future, remainingMs);
-
+          
             // We may have had in-flight offset commits when the synchronous commit began. If so, ensure that
             // the corresponding callbacks are invoked prior to returning in order to preserve the order that
             // the offset commits were applied.
             invokeCompletedOffsetCommitCallbacks();
 
-            if (future.succeeded()) {
+            if (future.succeeded() == RequestFuture.Status.SUCCEEDED) {
                 if (interceptors != null)
                     interceptors.onCommit(offsets);
                 return true;
             }
 
-            if (future.failed() && !future.isRetriable())
+            if (future.failed() == RequestFuture.Status.FAILED && future.isRetriable() != RequestFuture.Status.RETRY)
                 throw future.exception();
 
             time.sleep(retryBackoffMs);
