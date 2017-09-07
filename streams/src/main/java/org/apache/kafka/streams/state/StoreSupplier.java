@@ -14,22 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor;
+package org.apache.kafka.streams.state;
 
-import java.util.Map;
+import org.apache.kafka.streams.processor.StateStore;
 
 /**
  * A state store supplier which can create one or more {@link StateStore} instances.
  *
  * @param <T> State store type
- * @deprecated use {@link org.apache.kafka.streams.state.StoreSupplier}
  */
-@Deprecated
-public interface StateStoreSupplier<T extends StateStore> {
-
+public interface StoreSupplier<T extends StateStore> {
     /**
      * Return the name of this state store supplier.
-     * This must be a valid Kafka topic name; valid characters are ASCII alphanumerics, '.', '_' and '-'
+     * This must be a valid Kafka topic name; valid characters are ASCII alphanumerics, '.', '_' and '-'.
      *
      * @return the name of this state store supplier
      */
@@ -43,17 +40,8 @@ public interface StateStoreSupplier<T extends StateStore> {
     T get();
 
     /**
-     * Returns a Map containing any log configs that will be used when creating the changelog for the {@link StateStore}
-     * <p>
-     * Note: any unrecognized configs will be ignored by the Kafka brokers.
-     *
-     * @return Map containing any log configs to be used when creating the changelog for the {@link StateStore}
-     * If {@code loggingEnabled} returns false, this function will always return an empty map
+     * Return a String that is used as the scope for metrics recorded by Metered stores.
+     * @return metricsScope
      */
-    Map<String, String> logConfig();
-
-    /**
-     * @return true if the {@link StateStore} should have logging enabled
-     */
-    boolean loggingEnabled();
+    String metricsScope();
 }

@@ -23,10 +23,12 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockStateStoreSupplier;
 import org.apache.kafka.test.ProcessorTopologyTestDriver;
+import org.easymock.EasyMock;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -42,6 +44,8 @@ import static org.junit.Assert.fail;
 
 public class TopologyTest {
 
+    private final StoreBuilder storeBuilder = EasyMock.createNiceMock(StoreBuilder.class);
+    private final KeyValueStoreBuilder globalStoreBuilder = EasyMock.createNiceMock(KeyValueStoreBuilder.class);
     private final Topology topology = new Topology();
     private final InternalTopologyBuilder.TopologyDescription expectedDescription = new InternalTopologyBuilder.TopologyDescription();
 
@@ -203,38 +207,52 @@ public class TopologyTest {
 
     @Test(expected = TopologyException.class)
     public void shouldNotAllowToAddStateStoreToNonExistingProcessor() {
-        topology.addStateStore(new MockStateStoreSupplier("store", false), "no-such-processsor");
+        mockStoreBuilder();
+        EasyMock.replay(storeBuilder);
+        topology.addStateStore(storeBuilder, "no-such-processsor");
     }
 
     @Test
     public void shouldNotAllowToAddStateStoreToSource() {
+        mockStoreBuilder();
+        EasyMock.replay(storeBuilder);
         topology.addSource("source-1", "topic-1");
         try {
-            topology.addStateStore(new MockStateStoreSupplier("store", false), "source-1");
+            topology.addStateStore(storeBuilder, "source-1");
             fail("Should have thrown TopologyException for adding store to source node");
         } catch (final TopologyException expected) { }
     }
 
     @Test
     public void shouldNotAllowToAddStateStoreToSink() {
+        mockStoreBuilder();
+        EasyMock.replay(storeBuilder);
         topology.addSink("sink-1", "topic-1");
         try {
-            topology.addStateStore(new MockStateStoreSupplier("store", false), "sink-1");
+            topology.addStateStore(storeBuilder, "sink-1");
             fail("Should have thrown TopologyException for adding store to sink node");
         } catch (final TopologyException expected) { }
     }
 
+    private void mockStoreBuilder() {
+        EasyMock.expect(storeBuilder.name()).andReturn("store").anyTimes();
+        EasyMock.expect(storeBuilder.logConfig()).andReturn(Collections.emptyMap());
+        EasyMock.expect(storeBuilder.loggingEnabled()).andReturn(false);
+    }
+
     @Test
     public void shouldNotAllowToAddStoreWithSameName() {
-        topology.addStateStore(new MockStateStoreSupplier("store", false));
+        mockStoreBuilder();
+        EasyMock.replay(storeBuilder);
+        topology.addStateStore(storeBuilder);
         try {
-            topology.addStateStore(new MockStateStoreSupplier("store", false));
+            topology.addStateStore(storeBuilder);
             fail("Should have thrown TopologyException for duplicate store name");
         } catch (final TopologyException expected) { }
     }
 
     @Test(expected = TopologyBuilderException.class)
-    public void shouldThroughOnUnassignedStateStoreAccess() throws Exception {
+    public void shouldThrowOnUnassignedStateStoreAccess() throws Exception {
         final String sourceNodeName = "source";
         final String goodNodeName = "goodGuy";
         final String badNodeName = "badGuy";
@@ -243,12 +261,14 @@ public class TopologyTest {
         config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "host:1");
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
         final StreamsConfig streamsConfig = new StreamsConfig(config);
-
+        mockStoreBuilder();
+        EasyMock.expect(storeBuilder.build()).andReturn(new MockStateStoreSupplier.MockStateStore("store", false));
+        EasyMock.replay(storeBuilder);
         topology
             .addSource(sourceNodeName, "topic")
             .addProcessor(goodNodeName, new LocalMockProcessorSupplier(), sourceNodeName)
             .addStateStore(
-                Stores.create(LocalMockProcessorSupplier.STORE_NAME).withStringKeys().withStringValues().inMemory().build(),
+                storeBuilder,
                 goodNodeName)
             .addProcessor(badNodeName, new LocalMockProcessorSupplier(), sourceNodeName);
 
@@ -292,8 +312,10 @@ public class TopologyTest {
 
     @Test(expected = TopologyException.class)
     public void shouldNotAllowToAddGlobalStoreWithSourceNameEqualsProcessorName() {
+        EasyMock.expect(globalStoreBuilder.name()).andReturn("anyName").anyTimes();
+        EasyMock.replay(globalStoreBuilder);
         topology.addGlobalStore(
-            new MockStateStoreSupplier("anyName", false, false),
+            globalStoreBuilder,
             "sameName",
             null,
             null,
@@ -611,7 +633,10 @@ public class TopologyTest {
         topology.addProcessor(processorName, new MockProcessorSupplier(), parentNames);
         if (newStores) {
             for (final String store : storeNames) {
-                topology.addStateStore(new MockStateStoreSupplier(store, false), processorName);
+                final StoreBuilder storeBuilder = EasyMock.createNiceMock(StoreBuilder.class);
+                EasyMock.expect(storeBuilder.name()).andReturn(store).anyTimes();
+                EasyMock.replay(storeBuilder);
+                topology.addStateStore(storeBuilder, processorName);
             }
         } else {
             topology.connectProcessorAndStateStores(processorName, storeNames);
@@ -651,8 +676,11 @@ public class TopologyTest {
                                                                 final String sourceName,
                                                                 final String globalTopicName,
                                                                 final String processorName) {
+        final KeyValueStoreBuilder globalStoreBuilder = EasyMock.createNiceMock(KeyValueStoreBuilder.class);
+        EasyMock.expect(globalStoreBuilder.name()).andReturn(globalStoreName).anyTimes();
+        EasyMock.replay(globalStoreBuilder);
         topology.addGlobalStore(
-            new MockStateStoreSupplier(globalStoreName, false, false),
+            globalStoreBuilder,
             sourceName,
             null,
             null,

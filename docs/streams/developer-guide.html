@@ -320,23 +320,24 @@ You set the <code>org.apache.kafka.streams.processor.StateRestoreListener</code>
 <h4> <a id="disable-changelogs" href="#disable-changelogs">Enable / Disable Fault Tolerance of State Stores (Store Changelogs)</a></h4>
 
 <p>
-  You can enable or disable fault tolerance for a state store by enabling or disabling, respectively, the changelogging of the store through <code>enableLogging()</code> and <code>disableLogging()</code>. 
-  You can also fine-tune the associated topic’s configuration if needed.
+    You can enable or disable fault tolerance for a state store by enabling or disabling, respectively ,the changelogging of the store through <code>StateStoreBuilder#withLoggingEnabled(Map&lt;String, String&gt;)</code>
+    and <code>StateStoreBuilder#withLoggingDisabled()</code>.
+    You can also fine-tune the associated topic’s configuration if needed.
 </p>
 
 <p>Example for disabling fault-tolerance:</p>
 
 <pre class="brush: java;">
 
-  import org.apache.kafka.streams.processor.StateStoreSupplier;
+  import org.apache.kafka.streams.processor.state.KeyValueBytesStoreSupplier;
+  import org.apache.kafka.streams.processor.state.StateStoreBuilder;
   import org.apache.kafka.streams.state.Stores;
 
-  StateStoreSupplier countStoreSupplier = Stores.create("Counts")
-              .withKeys(Serdes.String())
-              .withValues(Serdes.Long())
-              .persistent()
-              .disableLogging() // disable backing up the store to a changelog topic
-              .build();
+  KeyValueBytesStoreSupplier countStoreSupplier = Stores.inMemoryKeyValueStore("Counts");
+  StateStoreBuilder builder = Stores.keyValueStoreBuilder(countStoreSupplier,
+                                                          Serdes.String(),
+                                                          Serdes.Long())
+                                    .withLoggingDisabled(); // disable backing up the store to a changelog topic
 
 </pre>
 
@@ -351,19 +352,20 @@ You set the <code>org.apache.kafka.streams.processor.StateRestoreListener</code>
 
 <pre class="brush: java;">
 
-  import org.apache.kafka.streams.processor.StateStoreSupplier;
+  import org.apache.kafka.streams.processor.state.KeyValueBytesStoreSupplier;
+  import org.apache.kafka.streams.processor.state.StateStoreBuilder;
   import org.apache.kafka.streams.state.Stores;
 
   Map&lt;String, String&gt; changelogConfig = new HashMap();
   // override min.insync.replicas
   changelogConfig.put("min.insyc.replicas", "1")
 
-  StateStoreSupplier countStoreSupplier = Stores.create("Counts")
-              .withKeys(Serdes.String())
-              .withValues(Serdes.Long())
-              .persistent()
-              .enableLogging(changelogConfig) // enable changelogging, with custom changelog settings
-              .build();
+  KeyValueBytesStoreSupplier countStoreSupplier = Stores.inMemoryKeyValueStore("Counts");
+  StateStoreBuilder builder = Stores.keyValueStoreBuilder(countStoreSupplier,
+                                                          Serdes.String(),
+                                                          Serdes.Long())
+                                    .withLoggingEnabled(changelogConfig); // enable changelogging, with custom changelog settings
+
 
 </pre>
 
@@ -376,7 +378,7 @@ You set the <code>org.apache.kafka.streams.processor.StateRestoreListener</code>
 </p>
 
 <p>
-  In addition to the actual store, you also need to provide a &quot;factory&quot; for the store by implementing the <code>org.apache.kafka.streams.processor.StateStoreSupplier</code> interface, which Kafka Streams uses to create instances of your store.
+  In addition to the actual store, you also need to provide a &quot;factory&quot; for the store by implementing the <code>org.apache.kafka.streams.processor.state.StoreSupplier</code> interface, which Kafka Streams uses to create instances of your store.
 </p>
 
 <p>
@@ -2244,7 +2246,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
         <li>Your custom state store must implement <code>StateStore</code>.</li>
         <li>You should have an interface to represent the operations available on the store.</li>
         <li>It is recommended that you also provide an interface that restricts access to read-only operations so users of this API can't mutate the state of your running Kafka Streams application out-of-band.</li>
-        <li>You also need to provide an implementation of <code>StateStoreSupplier</code> for creating instances of your store.</li>
+        <li>You also need to provide an implementation of <code>StoreSupplier</code> for creating instances of your store.</li>
     </ol>
 
     <p>
@@ -2266,7 +2268,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
             V read(K key);
           }
 
-          public class MyCustomStoreSupplier implements StateStoreSupplier {
+          public class MyCustomStoreSupplier implements StoreSupplier {
             // implementation of the supplier for MyCustomStore
           }
         </pre>
@@ -2655,18 +2657,14 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
         might not want to use the unified record cache for both state store and forwarding downstream.
     </p>
     <p>
-        Following from the example first shown in section <a href="#streams_processor_statestore">State Stores</a>, to enable caching, you can
-        add the <code>enableCaching</code> call (note that caches are disabled by default and there is no explicit <code>disableCaching</code>
-        call) :
+        Following from the example first shown in section <a href="#streams_processor_statestore">State Stores</a>, to enable caching,
+        you first create a <code>StateStoreBuilder</code> and then call <code>withCachingEnabled</code> (note that caches
+        are disabled by default and there is no explicit <code>withCachingDisabled</code> call) :
     </p>
     <pre class="brush: java;">
-        StateStoreSupplier countStoreSupplier =
-            Stores.create("Counts")
-                .withKeys(Serdes.String())
-                .withValues(Serdes.Long())
-                .persistent()
-                .enableCaching()
-                .build();
+        KeyValueBytesStoreSupplier countSupplier = Stores.persistentKeyValueStore("Counts");
+        StateStoreBuilder&lt;KeyValueStore&lt;String, Long&gt;&gt; builder = Stores.keyValueStoreBuilder(countSupplier, Serdes.String(), Serdes.Long());
+        builder.withCachingEnabled()
     </pre>
 
     <h4><a id="streams_developer-guide_memory-management_other_memory_usage" href="#streams_developer-guide_memory-management_other_memory_usage">Other memory usage</a></h4>
