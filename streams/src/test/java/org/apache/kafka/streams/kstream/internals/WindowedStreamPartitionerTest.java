@@ -146,21 +146,8 @@ public class WindowedStreamPartitionerTest {
     }
     
     @Test
-    public void testWindowSerializeConfig() {
+    public void testWindowSerializeExpectedWindowSize() {
         final Map<String, String> props = new HashMap<>();
-        // test key[value].serializer.inner.class takes precedence over serializer.inner.class
-        final WindowedDeserializer<StringSerializer> windowedDeserializer = new WindowedDeserializer<>();
-        props.put("key.deserializer.inner.class", "org.apache.kafka.common.serialization.StringDeserializer");
-        props.put("deserializer.inner.class", "org.apache.kafka.common.serialization.StringDeserializer");
-        windowedDeserializer.configure(props, true);
-        final Deserializer<?> inner = windowedDeserializer.innerDeserializer();
-        assertTrue("Inner deserializer type should be StringDeserializer", inner instanceof StringDeserializer);
-    }
-    
-    @Test
-    public void testWindowSerializeWithWindowSize() {
-        final Map<String, String> props = new HashMap<>();
-        // test key[value].serializer.inner.class takes precedence over serializer.inner.class
         final WindowedDeserializer<StringSerializer> windowedDeserializer = new WindowedDeserializer<>();
         props.put("key.deserializer.inner.class", "org.apache.kafka.common.serialization.StringDeserializer");
         props.put("deserializer.inner.class", "org.apache.kafka.common.serialization.StringDeserializer");
@@ -182,24 +169,8 @@ public class WindowedStreamPartitionerTest {
     }
     
     @Test
-    public void testWindowDeserializeConfig() {
+    public void testWindowDeserializeExpectedWindowSize() {
         final Map<String, String> props = new HashMap<>();
-        // test key[value].deserializer.inner.class takes precedence over serializer.inner.class
-        final WindowedDeserializer<StringSerializer> windowedDeserializer = new WindowedDeserializer<>();
-        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "host:1");
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
-        props.put("key.deserializer.inner.class", "org.apache.kafka.common.serialization.StringDeserializer");
-        props.put("deserializer.inner.class", "org.apache.kafka.common.serialization.StringDeserializer");
-        windowedDeserializer.configure(props, true);
-        final Deserializer<?> inner = windowedDeserializer.innerDeserializer();
-        assertNotNull("Inner deserializer should be not null", inner);
-        assertTrue("Inner deserializer type should be StringDeserializer", inner instanceof StringDeserializer);
-    }
-    
-    @Test
-    public void testWindowDeserializeWithWindowSize() {
-        final Map<String, String> props = new HashMap<>();
-        // test key[value].deserializer.inner.class takes precedence over serializer.inner.class
         final WindowedDeserializer<StringSerializer> windowedDeserializer = new WindowedDeserializer<>();
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "host:1");
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
