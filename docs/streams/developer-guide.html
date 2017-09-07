@@ -115,7 +115,7 @@
     this.context = context;
 
     // schedule a punctuation method every 1000 milliseconds.
-    this.context.schedule(1000, PunctuationType.SYSTEM_TIME, new Punctuator() {
+    this.context.schedule(1000, PunctuationType.WALL_CLOCK_TIME, new Punctuator() {
         @Override
         public void punctuate(long timestamp) {
             KeyValueIterator&lt;String, Long&gt; iter = this.kvStore.all();
