@@ -32,7 +32,6 @@ import org.apache.kafka.streams.state.internals.WindowStoreSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -1407,6 +1406,11 @@ public class InternalTopologyBuilder {
         @Override
         public Set<TopologyDescription.Node> nodes() {
             return Collections.unmodifiableSet(nodes);
+        }
+
+        // only for testing
+        public Iterator<TopologyDescription.Node> nodesInOrder() {
+            return nodes.iterator();
         }
 
         @Override
