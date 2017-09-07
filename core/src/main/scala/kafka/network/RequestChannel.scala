@@ -105,7 +105,15 @@ object RequestChannel extends Logging {
       if (apiRemoteCompleteTimeNanos < 0)
         apiRemoteCompleteTimeNanos = responseCompleteTimeNanos
 
-      def nanosToMs(nanos: Long) = math.max(nanos, 0).toDouble / TimeUnit.MILLISECONDS.toNanos(1)
+      /**
+       * Converts nanos to millis with micros precision as additional decimal places in the request log have low
+       * signal to noise ratio. When it comes to metrics, there is little difference either way as we round the value
+       * to the nearest long.
+       */
+      def nanosToMs(nanos: Long): Double = {
+        val positiveNanos = math.max(nanos, 0)
+        TimeUnit.NANOSECONDS.toMicros(positiveNanos).toDouble / TimeUnit.MILLISECONDS.toMicros(1)
+      }
 
       val requestQueueTimeMs = nanosToMs(requestDequeueTimeNanos - startTimeNanos)
       val apiLocalTimeMs = nanosToMs(apiLocalCompleteTimeNanos - requestDequeueTimeNanos)
