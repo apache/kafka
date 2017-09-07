@@ -57,7 +57,7 @@ public class InternalStreamsBuilderTest {
     private final InternalStreamsBuilder builder = new InternalStreamsBuilder(new InternalTopologyBuilder());
 
     private KStreamTestDriver driver = null;
-    private final Consumed<String, String> consumed = Consumed.with(null, null);
+    private final ConsumedInternal<String, String> consumed = new ConsumedInternal<>();
 
     @Before
     public void setUp() {
@@ -239,7 +239,7 @@ public class InternalStreamsBuilderTest {
     @Test
     public void shouldAddTopicToEarliestAutoOffsetResetList() {
         final String topicName = "topic-1";
-        final Consumed consumed = Consumed.with(AutoOffsetReset.EARLIEST);
+        final ConsumedInternal consumed = new ConsumedInternal<>(Consumed.with(AutoOffsetReset.EARLIEST));
         builder.stream(Collections.singleton(topicName), consumed);
 
         assertTrue(builder.internalTopologyBuilder.earliestResetTopicsPattern().matcher(topicName).matches());
@@ -250,7 +250,7 @@ public class InternalStreamsBuilderTest {
     public void shouldAddTopicToLatestAutoOffsetResetList() {
         final String topicName = "topic-1";
 
-        final Consumed consumed = Consumed.with(AutoOffsetReset.LATEST);
+        final ConsumedInternal consumed = new ConsumedInternal<>(Consumed.with(AutoOffsetReset.LATEST));
         builder.stream(Collections.singleton(topicName), consumed);
 
         assertTrue(builder.internalTopologyBuilder.latestResetTopicsPattern().matcher(topicName).matches());
@@ -261,7 +261,7 @@ public class InternalStreamsBuilderTest {
     public void shouldAddTableToEarliestAutoOffsetResetList() {
         final String topicName = "topic-1";
         final String storeName = "test-store";
-        builder.table(topicName, Consumed.with(AutoOffsetReset.EARLIEST), storeName);
+        builder.table(topicName, new ConsumedInternal<>(Consumed.with(AutoOffsetReset.EARLIEST)), storeName);
 
         assertTrue(builder.internalTopologyBuilder.earliestResetTopicsPattern().matcher(topicName).matches());
         assertFalse(builder.internalTopologyBuilder.latestResetTopicsPattern().matcher(topicName).matches());
@@ -272,7 +272,7 @@ public class InternalStreamsBuilderTest {
         final String topicName = "topic-1";
         final String storeName = "test-store";
 
-        builder.table(topicName, Consumed.with(AutoOffsetReset.LATEST), storeName);
+        builder.table(topicName, new ConsumedInternal<>(Consumed.with(AutoOffsetReset.LATEST)), storeName);
 
         assertTrue(builder.internalTopologyBuilder.latestResetTopicsPattern().matcher(topicName).matches());
         assertFalse(builder.internalTopologyBuilder.earliestResetTopicsPattern().matcher(topicName).matches());
@@ -306,7 +306,7 @@ public class InternalStreamsBuilderTest {
         final Pattern topicPattern = Pattern.compile("topic-\\d+");
         final String topicTwo = "topic-500000";
 
-        builder.stream(topicPattern, Consumed.with(AutoOffsetReset.EARLIEST));
+        builder.stream(topicPattern, new ConsumedInternal<>(Consumed.with(AutoOffsetReset.EARLIEST)));
 
         assertTrue(builder.internalTopologyBuilder.earliestResetTopicsPattern().matcher(topicTwo).matches());
         assertFalse(builder.internalTopologyBuilder.latestResetTopicsPattern().matcher(topicTwo).matches());
@@ -317,7 +317,7 @@ public class InternalStreamsBuilderTest {
         final Pattern topicPattern = Pattern.compile("topic-\\d+");
         final String topicTwo = "topic-1000000";
 
-        builder.stream(topicPattern, Consumed.with(AutoOffsetReset.LATEST));
+        builder.stream(topicPattern, new ConsumedInternal<>(Consumed.with(AutoOffsetReset.LATEST)));
 
         assertTrue(builder.internalTopologyBuilder.latestResetTopicsPattern().matcher(topicTwo).matches());
         assertFalse(builder.internalTopologyBuilder.earliestResetTopicsPattern().matcher(topicTwo).matches());
@@ -332,7 +332,7 @@ public class InternalStreamsBuilderTest {
 
     @Test
     public void shouldUseProvidedTimestampExtractor() throws Exception {
-        final Consumed consumed = Consumed.with(new MockTimestampExtractor());
+        final ConsumedInternal consumed = new ConsumedInternal<>(Consumed.with(new MockTimestampExtractor()));
         builder.stream(Collections.singleton("topic"), consumed);
         final ProcessorTopology processorTopology = builder.internalTopologyBuilder.build(null);
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
@@ -347,7 +347,8 @@ public class InternalStreamsBuilderTest {
 
     @Test
     public void ktableShouldUseProvidedTimestampExtractor() throws Exception {
-        builder.table("topic", Consumed.with(new MockTimestampExtractor()), "store");
+        final ConsumedInternal consumed = new ConsumedInternal<>(Consumed.with(new MockTimestampExtractor()));
+        builder.table("topic", consumed, "store");
         final ProcessorTopology processorTopology = builder.internalTopologyBuilder.build(null);
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }

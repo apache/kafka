@@ -19,7 +19,6 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.ForeachAction;
@@ -388,7 +387,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public KStream<K, V> through(final String topic, final Produced<K, V> produced) {
         to(topic, produced);
         return builder.stream(Collections.singleton(topic),
-                              Consumed.with(produced.keySerde(),
+                              new ConsumedInternal<>(produced.keySerde(),
                                             produced.valueSerde(),
                                             new FailOnInvalidTimestamp(),
                                             null));

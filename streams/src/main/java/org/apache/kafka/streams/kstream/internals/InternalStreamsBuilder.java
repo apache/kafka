@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
@@ -47,7 +46,7 @@ public class InternalStreamsBuilder {
     }
 
     public <K, V> KStream<K, V> stream(final Collection<String> topics,
-                                       final Consumed<K, V> consumed) {
+                                       final ConsumedInternal<K, V> consumed) {
         final String name = newName(KStreamImpl.SOURCE_NAME);
 
         internalTopologyBuilder.addSource(consumed.offsetResetPolicy(),
@@ -60,7 +59,7 @@ public class InternalStreamsBuilder {
         return new KStreamImpl<>(this, name, Collections.singleton(name), false);
     }
 
-    public <K, V> KStream<K, V> stream(final Pattern topicPattern, final Consumed<K, V> consumed) {
+    public <K, V> KStream<K, V> stream(final Pattern topicPattern, final ConsumedInternal<K, V> consumed) {
         final String name = newName(KStreamImpl.SOURCE_NAME);
 
         internalTopologyBuilder.addSource(consumed.offsetResetPolicy(),
@@ -75,7 +74,7 @@ public class InternalStreamsBuilder {
 
     @SuppressWarnings("unchecked")
     public <K, V> KTable<K, V> table(final String topic,
-                                     final Consumed<K, V> consumed,
+                                     final ConsumedInternal<K, V> consumed,
                                      final String queryableStoreName) {
         final String internalStoreName = queryableStoreName != null ? queryableStoreName : newStoreName(KTableImpl.SOURCE_NAME);
         final StateStoreSupplier storeSupplier = new RocksDBKeyValueStoreSupplier<>(internalStoreName,
@@ -94,10 +93,10 @@ public class InternalStreamsBuilder {
                                      final String topic,
                                      final StateStoreSupplier<KeyValueStore> storeSupplier) {
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
-        return doTable(Consumed.with(keySerde, valSerde, timestampExtractor, offsetReset), topic, storeSupplier, true);
+        return doTable(new ConsumedInternal<>(keySerde, valSerde, timestampExtractor, offsetReset), topic, storeSupplier, true);
     }
 
-    private <K, V> KTable<K, V> doTable(final Consumed<K, V> consumed,
+    private <K, V> KTable<K, V> doTable(final ConsumedInternal<K, V> consumed,
                                         final String topic,
                                         final StateStoreSupplier<KeyValueStore> storeSupplier,
                                         final boolean isQueryable) {
@@ -123,7 +122,7 @@ public class InternalStreamsBuilder {
     }
 
     public <K, V> GlobalKTable<K, V> globalTable(final String topic,
-                                                 final Consumed<K, V> consumed,
+                                                 final ConsumedInternal<K, V> consumed,
                                                  final String queryableStoreName) {
         final String internalStoreName = queryableStoreName != null ? queryableStoreName : newStoreName(KTableImpl.SOURCE_NAME);
         return doGlobalTable(consumed, topic, new RocksDBKeyValueStoreSupplier<>(internalStoreName,
@@ -138,11 +137,11 @@ public class InternalStreamsBuilder {
                                                  final Serde<V> valSerde,
                                                  final String topic,
                                                  final StateStoreSupplier<KeyValueStore> storeSupplier) {
-        return doGlobalTable(Consumed.with(keySerde, valSerde), topic, storeSupplier);
+        return doGlobalTable(new ConsumedInternal<>(keySerde, valSerde, null, null), topic, storeSupplier);
     }
 
     @SuppressWarnings("unchecked")
-    private <K, V> GlobalKTable<K, V> doGlobalTable(final Consumed<K, V> consumed,
+    private <K, V> GlobalKTable<K, V> doGlobalTable(final ConsumedInternal<K, V> consumed,
                                                     final String topic,
                                                     final StateStoreSupplier<KeyValueStore> storeSupplier) {
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");

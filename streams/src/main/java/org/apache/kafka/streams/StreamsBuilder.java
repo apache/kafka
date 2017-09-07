@@ -24,6 +24,7 @@ import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
@@ -128,7 +129,7 @@ public class StreamsBuilder {
      */
     public synchronized <K, V> KStream<K, V> stream(final Collection<String> topics,
                                                     final Consumed<K, V> consumed) {
-        return internalStreamsBuilder.stream(topics, consumed);
+        return internalStreamsBuilder.stream(topics, new ConsumedInternal<>(consumed));
     }
 
 
@@ -169,7 +170,7 @@ public class StreamsBuilder {
      */
     public synchronized <K, V> KStream<K, V> stream(final Pattern topicPattern,
                                                     final Consumed<K, V> consumed) {
-        return internalStreamsBuilder.stream(topicPattern, consumed);
+        return internalStreamsBuilder.stream(topicPattern, new ConsumedInternal<>(consumed));
     }
 
     /**
@@ -203,7 +204,7 @@ public class StreamsBuilder {
      */
     public synchronized <K, V> KTable<K, V> table(final String topic,
                                                   final String queryableStoreName) {
-        return internalStreamsBuilder.table(topic, Consumed.<K, V>with(null, null), queryableStoreName);
+        return internalStreamsBuilder.table(topic, new ConsumedInternal<K, V>(), queryableStoreName);
     }
 
     /**
@@ -258,7 +259,7 @@ public class StreamsBuilder {
      * @return a {@link KTable} for the specified topic
      */
     public synchronized <K, V> KTable<K, V> table(final String topic) {
-        return internalStreamsBuilder.table(topic, Consumed.<K, V>with(null, null), null);
+        return internalStreamsBuilder.table(topic, new ConsumedInternal<K, V>(), null);
     }
 
     /**
@@ -281,7 +282,7 @@ public class StreamsBuilder {
      */
     public synchronized <K, V> KTable<K, V> table(final String topic,
                                                   final Consumed<K, V> consumed) {
-        return internalStreamsBuilder.table(topic, consumed, null);
+        return internalStreamsBuilder.table(topic, new ConsumedInternal<>(consumed), null);
     }
 
     /**
@@ -318,7 +319,7 @@ public class StreamsBuilder {
     public synchronized <K, V> KTable<K, V> table(final Topology.AutoOffsetReset offsetReset,
                                                   final String topic,
                                                   final String queryableStoreName) {
-        return internalStreamsBuilder.table(topic, Consumed.<K, V>with(offsetReset), queryableStoreName);
+        return internalStreamsBuilder.table(topic, new ConsumedInternal<>(Consumed.<K, V>with(offsetReset)), queryableStoreName);
     }
 
     /**
@@ -392,7 +393,7 @@ public class StreamsBuilder {
     public synchronized <K, V> KTable<K, V> table(final TimestampExtractor timestampExtractor,
                                                   final String topic,
                                                   final String queryableStoreName) {
-        return internalStreamsBuilder.table(topic, Consumed.<K, V>with(timestampExtractor), queryableStoreName);
+        return internalStreamsBuilder.table(topic, new ConsumedInternal<>(Consumed.<K, V>with(timestampExtractor)), queryableStoreName);
     }
 
     /**
@@ -432,7 +433,7 @@ public class StreamsBuilder {
                                                   final String topic,
                                                   final String queryableStoreName) {
         final Consumed<K, V> consumed = Consumed.<K, V>with(offsetReset).withTimestampExtractor(timestampExtractor);
-        return internalStreamsBuilder.table(topic, consumed, queryableStoreName);
+        return internalStreamsBuilder.table(topic, new ConsumedInternal<>(consumed), queryableStoreName);
     }
 
     /**
@@ -472,7 +473,9 @@ public class StreamsBuilder {
                                                   final Serde<V> valueSerde,
                                                   final String topic,
                                                   final String queryableStoreName) {
-        return internalStreamsBuilder.table(topic, Consumed.with(keySerde, valueSerde), queryableStoreName);
+        return internalStreamsBuilder.table(topic,
+                                            new ConsumedInternal<>(keySerde, valueSerde, null, null),
+                                            queryableStoreName);
     }
 
     /**
@@ -553,7 +556,7 @@ public class StreamsBuilder {
                                                   final Serde<V> valueSerde,
                                                   final String topic,
                                                   final String queryableStoreName) {
-        final Consumed<K, V> consumed = Consumed.with(keySerde, valueSerde, null, offsetReset);
+        final ConsumedInternal<K, V> consumed = new ConsumedInternal<>(keySerde, valueSerde, null, offsetReset);
         return internalStreamsBuilder.table(topic, consumed, queryableStoreName);
     }
 
@@ -596,7 +599,7 @@ public class StreamsBuilder {
                                                   final Serde<V> valueSerde,
                                                   final String topic,
                                                   final String queryableStoreName) {
-        final Consumed<K, V> consumed = Consumed.with(keySerde, valueSerde, timestampExtractor, null);
+        final ConsumedInternal<K, V> consumed = new ConsumedInternal<>(keySerde, valueSerde, timestampExtractor, null);
         return internalStreamsBuilder.table(topic, consumed, queryableStoreName);
     }
 
@@ -642,7 +645,7 @@ public class StreamsBuilder {
                                                   final String topic,
                                                   final String queryableStoreName) {
         return internalStreamsBuilder.table(topic,
-                                            Consumed.with(keySerde, valueSerde, timestampExtractor, offsetReset),
+                                            new ConsumedInternal<>(keySerde, valueSerde, timestampExtractor, offsetReset),
                                             queryableStoreName);
     }
 
@@ -717,7 +720,7 @@ public class StreamsBuilder {
      */
     public synchronized <K, V> GlobalKTable<K, V> globalTable(final String topic,
                                                               final String queryableStoreName) {
-        return internalStreamsBuilder.globalTable(topic, Consumed.<K, V>with(null, null), queryableStoreName);
+        return internalStreamsBuilder.globalTable(topic, new ConsumedInternal<K, V>(), queryableStoreName);
     }
 
     /**
@@ -738,7 +741,7 @@ public class StreamsBuilder {
      */
     public synchronized <K, V> GlobalKTable<K, V> globalTable(final String topic,
                                                               final Consumed<K, V> consumed) {
-        return internalStreamsBuilder.globalTable(topic, consumed, null);
+        return internalStreamsBuilder.globalTable(topic, new ConsumedInternal<>(consumed), null);
     }
 
     /**
@@ -758,7 +761,7 @@ public class StreamsBuilder {
      * @return a {@link GlobalKTable} for the specified topic
      */
     public synchronized <K, V> GlobalKTable<K, V> globalTable(final String topic) {
-        return internalStreamsBuilder.globalTable(topic, Consumed.<K, V>with(null, null), null);
+        return internalStreamsBuilder.globalTable(topic, new ConsumedInternal<K, V>(), null);
     }
 
     /**
@@ -799,7 +802,7 @@ public class StreamsBuilder {
                                                               final String topic,
                                                               final String queryableStoreName) {
         return internalStreamsBuilder.globalTable(topic,
-                                                  Consumed.with(keySerde, valueSerde, timestampExtractor, null),
+                                                  new ConsumedInternal<>(keySerde, valueSerde, timestampExtractor, null),
                                                   queryableStoreName);
     }
 
@@ -872,7 +875,9 @@ public class StreamsBuilder {
                                                               final Serde<V> valueSerde,
                                                               final String topic,
                                                               final String queryableStoreName) {
-        return internalStreamsBuilder.globalTable(topic, Consumed.with(keySerde, valueSerde), queryableStoreName);
+        return internalStreamsBuilder.globalTable(topic,
+                                                  new ConsumedInternal<>(Consumed.with(keySerde, valueSerde)),
+                                                  queryableStoreName);
     }
 
     /**

@@ -31,10 +31,10 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
  */
 public class Consumed<K, V> {
 
-    private Serde<K> keySerde;
-    private Serde<V> valueSerde;
-    private TimestampExtractor timestampExtractor;
-    private Topology.AutoOffsetReset resetPolicy;
+    protected Serde<K> keySerde;
+    protected Serde<V> valueSerde;
+    protected TimestampExtractor timestampExtractor;
+    protected Topology.AutoOffsetReset resetPolicy;
 
     private Consumed(final Serde<K> keySerde,
                      final Serde<V> valueSerde,
@@ -45,6 +45,14 @@ public class Consumed<K, V> {
         this.valueSerde = valueSerde;
         this.timestampExtractor = timestampExtractor;
         this.resetPolicy = resetPolicy;
+    }
+
+    /**
+     * Create an instance of {@link Consumed} from an existing instance.
+     * @param consumed  the instance of {@link Consumed} to copy
+     */
+    public Consumed(final Consumed<K, V> consumed) {
+        this(consumed.keySerde, consumed.valueSerde, consumed.timestampExtractor, consumed.resetPolicy);
     }
 
     /**
@@ -146,21 +154,5 @@ public class Consumed<K, V> {
     public Consumed<K, V> withOffsetResetPolicy(final Topology.AutoOffsetReset resetPolicy) {
         this.resetPolicy = resetPolicy;
         return this;
-    }
-
-    public Serde<K> keySerde() {
-        return keySerde;
-    }
-
-    public Serde<V> valueSerde() {
-        return valueSerde;
-    }
-
-    public TimestampExtractor timestampExtractor() {
-        return timestampExtractor;
-    }
-
-    public Topology.AutoOffsetReset offsetResetPolicy() {
-        return resetPolicy;
     }
 }
