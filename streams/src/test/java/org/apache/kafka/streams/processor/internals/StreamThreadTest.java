@@ -1578,12 +1578,8 @@ public class StreamThreadTest {
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(testStreamTask.partitions);
         thread.runOnce(-1);
-        try {
-            thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
-            fail("should have thrown exception");
-        } catch (final Exception e) {
-            // expected
-        }
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+
         assertFalse(testStreamTask.committed);
     }
 
@@ -1640,12 +1636,8 @@ public class StreamThreadTest {
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(testStreamTask.partitions);
         thread.runOnce(-1);
-        try {
-            thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
-            fail("should have thrown exception");
-        } catch (final Exception e) {
-            // expected
-        }
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+
         assertFalse(testStreamTask.committed);
     }
 
@@ -1744,15 +1736,7 @@ public class StreamThreadTest {
         final StateDirectory stateDirMock = mockStateDirInteractions(taskId);
         final StreamThread thread = setupTest(taskId, stateDirMock);
 
-
-        try {
-            thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
-            fail("Should have thrown exception");
-        } catch (final Exception e) {
-            //
-        } finally {
-            thread.close();
-        }
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
 
         EasyMock.verify(stateDirMock);
     }
@@ -1763,9 +1747,10 @@ public class StreamThreadTest {
         final StateDirectory stateDirMock = mockStateDirInteractions(taskId);
 
         final StreamThread thread = setupTest(taskId, stateDirMock);
-        thread.start();
+        
         thread.close();
-        thread.join();
+        thread.shutdown(true);
+
         EasyMock.verify(stateDirMock);
     }
 
@@ -1839,14 +1824,8 @@ public class StreamThreadTest {
         final StateDirectory stateDirMock = mockStateDirInteractions(taskId);
         final StreamThread thread = setupStandbyTest(taskId, stateDirMock);
 
-        try {
-            thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
-            fail("Should have thrown exception");
-        } catch (final Exception e) {
-            // ok
-        } finally {
-            thread.close();
-        }
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+
         EasyMock.verify(stateDirMock);
     }
 
