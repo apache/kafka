@@ -386,8 +386,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public KStream<K, V> through(final String topic, final Produced<K, V> produced) {
-        to(topic, produced);
-        return builder.stream(null, new FailOnInvalidTimestamp(), produced.keySerde(), produced.valueSerde(), topic);
+        final ProducedInternal<K, V> producedInternal = new ProducedInternal<>(produced);
+        to(topic, producedInternal);
+        return builder.stream(null,
+                              new FailOnInvalidTimestamp(),
+                              producedInternal.keySerde(),
+                              producedInternal.valueSerde(),
+                              topic);
     }
 
     @Override
@@ -459,6 +464,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public void to(final String topic, final Produced<K, V> produced) {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(produced, "Produced can't be null");
+        to(topic, new ProducedInternal<>(produced));
+
+    }
+
+    private void to(final String topic, final ProducedInternal<K, V> produced) {
         final String name = builder.newName(SINK_NAME);
         final Serializer<K> keySerializer = produced.keySerde() == null ? null : produced.keySerde().serializer();
         final Serializer<V> valSerializer = produced.valueSerde() == null ? null : produced.valueSerde().serializer();
