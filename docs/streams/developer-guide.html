@@ -1955,7 +1955,9 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
     </p>
 
     <pre class="brush: java;">
-    joined.to("topic4");
+        joined.to("topic4");
+        // or using custom Serdes and a StreamPartitioner
+        joined.to("topic5", Produced.with(keySerde, valueSerde, myStreamPartitioner));
     </pre>
 
     If your application needs to continue reading and processing the records after they have been materialized
@@ -1963,11 +1965,15 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
     Kafka Streams provides a convenience method called <code>through</code>:
 
     <pre class="brush: java;">
-    // equivalent to
-    //
-    // joined.to("topic4");
-    // materialized = builder.stream("topic4");
-    KStream&lt;String, String&gt; materialized = joined.through("topic4");
+        // equivalent to
+        //
+        // joined.to("topic4");
+        // materialized = builder.stream("topic4");
+        KStream&lt;String, String&gt; materialized = joined.through("topic4");
+        // if you need to provide serdes or a custom StreamPartitioner you can use
+        // the overloaded version
+        KStream&lt;String, String&gt; materialized = joined.through("topic5",
+                Produced.with(keySerde, valueSerde, myStreamPartitioner));
     </pre>
     <br>
 
