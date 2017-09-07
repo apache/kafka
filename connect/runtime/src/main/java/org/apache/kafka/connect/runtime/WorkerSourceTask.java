@@ -159,7 +159,7 @@ class WorkerSourceTask extends WorkerTask {
                 }
 
                 if (toSend == null) {
-                    log.debug("{} Nothing to send to Kafka. Polling source for additional records", this);
+                    log.trace("{} Nothing to send to Kafka. Polling source for additional records", this);
                     toSend = task.poll();
                 }
                 if (toSend == null)

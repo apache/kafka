@@ -19,12 +19,22 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryLRUCacheStoreSupplier;
+import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
+import org.apache.kafka.streams.state.internals.MemoryNavigableLRUCache;
 import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDBSessionStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
+import org.apache.kafka.streams.state.internals.RocksDbKeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.RocksDbSessionBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
+import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,11 +51,149 @@ public class Stores {
     private static final Logger log = LoggerFactory.getLogger(Stores.class);
 
     /**
+     * Create a persistent {@link KeyValueBytesStoreSupplier}.
+     * @param name  name of the store
+     * @return  an instance of a {@link KeyValueBytesStoreSupplier} that can be used
+     * to build a persistent store
+     */
+    public static KeyValueBytesStoreSupplier persistentKeyValueStore(final String name) {
+        return new RocksDbKeyValueBytesStoreSupplier(name);
+    }
+
+    /**
+     * Create an in-memory {@link KeyValueBytesStoreSupplier}.
+     * @param name  name of the store
+     * @return  an instance of a {@link KeyValueBytesStoreSupplier} than can be used to
+     * build an in-memory store
+     */
+    public static KeyValueBytesStoreSupplier inMemoryKeyValueStore(final String name) {
+        return new KeyValueBytesStoreSupplier() {
+            @Override
+            public String name() {
+                return name;
+            }
+
+            @Override
+            public KeyValueStore<Bytes, byte[]> get() {
+                return new InMemoryKeyValueStore<>(name, Serdes.Bytes(), Serdes.ByteArray());
+            }
+
+            @Override
+            public String metricsScope() {
+                return "in-memory-state";
+            }
+        };
+    }
+
+    /**
+     * Create a LRU Map {@link KeyValueBytesStoreSupplier}.
+     * @param name          name of the store
+     * @param maxCacheSize  maximum number of items in the LRU
+     * @return an instance of a {@link KeyValueBytesStoreSupplier} that can be used to build
+     * an LRU Map based store
+     */
+    public static KeyValueBytesStoreSupplier lruMap(final String name, final int maxCacheSize) {
+        return new KeyValueBytesStoreSupplier() {
+            @Override
+            public String name() {
+                return name;
+            }
+
+            @Override
+            public KeyValueStore<Bytes, byte[]> get() {
+                return new MemoryNavigableLRUCache<>(name, maxCacheSize, Serdes.Bytes(), Serdes.ByteArray());
+            }
+
+            @Override
+            public String metricsScope() {
+                return "in-memory-lru-state";
+            }
+        };
+    }
+
+    /**
+     * Create a persistent {@link WindowBytesStoreSupplier}.
+     * @param name                  name of the store
+     * @param retentionPeriod       length of time to retain data in the store
+     * @param numSegments           number of db segments
+     * @param windowSize            size of the windows
+     * @param retainDuplicates      whether or not to retain duplicates.
+     * @return an instance of {@link WindowBytesStoreSupplier}
+     */
+    public static WindowBytesStoreSupplier persistentWindowStore(final String name,
+                                                                 final long retentionPeriod,
+                                                                 final int numSegments,
+                                                                 final long windowSize,
+                                                                 final boolean retainDuplicates) {
+        return new RocksDbWindowBytesStoreSupplier(name, retentionPeriod, numSegments, windowSize, retainDuplicates);
+    }
+
+    /**
+     * Create a persistent {@link SessionBytesStoreSupplier}.
+     * @param name              name of the store
+     * @param retentionPeriod   length ot time to retain data in the store
+     * @return an instance of a {@link  SessionBytesStoreSupplier}
+     */
+    public static SessionBytesStoreSupplier persistentSessionStore(final String name,
+                                                                   final long retentionPeriod) {
+        return new RocksDbSessionBytesStoreSupplier(name, retentionPeriod);
+    }
+
+
+    /**
+     * Creates a {@link StoreBuilder} that can be used to build a {@link WindowStore}.
+     * @param supplier      a {@link WindowBytesStoreSupplier}
+     * @param keySerde      the key serde to use
+     * @param valueSerde    the value serde to use
+     * @param <K>           key type
+     * @param <V>           value type
+     * @return an instance of {@link StoreBuilder} than can build a {@link WindowStore}
+     */
+    public static <K, V> StoreBuilder<WindowStore<K, V>> windowStoreBuilder(final WindowBytesStoreSupplier supplier,
+                                                                            final Serde<K> keySerde,
+                                                                            final Serde<V> valueSerde) {
+        return new WindowStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+    }
+
+    /**
+     * Creates a {@link StoreBuilder} than can be used to build a {@link KeyValueStore}.
+     * @param supplier      a {@link KeyValueBytesStoreSupplier}
+     * @param keySerde      the key serde to use
+     * @param valueSerde    the value serde to use
+     * @param <K>           key type
+     * @param <V>           value type
+     * @return an instance of a {@link StoreBuilder} that can build a {@link KeyValueStore}
+     */
+    public static <K, V> StoreBuilder<KeyValueStore<K, V>> keyValueStoreBuilder(final KeyValueBytesStoreSupplier supplier,
+                                                                                final Serde<K> keySerde,
+                                                                                final Serde<V> valueSerde) {
+        return new KeyValueStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+    }
+
+    /**
+     * Creates a {@link StoreBuilder} that can be used to build a {@link SessionStore}.
+     * @param supplier      a {@link SessionBytesStoreSupplier}
+     * @param keySerde      the key serde to use
+     * @param valueSerde    the value serde to use
+     * @param <K>           key type
+     * @param <V>           value type
+     * @return an instance of {@link StoreBuilder} than can build a {@link SessionStore}
+     * */
+    public static <K, V> StoreBuilder<SessionStore<K, V>> sessionStoreBuilder(final SessionBytesStoreSupplier supplier,
+                                                                              final Serde<K> keySerde,
+                                                                              final Serde<V> valueSerde) {
+        return new SessionStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+    }
+
+    /**
      * Begin to create a new {@link org.apache.kafka.streams.processor.StateStoreSupplier} instance.
      *
      * @param name the name of the store
      * @return the factory that can be used to specify other options or configurations for the store; never null
+     * @deprected use {@link #persistentKeyValueStore(String)}, {@link #persistentWindowStore(String, long, int, long, boolean)}
+     * {@link #persistentSessionStore(String, long)}, {@link #lruMap(String, int)}, or {@link #inMemoryKeyValueStore(String)}
      */
+    @Deprecated
     public static StoreFactory create(final String name) {
         return new StoreFactory() {
             @Override
@@ -90,7 +238,7 @@ public class Stores {
 
                                     @Override
                                     public StateStoreSupplier build() {
-                                        log.trace("Creating InMemory Store name={} capacity={} logged={}", name, capacity, logged);
+                                        log.trace("Defining InMemory Store name={} capacity={} logged={}", name, capacity, logged);
                                         if (capacity < Integer.MAX_VALUE) {
                                             return new InMemoryLRUCacheStoreSupplier<>(name, capacity, keySerde, valueSerde, logged, logConfig);
                                         }
@@ -154,7 +302,7 @@ public class Stores {
 
                                     @Override
                                     public StateStoreSupplier build() {
-                                        log.trace("Creating RocksDb Store name={} numSegments={} logged={}", name, numSegments, logged);
+                                        log.trace("Defining RocksDb Store name={} numSegments={} logged={}", name, numSegments, logged);
                                         if (sessionWindows) {
                                             return new RocksDBSessionStoreSupplier<>(name, retentionPeriod, keySerde, valueSerde, logged, logConfig, cachingEnabled);
                                         } else if (numSegments > 0) {

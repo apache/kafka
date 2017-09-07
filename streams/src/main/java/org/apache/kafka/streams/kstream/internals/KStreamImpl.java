@@ -30,6 +30,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Printed;
+import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueJoiner;
@@ -370,9 +371,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public KStream<K, V> through(final Serde<K> keySerde,
                                  final Serde<V> valSerde,
                                  final StreamPartitioner<? super K, ? super V> partitioner, String topic) {
-        to(keySerde, valSerde, partitioner, topic);
 
-        return builder.stream(null, new FailOnInvalidTimestamp(), keySerde, valSerde, topic);
+        return through(topic, Produced.with(keySerde, valSerde, partitioner));
+    }
+
+    @Override
+    public KStream<K, V> through(final String topic, final Produced<K, V> produced) {
+        to(topic, produced);
+        return builder.stream(null, new FailOnInvalidTimestamp(), produced.keySerde(), produced.valueSerde(), topic);
     }
 
     @Override
@@ -397,13 +403,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public KStream<K, V> through(final Serde<K> keySerde,
                                  final Serde<V> valSerde,
                                  final String topic) {
-        return through(keySerde, valSerde, null, topic);
+        return through(topic, Produced.with(keySerde, valSerde));
     }
 
     @Override
     public KStream<K, V> through(final StreamPartitioner<? super K, ? super V> partitioner,
                                  final String topic) {
-        return through(null, null, partitioner, topic);
+        return through(topic, Produced.streamPartitioner(partitioner));
     }
 
     @Override
@@ -413,20 +419,20 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public void to(final String topic) {
-        to(null, null, null, topic);
+        to(topic, Produced.<K, V>with(null, null, null));
     }
 
     @Override
     public void to(final StreamPartitioner<? super K, ? super V> partitioner,
                    final String topic) {
-        to(null, null, partitioner, topic);
+        to(topic, Produced.streamPartitioner(partitioner));
     }
 
     @Override
     public void to(final Serde<K> keySerde,
                    final Serde<V> valSerde,
                    final String topic) {
-        to(keySerde, valSerde, null, topic);
+        to(topic, Produced.with(keySerde, valSerde));
     }
 
     @SuppressWarnings("unchecked")
@@ -436,10 +442,18 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                    final StreamPartitioner<? super K, ? super V> partitioner,
                    final String topic) {
         Objects.requireNonNull(topic, "topic can't be null");
-        final String name = builder.newName(SINK_NAME);
+        to(topic, Produced.with(keySerde, valSerde, partitioner));
+    }
 
-        final Serializer<K> keySerializer = keySerde == null ? null : keySerde.serializer();
-        final Serializer<V> valSerializer = valSerde == null ? null : valSerde.serializer();
+    @SuppressWarnings("unchecked")
+    @Override
+    public void to(final String topic, final Produced<K, V> produced) {
+        Objects.requireNonNull(topic, "topic can't be null");
+        Objects.requireNonNull(produced, "Produced can't be null");
+        final String name = builder.newName(SINK_NAME);
+        final Serializer<K> keySerializer = produced.keySerde() == null ? null : produced.keySerde().serializer();
+        final Serializer<V> valSerializer = produced.valueSerde() == null ? null : produced.valueSerde().serializer();
+        final StreamPartitioner<? super K, ? super V> partitioner = produced.streamPartitioner();
 
         if (partitioner == null && keySerializer != null && keySerializer instanceof WindowedSerializer) {
             final WindowedSerializer<Object> windowedSerializer = (WindowedSerializer<Object>) keySerializer;

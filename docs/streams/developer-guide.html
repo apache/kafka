@@ -115,7 +115,7 @@
     this.context = context;
 
     // schedule a punctuation method every 1000 milliseconds.
-    this.context.schedule(1000, PunctuationType.SYSTEM_TIME, new Punctuator() {
+    this.context.schedule(1000, PunctuationType.WALL_CLOCK_TIME, new Punctuator() {
         @Override
         public void punctuate(long timestamp) {
             KeyValueIterator&lt;String, Long&gt; iter = this.kvStore.all();
@@ -125,6 +125,9 @@
                 context.forward(entry.key, entry.value.toString());
             }
 
+            // it is the caller's responsibility to close the iterator on state store;
+            // otherwise it may lead to memory and file handlers leak depending on the
+            // underlying state store implementation.
             iter.close();
 
             // commit the current processing progress
@@ -149,6 +152,20 @@
             this.kvStore.put(word, oldValue + 1L);
         }
     }
+    }
+
+    @Override
+    public void punctuate(long timestamp) {
+    KeyValueIterator&lt;String, Long&gt; iter = this.kvStore.all();
+
+    while (iter.hasNext()) {
+        KeyValue&lt;String, Long&gt; entry = iter.next();
+        context.forward(entry.key, entry.value.toString());
+    }
+
+    iter.close(); // avoid OOM
+    // commit the current processing progress
+    context.commit();
     }
 
     @Override
@@ -303,23 +320,24 @@ You set the <code>org.apache.kafka.streams.processor.StateRestoreListener</code>
 <h4> <a id="disable-changelogs" href="#disable-changelogs">Enable / Disable Fault Tolerance of State Stores (Store Changelogs)</a></h4>
 
 <p>
-  You can enable or disable fault tolerance for a state store by enabling or disabling, respectively, the changelogging of the store through <code>enableLogging()</code> and <code>disableLogging()</code>. 
-  You can also fine-tune the associated topic’s configuration if needed.
+    You can enable or disable fault tolerance for a state store by enabling or disabling, respectively ,the changelogging of the store through <code>StateStoreBuilder#withLoggingEnabled(Map&lt;String, String&gt;)</code>
+    and <code>StateStoreBuilder#withLoggingDisabled()</code>.
+    You can also fine-tune the associated topic’s configuration if needed.
 </p>
 
 <p>Example for disabling fault-tolerance:</p>
 
 <pre class="brush: java;">
 
-  import org.apache.kafka.streams.processor.StateStoreSupplier;
+  import org.apache.kafka.streams.processor.state.KeyValueBytesStoreSupplier;
+  import org.apache.kafka.streams.processor.state.StateStoreBuilder;
   import org.apache.kafka.streams.state.Stores;
 
-  StateStoreSupplier countStoreSupplier = Stores.create("Counts")
-              .withKeys(Serdes.String())
-              .withValues(Serdes.Long())
-              .persistent()
-              .disableLogging() // disable backing up the store to a changelog topic
-              .build();
+  KeyValueBytesStoreSupplier countStoreSupplier = Stores.inMemoryKeyValueStore("Counts");
+  StateStoreBuilder builder = Stores.keyValueStoreBuilder(countStoreSupplier,
+                                                          Serdes.String(),
+                                                          Serdes.Long())
+                                    .withLoggingDisabled(); // disable backing up the store to a changelog topic
 
 </pre>
 
@@ -334,19 +352,20 @@ You set the <code>org.apache.kafka.streams.processor.StateRestoreListener</code>
 
 <pre class="brush: java;">
 
-  import org.apache.kafka.streams.processor.StateStoreSupplier;
+  import org.apache.kafka.streams.processor.state.KeyValueBytesStoreSupplier;
+  import org.apache.kafka.streams.processor.state.StateStoreBuilder;
   import org.apache.kafka.streams.state.Stores;
 
   Map&lt;String, String&gt; changelogConfig = new HashMap();
   // override min.insync.replicas
   changelogConfig.put("min.insyc.replicas", "1")
 
-  StateStoreSupplier countStoreSupplier = Stores.create("Counts")
-              .withKeys(Serdes.String())
-              .withValues(Serdes.Long())
-              .persistent()
-              .enableLogging(changelogConfig) // enable changelogging, with custom changelog settings
-              .build();
+  KeyValueBytesStoreSupplier countStoreSupplier = Stores.inMemoryKeyValueStore("Counts");
+  StateStoreBuilder builder = Stores.keyValueStoreBuilder(countStoreSupplier,
+                                                          Serdes.String(),
+                                                          Serdes.Long())
+                                    .withLoggingEnabled(changelogConfig); // enable changelogging, with custom changelog settings
+
 
 </pre>
 
@@ -359,7 +378,7 @@ You set the <code>org.apache.kafka.streams.processor.StateRestoreListener</code>
 </p>
 
 <p>
-  In addition to the actual store, you also need to provide a &quot;factory&quot; for the store by implementing the <code>org.apache.kafka.streams.processor.StateStoreSupplier</code> interface, which Kafka Streams uses to create instances of your store.
+  In addition to the actual store, you also need to provide a &quot;factory&quot; for the store by implementing the <code>org.apache.kafka.streams.processor.state.StoreSupplier</code> interface, which Kafka Streams uses to create instances of your store.
 </p>
 
 <p>
@@ -1942,7 +1961,9 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
     </p>
 
     <pre class="brush: java;">
-    joined.to("topic4");
+        joined.to("topic4");
+        // or using custom Serdes and a StreamPartitioner
+        joined.to("topic5", Produced.with(keySerde, valueSerde, myStreamPartitioner));
     </pre>
 
     If your application needs to continue reading and processing the records after they have been materialized
@@ -1950,11 +1971,15 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
     Kafka Streams provides a convenience method called <code>through</code>:
 
     <pre class="brush: java;">
-    // equivalent to
-    //
-    // joined.to("topic4");
-    // materialized = builder.stream("topic4");
-    KStream&lt;String, String&gt; materialized = joined.through("topic4");
+        // equivalent to
+        //
+        // joined.to("topic4");
+        // materialized = builder.stream("topic4");
+        KStream&lt;String, String&gt; materialized = joined.through("topic4");
+        // if you need to provide serdes or a custom StreamPartitioner you can use
+        // the overloaded version
+        KStream&lt;String, String&gt; materialized = joined.through("topic5",
+                Produced.with(keySerde, valueSerde, myStreamPartitioner));
     </pre>
     <br>
 
@@ -2111,6 +2136,8 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
         Kafka Streams materializes one state store per stream partition, which means your application will potentially manage many underlying state stores.
         The API to query local state stores enables you to query all of the underlying stores without having to know which partition the data is in.
         The objects returned from <code>KafkaStreams#store(...)</code> are therefore wrapping potentially many underlying state stores.
+        Note that it is the caller's responsibility to close the iterator on state store;
+        otherwise it may lead to OOM and leaked file handlers depending on the state store implementation.
     </p>
 
     <h4><a id="streams_developer-guide_interactive-queries_local-key-value-stores" href="#streams_developer-guide_interactive-queries_local-key-value-stores">Querying local key-value stores</a></h4>
@@ -2156,6 +2183,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
             KeyValue&lt;String, Long&gt; next = range.next();
             System.out.println("count for " + next.key + ": " + value);
           }
+          range.close(); // close iterator to avoid memory leak
 
           // Get the values for all of the keys available in this application instance
           KeyValueIterator&lt;String, Long&gt; range = keyValueStore.all();
@@ -2163,6 +2191,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
             KeyValue&lt;String, Long&gt; next = range.next();
             System.out.println("count for " + next.key + ": " + value);
           }
+          range.close(); // close iterator to avoid memory leak
         </pre>
 
     <h4><a id="streams_developer-guide_interactive-queries_local-window-stores" href="#streams_developer-guide_interactive-queries_local-window-stores">Querying local window stores</a></h4>
@@ -2208,6 +2237,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
             long windowTimestamp = next.key;
             System.out.println("Count of 'world' @ time " + windowTimestamp + " is " + next.value);
           }
+          iterator.close();
         </pre>
 
     <h4><a id="streams_developer-guide_interactive-queries_custom-stores" href="#streams_developer-guide_interactive-queries_custom-stores">Querying local custom state stores</a></h4>
@@ -2220,7 +2250,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
         <li>Your custom state store must implement <code>StateStore</code>.</li>
         <li>You should have an interface to represent the operations available on the store.</li>
         <li>It is recommended that you also provide an interface that restricts access to read-only operations so users of this API can't mutate the state of your running Kafka Streams application out-of-band.</li>
-        <li>You also need to provide an implementation of <code>StateStoreSupplier</code> for creating instances of your store.</li>
+        <li>You also need to provide an implementation of <code>StoreSupplier</code> for creating instances of your store.</li>
     </ol>
 
     <p>
@@ -2242,7 +2272,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
             V read(K key);
           }
 
-          public class MyCustomStoreSupplier implements StateStoreSupplier {
+          public class MyCustomStoreSupplier implements StoreSupplier {
             // implementation of the supplier for MyCustomStore
           }
         </pre>
@@ -2631,18 +2661,14 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
         might not want to use the unified record cache for both state store and forwarding downstream.
     </p>
     <p>
-        Following from the example first shown in section <a href="#streams_processor_statestore">State Stores</a>, to enable caching, you can
-        add the <code>enableCaching</code> call (note that caches are disabled by default and there is no explicit <code>disableCaching</code>
-        call) :
+        Following from the example first shown in section <a href="#streams_processor_statestore">State Stores</a>, to enable caching,
+        you first create a <code>StateStoreBuilder</code> and then call <code>withCachingEnabled</code> (note that caches
+        are disabled by default and there is no explicit <code>withCachingDisabled</code> call) :
     </p>
     <pre class="brush: java;">
-        StateStoreSupplier countStoreSupplier =
-            Stores.create("Counts")
-                .withKeys(Serdes.String())
-                .withValues(Serdes.Long())
-                .persistent()
-                .enableCaching()
-                .build();
+        KeyValueBytesStoreSupplier countSupplier = Stores.persistentKeyValueStore("Counts");
+        StateStoreBuilder&lt;KeyValueStore&lt;String, Long&gt;&gt; builder = Stores.keyValueStoreBuilder(countSupplier, Serdes.String(), Serdes.Long());
+        builder.withCachingEnabled()
     </pre>
 
     <h4><a id="streams_developer-guide_memory-management_other_memory_usage" href="#streams_developer-guide_memory-management_other_memory_usage">Other memory usage</a></h4>

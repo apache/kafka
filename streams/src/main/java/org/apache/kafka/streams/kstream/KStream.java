@@ -712,7 +712,9 @@ public interface KStream<K, V> {
      *                    if not specified producer's {@link DefaultPartitioner} will be used
      * @param topic       the topic name
      * @return a {@code KStream} that contains the exact same (and potentially repartitioned) records as this {@code KStream}
+     * @deprecated use {@code through(String, Produced)}
      */
+    @Deprecated
     KStream<K, V> through(final StreamPartitioner<? super K, ? super V> partitioner,
                           final String topic);
 
@@ -733,7 +735,9 @@ public interface KStream<K, V> {
      *                 if not specified the default value serde defined in the configuration will be used
      * @param topic    the topic name
      * @return a {@code KStream} that contains the exact same (and potentially repartitioned) records as this {@code KStream}
+     * @deprecated use {@code through(String, Produced)}
      */
+    @Deprecated
     KStream<K, V> through(final Serde<K> keySerde,
                           final Serde<V> valSerde,
                           final String topic);
@@ -758,11 +762,31 @@ public interface KStream<K, V> {
      *                    be used
      * @param topic       the topic name
      * @return a {@code KStream} that contains the exact same (and potentially repartitioned) records as this {@code KStream}
+     * @deprecated use {@code through(String, Produced)}
      */
+    @Deprecated
     KStream<K, V> through(final Serde<K> keySerde,
                           final Serde<V> valSerde,
                           final StreamPartitioner<? super K, ? super V> partitioner,
                           final String topic);
+
+    /**
+     * Materialize this stream to a topic and creates a new {@code KStream} from the topic using the
+     * {@link Produced} instance for configuration of the {@link Serde key serde}, {@link Serde value serde},
+     * and {@link StreamPartitioner}.
+     * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
+     * started).
+     * <p>
+     * This is equivalent to calling {@link #to(String, Produced) to(someTopic, Produced.with(keySerde, valueSerde)}
+     * and {@link StreamsBuilder#stream(Serde, Serde, String...)
+     * StreamsBuilder#stream(keySerde, valSerde, someTopicName)}.
+     *
+     * @param topic
+     * @param produced
+     * @return a {@code KStream} that contains the exact same (and potentially repartitioned) records as this {@code KStream}
+     */
+    KStream<K, V> through(final String topic,
+                          final Produced<K, V> produced);
 
     /**
      * Materialize this stream to a topic using default serializers specified in the config and producer's
@@ -783,7 +807,9 @@ public interface KStream<K, V> {
      * @param partitioner the function used to determine how records are distributed among partitions of the topic,
      *                    if not specified producer's {@link DefaultPartitioner} will be used
      * @param topic       the topic name
+     * @deprecated use {@code to(String, Produced}
      */
+    @Deprecated
     void to(final StreamPartitioner<? super K, ? super V> partitioner,
             final String topic);
 
@@ -799,7 +825,9 @@ public interface KStream<K, V> {
      * @param valSerde value serde used to send key-value pairs,
      *                 if not specified the default serde defined in the configs will be used
      * @param topic    the topic name
+     * @deprecated use {@code to(String, Produced}
      */
+    @Deprecated
     void to(final Serde<K> keySerde,
             final Serde<V> valSerde,
             final String topic);
@@ -819,11 +847,24 @@ public interface KStream<K, V> {
      *                    {@link WindowedStreamPartitioner} will be used&mdash;otherwise {@link DefaultPartitioner} will
      *                    be used
      * @param topic       the topic name
+     * @deprecated use {@code to(String, Produced}
      */
+    @Deprecated
     void to(final Serde<K> keySerde,
             final Serde<V> valSerde,
             final StreamPartitioner<? super K, ? super V> partitioner,
             final String topic);
+
+    /**
+     * Materialize this stream to a topic using the provided {@link Produced} instance.
+     * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
+     * started).
+     *
+     * @param produced    the options to use when producing to the topic
+     * @param topic       the topic name
+     */
+    void to(final String topic,
+            final Produced<K, V> produced);
 
     /**
      * Transform each record of the input stream into zero or more records in the output stream (both key and value type
@@ -867,7 +908,7 @@ public interface KStream<K, V> {
      *                 this.state = context.getStateStore("myTransformState");
      *                 // punctuate each 1000ms; can access this.state
      *                 // can emit as many new KeyValue pairs as required via this.context#forward()
-     *                 context.schedule(1000, PunctuationType.SYSTEM_TIME, new Punctuator(..));
+     *                 context.schedule(1000, PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
      *             }
      *
      *             KeyValue transform(K key, V value) {
@@ -940,7 +981,7 @@ public interface KStream<K, V> {
      *
      *             void init(ProcessorContext context) {
      *                 this.state = context.getStateStore("myValueTransformState");
-     *                 context.schedule(1000, PunctuationType.SYSTEM_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
+     *                 context.schedule(1000, PunctuationType.WALL_CLOCK_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
      *             }
      *
      *             NewValueType transform(V value) {
@@ -1006,7 +1047,7 @@ public interface KStream<K, V> {
      *
      *             void init(ProcessorContext context) {
      *                 this.state = context.getStateStore("myProcessorState");
-     *                 context.schedule(1000, PunctuationType.SYSTEM_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
+     *                 context.schedule(1000, PunctuationType.WALL_CLOCK_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
      *             }
      *
      *             void process(K key, V value) {

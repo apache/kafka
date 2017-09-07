@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.WindowStore;
 
@@ -33,14 +32,9 @@ import java.util.Map;
  */
 
 public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, WindowStore> implements WindowStoreSupplier<WindowStore> {
-    private static final String METRICS_SCOPE = "rocksdb-window";
     public static final int MIN_SEGMENTS = 2;
     private final long retentionPeriod;
-    private final boolean retainDuplicates;
-    private final int numSegments;
-    private final long segmentInterval;
-    private final long windowSize;
-    private final boolean enableCaching;
+    private WindowStoreBuilder<K, V> builder;
 
     public RocksDBWindowStoreSupplier(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serde<K> keySerde, Serde<V> valueSerde, long windowSize, boolean logged, Map<String, String> logConfig, boolean enableCaching) {
         this(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde, Time.SYSTEM, windowSize, logged, logConfig, enableCaching);
@@ -52,34 +46,25 @@ public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V
             throw new IllegalArgumentException("numSegments must be >= " + MIN_SEGMENTS);
         }
         this.retentionPeriod = retentionPeriod;
-        this.retainDuplicates = retainDuplicates;
-        this.numSegments = numSegments;
-        this.windowSize = windowSize;
-        this.enableCaching = enableCaching;
-        this.segmentInterval = Segments.segmentInterval(retentionPeriod, numSegments);
-    }
-
-    public String name() {
-        return name;
+        builder = new WindowStoreBuilder<>(new RocksDbWindowBytesStoreSupplier(name,
+                                                                               retentionPeriod,
+                                                                               numSegments,
+                                                                               windowSize,
+                                                                               retainDuplicates),
+                                           keySerde,
+                                           valueSerde,
+                                           time);
+        if (enableCaching) {
+            builder.withCachingEnabled();
+        }
+        // logged by default so we only need to worry about when it is disabled.
+        if (!logged) {
+            builder.withLoggingDisabled();
+        }
     }
 
     public WindowStore<K, V> get() {
-        final RocksDBSegmentedBytesStore segmentedBytesStore = new RocksDBSegmentedBytesStore(
-                name,
-                retentionPeriod,
-                numSegments,
-                new WindowKeySchema()
-        );
-        final RocksDBWindowStore<Bytes, byte[]> innerStore = RocksDBWindowStore.bytesStore(segmentedBytesStore,
-                                                                                           retainDuplicates,
-                                                                                           windowSize);
-
-        return new MeteredWindowStore<>(maybeWrapCaching(maybeWrapLogged(innerStore)),
-                                        METRICS_SCOPE,
-                                        time,
-                                        keySerde,
-                                        valueSerde);
-
+        return builder.build();
     }
 
     @Override
@@ -87,17 +72,4 @@ public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V
         return retentionPeriod;
     }
 
-    private WindowStore<Bytes, byte[]> maybeWrapLogged(final WindowStore<Bytes, byte[]> inner) {
-        if (!logged) {
-            return inner;
-        }
-        return new ChangeLoggingWindowBytesStore(inner, retainDuplicates);
-    }
-
-    private WindowStore<Bytes, byte[]> maybeWrapCaching(final WindowStore<Bytes, byte[]> inner) {
-        if (!enableCaching) {
-            return inner;
-        }
-        return new CachingWindowStore<>(inner, keySerde, valueSerde, windowSize, segmentInterval);
-    }
 }
