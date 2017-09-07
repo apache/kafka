@@ -35,9 +35,12 @@ import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.rest.RestServer;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.sink.SinkConnector;
+import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.Callback;
@@ -430,7 +433,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         if (!configState.contains(connName)) {
                             callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
                         } else {
-                            callback.onCompletion(null, new ConnectorInfo(connName, configState.connectorConfig(connName), configState.tasks(connName)));
+                            callback.onCompletion(null, new ConnectorInfo(connName, configState.connectorConfig(connName),
+                                configState.tasks(connName),
+                                worker.isSinkConnector(connName) ? ConnectorType.SINK : ConnectorType.SOURCE));
                         }
                         return null;
                     }
@@ -488,7 +493,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         if (connector instanceof SinkConnector) {
             ConfigValue validatedName = validatedConfig.get(ConnectorConfig.NAME_CONFIG);
             String name = (String) validatedName.value();
-
             if (workerGroupId.equals(SinkUtils.consumerGroupId(name))) {
                 validatedName.addErrorMessage("Consumer group for sink connector named " + name +
                         " conflicts with Connect worker group " + workerGroupId);
@@ -506,7 +510,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 new Callable<Void>() {
                     @Override
                     public Void call() throws Exception {
-                        if (maybeAddConfigErrors(validateConnectorConfig(config), callback)) {
+                        ConfigInfos infos = validateConnectorConfig(config);
+                        if (maybeAddConfigErrors(infos, callback)) {
                             return null;
                         }
 
@@ -527,7 +532,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
                         // Note that we use the updated connector config despite the fact that we don't have an updated
                         // snapshot yet. The existing task info should still be accurate.
-                        ConnectorInfo info = new ConnectorInfo(connName, config, configState.tasks(connName));
+                        Connector connector = getConnector(infos.name());
+                        ConnectorInfo info = new ConnectorInfo(connName, config, configState.tasks(connName),
+                            connector instanceof SourceConnector ? ConnectorType.SOURCE : ConnectorType.SINK);
                         callback.onCompletion(null, new Created<>(!exists, info));
                         return null;
                     }
