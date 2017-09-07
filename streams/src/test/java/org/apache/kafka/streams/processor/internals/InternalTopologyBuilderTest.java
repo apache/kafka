@@ -470,7 +470,7 @@ public class InternalTopologyBuilderTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAddNullStateStoreSupplier() throws Exception {
-        builder.addStateStore(null);
+        builder.addStateStore((StateStoreSupplier) null);
     }
 
     private Set<String> nodeNames(final Collection<ProcessorNode> nodes) {

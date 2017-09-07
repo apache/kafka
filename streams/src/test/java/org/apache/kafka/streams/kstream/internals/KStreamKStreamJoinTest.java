@@ -22,6 +22,7 @@ import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsBuilderTest;
 import org.apache.kafka.streams.kstream.JoinWindows;
+import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.test.KStreamTestDriver;
@@ -74,7 +75,10 @@ public class KStreamKStreamJoinTest {
         processor = new MockProcessorSupplier<>();
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
-        joined = stream1.join(stream2, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(100), intSerde, stringSerde, stringSerde);
+        joined = stream1.join(stream2,
+                              MockValueJoiner.TOSTRING_JOINER,
+                              JoinWindows.of(100),
+                              Joined.with(intSerde, stringSerde, stringSerde));
         joined.process(processor);
 
         Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
@@ -170,11 +174,14 @@ public class KStreamKStreamJoinTest {
         MockProcessorSupplier<Integer, String> processor;
 
         processor = new MockProcessorSupplier<>();
+
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
-        joined = stream1.outerJoin(stream2, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(100), intSerde, stringSerde, stringSerde);
+        joined = stream1.outerJoin(stream2,
+                                   MockValueJoiner.TOSTRING_JOINER,
+                                   JoinWindows.of(100),
+                                   Joined.with(intSerde, stringSerde, stringSerde));
         joined.process(processor);
-
         Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
 
         assertEquals(1, copartitionGroups.size());
@@ -273,7 +280,10 @@ public class KStreamKStreamJoinTest {
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
 
-        joined = stream1.join(stream2, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(100), intSerde, stringSerde, stringSerde);
+        joined = stream1.join(stream2,
+                              MockValueJoiner.TOSTRING_JOINER,
+                              JoinWindows.of(100),
+                              Joined.with(intSerde, stringSerde, stringSerde));
         joined.process(processor);
 
         Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
@@ -500,7 +510,12 @@ public class KStreamKStreamJoinTest {
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
 
-        joined = stream1.join(stream2, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(0).after(100), intSerde, stringSerde, stringSerde);
+        joined = stream1.join(stream2,
+                              MockValueJoiner.TOSTRING_JOINER,
+                              JoinWindows.of(0).after(100),
+                              Joined.with(intSerde,
+                                          stringSerde,
+                                          stringSerde));
         joined.process(processor);
 
         Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
@@ -609,7 +624,10 @@ public class KStreamKStreamJoinTest {
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
 
-        joined = stream1.join(stream2, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(0).before(100), intSerde, stringSerde, stringSerde);
+        joined = stream1.join(stream2,
+                              MockValueJoiner.TOSTRING_JOINER,
+                              JoinWindows.of(0).before(100),
+                              Joined.with(intSerde, stringSerde, stringSerde));
         joined.process(processor);
 
         Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);

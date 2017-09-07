@@ -25,29 +25,35 @@ import org.apache.kafka.streams.StreamsBuilderTest;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.JoinWindows;
+import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
+import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.SourceNode;
+import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.concurrent.TimeUnit;
 
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 
 
 public class KStreamImplTest {
@@ -57,6 +63,9 @@ public class KStreamImplTest {
     private KStream<String, String> testStream;
     private StreamsBuilder builder;
     private final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
+
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @Before
     public void before() {
@@ -130,19 +139,20 @@ public class KStreamImplTest {
         );
 
         final int anyWindowSize = 1;
+        final Joined<String, Integer, Integer> joined = Joined.with(stringSerde, intSerde, intSerde);
         KStream<String, Integer> stream4 = streams2[0].join(streams3[0], new ValueJoiner<Integer, Integer, Integer>() {
             @Override
             public Integer apply(Integer value1, Integer value2) {
                 return value1 + value2;
             }
-        }, JoinWindows.of(anyWindowSize), stringSerde, intSerde, intSerde);
+        }, JoinWindows.of(anyWindowSize), joined);
 
-        KStream<String, Integer> stream5 = streams2[1].join(streams3[1], new ValueJoiner<Integer, Integer, Integer>() {
+        streams2[1].join(streams3[1], new ValueJoiner<Integer, Integer, Integer>() {
             @Override
             public Integer apply(Integer value1, Integer value2) {
                 return value1 + value2;
             }
-        }, JoinWindows.of(anyWindowSize), stringSerde, intSerde, intSerde);
+        }, JoinWindows.of(anyWindowSize), joined);
 
         stream4.to("topic-5");
 
@@ -180,6 +190,33 @@ public class KStreamImplTest {
     }
 
     @Test
+    public void shouldSendDataThroughTopicUsingProduced() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String input = "topic";
+        final KStream<String, String> stream = builder.stream(input, consumed);
+        final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+        stream.through("through-topic", Produced.with(stringSerde, stringSerde)).process(processorSupplier);
+
+        driver.setUp(builder);
+        driver.process(input, "a", "b");
+        assertThat(processorSupplier.processed, equalTo(Collections.singletonList("a:b")));
+    }
+
+    @Test
+    public void shouldSendDataToTopicUsingProduced() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String input = "topic";
+        final KStream<String, String> stream = builder.stream(input, consumed);
+        final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+        stream.to("to-topic", Produced.with(stringSerde, stringSerde));
+        builder.stream("to-topic", consumed).process(processorSupplier);
+
+        driver.setUp(builder);
+        driver.process(input, "e", "f");
+        assertThat(processorSupplier.processed, equalTo(Collections.singletonList("e:f")));
+    }
+
+    @Test
     // TODO: this test should be refactored when we removed KStreamBuilder so that the created Topology contains internal topics as well
     public void shouldUseRecordMetadataTimestampExtractorWhenInternalRepartitioningTopicCreated() {
         final KStreamBuilder builder = new KStreamBuilder();
@@ -194,11 +231,11 @@ public class KStreamImplTest {
                             }
                         });
         stream.join(kStream,
-                valueJoiner,
-                JoinWindows.of(windowSize).until(3 * windowSize),
-                Serdes.String(),
-                Serdes.String(),
-                Serdes.String())
+                    valueJoiner,
+                    JoinWindows.of(windowSize).until(3 * windowSize),
+                    Joined.with(Serdes.String(),
+                                Serdes.String(),
+                                Serdes.String()))
                 .to(Serdes.String(), Serdes.String(), "output-topic");
 
         ProcessorTopology processorTopology = builder.setApplicationId("X").build(null);
@@ -376,6 +413,54 @@ public class KStreamImplTest {
         testStream.leftJoin(builder.globalTable(Serdes.String(), Serdes.String(), null, "global", "global"),
                         MockKeyValueMapper.<String, String>SelectValueMapper(),
                         null);
+    }
+
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerOnThroughWhenProducedIsNull() {
+        testStream.through("topic", null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerOnToWhenProducedIsNull() {
+        testStream.to("topic", null);
+    }
+
+
+    @Test
+    public void shouldThrowNullPointerOnLeftJoinWithTableWhenJoinedIsNull() {
+        final KTable<String, String> table = builder.table("blah", consumed);
+        try {
+            testStream.leftJoin(table,
+                                MockValueJoiner.TOSTRING_JOINER,
+                                null);
+            fail("Should have thrown NullPointerException");
+        } catch (final NullPointerException e) {
+            // ok
+        }
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnJoinWithTableWhenJoinedIsNull() {
+        final KTable<String, String> table = builder.table("blah", consumed);
+        try {
+            testStream.join(table,
+                            MockValueJoiner.TOSTRING_JOINER,
+                            null);
+            fail("Should have thrown NullPointerException");
+        } catch (final NullPointerException e) {
+            // ok
+        }
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerOnJoinWithStreamWhenJoinedIsNull() {
+        testStream.join(testStream, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(10), null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerOnOuterJoinJoinedIsNull() {
+        testStream.outerJoin(testStream, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(10), null);
     }
 
 }

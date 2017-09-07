@@ -22,6 +22,7 @@ import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsBuilderTest;
 import org.apache.kafka.streams.kstream.JoinWindows;
+import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.test.KStreamTestDriver;
@@ -75,7 +76,10 @@ public class KStreamKStreamLeftJoinTest {
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
 
-        joined = stream1.leftJoin(stream2, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(100), intSerde, stringSerde, stringSerde);
+        joined = stream1.leftJoin(stream2,
+                                  MockValueJoiner.TOSTRING_JOINER,
+                                  JoinWindows.of(100),
+                                  Joined.with(intSerde, stringSerde, stringSerde));
         joined.process(processor);
 
         final Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
@@ -151,9 +155,7 @@ public class KStreamKStreamLeftJoinTest {
     @Test
     public void testWindowing() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
-
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
-
         long time = 0L;
 
         final KStream<Integer, String> stream1;
@@ -165,7 +167,10 @@ public class KStreamKStreamLeftJoinTest {
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
 
-        joined = stream1.leftJoin(stream2, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(100), intSerde, stringSerde, stringSerde);
+        joined = stream1.leftJoin(stream2,
+                                  MockValueJoiner.TOSTRING_JOINER,
+                                  JoinWindows.of(100),
+                                  Joined.with(intSerde, stringSerde, stringSerde));
         joined.process(processor);
 
         final Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);

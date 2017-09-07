@@ -422,7 +422,7 @@ public class StandbyTaskTest {
         };
         task.initialize();
         try {
-            task.close(true);
+            task.close(true, false);
             fail("should have thrown exception");
         } catch (Exception e) {
             // expected

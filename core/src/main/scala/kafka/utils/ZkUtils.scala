@@ -166,8 +166,8 @@ object ZkUtils {
     DeleteTopicsPath + "/" + topic
 
   // Parses without deduplicating keys so the data can be checked before allowing reassignment to proceed
-  def parsePartitionReassignmentDataWithoutDedup(jsonData: String): Seq[(TopicAndPartition, Seq[Int])] = {
-    for {
+  def parsePartitionReassignmentData(jsonData: String): Map[TopicAndPartition, Seq[Int]] = {
+    val seq = for {
       js <- Json.parseFull(jsonData).toSeq
       partitionsSeq <- js.asJsonObject.get("partitions").toSeq
       p <- partitionsSeq.asJsonArray.iterator
@@ -178,10 +178,8 @@ object ZkUtils {
       val newReplicas = partitionFields("replicas").to[Seq[Int]]
       TopicAndPartition(topic, partition) -> newReplicas
     }
+    seq.toMap
   }
-
-  def parsePartitionReassignmentData(jsonData: String): Map[TopicAndPartition, Seq[Int]] =
-    parsePartitionReassignmentDataWithoutDedup(jsonData).toMap
 
   def parseTopicsData(jsonData: String): Seq[String] = {
     for {

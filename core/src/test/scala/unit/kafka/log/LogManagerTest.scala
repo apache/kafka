@@ -275,7 +275,7 @@ class LogManagerTest {
   @Test
   def testRecoveryDirectoryMappingWithRelativeDirectory() {
     logManager.shutdown()
-    logDir = new File("data" + File.separator + logDir.getName)
+    logDir = new File("data" + File.separator + logDir.getName).getAbsoluteFile
     logDir.mkdirs()
     logDir.deleteOnExit()
     logManager = createLogManager()
