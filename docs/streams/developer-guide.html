@@ -708,7 +708,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                 </p>
                 <pre class="brush: java;">
                      KStream&lt;String, Long&gt; stream = ...;
-
+                     KTable&lt;String, Long&gt; table = ...;
                      // A filter that selects (keeps) only positive numbers
                      // Java 8+ example, using lambda expressions
                      KStream&lt;String, Long&gt; onlyPositives = stream.filter((key, value) -> value > 0);
@@ -721,6 +721,9 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                            return value > 0;
                          }
                        });
+
+                    // A filter on a KTable that materializes the result into a StateStore
+                    table.filter((key, value) -> value != 0, Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt;as("filtered"));
 	            </pre>
             </td>
         </tr>
@@ -993,6 +996,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
 
                 <pre class="brush: java;">
                        KStream&lt;byte[], String> stream = ...;
+                       KTable&ltString, String> table = ...;
 
                        // Java 8+ example, using lambda expressions
                        KStream&lt;byte[], String&gt; uppercased = stream.mapValues(value -> value.toUpperCase());
@@ -1005,6 +1009,9 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                              return s.toUpperCase();
                           }
                        });
+
+                       // mapValues on a KTable and also materialize the results into a statestore
+                       table.mapValue(value -> value.toUpperCase(), Materialized.&lt;String, String, KeyValueStore&lt;Bytes, byte[]&gt;&gt;as("uppercased"));
                 </pre>
             </td>
         </tr>
