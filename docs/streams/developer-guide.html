@@ -125,6 +125,9 @@
                 context.forward(entry.key, entry.value.toString());
             }
 
+            // it is the caller's responsibility to close the iterator on state store;
+            // otherwise it may lead to memory and file handlers leak depending on the
+            // underlying state store implementation.
             iter.close();
 
             // commit the current processing progress
@@ -149,6 +152,20 @@
             this.kvStore.put(word, oldValue + 1L);
         }
     }
+    }
+
+    @Override
+    public void punctuate(long timestamp) {
+    KeyValueIterator&lt;String, Long&gt; iter = this.kvStore.all();
+
+    while (iter.hasNext()) {
+        KeyValue&lt;String, Long&gt; entry = iter.next();
+        context.forward(entry.key, entry.value.toString());
+    }
+
+    iter.close(); // avoid OOM
+    // commit the current processing progress
+    context.commit();
     }
 
     @Override
@@ -2107,6 +2124,8 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
         Kafka Streams materializes one state store per stream partition, which means your application will potentially manage many underlying state stores.
         The API to query local state stores enables you to query all of the underlying stores without having to know which partition the data is in.
         The objects returned from <code>KafkaStreams#store(...)</code> are therefore wrapping potentially many underlying state stores.
+        Note that it is the caller's responsibility to close the iterator on state store;
+        otherwise it may lead to OOM and leaked file handlers depending on the state store implementation.
     </p>
 
     <h4><a id="streams_developer-guide_interactive-queries_local-key-value-stores" href="#streams_developer-guide_interactive-queries_local-key-value-stores">Querying local key-value stores</a></h4>
@@ -2152,6 +2171,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
             KeyValue&lt;String, Long&gt; next = range.next();
             System.out.println("count for " + next.key + ": " + value);
           }
+          range.close(); // close iterator to avoid memory leak
 
           // Get the values for all of the keys available in this application instance
           KeyValueIterator&lt;String, Long&gt; range = keyValueStore.all();
@@ -2159,6 +2179,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
             KeyValue&lt;String, Long&gt; next = range.next();
             System.out.println("count for " + next.key + ": " + value);
           }
+          range.close(); // close iterator to avoid memory leak
         </pre>
 
     <h4><a id="streams_developer-guide_interactive-queries_local-window-stores" href="#streams_developer-guide_interactive-queries_local-window-stores">Querying local window stores</a></h4>
@@ -2204,6 +2225,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
             long windowTimestamp = next.key;
             System.out.println("Count of 'world' @ time " + windowTimestamp + " is " + next.value);
           }
+          iterator.close();
         </pre>
 
     <h4><a id="streams_developer-guide_interactive-queries_custom-stores" href="#streams_developer-guide_interactive-queries_custom-stores">Querying local custom state stores</a></h4>
