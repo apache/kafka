@@ -16,14 +16,30 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.nio.ByteBuffer;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
+
+import java.nio.ByteBuffer;
+
+import static org.apache.kafka.common.protocol.types.Type.STRING;
 
 public class LeaveGroupRequest extends AbstractRequest {
     private static final String GROUP_ID_KEY_NAME = "group_id";
     private static final String MEMBER_ID_KEY_NAME = "member_id";
+
+    private static final Schema LEAVE_GROUP_REQUEST_V0 = new Schema(
+            new Field(GROUP_ID_KEY_NAME, STRING, "The group id."),
+            new Field(MEMBER_ID_KEY_NAME, STRING, "The member id assigned by the group coordinator."));
+
+    /* v1 request is the same as v0. Throttle time has been added to response */
+    private static final Schema LEAVE_GROUP_REQUEST_V1 = LEAVE_GROUP_REQUEST_V0;
+
+    public static Schema[] schemaVersions() {
+        return new Schema[] {LEAVE_GROUP_REQUEST_V0, LEAVE_GROUP_REQUEST_V1};
+    }
 
     public static class Builder extends AbstractRequest.Builder<LeaveGroupRequest> {
         private final String groupId;

@@ -75,6 +75,38 @@ public class Struct {
         return getFieldOrDefault(field);
     }
 
+    public Byte get(FieldDef.Int8 field) {
+        return getByte(field.name);
+    }
+
+    public Integer get(FieldDef.Int32 field) {
+        return getInt(field.name);
+    }
+
+    public Short get(FieldDef.Int16 field) {
+        return getShort(field.name);
+    }
+
+    public String get(FieldDef.Str field) {
+        return getString(field.name);
+    }
+
+    public String get(FieldDef.NullableStr field) {
+        return getString(field.name);
+    }
+
+    public Integer getOrElse(FieldDef.Int32 field, int alternative) {
+        if (hasField(field.name))
+            return getInt(field.name);
+        return alternative;
+    }
+
+    public String getOrElse(FieldDef.NullableStr field, String alternative) {
+        if (hasField(field.name))
+            return getString(field.name);
+        return alternative;
+    }
+
     /**
      * Get the record value for the field with the given name by doing a hash table lookup (slower!)
      *
@@ -96,6 +128,10 @@ public class Struct {
      */
     public boolean hasField(String name) {
         return schema.get(name) != null;
+    }
+
+    public boolean hasField(FieldDef def) {
+        return schema.get(def.name) != null;
     }
 
     public Struct getStruct(Field field) {
@@ -209,6 +245,33 @@ public class Struct {
         if (field == null)
             throw new SchemaException("Unknown field: " + name);
         this.values[field.index] = value;
+        return this;
+    }
+
+    public Struct set(FieldDef.Str def, String value) {
+        return set(def.name, value);
+    }
+
+    public Struct set(FieldDef.NullableStr def, String value) {
+        return set(def.name, value);
+    }
+
+    public Struct set(FieldDef.Int8 def, byte value) {
+        return set(def.name, value);
+    }
+
+    public Struct set(FieldDef.Int32 def, int value) {
+        return set(def.name, value);
+    }
+
+    public Struct set(FieldDef.Int16 def, short value) {
+        return set(def.name, value);
+    }
+
+    public Struct setIfExists(FieldDef def, Object value) {
+        Field field = this.schema.get(def.name);
+        if (field != null)
+            this.values[field.index] = value;
         return this;
     }
 

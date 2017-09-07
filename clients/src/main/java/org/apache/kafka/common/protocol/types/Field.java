@@ -58,6 +58,10 @@ public class Field {
         this(name, type, doc, NO_DEFAULT);
     }
 
+    public Field(FieldDef def) {
+        this(def.name, def.type, def.docString, def.hasDefaultValue ? def.defaultValue : NO_DEFAULT);
+    }
+
     public Field(String name, Type type) {
         this(name, type, "");
     }
