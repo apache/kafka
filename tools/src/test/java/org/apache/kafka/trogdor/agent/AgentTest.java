@@ -24,8 +24,9 @@ import org.apache.kafka.trogdor.basic.BasicPlatform;
 import org.apache.kafka.trogdor.basic.BasicTopology;
 import org.apache.kafka.trogdor.common.ExpectedFaults;
 import org.apache.kafka.trogdor.common.Node;
-import org.apache.kafka.trogdor.fault.FaultState;
+import org.apache.kafka.trogdor.fault.DoneState;
 import org.apache.kafka.trogdor.fault.NoOpFaultSpec;
+import org.apache.kafka.trogdor.fault.RunningState;
 import org.apache.kafka.trogdor.rest.AgentFaultsResponse;
 import org.apache.kafka.trogdor.rest.AgentStatusResponse;
 import org.apache.kafka.trogdor.rest.CreateAgentFaultRequest;
@@ -129,36 +130,32 @@ public class AgentTest {
 
         final NoOpFaultSpec fooSpec = new NoOpFaultSpec(10, 2);
         client.putFault(new CreateAgentFaultRequest("foo", fooSpec));
-        new ExpectedFaults().addFault("foo", FaultState.RUNNING).waitFor(client);
+        new ExpectedFaults().addFault("foo", new RunningState(0)).waitFor(client);
+
+        time.sleep(3);
+        new ExpectedFaults().addFault("foo", new DoneState(3, "")).waitFor(client);
 
         final NoOpFaultSpec barSpec = new NoOpFaultSpec(20, 3);
         client.putFault(new CreateAgentFaultRequest("bar", barSpec));
-        time.sleep(11);
         new ExpectedFaults().
-            addFault("foo", FaultState.RUNNING).
-            addFault("bar", FaultState.RUNNING).
+            addFault("foo", new DoneState(3, "")).
+            addFault("bar", new RunningState(3)).
             waitFor(client);
 
-        final NoOpFaultSpec bazSpec = new NoOpFaultSpec(1, 11);
+        time.sleep(4);
+        final NoOpFaultSpec bazSpec = new NoOpFaultSpec(1, 2);
         client.putFault(new CreateAgentFaultRequest("baz", bazSpec));
         new ExpectedFaults().
-            addFault("foo", FaultState.RUNNING).
-            addFault("bar", FaultState.RUNNING).
-            addFault("baz", FaultState.RUNNING).
+            addFault("foo", new DoneState(3, "")).
+            addFault("bar", new DoneState(7, "")).
+            addFault("baz", new RunningState(7)).
             waitFor(client);
 
-        time.sleep(2);
+        time.sleep(3);
         new ExpectedFaults().
-            addFault("foo", FaultState.DONE).
-            addFault("bar", FaultState.RUNNING).
-            addFault("baz", FaultState.DONE).
-            waitFor(client);
-
-        time.sleep(100);
-        new ExpectedFaults().
-            addFault("foo", FaultState.DONE).
-            addFault("bar", FaultState.DONE).
-            addFault("baz", FaultState.DONE).
+            addFault("foo", new DoneState(3, "")).
+            addFault("bar", new DoneState(7, "")).
+            addFault("baz", new DoneState(10, "")).
             waitFor(client);
 
         agent.beginShutdown();

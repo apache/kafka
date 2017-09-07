@@ -13,4 +13,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from util import kafkatest_version, is_version, is_int, is_int_with_prefix, node_is_reachable
+import json
+
+
+class FaultSpec(object):
+    """
+    The base class for a fault specification.
+
+    MAX_DURATION_MS         The longest duration we should use for a fault specification.
+    """
+
+    MAX_DURATION_MS=10000000
+
+    def __init__(self, start_ms, duration_ms):
+        """
+        Create a new fault specification.
+
+        :param start_ms:        The start time in milliseconds since the epoch.
+        :param duration_ms:     The duration in milliseconds.
+        """
+        self.start_ms = start_ms
+        self.duration_ms = duration_ms
+
+    def message(self):
+        """
+        Return a message suitable for sending to the Trogdor daemon.
+        """
+        raise NotImplemented
+
+    def __str__(self):
+        return json.dumps(self.message())
