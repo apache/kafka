@@ -44,6 +44,8 @@ import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.processor.PartitionGrouper;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.TaskMetadata;
+import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
 
@@ -196,6 +198,11 @@ public class StreamThread extends Thread implements ThreadDataProvider {
             }
 
             state = newState;
+            if (newState == State.RUNNING) {
+                updateThreadMetadata(taskManager.activeTasks(), taskManager.standbyTasks());
+            } else {
+                updateThreadMetadata(null, null);
+            }
         }
 
         if (stateListener != null) {
@@ -546,6 +553,8 @@ public class StreamThread extends Thread implements ThreadDataProvider {
 
     public final String applicationId;
 
+    private volatile ThreadMetadata threadMetadata;
+
     private final static int UNLIMITED_RECORDS = -1;
 
     public StreamThread(final InternalTopologyBuilder builder,
@@ -592,6 +601,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         }
         this.consumer = clientSupplier.getConsumer(consumerConfigs);
         taskManager.setConsumer(consumer);
+        updateThreadMetadata(null, null);
     }
 
     @SuppressWarnings("ConstantConditions")
@@ -1160,5 +1170,30 @@ public class StreamThread extends Thread implements ThreadDataProvider {
     private static void createLogContext(final String logPrefix) {
         final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(StreamThread.class);
+    }
+
+    /**
+     * Return information about the current {@link StreamThread}.
+     *
+     * @return {@link ThreadMetadata}.
+     */
+    public final ThreadMetadata threadMetadata() {
+        return threadMetadata;
+    }
+
+    private void updateThreadMetadata(final Map<TaskId, Task> activeTasks, final Map<TaskId, Task> standbyTasks) {
+        final Set<TaskMetadata> activeTasksMetadata = new HashSet<>();
+        if (activeTasks != null) {
+            for (Map.Entry<TaskId, Task> task : activeTasks.entrySet()) {
+                activeTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().partitions()));
+            }
+        }
+        final Set<TaskMetadata> standbyTasksMetadata = new HashSet<>();
+        if (standbyTasks != null) {
+            for (Map.Entry<TaskId, Task> task : standbyTasks.entrySet()) {
+                standbyTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().partitions()));
+            }
+        }
+        threadMetadata = new ThreadMetadata(this.getName(), this.state().name(), activeTasksMetadata, standbyTasksMetadata);
     }
 }

@@ -23,12 +23,14 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
 import org.apache.kafka.streams.processor.internals.StreamThread;
+import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.MockStateRestoreListener;
@@ -45,6 +47,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -53,6 +56,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.Assert.assertNotNull;
 
 @Category({IntegrationTest.class})
 public class KafkaStreamsTest {
@@ -401,6 +405,26 @@ public class KafkaStreamsTest {
             // stop the thread so we don't interfere with other tests etc
             keepRunning.set(false);
         }
+    }
+
+    @Test
+    public void shouldReturnThreadMetadata() {
+        final Properties props = new Properties();
+        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
+        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.INFO.toString());
+        props.setProperty(StreamsConfig.NUM_STREAM_THREADS_CONFIG, "2");
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
+        streams.start();
+        Set<ThreadMetadata> threadMetadata = streams.localThreadsMetadata();
+        assertNotNull(threadMetadata);
+        assertEquals(2, threadMetadata.size());
+        for (ThreadMetadata metadata : threadMetadata) {
+            assertTrue(Utils.mkList("RUNNING", "CREATED").contains(metadata.threadState()));
+            assertEquals(0, metadata.standbyTasks().size());
+            assertEquals(0, metadata.activeTasks().size());
+        }
+        streams.close();
     }
 
 

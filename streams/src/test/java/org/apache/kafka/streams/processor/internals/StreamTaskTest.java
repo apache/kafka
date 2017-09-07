@@ -171,7 +171,7 @@ public class StreamTaskTest {
     public void cleanup() throws IOException {
         try {
             if (task != null) {
-                task.close(true);
+                task.close(true, false);
             }
         } finally {
             Utils.delete(baseDir);
@@ -453,7 +453,7 @@ public class StreamTaskTest {
                                                                  Collections.<String, String>emptyMap(),
                                                                  Collections.<StateStore>emptyList());
 
-        task.close(true);
+        task.close(true, false);
 
         task = new StreamTask(taskId00, applicationId, partitions, topology, consumer, changelogReader, config,
             streamsMetrics, stateDirectory, null, time, producer);
@@ -740,11 +740,11 @@ public class StreamTaskTest {
 
     @Test
     public void shouldThrowExceptionIfAnyExceptionsRaisedDuringCloseButStillCloseAllProcessorNodesTopology() throws Exception {
-        task.close(true);
+        task.close(true, false);
         task = createTaskThatThrowsExceptionOnClose();
         task.initialize();
         try {
-            task.close(true);
+            task.close(true, false);
             fail("should have thrown runtime exception");
         } catch (final RuntimeException e) {
             task = null;
@@ -881,9 +881,20 @@ public class StreamTaskTest {
         task = new StreamTask(taskId00, applicationId, partitions, topology, consumer, changelogReader,
             eosConfig, streamsMetrics, stateDirectory, null, time, producer);
 
-        task.close(false);
+        task.close(false, false);
         task = null;
         assertTrue(producer.transactionAborted());
+    }
+
+    @Test
+    public void shouldNotAbortTransactionOnZombieClosedIfEosEnabled() throws Exception {
+        final MockProducer producer = new MockProducer();
+        task = new StreamTask(taskId00, applicationId, partitions, topology, consumer, changelogReader,
+            eosConfig, streamsMetrics, stateDirectory, null, time, producer);
+
+        task.close(false, true);
+        task = null;
+        assertFalse(producer.transactionAborted());
     }
 
     @Test
@@ -892,7 +903,7 @@ public class StreamTaskTest {
         task = new StreamTask(taskId00, applicationId, partitions, topology, consumer, changelogReader,
             config, streamsMetrics, stateDirectory, null, time, producer);
 
-        task.close(false);
+        task.close(false, false);
         assertFalse(producer.transactionAborted());
     }
 
@@ -904,7 +915,7 @@ public class StreamTaskTest {
         task = new StreamTask(taskId00, applicationId, partitions, topology, consumer,
             changelogReader, eosConfig, streamsMetrics, stateDirectory, null, time, producer);
 
-        task.close(true);
+        task.close(true, false);
         task = null;
         assertTrue(producer.closed());
     }
@@ -988,7 +999,7 @@ public class StreamTaskTest {
         };
 
         try {
-            streamTask.close(true);
+            streamTask.close(true, false);
             fail("should have thrown an exception");
         } catch (Exception e) {
             // all good
@@ -1000,7 +1011,7 @@ public class StreamTaskTest {
     public void shouldNotCloseTopologyProcessorNodesIfNotInitialized() {
         final StreamTask task = createTaskThatThrowsExceptionOnClose();
         try {
-            task.close(true);
+            task.close(true, false);
         } catch (Exception e) {
             fail("should have not closed unitialized topology");
         }
