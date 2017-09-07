@@ -17,31 +17,8 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.common.config.SslConfigs;
-import org.apache.kafka.common.network.Mode;
-
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.EOFException;
-import java.math.BigInteger;
-import java.net.InetAddress;
-
-import javax.net.ssl.TrustManagerFactory;
-
-import java.security.GeneralSecurityException;
-import java.security.Key;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.KeyStore;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
-import java.security.Security;
-import java.security.cert.Certificate;
-import java.security.cert.CertificateException;
-import java.security.cert.X509Certificate;
-
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.network.Mode;
 import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
@@ -60,11 +37,30 @@ import org.bouncycastle.operator.DefaultDigestAlgorithmIdentifierFinder;
 import org.bouncycastle.operator.DefaultSignatureAlgorithmIdentifierFinder;
 import org.bouncycastle.operator.bc.BcRSAContentSignerBuilder;
 
+import javax.net.ssl.TrustManagerFactory;
+import java.io.EOFException;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.math.BigInteger;
+import java.net.InetAddress;
+import java.security.GeneralSecurityException;
+import java.security.Key;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.KeyStore;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.security.Security;
+import java.security.cert.Certificate;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.Map;
 import java.util.List;
-import java.util.ArrayList;
+import java.util.Map;
 
 public class TestSslUtils {
 
@@ -134,10 +130,11 @@ public class TestSslUtils {
         saveKeyStore(ks, filename, password);
     }
 
-    public static <T extends Certificate> void createTrustStore(
+    public static <T extends Certificate> KeyStore createTrustStore(
             String filename, Password password, Map<String, T> certs) throws GeneralSecurityException, IOException {
         KeyStore ks = KeyStore.getInstance("JKS");
-        try (FileInputStream in = new FileInputStream(filename)) {
+        try {
+            FileInputStream in = new FileInputStream(filename);
             ks.load(in, password.value().toCharArray());
         } catch (EOFException e) {
             ks = createEmptyKeyStore();
@@ -146,6 +143,7 @@ public class TestSslUtils {
             ks.setCertificateEntry(cert.getKey(), cert.getValue());
         }
         saveKeyStore(ks, filename, password);
+        return ks;
     }
 
     private static Map<String, Object> createSslConfig(Mode mode, File keyStoreFile, Password password, Password keyPassword,

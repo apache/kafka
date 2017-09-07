@@ -16,19 +16,24 @@
  */
 package org.apache.kafka.common.security.ssl;
 
-import java.io.File;
-import java.util.Map;
-
-import javax.net.ssl.SSLEngine;
-
 import org.apache.kafka.common.config.SslConfigs;
-import org.apache.kafka.test.TestSslUtils;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.Mode;
+import org.apache.kafka.test.TestSslUtils;
 import org.junit.Test;
 
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.TrustManagerFactory;
+import java.io.File;
+import java.security.KeyPair;
+import java.security.KeyStore;
+import java.security.cert.X509Certificate;
+import java.util.HashMap;
+import java.util.Map;
+
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -76,4 +81,64 @@ public class SslFactoryTest {
         assertTrue(engine.getUseClientMode());
     }
 
+    @Test
+    public void testReloadableX509TrustManager() throws Exception {
+        Map<String, X509Certificate> certs = new HashMap<>();
+        String tmfAlgorithm = TrustManagerFactory.getDefaultAlgorithm();
+        TrustManagerFactory tmf = TrustManagerFactory.getInstance(tmfAlgorithm);
+        File trustStoreFile = File.createTempFile("truststore", ".jks");
+        Password trustStorePassword = new Password("TrustStorePassword");
+        KeyStore ts = createTruststore(1, trustStoreFile, trustStorePassword);
+
+        tmf.init(ts);
+        SecurityStore securityStore = new SecurityStore("jks", trustStoreFile.getPath(), trustStorePassword);
+
+        ReloadableX509TrustManager reloadableX509TrustManager = new ReloadableX509TrustManager(securityStore, tmf);
+        reloadableX509TrustManager.getAcceptedIssuers();
+
+        // One alias in truststore
+        assertEquals(1, reloadableX509TrustManager.getTrustKeyStore().size());
+
+        createTruststore(2, trustStoreFile, trustStorePassword);
+        reloadableX509TrustManager.getAcceptedIssuers();
+        // Two aliases in truststore, should have reloaded.
+        assertEquals(2, reloadableX509TrustManager.getTrustKeyStore().size());
+    }
+
+    @Test
+    public void testTrustManagerWithIOException() throws Exception {
+        Map<String, X509Certificate> certs = new HashMap<>();
+        String tmfAlgorithm = TrustManagerFactory.getDefaultAlgorithm();
+        TrustManagerFactory tmf = TrustManagerFactory.getInstance(tmfAlgorithm);
+        File trustStoreFile = File.createTempFile("truststore", ".jks");
+        Password trustStorePassword = new Password("TrustStorePassword");
+        KeyStore ts = createTruststore(1, trustStoreFile, trustStorePassword);
+
+        tmf.init(ts);
+        SecurityStore securityStore = new SecurityStore("jks", trustStoreFile.getPath(), trustStorePassword);
+
+        ReloadableX509TrustManager reloadableX509TrustManager = new ReloadableX509TrustManager(securityStore, tmf);
+
+        trustStoreFile.delete();
+        // ReloadableX509TrustManager should handle IO exception.
+        reloadableX509TrustManager.getAcceptedIssuers();
+
+        trustStoreFile.createNewFile();
+        createTruststore(1, trustStoreFile, trustStorePassword);
+        reloadableX509TrustManager.getAcceptedIssuers();
+        // Two aliases in truststore, should have reloaded.
+        assertEquals(1, reloadableX509TrustManager.getTrustKeyStore().size());
+    }
+
+    private KeyStore createTruststore(int numberOfKeypairs, File trustStoreFile, Password trustStorePassword) throws Exception {
+        Map<String, X509Certificate> certs = new HashMap<>();
+        for (int i = 0; i < numberOfKeypairs; i++) {
+            KeyPair cKP = TestSslUtils.generateKeyPair("RSA");
+            X509Certificate cCert = TestSslUtils.generateCertificate("CN=localhost, O=client " + i, cKP, 30, "SHA1withRSA");
+            certs.put("client" + i, cCert);
+        }
+        KeyStore ts = TestSslUtils.createTrustStore(trustStoreFile.getPath(), trustStorePassword, certs);
+        trustStoreFile.deleteOnExit();
+        return ts;
+    }
 }
