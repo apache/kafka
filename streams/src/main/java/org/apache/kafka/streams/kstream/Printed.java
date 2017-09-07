@@ -17,9 +17,6 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.errors.TopologyException;
-import org.apache.kafka.streams.kstream.internals.KStreamPrint;
-import org.apache.kafka.streams.kstream.internals.PrintForeachAction;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
@@ -35,9 +32,9 @@ import java.util.Objects;
  * @see KStream#print(Printed)
  */
 public class Printed<K, V> {
-    private final PrintWriter printWriter;
-    private String label;
-    private KeyValueMapper<? super K, ? super V, String> mapper = new KeyValueMapper<K, V, String>() {
+    protected final PrintWriter printWriter;
+    protected String label;
+    protected KeyValueMapper<? super K, ? super V, String> mapper = new KeyValueMapper<K, V, String>() {
         @Override
         public String apply(final K key, final V value) {
             return String.format("%s, %s", key, value);
@@ -49,12 +46,13 @@ public class Printed<K, V> {
     }
 
     /**
-     * Builds the {@link ProcessorSupplier} that will be used to print the records flowing through a {@link KStream}.
-     *
-     * @return the {@code ProcessorSupplier} to be used for printing
+     * Copy constructor.
+     * @param printed   instance of {@link Printed} to copy
      */
-    public ProcessorSupplier<K, V> build(final String processorName) {
-        return new KStreamPrint<>(new PrintForeachAction<>(printWriter, mapper, label != null ? label : processorName));
+    public Printed(final Printed<K, V> printed) {
+        this.printWriter = printed.printWriter;
+        this.label = printed.label;
+        this.mapper = printed.mapper;
     }
 
     /**
@@ -85,7 +83,7 @@ public class Printed<K, V> {
      * @return a new Printed instance
      */
     public static <K, V> Printed<K, V> toSysOut() {
-        return new Printed<>(null);
+        return new Printed<>((PrintWriter) null);
     }
 
     /**

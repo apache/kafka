@@ -236,8 +236,10 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public void print(final Printed<K, V> printed) {
+        Objects.requireNonNull(printed, "printed can't be null");
+        final PrintedInternal<K, V> printedInternal = new PrintedInternal<>(printed);
         final String name = builder.newName(PRINTING_NAME);
-        builder.internalTopologyBuilder.addProcessor(name, printed.build(this.name), this.name);
+        builder.internalTopologyBuilder.addProcessor(name, printedInternal.build(this.name), this.name);
     }
 
     @Override
