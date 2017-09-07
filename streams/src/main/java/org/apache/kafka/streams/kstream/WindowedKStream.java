@@ -24,11 +24,12 @@ import org.apache.kafka.streams.state.KeyValueStore;
 
 /**
  * {@code WindowedKStream} is an abstraction of a <i>windowed</i> record stream of {@link KeyValue} pairs.
- * It is an intermediate representation of a {@link KStream} in order to apply an aggregation operation on the original
+ * It is an intermediate representation of a {@link KStream} in order to apply a windowed aggregation operation on the original
  * {@link KStream} records.
  * <p>
  * It is an intermediate representation after a grouping and windowing of a {@link KStream} before an aggregation is applied to the
- * new partitions resulting in a {@link KTable}.
+ * new (partitioned) windows resulting in a windowed {@link KTable}
+ * (a <emph>windowed</emph> {@code KTable} is a {@link KTable} with key type {@link Windowed Windowed<K>}.
  * <p>
  * A {@code WindowedKStream} must be obtained from a {@link KGroupedStream} via {@link KGroupedStream#windowedBy(Windows)} .
  *
@@ -40,13 +41,18 @@ import org.apache.kafka.streams.state.KeyValueStore;
 public interface WindowedKStream<K, V> {
 
     /**
-     * Count the number of records in this stream by the grouped key.
+     * Count the number of records in this stream by the grouped key and the defined windows.
      * Records with {@code null} key or value are ignored.
-     * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view).
-     * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
+     * The specified {@code windows} define either hopping time windows that can be overlapping or tumbling (c.f.
+     * {@link TimeWindows}) or they define landmark windows (c.f. {@link UnlimitedWindows}).
+     * The result is written into a local windowed {@link KeyValueStore} (which is basically an ever-updating
+     * materialized view) that can be queried using the provided {@code queryableName}.
+     * Windows are retained until their retention time expires (c.f. {@link Windows#until(long)}).
+     * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
+     * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
      * <p>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
-     * the same key.
+     * the same window and key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
      * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
      * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
@@ -54,12 +60,11 @@ public interface WindowedKStream<K, V> {
      * <p>
      * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
      * The changelog topic will be named "${applicationId}-${internalStoreName}-changelog", where "applicationId" is
-     * user-specified in {@link StreamsConfig} via parameter
+     * user-specified in {@link StreamsConfig StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "internalStoreName" is an internal name
      * and "-changelog" is a fixed suffix.
      * Note that the internal store name may not be queriable through Interactive Queries.
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
-     *
      * @return a {@link KTable} that contains "update" records with unmodified keys and {@link Long} values that
      * represent the latest (rolling) count (i.e., number of records) for each key
      */
