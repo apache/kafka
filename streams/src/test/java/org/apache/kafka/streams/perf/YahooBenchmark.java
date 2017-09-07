@@ -32,6 +32,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
+import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
@@ -353,7 +354,7 @@ public class YahooBenchmark {
 
         // calculate windowed counts
         keyedByCampaign
-            .groupByKey(Serdes.String(), Serdes.String())
+            .groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
             .count(TimeWindows.of(10 * 1000), "time-windows");
 
         return new KafkaStreams(builder.build(), streamConfig);

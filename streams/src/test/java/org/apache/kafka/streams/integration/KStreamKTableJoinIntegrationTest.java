@@ -36,6 +36,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Reducer;
+import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
@@ -242,7 +243,7 @@ public class KStreamKTableJoinIntegrationTest {
                 }
             })
             // Compute the total per region by summing the individual click counts per region.
-            .groupByKey(stringSerde, longSerde)
+            .groupByKey(Serialized.with(stringSerde, longSerde))
             .reduce(new Reducer<Long>() {
                 @Override
                 public Long apply(final Long value1, final Long value2) {

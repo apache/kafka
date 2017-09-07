@@ -445,13 +445,13 @@ object ReassignPartitionsCommand extends Logging {
     val throttleOpt = parser.accepts("throttle", "The movement of partitions will be throttled to this value (bytes/sec). Rerunning with this option, whilst a rebalance is in progress, will alter the throttle value. The throttle rate should be at least 1 KB/s.")
                       .withRequiredArg()
                       .describedAs("throttle")
-                      .defaultsTo("-1")
                       .ofType(classOf[Long])
+                      .defaultsTo(-1)
     val timeoutOpt = parser.accepts("timeout", "The maximum time in ms allowed to wait for partition reassignment execution to be successfully initiated")
                       .withRequiredArg()
                       .describedAs("timeout")
-                      .defaultsTo("10000")
                       .ofType(classOf[Long])
+                      .defaultsTo(10000)
     val options = parser.parse(args : _*)
   }
 }

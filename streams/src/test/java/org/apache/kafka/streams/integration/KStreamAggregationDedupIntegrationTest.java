@@ -34,6 +34,7 @@ import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Reducer;
+import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.test.IntegrationTest;
@@ -103,8 +104,7 @@ public class KStreamAggregationDedupIntegrationTest {
         groupedStream = stream
             .groupBy(
                 mapper,
-                Serdes.String(),
-                Serdes.String());
+                Serialized.with(Serdes.String(), Serdes.String()));
 
         reducer = new Reducer<String>() {
             @Override
@@ -225,7 +225,7 @@ public class KStreamAggregationDedupIntegrationTest {
         produceMessages(timestamp);
         produceMessages(timestamp);
 
-        stream.groupByKey(Serdes.Integer(), Serdes.String())
+        stream.groupByKey(Serialized.with(Serdes.Integer(), Serdes.String()))
             .count(TimeWindows.of(500L), "count-windows")
             .toStream(new KeyValueMapper<Windowed<Integer>, Long, String>() {
                 @Override

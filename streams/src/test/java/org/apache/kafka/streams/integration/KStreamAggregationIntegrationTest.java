@@ -38,6 +38,7 @@ import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Reducer;
+import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -411,7 +412,7 @@ public class KStreamAggregationIntegrationTest {
         produceMessages(timestamp);
         produceMessages(timestamp);
 
-        stream.groupByKey(Serdes.Integer(), Serdes.String())
+        stream.groupByKey(Serialized.with(Serdes.Integer(), Serdes.String()))
             .count(TimeWindows.of(500L), "count-windows")
             .toStream(new KeyValueMapper<Windowed<Integer>, Long, String>() {
                 @Override
@@ -513,7 +514,7 @@ public class KStreamAggregationIntegrationTest {
         final Map<Windowed<String>, Long> results = new HashMap<>();
         final CountDownLatch latch = new CountDownLatch(11);
         builder.stream(Serdes.String(), Serdes.String(), userSessionsStream)
-                .groupByKey(Serdes.String(), Serdes.String())
+                .groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
                 .count(SessionWindows.with(sessionGap).until(maintainMillis), "UserSessionsStore")
                 .toStream()
                 .foreach(new ForeachAction<Windowed<String>, Long>() {
@@ -600,7 +601,7 @@ public class KStreamAggregationIntegrationTest {
         final CountDownLatch latch = new CountDownLatch(11);
         final String userSessionsStore = "UserSessionsStore";
         builder.stream(Serdes.String(), Serdes.String(), userSessionsStream)
-                .groupByKey(Serdes.String(), Serdes.String())
+                .groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
                 .reduce(new Reducer<String>() {
                     @Override
                     public String apply(final String value1, final String value2) {
