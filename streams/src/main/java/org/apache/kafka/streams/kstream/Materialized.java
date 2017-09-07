@@ -31,7 +31,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Used to describe how a {@link StateStore} should be Materialized.
+ * Used to describe how a {@link StateStore} should be materialized.
  * You can either provide a custom {@link StateStore} backend
  * through one of the provided methods accepting a supplier or use the default RocksDB backends
  * by providing just a store name.
@@ -142,7 +142,7 @@ public class Materialized<K, V, S extends StateStore> {
     /**
      * Indicates that a changelog should be created for the store. The changelog will be created
      * with the provided configs.
-     *<p>
+     * <p>
      * Note: Any unrecognized configs will be ignored.
      * @param config    any configs that should be applied to the changelog
      * @return itself
