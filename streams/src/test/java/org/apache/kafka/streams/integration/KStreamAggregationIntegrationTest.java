@@ -201,14 +201,15 @@ public class KStreamAggregationIntegrationTest {
         produceMessages(secondBatchTimestamp);
 
         groupedStream
-            .reduce(reducer, TimeWindows.of(500L), "reduce-time-windows")
-            .toStream(new KeyValueMapper<Windowed<String>, String, String>() {
-                @Override
-                public String apply(final Windowed<String> windowedKey, final String value) {
-                    return windowedKey.key() + "@" + windowedKey.window().start();
-                }
-            })
-            .to(Serdes.String(), Serdes.String(), outputTopic);
+                .windowedBy(TimeWindows.of(500L))
+                .reduce(reducer)
+                .toStream(new KeyValueMapper<Windowed<String>, String, String>() {
+                    @Override
+                    public String apply(final Windowed<String> windowedKey, final String value) {
+                        return windowedKey.key() + "@" + windowedKey.window().start();
+                    }
+                })
+                .to(Serdes.String(), Serdes.String(), outputTopic);
 
         startStreams();
 
@@ -301,18 +302,18 @@ public class KStreamAggregationIntegrationTest {
         produceMessages(secondTimestamp);
         produceMessages(secondTimestamp);
 
-        groupedStream.aggregate(
-            initializer,
-            aggregator,
-            TimeWindows.of(500L),
-            Serdes.Integer(), "aggregate-by-key-windowed")
-            .toStream(new KeyValueMapper<Windowed<String>, Integer, String>() {
-                @Override
-                public String apply(final Windowed<String> windowedKey, final Integer value) {
-                    return windowedKey.key() + "@" + windowedKey.window().start();
-                }
-            })
-            .to(Serdes.String(), Serdes.Integer(), outputTopic);
+        groupedStream.windowedBy(TimeWindows.of(500L))
+                .aggregate(
+                        initializer,
+                        aggregator,
+                        Serdes.Integer())
+                .toStream(new KeyValueMapper<Windowed<String>, Integer, String>() {
+                    @Override
+                    public String apply(final Windowed<String> windowedKey, final Integer value) {
+                        return windowedKey.key() + "@" + windowedKey.window().start();
+                    }
+                })
+                .to(Serdes.String(), Serdes.Integer(), outputTopic);
 
         startStreams();
 
@@ -413,13 +414,14 @@ public class KStreamAggregationIntegrationTest {
         produceMessages(timestamp);
 
         stream.groupByKey(Serialized.with(Serdes.Integer(), Serdes.String()))
-            .count(TimeWindows.of(500L), "count-windows")
-            .toStream(new KeyValueMapper<Windowed<Integer>, Long, String>() {
-                @Override
-                public String apply(final Windowed<Integer> windowedKey, final Long value) {
-                    return windowedKey.key() + "@" + windowedKey.window().start();
-                }
-            }).to(Serdes.String(), Serdes.Long(), outputTopic);
+                .windowedBy(TimeWindows.of(500L))
+                .count()
+                .toStream(new KeyValueMapper<Windowed<Integer>, Long, String>() {
+                    @Override
+                    public String apply(final Windowed<Integer> windowedKey, final Long value) {
+                        return windowedKey.key() + "@" + windowedKey.window().start();
+                    }
+                }).to(Serdes.String(), Serdes.Long(), outputTopic);
 
         startStreams();
 
