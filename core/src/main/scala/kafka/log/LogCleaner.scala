@@ -513,9 +513,9 @@ private[log] class Cleaner(val id: Int,
         // note that we will never delete a marker until all the records from that transaction are removed.
         discardBatchRecords = shouldDiscardBatch(batch, transactionMetadata, retainTxnMarkers = retainDeletes)
 
-        // check if the batch metadata is currently being cached. if so, we cannot
+        // check if the batch contains the last sequence number for the producer. if so, we cannot
         // remove the batch just yet or the producer may see an out of sequence error.
-        if (batch.hasProducerId && activeProducers.get(batch.producerId).exists(_.hasBatchWithSequenceRange(batch.baseSequence, batch.lastSequence).nonEmpty))
+        if (batch.hasProducerId && activeProducers.get(batch.producerId).exists(_.lastSeq == batch.lastSequence))
           BatchRetention.RETAIN_EMPTY
         else if (discardBatchRecords)
           BatchRetention.DELETE
