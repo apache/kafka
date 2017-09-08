@@ -117,7 +117,7 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
 
 
     def connect_setting(self, chroot=None):
-        if chroot and not chroot.starts_with("/"):
+        if chroot and not chroot.startswith("/"):
             raise Exception("ZK chroot must start with '/', invalid chroot: %s" % chroot)
 
         chroot = '' if chroot is None else chroot
@@ -136,7 +136,7 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
         """
         Queries zookeeper for data associated with 'path' and returns all fields in the schema
         """
-        if chroot and not chroot.starts_with("/"):
+        if chroot and not chroot.startswith("/"):
             raise Exception("ZK chroot must start with '/', invalid chroot: %s" % chroot)
 
         chroot_path = ('' if chroot is None else chroot) + path
