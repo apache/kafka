@@ -20,7 +20,6 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.channels.CancelledKeyException;
-import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.UnresolvedAddressException;
@@ -216,19 +215,7 @@ public class Selector implements Selectable, AutoCloseable {
             throw e;
         }
         SelectionKey key = socketChannel.register(nioSelector, SelectionKey.OP_CONNECT);
-        KafkaChannel channel;
-        try {
-            channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool);
-        } catch (Exception e) {
-            try {
-                socketChannel.close();
-            } finally {
-                key.cancel();
-            }
-            throw new IOException("Channel could not be created for socket " + socketChannel, e);
-        }
-        key.attach(channel);
-        this.channels.put(id, channel);
+        KafkaChannel channel = buildChannel(socketChannel, id, key);
 
         if (connected) {
             // OP_CONNECT won't trigger for immediately connected channels
@@ -247,18 +234,36 @@ public class Selector implements Selectable, AutoCloseable {
      * Kafka brokers add an incrementing index to the connection id to avoid reuse in the timing window
      * where an existing connection may not yet have been closed by the broker when a new connection with
      * the same remote host:port is processed.
+     * </p><p>
+     * If a `KafkaChannel` cannot be created for this connection, the `socketChannel` is closed
+     * and its selection key cancelled.
      * </p>
      */
-    public void register(String id, SocketChannel socketChannel) throws ClosedChannelException {
+    public void register(String id, SocketChannel socketChannel) throws IOException {
         if (this.channels.containsKey(id))
             throw new IllegalStateException("There is already a connection for id " + id);
         if (this.closingChannels.containsKey(id))
             throw new IllegalStateException("There is already a connection for id " + id + " that is still being closed");
 
         SelectionKey key = socketChannel.register(nioSelector, SelectionKey.OP_READ);
-        KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool);
+        buildChannel(socketChannel, id, key);
+    }
+
+    private KafkaChannel buildChannel(SocketChannel socketChannel, String id, SelectionKey key) throws IOException {
+        KafkaChannel channel;
+        try {
+            channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool);
+        } catch (Exception e) {
+            try {
+                socketChannel.close();
+            } finally {
+                key.cancel();
+            }
+            throw new IOException("Channel could not be created for socket " + socketChannel, e);
+        }
         key.attach(channel);
         this.channels.put(id, channel);
+        return channel;
     }
 
     /**
@@ -292,15 +297,24 @@ public class Selector implements Selectable, AutoCloseable {
      */
     public void send(Send send) {
         String connectionId = send.destination();
-        if (closingChannels.containsKey(connectionId))
+        KafkaChannel channel = openOrClosingChannelOrFail(connectionId);
+        if (closingChannels.containsKey(connectionId)) {
+            // ensure notification via `disconnected`, leave channel in the state in which closing was triggered
             this.failedSends.add(connectionId);
-        else {
-            KafkaChannel channel = channelOrFail(connectionId, false);
+        } else {
             try {
                 channel.setSend(send);
-            } catch (CancelledKeyException e) {
+            } catch (Exception e) {
+                // update the state for consistency, the channel will be discarded after `close`
+                channel.state(ChannelState.FAILED_SEND);
+                // ensure notification via `disconnected`
                 this.failedSends.add(connectionId);
                 close(channel, false);
+                if (!(e instanceof CancelledKeyException)) {
+                    log.error("Unexpected exception during send, closing connection {} and rethrowing exception {}",
+                            connectionId, e);
+                    throw e;
+                }
             }
         }
     }
@@ -535,7 +549,7 @@ public class Selector implements Selectable, AutoCloseable {
 
     @Override
     public void mute(String id) {
-        KafkaChannel channel = channelOrFail(id, true);
+        KafkaChannel channel = openOrClosingChannelOrFail(id);
         mute(channel);
     }
 
@@ -546,7 +560,7 @@ public class Selector implements Selectable, AutoCloseable {
 
     @Override
     public void unmute(String id) {
-        KafkaChannel channel = channelOrFail(id, true);
+        KafkaChannel channel = openOrClosingChannelOrFail(id);
         unmute(channel);
     }
 
@@ -603,12 +617,8 @@ public class Selector implements Selectable, AutoCloseable {
                 it.remove();
             }
         }
-        for (String channel : this.failedSends) {
-            KafkaChannel failedChannel = closingChannels.get(channel);
-            if (failedChannel != null)
-                failedChannel.state(ChannelState.FAILED_SEND);
+        for (String channel : this.failedSends)
             this.disconnected.put(channel, ChannelState.FAILED_SEND);
-        }
         this.failedSends.clear();
         this.madeReadProgressLastPoll = false;
     }
@@ -641,6 +651,11 @@ public class Selector implements Selectable, AutoCloseable {
             // channel state here anyway to avoid confusion.
             channel.state(ChannelState.LOCAL_CLOSE);
             close(channel, false);
+        } else {
+            KafkaChannel closingChannel = this.closingChannels.remove(id);
+            // Close any closing channel, leave the channel in the state in which closing was triggered
+            if (closingChannel != null)
+                doClose(closingChannel, false);
         }
     }
 
@@ -702,9 +717,9 @@ public class Selector implements Selectable, AutoCloseable {
         return channel != null && channel.ready();
     }
 
-    private KafkaChannel channelOrFail(String id, boolean maybeClosing) {
+    private KafkaChannel openOrClosingChannelOrFail(String id) {
         KafkaChannel channel = this.channels.get(id);
-        if (channel == null && maybeClosing)
+        if (channel == null)
             channel = this.closingChannels.get(id);
         if (channel == null)
             throw new IllegalStateException("Attempt to retrieve channel for which there is no connection. Connection id " + id + " existing connections " + channels.keySet());
