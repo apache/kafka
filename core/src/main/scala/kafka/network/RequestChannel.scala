@@ -154,10 +154,12 @@ object RequestChannel extends Logging {
 
       if (isRequestLoggingEnabled) {
         val detailsEnabled = requestLogger.isTraceEnabled
+        val responseString = response.responseAsString.getOrElse(
+          throw new IllegalStateException("responseAsString should always be defined if request logging is enabled"))
 
         val builder = new StringBuilder(256)
         builder.append("Completed request:").append(requestDesc(detailsEnabled))
-          .append(",response:").append(response.responseAsString.getOrElse(""))
+          .append(",response:").append(responseString)
           .append(" from connection ").append(context.connectionId)
           .append(";totalTime:").append(totalTimeMs)
           .append(",requestQueueTime:").append(requestQueueTimeMs)
