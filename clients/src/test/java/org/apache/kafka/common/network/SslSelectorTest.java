@@ -75,6 +75,11 @@ public class SslSelectorTest extends SelectorTest {
         this.metrics.close();
     }
 
+    @Override
+    public SecurityProtocol securityProtocol() {
+        return SecurityProtocol.PLAINTEXT;
+    }
+
     /**
      * Tests that SSL renegotiation initiated by the server are handled correctly by the client
      * @throws Exception
