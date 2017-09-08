@@ -31,6 +31,7 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
+import org.apache.kafka.streams.kstream.Printed;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
@@ -415,6 +416,11 @@ public class KStreamImplTest {
                         null);
     }
 
+    @SuppressWarnings("unchecked")
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerOnPrintIfPrintedIsNull() {
+        testStream.print((Printed) null);
+    }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnThroughWhenProducedIsNull() {
@@ -425,7 +431,6 @@ public class KStreamImplTest {
     public void shouldThrowNullPointerOnToWhenProducedIsNull() {
         testStream.to("topic", null);
     }
-
 
     @Test
     public void shouldThrowNullPointerOnLeftJoinWithTableWhenJoinedIsNull() {
