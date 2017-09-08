@@ -22,7 +22,9 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.trogdor.agent.AgentClient;
 import org.apache.kafka.trogdor.common.Node;
 import org.apache.kafka.trogdor.common.Platform;
+import org.apache.kafka.trogdor.fault.DoneState;
 import org.apache.kafka.trogdor.fault.Fault;
+import org.apache.kafka.trogdor.fault.SendingState;
 import org.apache.kafka.trogdor.rest.AgentStatusResponse;
 import org.apache.kafka.trogdor.rest.CreateAgentFaultRequest;
 import org.slf4j.Logger;
@@ -186,6 +188,10 @@ class NodeManager {
             lastContactMs = now;
         } finally {
             lock.unlock();
+        }
+        SendingState state = (SendingState) fault.state();
+        if (state.completeSend(node.name())) {
+            fault.setState(new DoneState(now, ""));
         }
         return true;
     }

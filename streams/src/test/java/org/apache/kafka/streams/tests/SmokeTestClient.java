@@ -18,6 +18,7 @@ package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -106,7 +107,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
 
         StreamsBuilder builder = new StreamsBuilder();
-        KStream<String, Integer> source = builder.stream(stringSerde, intSerde, "data");
+        KStream<String, Integer> source = builder.stream("data", Consumed.with(stringSerde, intSerde));
         source.to(stringSerde, intSerde, "echo");
         KStream<String, Integer> data = source.filter(new Predicate<String, Integer>() {
             @Override
