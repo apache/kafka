@@ -24,8 +24,6 @@ import org.I0Itec.zkclient.exception.ZkInterruptedException
 import org.I0Itec.zkclient.{IZkChildListener, IZkStateListener}
 import org.apache.kafka.common.utils.Time
 
-import scala.collection.JavaConverters._
-
 /**
  * Handle the notificationMessage.
  */
