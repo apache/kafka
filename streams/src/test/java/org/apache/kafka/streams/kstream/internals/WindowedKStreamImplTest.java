@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
@@ -51,7 +52,7 @@ public class WindowedKStreamImplTest {
 
     @Before
     public void before() {
-        final KStream<String, String> stream = builder.stream(Serdes.String(), Serdes.String(), TOPIC);
+        final KStream<String, String> stream = builder.stream(TOPIC, Consumed.with(Serdes.String(), Serdes.String()));
         windowedStream = stream.groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
                 .windowedBy(TimeWindows.of(500L));
     }
