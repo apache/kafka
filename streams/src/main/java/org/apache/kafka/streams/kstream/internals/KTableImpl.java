@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.ForeachAction;
@@ -24,6 +25,7 @@ import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
@@ -33,6 +35,7 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
@@ -155,9 +158,41 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return new KTableImpl<>(builder, name, processorSupplier, this.keySerde, this.valSerde, sourceNodes, internalStoreName, internalStoreName != null);
     }
 
+    private KTable<K, V> doFilter(final Predicate<? super K, ? super V> predicate,
+                                  final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized,
+                                  final boolean filterNot) {
+        String name = builder.newName(FILTER_NAME);
+
+        KTableProcessorSupplier<K, V, V> processorSupplier = new KTableFilter<>(this,
+                                                                                predicate,
+                                                                                filterNot,
+                                                                                materialized.storeName());
+        builder.internalTopologyBuilder.addProcessor(name, processorSupplier, this.name);
+
+        final StoreBuilder builder = new KeyValueStoreMaterializer<>(materialized).materialize();
+        this.builder.internalTopologyBuilder.addStateStore(builder, name);
+
+        return new KTableImpl<>(this.builder,
+                                name,
+                                processorSupplier,
+                                this.keySerde,
+                                this.valSerde,
+                                sourceNodes,
+                                builder.name(),
+                                true);
+    }
+
     @Override
     public KTable<K, V> filter(final Predicate<? super K, ? super V> predicate) {
         return filter(predicate, (String) null);
+    }
+
+    @Override
+    public KTable<K, V> filter(final Predicate<? super K, ? super V> predicate,
+                               final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+        Objects.requireNonNull(predicate, "predicate can't be null");
+        Objects.requireNonNull(materialized, "materialized can't be null");
+        return doFilter(predicate, new MaterializedInternal<>(materialized), false);
     }
 
     @Override
@@ -180,6 +215,14 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     @Override
     public KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate) {
         return filterNot(predicate, (String) null);
+    }
+
+    @Override
+    public KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate,
+                                  final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+        Objects.requireNonNull(predicate, "predicate can't be null");
+        Objects.requireNonNull(materialized, "materialized can't be null");
+        return doFilter(predicate, new MaterializedInternal<>(materialized), true);
     }
 
     @Override
@@ -221,6 +264,23 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     @Override
     public <V1> KTable<K, V1> mapValues(final ValueMapper<? super V, ? extends V1> mapper) {
         return mapValues(mapper, null, (String) null);
+    }
+
+    @Override
+    public <VR> KTable<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper,
+                                        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        Objects.requireNonNull(mapper, "mapper can't be null");
+        Objects.requireNonNull(materialized, "materialized can't be null");
+        final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal
+                = new MaterializedInternal<>(materialized);
+        final String name = builder.newName(MAPVALUES_NAME);
+        final KTableProcessorSupplier<K, V, VR> processorSupplier = new KTableMapValues<>(this,
+                                                                                          mapper,
+                                                                                          materializedInternal.storeName());
+        builder.internalTopologyBuilder.addProcessor(name, processorSupplier, this.name);
+        builder.internalTopologyBuilder.addStateStore(new KeyValueStoreMaterializer<>(materializedInternal).materialize(),
+                                                      name);
+        return new KTableImpl<>(builder, name, processorSupplier, sourceNodes, this.queryableStoreName, true);
     }
 
     @Override
