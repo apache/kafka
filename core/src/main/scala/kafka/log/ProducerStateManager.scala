@@ -107,11 +107,11 @@ private[log] case class ProducerIdEntry(producerId: Long, batchMetadata: mutable
     if (batch.producerEpoch() != producerEpoch)
       return None
 
-    hasBatchWithSequenceRange(batch.baseSequence(), batch.lastSequence())
+    batchWithSequenceRange(batch.baseSequence(), batch.lastSequence())
   }
 
   // Return the batch metadata of the cached batch having the exact sequence range, if any.
-  def hasBatchWithSequenceRange(firstSeq: Int, lastSeq:Int) : Option[BatchMetadata] = {
+  def batchWithSequenceRange(firstSeq: Int, lastSeq:Int) : Option[BatchMetadata] = {
     val duplicate = batchMetadata.filter { case(metadata) =>
       firstSeq == metadata.firstSeq && lastSeq == metadata.lastSeq
     }
@@ -178,7 +178,7 @@ private[log] class ProducerAppendInfo(val producerId: Long,
         // the epoch was bumped by a control record, so we expect the sequence number to be reset
         throw new OutOfOrderSequenceException(s"Out of order sequence number for producerId $producerId: found $firstSeq " +
           s"(incoming seq. number), but expected 0")
-      } else if (currentEntry.hasBatchWithSequenceRange(firstSeq, lastSeq).isDefined) {
+      } else if (currentEntry.batchWithSequenceRange(firstSeq, lastSeq).isDefined) {
         throw new DuplicateSequenceNumberException(s"Duplicate sequence number for producerId $producerId: (incomingBatch.firstSeq, " +
           s"incomingBatch.lastSeq): ($firstSeq, $lastSeq).")
       } else if (!inSequence(firstSeq, lastSeq)) {
