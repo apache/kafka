@@ -122,7 +122,8 @@ class ReplicaFetcherThreadTest {
 
 
     //Expectations
-    expect(logManager.truncateTo(anyObject())).once
+    expect(logManager.truncateTo(anyObject(), anyBoolean())).anyTimes()
+    expect(logManager.checkpointLogRecoveryOffsets()).once()
 
     replay(leaderEpochs, replicaManager, logManager, quota, replica)
 
@@ -158,7 +159,8 @@ class ReplicaFetcherThreadTest {
   def shouldTruncateToOffsetSpecifiedInEpochOffsetResponse(): Unit = {
 
     //Create a capture to track what partitions/offsets are truncated
-    val truncateToCapture: Capture[Map[TopicPartition, Long]] = newCapture(CaptureType.ALL)
+    val truncateToCapture1: Capture[Map[TopicPartition, Long]] = newCapture(CaptureType.ALL)
+    val truncateToCapture2: Capture[Map[TopicPartition, Long]] = newCapture(CaptureType.ALL)
 
     // Setup all the dependencies
     val configs = TestUtils.createBrokerConfigs(1, "localhost:1234").map(KafkaConfig.fromProps)
@@ -171,7 +173,9 @@ class ReplicaFetcherThreadTest {
     val initialLEO = 200
 
     //Stubs
-    expect(logManager.truncateTo(capture(truncateToCapture))).once
+    expect(logManager.truncateTo(capture(truncateToCapture1), anyBoolean())).once()
+    expect(logManager.truncateTo(capture(truncateToCapture2), anyBoolean())).once()
+    expect(logManager.checkpointLogRecoveryOffsets()).once()
     expect(replica.epochs).andReturn(Some(leaderEpochs)).anyTimes()
     expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(initialLEO)).anyTimes()
     expect(leaderEpochs.latestEpoch).andReturn(5).anyTimes()
@@ -194,8 +198,8 @@ class ReplicaFetcherThreadTest {
     thread.doWork()
 
     //We should have truncated to the offsets in the response
-    assertEquals(156, truncateToCapture.getValue.get(t1p0).get)
-    assertEquals(172, truncateToCapture.getValue.get(t2p1).get)
+    assertEquals(156, truncateToCapture1.getValue.get(t1p0).get)
+    assertEquals(172, truncateToCapture2.getValue.get(t2p1).get)
   }
 
   @Test
@@ -217,7 +221,8 @@ class ReplicaFetcherThreadTest {
 
     //Stubs
     expect(replica.highWatermark).andReturn(new LogOffsetMetadata(highWaterMark)).anyTimes()
-    expect(logManager.truncateTo(capture(truncated))).once
+    expect(logManager.truncateTo(capture(truncated), anyBoolean())).once
+    expect(logManager.checkpointLogRecoveryOffsets()).once
     expect(replica.epochs).andReturn(Some(leaderEpochs)).anyTimes()
     expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(initialLeo)).anyTimes()
     expect(leaderEpochs.latestEpoch).andReturn(5)
@@ -260,7 +265,8 @@ class ReplicaFetcherThreadTest {
 
     //Stubs
     expect(replica.highWatermark).andReturn(new LogOffsetMetadata(highWaterMark)).anyTimes()
-    expect(logManager.truncateTo(capture(truncated))).anyTimes()
+    expect(logManager.truncateTo(capture(truncated), anyBoolean())).anyTimes()
+    expect(logManager.checkpointLogRecoveryOffsets()).once()
     expect(replica.epochs).andReturn(Some(leaderEpochs)).anyTimes()
     expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(initialLeo)).anyTimes()
     expect(leaderEpochs.latestEpoch).andReturn(5)
@@ -355,7 +361,7 @@ class ReplicaFetcherThreadTest {
     val replicaManager = createNiceMock(classOf[ReplicaManager])
 
     //Stub return values
-    expect(logManager.truncateTo(capture(truncateToCapture))).once
+    expect(logManager.truncateTo(capture(truncateToCapture), anyBoolean())).once
     expect(replica.epochs).andReturn(Some(leaderEpochs)).anyTimes()
     expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(initialLEO)).anyTimes()
     expect(leaderEpochs.latestEpoch).andReturn(5)
