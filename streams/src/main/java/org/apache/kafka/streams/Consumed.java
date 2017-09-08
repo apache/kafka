@@ -51,7 +51,7 @@ public class Consumed<K, V> {
      * Create an instance of {@link Consumed} from an existing instance.
      * @param consumed  the instance of {@link Consumed} to copy
      */
-    public Consumed(final Consumed<K, V> consumed) {
+    protected Consumed(final Consumed<K, V> consumed) {
         this(consumed.keySerde, consumed.valueSerde, consumed.timestampExtractor, consumed.resetPolicy);
     }
 
