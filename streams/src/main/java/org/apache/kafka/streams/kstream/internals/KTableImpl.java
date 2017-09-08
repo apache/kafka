@@ -340,7 +340,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
         to(keySerde, valSerde, partitioner, topic);
 
-        return builder.table(null, new FailOnInvalidTimestamp(), keySerde, valSerde, topic, internalStoreName);
+        return builder.table(topic,
+                             new ConsumedInternal<>(keySerde, valSerde, new FailOnInvalidTimestamp(), null),
+                             internalStoreName);
     }
 
     @Override

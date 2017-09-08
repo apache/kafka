@@ -27,8 +27,8 @@ import kafka.network.RequestChannel.{ShutdownRequest, BaseRequest}
 import kafka.server.QuotaId
 import kafka.utils.{Logging, NotNothing}
 import org.apache.kafka.common.memory.MemoryPool
-import org.apache.kafka.common.network.{ListenerName, Send}
-import org.apache.kafka.common.protocol.{ApiKeys, Protocol, SecurityProtocol}
+import org.apache.kafka.common.network.Send
+import org.apache.kafka.common.protocol.{ApiKeys, Protocol}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Time
@@ -38,6 +38,8 @@ import scala.reflect.ClassTag
 
 object RequestChannel extends Logging {
   private val requestLogger = Logger.getLogger("kafka.request.logger")
+
+  def isRequestLoggingEnabled: Boolean = requestLogger.isDebugEnabled
 
   sealed trait BaseRequest
   case object ShutdownRequest extends BaseRequest
@@ -90,7 +92,7 @@ object RequestChannel extends Logging {
       math.max(apiLocalCompleteTimeNanos - requestDequeueTimeNanos, 0L)
     }
 
-    def updateRequestMetrics(networkThreadTimeNanos: Long) {
+    def updateRequestMetrics(networkThreadTimeNanos: Long, response: Response) {
       val endTimeNanos = Time.SYSTEM.nanoseconds
       // In some corner cases, apiLocalCompleteTimeNanos may not be set when the request completes if the remote
       // processing time is really small. This value is set in KafkaApis from a request handling thread.
@@ -103,15 +105,23 @@ object RequestChannel extends Logging {
       if (apiRemoteCompleteTimeNanos < 0)
         apiRemoteCompleteTimeNanos = responseCompleteTimeNanos
 
-      def nanosToMs(nanos: Long) = math.max(TimeUnit.NANOSECONDS.toMillis(nanos), 0)
+      /**
+       * Converts nanos to millis with micros precision as additional decimal places in the request log have low
+       * signal to noise ratio. When it comes to metrics, there is little difference either way as we round the value
+       * to the nearest long.
+       */
+      def nanosToMs(nanos: Long): Double = {
+        val positiveNanos = math.max(nanos, 0)
+        TimeUnit.NANOSECONDS.toMicros(positiveNanos).toDouble / TimeUnit.MILLISECONDS.toMicros(1)
+      }
 
-      val requestQueueTime = nanosToMs(requestDequeueTimeNanos - startTimeNanos)
-      val apiLocalTime = nanosToMs(apiLocalCompleteTimeNanos - requestDequeueTimeNanos)
-      val apiRemoteTime = nanosToMs(apiRemoteCompleteTimeNanos - apiLocalCompleteTimeNanos)
-      val apiThrottleTime = nanosToMs(responseCompleteTimeNanos - apiRemoteCompleteTimeNanos)
-      val responseQueueTime = nanosToMs(responseDequeueTimeNanos - responseCompleteTimeNanos)
-      val responseSendTime = nanosToMs(endTimeNanos - responseDequeueTimeNanos)
-      val totalTime = nanosToMs(endTimeNanos - startTimeNanos)
+      val requestQueueTimeMs = nanosToMs(requestDequeueTimeNanos - startTimeNanos)
+      val apiLocalTimeMs = nanosToMs(apiLocalCompleteTimeNanos - requestDequeueTimeNanos)
+      val apiRemoteTimeMs = nanosToMs(apiRemoteCompleteTimeNanos - apiLocalCompleteTimeNanos)
+      val apiThrottleTimeMs = nanosToMs(responseCompleteTimeNanos - apiRemoteCompleteTimeNanos)
+      val responseQueueTimeMs = nanosToMs(responseDequeueTimeNanos - responseCompleteTimeNanos)
+      val responseSendTimeMs = nanosToMs(endTimeNanos - responseDequeueTimeNanos)
+      val totalTimeMs = nanosToMs(endTimeNanos - startTimeNanos)
       val fetchMetricNames =
         if (header.apiKey == ApiKeys.FETCH) {
           val isFromFollower = body[FetchRequest].isFromFollower
@@ -125,13 +135,13 @@ object RequestChannel extends Logging {
       metricNames.foreach { metricName =>
         val m = RequestMetrics.metricsMap(metricName)
         m.requestRate.mark()
-        m.requestQueueTimeHist.update(requestQueueTime)
-        m.localTimeHist.update(apiLocalTime)
-        m.remoteTimeHist.update(apiRemoteTime)
-        m.throttleTimeHist.update(apiThrottleTime)
-        m.responseQueueTimeHist.update(responseQueueTime)
-        m.responseSendTimeHist.update(responseSendTime)
-        m.totalTimeHist.update(totalTime)
+        m.requestQueueTimeHist.update(Math.round(requestQueueTimeMs))
+        m.localTimeHist.update(Math.round(apiLocalTimeMs))
+        m.remoteTimeHist.update(Math.round(apiRemoteTimeMs))
+        m.throttleTimeHist.update(Math.round(apiThrottleTimeMs))
+        m.responseQueueTimeHist.update(Math.round(responseQueueTimeMs))
+        m.responseSendTimeHist.update(Math.round(responseSendTimeMs))
+        m.totalTimeHist.update(Math.round(totalTimeMs))
       }
 
       // Records network handler thread usage. This is included towards the request quota for the
@@ -142,28 +152,26 @@ object RequestChannel extends Logging {
       // the total time spent on authentication, which may be significant for SASL/SSL.
       recordNetworkThreadTimeCallback.foreach(record => record(networkThreadTimeNanos))
 
-      if (requestLogger.isDebugEnabled) {
+      if (isRequestLoggingEnabled) {
         val detailsEnabled = requestLogger.isTraceEnabled
-        def nanosToMs(nanos: Long) = TimeUnit.NANOSECONDS.toMicros(math.max(nanos, 0)).toDouble / TimeUnit.MILLISECONDS.toMicros(1)
-        val totalTimeMs = nanosToMs(endTimeNanos - startTimeNanos)
-        val requestQueueTimeMs = nanosToMs(requestDequeueTimeNanos - startTimeNanos)
-        val apiLocalTimeMs = nanosToMs(apiLocalCompleteTimeNanos - requestDequeueTimeNanos)
-        val apiRemoteTimeMs = nanosToMs(apiRemoteCompleteTimeNanos - apiLocalCompleteTimeNanos)
-        val apiThrottleTimeMs = nanosToMs(responseCompleteTimeNanos - apiRemoteCompleteTimeNanos)
-        val responseQueueTimeMs = nanosToMs(responseDequeueTimeNanos - responseCompleteTimeNanos)
-        val responseSendTimeMs = nanosToMs(endTimeNanos - responseDequeueTimeNanos)
+        val responseString = response.responseAsString.getOrElse(
+          throw new IllegalStateException("responseAsString should always be defined if request logging is enabled"))
 
-        requestLogger.debug(s"Completed request:${requestDesc(detailsEnabled)} from connection ${context.connectionId};" +
-          s"totalTime:$totalTimeMs," +
-          s"requestQueueTime:$requestQueueTimeMs," +
-          s"localTime:$apiLocalTimeMs," +
-          s"remoteTime:$apiRemoteTimeMs," +
-          s"throttleTime:$apiThrottleTimeMs," +
-          s"responseQueueTime:$responseQueueTimeMs," +
-          s"sendTime:$responseSendTimeMs," +
-          s"securityProtocol:${context.securityProtocol}," +
-          s"principal:${context.principal}," +
-          s"listener:${context.listenerName.value}")
+        val builder = new StringBuilder(256)
+        builder.append("Completed request:").append(requestDesc(detailsEnabled))
+          .append(",response:").append(responseString)
+          .append(" from connection ").append(context.connectionId)
+          .append(";totalTime:").append(totalTimeMs)
+          .append(",requestQueueTime:").append(requestQueueTimeMs)
+          .append(",localTime:").append(apiLocalTimeMs)
+          .append(",remoteTime:").append(apiRemoteTimeMs)
+          .append(",throttleTime:").append(apiThrottleTimeMs)
+          .append(",responseQueueTime:").append(responseQueueTimeMs)
+          .append(",sendTime:").append(responseSendTimeMs)
+          .append(",securityProtocol:").append(context.securityProtocol)
+          .append(",principal:").append(session.principal)
+          .append(",listener:").append(context.listenerName.value)
+        requestLogger.debug(builder.toString)
       }
     }
 
@@ -183,13 +191,16 @@ object RequestChannel extends Logging {
 
   }
 
-  class Response(val request: Request, val responseSend: Option[Send], val responseAction: ResponseAction) {
+  /** responseAsString should only be defined if request logging is enabled */
+  class Response(val request: Request, val responseSend: Option[Send], val responseAction: ResponseAction,
+                 val responseAsString: Option[String]) {
     request.responseCompleteTimeNanos = Time.SYSTEM.nanoseconds
     if (request.apiLocalCompleteTimeNanos == -1L) request.apiLocalCompleteTimeNanos = Time.SYSTEM.nanoseconds
 
     def processor: Int = request.processor
 
-    override def toString = s"Response(request=$request, responseSend=$responseSend, responseAction=$responseAction)"
+    override def toString =
+      s"Response(request=$request, responseSend=$responseSend, responseAction=$responseAction), responseAsString=$responseAsString"
   }
 
   trait ResponseAction

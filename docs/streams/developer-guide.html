@@ -547,9 +547,8 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                     StreamsBuilder builder = new StreamsBuilder();
 
                     KStream&lt;String, Long&gt; wordCounts = builder.stream(
-                        Serdes.String(), /* key serde */
-                        Serdes.Long(),   /* value serde */
-                        "word-counts-input-topic" /* input topic */);
+                        "word-counts-input-topic" /* input topic */,
+                        Consumed.with(Serdes.String(), Serdes.Long()); // define key and value serdes
                 </pre>
                 When to provide serdes explicitly:
                 <ul>
@@ -2427,7 +2426,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
           StreamsConfig config = new StreamsConfig(props);
           StreamsBuilder builder = new StreamsBuilder();
 
-          KStream&lt;String, String&gt; textLines = builder.stream(stringSerde, stringSerde, "word-count-input");
+          KStream&lt;String, String&gt; textLines = builder.stream("word-count-input", Consumed.with(stringSerde, stringSerde);
 
           KGroupedStream&lt;String, String&gt; groupedByWord = textLines
               .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))

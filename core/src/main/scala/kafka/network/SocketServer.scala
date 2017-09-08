@@ -36,8 +36,8 @@ import org.apache.kafka.common.memory.{MemoryPool, SimpleMemoryPool}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.stats.Rate
 import org.apache.kafka.common.network.{ChannelBuilders, KafkaChannel, ListenerName, Selectable, Send, Selector => KSelector}
+import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.protocol.types.SchemaException
 import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
 import org.apache.kafka.common.utils.{KafkaThread, Time}
@@ -484,7 +484,7 @@ private[kafka] class Processor(val id: Int,
           case RequestChannel.NoOpAction =>
             // There is no response to send to the client, we need to read more pipelined requests
             // that are sitting in the server's socket buffer
-            updateRequestMetrics(curr.request)
+            updateRequestMetrics(curr)
             trace("Socket server received empty response to send, registering for read: " + curr)
             val channelId = curr.request.context.connectionId
             if (selector.channel(channelId) != null || selector.closingChannel(channelId) != null)
@@ -494,7 +494,7 @@ private[kafka] class Processor(val id: Int,
               throw new IllegalStateException(s"responseSend must be defined for SendAction, response: $curr"))
             sendResponse(curr, responseSend)
           case RequestChannel.CloseConnectionAction =>
-            updateRequestMetrics(curr.request)
+            updateRequestMetrics(curr)
             trace("Closing socket connection actively according to the response code.")
             close(selector, curr.request.context.connectionId)
         }
@@ -511,7 +511,7 @@ private[kafka] class Processor(val id: Int,
     // `channel` can be None if the connection was closed remotely or if selector closed it for being idle for too long
     if (channel(connectionId).isEmpty) {
       warn(s"Attempting to send response via channel for which there is no open connection, connection id $connectionId")
-      response.request.updateRequestMetrics(0L)
+      response.request.updateRequestMetrics(0L, response)
     }
     // Invoke send for closingChannel as well so that the send is failed and the channel closed properly and
     // removed from the Selector after discarding any pending staged receives.
@@ -561,14 +561,15 @@ private[kafka] class Processor(val id: Int,
       val resp = inflightResponses.remove(send.destination).getOrElse {
         throw new IllegalStateException(s"Send for ${send.destination} completed, but not in `inflightResponses`")
       }
-      updateRequestMetrics(resp.request)
+      updateRequestMetrics(resp)
       selector.unmute(send.destination)
     }
   }
 
-  private def updateRequestMetrics(request: RequestChannel.Request) {
+  private def updateRequestMetrics(response: RequestChannel.Response) {
+    val request = response.request
     val networkThreadTimeNanos = openOrClosingChannel(request.context.connectionId).fold(0L)(_.getAndResetNetworkThreadTimeNanos())
-    request.updateRequestMetrics(networkThreadTimeNanos)
+    request.updateRequestMetrics(networkThreadTimeNanos, response)
   }
 
   private def processDisconnected() {
@@ -576,7 +577,7 @@ private[kafka] class Processor(val id: Int,
       val remoteHost = ConnectionId.fromString(connectionId).getOrElse {
         throw new IllegalStateException(s"connectionId has unexpected format: $connectionId")
       }.remoteHost
-      inflightResponses.remove(connectionId).foreach(response => updateRequestMetrics(response.request))
+      inflightResponses.remove(connectionId).foreach(updateRequestMetrics)
       // the channel has been closed by the selector but the quotas still need to be updated
       connectionQuotas.dec(InetAddress.getByName(remoteHost))
     }
