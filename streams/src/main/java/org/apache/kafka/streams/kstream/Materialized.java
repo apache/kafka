@@ -57,7 +57,7 @@ public class Materialized<K, V, S extends StateStore> {
      * Copy constructor.
      * @param materialized  the {@link Materialized} instance to copy.
      */
-    public Materialized(final Materialized<K, V, S> materialized) {
+    protected Materialized(final Materialized<K, V, S> materialized) {
         this.storeSupplier = materialized.storeSupplier;
         this.storeName = materialized.storeName;
         this.keySerde = materialized.keySerde;
