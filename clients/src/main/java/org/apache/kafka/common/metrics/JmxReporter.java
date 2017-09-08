@@ -169,7 +169,7 @@ public class JmxReporter implements MetricsReporter {
         private final Map<String, KafkaMetric> metrics;
 
         public KafkaMbean(String mbeanName) throws MalformedObjectNameException {
-            this.metrics = new HashMap<String, KafkaMetric>();
+            this.metrics = new HashMap<>();
             this.objectName = new ObjectName(mbeanName);
         }
 
@@ -191,15 +191,15 @@ public class JmxReporter implements MetricsReporter {
 
         @Override
         public AttributeList getAttributes(String[] names) {
-            try {
-                AttributeList list = new AttributeList();
-                for (String name : names)
+            AttributeList list = new AttributeList();
+            for (String name : names) {
+                try {
                     list.add(new Attribute(name, getAttribute(name)));
-                return list;
-            } catch (Exception e) {
-                log.error("Error getting JMX attribute: ", e);
-                return new AttributeList();
+                } catch (Exception e) {
+                    log.warn("Error getting JMX attribute '{}'", name, e);
+                }
             }
+            return list;
         }
 
         public KafkaMetric removeAttribute(String name) {
