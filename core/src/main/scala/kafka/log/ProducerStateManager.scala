@@ -115,16 +115,7 @@ private[log] case class ProducerIdEntry(producerId: Long, batchMetadata: mutable
     val duplicate = batchMetadata.filter { case(metadata) =>
       firstSeq == metadata.firstSeq && lastSeq == metadata.lastSeq
     }
-
-    if (duplicate.size > 1)
-      throw new IllegalStateException(s"Found ${duplicate.size} duplicate batches in the cached producer metadata " +
-        s"for producerId: $producerId and producerEpoch: $producerEpoch. This means that it's likely there are " +
-        s"duplicates in the log as well.")
-
-    if (duplicate.size == 1)
-      Some(duplicate.head)
-    else
-      None
+    duplicate.headOption
   }
 
   override def toString: String = {

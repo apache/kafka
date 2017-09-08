@@ -115,7 +115,7 @@ object DumpLogSegments {
         case Log.TimeIndexFileSuffix =>
           dumpTimeIndex(file, indexSanityOnly, verifyOnly, timeIndexDumpErrors, maxMessageSize)
         case Log.PidSnapshotFileSuffix =>
-          dumpPidSnapshot(file)
+          dumpProducerIdSnapshot(file)
         case Log.TxnIndexFileSuffix =>
           dumpTxnIndex(file)
         case _ =>
@@ -152,7 +152,7 @@ object DumpLogSegments {
     }
   }
 
-  private def dumpPidSnapshot(file: File): Unit = {
+  private def dumpProducerIdSnapshot(file: File): Unit = {
     try {
       ProducerStateManager.readSnapshot(file).foreach { entry =>
         println(s"producerId: ${entry.producerId} producerEpoch: ${entry.producerEpoch} " +
