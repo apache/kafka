@@ -122,7 +122,6 @@ public class WindowedStreamPartitionerTest {
     @Test
     public void testWindowedDeserializerNoArgConstructors() {
         Map<String, String> props = new HashMap<>();
-        // test key[value].deserializer.inner.class takes precedence over serializer.inner.class
         WindowedDeserializer<StringSerializer> windowedDeserializer = new WindowedDeserializer<>();
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "host:1");
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
@@ -147,50 +146,33 @@ public class WindowedStreamPartitionerTest {
     
     @Test
     public void testWindowSerializeExpectedWindowSize() {
+        final long randomLong = 5000000;
         final Map<String, String> props = new HashMap<>();
-        final WindowedDeserializer<StringSerializer> windowedDeserializer = new WindowedDeserializer<>();
+        final WindowedDeserializer<StringSerializer> windowedDeserializer = new WindowedDeserializer<>(randomLong);
         props.put("key.deserializer.inner.class", "org.apache.kafka.common.serialization.StringDeserializer");
         props.put("deserializer.inner.class", "org.apache.kafka.common.serialization.StringDeserializer");
         windowedDeserializer.configure(props, true);
-        props.put("deserializer.inner.class", "org.apache.kafka.common.serialization.ByteArraySerializer");
-        props.remove("key.serializer.inner.class");
-        props.remove("value.serializer.inner.class");
         //test for serializer expected window end time
-        final long randomLong = 5000000;
         final byte[] byteValues = stringSerializer.serialize(topicName, "dummy string"); //dummy string, serves no real purpose
-        final WindowedDeserializer<StringSerializer> windowedDeserializer1 = 
-            new WindowedDeserializer<>(windowedDeserializer.innerDeserializer(), randomLong);
-        windowedDeserializer1.configure(props, false);
-        final Windowed<?> windowed = windowedDeserializer1.deserialize(topicName, byteValues);
+        final Windowed<?> windowed = windowedDeserializer.deserialize(topicName, byteValues);
         final long actualSize = windowed.window().end() - windowed.window().start(); //find actual window time
         assertEquals(randomLong, actualSize); //testing if window size matches up with expected one
         windowedDeserializer.close();
-        windowedDeserializer1.close();
     }
     
     @Test
     public void testWindowDeserializeExpectedWindowSize() {
+        final long randomLong = 5000000;
         final Map<String, String> props = new HashMap<>();
-        final WindowedDeserializer<StringSerializer> windowedDeserializer = new WindowedDeserializer<>();
-        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "host:1");
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
+        final WindowedDeserializer<StringSerializer> windowedDeserializer = new WindowedDeserializer<>(randomLong);
         props.put("key.deserializer.inner.class", "org.apache.kafka.common.serialization.StringDeserializer");
         props.put("deserializer.inner.class", "org.apache.kafka.common.serialization.StringDeserializer");
         windowedDeserializer.configure(props, true);
-        final Deserializer<?> inner = windowedDeserializer.innerDeserializer();
-        props.put("deserializer.inner.class", "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-        props.remove("key.serializer.inner.class");
-        props.remove("value.serializer.inner.class");
         //test for deserializer expected window end time
-        final long randomLong = 5000000;
         final byte[] byteValues = stringSerializer.serialize(topicName, "dummy string"); //dummy string, serves no real purpose
-        final WindowedDeserializer<StringSerializer> windowedDeserializer1 = 
-            new WindowedDeserializer<>(windowedDeserializer.innerDeserializer(), randomLong);
-        windowedDeserializer1.configure(props, false);
-        final Windowed<?> windowed = windowedDeserializer1.deserialize(topicName, byteValues);
+        final Windowed<?> windowed = windowedDeserializer.deserialize(topicName, byteValues);
         final long actualSize = windowed.window().end() - windowed.window().start(); //find actual window time
         assertEquals(randomLong, actualSize); //testing if window size matches up with expected one
         windowedDeserializer.close();
-        windowedDeserializer1.close();
     }
 }

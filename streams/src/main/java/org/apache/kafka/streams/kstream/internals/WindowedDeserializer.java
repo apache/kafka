@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.internals.WindowStoreUtils;
 
@@ -42,8 +43,12 @@ public class WindowedDeserializer<T> implements Deserializer<Windowed<T>> {
     public WindowedDeserializer() {
         this(null, Long.MAX_VALUE);
     }
-
-    public WindowedDeserializer(Deserializer<T> inner) {
+    
+    public WindowedDeserializer(final Long windowSize) {
+       this(null, windowSize);
+    }
+    
+    public WindowedDeserializer(final Deserializer<T> inner) {
         this(inner, Long.MAX_VALUE);
     }
 
@@ -80,7 +85,7 @@ public class WindowedDeserializer<T> implements Deserializer<Windowed<T>> {
         
         long start = ByteBuffer.wrap(data).getLong(data.length - TIMESTAMP_SIZE);
         
-        TimeWindow timeWindow = (TimeWindow) (windowSize != Long.MAX_VALUE ? WindowStoreUtils.timeWindowForSize(start, windowSize) : new UnlimitedWindow(start));
+        Window timeWindow = windowSize != Long.MAX_VALUE ? WindowStoreUtils.timeWindowForSize(start, windowSize) : new UnlimitedWindow(start);
         return new Windowed<T>(inner.deserialize(topic, bytes), timeWindow);
     }
 
@@ -89,9 +94,13 @@ public class WindowedDeserializer<T> implements Deserializer<Windowed<T>> {
     public void close() {
         inner.close();
     }
-
+    
     // Only for testing
     public Deserializer<T> innerDeserializer() {
         return inner;
+    }
+    
+    public Long getWindowSize() {
+        return this.windowSize;
     }
 }
