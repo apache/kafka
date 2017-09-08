@@ -525,6 +525,7 @@ public class KGroupedStreamImplTest {
         doCountWindowed(results);
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldCountWindowedWithInternalStoreName() throws Exception {
         final List<KeyValue<Windowed<String>, Long>> results = new ArrayList<>();
