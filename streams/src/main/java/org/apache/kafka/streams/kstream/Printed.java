@@ -49,7 +49,7 @@ public class Printed<K, V> {
      * Copy constructor.
      * @param printed   instance of {@link Printed} to copy
      */
-    public Printed(final Printed<K, V> printed) {
+    protected Printed(final Printed<K, V> printed) {
         this.printWriter = printed.printWriter;
         this.label = printed.label;
         this.mapper = printed.mapper;
