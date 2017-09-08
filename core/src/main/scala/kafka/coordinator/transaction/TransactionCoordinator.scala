@@ -52,13 +52,16 @@ object TransactionCoordinator {
 
     val producerIdManager = new ProducerIdManager(config.brokerId, zkUtils)
     // we do not need to turn on reaper thread since no tasks will be expired and there are no completed tasks to be purged
-    val txnMarkerPurgatory = DelayedOperationPurgatory[DelayedTxnMarker]("txn-marker-purgatory", config.brokerId, reaperEnabled = false, timerEnabled = false)
+    val txnMarkerPurgatory = DelayedOperationPurgatory[DelayedTxnMarker]("txn-marker-purgatory", config.brokerId,
+      reaperEnabled = false, timerEnabled = false)
     val txnStateManager = new TransactionStateManager(config.brokerId, zkUtils, scheduler, replicaManager, txnConfig, time)
 
     val logContext = new LogContext(s"[TransactionCoordinator id=${config.brokerId}] ")
-    val txnMarkerChannelManager = TransactionMarkerChannelManager(config, metrics, metadataCache, txnStateManager, txnMarkerPurgatory, time, logContext)
+    val txnMarkerChannelManager = TransactionMarkerChannelManager(config, metrics, metadataCache, txnStateManager,
+      txnMarkerPurgatory, time, logContext)
 
-    new TransactionCoordinator(config.brokerId, scheduler, producerIdManager, txnStateManager, txnMarkerChannelManager, time, logContext)
+    new TransactionCoordinator(config.brokerId, scheduler, producerIdManager, txnStateManager, txnMarkerChannelManager,
+      time, logContext)
   }
 
   private def initTransactionError(error: Errors): InitProducerIdResult = {
@@ -85,7 +88,7 @@ class TransactionCoordinator(brokerId: Int,
                              txnMarkerChannelManager: TransactionMarkerChannelManager,
                              time: Time,
                              logContext: LogContext) extends Logging {
-  this.logIdent = logContext.logPrefix()
+  this.logIdent = logContext.logPrefix
 
   import TransactionCoordinator._
 

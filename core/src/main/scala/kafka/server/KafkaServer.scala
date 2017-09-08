@@ -164,7 +164,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     "yammer-metrics-count",
     new Gauge[Int] {
       def value = {
-        com.yammer.metrics.Metrics.defaultRegistry().allMetrics().size()
+        com.yammer.metrics.Metrics.defaultRegistry.allMetrics.size
       }
     }
   )
@@ -201,7 +201,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         val (brokerId, initialOfflineDirs) = getBrokerIdAndOfflineDirs
         config.brokerId = brokerId
         logContext = new LogContext(s"[KafkaServer id=${config.brokerId}] ")
-        this.logIdent = logContext.logPrefix()
+        this.logIdent = logContext.logPrefix
 
         /* create and configure metrics */
         val reporters = config.getConfiguredInstances(KafkaConfig.MetricReporterClassesProp, classOf[MetricsReporter],

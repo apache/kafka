@@ -53,7 +53,7 @@ class TransactionCoordinatorTest {
     transactionManager,
     transactionMarkerChannelManager,
     time,
-    new LogContext())
+    new LogContext)
 
   var result: InitProducerIdResult = _
   var error: Errors = Errors.NONE
