@@ -374,7 +374,7 @@ public class KafkaStreamsTest {
             final String topic = "input";
             CLUSTER.createTopic(topic);
 
-            builder.stream(Serdes.String(), Serdes.String(), topic)
+            builder.stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
                     .foreach(new ForeachAction<String, String>() {
                         @Override
                         public void apply(final String key, final String value) {

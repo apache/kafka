@@ -29,6 +29,7 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreSupplier;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -44,45 +45,45 @@ public class InternalStreamsBuilder {
         this.internalTopologyBuilder = internalTopologyBuilder;
     }
 
-    public <K, V> KStream<K, V> stream(final Topology.AutoOffsetReset offsetReset,
-                                                                  final TimestampExtractor timestampExtractor,
-                                                                  final Serde<K> keySerde,
-                                                                  final Serde<V> valSerde,
-                                                                  final String... topics) {
+    public <K, V> KStream<K, V> stream(final Collection<String> topics,
+                                       final ConsumedInternal<K, V> consumed) {
         final String name = newName(KStreamImpl.SOURCE_NAME);
 
-        internalTopologyBuilder.addSource(offsetReset, name, timestampExtractor, keySerde == null ? null : keySerde.deserializer(), valSerde == null ? null : valSerde.deserializer(), topics);
+        internalTopologyBuilder.addSource(consumed.offsetResetPolicy(),
+                                          name,
+                                          consumed.timestampExtractor(),
+                                          consumed.keySerde() == null ? null : consumed.keySerde().deserializer(),
+                                          consumed.valueSerde() == null ? null : consumed.valueSerde().deserializer(),
+                                          topics.toArray(new String[topics.size()]));
 
         return new KStreamImpl<>(this, name, Collections.singleton(name), false);
     }
 
-    public <K, V> KStream<K, V> stream(final Topology.AutoOffsetReset offsetReset,
-                                       final TimestampExtractor timestampExtractor,
-                                       final Serde<K> keySerde,
-                                       final Serde<V> valSerde,
-                                       final Pattern topicPattern) {
+    public <K, V> KStream<K, V> stream(final Pattern topicPattern, final ConsumedInternal<K, V> consumed) {
         final String name = newName(KStreamImpl.SOURCE_NAME);
 
-        internalTopologyBuilder.addSource(offsetReset, name, timestampExtractor, keySerde == null ? null : keySerde.deserializer(), valSerde == null ? null : valSerde.deserializer(), topicPattern);
+        internalTopologyBuilder.addSource(consumed.offsetResetPolicy(),
+                                          name,
+                                          consumed.timestampExtractor(),
+                                          consumed.keySerde() == null ? null : consumed.keySerde().deserializer(),
+                                          consumed.valueSerde() == null ? null : consumed.valueSerde().deserializer(),
+                                          topicPattern);
 
         return new KStreamImpl<>(this, name, Collections.singleton(name), false);
     }
 
     @SuppressWarnings("unchecked")
-    public <K, V> KTable<K, V> table(final Topology.AutoOffsetReset offsetReset,
-                                     final TimestampExtractor timestampExtractor,
-                                     final Serde<K> keySerde,
-                                     final Serde<V> valSerde,
-                                     final String topic,
+    public <K, V> KTable<K, V> table(final String topic,
+                                     final ConsumedInternal<K, V> consumed,
                                      final String queryableStoreName) {
         final String internalStoreName = queryableStoreName != null ? queryableStoreName : newStoreName(KTableImpl.SOURCE_NAME);
         final StateStoreSupplier storeSupplier = new RocksDBKeyValueStoreSupplier<>(internalStoreName,
-            keySerde,
-            valSerde,
+            consumed.keySerde(),
+            consumed.valueSerde(),
             false,
             Collections.<String, String>emptyMap(),
             true);
-        return doTable(offsetReset, keySerde, valSerde, timestampExtractor, topic, storeSupplier, queryableStoreName != null);
+        return doTable(consumed, topic, storeSupplier, queryableStoreName != null);
     }
 
     public <K, V> KTable<K, V> table(final Topology.AutoOffsetReset offsetReset,
@@ -92,13 +93,10 @@ public class InternalStreamsBuilder {
                                      final String topic,
                                      final StateStoreSupplier<KeyValueStore> storeSupplier) {
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
-        return doTable(offsetReset, keySerde, valSerde, timestampExtractor, topic, storeSupplier, true);
+        return doTable(new ConsumedInternal<>(keySerde, valSerde, timestampExtractor, offsetReset), topic, storeSupplier, true);
     }
 
-    private <K, V> KTable<K, V> doTable(final Topology.AutoOffsetReset offsetReset,
-                                        final Serde<K> keySerde,
-                                        final Serde<V> valSerde,
-                                        final TimestampExtractor timestampExtractor,
+    private <K, V> KTable<K, V> doTable(final ConsumedInternal<K, V> consumed,
                                         final String topic,
                                         final StateStoreSupplier<KeyValueStore> storeSupplier,
                                         final boolean isQueryable) {
@@ -106,13 +104,16 @@ public class InternalStreamsBuilder {
         final String name = newName(KTableImpl.SOURCE_NAME);
         final ProcessorSupplier<K, V> processorSupplier = new KTableSource<>(storeSupplier.name());
 
-        internalTopologyBuilder.addSource(offsetReset, source, timestampExtractor, keySerde == null ? null : keySerde.deserializer(),
-            valSerde == null ? null : valSerde.deserializer(),
-            topic);
+        internalTopologyBuilder.addSource(consumed.offsetResetPolicy(),
+                                          source,
+                                          consumed.timestampExtractor(),
+                                          consumed.keySerde() == null ? null : consumed.keySerde().deserializer(),
+                                          consumed.valueSerde() == null ? null : consumed.valueSerde().deserializer(),
+                                          topic);
         internalTopologyBuilder.addProcessor(name, processorSupplier, source);
 
         final KTableImpl<K, ?, V> kTable = new KTableImpl<>(this, name, processorSupplier,
-            keySerde, valSerde, Collections.singleton(source), storeSupplier.name(), isQueryable);
+            consumed.keySerde(), consumed.valueSerde(), Collections.singleton(source), storeSupplier.name(), isQueryable);
 
         internalTopologyBuilder.addStateStore(storeSupplier, name);
         internalTopologyBuilder.connectSourceStoreAndTopic(storeSupplier.name(), topic);
@@ -120,15 +121,13 @@ public class InternalStreamsBuilder {
         return kTable;
     }
 
-    public <K, V> GlobalKTable<K, V> globalTable(final Serde<K> keySerde,
-                                                 final Serde<V> valSerde,
-                                                 final TimestampExtractor timestampExtractor,
-                                                 final String topic,
+    public <K, V> GlobalKTable<K, V> globalTable(final String topic,
+                                                 final ConsumedInternal<K, V> consumed,
                                                  final String queryableStoreName) {
         final String internalStoreName = queryableStoreName != null ? queryableStoreName : newStoreName(KTableImpl.SOURCE_NAME);
-        return doGlobalTable(keySerde, valSerde, timestampExtractor, topic, new RocksDBKeyValueStoreSupplier<>(internalStoreName,
-            keySerde,
-            valSerde,
+        return doGlobalTable(consumed, topic, new RocksDBKeyValueStoreSupplier<>(internalStoreName,
+            consumed.keySerde(),
+            consumed.valueSerde(),
             false,
             Collections.<String, String>emptyMap(),
             true));
@@ -138,13 +137,11 @@ public class InternalStreamsBuilder {
                                                  final Serde<V> valSerde,
                                                  final String topic,
                                                  final StateStoreSupplier<KeyValueStore> storeSupplier) {
-        return doGlobalTable(keySerde, valSerde, null, topic, storeSupplier);
+        return doGlobalTable(new ConsumedInternal<>(keySerde, valSerde, null, null), topic, storeSupplier);
     }
 
     @SuppressWarnings("unchecked")
-    private <K, V> GlobalKTable<K, V> doGlobalTable(final Serde<K> keySerde,
-                                                    final Serde<V> valSerde,
-                                                    final TimestampExtractor timestampExtractor,
+    private <K, V> GlobalKTable<K, V> doGlobalTable(final ConsumedInternal<K, V> consumed,
                                                     final String topic,
                                                     final StateStoreSupplier<KeyValueStore> storeSupplier) {
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
@@ -153,10 +150,17 @@ public class InternalStreamsBuilder {
         final KTableSource<K, V> tableSource = new KTableSource<>(storeSupplier.name());
 
 
-        final Deserializer<K> keyDeserializer = keySerde == null ? null : keySerde.deserializer();
-        final Deserializer<V> valueDeserializer = valSerde == null ? null : valSerde.deserializer();
+        final Deserializer<K> keyDeserializer = consumed.keySerde() == null ? null : consumed.keySerde().deserializer();
+        final Deserializer<V> valueDeserializer = consumed.valueSerde() == null ? null : consumed.valueSerde().deserializer();
 
-        internalTopologyBuilder.addGlobalStore(storeSupplier, sourceName, timestampExtractor, keyDeserializer, valueDeserializer, topic, processorName, tableSource);
+        internalTopologyBuilder.addGlobalStore(storeSupplier,
+                                               sourceName,
+                                               consumed.timestampExtractor(),
+                                               keyDeserializer,
+                                               valueDeserializer,
+                                               topic,
+                                               processorName,
+                                               tableSource);
         return new GlobalKTableImpl(new KTableSourceValueGetterSupplier<>(storeSupplier.name()));
     }
 
@@ -199,5 +203,4 @@ public class InternalStreamsBuilder {
         internalTopologyBuilder.addGlobalStore(storeSupplier, sourceName, timestampExtractor, keyDeserializer,
             valueDeserializer, topic, processorName, stateUpdateSupplier);
     }
-
 }
