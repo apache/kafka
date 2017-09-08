@@ -66,8 +66,8 @@ public class AssignedTasksTest {
     public void shouldGetPartitionsFromNewTasksThatHaveStateStores() {
         EasyMock.expect(t1.hasStateStores()).andReturn(true);
         EasyMock.expect(t2.hasStateStores()).andReturn(true);
-        EasyMock.expect(t1.partitions()).andReturn(Collections.singleton(tp1));
-        EasyMock.expect(t2.partitions()).andReturn(Collections.singleton(tp2));
+        EasyMock.expect(t1.partitions()).andReturn(Collections.singleton(tp1)).anyTimes();
+        EasyMock.expect(t2.partitions()).andReturn(Collections.singleton(tp2)).anyTimes();
         EasyMock.replay(t1, t2);
 
         assignedTasks.addNewTask(t1);
@@ -82,6 +82,8 @@ public class AssignedTasksTest {
     public void shouldNotGetPartitionsFromNewTasksWithoutStateStores() {
         EasyMock.expect(t1.hasStateStores()).andReturn(false);
         EasyMock.expect(t2.hasStateStores()).andReturn(false);
+        EasyMock.expect(t1.partitions()).andReturn(Collections.singleton(tp1)).anyTimes();
+        EasyMock.expect(t2.partitions()).andReturn(Collections.singleton(tp2)).anyTimes();
         EasyMock.replay(t1, t2);
 
         assignedTasks.addNewTask(t1);
@@ -95,6 +97,7 @@ public class AssignedTasksTest {
     @Test
     public void shouldInitializeNewTasks() {
         EasyMock.expect(t1.initialize()).andReturn(false);
+        EasyMock.expect(t1.partitions()).andReturn(Collections.singleton(tp1)).anyTimes();
         EasyMock.replay(t1);
 
         assignedTasks.addNewTask(t1);
@@ -107,7 +110,8 @@ public class AssignedTasksTest {
     public void shouldMoveInitializedTasksNeedingRestoreToRestoring() {
         EasyMock.expect(t1.initialize()).andReturn(false);
         EasyMock.expect(t2.initialize()).andReturn(true);
-        EasyMock.expect(t2.partitions()).andReturn(Collections.singleton(tp2));
+        EasyMock.expect(t1.partitions()).andReturn(Collections.singleton(tp1)).anyTimes();
+        EasyMock.expect(t2.partitions()).andReturn(Collections.singleton(tp2)).anyTimes();
         EasyMock.expect(t2.changelogPartitions()).andReturn(Collections.<TopicPartition>emptyList());
 
         EasyMock.replay(t1, t2);
@@ -125,7 +129,7 @@ public class AssignedTasksTest {
     @Test
     public void shouldMoveInitializedTasksThatDontNeedRestoringToRunning() {
         EasyMock.expect(t2.initialize()).andReturn(true);
-        EasyMock.expect(t2.partitions()).andReturn(Collections.singleton(tp2));
+        EasyMock.expect(t2.partitions()).andReturn(Collections.singleton(tp2)).anyTimes();
         EasyMock.expect(t2.changelogPartitions()).andReturn(Collections.<TopicPartition>emptyList());
 
         EasyMock.replay(t2);
@@ -169,6 +173,7 @@ public class AssignedTasksTest {
     public void shouldCloseUnInitializedTasksOnSuspend() {
         t1.close(false, false);
         EasyMock.expectLastCall();
+        EasyMock.expect(t1.partitions()).andReturn(Collections.singleton(tp1)).anyTimes();
         EasyMock.replay(t1);
 
         assignedTasks.addNewTask(t1);
@@ -217,7 +222,7 @@ public class AssignedTasksTest {
 
     private void mockInitializedTask() {
         EasyMock.expect(t1.initialize()).andReturn(true);
-        EasyMock.expect(t1.partitions()).andReturn(Collections.singleton(tp1));
+        EasyMock.expect(t1.partitions()).andReturn(Collections.singleton(tp1)).anyTimes();
         EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.<TopicPartition>emptyList());
     }
 

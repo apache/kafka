@@ -82,7 +82,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 public class StreamThreadTest {
 
@@ -92,11 +91,11 @@ public class StreamThreadTest {
     private final Metrics metrics = new Metrics();
     private final MockClientSupplier clientSupplier = new MockClientSupplier();
     private UUID processId = UUID.randomUUID();
-    final KStreamBuilder builder = new KStreamBuilder();
+    private final KStreamBuilder builder = new KStreamBuilder();
     private final StreamsConfig config = new StreamsConfig(configProps(false));
     private final String stateDir = TestUtils.tempDirectory().getPath();
     private final StateDirectory stateDirectory  = new StateDirectory("applicationId", stateDir, mockTime);
-    private final ChangelogReader changelogReader = new StoreChangelogReader(clientSupplier.restoreConsumer, Time.SYSTEM, 5000);
+    private final ChangelogReader changelogReader = new StoreChangelogReader(clientSupplier.restoreConsumer);
 
     @Before
     public void setUp() throws Exception {
@@ -151,9 +150,8 @@ public class StreamThreadTest {
     // task0 is unused
     private final TaskId task1 = new TaskId(0, 1);
     private final TaskId task2 = new TaskId(0, 2);
-    private final TaskId task3 = new TaskId(0, 3);
-    private final TaskId task4 = new TaskId(1, 1);
-    private final TaskId task5 = new TaskId(1, 2);
+    private final TaskId task3 = new TaskId(1, 1);
+    private final TaskId task4 = new TaskId(1, 2);
 
     private Properties configProps(final boolean enableEos) {
         return new Properties() {
@@ -396,10 +394,10 @@ public class StreamThreadTest {
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
         thread.runOnce(-1);
 
+        assertTrue(thread.tasks().containsKey(task3));
         assertTrue(thread.tasks().containsKey(task4));
-        assertTrue(thread.tasks().containsKey(task5));
-        assertEquals(expectedGroup1, thread.tasks().get(task4).partitions());
-        assertEquals(expectedGroup2, thread.tasks().get(task5).partitions());
+        assertEquals(expectedGroup1, thread.tasks().get(task3).partitions());
+        assertEquals(expectedGroup2, thread.tasks().get(task4).partitions());
         assertEquals(2, thread.tasks().size());
 
         // revoke four partitions and assign three partitions of both subtopologies
@@ -410,14 +408,14 @@ public class StreamThreadTest {
         expectedGroup1 = new HashSet<>(Collections.singleton(t1p1));
         expectedGroup2 = new HashSet<>(Arrays.asList(t2p1, t3p1));
         activeTasks.put(new TaskId(0, 1), expectedGroup1);
-        activeTasks.remove(task5);
+        activeTasks.remove(task4);
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
         thread.runOnce(-1);
 
         assertTrue(thread.tasks().containsKey(task1));
-        assertTrue(thread.tasks().containsKey(task4));
+        assertTrue(thread.tasks().containsKey(task3));
         assertEquals(expectedGroup1, thread.tasks().get(task1).partitions());
-        assertEquals(expectedGroup2, thread.tasks().get(task4).partitions());
+        assertEquals(expectedGroup2, thread.tasks().get(task3).partitions());
         assertEquals(2, thread.tasks().size());
 
         // revoke all three partitons and reassign the same three partitions (from different subtopologies)
@@ -430,9 +428,9 @@ public class StreamThreadTest {
         thread.runOnce(-1);
 
         assertTrue(thread.tasks().containsKey(task1));
-        assertTrue(thread.tasks().containsKey(task4));
+        assertTrue(thread.tasks().containsKey(task3));
         assertEquals(expectedGroup1, thread.tasks().get(task1).partitions());
-        assertEquals(expectedGroup2, thread.tasks().get(task4).partitions());
+        assertEquals(expectedGroup2, thread.tasks().get(task3).partitions());
         assertEquals(2, thread.tasks().size());
 
         // revoke all partitions and assign nothing
@@ -1579,12 +1577,8 @@ public class StreamThreadTest {
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(testStreamTask.partitions);
         thread.runOnce(-1);
-        try {
-            thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
-            fail("should have thrown exception");
-        } catch (final Exception e) {
-            // expected
-        }
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+
         assertFalse(testStreamTask.committed);
     }
 
@@ -1641,12 +1635,8 @@ public class StreamThreadTest {
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(testStreamTask.partitions);
         thread.runOnce(-1);
-        try {
-            thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
-            fail("should have thrown exception");
-        } catch (final Exception e) {
-            // expected
-        }
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+
         assertFalse(testStreamTask.committed);
     }
 
@@ -1745,15 +1735,7 @@ public class StreamThreadTest {
         final StateDirectory stateDirMock = mockStateDirInteractions(taskId);
         final StreamThread thread = setupTest(taskId, stateDirMock);
 
-
-        try {
-            thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
-            fail("Should have thrown exception");
-        } catch (final Exception e) {
-            //
-        } finally {
-            thread.close();
-        }
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
 
         EasyMock.verify(stateDirMock);
     }
@@ -1764,9 +1746,10 @@ public class StreamThreadTest {
         final StateDirectory stateDirMock = mockStateDirInteractions(taskId);
 
         final StreamThread thread = setupTest(taskId, stateDirMock);
-        thread.start();
+
         thread.close();
-        thread.join();
+        thread.shutdown(true);
+
         EasyMock.verify(stateDirMock);
     }
 
@@ -1840,14 +1823,8 @@ public class StreamThreadTest {
         final StateDirectory stateDirMock = mockStateDirInteractions(taskId);
         final StreamThread thread = setupStandbyTest(taskId, stateDirMock);
 
-        try {
-            thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
-            fail("Should have thrown exception");
-        } catch (final Exception e) {
-            // ok
-        } finally {
-            thread.close();
-        }
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+
         EasyMock.verify(stateDirMock);
     }
 
@@ -1916,7 +1893,7 @@ public class StreamThreadTest {
                     partitions,
                     builder.build(0),
                     clientSupplier.consumer,
-                    new StoreChangelogReader(getName(), clientSupplier.restoreConsumer, mockTime, 1000),
+                    new StoreChangelogReader(getName(), clientSupplier.restoreConsumer),
                     StreamThreadTest.this.config,
                     new StreamsMetricsImpl(new Metrics(), "groupName", Collections.<String, String>emptyMap()),
                     stateDirectory) {

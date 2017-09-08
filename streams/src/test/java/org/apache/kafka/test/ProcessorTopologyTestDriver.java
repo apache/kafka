@@ -216,10 +216,7 @@ public class ProcessorTopologyTestDriver {
                                   partitionsByTopic.values(),
                                   topology,
                                   consumer,
-                                  new StoreChangelogReader(
-                                      createRestoreConsumer(topology.storeToChangelogTopic()),
-                                      Time.SYSTEM,
-                                      5000),
+                                  new StoreChangelogReader(createRestoreConsumer(topology.storeToChangelogTopic())),
                                   config,
                                   streamsMetrics, stateDirectory,
                                   cache,
@@ -361,7 +358,7 @@ public class ProcessorTopologyTestDriver {
      * @return the state store, or null if no store has been registered with the given name
      * @see #getKeyValueStore(String)
      */
-    public StateStore getStateStore(final String name) {
+    private StateStore getStateStore(final String name) {
         return ((ProcessorContextImpl) task.context()).getStateMgr().getStore(name);
     }
 

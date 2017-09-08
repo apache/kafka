@@ -201,7 +201,7 @@ public class StreamThreadStateStoreProviderTest {
             Collections.singletonList(new TopicPartition(topicName, taskId.partition)),
             topology,
             clientSupplier.consumer,
-            new StoreChangelogReader(clientSupplier.restoreConsumer, Time.SYSTEM, 5000),
+            new StoreChangelogReader(clientSupplier.restoreConsumer),
             streamsConfig,
             new MockStreamsMetrics(new Metrics()),
             stateDirectory,
