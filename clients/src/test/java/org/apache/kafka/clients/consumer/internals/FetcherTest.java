@@ -113,7 +113,7 @@ import static org.junit.Assert.fail;
 
 @SuppressWarnings("deprecation")
 public class FetcherTest {
-    private ConsumerRebalanceListener listener = new NoOpConsumerRebalanceListener();
+    private ConsumerRebalanceListener listener = ConsumerRebalanceListener.NO_OP;
     private String topicName = "test";
     private String groupId = "test-group";
     private final String metricGroup = "consumer" + groupId + "-fetch-manager-metrics";
