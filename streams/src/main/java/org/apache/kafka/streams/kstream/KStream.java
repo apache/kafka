@@ -274,7 +274,9 @@ public interface KStream<K, V> {
      * <p>
      * Implementors will need to override {@code toString()} for keys and values that are not of type {@link String},
      * {@link Integer} etc. to get meaningful information.
+     * @deprecated use {@code print(Printed)}
      */
+    @Deprecated
     void print();
 
     /**
@@ -288,7 +290,9 @@ public interface KStream<K, V> {
      * {@link Integer} etc. to get meaningful information.
      *
      * @param label the name used to label the key/value pairs printed to the console
+     * @deprecated use {@code print(Printed)}
      */
+    @Deprecated
     void print(final String label);
 
     /**
@@ -304,7 +308,9 @@ public interface KStream<K, V> {
      *
      * @param keySerde key serde used to deserialize key if type is {@code byte[]},
      * @param valSerde value serde used to deserialize value if type is {@code byte[]},
+     * @deprecated use {@code print(Printed)}
      */
+    @Deprecated
     void print(final Serde<K> keySerde,
                final Serde<V> valSerde);
 
@@ -320,7 +326,9 @@ public interface KStream<K, V> {
      * @param keySerde   key serde used to deserialize key if type is {@code byte[]},
      * @param valSerde   value serde used to deserialize value if type is {@code byte[]},
      * @param label the name used to label the key/value pairs printed to the console
+     * @deprecated use {@code print(Printed)}
      */
+    @Deprecated
     void print(final Serde<K> keySerde,
                final Serde<V> valSerde,
                final String label);
@@ -344,7 +352,9 @@ public interface KStream<K, V> {
      * The KeyValueMapper's mapped value type must be {@code String}.
      *
      * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
+     * @deprecated use {@code print(Printed)}
      */
+    @Deprecated
     void print(final KeyValueMapper<? super K, ? super V, String> mapper);
 
     /**
@@ -367,7 +377,9 @@ public interface KStream<K, V> {
      *
      * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
      * @param label The given name which labels output will be printed.
+     * @deprecated use {@code print(Printed)}
      */
+    @Deprecated
     void print(final KeyValueMapper<? super K, ? super V, String> mapper, final String label);
 
     /**
@@ -394,7 +406,9 @@ public interface KStream<K, V> {
      * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
      * @param keySerde a {@link Serde<K>} used to deserialize key if type is {@code byte[]}.
      * @param valSerde a {@link Serde<V>} used to deserialize value if type is {@code byte[]}.
+     * @deprecated use {@code print(Printed)}
      */
+    @Deprecated
     void print(final KeyValueMapper<? super K, ? super V, String> mapper, final Serde<K> keySerde, final Serde<V> valSerde);
 
     /**
@@ -422,8 +436,16 @@ public interface KStream<K, V> {
      * @param keySerde a {@link Serde<K>} used to deserialize key if type is {@code byte[]}.
      * @param valSerde a {@link Serde<V>} used to deserialize value if type is {@code byte[]}.
      * @param label The given name which labels output will be printed.
+     * @deprecated use {@code print(Printed)}
      */
+    @Deprecated
     void print(final KeyValueMapper<? super K, ? super V, String> mapper, final Serde<K> keySerde, final Serde<V> valSerde, final String label);
+
+    /**
+     * Print the records of this KStream using the options provided by {@link Printed}
+     * @param printed options for printing
+     */
+    void print(final Printed<K, V> printed);
 
     /**
      * Write the records of this stream to a file at the given path.
@@ -437,7 +459,9 @@ public interface KStream<K, V> {
      * {@link Integer} etc. to get meaningful information.
      *
      * @param filePath name of the file to write to
+     * @deprecated use {@code print(Printed)}
      */
+    @Deprecated
     void writeAsText(final String filePath);
 
     /**
@@ -452,7 +476,9 @@ public interface KStream<K, V> {
      *
      * @param filePath   name of the file to write to
      * @param label the name used to label the key/value pairs written to the file
+     * @deprecated use {@code print(Printed)}
      */
+    @Deprecated
     void writeAsText(final String filePath,
                      final String label);
 
@@ -470,7 +496,9 @@ public interface KStream<K, V> {
      * @param filePath name of the file to write to
      * @param keySerde key serde used to deserialize key if type is {@code byte[]},
      * @param valSerde value serde used to deserialize value if type is {@code byte[]},
+     * @deprecated use {@code print(Printed)}
      */
+    @Deprecated
     void writeAsText(final String filePath,
                      final Serde<K> keySerde,
                      final Serde<V> valSerde);
@@ -489,7 +517,9 @@ public interface KStream<K, V> {
      * @param label the name used to label the key/value pairs written to the file
      * @param keySerde   key serde used to deserialize key if type is {@code byte[]},
      * @param valSerde   value serde used deserialize value if type is {@code byte[]},
+     * @deprecated use {@code print(Printed)}
      */
+    @Deprecated
     void writeAsText(final String filePath,
                      final String label,
                      final Serde<K> keySerde,
@@ -517,7 +547,9 @@ public interface KStream<K, V> {
      *
      * @param filePath path of the file to write to.
      * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
+     * @deprecated use {@code print(Printed)}
      */
+    @Deprecated
     void writeAsText(final String filePath, final KeyValueMapper<? super K, ? super V, String> mapper);
 
     /**
@@ -543,7 +575,9 @@ public interface KStream<K, V> {
      * @param filePath path of the file to write to.
      * @param label the name used to label records written to file.
      * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
+     * @deprecated use {@code print(Printed)}
      */
+    @Deprecated
     void writeAsText(final String filePath, final String label, final KeyValueMapper<? super K, ? super V, String> mapper);
 
     /**
@@ -573,7 +607,9 @@ public interface KStream<K, V> {
      * @param keySerde key serde used to deserialize key if type is {@code byte[]}.
      * @param valSerde value serde used to deserialize value if type is {@code byte[]}.
      * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
+     * @deprecated use {@code print(Printed)}
      */
+    @Deprecated
     void writeAsText(final String filePath, final Serde<K> keySerde, final Serde<V> valSerde, final KeyValueMapper<? super K, ? super V, String> mapper);
 
     /**
@@ -604,6 +640,7 @@ public interface KStream<K, V> {
      * @param keySerde key serde used to deserialize key if type is {@code byte[]}.
      * @param valSerde value serde used to deserialize value if type is {@code byte[]}.
      * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
+     * @deprecated use {@code print(Printed)}
      */
     void writeAsText(final String filePath, final String label, final Serde<K> keySerde, final Serde<V> valSerde, final KeyValueMapper<? super K, ? super V, String> mapper);
 

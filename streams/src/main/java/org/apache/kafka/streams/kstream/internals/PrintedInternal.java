@@ -16,37 +16,21 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.kstream.ForeachAction;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.AbstractProcessor;
+import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.Printed;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-public class KStreamPrint<K, V> implements ProcessorSupplier<K, V> {
-
-    private final ForeachAction<K, V> action;
-    
-    public KStreamPrint(final ForeachAction<K, V> action) {
-        this.action = action;
+public class PrintedInternal<K, V> extends Printed<K, V> {
+    public PrintedInternal(final Printed<K, V> printed) {
+        super(printed);
     }
 
-    @Override
-    public Processor<K, V> get() {
-        return new KStreamPrintProcessor();
+    /**
+     * Builds the {@link ProcessorSupplier} that will be used to print the records flowing through a {@link KStream}.
+     *
+     * @return the {@code ProcessorSupplier} to be used for printing
+     */
+    public ProcessorSupplier<K, V> build(final String processorName) {
+        return new KStreamPrint<>(new PrintForeachAction<>(printWriter, mapper, label != null ? label : processorName));
     }
-
-    private class KStreamPrintProcessor extends AbstractProcessor<K, V> {
-
-        @Override
-        public void process(final K key, final V value) {
-            action.apply(key, value);
-        }
-
-        @Override
-        public void close() {
-            if (action instanceof PrintForeachAction) {
-                ((PrintForeachAction) action).close();
-            }
-        }
-    }
-
 }
