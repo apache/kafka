@@ -223,7 +223,7 @@ public interface KGroupedStream<K, V> {
      * @param windows   the specification of the aggregation {@link Windows}
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys and {@link Long} values
      * that represent the latest (rolling) count (i.e., number of records) for each key within a window
-     * @deprecated use {@code windowedBy(windows).count()}
+     * @deprecated use {@link #windowedBy(Windows)}
      */
     @Deprecated
     <W extends Window> KTable<Windowed<K>, Long> count(final Windows<W> windows);
@@ -621,7 +621,7 @@ public interface KGroupedStream<K, V> {
      * @param windows   the specification of the aggregation {@link Windows}
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
-     * @deprecated use {@code windowedBy(windows).reduce(reducer)}
+     * @deprecated use {@link #windowedBy(Windows)}
      */
     @Deprecated
     <W extends Window> KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
@@ -1116,7 +1116,7 @@ public interface KGroupedStream<K, V> {
      * @param <VR>          the value type of the resulting {@link KTable}
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
-     * @deprecated use {@code windowedBy(windows).aggregate(initializer, aggregator, aggValueSerde)}
+     * @deprecated use {@link #windowedBy(Windows)}
      */
     @Deprecated
     <W extends Window, VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,

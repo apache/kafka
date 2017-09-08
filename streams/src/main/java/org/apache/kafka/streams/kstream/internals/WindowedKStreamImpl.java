@@ -95,7 +95,7 @@ public class WindowedKStreamImpl<K, V, W extends Window> extends AbstractStream<
         Objects.requireNonNull(reducer, "reducer can't be null");
         final String storeName = builder.newStoreName(REDUCE_NAME);
         return doAggregate(valSerde,
-                           REDUCE_NAME,
+                           builder.newName(REDUCE_NAME),
                            storeName,
                            new KStreamWindowReduce<>(windows, storeName, reducer));
 
