@@ -32,7 +32,7 @@ public class KeyValueStoreMaterializer<K, V> {
     public StoreBuilder<KeyValueStore<K, V>> materialize() {
         KeyValueBytesStoreSupplier supplier = (KeyValueBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
-            supplier = Stores.inMemoryKeyValueStore(materialized.storeName());
+            supplier = Stores.persistentKeyValueStore(materialized.storeName());
         }
         final StoreBuilder<KeyValueStore<K, V>> builder = Stores.keyValueStoreBuilder(supplier,
                                                                                       materialized.keySerde(),

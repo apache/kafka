@@ -29,6 +29,7 @@ import org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -118,10 +119,11 @@ public interface KTable<K, V> {
      * }</pre>
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
+     * The store name to query with is specified by {@link Materialized#as(String)} or {@link Materialized#as(KeyValueBytesStoreSupplier)}.
      * <p>
      *
      * @param predicate     a filter {@link Predicate} that is applied to each record
-     * @param materialized  a {@link Materialized} that describes how the {@link StateStore} for this {@code KTable}
+     * @param materialized  a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
      *                      should be materialized
      * @return a {@code KTable} that contains only those records that satisfy the given predicate
      * @see #filterNot(Predicate, Materialized)
@@ -254,9 +256,10 @@ public interface KTable<K, V> {
      * }</pre>
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
+     * The store name to query with is specified by {@link Materialized#as(String)} or {@link Materialized#as(KeyValueBytesStoreSupplier)}.
      * <p>
      * @param predicate a filter {@link Predicate} that is applied to each record
-     * @param materialized  a {@link Materialized} that describes how the {@link StateStore} for this {@code KTable}
+     * @param materialized  a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
      *                      should be materialized
      * @return a {@code KTable} that contains only those records that do <em>not</em> satisfy the given predicate
      * @see #filter(Predicate, Materialized)
@@ -395,7 +398,7 @@ public interface KTable<K, V> {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
-     * <p>
+     * The store name to query with is specified by {@link Materialized#as(String)} or {@link Materialized#as(KeyValueBytesStoreSupplier)}.
      * <p>
      * This operation preserves data co-location with respect to the key.
      * Thus, <em>no</em> internal data redistribution is required if a key based operator (like a join) is applied to
@@ -408,10 +411,8 @@ public interface KTable<K, V> {
      * delete the corresponding record in the result {@code KTable}.
      *
      * @param mapper a {@link ValueMapper} that computes a new output value
-     * @param materialized  a {@link Materialized} that describes how the {@link StateStore} for this {@code KTable}
+     * @param materialized  a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
      *                      should be materialized
-     * (i.e., that would be equivalent to calling {@link KTable#mapValues(ValueMapper)}.
-     * @param valueSerde serializer for new value type
      * @param <VR>   the value type of the result {@code KTable}
      *
      * @return a {@code KTable} that contains records with unmodified keys and new values (possibly of different type)
