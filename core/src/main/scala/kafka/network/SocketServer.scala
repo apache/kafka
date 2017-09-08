@@ -570,14 +570,12 @@ private[kafka] class Processor(val id: Int,
         val resp = inflightResponses.remove(send.destination).getOrElse {
           throw new IllegalStateException(s"Send for ${send.destination} completed, but not in `inflightResponses`")
         }
-        updateRequestMetrics(resp.request)
+        updateRequestMetrics(resp)
         selector.unmute(send.destination)
       } catch {
         case e: Throwable => processChannelException(send.destination,
             s"Exception while processing completed send to ${send.destination}", e)
       }
-      updateRequestMetrics(resp)
-      selector.unmute(send.destination)
     }
   }
 
@@ -617,7 +615,7 @@ private[kafka] class Processor(val id: Int,
         connectionQuotas.dec(address)
       selector.close(connectionId)
 
-      inflightResponses.remove(connectionId).foreach(response => updateRequestMetrics(response.request))
+      inflightResponses.remove(connectionId).foreach(response => updateRequestMetrics(response))
     }
   }
 
