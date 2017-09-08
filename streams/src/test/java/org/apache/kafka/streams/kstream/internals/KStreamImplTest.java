@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsBuilderTest;
@@ -45,6 +46,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.concurrent.TimeUnit;
 
@@ -61,6 +63,7 @@ public class KStreamImplTest {
     final private Serde<Integer> intSerde = Serdes.Integer();
     private KStream<String, String> testStream;
     private StreamsBuilder builder;
+    private final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
 
     @Rule
     public final KStreamTestDriver driver = new KStreamTestDriver();
@@ -75,9 +78,9 @@ public class KStreamImplTest {
     public void testNumProcesses() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        KStream<String, String> source1 = builder.stream(stringSerde, stringSerde, "topic-1", "topic-2");
+        KStream<String, String> source1 = builder.stream(Arrays.asList("topic-1", "topic-2"), consumed);
 
-        KStream<String, String> source2 = builder.stream(stringSerde, stringSerde, "topic-3", "topic-4");
+        KStream<String, String> source2 = builder.stream(Arrays.asList("topic-3", "topic-4"), consumed);
 
         KStream<String, String> stream1 =
             source1.filter(new Predicate<String, String>() {
@@ -172,8 +175,9 @@ public class KStreamImplTest {
     @Test
     public void shouldUseRecordMetadataTimestampExtractorWithThrough() {
         final StreamsBuilder builder = new StreamsBuilder();
-        KStream<String, String> stream1 = builder.stream(stringSerde, stringSerde, "topic-1", "topic-2");
-        KStream<String, String> stream2 = builder.stream(stringSerde, stringSerde, "topic-3", "topic-4");
+        final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
+        KStream<String, String> stream1 = builder.stream(Arrays.asList("topic-1", "topic-2"), consumed);
+        KStream<String, String> stream2 = builder.stream(Arrays.asList("topic-3", "topic-4"), consumed);
 
         stream1.to("topic-5");
         stream2.through("topic-6");
@@ -190,7 +194,7 @@ public class KStreamImplTest {
     public void shouldSendDataThroughTopicUsingProduced() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String input = "topic";
-        final KStream<String, String> stream = builder.stream(stringSerde, stringSerde, input);
+        final KStream<String, String> stream = builder.stream(input, consumed);
         final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
         stream.through("through-topic", Produced.with(stringSerde, stringSerde)).process(processorSupplier);
 
@@ -203,10 +207,10 @@ public class KStreamImplTest {
     public void shouldSendDataToTopicUsingProduced() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String input = "topic";
-        final KStream<String, String> stream = builder.stream(stringSerde, stringSerde, input);
+        final KStream<String, String> stream = builder.stream(input, consumed);
         final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
         stream.to("to-topic", Produced.with(stringSerde, stringSerde));
-        builder.stream(stringSerde, stringSerde, "to-topic").process(processorSupplier);
+        builder.stream("to-topic", consumed).process(processorSupplier);
 
         driver.setUp(builder);
         driver.process(input, "e", "f");
@@ -250,7 +254,8 @@ public class KStreamImplTest {
     @Test
     public void testToWithNullValueSerdeDoesntNPE() {
         final StreamsBuilder builder = new StreamsBuilder();
-        final KStream<String, String> inputStream = builder.stream(stringSerde, stringSerde, "input");
+        final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
+        final KStream<String, String> inputStream = builder.stream(Collections.singleton("input"), consumed);
         inputStream.to(stringSerde, null, "output");
     }
 
@@ -429,7 +434,7 @@ public class KStreamImplTest {
 
     @Test
     public void shouldThrowNullPointerOnLeftJoinWithTableWhenJoinedIsNull() {
-        final KTable<String, String> table = builder.table(Serdes.String(), Serdes.String(), "blah");
+        final KTable<String, String> table = builder.table("blah", consumed);
         try {
             testStream.leftJoin(table,
                                 MockValueJoiner.TOSTRING_JOINER,
@@ -442,7 +447,7 @@ public class KStreamImplTest {
 
     @Test
     public void shouldThrowNullPointerOnJoinWithTableWhenJoinedIsNull() {
-        final KTable<String, String> table = builder.table(Serdes.String(), Serdes.String(), "blah");
+        final KTable<String, String> table = builder.table("blah", consumed);
         try {
             testStream.join(table,
                             MockValueJoiner.TOSTRING_JOINER,

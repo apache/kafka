@@ -333,7 +333,7 @@ class LogSegmentTest {
   private def endTxnRecords(controlRecordType: ControlRecordType,
                             producerId: Long,
                             producerEpoch: Short,
-                            offset: Long = 0L,
+                            offset: Long,
                             partitionLeaderEpoch: Int = 0,
                             coordinatorEpoch: Int = 0,
                             timestamp: Long = RecordBatch.NO_TIMESTAMP): MemoryRecords = {

@@ -547,9 +547,8 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                     StreamsBuilder builder = new StreamsBuilder();
 
                     KStream&lt;String, Long&gt; wordCounts = builder.stream(
-                        Serdes.String(), /* key serde */
-                        Serdes.Long(),   /* value serde */
-                        "word-counts-input-topic" /* input topic */);
+                        "word-counts-input-topic" /* input topic */,
+                        Consumed.with(Serdes.String(), Serdes.Long()); // define key and value serdes
                 </pre>
                 When to provide serdes explicitly:
                 <ul>
@@ -1180,9 +1179,10 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
         Once records are grouped by key via <code>groupByKey</code> or <code>groupBy</code> -- and
         thus represented as either a <code>KGroupedStream</code> or a
         <code>KGroupedTable</code> -- they can be aggregated via an operation such as
-        <code>reduce</code>. Aggregations are <i>key-based</i> operations, i.e.
-        they always operate over records (notably record values) <i>of the same key</i>. You may
-        choose to perform aggregations on
+        <code>reduce</code>.
+        For windowed aggregations use <code>windowedBy(Windows).reduce(Reducer)</code>.
+        Aggregations are <i>key-based</i> operations, i.e.they always operate over records (notably record values) <i>of the same key</i>.
+        You maychoose to perform aggregations on
         <a href="#streams_dsl_windowing">windowed</a> or non-windowed data.
     </p>
     <table class="data-table" border="1">
@@ -1210,20 +1210,20 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                     Several variants of <code>aggregate</code> exist, see Javadocs for details.
                 </p>
                 <pre class="brush: java;">
-                    KGroupedStream&lt;byte[], String&gt; groupedStream = ...;
-                    KGroupedTable&lt;byte[], String&gt; groupedTable = ...;
+                    KGroupedStream&lt;Bytes, String&gt; groupedStream = ...;
+                    KGroupedTable&lt;Bytes, String&gt; groupedTable = ...;
 
                     // Java 8+ examples, using lambda expressions
 
                     // Aggregating a KGroupedStream (note how the value type changes from String to Long)
-                    KTable&lt;byte[], Long&gt; aggregatedStream = groupedStream.aggregate(
+                    KTable&lt;Bytes, Long&gt; aggregatedStream = groupedStream.aggregate(
                         () -> 0L, /* initializer */
                         (aggKey, newValue, aggValue) -> aggValue + newValue.length(), /* adder */
                         Serdes.Long(), /* serde for aggregate value */
                         "aggregated-stream-store" /* state store name */);
 
                     // Aggregating a KGroupedTable (note how the value type changes from String to Long)
-                    KTable&lt;byte[], Long&gt; aggregatedTable = groupedTable.aggregate(
+                    KTable&lt;Bytes, Long&gt; aggregatedTable = groupedTable.aggregate(
                         () -> 0L, /* initializer */
                         (aggKey, newValue, aggValue) -> aggValue + newValue.length(), /* adder */
                         (aggKey, oldValue, aggValue) -> aggValue - oldValue.length(), /* subtractor */
@@ -1231,19 +1231,26 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                         "aggregated-table-store" /* state store name */);
 
 
+                    // windowed aggregation
+                    KTable&lt;Windowed&ltBytes&gt;, Long&gt; windowedAggregate = groupedStream.windowedBy(TimeWindows.of(TimeUnit.MINUTES(5).toMillis())
+                        .aggregate(() -> 0L, /* initializer */
+                            (aggKey, newValue, aggValue) -> aggValue + newValue.length(), /* aggregator */
+                            Serdes.Long()) /* serde for aggregate value */
+
+
                     // Java 7 examples
 
                     // Aggregating a KGroupedStream (note how the value type changes from String to Long)
-                    KTable&lt;byte[], Long&gt; aggregatedStream = groupedStream.aggregate(
+                    KTable&lt;Bytes, Long&gt; aggregatedStream = groupedStream.aggregate(
                         new Initializer&lt;Long&gt;() { /* initializer */
                           @Override
                           public Long apply() {
                             return 0L;
                           }
                         },
-                        new Aggregator&lt;byte[], String, Long&gt;() { /* adder */
+                        new Aggregator&lt;Bytes, String, Long&gt;() { /* adder */
                           @Override
-                          public Long apply(byte[] aggKey, String newValue, Long aggValue) {
+                          public Long apply(Bytes aggKey, String newValue, Long aggValue) {
                             return aggValue + newValue.length();
                           }
                         },
@@ -1251,27 +1258,44 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                         "aggregated-stream-store");
 
                     // Aggregating a KGroupedTable (note how the value type changes from String to Long)
-                    KTable&lt;byte[], Long&gt; aggregatedTable = groupedTable.aggregate(
+                    KTable&lt;Bytes, Long&gt; aggregatedTable = groupedTable.aggregate(
                         new Initializer&lt;Long&gt;() { /* initializer */
                           @Override
                           public Long apply() {
                             return 0L;
                           }
                         },
-                        new Aggregator&lt;byte[], String, Long&gt;() { /* adder */
+                        new Aggregator&lt;Bytes, String, Long&gt;() { /* adder */
                           @Override
-                          public Long apply(byte[] aggKey, String newValue, Long aggValue) {
+                          public Long apply(Bytes aggKey, String newValue, Long aggValue) {
                             return aggValue + newValue.length();
                           }
                         },
-                        new Aggregator&lt;byte[], String, Long&gt;() { /* subtractor */
+                        new Aggregator&lt;Bytes, String, Long&gt;() { /* subtractor */
                           @Override
-                          public Long apply(byte[] aggKey, String oldValue, Long aggValue) {
+                          public Long apply(Bytes aggKey, String oldValue, Long aggValue) {
                             return aggValue - oldValue.length();
                           }
                         },
                         Serdes.Long(),
                         "aggregated-table-store");
+
+                    // Windowed aggregation
+                    KTable&lt;Bytes, Long&gt; aggregatedStream = groupedStream.windowedBy(TimeWindows.of(TimeUnit.MINUTES(5).toMillis())
+                        .aggregate(
+                            new Initializer&lt;Long&gt;() { /* initializer */
+                              @Override
+                              public Long apply() {
+                                return 0L;
+                              }
+                            },
+                            new Aggregator&lt;Bytes, String, Long&gt;() { /* adder */
+                              @Override
+                              public Long apply(Bytes aggKey, String newValue, Long aggValue) {
+                                return aggValue + newValue.length();
+                              }
+                            },
+                            Serdes.Long());
                 </pre>
                 <p>
                     Detailed behavior of <code>KGroupedStream</code>:
@@ -2431,7 +2455,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
           StreamsConfig config = new StreamsConfig(props);
           StreamsBuilder builder = new StreamsBuilder();
 
-          KStream&lt;String, String&gt; textLines = builder.stream(stringSerde, stringSerde, "word-count-input");
+          KStream&lt;String, String&gt; textLines = builder.stream("word-count-input", Consumed.with(stringSerde, stringSerde);
 
           KGroupedStream&lt;String, String&gt; groupedByWord = textLines
               .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))

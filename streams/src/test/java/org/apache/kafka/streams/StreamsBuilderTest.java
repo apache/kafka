@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams;
 
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.KStream;
@@ -27,7 +26,9 @@ import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Rule;
 import org.junit.Test;
 
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
@@ -41,7 +42,7 @@ public class StreamsBuilderTest {
 
     @Test(expected = TopologyException.class)
     public void testFrom() {
-        builder.stream("topic-1", "topic-2");
+        builder.stream(Arrays.asList("topic-1", "topic-2"));
 
         builder.build().addSource(KStreamImpl.SOURCE_NAME + "0000000000", "topic-3");
     }
@@ -109,12 +110,12 @@ public class StreamsBuilderTest {
 
     @Test(expected = TopologyException.class)
     public void shouldThrowExceptionWhenNoTopicPresent() throws Exception {
-        builder.stream();
+        builder.stream(Collections.<String>emptyList());
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowExceptionWhenTopicNamesAreNull() throws Exception {
-        builder.stream(Serdes.String(), Serdes.String(), null, null);
+        builder.stream(Arrays.<String>asList(null, null));
     }
 
     // TODO: these two static functions are added because some non-TopologyBuilder unit tests need to access the internal topology builder,
