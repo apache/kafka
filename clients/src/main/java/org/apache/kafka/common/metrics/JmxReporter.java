@@ -191,15 +191,15 @@ public class JmxReporter implements MetricsReporter {
 
         @Override
         public AttributeList getAttributes(String[] names) {
-            try {
-                AttributeList list = new AttributeList();
-                for (String name : names)
+            AttributeList list = new AttributeList();
+            for (String name : names) {
+                try {
                     list.add(new Attribute(name, getAttribute(name)));
-                return list;
-            } catch (Exception e) {
-                log.error("Error getting JMX attribute: ", e);
-                return new AttributeList();
+                } catch (Exception e) {
+                    log.warn("Error getting JMX attribute: ", e);
+                }
             }
+            return list;
         }
 
         public KafkaMetric removeAttribute(String name) {
