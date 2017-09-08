@@ -166,7 +166,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
      * @return The state this instance is in
      */
     public State state() {
-        // we do not need to use the stat lock since the variable is volatile
+        // we do not need to use the state lock since the variable is volatile
         return state;
     }
 
@@ -212,12 +212,12 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         return true;
     }
 
-    public synchronized boolean isRunningAndNotRebalancing() {
+    public boolean isRunningAndNotRebalancing() {
         // we do not need to grab stateLock since it is a single read
         return state == State.RUNNING;
     }
 
-    public synchronized boolean isRunning() {
+    public boolean isRunning() {
         synchronized (stateLock) {
             return state == State.RUNNING || state == State.PARTITIONS_REVOKED || state == State.PARTITIONS_ASSIGNED;
         }
@@ -1030,7 +1030,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
      * Note that there is nothing to prevent this function from being called multiple times
      * (e.g., in testing), hence the state is set only the first time
      */
-    public synchronized void shutdown() {
+    public void shutdown() {
         log.info("{} Informed to shut down", logPrefix);
         setState(State.PENDING_SHUTDOWN);
     }

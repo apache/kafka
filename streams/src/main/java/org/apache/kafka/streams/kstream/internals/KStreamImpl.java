@@ -380,7 +380,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public KStream<K, V> through(final Serde<K> keySerde,
                                  final Serde<V> valSerde,
                                  final StreamPartitioner<? super K, ? super V> partitioner, String topic) {
-
         return through(topic, Produced.with(keySerde, valSerde, partitioner));
     }
 
@@ -388,11 +387,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public KStream<K, V> through(final String topic, final Produced<K, V> produced) {
         final ProducedInternal<K, V> producedInternal = new ProducedInternal<>(produced);
         to(topic, producedInternal);
-        return builder.stream(null,
-                              new FailOnInvalidTimestamp(),
-                              producedInternal.keySerde(),
-                              producedInternal.valueSerde(),
-                              topic);
+        return builder.stream(Collections.singleton(topic),
+                              new ConsumedInternal<>(producedInternal.keySerde(),
+                                            producedInternal.valueSerde(),
+                                            new FailOnInvalidTimestamp(),
+                                            null));
     }
 
     @Override

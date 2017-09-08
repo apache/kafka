@@ -25,6 +25,7 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -100,9 +101,9 @@ public class KStreamRepartitionJoinTest {
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 3);
         streamsConfiguration.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
 
-        streamOne = builder.stream(Serdes.Long(), Serdes.Integer(), streamOneInput);
-        streamTwo = builder.stream(Serdes.Integer(), Serdes.String(), streamTwoInput);
-        streamFour = builder.stream(Serdes.Integer(), Serdes.String(), streamFourInput);
+        streamOne = builder.stream(streamOneInput, Consumed.with(Serdes.Long(), Serdes.Integer()));
+        streamTwo = builder.stream(streamTwoInput, Consumed.with(Serdes.Integer(), Serdes.String()));
+        streamFour = builder.stream(streamFourInput, Consumed.with(Serdes.Integer(), Serdes.String()));
 
         keyMapper = MockKeyValueMapper.SelectValueKeyValueMapper();
     }
