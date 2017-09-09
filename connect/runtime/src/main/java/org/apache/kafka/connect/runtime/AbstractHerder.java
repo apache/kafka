@@ -30,6 +30,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
@@ -207,7 +208,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
         Collections.sort(taskStates);
 
-        return new ConnectorStateInfo(connName, connectorState, taskStates);
+        return new ConnectorStateInfo(connName, connectorState, taskStates,
+            worker.isSinkConnector(connName) ? ConnectorType.SINK : ConnectorType.SOURCE);
     }
 
     @Override
