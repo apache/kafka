@@ -257,8 +257,8 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                 taskManager.createTasks(assignment);
                 streamThread.refreshMetadataState();
             } catch (final Throwable t) {
-                log.error("{} Error caught during partition assignment, " +
-                        "will abort the current process and re-throw at the end of rebalance: {}", logPrefix, t.getMessage());
+                log.error("Error caught during partition assignment, " +
+                        "will abort the current process and re-throw at the end of rebalance: {}", t.getMessage());
                 streamThread.setRebalanceException(t);
             } finally {
                 log.info("partition assignment took {} ms.\n" +
@@ -288,8 +288,8 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                     // suspend active tasks
                     taskManager.suspendTasksAndState();
                 } catch (final Throwable t) {
-                    log.error("{} Error caught during partition revocation, " +
-                            "will abort the current process and re-throw at the end of rebalance: {}", logPrefix, t.getMessage());
+                    log.error("Error caught during partition revocation, " +
+                            "will abort the current process and re-throw at the end of rebalance: {}", t.getMessage());
                     streamThread.setRebalanceException(t);
                 } finally {
                     streamThread.refreshMetadataState();
