@@ -805,16 +805,22 @@ class LogTest {
       case _: OutOfOrderSequenceException => // Good!
     }
 
-    // Append a Duplicate of an entry in the middle of the log. This is not allowed.
+    // Append a duplicate of the batch which is 4th from the tail. This should succeed without error since we
+    // retain the batch metadata of the last 5 batches.
+    val duplicateOfFourth = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds, "key".getBytes, "value".getBytes)),
+      producerId = pid, producerEpoch = epoch, sequence = 2)
+    log.appendAsLeader(duplicateOfFourth, leaderEpoch = 0)
+
+    // Append a Duplicate of an entry older than the last 5 appended batches. This should result in a DuplicateSequenceNumberException.
      try {
       val records = TestUtils.records(
         List(new SimpleRecord(mockTime.milliseconds, s"key-1".getBytes, s"value-1".getBytes)),
         producerId = pid, producerEpoch = epoch, sequence = 1)
       log.appendAsLeader(records, leaderEpoch = 0)
-      fail ("Should have received an OutOfOrderSequenceException since we attempted to append a duplicate of a records " +
-        "in the middle of the log.")
+      fail ("Should have received an DuplicateSequenceNumberException since we attempted to append a duplicate of a batch" +
+        "which is older than the last 5 appended batches.")
     } catch {
-      case _: OutOfOrderSequenceException => // Good!
+      case _: DuplicateSequenceException => // Good!
     }
 
     // Append a duplicate entry with a single records at the tail of the log. This should return the appendInfo of the original entry.
@@ -872,7 +878,7 @@ class LogTest {
     }
   }
 
-  @Test(expected = classOf[DuplicateSequenceNumberException])
+  @Test(expected = classOf[DuplicateSequenceException])
   def testDuplicateAppendToFollower() : Unit = {
     val logConfig = createLogConfig(segmentBytes = 1024 * 1024 * 5)
     val log = createLog(logDir, logConfig)
@@ -888,7 +894,7 @@ class LogTest {
       partitionLeaderEpoch, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
   }
 
-  @Test(expected = classOf[DuplicateSequenceNumberException])
+  @Test(expected = classOf[DuplicateSequenceException])
   def testMultipleProducersWithDuplicatesInSingleAppend() : Unit = {
     val logConfig = createLogConfig(segmentBytes = 1024 * 1024 * 5)
     val log = createLog(logDir, logConfig)

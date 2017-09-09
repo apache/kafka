@@ -459,6 +459,7 @@ public class TransactionManager {
             // Sequence numbers are not being tracked for this partition. This could happen if the producer id was just
             // reset due to a previous OutOfOrderSequenceException.
             return;
+
         int currentSequence = sequenceNumber(batch.topicPartition);
         currentSequence -= batch.recordCount;
         if (currentSequence < 0)
@@ -467,13 +468,15 @@ public class TransactionManager {
         setNextSequence(batch.topicPartition, currentSequence);
 
         for (ProducerBatch inFlightBatch : inflightBatchesBySequence.get(batch.topicPartition)) {
+            if (inFlightBatch.baseSequence() < batch.baseSequence())
+                continue;
             int newSequence = inFlightBatch.baseSequence() - batch.recordCount;
             if (newSequence < 0)
                 throw new IllegalStateException("Sequence number for batch with sequence " + inFlightBatch.baseSequence()
                         + " for partition " + batch.topicPartition + " is going to become negative :" + newSequence);
 
             log.debug("Setting sequence number of batch with current sequence {} for partition {} to {}", batch.baseSequence(), batch.topicPartition, newSequence);
-            inFlightBatch.setProducerState(new ProducerIdAndEpoch(inFlightBatch.producerId(), inFlightBatch.producerEpoch()), newSequence, inFlightBatch.isTransactional());
+            inFlightBatch.resetProducerState(new ProducerIdAndEpoch(inFlightBatch.producerId(), inFlightBatch.producerEpoch()), newSequence, inFlightBatch.isTransactional());
         }
     }
 
@@ -491,8 +494,7 @@ public class TransactionManager {
 
     // Checks if there are any partitions with unresolved partitions which may now be resolved. Returns true if
     // the producer id needs a reset, false otherwise.
-
-    synchronized boolean maybeResolveSequences() {
+    synchronized boolean shouldResetProducerStateAfterResolvingSequences() {
         for (TopicPartition topicPartition : partitionsWithUnresolvedSequences) {
             if (!hasInflightBatches(topicPartition)) {
                 // The partition has been fully drained. At this point, the last ack'd sequence should be once less than

@@ -343,6 +343,9 @@ public final class RecordAccumulator {
         return numSplitBatches;
     }
 
+    // The deque for the partition may have to be reordered in situations where leadership changes in between
+    // batch drains. Since the requests are on different connections, we no longer have any guarantees about ordering
+    // of the responses. Hence we will have to check if there is anything out of order and correct the order in the queue.
     private void maybeEnsureQueueIsOrdered(Deque<ProducerBatch> deque, ProducerBatch batch) {
         if (transactionManager != null) {
             // When we are requeing and have enabled idempotence, the reenqueued batch must always have a sequence.

@@ -66,9 +66,12 @@ private[log] case class BatchMetadata(lastSeq: Int, lastOffset: Long, offsetDelt
   }
 }
 
-private[log] case class ProducerIdEntry(producerId: Long, batchMetadata: mutable.Queue[BatchMetadata],
-                                        var producerEpoch: Short, var coordinatorEpoch: Int,
-                                        var currentTxnFirstOffset: Option[Long]) {
+// the batchMetadata is ordered such that the batch with the lowest sequence is at the head of the queue while the
+// batch with the highest sequence is at the tail of the queue. We will retain at most ProducerIdEntry.NumBatchesToRetain
+// elements in the queue. When the queue is at capacity, we remove the first element to make space for the incoming batch.
+private[log] class ProducerIdEntry(val producerId: Long, val batchMetadata: mutable.Queue[BatchMetadata],
+                                   var producerEpoch: Short, var coordinatorEpoch: Int,
+                                   var currentTxnFirstOffset: Option[Long]) {
 
   def firstSeq: Int = if (batchMetadata.isEmpty) RecordBatch.NO_SEQUENCE else batchMetadata.front.firstSeq
   def firstOffset: Long = if (batchMetadata.isEmpty) -1L else batchMetadata.front.firstOffset
@@ -95,13 +98,7 @@ private[log] case class ProducerIdEntry(producerId: Long, batchMetadata: mutable
     false
   }
 
-  def removeBatchesOlderThan(offset: Long) = {
-    val retainedMetadata = batchMetadata.filter(_.lastOffset >= offset)
-    if (retainedMetadata.size != batchMetadata.size) {
-      batchMetadata.clear()
-      retainedMetadata.foreach(batchMetadata.enqueue(_))
-    }
-  }
+  def removeBatchesOlderThan(offset: Long) = batchMetadata.dropWhile(_.lastOffset < offset)
 
   def duplicateOf(batch: RecordBatch): Option[BatchMetadata] = {
     if (batch.producerEpoch() != producerEpoch)
@@ -169,8 +166,8 @@ private[log] class ProducerAppendInfo(val producerId: Long,
         // the epoch was bumped by a control record, so we expect the sequence number to be reset
         throw new OutOfOrderSequenceException(s"Out of order sequence number for producerId $producerId: found $firstSeq " +
           s"(incoming seq. number), but expected 0")
-      } else if (currentEntry.batchWithSequenceRange(firstSeq, lastSeq).isDefined) {
-        throw new DuplicateSequenceNumberException(s"Duplicate sequence number for producerId $producerId: (incomingBatch.firstSeq, " +
+      } else if (lastSeq < currentEntry.firstSeq || currentEntry.batchWithSequenceRange(firstSeq, lastSeq).isDefined) {
+        throw new DuplicateSequenceException(s"Duplicate sequence number for producerId $producerId: (incomingBatch.firstSeq, " +
           s"incomingBatch.lastSeq): ($firstSeq, $lastSeq).")
       } else if (!inSequence(firstSeq, lastSeq)) {
         throw new OutOfOrderSequenceException(s"Out of order sequence number for producerId $producerId: $firstSeq " +
@@ -341,7 +338,7 @@ object ProducerStateManager {
         val offsetDelta = producerEntryStruct.getInt(OffsetDeltaField)
         val coordinatorEpoch = producerEntryStruct.getInt(CoordinatorEpochField)
         val currentTxnFirstOffset = producerEntryStruct.getLong(CurrentTxnFirstOffsetField)
-        val newEntry = ProducerIdEntry(producerId, mutable.Queue[BatchMetadata](BatchMetadata(seq, offset, offsetDelta, timestamp)), producerEpoch,
+        val newEntry = new ProducerIdEntry(producerId, mutable.Queue[BatchMetadata](BatchMetadata(seq, offset, offsetDelta, timestamp)), producerEpoch,
           coordinatorEpoch, if (currentTxnFirstOffset >= 0) Some(currentTxnFirstOffset) else None)
         newEntry
       }
