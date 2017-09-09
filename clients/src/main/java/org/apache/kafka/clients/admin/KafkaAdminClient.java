@@ -359,6 +359,10 @@ public class KafkaAdminClient extends AdminClient {
         thread.start();
     }
 
+    Time time() {
+        return time;
+    }
+
     @Override
     public void close(long duration, TimeUnit unit) {
         long waitTimeMs = unit.toMillis(duration);
