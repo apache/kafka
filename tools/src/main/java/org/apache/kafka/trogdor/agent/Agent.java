@@ -29,7 +29,7 @@ import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.fault.Fault;
 import org.apache.kafka.trogdor.fault.FaultSet;
 import org.apache.kafka.trogdor.fault.FaultSpec;
-import org.apache.kafka.trogdor.fault.FaultState;
+import org.apache.kafka.trogdor.fault.RunningState;
 import org.apache.kafka.trogdor.rest.AgentFaultsResponse;
 import org.apache.kafka.trogdor.rest.CreateAgentFaultRequest;
 import org.apache.kafka.trogdor.rest.JsonRestServer;
@@ -140,7 +140,8 @@ public final class Agent {
                         Iterator<Fault> running = runningFaults.iterateByEnd();
                         while (running.hasNext()) {
                             Fault fault = running.next();
-                            long endMs = fault.spec().startMs() + fault.spec().durationMs();
+                            RunningState state = (RunningState) fault.state();
+                            long endMs = state.startedMs() + fault.spec().durationMs();
                             if (now < endMs) {
                                 nextWakeMs = Math.min(nextWakeMs, endMs);
                                 break;
@@ -154,7 +155,7 @@ public final class Agent {
                     for (Fault fault: toStart) {
                         try {
                             log.debug("Activating fault " + fault);
-                            fault.activate(platform);
+                            fault.activate(now, platform);
                             started.add(fault);
                         } catch (Throwable e) {
                             log.error("Error activating fault " + fault.id(), e);
@@ -164,7 +165,7 @@ public final class Agent {
                     for (Fault fault: toEnd) {
                         try {
                             log.debug("Deactivating fault " + fault);
-                            fault.deactivate(platform);
+                            fault.deactivate(now, platform);
                         } catch (Throwable e) {
                             log.error("Error deactivating fault " + fault.id(), e);
                         } finally {
@@ -200,8 +201,33 @@ public final class Agent {
             } finally {
                 log.info("AgentRunnable shutting down.");
                 restServer.stop();
+                int numDeactivated = deactivateRunningFaults();
+                log.info("AgentRunnable deactivated {} fault(s).", numDeactivated);
             }
         }
+    }
+
+    private int deactivateRunningFaults() {
+        long now = time.milliseconds();
+        int numDeactivated = 0;
+        lock.lock();
+        try {
+            for (Iterator<Fault> iter = runningFaults.iterateByStart(); iter.hasNext(); ) {
+                Fault fault = iter.next();
+                try {
+                    numDeactivated++;
+                    iter.remove();
+                    fault.deactivate(now, platform);
+                } catch (Exception e) {
+                    log.error("Got exception while deactivating {}", fault, e);
+                } finally {
+                    doneFaults.add(fault);
+                }
+            }
+        } finally {
+            lock.unlock();
+        }
+        return numDeactivated;
     }
 
     /**
@@ -257,9 +283,9 @@ public final class Agent {
         Map<String, AgentFaultsResponse.FaultData> faultData = new TreeMap<>();
         lock.lock();
         try {
-            updateFaultsResponse(faultData, pendingFaults, FaultState.PENDING);
-            updateFaultsResponse(faultData, runningFaults, FaultState.RUNNING);
-            updateFaultsResponse(faultData, doneFaults, FaultState.DONE);
+            updateFaultsResponse(faultData, pendingFaults);
+            updateFaultsResponse(faultData, runningFaults);
+            updateFaultsResponse(faultData, doneFaults);
         } finally {
             lock.unlock();
         }
@@ -267,12 +293,12 @@ public final class Agent {
     }
 
     private void updateFaultsResponse(Map<String, AgentFaultsResponse.FaultData> faultData,
-                                      FaultSet faultSet, FaultState state) {
+                                      FaultSet faultSet) {
         for (Iterator<Fault> iter = faultSet.iterateByStart();
                 iter.hasNext(); ) {
             Fault fault = iter.next();
             AgentFaultsResponse.FaultData data =
-                new AgentFaultsResponse.FaultData(fault.spec(), state);
+                new AgentFaultsResponse.FaultData(fault.spec(), fault.state());
             faultData.put(fault.id(), data);
         }
     }
@@ -326,12 +352,14 @@ public final class Agent {
         JsonRestServer restServer =
             new JsonRestServer(Node.Util.getTrogdorAgentPort(platform.curNode()));
         AgentRestResource resource = new AgentRestResource();
-        Agent agent = new Agent(platform, Time.SYSTEM, restServer, resource);
+        final Agent agent = new Agent(platform, Time.SYSTEM, restServer, resource);
         restServer.start(resource);
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
             public void run() {
-                log.error("Agent shutting down...");
+                log.error("Running shutdown hook...");
+                agent.beginShutdown();
+                agent.waitForShutdown();
             }
         });
         agent.waitForShutdown();

@@ -947,9 +947,9 @@ class LogValidatorTest {
       isFromClient = true)
   }
 
-  private def createRecords(magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE,
+  private def createRecords(magicValue: Byte,
                             timestamp: Long = RecordBatch.NO_TIMESTAMP,
-                            codec: CompressionType = CompressionType.NONE): MemoryRecords = {
+                            codec: CompressionType): MemoryRecords = {
     val buf = ByteBuffer.allocate(512)
     val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L)
     builder.appendWithOffset(0, timestamp, null, "hello".getBytes)

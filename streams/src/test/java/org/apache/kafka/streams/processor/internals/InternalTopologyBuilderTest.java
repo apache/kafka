@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.TopologyDescription;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.errors.TopologyException;
@@ -43,6 +44,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -470,7 +472,7 @@ public class InternalTopologyBuilderTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAddNullStateStoreSupplier() throws Exception {
-        builder.addStateStore(null);
+        builder.addStateStore((StateStoreSupplier) null);
     }
 
     private Set<String> nodeNames(final Collection<ProcessorNode> nodes) {
@@ -662,6 +664,50 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source", new MockTimestampExtractor(), null, null, pattern);
         final ProcessorTopology processorTopology = builder.build(null);
         assertThat(processorTopology.source(pattern.pattern()).getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
+    }
+
+    @Test
+    public void shouldSortProcessorNodesCorrectly() throws Exception {
+        builder.addSource(null, "source1", null, null, null, "topic1");
+        builder.addSource(null, "source2", null, null, null, "topic2");
+        builder.addProcessor("processor1", new MockProcessorSupplier(), "source1");
+        builder.addProcessor("processor2", new MockProcessorSupplier(), "source1", "source2");
+        builder.addProcessor("processor3", new MockProcessorSupplier(), "processor2");
+        builder.addSink("sink1", "topic2", null, null, null, "processor1", "processor3");
+
+        assertEquals(1, builder.describe().subtopologies().size());
+
+        final Iterator<TopologyDescription.Node> iterator = ((InternalTopologyBuilder.Subtopology) builder.describe().subtopologies().iterator().next()).nodesInOrder();
+
+        assertTrue(iterator.hasNext());
+        InternalTopologyBuilder.AbstractNode node = (InternalTopologyBuilder.AbstractNode) iterator.next();
+        assertTrue(node.name.equals("source1"));
+        assertEquals(6, node.size);
+
+        assertTrue(iterator.hasNext());
+        node = (InternalTopologyBuilder.AbstractNode) iterator.next();
+        assertTrue(node.name.equals("source2"));
+        assertEquals(4, node.size);
+
+        assertTrue(iterator.hasNext());
+        node = (InternalTopologyBuilder.AbstractNode) iterator.next();
+        assertTrue(node.name.equals("processor2"));
+        assertEquals(3, node.size);
+
+        assertTrue(iterator.hasNext());
+        node = (InternalTopologyBuilder.AbstractNode) iterator.next();
+        assertTrue(node.name.equals("processor1"));
+        assertEquals(2, node.size);
+
+        assertTrue(iterator.hasNext());
+        node = (InternalTopologyBuilder.AbstractNode) iterator.next();
+        assertTrue(node.name.equals("processor3"));
+        assertEquals(2, node.size);
+
+        assertTrue(iterator.hasNext());
+        node = (InternalTopologyBuilder.AbstractNode) iterator.next();
+        assertTrue(node.name.equals("sink1"));
+        assertEquals(1, node.size);
     }
 
     @Test

@@ -31,6 +31,7 @@ import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -586,7 +587,7 @@ public class SimpleBenchmark {
 
         StreamsBuilder builder = new StreamsBuilder();
 
-        KStream<Integer, byte[]> source = builder.stream(INTEGER_SERDE, BYTE_SERDE, topic);
+        KStream<Integer, byte[]> source = builder.stream(topic, Consumed.with(INTEGER_SERDE, BYTE_SERDE));
 
         source.process(new ProcessorSupplier<Integer, byte[]>() {
             @Override
@@ -625,7 +626,7 @@ public class SimpleBenchmark {
 
         StreamsBuilder builder = new StreamsBuilder();
 
-        KStream<Integer, byte[]> source = builder.stream(INTEGER_SERDE, BYTE_SERDE, topic);
+        KStream<Integer, byte[]> source = builder.stream(topic, Consumed.with(INTEGER_SERDE, BYTE_SERDE));
 
         source.to(INTEGER_SERDE, BYTE_SERDE, SINK_TOPIC);
         source.process(new ProcessorSupplier<Integer, byte[]>() {
@@ -729,7 +730,7 @@ public class SimpleBenchmark {
         } else {
             builder.addStateStore(Stores.create("store").withIntegerKeys().withByteArrayValues().persistent().build());
         }
-        KStream<Integer, byte[]> source = builder.stream(INTEGER_SERDE, BYTE_SERDE, topic);
+        KStream<Integer, byte[]> source = builder.stream(topic, Consumed.with(INTEGER_SERDE, BYTE_SERDE));
 
         source.process(new ProcessorSupplier<Integer, byte[]>() {
             @Override

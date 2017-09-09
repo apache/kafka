@@ -521,7 +521,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         switch (type) {
             case STREAM_TIME:
                 return streamTimePunctuationQueue.schedule(schedule);
-            case SYSTEM_TIME:
+            case WALL_CLOCK_TIME:
                 return systemTimePunctuationQueue.schedule(schedule);
             default:
                 throw new IllegalArgumentException("Unrecognized PunctuationType: " + type);
@@ -560,7 +560,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     public boolean maybePunctuateSystemTime() {
         final long timestamp = time.milliseconds();
 
-        return systemTimePunctuationQueue.mayPunctuate(timestamp, PunctuationType.SYSTEM_TIME, this);
+        return systemTimePunctuationQueue.mayPunctuate(timestamp, PunctuationType.WALL_CLOCK_TIME, this);
     }
 
     @Override

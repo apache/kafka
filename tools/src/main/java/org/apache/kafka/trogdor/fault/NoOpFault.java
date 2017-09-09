@@ -17,7 +17,6 @@
 
 package org.apache.kafka.trogdor.fault;
 
-import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Node;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.common.Topology;
@@ -26,37 +25,22 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 
-public class NoOpFault implements Fault {
+public class NoOpFault extends AbstractFault {
     private static final Logger log = LoggerFactory.getLogger(NoOpFault.class);
 
-    private final String id;
-    private final FaultSpec spec;
-
     public NoOpFault(String id, FaultSpec spec) {
-        this.id = id;
-        this.spec = spec;
+        super(id, spec);
     }
 
     @Override
-    public String id() {
-        return id;
-    }
-
-    @Override
-    public FaultSpec spec() {
-        return spec;
-    }
-
-    @Override
-    public void activate(Platform platform) {
+    protected void handleActivation(long now, Platform platform) throws Exception {
         log.info("Activating NoOpFault...");
     }
 
     @Override
-    public void deactivate(Platform platform) {
+    protected void handleDeactivation(long now, Platform platform) throws Exception {
         log.info("Deactivating NoOpFault...");
     }
 
@@ -69,24 +53,5 @@ public class NoOpFault implements Fault {
             }
         }
         return set;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        NoOpFault that = (NoOpFault) o;
-        return Objects.equals(id, that.id) &&
-            Objects.equals(spec, that.spec);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(id, spec);
-    }
-
-    @Override
-    public String toString() {
-        return "NoOpFault(id=" + id + ", spec=" + JsonUtil.toJsonString(spec) + ")";
     }
 }
