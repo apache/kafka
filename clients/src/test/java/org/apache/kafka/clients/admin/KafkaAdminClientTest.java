@@ -324,6 +324,8 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
             env.kafkaClient().setNode(nodes.get(0));
+            assertEquals(time, env.time());
+            assertEquals(env.time(), ((KafkaAdminClient) env.adminClient()).time());
 
             // Make a request with an extremely short timeout.
             // Then wait for it to fail by not supplying any response.
