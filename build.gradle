@@ -24,10 +24,10 @@ buildscript {
 
   dependencies {
     // For Apache Rat plugin to ignore non-Git files
-    classpath "org.ajoberstar:grgit:1.9.2"
-    classpath 'com.github.ben-manes:gradle-versions-plugin:0.14.0'
+    classpath "org.ajoberstar:grgit:1.9.3"
+    classpath 'com.github.ben-manes:gradle-versions-plugin:0.15.0'
     classpath 'org.scoverage:gradle-scoverage:2.1.0'
-    classpath 'com.github.jengelman.gradle.plugins:shadow:1.2.4'
+    classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.1'
   }
 }
 
@@ -77,12 +77,12 @@ allprojects {
 }
 
 ext {
-  gradleVersion = "3.5"
+  gradleVersion = "4.1"
   buildVersionFileName = "kafka-version.properties"
 
   maxPermSizeArgs = []
   if (!JavaVersion.current().isJava8Compatible())
-    maxPermSizeArgs = ['-XX:MaxPermSize=512m']
+    maxPermSizeArgs += '-XX:MaxPermSize=512m'
 
   userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
 
@@ -98,6 +98,8 @@ ext {
   userTestLoggingEvents = project.hasProperty("testLoggingEvents") ? Arrays.asList(testLoggingEvents.split(",")) : null
 
   generatedDocsDir = new File("${project.rootDir}/docs/generated")
+
+  commitId = project.hasProperty('commitId') ? commitId : null
 }
 
 apply from: file('wrapper.gradle')
@@ -119,7 +121,8 @@ if (new File('.git').exists()) {
         '**/README.md',
         '**/id_rsa',
         '**/id_rsa.pub',
-        'checkstyle/suppressions.xml'
+        'checkstyle/suppressions.xml',
+        'streams/quickstart/java/src/test/resources/projects/basic/goal.txt'
     ])
   }
 }
@@ -134,14 +137,24 @@ subprojects {
   apply plugin: 'maven'
   apply plugin: 'signing'
   apply plugin: 'checkstyle'
-  apply plugin: 'findbugs'
+
+  if (!JavaVersion.current().isJava9Compatible())
+    apply plugin: 'findbugs'
 
   sourceCompatibility = 1.7
+  targetCompatibility = 1.7
 
   compileJava {
     options.encoding = 'UTF-8'
-    // Add unchecked once we drop support for Java 7 as @SuppressWarnings("unchecked") is too buggy in Java 7
     options.compilerArgs << "-Xlint:deprecation"
+    // -Xlint:unchecked is too buggy in Java 7, so we only enable for Java 8 or higher
+    if (JavaVersion.current().isJava8Compatible())
+      options.compilerArgs << "-Xlint:unchecked"
+    // --release is the recommended way to select the target release, but it's only supported in Java 9 so we also
+    // set --source and --target via `sourceCompatibility` and `targetCompatibility`. If/when Gradle supports `--release`
+    // natively (https://github.com/gradle/gradle/issues/2510), we should switch to that.
+    if (JavaVersion.current().isJava9Compatible())
+      options.compilerArgs << "--release" << "7"
   }
 
   uploadArchives {
@@ -346,17 +359,19 @@ subprojects {
   }
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 
-  findbugs {
-    toolVersion = "3.0.1"
-    excludeFilter = file("$rootDir/gradle/findbugs-exclude.xml")
-    ignoreFailures = false
-  }
-  test.dependsOn('findbugsMain')
+  if (!JavaVersion.current().isJava9Compatible()) {
+    findbugs {
+      toolVersion = "3.0.1"
+      excludeFilter = file("$rootDir/gradle/findbugs-exclude.xml")
+      ignoreFailures = false
+    }
+    test.dependsOn('findbugsMain')
 
-  tasks.withType(FindBugs) {
-    reports {
-      xml.enabled (project.hasProperty('xmlFindBugsReport'))
-      html.enabled (!project.hasProperty('xmlFindBugsReport'))
+    tasks.withType(FindBugs) {
+      reports {
+        xml.enabled(project.hasProperty('xmlFindBugsReport'))
+        html.enabled(!project.hasProperty('xmlFindBugsReport'))
+      }
     }
   }
 
@@ -523,13 +538,13 @@ project(':core') {
 
   dependencies {
     compile project(':clients')
+    compile libs.jacksonDatabind
     compile libs.joptSimple
     compile libs.metrics
     compile libs.scala
     compile libs.slf4jlog4j
     compile libs.zkclient
     compile libs.zookeeper
-    compile libs.scalaParserCombinators
 
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.bcpkix
@@ -546,7 +561,7 @@ project(':core') {
     testCompile libs.apachedsMavibotPartition
     testCompile libs.apachedsJdbmPartition
     testCompile libs.junit
-    testCompile libs.scalaTest
+    testCompile libs.scalatest
     testCompile libs.jfreechart
 
     scoverage libs.scoveragePlugin
@@ -651,11 +666,18 @@ project(':core') {
     standardOutput = new File(generatedDocsDir, "consumer_metrics.html").newOutputStream()
   }
 
+  task genProducerMetricsDocs(type: JavaExec) {
+    classpath = sourceSets.test.runtimeClasspath
+    main = 'org.apache.kafka.clients.producer.internals.ProducerMetrics'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "producer_metrics.html").newOutputStream()
+  }
+
   task siteDocsTar(dependsOn: ['genProtocolErrorDocs', 'genProtocolApiKeyDocs', 'genProtocolMessageDocs',
                                'genAdminClientConfigDocs', 'genProducerConfigDocs', 'genConsumerConfigDocs',
                                'genKafkaConfigDocs', 'genTopicConfigDocs',
                                ':connect:runtime:genConnectConfigDocs', ':connect:runtime:genConnectTransformationDocs',
-                               ':streams:genStreamsConfigDocs', 'genConsumerMetricsDocs'], type: Tar) {
+                               ':streams:genStreamsConfigDocs', 'genConsumerMetricsDocs', 'genProducerMetricsDocs'], type: Tar) {
     classifier = 'site-docs'
     compression = Compression.GZIP
     from project.file("$rootDir/docs")
@@ -751,20 +773,22 @@ project(':clients') {
   }
 
   task determineCommitId {
-    ext.commitId = "unknown"
     def takeFromHash = 16
-    if (file("$rootDir/.git/HEAD").exists()) {
+    if (commitId) {
+      commitId = commitId.take(takeFromHash)
+    } else if (file("$rootDir/.git/HEAD").exists()) {
       def headRef = file("$rootDir/.git/HEAD").text
       if (headRef.contains('ref: ')) {
         headRef = headRef.replaceAll('ref: ', '').trim()
         if (file("$rootDir/.git/$headRef").exists()) {
-        commitId = file("$rootDir/.git/$headRef").text.trim().take(takeFromHash)
+          commitId = file("$rootDir/.git/$headRef").text.trim().take(takeFromHash)
         }
       } else {
         commitId = headRef.trim().take(takeFromHash)
       }
+    } else {
+      commitId = "unknown"
     }
-    commitId
   }
 
   task createVersionFile(dependsOn: determineCommitId) {
@@ -773,7 +797,7 @@ project(':clients') {
     outputs.upToDateWhen { false }
     doLast {
       def data = [
-        commitId: determineCommitId.commitId,
+        commitId: commitId,
         version: version,
       ]
 
@@ -820,8 +844,15 @@ project(':tools') {
     compile libs.jacksonDatabind
     compile libs.slf4jlog4j
 
+    compile libs.jacksonJaxrsJsonProvider
+    compile libs.jerseyContainerServlet
+    compile libs.jettyServer
+    compile libs.jettyServlet
+    compile libs.jettyServlets
+
     testCompile project(':clients')
     testCompile libs.junit
+    testCompile project(':clients').sourceSets.test.output
   }
 
   javadoc {
@@ -857,6 +888,7 @@ project(':streams') {
     testCompile project(':core')
     testCompile project(':core').sourceSets.test.output
     testCompile libs.junit
+    testCompile libs.easymock
 
     testRuntime libs.slf4jlog4j
   }
@@ -930,11 +962,11 @@ project(':jmh-benchmarks') {
   }
 
   dependencies {
-      compile project(':clients')
-      compile project(':streams')
-      compile 'org.openjdk.jmh:jmh-core:1.18'
-      compile 'org.openjdk.jmh:jmh-generator-annprocess:1.18'
-      compile 'org.openjdk.jmh:jmh-core-benchmarks:1.18'
+    compile project(':clients')
+    compile project(':streams')
+    compile libs.jmhCore
+    compile libs.jmhGeneratorAnnProcess
+    compile libs.jmhCoreBenchmarks
   }
 
   jar {

@@ -19,18 +19,18 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsBuilderTest;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
@@ -50,35 +50,27 @@ public class KTableKTableJoinTest {
 
     final private Serde<Integer> intSerde = Serdes.Integer();
     final private Serde<String> stringSerde = Serdes.String();
-
-    private KStreamTestDriver driver = null;
     private File stateDir = null;
-
-    @After
-    public void tearDown() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
-    }
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @Before
-    public void setUp() throws IOException {
+    public void setUp() {
         stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
-    private void doTestJoin(final KStreamBuilder builder,
+    private void doTestJoin(final StreamsBuilder builder,
                             final int[] expectedKeys,
                             final MockProcessorSupplier<Integer, String> processor,
                             final KTable<Integer, String> joined) {
-        final Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
+        final Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
 
         assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
         final KTableValueGetterSupplier<Integer, String> getterSupplier = ((KTableImpl<Integer, String, String>) joined).valueGetterSupplier();
 
-        driver = new KStreamTestDriver(builder, stateDir, Serdes.Integer(), Serdes.String());
+        driver.setUp(builder, stateDir, Serdes.Integer(), Serdes.String());
         driver.setTime(0L);
 
         final KTableValueGetter<Integer, String> getter = getterSupplier.get();
@@ -163,7 +155,7 @@ public class KTableKTableJoinTest {
 
     @Test
     public void testJoin() {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
@@ -184,7 +176,7 @@ public class KTableKTableJoinTest {
 
     @Test
     public void testQueryableJoin() {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
@@ -202,7 +194,7 @@ public class KTableKTableJoinTest {
         doTestJoin(builder, expectedKeys, processor, joined);
     }
 
-    private void doTestSendingOldValues(final KStreamBuilder builder,
+    private void doTestSendingOldValues(final StreamsBuilder builder,
                                         final int[] expectedKeys,
                                         final KTable<Integer, String> table1,
                                         final KTable<Integer, String> table2,
@@ -210,8 +202,7 @@ public class KTableKTableJoinTest {
                                         final KTable<Integer, String> joined,
                                         final boolean sendOldValues) {
 
-
-        driver = new KStreamTestDriver(builder, stateDir, Serdes.Integer(), Serdes.String());
+        driver.setUp(builder, stateDir, Serdes.Integer(), Serdes.String());
         driver.setTime(0L);
 
         if (!sendOldValues) {
@@ -285,7 +276,7 @@ public class KTableKTableJoinTest {
 
     @Test
     public void testNotSendingOldValues() {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
@@ -298,7 +289,7 @@ public class KTableKTableJoinTest {
         table2 = builder.table(intSerde, stringSerde, topic2, storeName2);
         joined = table1.join(table2, MockValueJoiner.TOSTRING_JOINER);
         proc = new MockProcessorSupplier<>();
-        builder.addProcessor("proc", proc, ((KTableImpl<?, ?, ?>) joined).name);
+        builder.build().addProcessor("proc", proc, ((KTableImpl<?, ?, ?>) joined).name);
 
         doTestSendingOldValues(builder, expectedKeys, table1, table2, proc, joined, false);
 
@@ -306,7 +297,7 @@ public class KTableKTableJoinTest {
 
     @Test
     public void testQueryableNotSendingOldValues() {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
@@ -319,7 +310,7 @@ public class KTableKTableJoinTest {
         table2 = builder.table(intSerde, stringSerde, topic2, storeName2);
         joined = table1.join(table2, MockValueJoiner.TOSTRING_JOINER, Serdes.String(), "anyQueryableName");
         proc = new MockProcessorSupplier<>();
-        builder.addProcessor("proc", proc, ((KTableImpl<?, ?, ?>) joined).name);
+        builder.build().addProcessor("proc", proc, ((KTableImpl<?, ?, ?>) joined).name);
 
         doTestSendingOldValues(builder, expectedKeys, table1, table2, proc, joined, false);
 
@@ -327,7 +318,7 @@ public class KTableKTableJoinTest {
 
     @Test
     public void testSendingOldValues() {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
@@ -341,7 +332,7 @@ public class KTableKTableJoinTest {
         joined = table1.join(table2, MockValueJoiner.TOSTRING_JOINER);
 
         proc = new MockProcessorSupplier<>();
-        builder.addProcessor("proc", proc, ((KTableImpl<?, ?, ?>) joined).name);
+        builder.build().addProcessor("proc", proc, ((KTableImpl<?, ?, ?>) joined).name);
 
         doTestSendingOldValues(builder, expectedKeys, table1, table2, proc, joined, true);
 

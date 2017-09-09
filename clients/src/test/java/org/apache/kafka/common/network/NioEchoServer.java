@@ -94,14 +94,15 @@ public class NioEchoServer extends Thread {
                 List<NetworkReceive> completedReceives = selector.completedReceives();
                 for (NetworkReceive rcv : completedReceives) {
                     KafkaChannel channel = channel(rcv.source());
-                    channel.mute();
+                    String channelId = channel.id();
+                    selector.mute(channelId);
                     NetworkSend send = new NetworkSend(rcv.source(), rcv.payload());
                     if (outputChannel == null)
                         selector.send(send);
                     else {
                         for (ByteBuffer buffer : send.buffers)
                             outputChannel.write(buffer);
-                        channel.unmute();
+                        selector.unmute(channelId);
                     }
                 }
                 for (Send send : selector.completedSends())

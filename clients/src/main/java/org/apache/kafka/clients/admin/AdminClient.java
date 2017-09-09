@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceStability;
@@ -335,9 +336,6 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * Update the configuration for the specified resources with the default options.
      *
-     * Updates are not transactional so they may succeed for some resources while fail for others. The configs for
-     * a particular resource are updated atomically.
-     *
      * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
      * @param configs         The resources with their configs (topic is the only resource type with configs that can
@@ -346,4 +344,77 @@ public abstract class AdminClient implements AutoCloseable {
      * @return                The AlterConfigsResult
      */
     public abstract AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options);
+
+    /**
+     * Change the log directory for the specified replicas. This API is currently only useful if it is used
+     * before the replica has been created on the broker. It will support moving replicas that have already been created after
+     * KIP-113 is fully implemented.
+     *
+     * This operation is supported by brokers with version 1.0.0 or higher.
+     *
+     * @param replicaAssignment  The replicas with their log directory absolute path
+     * @return                   The AlterReplicaDirResult
+     */
+    public AlterReplicaDirResult alterReplicaDir(Map<TopicPartitionReplica, String> replicaAssignment) {
+        return alterReplicaDir(replicaAssignment, new AlterReplicaDirOptions());
+    }
+
+    /**
+     * Change the log directory for the specified replicas. This API is currently only useful if it is used
+     * before the replica has been created on the broker. It will support moving replicas that have already been created after
+     * KIP-113 is fully implemented.
+     *
+     * This operation is supported by brokers with version 1.0.0 or higher.
+     *
+     * @param replicaAssignment  The replicas with their log directory absolute path
+     * @param options            The options to use when changing replica dir
+     * @return                   The AlterReplicaDirResult
+     */
+    public abstract AlterReplicaDirResult alterReplicaDir(Map<TopicPartitionReplica, String> replicaAssignment, AlterReplicaDirOptions options);
+
+    /**
+     * Query the information of all log directories on the given set of brokers
+     *
+     * This operation is supported by brokers with version 1.0.0 or higher.
+     *
+     * @param brokers     A list of brokers
+     * @return            The DescribeLogDirsResult
+     */
+    public DescribeLogDirsResult describeLogDirs(Collection<Integer> brokers) {
+        return describeLogDirs(brokers, new DescribeLogDirsOptions());
+    }
+
+    /**
+     * Query the information of all log directories on the given set of brokers
+     *
+     * This operation is supported by brokers with version 1.0.0 or higher.
+     *
+     * @param brokers     A list of brokers
+     * @param options     The options to use when querying log dir info
+     * @return            The DescribeLogDirsResult
+     */
+    public abstract DescribeLogDirsResult describeLogDirs(Collection<Integer> brokers, DescribeLogDirsOptions options);
+
+    /**
+     * Query the replica log directory information for the specified replicas.
+     *
+     * This operation is supported by brokers with version 1.0.0 or higher.
+     *
+     * @param replicas      The replicas to query
+     * @return              The DescribeReplicaLogDirResult
+     */
+    public DescribeReplicaLogDirResult describeReplicaLogDir(Collection<TopicPartitionReplica> replicas) {
+        return describeReplicaLogDir(replicas, new DescribeReplicaLogDirOptions());
+    }
+
+    /**
+     * Query the replica log directory information for the specified replicas.
+     *
+     * This operation is supported by brokers with version 1.0.0 or higher.
+     *
+     * @param replicas      The replicas to query
+     * @param options       The options to use when querying replica log dir info
+     * @return              The DescribeReplicaLogDirResult
+     */
+    public abstract DescribeReplicaLogDirResult describeReplicaLogDir(Collection<TopicPartitionReplica> replicas, DescribeReplicaLogDirOptions options);
 }

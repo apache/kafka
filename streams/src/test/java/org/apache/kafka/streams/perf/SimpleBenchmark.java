@@ -31,15 +31,16 @@ import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
-import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -51,9 +52,9 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.concurrent.CountDownLatch;
 import java.util.Properties;
 import java.util.Random;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -280,13 +281,13 @@ public class SimpleBenchmark {
 
 
     private KafkaStreams createCountStreams(Properties streamConfig, String topic, final CountDownLatch latch) {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Integer, byte[]> input = builder.stream(topic);
 
         input.groupByKey()
             .count("tmpStoreName").foreach(new CountDownAction(latch));
 
-        return new KafkaStreams(builder, streamConfig);
+        return new KafkaStreams(builder.build(), streamConfig);
     }
 
 
@@ -584,9 +585,9 @@ public class SimpleBenchmark {
     private KafkaStreams createKafkaStreams(String topic, final CountDownLatch latch) {
         Properties props = setStreamProperties("simple-benchmark-streams");
 
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
 
-        KStream<Integer, byte[]> source = builder.stream(INTEGER_SERDE, BYTE_SERDE, topic);
+        KStream<Integer, byte[]> source = builder.stream(topic, Consumed.with(INTEGER_SERDE, BYTE_SERDE));
 
         source.process(new ProcessorSupplier<Integer, byte[]>() {
             @Override
@@ -623,9 +624,9 @@ public class SimpleBenchmark {
     private KafkaStreams createKafkaStreamsWithSink(String topic, final CountDownLatch latch) {
         final Properties props = setStreamProperties("simple-benchmark-streams-with-sink");
 
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
 
-        KStream<Integer, byte[]> source = builder.stream(INTEGER_SERDE, BYTE_SERDE, topic);
+        KStream<Integer, byte[]> source = builder.stream(topic, Consumed.with(INTEGER_SERDE, BYTE_SERDE));
 
         source.to(INTEGER_SERDE, BYTE_SERDE, SINK_TOPIC);
         source.process(new ProcessorSupplier<Integer, byte[]>() {
@@ -682,7 +683,7 @@ public class SimpleBenchmark {
 
     private KafkaStreams createKafkaStreamsKStreamKTableJoin(Properties streamConfig, String kStreamTopic,
                                                              String kTableTopic, final CountDownLatch latch) {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Long, byte[]> input1 = builder.stream(kStreamTopic);
         final KTable<Long, byte[]> input2 = builder.table(kTableTopic, kTableTopic + "-store");
@@ -694,7 +695,7 @@ public class SimpleBenchmark {
 
     private KafkaStreams createKafkaStreamsKTableKTableJoin(Properties streamConfig, String kTableTopic1,
                                                             String kTableTopic2, final CountDownLatch latch) {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final KTable<Long, byte[]> input1 = builder.table(kTableTopic1, kTableTopic1 + "-store");
         final KTable<Long, byte[]> input2 = builder.table(kTableTopic2, kTableTopic2 + "-store");
@@ -706,7 +707,7 @@ public class SimpleBenchmark {
 
     private KafkaStreams createKafkaStreamsKStreamKStreamJoin(Properties streamConfig, String kStreamTopic1,
                                                               String kStreamTopic2, final CountDownLatch latch) {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Long, byte[]> input1 = builder.stream(kStreamTopic1);
         final KStream<Long, byte[]> input2 = builder.stream(kStreamTopic2);
@@ -722,14 +723,14 @@ public class SimpleBenchmark {
                                                           boolean enableCaching) {
         Properties props = setStreamProperties("simple-benchmark-streams-with-store" + enableCaching);
 
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
 
         if (enableCaching) {
             builder.addStateStore(Stores.create("store").withIntegerKeys().withByteArrayValues().persistent().enableCaching().build());
         } else {
             builder.addStateStore(Stores.create("store").withIntegerKeys().withByteArrayValues().persistent().build());
         }
-        KStream<Integer, byte[]> source = builder.stream(INTEGER_SERDE, BYTE_SERDE, topic);
+        KStream<Integer, byte[]> source = builder.stream(topic, Consumed.with(INTEGER_SERDE, BYTE_SERDE));
 
         source.process(new ProcessorSupplier<Integer, byte[]>() {
             @Override
@@ -767,8 +768,8 @@ public class SimpleBenchmark {
         return createKafkaStreamsWithExceptionHandler(builder, props);
     }
 
-    private KafkaStreams createKafkaStreamsWithExceptionHandler(final KStreamBuilder builder, final Properties props) {
-        final KafkaStreams streamsClient = new KafkaStreams(builder, props);
+    private KafkaStreams createKafkaStreamsWithExceptionHandler(final StreamsBuilder builder, final Properties props) {
+        final KafkaStreams streamsClient = new KafkaStreams(builder.build(), props);
         streamsClient.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
             public void uncaughtException(Thread t, Throwable e) {

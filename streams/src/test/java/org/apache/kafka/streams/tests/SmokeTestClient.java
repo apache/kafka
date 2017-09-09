@@ -18,15 +18,17 @@ package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Predicate;
+import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 
@@ -104,8 +106,8 @@ public class SmokeTestClient extends SmokeTestUtil {
         props.put(ProducerConfig.ACKS_CONFIG, "all");
 
 
-        KStreamBuilder builder = new KStreamBuilder();
-        KStream<String, Integer> source = builder.stream(stringSerde, intSerde, "data");
+        StreamsBuilder builder = new StreamsBuilder();
+        KStream<String, Integer> source = builder.stream("data", Consumed.with(stringSerde, intSerde));
         source.to(stringSerde, intSerde, "echo");
         KStream<String, Integer> data = source.filter(new Predicate<String, Integer>() {
             @Override
@@ -119,7 +121,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         // min
         KGroupedStream<String, Integer>
             groupedData =
-            data.groupByKey(stringSerde, intSerde);
+            data.groupByKey(Serialized.with(stringSerde, intSerde));
 
         groupedData.aggregate(
                 new Initializer<Integer>() {
@@ -218,8 +220,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         // test repartition
         Agg agg = new Agg();
         cntTable.groupBy(agg.selector(),
-                         stringSerde,
-                         longSerde
+                         Serialized.with(stringSerde, longSerde)
         ).aggregate(agg.init(),
                     agg.adder(),
                     agg.remover(),
@@ -227,7 +228,7 @@ public class SmokeTestClient extends SmokeTestUtil {
                     "cntByCnt"
         ).to(stringSerde, longSerde, "tagg");
 
-        final KafkaStreams streamsClient = new KafkaStreams(builder, props);
+        final KafkaStreams streamsClient = new KafkaStreams(builder.build(), props);
         streamsClient.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
             public void uncaughtException(Thread t, Throwable e) {

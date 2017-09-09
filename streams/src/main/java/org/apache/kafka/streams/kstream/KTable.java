@@ -19,13 +19,17 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.internals.WindowedSerializer;
 import org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -34,7 +38,7 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
  * {@code KTable} is an abstraction of a <i>changelog stream</i> from a primary-keyed table.
  * Each record in this changelog stream is an update on the primary-keyed table with the record key as the primary key.
  * <p>
- * A {@code KTable} is either {@link KStreamBuilder#table(String, String) defined from a single Kafka topic} that is
+ * A {@code KTable} is either {@link StreamsBuilder#table(String, String) defined from a single Kafka topic} that is
  * consumed message by message or the result of a {@code KTable} transformation.
  * An aggregation of a {@link KStream} also yields a {@code KTable}.
  * <p>
@@ -62,7 +66,7 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
  * @see KStream
  * @see KGroupedTable
  * @see GlobalKTable
- * @see KStreamBuilder#table(String, String)
+ * @see StreamsBuilder#table(String, String)
  */
 @InterfaceStability.Evolving
 public interface KTable<K, V> {
@@ -115,6 +119,44 @@ public interface KTable<K, V> {
      * }</pre>
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
+     * The store name to query with is specified by {@link Materialized#as(String)} or {@link Materialized#as(KeyValueBytesStoreSupplier)}.
+     * <p>
+     *
+     * @param predicate     a filter {@link Predicate} that is applied to each record
+     * @param materialized  a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
+     *                      should be materialized
+     * @return a {@code KTable} that contains only those records that satisfy the given predicate
+     * @see #filterNot(Predicate, Materialized)
+     */
+    KTable<K, V> filter(final Predicate<? super K, ? super V> predicate,
+                        final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized);
+
+    /**
+     * Create a new {@code KTable} that consists of all records of this {@code KTable} which satisfy the given
+     * predicate.
+     * All records that do not satisfy the predicate are dropped.
+     * For each {@code KTable} update the filter is evaluated on the update record to produce an update record for the
+     * result {@code KTable}.
+     * This is a stateless record-by-record operation.
+     * <p>
+     * Note that {@code filter} for a <i>changelog stream</i> works different to {@link KStream#filter(Predicate)
+     * record stream filters}, because {@link KeyValue records} with {@code null} values (so-called tombstone records)
+     * have delete semantics.
+     * Thus, for tombstones the provided filter predicate is not evaluated but the tombstone record is forwarded
+     * directly if required (i.e., if there is anything to be deleted).
+     * Furthermore, for each record that gets dropped (i.e., dot not satisfied the given predicate) a tombstone record
+     * is forwarded.
+     * <p>
+     * To query the local {@link KeyValueStore} it must be obtained via
+     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
+     * <pre>{@code
+     * KafkaStreams streams = ... // filtering words
+     * ReadOnlyKeyValueStore<K,V> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, V>keyValueStore());
+     * K key = "some-word";
+     * V valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
+     * }</pre>
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * query the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
      *
      * @param predicate a filter {@link Predicate} that is applied to each record
@@ -123,8 +165,10 @@ public interface KTable<K, V> {
      *                          alphanumerics, '.', '_' and '-'. If {@code null} then the results cannot be queried
      *                          (i.e., that would be equivalent to calling {@link KTable#filter(Predicate)}.
      * @return a {@code KTable} that contains only those records that satisfy the given predicate
-     * @see #filterNot(Predicate)
+     * @see #filterNot(Predicate, Materialized)
+     * @deprecated use {@link #filter(Predicate, Materialized)}
      */
+    @Deprecated
     KTable<K, V> filter(final Predicate<? super K, ? super V> predicate, final String queryableStoreName);
 
     /**
@@ -158,8 +202,10 @@ public interface KTable<K, V> {
      * @param predicate a filter {@link Predicate} that is applied to each record
      * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a {@code KTable} that contains only those records that satisfy the given predicate
-     * @see #filterNot(Predicate)
+     * @see #filterNot(Predicate, Materialized)
+     * @deprecated use {@link #filter(Predicate, Materialized)}
      */
+    @Deprecated
     KTable<K, V> filter(final Predicate<? super K, ? super V> predicate, final StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
@@ -210,12 +256,50 @@ public interface KTable<K, V> {
      * }</pre>
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
+     * The store name to query with is specified by {@link Materialized#as(String)} or {@link Materialized#as(KeyValueBytesStoreSupplier)}.
+     * <p>
+     * @param predicate a filter {@link Predicate} that is applied to each record
+     * @param materialized  a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
+     *                      should be materialized
+     * @return a {@code KTable} that contains only those records that do <em>not</em> satisfy the given predicate
+     * @see #filter(Predicate, Materialized)
+     */
+    KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate,
+                           final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized);
+    /**
+     * Create a new {@code KTable} that consists all records of this {@code KTable} which do <em>not</em> satisfy the
+     * given predicate.
+     * All records that <em>do</em> satisfy the predicate are dropped.
+     * For each {@code KTable} update the filter is evaluated on the update record to produce an update record for the
+     * result {@code KTable}.
+     * This is a stateless record-by-record operation.
+     * <p>
+     * Note that {@code filterNot} for a <i>changelog stream</i> works different to {@link KStream#filterNot(Predicate)
+     * record stream filters}, because {@link KeyValue records} with {@code null} values (so-called tombstone records)
+     * have delete semantics.
+     * Thus, for tombstones the provided filter predicate is not evaluated but the tombstone record is forwarded
+     * directly if required (i.e., if there is anything to be deleted).
+     * Furthermore, for each record that gets dropped (i.e., does satisfy the given predicate) a tombstone record is
+     * forwarded.
+     * <p>
+     * To query the local {@link KeyValueStore} it must be obtained via
+     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
+     * <pre>{@code
+     * KafkaStreams streams = ... // filtering words
+     * ReadOnlyKeyValueStore<K,V> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, V>keyValueStore());
+     * K key = "some-word";
+     * V valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
+     * }</pre>
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * query the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
      * @param predicate a filter {@link Predicate} that is applied to each record
      * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a {@code KTable} that contains only those records that do <em>not</em> satisfy the given predicate
-     * @see #filter(Predicate)
+     * @see #filter(Predicate, Materialized)
+     * @deprecated use {@link #filterNot(Predicate, Materialized)}
      */
+    @Deprecated
     KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate, final StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
@@ -251,8 +335,10 @@ public interface KTable<K, V> {
      * alphanumerics, '.', '_' and '-'. If {@code null} then the results cannot be queried
      * (i.e., that would be equivalent to calling {@link KTable#filterNot(Predicate)}.
      * @return a {@code KTable} that contains only those records that do <em>not</em> satisfy the given predicate
-     * @see #filter(Predicate)
+     * @see #filter(Predicate, Materialized)
+     * @deprecated use {@link #filter(Predicate, Materialized)}
      */
+    @Deprecated
     KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate, final String queryableStoreName);
 
 
@@ -290,6 +376,49 @@ public interface KTable<K, V> {
      */
     <VR> KTable<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper);
 
+    /**
+     * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
+     * (with possible new type)in the new {@code KTable}.
+     * For each {@code KTable} update the provided {@link ValueMapper} is applied to the value of the update record and
+     * computes a new value for it, resulting in an update record for the result {@code KTable}.
+     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
+     * This is a stateless record-by-record operation.
+     * <p>
+     * The example below counts the number of token of the value string.
+     * <pre>{@code
+     * KTable<String, String> inputTable = builder.table("topic");
+     * KTable<String, Integer> outputTable = inputTable.mapValue(new ValueMapper<String, Integer> {
+     *     Integer apply(String value) {
+     *         return value.split(" ").length;
+     *     }
+     * });
+     * }</pre>
+     * <p>
+     * To query the local {@link KeyValueStore} representing outputTable above it must be obtained via
+     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * query the value of the key on a parallel running instance of your Kafka Streams application.
+     * The store name to query with is specified by {@link Materialized#as(String)} or {@link Materialized#as(KeyValueBytesStoreSupplier)}.
+     * <p>
+     * This operation preserves data co-location with respect to the key.
+     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like a join) is applied to
+     * the result {@code KTable}.
+     * <p>
+     * Note that {@code mapValues} for a <i>changelog stream</i> works different to {@link KStream#mapValues(ValueMapper)
+     * record stream filters}, because {@link KeyValue records} with {@code null} values (so-called tombstone records)
+     * have delete semantics.
+     * Thus, for tombstones the provided value-mapper is not evaluated but the tombstone record is forwarded directly to
+     * delete the corresponding record in the result {@code KTable}.
+     *
+     * @param mapper a {@link ValueMapper} that computes a new output value
+     * @param materialized  a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
+     *                      should be materialized
+     * @param <VR>   the value type of the result {@code KTable}
+     *
+     * @return a {@code KTable} that contains records with unmodified keys and new values (possibly of different type)
+     */
+    <VR> KTable<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper,
+                                 final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
@@ -334,7 +463,9 @@ public interface KTable<K, V> {
      * @param <VR>   the value type of the result {@code KTable}
      *
      * @return a {@code KTable} that contains records with unmodified keys and new values (possibly of different type)
+     * @deprecated use {@link #mapValues(ValueMapper, Materialized)}
      */
+    @Deprecated
     <VR> KTable<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper, final Serde<VR> valueSerde, final String queryableStoreName);
 
     /**
@@ -376,7 +507,9 @@ public interface KTable<K, V> {
      * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @param <VR>   the value type of the result {@code KTable}
      * @return a {@code KTable} that contains records with unmodified keys and new values (possibly of different type)
+     * @deprecated use {@link #mapValues(ValueMapper, Materialized)}
      */
+    @Deprecated
     <VR> KTable<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper,
                                  final Serde<VR> valueSerde,
                                  final StateStoreSupplier<KeyValueStore> storeSupplier);
@@ -630,10 +763,10 @@ public interface KTable<K, V> {
      * started).
      * <p>
      * This is equivalent to calling {@link #to(String) #to(someTopicName)} and
-     * {@link KStreamBuilder#table(String, String) KStreamBuilder#table(someTopicName, queryableStoreName)}.
+     * {@link StreamsBuilder#table(String, String) StreamsBuilder#table(someTopicName, queryableStoreName)}.
      * <p>
      * The resulting {@code KTable} will be materialized in a local state store with the given store name (cf.
-     * {@link KStreamBuilder#table(String, String)})
+     * {@link StreamsBuilder#table(String, String)})
      * The store name must be a valid Kafka topic name and cannot contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      *
      * @param topic     the topic name
@@ -651,10 +784,10 @@ public interface KTable<K, V> {
      * started).
      * <p>
      * This is equivalent to calling {@link #to(String) #to(someTopicName)} and
-     * {@link KStreamBuilder#table(String, String) KStreamBuilder#table(someTopicName, queryableStoreName)}.
+     * {@link StreamsBuilder#table(String, String) StreamsBuilder#table(someTopicName, queryableStoreName)}.
      * <p>
      * The resulting {@code KTable} will be materialized in a local state store with the given store name (cf.
-     * {@link KStreamBuilder#table(String, String)})
+     * {@link StreamsBuilder#table(String, String)})
      * The store name must be a valid Kafka topic name and cannot contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      *
      * @param topic     the topic name
@@ -671,10 +804,10 @@ public interface KTable<K, V> {
      * started).
      * <p>
      * This is equivalent to calling {@link #to(String) #to(someTopicName)} and
-     * {@link KStreamBuilder#table(String, String) KStreamBuilder#table(someTopicName)}.
+     * {@link StreamsBuilder#table(String, String) StreamsBuilder#table(someTopicName)}.
      * <p>
      * The resulting {@code KTable} will be materialized in a local state store with an internal store name (cf.
-     * {@link KStreamBuilder#table(String)})
+     * {@link StreamsBuilder#table(String)})
      *
      * @param topic     the topic name
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
@@ -689,10 +822,10 @@ public interface KTable<K, V> {
      * started).
      * <p>
      * This is equivalent to calling {@link #to(StreamPartitioner, String) #to(partitioner, someTopicName)} and
-     * {@link KStreamBuilder#table(String, String) KStreamBuilder#table(someTopicName)}.
+     * {@link StreamsBuilder#table(String, String) StreamsBuilder#table(someTopicName)}.
      * <p>
      * The resulting {@code KTable} will be materialized in a local state store with an internal store name (cf.
-     * {@link KStreamBuilder#table(String)})
+     * {@link StreamsBuilder#table(String)})
      *
      * @param partitioner the function used to determine how records are distributed among partitions of the topic,
      *                    if not specified producer's {@link DefaultPartitioner} will be used
@@ -710,10 +843,10 @@ public interface KTable<K, V> {
      * started).
      * <p>
      * This is equivalent to calling {@link #to(StreamPartitioner, String) #to(partitioner, someTopicName)} and
-     * {@link KStreamBuilder#table(String, String) KStreamBuilder#table(someTopicName, queryableStoreName)}.
+     * {@link StreamsBuilder#table(String, String) StreamsBuilder#table(someTopicName, queryableStoreName)}.
      * <p>
      * The resulting {@code KTable} will be materialized in a local state store with the given store name (cf.
-     * {@link KStreamBuilder#table(String, String)})
+     * {@link StreamsBuilder#table(String, String)})
      *
      * @param partitioner the function used to determine how records are distributed among partitions of the topic,
      *                    if not specified producer's {@link DefaultPartitioner} will be used
@@ -734,10 +867,10 @@ public interface KTable<K, V> {
      * started).
      * <p>
      * This is equivalent to calling {@link #to(StreamPartitioner, String) #to(partitioner, someTopicName)} and
-     * {@link KStreamBuilder#table(String, String) KStreamBuilder#table(someTopicName, queryableStoreName)}.
+     * {@link StreamsBuilder#table(String, String) StreamsBuilder#table(someTopicName, queryableStoreName)}.
      * <p>
      * The resulting {@code KTable} will be materialized in a local state store with the given store name (cf.
-     * {@link KStreamBuilder#table(String, String)})
+     * {@link StreamsBuilder#table(String, String)})
      *
      * @param partitioner the function used to determine how records are distributed among partitions of the topic,
      *                    if not specified producer's {@link DefaultPartitioner} will be used
@@ -758,10 +891,10 @@ public interface KTable<K, V> {
      * used&mdash;otherwise producer's {@link DefaultPartitioner} is used.
      * <p>
      * This is equivalent to calling {@link #to(Serde, Serde, String) #to(keySerde, valueSerde, someTopicName)} and
-     * {@link KStreamBuilder#table(String, String) KStreamBuilder#table(someTopicName, queryableStoreName)}.
+     * {@link StreamsBuilder#table(String, String) StreamsBuilder#table(someTopicName, queryableStoreName)}.
      * <p>
      * The resulting {@code KTable} will be materialized in a local state store with the given store name (cf.
-     * {@link KStreamBuilder#table(String, String)})
+     * {@link StreamsBuilder#table(String, String)})
      *
      * @param keySerde  key serde used to send key-value pairs,
      *                  if not specified the default key serde defined in the configuration will be used
@@ -785,10 +918,10 @@ public interface KTable<K, V> {
      * used&mdash;otherwise producer's {@link DefaultPartitioner} is used.
      * <p>
      * This is equivalent to calling {@link #to(Serde, Serde, String) #to(keySerde, valueSerde, someTopicName)} and
-     * {@link KStreamBuilder#table(String, String) KStreamBuilder#table(someTopicName, queryableStoreName)}.
+     * {@link StreamsBuilder#table(String, String) StreamsBuilder#table(someTopicName, queryableStoreName)}.
      * <p>
      * The resulting {@code KTable} will be materialized in a local state store with the given store name (cf.
-     * {@link KStreamBuilder#table(String, String)})
+     * {@link StreamsBuilder#table(String, String)})
      *
      * @param keySerde  key serde used to send key-value pairs,
      *                  if not specified the default key serde defined in the configuration will be used
@@ -811,10 +944,10 @@ public interface KTable<K, V> {
      * used&mdash;otherwise producer's {@link DefaultPartitioner} is used.
      * <p>
      * This is equivalent to calling {@link #to(Serde, Serde, String) #to(keySerde, valueSerde, someTopicName)} and
-     * {@link KStreamBuilder#table(String) KStreamBuilder#table(someTopicName)}.
+     * {@link StreamsBuilder#table(String) StreamsBuilder#table(someTopicName)}.
      * <p>
      * The resulting {@code KTable} will be materialized in a local state store with an interna; store name (cf.
-     * {@link KStreamBuilder#table(String)})
+     * {@link StreamsBuilder#table(String)})
      *
      * @param keySerde  key serde used to send key-value pairs,
      *                  if not specified the default key serde defined in the configuration will be used
@@ -834,10 +967,10 @@ public interface KTable<K, V> {
      * <p>
      * This is equivalent to calling {@link #to(Serde, Serde, StreamPartitioner, String)
      * #to(keySerde, valueSerde, partitioner, someTopicName)} and
-     * {@link KStreamBuilder#table(String, String) KStreamBuilder#table(someTopicName, queryableStoreName)}.
+     * {@link StreamsBuilder#table(String, String) StreamsBuilder#table(someTopicName, queryableStoreName)}.
      * <p>
      * The resulting {@code KTable} will be materialized in a local state store with the given store name (cf.
-     * {@link KStreamBuilder#table(String, String)})
+     * {@link StreamsBuilder#table(String, String)})
      *
      * @param keySerde    key serde used to send key-value pairs,
      *                    if not specified the default key serde defined in the configuration will be used
@@ -866,10 +999,10 @@ public interface KTable<K, V> {
      * <p>
      * This is equivalent to calling {@link #to(Serde, Serde, StreamPartitioner, String)
      * #to(keySerde, valueSerde, partitioner, someTopicName)} and
-     * {@link KStreamBuilder#table(String, String) KStreamBuilder#table(someTopicName, queryableStoreName)}.
+     * {@link StreamsBuilder#table(String, String) StreamsBuilder#table(someTopicName, queryableStoreName)}.
      * <p>
      * The resulting {@code KTable} will be materialized in a local state store with the given store name (cf.
-     * {@link KStreamBuilder#table(String, String)})
+     * {@link StreamsBuilder#table(String, String)})
      *
      * @param keySerde    key serde used to send key-value pairs,
      *                    if not specified the default key serde defined in the configuration will be used
@@ -897,10 +1030,10 @@ public interface KTable<K, V> {
      * <p>
      * This is equivalent to calling {@link #to(Serde, Serde, StreamPartitioner, String)
      * #to(keySerde, valueSerde, partitioner, someTopicName)} and
-     * {@link KStreamBuilder#table(String) KStreamBuilder#table(someTopicName)}.
+     * {@link StreamsBuilder#table(String) StreamsBuilder#table(someTopicName)}.
      * <p>
      * The resulting {@code KTable} will be materialized in a local state store with an internal store name (cf.
-     * {@link KStreamBuilder#table(String)})
+     * {@link StreamsBuilder#table(String)})
      *
      * @param keySerde    key serde used to send key-value pairs,
      *                    if not specified the default key serde defined in the configuration will be used
@@ -917,7 +1050,6 @@ public interface KTable<K, V> {
                          final Serde<V> valSerde,
                          final StreamPartitioner<? super K, ? super V> partitioner,
                          final String topic);
-
 
     /**
      * Materialize this changelog stream to a topic using default serializers and deserializers and producer's
@@ -1001,7 +1133,7 @@ public interface KTable<K, V> {
      * records to and rereading all update records from it, such that the resulting {@link KGroupedTable} is partitioned
      * on the new key.
      * <p>
-     * If the key or value type is changed, it is recommended to use {@link #groupBy(KeyValueMapper, Serde, Serde)}
+     * If the key or value type is changed, it is recommended to use {@link #groupBy(KeyValueMapper, Serialized)}
      * instead.
      *
      * @param selector a {@link KeyValueMapper} that computes a new grouping key and value to be aggregated
@@ -1010,6 +1142,35 @@ public interface KTable<K, V> {
      * @return a {@link KGroupedTable} that contains the re-grouped records of the original {@code KTable}
      */
     <KR, VR> KGroupedTable<KR, VR> groupBy(final KeyValueMapper<? super K, ? super V, KeyValue<KR, VR>> selector);
+
+    /**
+     * Re-groups the records of this {@code KTable} using the provided {@link KeyValueMapper}
+     * and {@link Serde}s as specified by {@link Serialized}.
+     * Each {@link KeyValue} pair of this {@code KTable} is mapped to a new {@link KeyValue} pair by applying the
+     * provided {@link KeyValueMapper}.
+     * Re-grouping a {@code KTable} is required before an aggregation operator can be applied to the data
+     * (cf. {@link KGroupedTable}).
+     * The {@link KeyValueMapper} selects a new key and value (with should both have unmodified type).
+     * If the new record key is {@code null} the record will not be included in the resulting {@link KGroupedTable}
+     * <p>
+     * Because a new key is selected, an internal repartitioning topic will be created in Kafka.
+     * This topic will be named "${applicationId}-XXX-repartition", where "applicationId" is user-specified in
+     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is
+     * an internally generated name, and "-repartition" is a fixed suffix.
+     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     * <p>
+     * All data of this {@code KTable} will be redistributed through the repartitioning topic by writing all update
+     * records to and rereading all update records from it, such that the resulting {@link KGroupedTable} is partitioned
+     * on the new key.
+     *
+     * @param selector      a {@link KeyValueMapper} that computes a new grouping key and value to be aggregated
+     * @param serialized    the {@link Serialized} instance used to specify {@link org.apache.kafka.common.serialization.Serdes}
+     * @param <KR>          the key type of the result {@link KGroupedTable}
+     * @param <VR>          the value type of the result {@link KGroupedTable}
+     * @return a {@link KGroupedTable} that contains the re-grouped records of the original {@code KTable}
+     */
+    <KR, VR> KGroupedTable<KR, VR> groupBy(final KeyValueMapper<? super K, ? super V, KeyValue<KR, VR>> selector,
+                                           final Serialized<KR, VR> serialized);
 
     /**
      * Re-groups the records of this {@code KTable} using the provided {@link KeyValueMapper}.
@@ -1038,7 +1199,9 @@ public interface KTable<K, V> {
      * @param <KR>       the key type of the result {@link KGroupedTable}
      * @param <VR>       the value type of the result {@link KGroupedTable}
      * @return a {@link KGroupedTable} that contains the re-grouped records of the original {@code KTable}
+     * @deprecated use {@link #groupBy(KeyValueMapper, Serialized)}
      */
+    @Deprecated
     <KR, VR> KGroupedTable<KR, VR> groupBy(final KeyValueMapper<? super K, ? super V, KeyValue<KR, VR>> selector,
                                            final Serde<KR> keySerde,
                                            final Serde<VR> valueSerde);

@@ -28,13 +28,13 @@ import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.{Log, TimestampOffset}
 import kafka.network.RequestChannel
-import kafka.network.RequestChannel.Session
 import kafka.security.auth.Authorizer
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server._
 import kafka.utils.{MockTime, TestUtils, ZkUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.UnsupportedVersionException
+import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
@@ -392,10 +392,14 @@ class KafkaApisTest {
 
   private def buildRequest[T <: AbstractRequest](builder: AbstractRequest.Builder[T]): (T, RequestChannel.Request) = {
     val request = builder.build()
-    val header = new RequestHeader(builder.apiKey.id, request.version, "", 0)
-    val buffer = request.serialize(header)
-    val session = Session(KafkaPrincipal.ANONYMOUS, InetAddress.getLocalHost)
-    (request, RequestChannel.Request(1, "1", session, buffer, 0, new ListenerName(""), SecurityProtocol.PLAINTEXT))
+    val buffer = request.serialize(new RequestHeader(builder.apiKey, request.version, "", 0))
+
+    // read the header from the buffer first so that the body can be read next from the Request constructor
+    val header = RequestHeader.parse(buffer)
+    val context = new RequestContext(header, "1", InetAddress.getLocalHost, KafkaPrincipal.ANONYMOUS,
+      new ListenerName(""), SecurityProtocol.PLAINTEXT)
+    (request, new RequestChannel.Request(processor = 1, context = context, startTimeNanos =  0,
+      MemoryPool.NONE, buffer))
   }
 
   private def readResponse(api: ApiKeys, request: AbstractRequest, capturedResponse: Capture[RequestChannel.Response]): AbstractResponse = {
@@ -406,16 +410,13 @@ class KafkaApisTest {
     channel.buffer.getInt() // read the size
     ResponseHeader.parse(channel.buffer)
     val struct = api.responseSchema(request.version).read(channel.buffer)
-    AbstractResponse.getResponse(api, struct)
+    AbstractResponse.parseResponse(api, struct)
   }
 
   private def expectThrottleCallbackAndInvoke(capturedThrottleCallback: Capture[Int => Unit]): Unit = {
     EasyMock.expect(clientRequestQuotaManager.maybeRecordAndThrottle(
-      EasyMock.anyString(),
-      EasyMock.anyString(),
-      EasyMock.anyLong(),
-      EasyMock.capture(capturedThrottleCallback),
-      EasyMock.anyObject[(Long => Unit) => Unit]()))
+      EasyMock.anyObject[RequestChannel.Request](),
+      EasyMock.capture(capturedThrottleCallback)))
       .andAnswer(new IAnswer[Unit] {
         override def answer(): Unit = {
           val callback = capturedThrottleCallback.getValue

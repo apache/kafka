@@ -28,7 +28,7 @@ import joptsimple.OptionParser
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.math._
-import kafka.utils.{CommandLineUtils, Exit, Logging}
+import kafka.utils.{CommandLineUtils , Exit, Logging}
 
 
 /**
@@ -177,14 +177,14 @@ object JmxTool extends Logging {
   }
 
   def queryAttributes(mbsc: MBeanServerConnection, names: Iterable[ObjectName], attributesWhitelist: Option[Array[String]]) = {
-    var attributes = new mutable.HashMap[String, Any]()
-    for(name <- names) {
+    val attributes = new mutable.HashMap[String, Any]()
+    for (name <- names) {
       val mbean = mbsc.getMBeanInfo(name)
-      for(attrObj <- mbsc.getAttributes(name, mbean.getAttributes.map(_.getName)).asScala) {
+      for (attrObj <- mbsc.getAttributes(name, mbean.getAttributes.map(_.getName)).asScala) {
         val attr = attrObj.asInstanceOf[Attribute]
         attributesWhitelist match {
           case Some(allowedAttributes) =>
-            if(allowedAttributes.contains(attr.getName))
+            if (allowedAttributes.contains(attr.getName))
               attributes(name + ":" + attr.getName) = attr.getValue
           case None => attributes(name + ":" + attr.getName) = attr.getValue
         }

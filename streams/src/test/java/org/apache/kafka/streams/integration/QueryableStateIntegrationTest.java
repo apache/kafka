@@ -27,22 +27,26 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreamsTest;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
@@ -189,9 +193,9 @@ public class QueryableStateIntegrationTest {
      * Creates a typical word count topology
      */
     private KafkaStreams createCountStream(final String inputTopic, final String outputTopic, final Properties streamsConfiguration) {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final Serde<String> stringSerde = Serdes.String();
-        final KStream<String, String> textLines = builder.stream(stringSerde, stringSerde, inputTopic);
+        final KStream<String, String> textLines = builder.stream(inputTopic, Consumed.with(stringSerde, stringSerde));
 
         final KGroupedStream<String, String> groupedByWord = textLines
             .flatMapValues(new ValueMapper<String, Iterable<String>>() {
@@ -208,7 +212,7 @@ public class QueryableStateIntegrationTest {
         // Create a Windowed State Store that contains the word count for every 1 minute
         groupedByWord.count(TimeWindows.of(WINDOW_SIZE), "windowed-word-count-store-" + inputTopic);
 
-        return new KafkaStreams(builder, streamsConfiguration);
+        return new KafkaStreams(builder.build(), streamsConfiguration);
     }
 
     private class StreamRunnable implements Runnable {
@@ -416,7 +420,7 @@ public class QueryableStateIntegrationTest {
     public void shouldBeAbleToQueryFilterState() throws Exception {
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final String[] keys = {"hello", "goodbye", "welcome", "go", "kafka"};
         final Set<KeyValue<String, Long>> batch1 = new HashSet<>();
         batch1.addAll(Arrays.asList(
@@ -445,11 +449,11 @@ public class QueryableStateIntegrationTest {
             }
         };
         final KTable<String, Long> t1 = builder.table(streamOne);
-        final KTable<String, Long> t2 = t1.filter(filterPredicate, "queryFilter");
-        t1.filterNot(filterPredicate, "queryFilterNot");
+        final KTable<String, Long> t2 = t1.filter(filterPredicate, Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("queryFilter"));
+        t1.filterNot(filterPredicate, Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("queryFilterNot"));
         t2.to(outputTopic);
 
-        kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
+        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.start();
 
         waitUntilAtLeastNumRecordProcessed(outputTopic, 2);
@@ -482,7 +486,7 @@ public class QueryableStateIntegrationTest {
     public void shouldBeAbleToQueryMapValuesState() throws Exception {
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final String[] keys = {"hello", "goodbye", "welcome", "go", "kafka"};
         final Set<KeyValue<String, String>> batch1 = new HashSet<>();
         batch1.addAll(Arrays.asList(
@@ -508,10 +512,10 @@ public class QueryableStateIntegrationTest {
             public Long apply(final String value) {
                 return Long.valueOf(value);
             }
-        }, Serdes.Long(), "queryMapValues");
+        }, Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("queryMapValues").withValueSerde(Serdes.Long()));
         t2.to(Serdes.String(), Serdes.Long(), outputTopic);
 
-        kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
+        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.start();
 
         waitUntilAtLeastNumRecordProcessed(outputTopic, 1);
@@ -528,7 +532,7 @@ public class QueryableStateIntegrationTest {
     public void shouldBeAbleToQueryMapValuesAfterFilterState() throws Exception {
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final String[] keys = {"hello", "goodbye", "welcome", "go", "kafka"};
         final Set<KeyValue<String, String>> batch1 = new HashSet<>();
         batch1.addAll(Arrays.asList(
@@ -558,16 +562,16 @@ public class QueryableStateIntegrationTest {
             }
         };
         final KTable<String, String> t1 = builder.table(streamOne);
-        final KTable<String, String> t2 = t1.filter(filterPredicate, "queryFilter");
+        final KTable<String, String> t2 = t1.filter(filterPredicate, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("queryFilter"));
         final KTable<String, Long> t3 = t2.mapValues(new ValueMapper<String, Long>() {
             @Override
             public Long apply(final String value) {
                 return Long.valueOf(value);
             }
-        }, Serdes.Long(), "queryMapValues");
+        }, Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("queryMapValues").withValueSerde(Serdes.Long()));
         t3.to(Serdes.String(), Serdes.Long(), outputTopic);
 
-        kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
+        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.start();
 
         waitUntilAtLeastNumRecordProcessed(outputTopic, 1);
@@ -588,7 +592,7 @@ public class QueryableStateIntegrationTest {
 
     private void verifyCanQueryState(final int cacheSizeBytes) throws Exception {
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final String[] keys = {"hello", "goodbye", "welcome", "go", "kafka"};
 
         final Set<KeyValue<String, String>> batch1 = new TreeSet<>(stringComparator);
@@ -621,7 +625,7 @@ public class QueryableStateIntegrationTest {
         s1.groupByKey().count("my-count").to(Serdes.String(), Serdes.Long(), outputTopic);
 
         s1.groupByKey().count(TimeWindows.of(WINDOW_SIZE), "windowed-count");
-        kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
+        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.start();
 
         waitUntilAtLeastNumRecordProcessed(outputTopic, 1);
@@ -642,12 +646,12 @@ public class QueryableStateIntegrationTest {
 
     @Test
     public void shouldNotMakeStoreAvailableUntilAllStoresAvailable() throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> stream = builder.stream(streamThree);
 
         final String storeName = "count-by-key";
         stream.groupByKey().count(storeName);
-        kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
+        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.start();
 
         final KeyValue<String, String> hello = KeyValue.pair("hello", "hello");
@@ -677,7 +681,7 @@ public class QueryableStateIntegrationTest {
         kafkaStreams.close();
 
         // start again
-        kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
+        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.start();
 
         // make sure we never get any value other than 8 for hello
@@ -718,7 +722,7 @@ public class QueryableStateIntegrationTest {
         final AtomicBoolean failed = new AtomicBoolean(false);
         final String storeName = "store";
 
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> input = builder.stream(streamOne);
         input
             .groupByKey()
@@ -736,7 +740,7 @@ public class QueryableStateIntegrationTest {
             .to(outputTopic);
 
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
-        kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
+        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
             public void uncaughtException(final Thread t, final Throwable e) {

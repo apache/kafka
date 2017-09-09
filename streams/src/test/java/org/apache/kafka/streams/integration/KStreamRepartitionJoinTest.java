@@ -25,14 +25,16 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.JoinWindows;
+import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueJoiner;
@@ -44,7 +46,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
-
 import org.junit.experimental.categories.Category;
 
 import java.io.IOException;
@@ -69,7 +70,7 @@ public class KStreamRepartitionJoinTest {
     private final MockTime mockTime = CLUSTER.time;
     private static final long WINDOW_SIZE = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
 
-    private KStreamBuilder builder;
+    private StreamsBuilder builder;
     private Properties streamsConfiguration;
     private KStream<Long, Integer> streamOne;
     private KStream<Integer, String> streamTwo;
@@ -88,7 +89,7 @@ public class KStreamRepartitionJoinTest {
     public void before() throws InterruptedException {
         testNo++;
         String applicationId = "kstream-repartition-join-test-" + testNo;
-        builder = new KStreamBuilder();
+        builder = new StreamsBuilder();
         createTopics();
         streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
@@ -99,9 +100,9 @@ public class KStreamRepartitionJoinTest {
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 3);
         streamsConfiguration.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
 
-        streamOne = builder.stream(Serdes.Long(), Serdes.Integer(), streamOneInput);
-        streamTwo = builder.stream(Serdes.Integer(), Serdes.String(), streamTwoInput);
-        streamFour = builder.stream(Serdes.Integer(), Serdes.String(), streamFourInput);
+        streamOne = builder.stream(streamOneInput, Consumed.with(Serdes.Long(), Serdes.Integer()));
+        streamTwo = builder.stream(streamTwoInput, Consumed.with(Serdes.Integer(), Serdes.String()));
+        streamFour = builder.stream(streamFourInput, Consumed.with(Serdes.Integer(), Serdes.String()));
 
         keyMapper = MockKeyValueMapper.SelectValueKeyValueMapper();
     }
@@ -212,9 +213,7 @@ public class KStreamRepartitionJoinTest {
             .join(streamOne.map(keyMapper),
                 TOSTRING_JOINER,
                 getJoinWindow(),
-                Serdes.Integer(),
-                Serdes.String(),
-                Serdes.Integer())
+                Joined.with(Serdes.Integer(), Serdes.String(), Serdes.Integer()))
             .to(Serdes.Integer(), Serdes.String(), output);
 
         return new ExpectedOutputOnTopic(Arrays.asList("A:1", "B:2", "C:3", "D:4", "E:5"), output);
@@ -231,9 +230,7 @@ public class KStreamRepartitionJoinTest {
         map1.leftJoin(map2,
             TOSTRING_JOINER,
             getJoinWindow(),
-            Serdes.Integer(),
-            Serdes.Integer(),
-            Serdes.String())
+            Joined.with(Serdes.Integer(), Serdes.Integer(), Serdes.String()))
             .filterNot(new Predicate<Integer, String>() {
                 @Override
                 public boolean test(Integer key, String value) {
@@ -257,9 +254,7 @@ public class KStreamRepartitionJoinTest {
         final KStream<Integer, String> join = map1.join(map2,
             TOSTRING_JOINER,
             getJoinWindow(),
-            Serdes.Integer(),
-            Serdes.Integer(),
-            Serdes.String());
+            Joined.with(Serdes.Integer(), Serdes.Integer(), Serdes.String()));
 
         final String topic = "map-join-join-" + testNo;
         CLUSTER.createTopic(topic);
@@ -267,9 +262,7 @@ public class KStreamRepartitionJoinTest {
             .join(streamFour.map(kvMapper),
                 TOSTRING_JOINER,
                 getJoinWindow(),
-                Serdes.Integer(),
-                Serdes.String(),
-                Serdes.String())
+                Joined.with(Serdes.Integer(), Serdes.String(), Serdes.String()))
             .to(Serdes.Integer(), Serdes.String(), topic);
 
 
@@ -352,7 +345,7 @@ public class KStreamRepartitionJoinTest {
 
 
     private void startStreams() {
-        kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
+        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.start();
     }
 
@@ -384,11 +377,9 @@ public class KStreamRepartitionJoinTest {
                         final String outputTopic) throws InterruptedException {
         CLUSTER.createTopic(outputTopic);
         lhs.join(rhs,
-            TOSTRING_JOINER,
-            getJoinWindow(),
-            Serdes.Integer(),
-            Serdes.Integer(),
-            Serdes.String())
+                 TOSTRING_JOINER,
+                 getJoinWindow(),
+                 Joined.with(Serdes.Integer(), Serdes.Integer(), Serdes.String()))
             .to(Serdes.Integer(), Serdes.String(), outputTopic);
     }
 

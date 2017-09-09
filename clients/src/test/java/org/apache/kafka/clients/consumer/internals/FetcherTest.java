@@ -75,6 +75,7 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.DelayedReceive;
@@ -129,7 +130,8 @@ public class FetcherTest {
     private SubscriptionState subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST);
     private SubscriptionState subscriptionsNoAutoReset = new SubscriptionState(OffsetResetStrategy.NONE);
     private static final double EPSILON = 0.0001;
-    private ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(client, metadata, time, 100, 1000);
+    private ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(new LogContext(),
+            client, metadata, time, 100, 1000);
 
     private MemoryRecords records;
     private MemoryRecords nextRecords;
@@ -265,7 +267,7 @@ public class FetcherTest {
             public byte[] deserialize(String topic, byte[] data) {
                 if (i++ % 2 == 1) {
                     // Should be blocked on the value deserialization of the first record.
-                    assertEquals(new String(data, StandardCharsets.UTF_8), "value-1");
+                    assertEquals("value-1", new String(data, StandardCharsets.UTF_8));
                     throw new SerializationException();
                 }
                 return data;
@@ -294,7 +296,7 @@ public class FetcherTest {
     }
 
     @Test
-    public void testParseInvalidRecord() throws Exception {
+    public void testParseCorruptedRecord() throws Exception {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer));
 
@@ -323,6 +325,15 @@ public class FetcherTest {
         out.writeInt(size);
         LegacyRecord.write(out, magic, crc, LegacyRecord.computeAttributes(magic, CompressionType.NONE, TimestampType.CREATE_TIME), timestamp, key, value);
 
+        // Write a record whose size field is invalid.
+        out.writeLong(offset + 3);
+        out.writeInt(1);
+
+        // write one valid record
+        out.writeLong(offset + 4);
+        out.writeInt(size);
+        LegacyRecord.write(out, magic, crc, LegacyRecord.computeAttributes(magic, CompressionType.NONE, TimestampType.CREATE_TIME), timestamp, key, value);
+
         buffer.flip();
 
         subscriptions.assignFromUser(singleton(tp0));
@@ -337,28 +348,44 @@ public class FetcherTest {
         assertEquals(1, fetcher.fetchedRecords().get(tp0).size());
         assertEquals(1, subscriptions.position(tp0).longValue());
 
-        // the fetchedRecords() should always throw exception due to the second invalid message
+        ensureBlockOnRecord(1L);
+        seekAndConsumeRecord(buffer, 2L);
+        ensureBlockOnRecord(3L);
+        try {
+            // For a record that cannot be retrieved from the iterator, we cannot seek over it within the batch.
+            seekAndConsumeRecord(buffer, 4L);
+            fail("Should have thrown exception when fail to retrieve a record from iterator.");
+        } catch (KafkaException ke) {
+           // let it go
+        }
+        ensureBlockOnRecord(4L);
+    }
+
+    private void ensureBlockOnRecord(long blockedOffset) {
+        // the fetchedRecords() should always throw exception due to the invalid message at the starting offset.
         for (int i = 0; i < 2; i++) {
             try {
                 fetcher.fetchedRecords();
                 fail("fetchedRecords should have raised KafkaException");
             } catch (KafkaException e) {
-                assertEquals(1, subscriptions.position(tp0).longValue());
+                assertEquals(blockedOffset, subscriptions.position(tp0).longValue());
             }
         }
+    }
 
+    private void seekAndConsumeRecord(ByteBuffer responseBuffer, long toOffset) {
         // Seek to skip the bad record and fetch again.
-        subscriptions.seek(tp0, 2);
+        subscriptions.seek(tp0, toOffset);
         // Should not throw exception after the seek.
         fetcher.fetchedRecords();
         assertEquals(1, fetcher.sendFetches());
-        client.prepareResponse(fetchResponse(tp0, MemoryRecords.readableRecords(buffer), Errors.NONE, 100L, 0));
+        client.prepareResponse(fetchResponse(tp0, MemoryRecords.readableRecords(responseBuffer), Errors.NONE, 100L, 0));
         consumerClient.poll(0);
 
         List<ConsumerRecord<byte[], byte[]>> records = fetcher.fetchedRecords().get(tp0);
         assertEquals(1, records.size());
-        assertEquals(2L, records.get(0).offset());
-        assertEquals(3, subscriptions.position(tp0).longValue());
+        assertEquals(toOffset, records.get(0).offset());
+        assertEquals(toOffset + 1, subscriptions.position(tp0).longValue());
     }
 
     @Test
@@ -1979,7 +2006,8 @@ public class FetcherTest {
                         partitionInfo.partition(),
                         partitionInfo.leader(),
                         Arrays.asList(partitionInfo.replicas()),
-                        Arrays.asList(partitionInfo.inSyncReplicas())));
+                        Arrays.asList(partitionInfo.inSyncReplicas()),
+                        Arrays.asList(partitionInfo.offlineReplicas())));
             }
         }
 
@@ -2012,7 +2040,9 @@ public class FetcherTest {
                                                Deserializer<V> valueDeserializer,
                                                int maxPollRecords,
                                                IsolationLevel isolationLevel) {
-        return new Fetcher<>(consumerClient,
+        return new Fetcher<>(
+                new LogContext(),
+                consumerClient,
                 minBytes,
                 maxBytes,
                 maxWaitMs,

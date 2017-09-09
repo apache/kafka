@@ -43,6 +43,7 @@
   <allow pkg="org.apache.kafka.common.security" />
   <allow pkg="org.apache.kafka.common.utils" />
   <allow pkg="org.apache.kafka.common.errors" exact-match="true" />
+  <allow pkg="org.apache.kafka.common.memory" />
 
   <subpackage name="common">
     <disallow pkg="org.apache.kafka.clients" />
@@ -64,6 +65,10 @@
     </subpackage>
 
     <subpackage name="metrics">
+      <allow pkg="org.apache.kafka.common.metrics" />
+    </subpackage>
+
+    <subpackage name="memory">
       <allow pkg="org.apache.kafka.common.metrics" />
     </subpackage>
 
@@ -93,7 +98,6 @@
       </subpackage>
       <subpackage name="scram">
         <allow pkg="javax.crypto" />
-        <allow pkg="javax.xml.bind" />
         <allow pkg="org.apache.kafka.common.errors" />
       </subpackage>
     </subpackage>
@@ -173,6 +177,18 @@
     <allow pkg="org.apache.log4j" />
   </subpackage>
 
+  <subpackage name="trogdor">
+    <allow pkg="com.fasterxml.jackson" />
+    <allow pkg="javax.servlet" />
+    <allow pkg="javax.ws.rs" />
+    <allow pkg="net.sourceforge.argparse4j" />
+    <allow pkg="org.apache.kafka.test"/>
+    <allow pkg="org.apache.kafka.trogdor" />
+    <allow pkg="org.apache.log4j" />
+    <allow pkg="org.eclipse.jetty" />
+    <allow pkg="org.glassfish.jersey" />
+  </subpackage>
+
   <subpackage name="streams">
     <allow pkg="org.apache.kafka.common"/>
     <allow pkg="org.apache.kafka.test"/>
@@ -242,7 +258,6 @@
   <subpackage name="test">
     <allow pkg="org.apache.kafka" />
     <allow pkg="org.bouncycastle" />
-    <allow pkg="javax.xml.bind" />
   </subpackage>
 
   <subpackage name="connect">

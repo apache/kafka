@@ -96,20 +96,8 @@ public class RocksDBSessionStoreSupplierTest {
         context.setTime(1);
         store.put(new Windowed<>("a", new SessionWindow(0, 10)), "b");
         store.put(new Windowed<>("b", new SessionWindow(0, 10)), "c");
-        assertThat(store, is(instanceOf(CachingSessionStore.class)));
+        assertThat(((WrappedStateStore) store).wrappedStore(), is(instanceOf(CachingSessionStore.class)));
         assertThat(cache.size(), is(2L));
-    }
-
-    @Test
-    public void shouldReturnRocksDbStoreWhenCachingAndLoggingDisabled() {
-        store = createStore(false, false);
-        assertThat(store, is(instanceOf(RocksDBSessionStore.class)));
-    }
-
-    @Test
-    public void shouldReturnRocksDbStoreWhenCachingDisabled() {
-        store = createStore(true, false);
-        assertThat(store, is(instanceOf(RocksDBSessionStore.class)));
     }
 
     @Test

@@ -45,7 +45,7 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
 
     private final List<KeyValue<Long, byte[]>> windowStoreKvPairs = new ArrayList<>();
     private final ThreadCache cache = new ThreadCache("testCache", 1000000L,  new MockStreamsMetrics(new Metrics()));
-    private final String namespace = "one";
+    private final String namespace = "0.0-one";
     private final StateSerdes<String, String> stateSerdes = new StateSerdes<>("foo", Serdes.String(), Serdes.String());
 
     @Test
@@ -70,8 +70,8 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
             namespace, SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(fromBytes), SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(toBytes)
         );
 
-        final MergedSortedCacheWindowStoreIterator<byte[]> iterator = new MergedSortedCacheWindowStoreIterator<>(
-            cacheIterator, storeIterator, new StateSerdes<>("name", Serdes.Long(), Serdes.ByteArray())
+        final MergedSortedCacheWindowStoreIterator iterator = new MergedSortedCacheWindowStoreIterator(
+            cacheIterator, storeIterator
         );
         int index = 0;
         while (iterator.hasNext()) {
@@ -93,8 +93,8 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(
             namespace, SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(fromBytes), SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(toBytes)
         );
-        final MergedSortedCacheWindowStoreIterator<byte[]> iterator = new MergedSortedCacheWindowStoreIterator<>(
-            cacheIterator, storeIterator, new StateSerdes<>("name", Serdes.Long(), Serdes.ByteArray())
+        final MergedSortedCacheWindowStoreIterator iterator = new MergedSortedCacheWindowStoreIterator(
+            cacheIterator, storeIterator
         );
         assertThat(iterator.peekNextKey(), equalTo(0L));
         iterator.next();
@@ -110,7 +110,7 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
         Bytes toBytes = WindowStoreUtils.toBinaryKey("a", 100, 0, stateSerdes);
         final KeyValueIterator<Long, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>("store", new KeyValueIteratorStub<>(windowStoreKvPairs.iterator()));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(namespace, SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(fromBytes), SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(toBytes));
-        final MergedSortedCacheWindowStoreIterator<byte[]> iterator = new MergedSortedCacheWindowStoreIterator<>(cacheIterator, storeIterator, new StateSerdes<>("name", Serdes.Long(), Serdes.ByteArray()));
+        final MergedSortedCacheWindowStoreIterator iterator = new MergedSortedCacheWindowStoreIterator(cacheIterator, storeIterator);
         assertThat(iterator.peekNextKey(), equalTo(0L));
         iterator.next();
         assertThat(iterator.peekNextKey(), equalTo(10L));

@@ -19,9 +19,9 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KGroupedTable;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
@@ -32,8 +32,8 @@ import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.util.HashMap;
@@ -45,23 +45,16 @@ import static org.junit.Assert.assertNull;
 
 public class KGroupedTableImplTest {
 
-    private final KStreamBuilder builder = new KStreamBuilder();
+    private final StreamsBuilder builder = new StreamsBuilder();
     private static final String INVALID_STORE_NAME = "~foo bar~";
     private KGroupedTable<String, String> groupedTable;
-    private KStreamTestDriver driver = null;
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @Before
     public void before() {
         groupedTable = builder.table(Serdes.String(), Serdes.String(), "blah", "blah")
                 .groupBy(MockKeyValueMapper.<String, String>SelectValueKeyValueMapper());
-    }
-
-    @After
-    public void cleanup() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
     }
 
     @Test
@@ -128,7 +121,7 @@ public class KGroupedTableImplTest {
             }
         });
 
-        driver = new KStreamTestDriver(builder, TestUtils.tempDirectory(), Serdes.String(), Serdes.Integer());
+        driver.setUp(builder, TestUtils.tempDirectory(), Serdes.String(), Serdes.Integer());
         driver.setTime(10L);
         driver.process(topic, "A", 1.1);
         driver.process(topic, "B", 2.2);

@@ -22,17 +22,17 @@ import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.WindowedKStream;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.WindowStore;
 
 import java.util.Collections;
 import java.util.Objects;
@@ -40,21 +40,21 @@ import java.util.Set;
 
 class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStream<K, V> {
 
-    private static final String REDUCE_NAME = "KSTREAM-REDUCE-";
-    private static final String AGGREGATE_NAME = "KSTREAM-AGGREGATE-";
+    static final String REDUCE_NAME = "KSTREAM-REDUCE-";
+    static final String AGGREGATE_NAME = "KSTREAM-AGGREGATE-";
 
     private final Serde<K> keySerde;
     private final Serde<V> valSerde;
     private final boolean repartitionRequired;
     private boolean isQueryable = true;
 
-    KGroupedStreamImpl(final KStreamBuilder topology,
+    KGroupedStreamImpl(final InternalStreamsBuilder builder,
                        final String name,
                        final Set<String> sourceNodes,
                        final Serde<K> keySerde,
                        final Serde<V> valSerde,
                        final boolean repartitionRequired) {
-        super(topology, name, sourceNodes);
+        super(builder, name, sourceNodes);
         this.keySerde = keySerde;
         this.valSerde = valSerde;
         this.repartitionRequired = repartitionRequired;
@@ -103,7 +103,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     @Override
     public <W extends Window> KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
                                                             final Windows<W> windows) {
-        return reduce(reducer, windows, (String) null);
+        return windowedBy(windows).reduce(reducer);
     }
 
     @SuppressWarnings("unchecked")
@@ -165,7 +165,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                                                                   final Aggregator<? super K, ? super V, T> aggregator,
                                                                   final Windows<W> windows,
                                                                   final Serde<T> aggValueSerde) {
-        return aggregate(initializer, aggregator, windows, aggValueSerde, null);
+        return windowedBy(windows).aggregate(initializer, aggregator, aggValueSerde);
     }
 
     @SuppressWarnings("unchecked")
@@ -220,7 +220,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
 
     @Override
     public <W extends Window> KTable<Windowed<K>, Long> count(final Windows<W> windows) {
-        return count(windows, (String) null);
+        return windowedBy(windows).count();
     }
 
     @Override
@@ -290,6 +290,17 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                 AGGREGATE_NAME,
                 storeSupplier);
 
+    }
+
+    @Override
+    public <W extends Window> WindowedKStream<K, V> windowedBy(final Windows<W> windows) {
+        return new WindowedKStreamImpl<>(windows,
+                                         builder,
+                                         sourceNodes,
+                                         name,
+                                         keySerde,
+                                         valSerde,
+                                         repartitionRequired);
     }
 
     @SuppressWarnings("unchecked")
@@ -391,20 +402,21 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
             final String functionName,
             final StateStoreSupplier storeSupplier) {
 
-        final String aggFunctionName = topology.newName(functionName);
+        final String aggFunctionName = builder.newName(functionName);
 
         final String sourceName = repartitionIfRequired(storeSupplier.name());
 
-        topology.addProcessor(aggFunctionName, aggregateSupplier, sourceName);
-        topology.addStateStore(storeSupplier, aggFunctionName);
+        builder.internalTopologyBuilder.addProcessor(aggFunctionName, aggregateSupplier, sourceName);
+        builder.internalTopologyBuilder.addStateStore(storeSupplier, aggFunctionName);
 
-        return new KTableImpl<>(topology,
-                aggFunctionName,
-                aggregateSupplier,
-                sourceName.equals(this.name) ? sourceNodes
-                        : Collections.singleton(sourceName),
-                storeSupplier.name(),
-                isQueryable);
+        return new KTableImpl<>(
+            builder,
+            aggFunctionName,
+            aggregateSupplier,
+            sourceName.equals(this.name) ? sourceNodes
+                    : Collections.singleton(sourceName),
+            storeSupplier.name(),
+            isQueryable);
     }
 
     /**

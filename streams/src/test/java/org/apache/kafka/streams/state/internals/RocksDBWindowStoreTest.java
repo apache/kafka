@@ -362,11 +362,6 @@ public class RocksDBWindowStoreTest {
         assertEquals(Utils.mkSet("zero@0", "zero@0", "zero+@0", "zero++@0"), entriesByKey.get(0));
     }
 
-    @Test
-    public void testCachingEnabled() throws IOException {
-        windowStore = createWindowStore(context, true, false);
-        assertTrue(windowStore instanceof CachedStateStore);
-    }
 
     @SuppressWarnings("unchecked")
     @Test

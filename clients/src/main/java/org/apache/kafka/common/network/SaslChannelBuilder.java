@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
@@ -42,6 +43,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
     private static final Logger log = LoggerFactory.getLogger(SaslChannelBuilder.class);
 
     private final SecurityProtocol securityProtocol;
+    private final ListenerName listenerName;
     private final String clientSaslMechanism;
     private final Mode mode;
     private final JaasContext jaasContext;
@@ -53,12 +55,17 @@ public class SaslChannelBuilder implements ChannelBuilder {
     private Map<String, ?> configs;
     private KerberosShortNamer kerberosShortNamer;
 
-    public SaslChannelBuilder(Mode mode, JaasContext jaasContext, SecurityProtocol securityProtocol,
+    public SaslChannelBuilder(Mode mode,
+                              JaasContext jaasContext,
+                              SecurityProtocol securityProtocol,
+                              ListenerName listenerName,
                               String clientSaslMechanism,
-                              boolean handshakeRequestEnable, CredentialCache credentialCache) {
+                              boolean handshakeRequestEnable,
+                              CredentialCache credentialCache) {
         this.mode = mode;
         this.jaasContext = jaasContext;
         this.securityProtocol = securityProtocol;
+        this.listenerName = listenerName;
         this.handshakeRequestEnable = handshakeRequestEnable;
         this.clientSaslMechanism = clientSaslMechanism;
         this.credentialCache = credentialCache;
@@ -100,21 +107,22 @@ public class SaslChannelBuilder implements ChannelBuilder {
         }
     }
 
-    public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize) throws KafkaException {
+    @Override
+    public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize, MemoryPool memoryPool) throws KafkaException {
         try {
             SocketChannel socketChannel = (SocketChannel) key.channel();
             TransportLayer transportLayer = buildTransportLayer(id, key, socketChannel);
             Authenticator authenticator;
             if (mode == Mode.SERVER)
                 authenticator = new SaslServerAuthenticator(id, jaasContext, loginManager.subject(),
-                        kerberosShortNamer, socketChannel.socket().getLocalAddress().getHostName(), maxReceiveSize,
-                        credentialCache);
+                        kerberosShortNamer, socketChannel.socket().getLocalAddress(), credentialCache,
+                        listenerName, securityProtocol);
             else
                 authenticator = new SaslClientAuthenticator(id, loginManager.subject(), loginManager.serviceName(),
                         socketChannel.socket().getInetAddress().getHostName(), clientSaslMechanism, handshakeRequestEnable);
             // Both authenticators don't use `PrincipalBuilder`, so we pass `null` for now. Reconsider if this changes.
             authenticator.configure(transportLayer, null, this.configs);
-            return new KafkaChannel(id, transportLayer, authenticator, maxReceiveSize);
+            return new KafkaChannel(id, transportLayer, authenticator, maxReceiveSize, memoryPool != null ? memoryPool : MemoryPool.NONE);
         } catch (Exception e) {
             log.info("Failed to create channel due to ", e);
             throw new KafkaException(e);
@@ -159,8 +167,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
         }
         getInstanceMethod = classRef.getMethod("getInstance", new Class[0]);
         kerbConf = getInstanceMethod.invoke(classRef, new Object[0]);
-        getDefaultRealmMethod = classRef.getDeclaredMethod("getDefaultRealm",
-                new Class[0]);
+        getDefaultRealmMethod = classRef.getDeclaredMethod("getDefaultRealm", new Class[0]);
         return (String) getDefaultRealmMethod.invoke(kerbConf, new Object[0]);
     }
 }

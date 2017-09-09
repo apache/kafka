@@ -39,10 +39,10 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.CopyOnWriteMap;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
@@ -67,8 +67,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public final class RecordAccumulator {
 
-    private static final Logger log = LoggerFactory.getLogger(RecordAccumulator.class);
-
+    private final Logger log;
     private volatile boolean closed;
     private final AtomicInteger flushesInProgress;
     private final AtomicInteger appendsInProgress;
@@ -89,6 +88,7 @@ public final class RecordAccumulator {
     /**
      * Create a new record accumulator
      *
+     * @param logContext The log context used for logging
      * @param batchSize The size to use when allocating {@link MemoryRecords} instances
      * @param totalSize The maximum memory the record accumulator can use.
      * @param compression The compression codec for the records
@@ -103,7 +103,8 @@ public final class RecordAccumulator {
      * @param transactionManager The shared transaction state object which tracks producer IDs, epochs, and sequence
      *                           numbers per partition.
      */
-    public RecordAccumulator(int batchSize,
+    public RecordAccumulator(LogContext logContext,
+                             int batchSize,
                              long totalSize,
                              CompressionType compression,
                              long lingerMs,
@@ -112,6 +113,7 @@ public final class RecordAccumulator {
                              Time time,
                              ApiVersions apiVersions,
                              TransactionManager transactionManager) {
+        this.log = logContext.logger(RecordAccumulator.class);
         this.drainIndex = 0;
         this.closed = false;
         this.flushesInProgress = new AtomicInteger(0);

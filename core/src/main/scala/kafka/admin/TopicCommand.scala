@@ -21,6 +21,7 @@ import java.util.Properties
 
 import joptsimple._
 import kafka.common.AdminCommandFailedException
+import kafka.utils.Implicits._
 import kafka.consumer.Whitelist
 import kafka.log.LogConfig
 import kafka.server.ConfigType
@@ -130,7 +131,7 @@ object TopicCommand extends Logging {
         val configsToBeAdded = parseTopicConfigsToBeAdded(opts)
         val configsToBeDeleted = parseTopicConfigsToBeDeleted(opts)
         // compile the final set of configs
-        configs.putAll(configsToBeAdded)
+        configs ++= configsToBeAdded
         configsToBeDeleted.foreach(config => configs.remove(config))
         AdminUtils.changeTopicConfig(zkUtils, topic, configs)
         println("Updated config for topic \"%s\".".format(topic))

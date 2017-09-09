@@ -24,6 +24,7 @@ import kafka.common.InvalidConfigException
 import kafka.log.LogConfig
 import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig, QuotaId}
 import kafka.utils.{CommandLineUtils, ZkUtils}
+import kafka.utils.Implicits._
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.scram._
 import org.apache.kafka.common.utils.Utils
@@ -95,7 +96,7 @@ object ConfigCommand extends Config {
     if (invalidConfigs.nonEmpty)
       throw new InvalidConfigException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
 
-    configs.putAll(configsToBeAdded)
+    configs ++= configsToBeAdded
     configsToBeDeleted.foreach(configs.remove(_))
 
     utils.changeConfigs(zkUtils, entityType, entityName, configs)
