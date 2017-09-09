@@ -16,68 +16,102 @@
  */
 package org.apache.kafka.tools;
 
-import static net.sourceforge.argparse4j.impl.Arguments.store;
-import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
-
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Properties;
-import java.util.Random;
-import java.util.Arrays;
-
+import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-
-import net.sourceforge.argparse4j.ArgumentParsers;
-import net.sourceforge.argparse4j.inf.ArgumentParser;
-import net.sourceforge.argparse4j.inf.ArgumentParserException;
-import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Properties;
+import java.util.Random;
+
+import static net.sourceforge.argparse4j.impl.Arguments.store;
+import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
 
 public class ProducerPerformance {
 
     public static void main(String[] args) throws Exception {
-        ArgumentParser parser = argParser();
+        new ProducerPerformance().run(args);
+    }
+
+    /**
+     * Get the properties needed for configuring the used Kafka producer
+     *
+     * @param opts  options
+     * @return  properties needed for configuring the used Kafka producer
+     * @throws Exception
+     */
+    Properties getProducerProps(ProducerPerformanceOptions opts) throws Exception {
+
+        String bootstrapServer = opts.bootstrapServer();
+        List<String> producerProps = opts.producerProps();
+        String producerConfig = opts.producerConfig();
+        String transactionalId = opts.transactionalId();
+        long transactionDurationMs = opts.transactionDurationMs();
+        boolean transactionsEnabled =  0 < transactionDurationMs;
+
+        if (producerProps == null && producerConfig == null) {
+            throw new ArgumentParserException("Either --producer-props or --producer.config must be specified.", opts.parser);
+        }
+
+        Properties props = new Properties();
+        if (bootstrapServer != null) {
+            props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
+        }
+        if (producerConfig != null) {
+            props.putAll(Utils.loadProps(producerConfig));
+        }
+        if (producerProps != null)
+            for (String prop : producerProps) {
+                String[] pieces = prop.split("=");
+                if (pieces.length != 2)
+                    throw new IllegalArgumentException("Invalid property: " + prop);
+                props.put(pieces[0], pieces[1]);
+            }
+
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+        if (transactionsEnabled)
+            props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
+
+        return props;
+    }
+
+    void run(String[] args) throws Exception {
+
+        ProducerPerformanceOptions opts = new ProducerPerformanceOptions(args);
 
         try {
-            Namespace res = parser.parseArgs(args);
-
             /* parse args */
-            String bootstrapServer = res.getString("bootstrapServer");
-            String topicName = res.getString("topic");
-            long numRecords = res.getLong("numRecords");
-            Integer recordSize = res.getInt("recordSize");
-            int throughput = res.getInt("throughput");
-            List<String> producerProps = res.getList("producerConfig");
-            String producerConfig = res.getString("producerConfigFile");
-            String payloadFilePath = res.getString("payloadFile");
-            String transactionalId = res.getString("transactionalId");
-            boolean shouldPrintMetrics = res.getBoolean("printMetrics");
-            long transactionDurationMs = res.getLong("transactionDurationMs");
-            boolean transactionsEnabled =  0 < transactionDurationMs;
+            String topicName = opts.topic();
+            long numRecords = opts.numRecords();
+            Integer recordSize = opts.recordSize();
+            int throughput = opts.throughput();
+            String payloadFilePath = opts.payloadFile();
+            boolean shouldPrintMetrics = opts.printMetrics();
+            long transactionDurationMs = opts.transactionDurationMs();
+            boolean transactionsEnabled = 0 < transactionDurationMs;
 
             // since default value gets printed with the help text, we are escaping \n there and replacing it with correct value here.
-            String payloadDelimiter = res.getString("payloadDelimiter").equals("\\n") ? "\n" : res.getString("payloadDelimiter");
-
-            if (producerProps == null && producerConfig == null) {
-                throw new ArgumentParserException("Either --producer-props or --producer.config must be specified.", parser);
-            }
+            String payloadDelimiter = opts.payloadDelimiter().equals("\\n") ? "\n" : opts.payloadDelimiter();
 
             List<byte[]> payloadByteList = new ArrayList<>();
             if (payloadFilePath != null) {
                 Path path = Paths.get(payloadFilePath);
                 System.out.println("Reading payloads from: " + path.toAbsolutePath());
-                if (Files.notExists(path) || Files.size(path) == 0)  {
-                    throw new  IllegalArgumentException("File does not exist or empty file provided.");
+                if (Files.notExists(path) || Files.size(path) == 0) {
+                    throw new IllegalArgumentException("File does not exist or empty file provided.");
                 }
 
                 String[] payloadList = new String(Files.readAllBytes(path), "UTF-8").split(payloadDelimiter);
@@ -89,23 +123,8 @@ public class ProducerPerformance {
                 }
             }
 
-            Properties props = new Properties();
-            props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
-            if (producerConfig != null) {
-                props.putAll(Utils.loadProps(producerConfig));
-            }
-            if (producerProps != null)
-                for (String prop : producerProps) {
-                    String[] pieces = prop.split("=");
-                    if (pieces.length != 2)
-                        throw new IllegalArgumentException("Invalid property: " + prop);
-                    props.put(pieces[0], pieces[1]);
-                }
-
-            props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-            props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-            if (transactionsEnabled)
-                props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
+            // get properties for configuring Kafka producer from arguments
+            Properties props = getProducerProps(opts);
 
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(props);
 
@@ -161,7 +180,7 @@ public class ProducerPerformance {
             if (!shouldPrintMetrics) {
                 producer.close();
 
-                /* print final results */
+            /* print final results */
                 stats.printTotal();
             } else {
                 // Make sure all messages are sent before printing out the stats and the metrics
@@ -169,138 +188,197 @@ public class ProducerPerformance {
                 // expects this class to work with older versions of the client jar that don't support flush().
                 producer.flush();
 
-                /* print final results */
+            /* print final results */
                 stats.printTotal();
 
-                /* print out metrics */
+            /* print out metrics */
                 ToolsUtils.printMetrics(producer.metrics());
                 producer.close();
             }
         } catch (ArgumentParserException e) {
-            if (args.length == 0) {
-                parser.printHelp();
-                Exit.exit(0);
-            } else {
-                parser.handleError(e);
-                Exit.exit(1);
-            }
-        }
 
+            opts.parser.handleError(e);
+            Exit.exit(1);
+        }
     }
 
-    /** Get the command-line argument parser. */
-    private static ArgumentParser argParser() {
-        ArgumentParser parser = ArgumentParsers
-                .newArgumentParser("producer-performance")
-                .defaultHelp(true)
-                .description("This tool is used to verify the producer performance.");
+    /**
+     * Options for ProducerPerformance
+     */
+    public static class ProducerPerformanceOptions extends CommandOptions {
 
-        MutuallyExclusiveGroup payloadOptions = parser
-                .addMutuallyExclusiveGroup()
-                .required(true)
-                .description("either --record-size or --payload-file must be specified but not both.");
+        public static final String BOOTSTRAP_SERVER = "bootstrapServer";
+        public static final String TOPIC = "topic";
+        public static final String NUM_RECORDS = "numRecords";
+        public static final String RECORD_SIZE = "recordSize";
+        public static final String PAYLOAD_FILE = "payloadFile";
+        public static final String PAYLOAD_DELIMITER = "payloadDelimiter";
+        public static final String THROUGHPUT = "throughput";
+        public static final String PRODUCER_PROPS = "producerConfig";
+        public static final String PRODUCER_CONFIG = "producerConfigFile";
+        public static final String PRINT_METRICS = "printMetrics";
+        public static final String TRANSACTIONAL_ID = "transactionalId";
+        public static final String TRANSACTION_DURATION_MS = "transactionDurationMs";
 
-        parser.addArgument("--bootstrap-server")
-                .action(store())
-                .type(String.class)
-                .dest("bootstrapServer")
-                .help("The server to connect to");
+        public String bootstrapServer() {
+            return this.ns.getString(BOOTSTRAP_SERVER);
+        }
 
-        parser.addArgument("--topic")
-                .action(store())
-                .required(true)
-                .type(String.class)
-                .metavar("TOPIC")
-                .help("produce messages to this topic");
+        public String topic() {
+            return this.ns.getString(TOPIC);
+        }
 
-        parser.addArgument("--num-records")
-                .action(store())
-                .required(true)
-                .type(Long.class)
-                .metavar("NUM-RECORDS")
-                .dest("numRecords")
-                .help("number of messages to produce");
+        public long numRecords() {
+            return this.ns.getLong(NUM_RECORDS);
+        }
 
-        payloadOptions.addArgument("--record-size")
-                .action(store())
-                .required(false)
-                .type(Integer.class)
-                .metavar("RECORD-SIZE")
-                .dest("recordSize")
-                .help("message size in bytes. Note that you must provide exactly one of --record-size or --payload-file.");
+        public int recordSize() {
+            return this.ns.getInt(RECORD_SIZE);
+        }
 
-        payloadOptions.addArgument("--payload-file")
-                .action(store())
-                .required(false)
-                .type(String.class)
-                .metavar("PAYLOAD-FILE")
-                .dest("payloadFile")
-                .help("file to read the message payloads from. This works only for UTF-8 encoded text files. " +
-                        "Payloads will be read from this file and a payload will be randomly selected when sending messages. " +
-                        "Note that you must provide exactly one of --record-size or --payload-file.");
+        public String payloadFile() {
+            return this.ns.getString(PAYLOAD_FILE);
+        }
 
-        parser.addArgument("--payload-delimiter")
-                .action(store())
-                .required(false)
-                .type(String.class)
-                .metavar("PAYLOAD-DELIMITER")
-                .dest("payloadDelimiter")
-                .setDefault("\\n")
-                .help("provides delimiter to be used when --payload-file is provided. " +
-                        "Defaults to new line. " +
-                        "Note that this parameter will be ignored if --payload-file is not provided.");
+        public String payloadDelimiter() {
+            return this.ns.getString(PAYLOAD_DELIMITER);
+        }
 
-        parser.addArgument("--throughput")
-                .action(store())
-                .required(true)
-                .type(Integer.class)
-                .metavar("THROUGHPUT")
-                .help("throttle maximum message throughput to *approximately* THROUGHPUT messages/sec");
+        public int throughput() {
+            return this.ns.getInt(THROUGHPUT);
+        }
 
-        parser.addArgument("--producer-props")
-                 .nargs("+")
-                 .required(false)
-                 .metavar("PROP-NAME=PROP-VALUE")
-                 .type(String.class)
-                 .dest("producerConfig")
-                 .help("kafka producer related configuration properties like bootstrap.servers,client.id etc. " +
-                         "These configs take precedence over those passed via --producer.config.");
+        public List<String> producerProps() {
+            return this.ns.getList(PRODUCER_PROPS);
+        }
 
-        parser.addArgument("--producer.config")
-                .action(store())
-                .required(false)
-                .type(String.class)
-                .metavar("CONFIG-FILE")
-                .dest("producerConfigFile")
-                .help("producer config properties file.");
+        public String producerConfig() {
+            return this.ns.getString(PRODUCER_CONFIG);
+        }
 
-        parser.addArgument("--print-metrics")
-                .action(storeTrue())
-                .type(Boolean.class)
-                .metavar("PRINT-METRICS")
-                .dest("printMetrics")
-                .help("print out metrics at the end of the test.");
+        public boolean printMetrics() {
+            return this.ns.getBoolean(PRINT_METRICS);
+        }
 
-        parser.addArgument("--transactional-id")
-               .action(store())
-               .required(false)
-               .type(String.class)
-               .metavar("TRANSACTIONAL-ID")
-               .dest("transactionalId")
-               .setDefault("performance-producer-default-transactional-id")
-               .help("The transactionalId to use if transaction-duration-ms is > 0. Useful when testing the performance of concurrent transactions.");
+        public String transactionalId() {
+            return this.ns.getString(TRANSACTIONAL_ID);
+        }
 
-        parser.addArgument("--transaction-duration-ms")
-               .action(store())
-               .required(false)
-               .type(Long.class)
-               .metavar("TRANSACTION-DURATION")
-               .dest("transactionDurationMs")
-               .setDefault(0L)
-               .help("The max age of each transaction. The commitTransaction will be called after this this time has elapsed. Transactions are only enabled if this value is positive.");
+        public long transactionDurationMs() {
+            return this.ns.getLong(TRANSACTION_DURATION_MS);
+        }
 
+        public ProducerPerformanceOptions(String[] args) throws ArgumentParserException {
+            super("producer-performance", "This tool is used to verify the producer performance.", args);
+        }
 
-        return parser;
+        @Override
+        public void prepareArgs() {
+
+            MutuallyExclusiveGroup payloadOptions = this.parser
+                    .addMutuallyExclusiveGroup()
+                    .required(true)
+                    .description("either --record-size or --payload-file must be specified but not both.");
+
+            this.parser.addArgument("--bootstrap-server")
+                    .action(store())
+                    .type(String.class)
+                    .dest("bootstrapServer")
+                    .help("The server to connect to");
+
+            this.parser.addArgument("--topic")
+                    .action(store())
+                    .required(true)
+                    .type(String.class)
+                    .metavar("TOPIC")
+                    .help("produce messages to this topic");
+
+            this.parser.addArgument("--num-records")
+                    .action(store())
+                    .required(true)
+                    .type(Long.class)
+                    .metavar("NUM-RECORDS")
+                    .dest("numRecords")
+                    .help("number of messages to produce");
+
+            payloadOptions.addArgument("--record-size")
+                    .action(store())
+                    .required(false)
+                    .type(Integer.class)
+                    .metavar("RECORD-SIZE")
+                    .dest("recordSize")
+                    .help("message size in bytes. Note that you must provide exactly one of --record-size or --payload-file.");
+
+            payloadOptions.addArgument("--payload-file")
+                    .action(store())
+                    .required(false)
+                    .type(String.class)
+                    .metavar("PAYLOAD-FILE")
+                    .dest("payloadFile")
+                    .help("file to read the message payloads from. This works only for UTF-8 encoded text files. " +
+                            "Payloads will be read from this file and a payload will be randomly selected when sending messages. " +
+                            "Note that you must provide exactly one of --record-size or --payload-file.");
+
+            this.parser.addArgument("--payload-delimiter")
+                    .action(store())
+                    .required(false)
+                    .type(String.class)
+                    .metavar("PAYLOAD-DELIMITER")
+                    .dest("payloadDelimiter")
+                    .setDefault("\\n")
+                    .help("provides delimiter to be used when --payload-file is provided. " +
+                            "Defaults to new line. " +
+                            "Note that this parameter will be ignored if --payload-file is not provided.");
+
+            this.parser.addArgument("--throughput")
+                    .action(store())
+                    .required(true)
+                    .type(Integer.class)
+                    .metavar("THROUGHPUT")
+                    .help("throttle maximum message throughput to *approximately* THROUGHPUT messages/sec");
+
+            this.parser.addArgument("--producer-props")
+                    .nargs("+")
+                    .required(false)
+                    .metavar("PROP-NAME=PROP-VALUE")
+                    .type(String.class)
+                    .dest("producerConfig")
+                    .help("kafka producer related configuration properties like bootstrap.servers,client.id etc. " +
+                            "These configs take precedence over those passed via --producer.config.");
+
+            this.parser.addArgument("--producer.config")
+                    .action(store())
+                    .required(false)
+                    .type(String.class)
+                    .metavar("CONFIG-FILE")
+                    .dest("producerConfigFile")
+                    .help("producer config properties file.");
+
+            this.parser.addArgument("--print-metrics")
+                    .action(storeTrue())
+                    .type(Boolean.class)
+                    .metavar("PRINT-METRICS")
+                    .dest("printMetrics")
+                    .help("print out metrics at the end of the test.");
+
+            this.parser.addArgument("--transactional-id")
+                    .action(store())
+                    .required(false)
+                    .type(String.class)
+                    .metavar("TRANSACTIONAL-ID")
+                    .dest("transactionalId")
+                    .setDefault("performance-producer-default-transactional-id")
+                    .help("The transactionalId to use if transaction-duration-ms is > 0. Useful when testing the performance of concurrent transactions.");
+
+            this.parser.addArgument("--transaction-duration-ms")
+                    .action(store())
+                    .required(false)
+                    .type(Long.class)
+                    .metavar("TRANSACTION-DURATION")
+                    .dest("transactionDurationMs")
+                    .setDefault(0L)
+                    .help("The max age of each transaction. The commitTransaction will be called after this this time has elapsed. Transactions are only enabled if this value is positive.");
+        }
     }
 
     private static class Stats {
