@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -51,7 +52,7 @@ public class StoreChangelogReaderTest {
     private final CompositeRestoreListener restoreListener = new CompositeRestoreListener(callback);
     private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final StateRestoreListener stateRestoreListener = new MockStateRestoreListener();
-    private final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, stateRestoreListener);
+    private final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, stateRestoreListener, new LogContext("test-reader "));
     private final TopicPartition topicPartition = new TopicPartition("topic", 0);
 
     @Before
@@ -70,7 +71,7 @@ public class StoreChangelogReaderTest {
             }
         };
 
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, stateRestoreListener);
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, stateRestoreListener, new LogContext("test-reader "));
         changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true,
                 "storeName"));
         changelogReader.restore();

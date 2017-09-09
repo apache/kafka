@@ -77,13 +77,11 @@ public class ProcessorStateManager implements StateManager {
                                  final StateDirectory stateDirectory,
                                  final Map<String, String> storeToChangelogTopic,
                                  final ChangelogReader changelogReader,
-                                 final boolean eosEnabled) throws IOException {
+                                 final boolean eosEnabled,
+                                 final LogContext logContext) throws IOException {
         this.taskId = taskId;
         this.changelogReader = changelogReader;
         logPrefix = String.format("task [%s] ", taskId);
-
-        final LogContext logContext = new LogContext(logPrefix);
-
         this.log = logContext.logger(getClass());
 
         partitionForTopic = new HashMap<>();

@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
@@ -62,7 +63,7 @@ public class RocksDBSessionStoreTest {
                                            Serdes.String(),
                                            Serdes.Long(),
                                            new NoOpRecordCollector(),
-                                           new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
+                                           new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())));
         sessionStore.init(context, sessionStore);
     }
 

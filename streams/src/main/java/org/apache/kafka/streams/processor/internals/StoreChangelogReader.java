@@ -50,17 +50,17 @@ public class StoreChangelogReader implements ChangelogReader {
 
     public StoreChangelogReader(final String threadId,
                                 final Consumer<byte[], byte[]> consumer,
-                                final StateRestoreListener stateRestoreListener) {
+                                final StateRestoreListener stateRestoreListener,
+                                final LogContext logContext) {
         this.consumer = consumer;
-
-        final LogContext logContext = new LogContext("stream-thread [" + threadId + "] ");
         this.log = logContext.logger(getClass());
         this.stateRestoreListener = stateRestoreListener;
     }
 
     public StoreChangelogReader(final Consumer<byte[], byte[]> consumer,
-                                final StateRestoreListener stateRestoreListener) {
-        this("", consumer, stateRestoreListener);
+                                final StateRestoreListener stateRestoreListener,
+                                final LogContext logContext) {
+        this("", consumer, stateRestoreListener, logContext);
     }
 
     @Override

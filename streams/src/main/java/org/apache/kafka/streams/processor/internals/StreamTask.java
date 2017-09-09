@@ -38,7 +38,6 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.state.internals.ThreadCache;
-import org.slf4j.Logger;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -70,7 +69,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     private boolean transactionInFlight = false;
     private final Time time;
     private final TaskMetrics metrics;
-    private final Logger log;
 
     protected class TaskMetrics  {
         final StreamsMetricsImpl metrics;
@@ -120,10 +118,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
         this.metrics = new TaskMetrics(metrics);
 
-        final LogContext logContext = new LogContext(logPrefix);
-
-        this.log = logContext.logger(getClass());
-
         // create queues for each assigned partition and associate them
         // to corresponding source nodes in the processor topology
         final Map<TopicPartition, RecordQueue> partitionQueues = new HashMap<>();
@@ -132,7 +126,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         consumedOffsets = new HashMap<>();
 
         this.producer = producer;
-        recordCollector = createRecordCollector();
+        recordCollector = createRecordCollector(logContext);
 
         // initialize the topology with its own context
         processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, metrics, cache);
@@ -599,8 +593,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     // visible for testing only
-    RecordCollector createRecordCollector() {
-        return new RecordCollectorImpl(producer, id.toString());
+    RecordCollector createRecordCollector(final LogContext logContext) {
+        return new RecordCollectorImpl(producer, id.toString(), logContext);
     }
 
     public boolean initialize() {

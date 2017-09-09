@@ -19,11 +19,9 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.TaskId;
-import org.slf4j.Logger;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -36,7 +34,6 @@ import java.util.Map;
  */
 public class StandbyTask extends AbstractTask {
 
-    private final Logger log;
     private Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
 
     /**
@@ -64,10 +61,6 @@ public class StandbyTask extends AbstractTask {
 
         // initialize the topology with its own context
         processorContext = new StandbyContextImpl(id, applicationId, config, stateMgr, metrics);
-
-        final LogContext logContext = new LogContext(logPrefix);
-
-        this.log = logContext.logger(getClass());
     }
 
     /**

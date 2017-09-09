@@ -49,9 +49,10 @@ public abstract class AbstractTask implements Task {
     final Consumer consumer;
     final String logPrefix;
     final boolean eosEnabled;
+    final Logger log;
+    final LogContext logContext;
     boolean taskInitialized;
     private final StateDirectory stateDirectory;
-    private final Logger log;
 
     InternalProcessorContext processorContext;
 
@@ -75,10 +76,8 @@ public abstract class AbstractTask implements Task {
         this.eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
         this.stateDirectory = stateDirectory;
 
-        logPrefix = String.format("%s [%s] ", isStandby ? "standby-task" : "task", id());
-
-        final LogContext logContext = new LogContext(logPrefix);
-
+        this.logPrefix = String.format("%s [%s] ", isStandby ? "standby-task" : "task", id());
+        this.logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
 
         // create the processor state manager
@@ -90,7 +89,8 @@ public abstract class AbstractTask implements Task {
                 stateDirectory,
                 topology.storeToChangelogTopic(),
                 changelogReader,
-                eosEnabled);
+                eosEnabled,
+                    logContext);
         } catch (final IOException e) {
             throw new ProcessorStateException(String.format("%sError while creating the state manager", logPrefix), e);
         }

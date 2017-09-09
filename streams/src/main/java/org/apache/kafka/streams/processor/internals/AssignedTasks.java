@@ -53,11 +53,9 @@ class AssignedTasks {
     private int committed = 0;
 
 
-    AssignedTasks(final String logPrefix,
+    AssignedTasks(final LogContext logContext,
                   final String taskTypeName) {
         this.taskTypeName = taskTypeName;
-
-        final LogContext logContext = new LogContext(logPrefix);
 
         this.log = logContext.logger(getClass());
 

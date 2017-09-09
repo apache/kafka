@@ -52,10 +52,9 @@ public class ThreadCache {
         void apply(final List<DirtyEntry> dirty);
     }
 
-    public ThreadCache(final String logPrefix, long maxCacheSizeBytes, final StreamsMetrics metrics) {
+    public ThreadCache(final LogContext logContext, long maxCacheSizeBytes, final StreamsMetrics metrics) {
         this.maxCacheSizeBytes = maxCacheSizeBytes;
         this.metrics = metrics;
-        final LogContext logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
     }
 

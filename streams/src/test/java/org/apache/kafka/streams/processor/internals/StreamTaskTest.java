@@ -33,6 +33,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
@@ -114,7 +115,7 @@ public class StreamTaskTest {
     private final MockProducer<byte[], byte[]> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer);
     private final MockConsumer<byte[], byte[]> restoreStateConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final StateRestoreListener stateRestoreListener = new MockStateRestoreListener();
-    private final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreStateConsumer, stateRestoreListener);
+    private final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreStateConsumer, stateRestoreListener, new LogContext("stream-task-test "));
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
     private final String applicationId = "applicationId";
@@ -124,7 +125,7 @@ public class StreamTaskTest {
     private final MockTime time = new MockTime();
     private File baseDir = TestUtils.tempDirectory();
     private StateDirectory stateDirectory;
-    private final RecordCollectorImpl recordCollector = new RecordCollectorImpl(producer, "taskId");
+    private final RecordCollectorImpl recordCollector = new RecordCollectorImpl(producer, "taskId", new LogContext("taskId "));
     private StreamsConfig config;
     private StreamsConfig eosConfig;
     private StreamTask task;
@@ -551,7 +552,7 @@ public class StreamTaskTest {
             changelogReader, config, streamsMetrics, stateDirectory, null, time, producer) {
 
             @Override
-            RecordCollector createRecordCollector() {
+            RecordCollector createRecordCollector(final LogContext logContext) {
                 return new NoOpRecordCollector() {
                     @Override
                     public void flush() {
@@ -605,7 +606,7 @@ public class StreamTaskTest {
             changelogReader, config, streamsMetrics, stateDirectory, null, time, producer) {
 
             @Override
-            RecordCollector createRecordCollector() {
+            RecordCollector createRecordCollector(final LogContext logContext) {
                 return new NoOpRecordCollector() {
                     @Override
                     public Map<TopicPartition, Long> offsets() {
@@ -672,7 +673,7 @@ public class StreamTaskTest {
             changelogReader, testConfig, streamsMetrics, stateDirectory, null, time, producer) {
 
             @Override
-            RecordCollector createRecordCollector() {
+            RecordCollector createRecordCollector(final LogContext logContext) {
                 return new NoOpRecordCollector() {
                     @Override
                     public Map<TopicPartition, Long> offsets() {

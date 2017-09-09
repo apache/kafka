@@ -20,6 +20,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.TaskId;
 import org.easymock.EasyMock;
@@ -52,7 +53,7 @@ public class AssignedTasksTest {
 
     @Before
     public void before() {
-        assignedTasks = new AssignedTasks("log", "task");
+        assignedTasks = new AssignedTasks(new LogContext("log "), "task");
         EasyMock.expect(t1.id()).andReturn(taskId1).anyTimes();
         EasyMock.expect(t2.id()).andReturn(taskId2).anyTimes();
     }

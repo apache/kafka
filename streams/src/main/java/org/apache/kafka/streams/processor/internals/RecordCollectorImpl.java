@@ -48,12 +48,10 @@ public class RecordCollectorImpl implements RecordCollector {
 
     private volatile KafkaException sendException;
 
-    public RecordCollectorImpl(final Producer<byte[], byte[]> producer, final String streamTaskId) {
+    public RecordCollectorImpl(final Producer<byte[], byte[]> producer, final String streamTaskId, final LogContext logContext) {
         this.producer = producer;
-        offsets = new HashMap<>();
-        logPrefix = String.format("task [%s] ", streamTaskId);
-        final LogContext logContext = new LogContext(logPrefix);
-
+        this.offsets = new HashMap<>();
+        this.logPrefix = String.format("task [%s] ", streamTaskId);
         this.log = logContext.logger(getClass());
     }
 

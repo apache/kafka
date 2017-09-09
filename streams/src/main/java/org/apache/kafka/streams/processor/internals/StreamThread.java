@@ -66,7 +66,7 @@ import static java.util.Collections.singleton;
 
 public class StreamThread extends Thread implements ThreadDataProvider {
 
-    private static Logger log;
+    private final Logger log;
     private static final AtomicInteger STREAM_THREAD_ID_SEQUENCE = new AtomicInteger(1);
 
     /**
@@ -227,13 +227,16 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         private final Time time;
         private final TaskManager taskManager;
         private final StreamThread streamThread;
+        private final Logger log;
 
         RebalanceListener(final Time time,
                           final TaskManager taskManager,
-                          final StreamThread streamThread) {
+                          final StreamThread streamThread,
+                          final Logger log) {
             this.time = time;
             this.taskManager = taskManager;
             this.streamThread = streamThread;
+            this.log = log;
         }
 
         @Override
@@ -314,6 +317,8 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         final Sensor taskCreatedSensor;
         final ChangelogReader storeChangelogReader;
         final Time time;
+        final Logger log;
+
 
         AbstractTaskCreator(final InternalTopologyBuilder builder,
                             final StreamsConfig config,
@@ -321,7 +326,8 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                             final StateDirectory stateDirectory,
                             final Sensor taskCreatedSensor,
                             final ChangelogReader storeChangelogReader,
-                            final Time time) {
+                            final Time time,
+                            final Logger log) {
             this.applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
             this.builder = builder;
             this.config = config;
@@ -330,6 +336,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
             this.taskCreatedSensor = taskCreatedSensor;
             this.storeChangelogReader = storeChangelogReader;
             this.time = time;
+            this.log = log;
         }
 
         Collection<Task> createTasks(final Consumer<byte[], byte[]> consumer, final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
@@ -358,7 +365,6 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         private final String threadClientId;
         private final Producer<byte[], byte[]> threadProducer;
 
-
         TaskCreator(final InternalTopologyBuilder builder,
                     final StreamsConfig config,
                     final StreamsMetrics streamsMetrics,
@@ -369,14 +375,16 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                     final Time time,
                     final KafkaClientSupplier clientSupplier,
                     final Producer<byte[], byte[]> threadProducer,
-                    final String threadClientId) {
+                    final String threadClientId,
+                    final Logger log) {
             super(builder,
                   config,
                   streamsMetrics,
                   stateDirectory,
                   taskCreatedSensor,
                   storeChangelogReader,
-                  time);
+                  time,
+                    log);
             this.cache = cache;
             this.clientSupplier = clientSupplier;
             this.threadProducer = threadProducer;
@@ -435,14 +443,16 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                            final StateDirectory stateDirectory,
                            final Sensor taskCreatedSensor,
                            final ChangelogReader storeChangelogReader,
-                           final Time time) {
+                           final Time time,
+                           final Logger log) {
             super(builder,
                   config,
                   streamsMetrics,
                   stateDirectory,
                   taskCreatedSensor,
                   storeChangelogReader,
-                  time);
+                  time,
+                    log);
         }
 
         @Override
@@ -583,13 +593,13 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         this.streamsMetrics = streamsMetrics;
         this.restoreConsumer = restoreConsumer;
         this.stateDirectory = stateDirectory;
-        this.rebalanceListener = new RebalanceListener(time, taskManager, this);
         this.config = config;
         this.stateLock = new Object();
         this.standbyRecords = new HashMap<>();
         this.partitionGrouper = config.getConfiguredInstance(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
-
-        createLogContext(this.logPrefix);
+        final LogContext logContext = new LogContext(this.logPrefix);
+        this.log = logContext.logger(StreamThread.class);
+        this.rebalanceListener = new RebalanceListener(time, taskManager, this, this.log);
 
         log.info("Creating consumer client");
         final Map<String, Object> consumerConfigs = config.getConsumerConfigs(this, applicationId, threadClientId);
@@ -625,12 +635,13 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                                                                                                               threadClientId));
 
         final String logPrefix = String.format("stream-thread [%s] ", threadClientId);
-        createLogContext(logPrefix);
+        final LogContext logContext = new LogContext(logPrefix);
+        final Logger log = logContext.logger(StreamThread.class);
 
         if (config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) < 0) {
             log.warn("Negative cache size passed in thread. Reverting to cache size of 0 bytes");
         }
-        final ThreadCache cache = new ThreadCache(threadClientId, cacheSizeBytes, streamsMetrics);
+        final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
 
         final boolean eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
 
@@ -639,7 +650,8 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         final Consumer<byte[], byte[]> restoreConsumer = clientSupplier.getRestoreConsumer(consumerConfigs);
         final StoreChangelogReader changelogReader = new StoreChangelogReader(threadClientId,
                                                                               restoreConsumer,
-                                                                              stateRestoreListener);
+                                                                              stateRestoreListener,
+                                                                                logContext);
 
         Producer<byte[], byte[]> threadProducer = null;
         if (!eosEnabled) {
@@ -658,23 +670,25 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                                                                       time,
                                                                       clientSupplier,
                                                                       threadProducer,
-                                                                      threadClientId);
+                                                                      threadClientId,
+                                                                      log);
         final AbstractTaskCreator standbyTaskCreator = new StandbyTaskCreator(builder,
                                                                               config,
                                                                               streamsMetrics,
                                                                               stateDirectory,
                                                                               streamsMetrics.taskCreatedSensor,
                                                                               changelogReader,
-                                                                              time);
+                                                                              time,
+                                                                              log);
         final TaskManager taskManager = new TaskManager(changelogReader,
                                                         logPrefix,
                                                         restoreConsumer,
                                                         activeTaskCreator,
                                                         standbyTaskCreator,
-                                                        new AssignedTasks(logPrefix,
+                                                        new AssignedTasks(logContext,
                                                                           "stream task"
                                                         ),
-                                                        new AssignedTasks(logPrefix,
+                                                        new AssignedTasks(logContext,
                                                                           "standby task"
                                                         ));
 
@@ -1165,11 +1179,6 @@ public class StreamThread extends Thread implements ThreadDataProvider {
 
     private void refreshMetadataState() {
         streamsMetadataState.onChange(metadataProvider.getPartitionsByHostState(), metadataProvider.clusterMetadata());
-    }
-
-    private static void createLogContext(final String logPrefix) {
-        final LogContext logContext = new LogContext(logPrefix);
-        log = logContext.logger(StreamThread.class);
     }
 
     /**
