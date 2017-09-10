@@ -148,7 +148,7 @@ public class StreamPartitionAssignorTest {
 
 
     @Test
-    public void testSubscription() {
+    public void testSubscription() throws Exception {
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addSource(null, "source2", null, null, null, "topic2");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source1", "source2");
@@ -177,7 +177,7 @@ public class StreamPartitionAssignorTest {
 
 
     @Test
-    public void testAssignBasic() {
+    public void testAssignBasic() throws Exception {
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addSource(null, "source2", null, null, null, "topic2");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source1", "source2");
@@ -241,7 +241,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void testAssignWithPartialTopology() {
+    public void testAssignWithPartialTopology() throws Exception {
         Properties props = configProps();
         props.put(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, SingleGroupPartitionGrouperStub.class);
         StreamsConfig config = new StreamsConfig(props);
@@ -280,7 +280,7 @@ public class StreamPartitionAssignorTest {
 
 
     @Test
-    public void testAssignEmptyMetadata() {
+    public void testAssignEmptyMetadata() throws Exception {
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addSource(null, "source2", null, null, null, "topic2");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source1", "source2");
@@ -335,7 +335,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void testAssignWithNewTasks() {
+    public void testAssignWithNewTasks() throws Exception {
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addSource(null, "source2", null, null, null, "topic2");
         builder.addSource(null, "source3", null, null, null, "topic3");
@@ -388,7 +388,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void testAssignWithStates() {
+    public void testAssignWithStates() throws Exception {
         String applicationId = "test";
         builder.setApplicationId(applicationId);
         builder.addSource(null, "source1", null, null, null, "topic1");
@@ -477,7 +477,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void testAssignWithStandbyReplicas() {
+    public void testAssignWithStandbyReplicas() throws Exception {
         Properties props = configProps();
         props.setProperty(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, "1");
         StreamsConfig config = new StreamsConfig(props);
@@ -548,7 +548,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void testOnAssignment() {
+    public void testOnAssignment() throws Exception {
         TopicPartition t2p3 = new TopicPartition("topic2", 3);
 
         builder.addSource(null, "source1", null, null, null, "topic1");
@@ -576,7 +576,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void testAssignWithInternalTopics() {
+    public void testAssignWithInternalTopics() throws Exception {
         String applicationId = "test";
         builder.setApplicationId(applicationId);
         builder.addInternalTopic("topicX");
@@ -607,7 +607,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void testAssignWithInternalTopicThatsSourceIsAnotherInternalTopic() {
+    public void testAssignWithInternalTopicThatsSourceIsAnotherInternalTopic() throws Exception {
         String applicationId = "test";
         builder.setApplicationId(applicationId);
         builder.addInternalTopic("topicX");
@@ -642,7 +642,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void shouldAddUserDefinedEndPointToSubscription() {
+    public void shouldAddUserDefinedEndPointToSubscription() throws Exception {
         final String applicationId = "application-id";
         builder.setApplicationId(applicationId);
         builder.addSource(null, "source", null, null, null, "input");
@@ -661,7 +661,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void shouldMapUserEndPointToTopicPartitions() {
+    public void shouldMapUserEndPointToTopicPartitions() throws Exception {
         final String applicationId = "application-id";
         builder.setApplicationId(applicationId);
         builder.addSource(null, "source", null, null, null, "topic1");
@@ -691,7 +691,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void shouldThrowExceptionIfApplicationServerConfigIsNotHostPortPair() {
+    public void shouldThrowExceptionIfApplicationServerConfigIsNotHostPortPair() throws Exception {
         final String myEndPoint = "localhost";
         final String applicationId = "application-id";
         builder.setApplicationId(applicationId);
@@ -722,7 +722,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void shouldExposeHostStateToTopicPartitionsOnAssignment() {
+    public void shouldExposeHostStateToTopicPartitionsOnAssignment() throws Exception {
         List<TopicPartition> topic = Collections.singletonList(new TopicPartition("topic", 0));
         final Map<HostInfo, Set<TopicPartition>> hostState =
                 Collections.singletonMap(new HostInfo("localhost", 80),
@@ -738,7 +738,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void shouldSetClusterMetadataOnAssignment() {
+    public void shouldSetClusterMetadataOnAssignment() throws Exception {
         final List<TopicPartition> topic = Collections.singletonList(new TopicPartition("topic", 0));
         final Map<HostInfo, Set<TopicPartition>> hostState =
                 Collections.singletonMap(new HostInfo("localhost", 80),
@@ -871,7 +871,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void shouldUpdatePartitionHostInfoMapOnAssignment() {
+    public void shouldUpdatePartitionHostInfoMapOnAssignment() throws Exception {
         final TopicPartition partitionOne = new TopicPartition("topic", 1);
         final TopicPartition partitionTwo = new TopicPartition("topic", 2);
         final Map<HostInfo, Set<TopicPartition>> firstHostState = Collections.singletonMap(
@@ -894,7 +894,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void shouldUpdateClusterMetadataOnAssignment() {
+    public void shouldUpdateClusterMetadataOnAssignment() throws Exception {
         final TopicPartition topicOne = new TopicPartition("topic", 1);
         final TopicPartition topicTwo = new TopicPartition("topic2", 2);
         final Map<HostInfo, Set<TopicPartition>> firstHostState = Collections.singletonMap(
@@ -916,7 +916,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void shouldNotAddStandbyTaskPartitionsToPartitionsForHost() {
+    public void shouldNotAddStandbyTaskPartitionsToPartitionsForHost() throws Exception {
         final String applicationId = "appId";
         final StreamsBuilder builder = new StreamsBuilder();
 
