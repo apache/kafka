@@ -317,10 +317,11 @@ public class SelectorTest {
     public void testCloseConnectionInClosingState() throws Exception {
         KafkaChannel channel = createConnectionWithStagedReceives(5);
         String id = channel.id();
-        time.sleep(6000); // The max idle time is 5000ms
+        selector.mute(id); // Mute to allow channel to be expired even if more data is available for read
+        time.sleep(6000);  // The max idle time is 5000ms
         selector.poll(0);
-        assertEquals(channel, selector.closingChannel(id));
         assertNull("Channel not expired", selector.channel(id));
+        assertEquals(channel, selector.closingChannel(id));
         assertEquals(ChannelState.EXPIRED, channel.state());
         selector.close(id);
         assertNull("Channel not removed from channels", selector.channel(id));
