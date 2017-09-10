@@ -69,6 +69,7 @@ public class AbstractHerderTest extends EasyMockSupport {
                 .createMock();
 
         EasyMock.expect(herder.generation()).andStubReturn(generation);
+        EasyMock.expect(worker.isSinkConnector(connector)).andReturn(true);
 
         EasyMock.expect(statusStore.get(connector))
                 .andReturn(new ConnectorStatus(connector, AbstractStatus.State.RUNNING, workerId, generation));
