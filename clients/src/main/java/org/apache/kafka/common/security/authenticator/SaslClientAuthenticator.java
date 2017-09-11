@@ -70,13 +70,13 @@ public class SaslClientAuthenticator implements Authenticator {
     private final String node;
     private final String mechanism;
     private final boolean handshakeRequestEnable;
+    private final TransportLayer transportLayer;
 
     // assigned in `configure`
     private SaslClient saslClient;
     private Map<String, ?> configs;
     private String clientPrincipalName;
     private AuthCallbackHandler callbackHandler;
-    private TransportLayer transportLayer;
 
     // buffers used in `authenticate`
     private NetworkReceive netInBuffer;
@@ -96,7 +96,8 @@ public class SaslClientAuthenticator implements Authenticator {
                                    String servicePrincipal,
                                    String host,
                                    String mechanism,
-                                   boolean handshakeRequestEnable) throws IOException {
+                                   boolean handshakeRequestEnable,
+                                   TransportLayer transportLayer) throws IOException {
         this.node = node;
         this.subject = subject;
         this.host = host;
@@ -104,11 +105,12 @@ public class SaslClientAuthenticator implements Authenticator {
         this.mechanism = mechanism;
         this.handshakeRequestEnable = handshakeRequestEnable;
         this.correlationId = -1;
+        this.transportLayer = transportLayer;
     }
 
-    public void configure(TransportLayer transportLayer, Map<String, ?> configs) throws KafkaException {
+    @Override
+    public void configure(Map<String, ?> configs) throws KafkaException {
         try {
-            this.transportLayer = transportLayer;
             this.configs = configs;
 
             setSaslState(handshakeRequestEnable ? SaslState.SEND_HANDSHAKE_REQUEST : SaslState.INITIAL);

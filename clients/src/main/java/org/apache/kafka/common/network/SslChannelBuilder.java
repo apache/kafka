@@ -56,9 +56,10 @@ public class SslChannelBuilder implements ChannelBuilder {
     public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize, MemoryPool memoryPool) throws KafkaException {
         try {
             SslTransportLayer transportLayer = buildTransportLayer(sslFactory, id, key, peerHost(key));
-            Authenticator authenticator = new SslAuthenticator();
-            authenticator.configure(transportLayer, this.configs);
-            return new KafkaChannel(id, transportLayer, authenticator, maxReceiveSize, memoryPool != null ? memoryPool : MemoryPool.NONE);
+            Authenticator authenticator = new SslAuthenticator(transportLayer);
+            authenticator.configure(this.configs);
+            return new KafkaChannel(id, transportLayer, authenticator, maxReceiveSize,
+                    memoryPool != null ? memoryPool : MemoryPool.NONE);
         } catch (Exception e) {
             log.info("Failed to create channel due to ", e);
             throw new KafkaException(e);
@@ -115,30 +116,30 @@ public class SslChannelBuilder implements ChannelBuilder {
     }
 
     private static class SslAuthenticator implements Authenticator {
-
-        private SslTransportLayer transportLayer;
+        private final SslTransportLayer transportLayer;
         private KafkaPrincipalBuilder principalBuilder;
 
+        public SslAuthenticator(SslTransportLayer transportLayer) {
+            this.transportLayer = transportLayer;
+        }
+
         @Override
-        public void configure(TransportLayer transportLayer, Map<String, ?> configs) {
-            if (!(transportLayer instanceof SslTransportLayer))
-                throw new IllegalArgumentException("TransportLayer " + transportLayer +
-                        " not an instance of SslTransportLayer");
-            this.transportLayer = (SslTransportLayer) transportLayer;
+        public void configure(Map<String, ?> configs) {
             this.principalBuilder = ChannelBuilders.createPrincipalBuilder(configs, transportLayer, this, null);
         }
 
         /**
-         * No-Op for default authenticator
+         * No-Op for plaintext authenticator
          */
+        @Override
         public void authenticate() throws IOException {}
 
         /**
          * Constructs Principal using configured principalBuilder.
          * @return the built principal
-         * @throws KafkaException
          */
-        public KafkaPrincipal principal() throws KafkaException {
+        @Override
+        public KafkaPrincipal principal() {
             SslAuthenticationContext context = new SslAuthenticationContext(transportLayer.sslSession());
             return principalBuilder.build(context);
         }
@@ -152,6 +153,7 @@ public class SslChannelBuilder implements ChannelBuilder {
          * SslAuthenticator doesn't implement any additional authentication mechanism.
          * @return true
          */
+        @Override
         public boolean complete() {
             return true;
         }

@@ -41,8 +41,8 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
     public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize, MemoryPool memoryPool) throws KafkaException {
         try {
             PlaintextTransportLayer transportLayer = new PlaintextTransportLayer(key);
-            PlaintextAuthenticator authenticator = new PlaintextAuthenticator();
-            authenticator.configure(transportLayer, this.configs);
+            PlaintextAuthenticator authenticator = new PlaintextAuthenticator(transportLayer);
+            authenticator.configure(this.configs);
             return new KafkaChannel(id, transportLayer, authenticator, maxReceiveSize,
                     memoryPool != null ? memoryPool : MemoryPool.NONE);
         } catch (Exception e) {
@@ -57,10 +57,15 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
     }
 
     private static class PlaintextAuthenticator implements Authenticator {
+        private final PlaintextTransportLayer transportLayer;
         private KafkaPrincipalBuilder principalBuilder;
 
+        private PlaintextAuthenticator(PlaintextTransportLayer transportLayer) {
+            this.transportLayer = transportLayer;
+        }
+
         @Override
-        public void configure(TransportLayer transportLayer, Map<String, ?> configs) {
+        public void configure(Map<String, ?> configs) {
             this.principalBuilder = ChannelBuilders.createPrincipalBuilder(configs, transportLayer, this, null);
         }
 
@@ -70,7 +75,7 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
         }
 
         @Override
-        public KafkaPrincipal principal() throws KafkaException {
+        public KafkaPrincipal principal() {
             return principalBuilder.build(PlaintextAuthenticationContext.INSTANCE);
         }
 

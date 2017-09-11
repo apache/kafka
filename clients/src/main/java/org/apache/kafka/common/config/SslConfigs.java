@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.config;
 
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.TrustManagerFactory;
 
@@ -24,10 +26,21 @@ public class SslConfigs {
      * NOTE: DO NOT CHANGE EITHER CONFIG NAMES AS THESE ARE PART OF THE PUBLIC API AND CHANGE WILL BREAK USER CODE.
      */
 
-    public static final String PRINCIPAL_BUILDER_CLASS_CONFIG = "principal.builder.class";
-    public static final String PRINCIPAL_BUILDER_CLASS_DOC = "The fully qualified name of a class that implements the PrincipalBuilder interface, " +
-            "which is currently used to build the Principal for connections with the SSL SecurityProtocol.";
-    public static final String DEFAULT_PRINCIPAL_BUILDER_CLASS = "org.apache.kafka.common.security.auth.DefaultPrincipalBuilder";
+    /**
+     * @deprecated As of 1.0.0. This field will be removed in a future major release.
+     */
+    @Deprecated
+    public static final String PRINCIPAL_BUILDER_CLASS_CONFIG = BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG;
+    /**
+     * @deprecated As of 1.0.0. This field will be removed in a future major release.
+     */
+    @Deprecated
+    public static final String PRINCIPAL_BUILDER_CLASS_DOC = BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_DOC;
+    /**
+     * @deprecated As of 1.0.0. This field will be removed in a future major release.
+     */
+    @Deprecated
+    public static final String DEFAULT_PRINCIPAL_BUILDER_CLASS = BrokerSecurityConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS;
 
     public static final String SSL_PROTOCOL_CONFIG = "ssl.protocol";
     public static final String SSL_PROTOCOL_DOC = "The SSL protocol used to generate the SSLContext. "

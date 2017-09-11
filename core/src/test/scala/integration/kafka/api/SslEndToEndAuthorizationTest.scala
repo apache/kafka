@@ -18,6 +18,7 @@
 package kafka.api
 
 import org.apache.kafka.common.config.SslConfigs
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder, SslAuthenticationContext}
 import org.junit.Before
@@ -45,7 +46,7 @@ class SslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
 
   override protected def securityProtocol = SecurityProtocol.SSL
   this.serverConfig.setProperty(SslConfigs.SSL_CLIENT_AUTH_CONFIG, "required")
-  this.serverConfig.setProperty(SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[TestPrincipalBuilder].getName)
+  this.serverConfig.setProperty(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[TestPrincipalBuilder].getName)
   override val clientPrincipal = "client"
   override val kafkaPrincipal = "server"
 

@@ -22,6 +22,7 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 
 import java.util.Map;
 
@@ -31,8 +32,9 @@ public class TestSecurityConfig extends AbstractConfig {
                     SslConfigs.SSL_CLIENT_AUTH_DOC)
             .define(SaslConfigs.SASL_ENABLED_MECHANISMS, Type.LIST, SaslConfigs.DEFAULT_SASL_ENABLED_MECHANISMS,
                     Importance.MEDIUM, SaslConfigs.SASL_ENABLED_MECHANISMS_DOC)
-            .define(SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Type.CLASS, SslConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS,
-                    Importance.MEDIUM, SslConfigs.PRINCIPAL_BUILDER_CLASS_DOC)
+            .define(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Type.CLASS,
+                    BrokerSecurityConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS, Importance.MEDIUM,
+                    BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_DOC)
             .withClientSslSupport()
             .withClientSaslSupport();
 

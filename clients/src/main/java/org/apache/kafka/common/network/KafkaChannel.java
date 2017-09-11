@@ -64,7 +64,7 @@ public class KafkaChannel {
     /**
      * Returns the principal returned by `authenticator.principal()`.
      */
-    public KafkaPrincipal principal() throws IOException {
+    public KafkaPrincipal principal() {
         return authenticator.principal();
     }
 

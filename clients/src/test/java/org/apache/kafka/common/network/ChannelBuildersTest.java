@@ -18,12 +18,13 @@ package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.security.auth.AuthenticationContext;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
 import org.apache.kafka.common.security.auth.PlaintextAuthenticationContext;
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
+import org.easymock.EasyMock;
 import org.junit.Test;
 
 import java.security.Principal;
@@ -38,9 +39,12 @@ public class ChannelBuildersTest {
     @Test
     @SuppressWarnings("deprecation")
     public void testCreateOldPrincipalBuilder() {
+        TransportLayer transportLayer = EasyMock.mock(TransportLayer.class);
+        Authenticator authenticator = EasyMock.mock(Authenticator.class);
+
         Map<String, Object> configs = new HashMap<>();
-        configs.put(SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, OldPrincipalBuilder.class);
-        KafkaPrincipalBuilder builder = ChannelBuilders.createPrincipalBuilder(configs, null, null, null);
+        configs.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, OldPrincipalBuilder.class);
+        KafkaPrincipalBuilder builder = ChannelBuilders.createPrincipalBuilder(configs, transportLayer, authenticator, null);
 
         // test old principal builder is properly configured and delegated to
         assertTrue(OldPrincipalBuilder.configured);
@@ -53,9 +57,12 @@ public class ChannelBuildersTest {
 
     @Test
     public void testCreateConfigurableKafkaPrincipalBuilder() {
+        TransportLayer transportLayer = EasyMock.mock(TransportLayer.class);
+        Authenticator authenticator = EasyMock.mock(Authenticator.class);
+
         Map<String, Object> configs = new HashMap<>();
-        configs.put(SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, ConfigurableKafkaPrincipalBuilder.class);
-        KafkaPrincipalBuilder builder = ChannelBuilders.createPrincipalBuilder(configs, null, null, null);
+        configs.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, ConfigurableKafkaPrincipalBuilder.class);
+        KafkaPrincipalBuilder builder = ChannelBuilders.createPrincipalBuilder(configs, transportLayer, authenticator, null);
         assertTrue(builder instanceof ConfigurableKafkaPrincipalBuilder);
         assertTrue(((ConfigurableKafkaPrincipalBuilder) builder).configured);
     }

@@ -71,6 +71,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
         this.credentialCache = credentialCache;
     }
 
+    @Override
     public void configure(Map<String, ?> configs) throws KafkaException {
         try {
             this.configs = configs;
@@ -116,11 +117,12 @@ public class SaslChannelBuilder implements ChannelBuilder {
             if (mode == Mode.SERVER)
                 authenticator = new SaslServerAuthenticator(id, jaasContext, loginManager.subject(),
                         kerberosShortNamer, socketChannel.socket().getLocalAddress(), credentialCache,
-                        listenerName, securityProtocol);
+                        listenerName, securityProtocol, transportLayer);
             else
                 authenticator = new SaslClientAuthenticator(id, loginManager.subject(), loginManager.serviceName(),
-                        socketChannel.socket().getInetAddress().getHostName(), clientSaslMechanism, handshakeRequestEnable);
-            authenticator.configure(transportLayer, this.configs);
+                        socketChannel.socket().getInetAddress().getHostName(), clientSaslMechanism,
+                        handshakeRequestEnable, transportLayer);
+            authenticator.configure(this.configs);
             return new KafkaChannel(id, transportLayer, authenticator, maxReceiveSize, memoryPool != null ? memoryPool : MemoryPool.NONE);
         } catch (Exception e) {
             log.info("Failed to create channel due to ", e);

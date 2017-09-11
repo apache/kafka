@@ -17,7 +17,7 @@
 package kafka.api
 
 import kafka.utils.{JaasTestUtils, TestUtils}
-import org.apache.kafka.common.config.SslConfigs
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder, SaslAuthenticationContext}
 import org.junit.Test
 
@@ -43,7 +43,7 @@ object SaslPlainSslEndToEndAuthorizationTest {
 class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
   import SaslPlainSslEndToEndAuthorizationTest.TestPrincipalBuilder
 
-  this.serverConfig.setProperty(SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[TestPrincipalBuilder].getName)
+  this.serverConfig.setProperty(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[TestPrincipalBuilder].getName)
 
   override protected def kafkaClientSaslMechanism = "PLAIN"
   override protected def kafkaServerSaslMechanisms = List("PLAIN")

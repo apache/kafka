@@ -48,8 +48,8 @@ public class SaslServerAuthenticatorTest {
 
     @Test(expected = InvalidReceiveException.class)
     public void testOversizeRequest() throws IOException {
-        SaslServerAuthenticator authenticator = setupAuthenticator();
         TransportLayer transportLayer = EasyMock.mock(TransportLayer.class);
+        SaslServerAuthenticator authenticator = setupAuthenticator(transportLayer);
         Map<String, ?> configs = Collections.singletonMap(SaslConfigs.SASL_ENABLED_MECHANISMS,
                 Collections.singletonList(SCRAM_SHA_256.mechanismName()));
 
@@ -64,14 +64,14 @@ public class SaslServerAuthenticatorTest {
 
         EasyMock.replay(transportLayer);
 
-        authenticator.configure(transportLayer, configs);
+        authenticator.configure(configs);
         authenticator.authenticate();
     }
 
     @Test
     public void testUnexpectedRequestType() throws IOException {
-        SaslServerAuthenticator authenticator = setupAuthenticator();
         TransportLayer transportLayer = EasyMock.mock(TransportLayer.class);
+        SaslServerAuthenticator authenticator = setupAuthenticator(transportLayer);
         Map<String, ?> configs = Collections.singletonMap(SaslConfigs.SASL_ENABLED_MECHANISMS,
                 Collections.singletonList(SCRAM_SHA_256.mechanismName()));
 
@@ -99,7 +99,7 @@ public class SaslServerAuthenticatorTest {
 
         EasyMock.replay(transportLayer);
 
-        authenticator.configure(transportLayer, configs);
+        authenticator.configure(configs);
         try {
             authenticator.authenticate();
             fail("Expected authenticate() to raise an exception");
@@ -108,13 +108,13 @@ public class SaslServerAuthenticatorTest {
         }
     }
 
-    private SaslServerAuthenticator setupAuthenticator() throws IOException {
+    private SaslServerAuthenticator setupAuthenticator(TransportLayer transportLayer) throws IOException {
         TestJaasConfig jaasConfig = new TestJaasConfig();
         jaasConfig.addEntry("jaasContext", PlainLoginModule.class.getName(), new HashMap<String, Object>());
         JaasContext jaasContext = new JaasContext("jaasContext", JaasContext.Type.SERVER, jaasConfig);
         Subject subject = new Subject();
         return new SaslServerAuthenticator("node", jaasContext, subject, null, InetAddress.getLocalHost(),
-                new CredentialCache(), new ListenerName("ssl"), SecurityProtocol.SASL_SSL);
+                new CredentialCache(), new ListenerName("ssl"), SecurityProtocol.SASL_SSL, transportLayer);
     }
 
 }

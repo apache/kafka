@@ -48,8 +48,8 @@ public class DefaultKafkaPrincipalBuilderTest extends EasyMockSupport {
 
         replayAll();
 
-        DefaultKafkaPrincipalBuilder builder = new DefaultKafkaPrincipalBuilder(oldPrincipalBuilder, authenticator,
-                transportLayer, null);
+        DefaultKafkaPrincipalBuilder builder = new DefaultKafkaPrincipalBuilder(authenticator, transportLayer, oldPrincipalBuilder,
+                null);
 
         KafkaPrincipal principal = builder.build(PlaintextAuthenticationContext.INSTANCE);
         assertEquals(KafkaPrincipal.USER_TYPE, principal.getPrincipalType());
@@ -67,7 +67,7 @@ public class DefaultKafkaPrincipalBuilderTest extends EasyMockSupport {
 
         replayAll();
 
-        DefaultKafkaPrincipalBuilder builder = new DefaultKafkaPrincipalBuilder(null, authenticator, transportLayer, null);
+        DefaultKafkaPrincipalBuilder builder = new DefaultKafkaPrincipalBuilder(authenticator, transportLayer, null, null);
         assertEquals(KafkaPrincipal.ANONYMOUS, builder.build(PlaintextAuthenticationContext.INSTANCE));
 
         verifyAll();
@@ -88,8 +88,8 @@ public class DefaultKafkaPrincipalBuilderTest extends EasyMockSupport {
 
         replayAll();
 
-        DefaultKafkaPrincipalBuilder builder = new DefaultKafkaPrincipalBuilder(oldPrincipalBuilder, authenticator,
-                transportLayer, null);
+        DefaultKafkaPrincipalBuilder builder = new DefaultKafkaPrincipalBuilder(authenticator, transportLayer, oldPrincipalBuilder,
+                null);
 
         KafkaPrincipal principal = builder.build(new SslAuthenticationContext(session));
         assertEquals(KafkaPrincipal.USER_TYPE, principal.getPrincipalType());
@@ -110,8 +110,8 @@ public class DefaultKafkaPrincipalBuilderTest extends EasyMockSupport {
 
         replayAll();
 
-        DefaultKafkaPrincipalBuilder builder = new DefaultKafkaPrincipalBuilder(null, authenticator,
-                transportLayer, null);
+        DefaultKafkaPrincipalBuilder builder = new DefaultKafkaPrincipalBuilder(authenticator, transportLayer, null,
+                null);
 
         KafkaPrincipal principal = builder.build(new SslAuthenticationContext(session));
         assertEquals(KafkaPrincipal.USER_TYPE, principal.getPrincipalType());
@@ -131,8 +131,8 @@ public class DefaultKafkaPrincipalBuilderTest extends EasyMockSupport {
 
         replayAll();
 
-        DefaultKafkaPrincipalBuilder builder = new DefaultKafkaPrincipalBuilder(null, authenticator,
-                transportLayer, null);
+        DefaultKafkaPrincipalBuilder builder = new DefaultKafkaPrincipalBuilder(authenticator, transportLayer, null,
+                null);
 
         KafkaPrincipal principal = builder.build(new SaslAuthenticationContext(server));
         assertEquals(KafkaPrincipal.USER_TYPE, principal.getPrincipalType());
@@ -155,8 +155,8 @@ public class DefaultKafkaPrincipalBuilderTest extends EasyMockSupport {
 
         replayAll();
 
-        DefaultKafkaPrincipalBuilder builder = new DefaultKafkaPrincipalBuilder(null, authenticator,
-                transportLayer, kerberosShortNamer);
+        DefaultKafkaPrincipalBuilder builder = new DefaultKafkaPrincipalBuilder(authenticator, transportLayer, null,
+                kerberosShortNamer);
 
         KafkaPrincipal principal = builder.build(new SaslAuthenticationContext(server));
         assertEquals(KafkaPrincipal.USER_TYPE, principal.getPrincipalType());

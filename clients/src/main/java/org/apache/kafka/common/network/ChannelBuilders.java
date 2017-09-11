@@ -18,7 +18,7 @@ package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
-import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.security.JaasContext;
@@ -139,16 +139,16 @@ public class ChannelBuilders {
                                                                TransportLayer transportLayer,
                                                                Authenticator authenticator,
                                                                KerberosShortNamer kerberosShortNamer) {
-        Class<?> principalBuilderClass = (Class<?>) configs.get(SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG);
+        Class<?> principalBuilderClass = (Class<?>) configs.get(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG);
         final KafkaPrincipalBuilder builder;
 
-        if (principalBuilderClass == null) {
-            builder = new DefaultKafkaPrincipalBuilder(null, authenticator, transportLayer, kerberosShortNamer);
+        if (principalBuilderClass == null || principalBuilderClass == DefaultKafkaPrincipalBuilder.class) {
+            builder = new DefaultKafkaPrincipalBuilder(authenticator, transportLayer, null, kerberosShortNamer);
         } else if (KafkaPrincipalBuilder.class.isAssignableFrom(principalBuilderClass)) {
             builder = (KafkaPrincipalBuilder) Utils.newInstance(principalBuilderClass);
         } else if (PrincipalBuilder.class.isAssignableFrom(principalBuilderClass)) {
             PrincipalBuilder oldPrincipalBuilder = createPrincipalBuilder(principalBuilderClass, configs);
-            builder = new DefaultKafkaPrincipalBuilder(oldPrincipalBuilder, authenticator, transportLayer, kerberosShortNamer);
+            builder = new DefaultKafkaPrincipalBuilder(authenticator, transportLayer, oldPrincipalBuilder, kerberosShortNamer);
         } else {
             throw new InvalidConfigurationException("Type " + principalBuilderClass.getName() + " is not " +
                     "an instance of " + PrincipalBuilder.class.getName() + " or " + KafkaPrincipalBuilder.class.getName());

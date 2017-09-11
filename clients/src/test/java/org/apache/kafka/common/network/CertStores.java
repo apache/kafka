@@ -22,6 +22,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.test.TestSslUtils;
 
 public class CertStores {
@@ -46,7 +47,7 @@ public class CertStores {
         File truststoreFile = File.createTempFile(name + "TS", ".jks");
         sslConfig = TestSslUtils.createSslConfig(!server, true, mode, truststoreFile, name, commonName, certBuilder);
         if (server)
-            sslConfig.put(SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SslConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
+            sslConfig.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SslConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
     }
 
     public Map<String, Object> getTrustingConfig(CertStores truststoreConfig) {

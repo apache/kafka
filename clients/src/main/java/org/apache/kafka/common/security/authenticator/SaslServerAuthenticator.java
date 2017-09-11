@@ -94,6 +94,7 @@ public class SaslServerAuthenticator implements Authenticator {
     private final KerberosShortNamer kerberosNamer;
     private final InetAddress clientAddress;
     private final CredentialCache credentialCache;
+    private final TransportLayer transportLayer;
 
     // Current SASL state
     private SaslState saslState = SaslState.GSSAPI_OR_HANDSHAKE_REQUEST;
@@ -105,7 +106,6 @@ public class SaslServerAuthenticator implements Authenticator {
     private KafkaPrincipalBuilder principalBuilder;
 
     // assigned in `configure`
-    private TransportLayer transportLayer;
     private Set<String> enabledMechanisms;
     private Map<String, ?> configs;
 
@@ -120,7 +120,8 @@ public class SaslServerAuthenticator implements Authenticator {
                                    InetAddress clientAddress,
                                    CredentialCache credentialCache,
                                    ListenerName listenerName,
-                                   SecurityProtocol securityProtocol) throws IOException {
+                                   SecurityProtocol securityProtocol,
+                                   TransportLayer transportLayer) throws IOException {
         if (subject == null)
             throw new IllegalArgumentException("subject cannot be null");
         this.connectionId = connectionId;
@@ -131,11 +132,11 @@ public class SaslServerAuthenticator implements Authenticator {
         this.credentialCache = credentialCache;
         this.listenerName = listenerName;
         this.securityProtocol = securityProtocol;
+        this.transportLayer = transportLayer;
     }
 
     @Override
-    public void configure(TransportLayer transportLayer, Map<String, ?> configs) {
-        this.transportLayer = transportLayer;
+    public void configure(Map<String, ?> configs) {
         this.configs = configs;
         List<String> enabledMechanisms = (List<String>) this.configs.get(SaslConfigs.SASL_ENABLED_MECHANISMS);
         if (enabledMechanisms == null || enabledMechanisms.isEmpty())
@@ -144,7 +145,7 @@ public class SaslServerAuthenticator implements Authenticator {
 
         // Note that the old principal builder does not support SASL, so we do not need to pass the
         // authenticator or the transport layer
-        this.principalBuilder = ChannelBuilders.createPrincipalBuilder(configs, null, null, kerberosNamer);
+        this.principalBuilder = ChannelBuilders.createPrincipalBuilder(configs, transportLayer, this, kerberosNamer);
     }
 
     private void createSaslServer(String mechanism) throws IOException {
@@ -222,6 +223,7 @@ public class SaslServerAuthenticator implements Authenticator {
      * The messages are sent and received as size delimited bytes that consists of a 4 byte network-ordered size N
      * followed by N bytes representing the opaque payload.
      */
+    @Override
     public void authenticate() throws IOException {
         if (netOutBuffer != null && !flushNetOutBufferAndUpdateInterestOps())
             return;
@@ -271,6 +273,7 @@ public class SaslServerAuthenticator implements Authenticator {
         }
     }
 
+    @Override
     public KafkaPrincipal principal() {
         SaslAuthenticationContext context = new SaslAuthenticationContext(saslServer);
         return principalBuilder.build(context);

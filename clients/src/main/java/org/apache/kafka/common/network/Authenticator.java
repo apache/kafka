@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.network;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 import java.io.Closeable;
@@ -31,10 +30,9 @@ public interface Authenticator extends Closeable {
     /**
      * Configures Authenticator using the provided parameters.
      *
-     * @param transportLayer The transport layer used to read or write tokens
      * @param configs Additional configuration parameters as key/value pairs
      */
-    void configure(TransportLayer transportLayer, Map<String, ?> configs);
+    void configure(Map<String, ?> configs);
 
     /**
      * Implements any authentication mechanism. Use transportLayer to read or write tokens.
@@ -45,7 +43,7 @@ public interface Authenticator extends Closeable {
     /**
      * Returns Principal using PrincipalBuilder
      */
-    KafkaPrincipal principal() throws KafkaException;
+    KafkaPrincipal principal();
 
     /**
      * returns true if authentication is complete otherwise returns false;

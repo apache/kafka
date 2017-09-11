@@ -25,7 +25,7 @@ import org.apache.kafka.common.KafkaException;
 
 /**
  * DefaultPrincipalBuilder which return transportLayer's peer Principal
- * @deprecated As of Kafka 1.0.0
+ * @deprecated As of Kafka 1.0.0. This may be removed in a future major release.
  **/
 @Deprecated
 public class DefaultPrincipalBuilder implements PrincipalBuilder {

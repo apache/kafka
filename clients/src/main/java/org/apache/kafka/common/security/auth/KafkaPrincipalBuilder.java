@@ -21,7 +21,8 @@ package org.apache.kafka.common.security.auth;
  * {@link SslAuthenticationContext} and SASL through {@link SaslAuthenticationContext}.
  *
  * Note that the {@link org.apache.kafka.common.Configurable} and {@link java.io.Closeable}
- * interfaces are respected if implemented.
+ * interfaces are respected if implemented. Additionally, implementations must provide a
+ * default no-arg constructor.
  */
 public interface KafkaPrincipalBuilder {
     /**

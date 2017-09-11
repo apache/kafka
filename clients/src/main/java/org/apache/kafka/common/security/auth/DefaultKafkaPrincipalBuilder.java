@@ -16,19 +16,20 @@
  */
 package org.apache.kafka.common.security.auth;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.security.kerberos.KerberosName;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.SSLPeerUnverifiedException;
 import javax.net.ssl.SSLSession;
 import javax.security.sasl.SaslServer;
 import java.io.IOException;
 import java.security.Principal;
+
+import static java.util.Objects.requireNonNull;
 
 /**
  * Default implementation of {@link KafkaPrincipalBuilder} which provides basic support for
@@ -37,20 +38,25 @@ import java.security.Principal;
  * the name.
  */
 public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, AutoCloseable {
-    private static final Logger log = LoggerFactory.getLogger(DefaultKafkaPrincipalBuilder.class);
-
     private final PrincipalBuilder oldPrincipalBuilder;
     private final Authenticator authenticator;
     private final TransportLayer transportLayer;
     private final KerberosShortNamer kerberosShortNamer;
 
-    public DefaultKafkaPrincipalBuilder(PrincipalBuilder oldPrincipalBuilder,
-                                        Authenticator authenticator,
+    /**
+     * Construct a new instance.
+     * @param authenticator The authenticator in use
+     * @param transportLayer The underlying transport layer
+     * @param oldPrincipalBuilder Instance of {@link PrincipalBuilder} or null if none is configured
+     * @param kerberosShortNamer Kerberos name rewrite rules or null if none have been configured
+     */
+    public DefaultKafkaPrincipalBuilder(Authenticator authenticator,
                                         TransportLayer transportLayer,
+                                        PrincipalBuilder oldPrincipalBuilder,
                                         KerberosShortNamer kerberosShortNamer) {
+        this.authenticator = requireNonNull(authenticator);
+        this.transportLayer = requireNonNull(transportLayer);
         this.oldPrincipalBuilder = oldPrincipalBuilder;
-        this.authenticator = authenticator;
-        this.transportLayer = transportLayer;
         this.kerberosShortNamer = kerberosShortNamer;
     }
 
@@ -89,8 +95,8 @@ public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, Auto
             String shortName = kerberosShortNamer.shortName(kerberosName);
             return new KafkaPrincipal(KafkaPrincipal.USER_TYPE, shortName);
         } catch (IOException e) {
-            log.error("Failed to set name for '{}' based on Kerberos authentication rules.", kerberosName, e);
-            return KafkaPrincipal.ANONYMOUS;
+            throw new KafkaException("Failed to set name for '" + kerberosName +
+                    "' based on Kerberos authentication rules.", e);
         }
     }
 
