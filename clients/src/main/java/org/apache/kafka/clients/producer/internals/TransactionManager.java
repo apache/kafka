@@ -413,7 +413,7 @@ public class TransactionManager {
         nextSequence.put(topicPartition, currentSequenceNumber);
     }
 
-    synchronized void startTrackingBatch(ProducerBatch batch) {
+    synchronized void addInFlightBatch(ProducerBatch batch) {
         if (!batch.hasSequence())
             throw new IllegalStateException("Can't track batch for partition " + batch.topicPartition + " when sequence is not set.");
         if (!inflightBatchesBySequence.containsKey(batch.topicPartition)) {
@@ -432,7 +432,7 @@ public class TransactionManager {
         return inflightBatchesBySequence.get(topicPartition).peek();
     }
 
-    synchronized void stopTrackingBatch(ProducerBatch batch) {
+    synchronized void removeInFlightBatch(ProducerBatch batch) {
         if (inflightBatchesBySequence.containsKey(batch.topicPartition))
             inflightBatchesBySequence.get(batch.topicPartition).remove(batch);
     }
@@ -617,6 +617,12 @@ public class TransactionManager {
     synchronized boolean hasOngoingTransaction() {
         // transactions are considered ongoing once started until completion or a fatal error
         return currentState == State.IN_TRANSACTION || isCompleting() || hasAbortableError();
+    }
+
+    synchronized boolean canRetryOutOfOrderSequenceException(ProducerBatch batch) {
+        return hasProducerId(batch.producerId())
+                && !partitionHasUnresolvedSequence(batch.topicPartition)
+                && !isNextSequence(batch.topicPartition, batch.baseSequence());
     }
 
     // visible for testing

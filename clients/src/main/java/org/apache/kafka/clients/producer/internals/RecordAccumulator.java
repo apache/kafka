@@ -335,7 +335,7 @@ public final class RecordAccumulator {
                 partitionDequeue.addFirst(batch);
                 if (transactionManager != null) {
                     // We should track the newly created batches since they already have assigned sequences.
-                    transactionManager.startTrackingBatch(batch);
+                    transactionManager.addInFlightBatch(batch);
                     maybeEnsureQueueIsOrdered(partitionDequeue, batch);
                 }
             }
@@ -557,7 +557,7 @@ public final class RecordAccumulator {
                                                             "{} being sent to partition {}", producerIdAndEpoch.producerId,
                                                     producerIdAndEpoch.epoch, batch.baseSequence(), tp);
 
-                                            transactionManager.startTrackingBatch(batch);
+                                            transactionManager.addInFlightBatch(batch);
                                         }
                                         batch.close();
                                         size += batch.records().sizeInBytes();

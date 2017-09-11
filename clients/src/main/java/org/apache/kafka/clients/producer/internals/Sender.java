@@ -504,7 +504,7 @@ public class Sender implements Runnable {
                      this.retries - batch.attempts(),
                      error);
             if (transactionManager != null)
-                transactionManager.stopTrackingBatch(batch);
+                transactionManager.removeInFlightBatch(batch);
             this.accumulator.splitAndReenqueue(batch);
             this.accumulator.deallocate(batch);
             this.sensors.recordBatchSplit();
@@ -543,8 +543,10 @@ public class Sender implements Runnable {
                     exception = new ClusterAuthorizationException("The producer is not authorized to do idempotent sends");
                 else
                     exception = error.exception();
-                // tell the user the result of their request
-                failBatch(batch, response, exception, true);
+                // tell the user the result of their request. We only adjust sequence numbers if the batch didn't exhaust
+                // its retries -- if it did, we don't know the whether the sequence number was accepted or not, and
+                // thus it is not safe to reassign the sequence.
+                failBatch(batch, response, exception, batch.attempts() < this.retries);
             }
             if (error.exception() instanceof InvalidMetadataException) {
                 if (error.exception() instanceof UnknownTopicOrPartitionException)
@@ -574,7 +576,7 @@ public class Sender implements Runnable {
                 log.debug("ProducerId: {}; Set last ack'd sequence number for topic-partition {} to {}", batch.producerId(), batch.topicPartition,
                         transactionManager.lastAckedSequence(batch.topicPartition));
             }
-            transactionManager.stopTrackingBatch(batch);
+            transactionManager.removeInFlightBatch(batch);
         }
 
         batch.done(response.baseOffset, response.logAppendTime, null);
@@ -606,7 +608,7 @@ public class Sender implements Runnable {
             } else if (transactionManager.isTransactional()) {
                 transactionManager.transitionToAbortableError(exception);
             }
-            transactionManager.stopTrackingBatch(batch);
+            transactionManager.removeInFlightBatch(batch);
             if (adjustSequenceNumbers)
                 transactionManager.adjustSequencesDueToFailedBatch(batch);
         }
@@ -624,10 +626,8 @@ public class Sender implements Runnable {
     private boolean canRetry(ProducerBatch batch, Errors error) {
         return batch.attempts() < this.retries &&
                 ((error.exception() instanceof RetriableException) ||
-                        (error.exception() instanceof OutOfOrderSequenceException &&
-                                transactionManager.hasProducerId(batch.producerId()) &&
-                                !transactionManager.partitionHasUnresolvedSequence(batch.topicPartition) &&
-                                !transactionManager.isNextSequence(batch.topicPartition, batch.baseSequence())));
+                        (error.exception() instanceof OutOfOrderSequenceException
+                                && transactionManager.canRetryOutOfOrderSequenceException(batch)));
     }
 
     /**
