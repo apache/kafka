@@ -899,7 +899,8 @@ class SocketServerTest extends JUnitSuite {
     override def newProcessor(id: Int, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
                                 protocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
       new Processor(id, time, config.socketRequestMaxBytes, requestChannel, connectionQuotas,
-        config.connectionsMaxIdleMs, listenerName, protocol, config, metrics, credentialProvider, memoryPool) {
+        config.connectionsMaxIdleMs, listenerName, protocol, config, metrics, credentialProvider, memoryPool, new
+            LogContext()) {
 
         override protected[network] def createSelector(channelBuilder: ChannelBuilder): Selector = {
            val testableSelector = new TestableSelector(config, channelBuilder, time, metrics)
@@ -947,7 +948,7 @@ class SocketServerTest extends JUnitSuite {
 
   class TestableSelector(config: KafkaConfig, channelBuilder: ChannelBuilder, time: Time, metrics: Metrics)
         extends Selector(config.socketRequestMaxBytes, config.connectionsMaxIdleMs,
-            metrics, time, "socket-server", new HashMap, false, true, channelBuilder, MemoryPool.NONE) {
+            metrics, time, "socket-server", new HashMap, false, true, channelBuilder, MemoryPool.NONE, new LogContext()) {
 
     val failures = mutable.Map[SelectorOperation, Exception]()
     val operationCounts = mutable.Map[SelectorOperation, Int]().withDefaultValue(0)
