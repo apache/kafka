@@ -34,17 +34,37 @@ public interface Fault {
     FaultSpec spec();
 
     /**
-     * Activate the fault.
+     * Get the current fault state.  Thread-safe.
      */
-    void activate(Platform platform) throws Exception;
+    FaultState state();
 
     /**
-     * Deactivate the fault.
+     * Set the current fault state.  Thread-safe.
      */
-    void deactivate(Platform platform) throws Exception;
+    void setState(FaultState state);
+
+    /**
+     * Activate the fault.  Will transition into RunningState or DoneState.
+     *
+     * @param now           The current time in ms.
+     * @param platform      The platform to use.
+     */
+    void activate(long now, Platform platform) throws Exception;
+
+    /**
+     * Deactivate the fault.  Will transition into DoneState.
+     *
+     * @param now           The current time in ms.
+     * @param platform      The platform to use.
+     */
+    void deactivate(long now, Platform platform) throws Exception;
 
     /**
      * Get the nodes which this fault is targetting.
+     *
+     * @param topology      The topology to use.
+     *
+     * @return              A set of target node names.
      */
     Set<String> targetNodes(Topology topology);
 }

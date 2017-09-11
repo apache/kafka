@@ -197,19 +197,23 @@ object TestUtils extends Logging {
     *
     * Note that if `interBrokerSecurityProtocol` is defined, the listener for the `SecurityProtocol` will be enabled.
     */
-  def createBrokerConfig(nodeId: Int, zkConnect: String,
-    enableControlledShutdown: Boolean = true,
-    enableDeleteTopic: Boolean = false,
-    port: Int = RandomPort,
-    interBrokerSecurityProtocol: Option[SecurityProtocol] = None,
-    trustStoreFile: Option[File] = None,
-    saslProperties: Option[Properties] = None,
-    enablePlaintext: Boolean = true,
-    enableSaslPlaintext: Boolean = false, saslPlaintextPort: Int = RandomPort,
-    enableSsl: Boolean = false, sslPort: Int = RandomPort,
-    enableSaslSsl: Boolean = false, saslSslPort: Int = RandomPort, rack: Option[String] = None, logDirCount: Int = 1)
-  : Properties = {
-
+  def createBrokerConfig(nodeId: Int,
+                         zkConnect: String,
+                         enableControlledShutdown: Boolean = true,
+                         enableDeleteTopic: Boolean = false,
+                         port: Int = RandomPort,
+                         interBrokerSecurityProtocol: Option[SecurityProtocol] = None,
+                         trustStoreFile: Option[File] = None,
+                         saslProperties: Option[Properties] = None,
+                         enablePlaintext: Boolean = true,
+                         enableSaslPlaintext: Boolean = false,
+                         saslPlaintextPort: Int = RandomPort,
+                         enableSsl: Boolean = false,
+                         sslPort: Int = RandomPort,
+                         enableSaslSsl: Boolean = false,
+                         saslSslPort: Int = RandomPort,
+                         rack: Option[String] = None,
+                         logDirCount: Int = 1): Properties = {
     def shouldEnable(protocol: SecurityProtocol) = interBrokerSecurityProtocol.fold(false)(_ == protocol)
 
     val protocolAndPorts = ArrayBuffer[(SecurityProtocol, Int)]()
@@ -230,7 +234,11 @@ object TestUtils extends Logging {
     if (nodeId >= 0) props.put(KafkaConfig.BrokerIdProp, nodeId.toString)
     props.put(KafkaConfig.ListenersProp, listeners)
     if (logDirCount > 1) {
-      val logDirs = (1 to logDirCount).toList.map(i => TestUtils.tempDir().getAbsolutePath).mkString(",")
+      val logDirs = (1 to logDirCount).toList.map(i =>
+        // We would like to allow user to specify both relative path and absolute path as log directory for backward-compatibility reason
+        // We can verify this by using a mixture of relative path and absolute path as log directories in the test
+        if (i % 2 == 0) TestUtils.tempDir().getAbsolutePath else TestUtils.tempRelativeDir("data")
+      ).mkString(",")
       props.put(KafkaConfig.LogDirsProp, logDirs)
     } else {
       props.put(KafkaConfig.LogDirProp, TestUtils.tempDir().getAbsolutePath)

@@ -22,9 +22,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,6 +32,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -41,62 +40,27 @@ import java.util.Set;
 public class StoreChangelogReader implements ChangelogReader {
     private static final Logger log = LoggerFactory.getLogger(StoreChangelogReader.class);
 
-    private final Consumer<byte[], byte[]> consumer;
     private final String logPrefix;
-    private final Time time;
-    private final long partitionValidationTimeoutMs;
-    private final Map<String, List<PartitionInfo>> partitionInfo = new HashMap<>();
+    private final Consumer<byte[], byte[]> consumer;
     private final StateRestoreListener stateRestoreListener;
+    private final Map<TopicPartition, Long> endOffsets = new HashMap<>();
+    private final Map<String, List<PartitionInfo>> partitionInfo = new HashMap<>();
     private final Map<TopicPartition, StateRestorer> stateRestorers = new HashMap<>();
     private final Map<TopicPartition, StateRestorer> needsRestoring = new HashMap<>();
     private final Map<TopicPartition, StateRestorer> needsInitializing = new HashMap<>();
-    private final Map<TopicPartition, Long> endOffsets = new HashMap<>();
 
-    public StoreChangelogReader(final String threadId, final Consumer<byte[], byte[]> consumer, final Time time,
-                                final long partitionValidationTimeoutMs, final StateRestoreListener stateRestoreListener) {
-        this.time = time;
+    public StoreChangelogReader(final String threadId,
+                                final Consumer<byte[], byte[]> consumer,
+                                final StateRestoreListener stateRestoreListener) {
         this.consumer = consumer;
-        this.partitionValidationTimeoutMs = partitionValidationTimeoutMs;
 
         this.logPrefix = String.format("stream-thread [%s]", threadId);
         this.stateRestoreListener = stateRestoreListener;
     }
 
-    public StoreChangelogReader(final Consumer<byte[], byte[]> consumer, final Time time,
-                                long partitionValidationTimeoutMs, final StateRestoreListener stateRestoreListener) {
-        this("", consumer, time, partitionValidationTimeoutMs, stateRestoreListener);
-    }
-
-    @Override
-    public void validatePartitionExists(final TopicPartition topicPartition, final String storeName) {
-        final long start = time.milliseconds();
-        // fetch all info on all topics to avoid multiple remote calls
-        if (partitionInfo.isEmpty()) {
-            try {
-                partitionInfo.putAll(consumer.listTopics());
-            } catch (final TimeoutException e) {
-                log.warn("{} Could not list topics so will fall back to partition by partition fetching", logPrefix);
-            }
-        }
-
-        final long endTime = time.milliseconds() + partitionValidationTimeoutMs;
-        while (!hasPartition(topicPartition) && time.milliseconds() < endTime) {
-            try {
-                final List<PartitionInfo> partitions = consumer.partitionsFor(topicPartition.topic());
-                if (partitions != null) {
-                    partitionInfo.put(topicPartition.topic(), partitions);
-                }
-            } catch (final TimeoutException e) {
-                throw new StreamsException(String.format("Could not fetch partition info for topic: %s before expiration of the configured request timeout",
-                                                         topicPartition.topic()));
-            }
-        }
-
-        if (!hasPartition(topicPartition)) {
-            throw new StreamsException(String.format("Store %s's change log (%s) does not contain partition %s",
-                                                     storeName, topicPartition.topic(), topicPartition.partition()));
-        }
-        log.debug("{} Took {}ms to validate that partition {} exists", logPrefix, time.milliseconds() - start, topicPartition);
+    public StoreChangelogReader(final Consumer<byte[], byte[]> consumer,
+                                final StateRestoreListener stateRestoreListener) {
+        this("", consumer, stateRestoreListener);
     }
 
     @Override
@@ -105,7 +69,6 @@ public class StoreChangelogReader implements ChangelogReader {
         stateRestorers.put(restorer.partition(), restorer);
         needsInitializing.put(restorer.partition(), restorer);
     }
-
 
     public Collection<TopicPartition> restore() {
         if (!needsInitializing.isEmpty()) {
@@ -131,45 +94,79 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     private void initialize() {
-        final Map<TopicPartition, StateRestorer> newTasksNeedingRestoration = new HashMap<>();
-
         if (!consumer.subscription().isEmpty()) {
-            throw new IllegalStateException(String.format("Restore consumer should have not subscribed to any partitions (%s) beforehand", consumer.subscription()));
+            throw new IllegalStateException("Restore consumer should not be subscribed to any topics (" + consumer.subscription() + ")");
         }
-        endOffsets.putAll(consumer.endOffsets(needsInitializing.keySet()));
 
-        // remove any partitions where we already have all of the data
-        for (final Map.Entry<TopicPartition, Long> entry : endOffsets.entrySet()) {
-            TopicPartition topicPartition = entry.getKey();
-            Long offset = entry.getValue();
-            final StateRestorer restorer = needsInitializing.get(topicPartition);
-            // might be null as has was initialized in a previous invocation.
-            if (restorer != null) {
-                if (restorer.checkpoint() >= offset) {
-                    restorer.setRestoredOffset(restorer.checkpoint());
-                } else if (restorer.offsetLimit() == 0 || endOffsets.get(topicPartition) == 0) {
-                    restorer.setRestoredOffset(0);
-                } else {
-                    newTasksNeedingRestoration.put(topicPartition, restorer);
-                    final Long endOffset = endOffsets.get(topicPartition);
-                    restorer.restoreStarted(restorer.startingOffset(), endOffset);
-                }
+        // first refresh the changelog partition information from brokers, since initialize is only called when
+        // the needsInitializing map is not empty, meaning we do not know the metadata for some of them yet
+        refreshChangelogInfo();
+
+        Map<TopicPartition, StateRestorer> initializable = new HashMap<>();
+        for (Map.Entry<TopicPartition, StateRestorer> entry : needsInitializing.entrySet()) {
+            final TopicPartition topicPartition = entry.getKey();
+            if (hasPartition(topicPartition)) {
+                initializable.put(entry.getKey(), entry.getValue());
             }
         }
 
-        log.debug("{} Starting restoring state stores from changelog topics {}", logPrefix, newTasksNeedingRestoration.keySet());
+        // try to fetch end offsets for the initializable restorers and remove any partitions
+        // where we already have all of the data
+        try {
+            endOffsets.putAll(consumer.endOffsets(initializable.keySet()));
+        } catch (final TimeoutException e) {
+            // if timeout exception gets thrown we just give up this time and retry in the next run loop
+            log.debug("{} Could not fetch end offset for {}; will fall back to partition by partition fetching", logPrefix, initializable);
+            return;
+        }
+
+        final Iterator<TopicPartition> iter = initializable.keySet().iterator();
+        while (iter.hasNext()) {
+            final TopicPartition topicPartition = iter.next();
+            final Long endOffset = endOffsets.get(topicPartition);
+
+            // offset should not be null; but since the consumer API does not guarantee it
+            // we add this check just in case
+            if (endOffset != null) {
+                final StateRestorer restorer = needsInitializing.get(topicPartition);
+                if (restorer.checkpoint() >= endOffset) {
+                    restorer.setRestoredOffset(restorer.checkpoint());
+                    iter.remove();
+                } else if (restorer.offsetLimit() == 0 || endOffset == 0) {
+                    restorer.setRestoredOffset(0);
+                    iter.remove();
+                } else {
+                    restorer.setEndingOffset(endOffset);
+                }
+                needsInitializing.remove(topicPartition);
+            } else {
+                log.info("{} End offset cannot be found form the returned metadata; removing this partition from the current run loop", logPrefix);
+                iter.remove();
+            }
+        }
+
+        // set up restorer for those initializable
+        if (!initializable.isEmpty()) {
+            startRestoration(initializable);
+        }
+    }
+
+    private void startRestoration(final Map<TopicPartition, StateRestorer> initialized) {
+        log.debug("{} Start restoring state stores from changelog topics {}", logPrefix, initialized.keySet());
 
         final Set<TopicPartition> assignment = new HashSet<>(consumer.assignment());
-        assignment.addAll(newTasksNeedingRestoration.keySet());
+        assignment.addAll(initialized.keySet());
         consumer.assign(assignment);
+
         final List<StateRestorer> needsPositionUpdate = new ArrayList<>();
-        for (final StateRestorer restorer : newTasksNeedingRestoration.values()) {
+        for (final StateRestorer restorer : initialized.values()) {
             if (restorer.checkpoint() != StateRestorer.NO_CHECKPOINT) {
                 consumer.seek(restorer.partition(), restorer.checkpoint());
                 logRestoreOffsets(restorer.partition(),
-                                  restorer.checkpoint(),
-                                  endOffsets.get(restorer.partition()));
+                        restorer.checkpoint(),
+                        endOffsets.get(restorer.partition()));
                 restorer.setStartingOffset(consumer.position(restorer.partition()));
+                restorer.restoreStarted();
             } else {
                 consumer.seekToBeginning(Collections.singletonList(restorer.partition()));
                 needsPositionUpdate.add(restorer);
@@ -178,14 +175,14 @@ public class StoreChangelogReader implements ChangelogReader {
 
         for (final StateRestorer restorer : needsPositionUpdate) {
             final long position = consumer.position(restorer.partition());
-            restorer.setStartingOffset(position);
             logRestoreOffsets(restorer.partition(),
-                              position,
-                              endOffsets.get(restorer.partition()));
+                    position,
+                    endOffsets.get(restorer.partition()));
+            restorer.setStartingOffset(position);
+            restorer.restoreStarted();
         }
 
-        needsRestoring.putAll(newTasksNeedingRestoration);
-        needsInitializing.clear();
+        needsRestoring.putAll(initialized);
     }
 
     private void logRestoreOffsets(final TopicPartition partition, final long startingOffset, final Long endOffset) {
@@ -201,6 +198,14 @@ public class StoreChangelogReader implements ChangelogReader {
         completed.removeAll(needsRestoring.keySet());
         log.debug("{} completed partitions {}", logPrefix, completed);
         return completed;
+    }
+
+    private void refreshChangelogInfo() {
+        try {
+            partitionInfo.putAll(consumer.listTopics());
+        } catch (final TimeoutException e) {
+            log.debug("{} Could not fetch topic metadata within the timeout, will retry in the next run loop", logPrefix);
+        }
     }
 
     @Override
@@ -294,6 +299,5 @@ public class StoreChangelogReader implements ChangelogReader {
         }
 
         return false;
-
     }
 }

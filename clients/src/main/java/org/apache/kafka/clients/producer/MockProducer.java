@@ -306,8 +306,6 @@ public class MockProducer<K, V> implements Producer<K, V> {
         if (this.closed) {
             throw new IllegalStateException("MockProducer is already closed.");
         }
-        if (transactionInFlight)
-            abortTransaction();
         this.closed = true;
     }
 

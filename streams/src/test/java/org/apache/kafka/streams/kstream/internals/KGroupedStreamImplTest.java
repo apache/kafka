@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.Aggregator;
@@ -28,6 +29,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.Reducer;
+import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -67,8 +69,8 @@ public class KGroupedStreamImplTest {
 
     @Before
     public void before() {
-        final KStream<String, String> stream = builder.stream(Serdes.String(), Serdes.String(), TOPIC);
-        groupedStream = stream.groupByKey(Serdes.String(), Serdes.String());
+        final KStream<String, String> stream = builder.stream(TOPIC, Consumed.with(Serdes.String(), Serdes.String()));
+        groupedStream = stream.groupByKey(Serialized.with(Serdes.String(), Serdes.String()));
     }
 
     @Test(expected = NullPointerException.class)
@@ -86,17 +88,20 @@ public class KGroupedStreamImplTest {
         groupedStream.reduce(MockReducer.STRING_ADDER, INVALID_STORE_NAME);
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullStoreSupplierOnReduce() throws Exception {
         groupedStream.reduce(MockReducer.STRING_ADDER, (StateStoreSupplier<KeyValueStore>) null);
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullStoreSupplierOnCount() throws Exception {
         groupedStream.count((StateStoreSupplier<KeyValueStore>) null);
     }
 
 
+    @SuppressWarnings("deprecation")
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullStoreSupplierOnWindowedCount() throws Exception {
         groupedStream.count(TimeWindows.of(10), (StateStoreSupplier<WindowStore>) null);
@@ -167,6 +172,7 @@ public class KGroupedStreamImplTest {
         groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10), Serdes.String(), INVALID_STORE_NAME);
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullStoreSupplierOnWindowedAggregate() throws Exception {
         groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10), (StateStoreSupplier<WindowStore>) null);
@@ -382,6 +388,7 @@ public class KGroupedStreamImplTest {
         groupedStream.reduce(MockReducer.STRING_ADDER, SessionWindows.with(10), INVALID_STORE_NAME);
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullStateStoreSupplierWhenReducingSessionWindows() throws Exception {
         groupedStream.reduce(MockReducer.STRING_ADDER, SessionWindows.with(10), (StateStoreSupplier<SessionStore>) null);
@@ -447,6 +454,7 @@ public class KGroupedStreamImplTest {
         }, SessionWindows.with(10), Serdes.String(), INVALID_STORE_NAME);
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullStateStoreSupplierNameWhenAggregatingSessionWindows() throws Exception {
         groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, new Merger<String, String>() {
@@ -472,6 +480,7 @@ public class KGroupedStreamImplTest {
         groupedStream.count(SessionWindows.with(90), INVALID_STORE_NAME);
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullStateStoreSupplierWhenCountingSessionWindows() throws Exception {
         groupedStream.count(SessionWindows.with(90), (StateStoreSupplier<SessionStore>) null);
@@ -516,6 +525,7 @@ public class KGroupedStreamImplTest {
         doCountWindowed(results);
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldCountWindowedWithInternalStoreName() throws Exception {
         final List<KeyValue<Windowed<String>, Long>> results = new ArrayList<>();

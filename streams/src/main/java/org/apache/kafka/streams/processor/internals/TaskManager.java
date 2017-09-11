@@ -239,6 +239,10 @@ class TaskManager {
         return active.runningTaskMap();
     }
 
+    Map<TaskId, Task> standbyTasks() {
+        return standby.runningTaskMap();
+    }
+
     void setConsumer(final Consumer<byte[], byte[]> consumer) {
         this.consumer = consumer;
     }

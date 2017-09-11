@@ -33,13 +33,17 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore implements WindowStore<Bytes, byte[]> {
 
     private final WindowStore<Bytes, byte[]> bytesStore;
+    private final boolean retainDuplicates;
     private StoreChangeLogger<Bytes, byte[]> changeLogger;
     private ProcessorContext context;
     private StateSerdes<Bytes, byte[]> innerStateSerde;
+    private int seqnum = 0;
 
-    ChangeLoggingWindowBytesStore(final WindowStore<Bytes, byte[]> bytesStore) {
+    ChangeLoggingWindowBytesStore(final WindowStore<Bytes, byte[]> bytesStore,
+                                  final boolean retainDuplicates) {
         super(bytesStore);
         this.bytesStore = bytesStore;
+        this.retainDuplicates = retainDuplicates;
     }
 
     @Override
@@ -62,7 +66,7 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore
     public void put(final Bytes key, final byte[] value, final long timestamp) {
         if (key != null) {
             bytesStore.put(key, value, timestamp);
-            changeLogger.logChange(WindowStoreUtils.toBinaryKey(key, timestamp, 0, innerStateSerde), value);
+            changeLogger.logChange(WindowStoreUtils.toBinaryKey(key, timestamp, maybeUpdateSeqnumForDups(), innerStateSerde), value);
         }
     }
 
@@ -70,13 +74,17 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore
     public void init(final ProcessorContext context, final StateStore root) {
         this.context = context;
         bytesStore.init(context, root);
-        innerStateSerde = WindowStoreUtils.getInnerStateSerde(
-                ProcessorStateManager.storeChangelogTopic(
-                        context.applicationId(),
-                        bytesStore.name()));
+        innerStateSerde = WindowStoreUtils.getInnerStateSerde(ProcessorStateManager.storeChangelogTopic(context.applicationId(), bytesStore.name()));
         changeLogger = new StoreChangeLogger<>(
             name(),
             context,
             innerStateSerde);
+    }
+
+    private int maybeUpdateSeqnumForDups() {
+        if (retainDuplicates) {
+            seqnum = (seqnum + 1) & 0x7FFFFFFF;
+        }
+        return seqnum;
     }
 }

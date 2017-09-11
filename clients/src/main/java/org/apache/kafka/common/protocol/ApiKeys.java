@@ -68,7 +68,9 @@ public enum ApiKeys {
     CREATE_ACLS(30, "CreateAcls"),
     DELETE_ACLS(31, "DeleteAcls"),
     DESCRIBE_CONFIGS(32, "DescribeConfigs"),
-    ALTER_CONFIGS(33, "AlterConfigs");
+    ALTER_CONFIGS(33, "AlterConfigs"),
+    ALTER_REPLICA_DIR(34, "AlterReplicaDir"),
+    DESCRIBE_LOG_DIRS(35, "DescribeLogDirs");
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;

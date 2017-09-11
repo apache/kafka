@@ -52,7 +52,7 @@ public class MockKafkaAdminClientEnv implements AutoCloseable {
     }
 
     public MockKafkaAdminClientEnv(Time time, Cluster cluster, Map<String, Object> config) {
-        this.time = Time.SYSTEM;
+        this.time = time;
         this.adminClientConfig = new AdminClientConfig(config);
         this.cluster = cluster;
         this.metadata = new Metadata(adminClientConfig.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),

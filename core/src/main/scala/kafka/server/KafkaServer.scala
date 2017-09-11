@@ -32,7 +32,7 @@ import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.{LogConfig, LogManager}
 import kafka.metrics.{KafkaMetricsGroup, KafkaMetricsReporter}
-import kafka.network.{BlockingChannel, SocketServer}
+import kafka.network.SocketServer
 import kafka.security.CredentialProvider
 import kafka.security.auth.Authorizer
 import kafka.utils._
@@ -618,10 +618,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   private def checkpointBrokerId(brokerId: Int) {
     var logDirsWithoutMetaProps: List[String] = List()
 
-    for (logDir <- logManager.liveLogDirs) {
-      val brokerMetadataOpt = brokerMetadataCheckpoints(logDir.getAbsolutePath).read()
+    for (logDir <- config.logDirs if logManager.isLogDirOnline(new File(logDir).getAbsolutePath)) {
+      val brokerMetadataOpt = brokerMetadataCheckpoints(logDir).read()
       if(brokerMetadataOpt.isEmpty)
-        logDirsWithoutMetaProps ++= List(logDir.getAbsolutePath)
+        logDirsWithoutMetaProps ++= List(logDir)
     }
 
     for(logDir <- logDirsWithoutMetaProps) {

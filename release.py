@@ -121,6 +121,8 @@ def user_ok(msg):
 
 def sftp_mkdir(dir):
     basedir, dirname = os.path.split(dir)
+    if not basedir:
+       basedir = "."
     try:
        cmd_str  = """
 cd %s

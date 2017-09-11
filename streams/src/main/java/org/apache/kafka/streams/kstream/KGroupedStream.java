@@ -223,7 +223,9 @@ public interface KGroupedStream<K, V> {
      * @param windows   the specification of the aggregation {@link Windows}
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys and {@link Long} values
      * that represent the latest (rolling) count (i.e., number of records) for each key within a window
+     * @deprecated use {@link #windowedBy(Windows)}
      */
+    @Deprecated
     <W extends Window> KTable<Windowed<K>, Long> count(final Windows<W> windows);
 
     /**
@@ -619,7 +621,9 @@ public interface KGroupedStream<K, V> {
      * @param windows   the specification of the aggregation {@link Windows}
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
+     * @deprecated use {@link #windowedBy(Windows)}
      */
+    @Deprecated
     <W extends Window> KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
                                                      final Windows<W> windows);
 
@@ -1112,7 +1116,9 @@ public interface KGroupedStream<K, V> {
      * @param <VR>          the value type of the resulting {@link KTable}
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
+     * @deprecated use {@link #windowedBy(Windows)}
      */
+    @Deprecated
     <W extends Window, VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
                                                              final Aggregator<? super K, ? super V, VR> aggregator,
                                                              final Windows<W> windows,
@@ -1332,5 +1338,13 @@ public interface KGroupedStream<K, V> {
                                          final SessionWindows sessionWindows,
                                          final Serde<T> aggValueSerde,
                                          final StateStoreSupplier<SessionStore> storeSupplier);
+
+    /**
+     * Create a new {@link WindowedKStream} instance that can be used to perform windowed aggregations.
+     * @param windows the specification of the aggregation {@link Windows}
+     * @param <W>     the window type
+     * @return an instance of {@link WindowedKStream}
+     */
+    <W extends Window> WindowedKStream<K, V> windowedBy(final Windows<W> windows);
 
 }

@@ -36,7 +36,6 @@ Port = collections.namedtuple('Port', ['name', 'number', 'open'])
 
 
 class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
-
     PERSISTENT_ROOT = "/mnt/kafka"
     STDOUT_STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "server-start-stdout-stderr.log")
     LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "kafka-log4j.properties")
@@ -244,7 +243,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def pids(self, node):
         """Return process ids associated with running processes on the given node."""
         try:
-            cmd = "jcmd | grep -e kafka.Kafka | awk '{print $1}'"
+            cmd = "jcmd | grep -e %s | awk '{print $1}'" % self.java_class_name()
             pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
             return pid_arr
         except (RemoteCommandError, ValueError) as e:
@@ -270,7 +269,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def clean_node(self, node):
         JmxMixin.clean_node(self, node)
         self.security_config.clean_node(node)
-        node.account.kill_process("kafka", clean_shutdown=False, allow_fail=True)
+        node.account.kill_java_processes(self.java_class_name(),
+                                         clean_shutdown=False, allow_fail=True)
         node.account.ssh("sudo rm -rf -- %s" % KafkaService.PERSISTENT_ROOT, allow_fail=False)
 
     def create_topic(self, topic_cfg, node=None):
@@ -656,3 +656,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             output += line
         self.logger.debug(output)
         return output
+
+    def java_class_name(self):
+        return "kafka.Kafka"

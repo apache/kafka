@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.network;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.memory.SimpleMemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
@@ -43,6 +44,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -87,6 +90,10 @@ public class SelectorTest {
         this.metrics.close();
     }
 
+    public SecurityProtocol securityProtocol() {
+        return SecurityProtocol.PLAINTEXT;
+    }
+
     /**
      * Validate that when the server disconnects, a client send ends up with that node in the disconnected list.
      */
@@ -111,13 +118,20 @@ public class SelectorTest {
     /**
      * Sending a request with one already in flight should result in an exception
      */
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void testCantSendWithInProgress() throws Exception {
         String node = "0";
         blockingConnect(node);
         selector.send(createSend(node, "test1"));
-        selector.send(createSend(node, "test2"));
-        selector.poll(1000L);
+        try {
+            selector.send(createSend(node, "test2"));
+            fail("IllegalStateException not thrown when sending a request with one in flight");
+        } catch (IllegalStateException e) {
+            // Expected exception
+        }
+        selector.poll(0);
+        assertTrue("Channel not closed", selector.disconnected().containsKey(node));
+        assertEquals(ChannelState.FAILED_SEND, selector.disconnected().get(node));
     }
 
     /**
@@ -274,6 +288,48 @@ public class SelectorTest {
         assertEquals("The response should be from the previously muted node", "1", selector.completedReceives().get(0).source());
     }
 
+    @Test
+    public void registerFailure() throws Exception {
+        ChannelBuilder channelBuilder = new PlaintextChannelBuilder() {
+            @Override
+            public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize,
+                    MemoryPool memoryPool) throws KafkaException {
+                throw new RuntimeException("Test exception");
+            }
+            @Override
+            public void close() {
+            }
+        };
+        Selector selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder);
+        SocketChannel socketChannel = SocketChannel.open();
+        socketChannel.configureBlocking(false);
+        try {
+            selector.register("1", socketChannel);
+            fail("Register did not fail");
+        } catch (IOException e) {
+            assertTrue("Unexpected exception: " + e, e.getCause().getMessage().contains("Test exception"));
+            assertFalse("Socket not closed", socketChannel.isOpen());
+        }
+        selector.close();
+    }
+
+    @Test
+    public void testCloseConnectionInClosingState() throws Exception {
+        KafkaChannel channel = createConnectionWithStagedReceives(5);
+        String id = channel.id();
+        time.sleep(6000); // The max idle time is 5000ms
+        selector.poll(0);
+        assertEquals(channel, selector.closingChannel(id));
+        assertNull("Channel not expired", selector.channel(id));
+        assertEquals(ChannelState.EXPIRED, channel.state());
+        selector.close(id);
+        assertNull("Channel not removed from channels", selector.channel(id));
+        assertNull("Channel not removed from closingChannels", selector.closingChannel(id));
+        assertTrue("Unexpected disconnect notification", selector.disconnected().isEmpty());
+        assertEquals(ChannelState.EXPIRED, channel.state());
+        selector.poll(0);
+        assertTrue("Unexpected disconnect notification", selector.disconnected().isEmpty());
+    }
 
     @Test
     public void testCloseOldestConnection() throws Exception {
@@ -297,22 +353,32 @@ public class SelectorTest {
         verifyCloseOldestConnectionWithStagedReceives(5);
     }
 
-    private void verifyCloseOldestConnectionWithStagedReceives(int maxStagedReceives) throws Exception {
+    private KafkaChannel createConnectionWithStagedReceives(int maxStagedReceives) throws Exception {
         String id = "0";
         blockingConnect(id);
         KafkaChannel channel = selector.channel(id);
+        int retries = 100;
 
-        selector.mute(id);
-        for (int i = 0; i <= maxStagedReceives; i++) {
-            selector.send(createSend(id, String.valueOf(i)));
-            selector.poll(1000);
-        }
-
-        selector.unmute(id);
         do {
-            selector.poll(1000);
-        } while (selector.completedReceives().isEmpty());
+            selector.mute(id);
+            for (int i = 0; i <= maxStagedReceives; i++) {
+                selector.send(createSend(id, String.valueOf(i)));
+                selector.poll(1000);
+            }
 
+            selector.unmute(id);
+            do {
+                selector.poll(1000);
+            } while (selector.completedReceives().isEmpty());
+        } while (selector.numStagedReceives(channel) == 0 && --retries > 0);
+        assertTrue("No staged receives after 100 attempts", selector.numStagedReceives(channel) > 0);
+
+        return channel;
+    }
+
+    private void verifyCloseOldestConnectionWithStagedReceives(int maxStagedReceives) throws Exception {
+        KafkaChannel channel = createConnectionWithStagedReceives(maxStagedReceives);
+        String id = channel.id();
         int stagedReceives = selector.numStagedReceives(channel);
         int completedReceives = 0;
         while (selector.disconnected().isEmpty()) {

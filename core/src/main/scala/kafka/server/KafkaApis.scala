@@ -36,7 +36,7 @@ import kafka.log.{Log, LogManager, TimestampOffset}
 import kafka.network.RequestChannel
 import kafka.network.RequestChannel.{CloseConnectionAction, NoOpAction, SendAction}
 import kafka.security.SecurityUtils
-import kafka.security.auth._
+import kafka.security.auth.{Resource, _}
 import kafka.utils.{CoreUtils, Logging, ZKGroupTopicDirs, ZkUtils}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.FatalExitError
@@ -54,6 +54,7 @@ import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.requests.SaslHandshakeResponse
 import org.apache.kafka.common.resource.{Resource => AdminResource}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding}
+import DescribeLogDirsResponse.LogDirInfo
 
 import scala.collection.{mutable, _}
 import scala.collection.JavaConverters._
@@ -129,6 +130,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DELETE_ACLS => handleDeleteAcls(request)
         case ApiKeys.ALTER_CONFIGS => handleAlterConfigsRequest(request)
         case ApiKeys.DESCRIBE_CONFIGS => handleDescribeConfigsRequest(request)
+        case ApiKeys.ALTER_REPLICA_DIR => handleAlterReplicaDirRequest(request)
+        case ApiKeys.DESCRIBE_LOG_DIRS => handleDescribeLogDirsRequest(request)
       }
     } catch {
       case e: FatalExitError => throw e
@@ -986,7 +989,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     def createResponse(requestThrottleMs: Int): AbstractResponse = {
       val offsetFetchResponse =
         // reject the request if not authorized to the group
-        if (!authorize(request.session, Read, new Resource(Group, offsetFetchRequest.groupId)))
+        if (!authorize(request.session, Describe, new Resource(Group, offsetFetchRequest.groupId)))
           offsetFetchRequest.getErrorResponse(requestThrottleMs, Errors.GROUP_AUTHORIZATION_FAILED)
         else {
           if (header.apiVersion == 0) {
@@ -1910,6 +1913,35 @@ class KafkaApis(val requestChannel: RequestChannel,
       new DescribeConfigsResponse(requestThrottleMs, (authorizedConfigs ++ unauthorizedConfigs).asJava))
   }
 
+  def handleAlterReplicaDirRequest(request: RequestChannel.Request): Unit = {
+    val alterReplicaDirRequest = request.body[AlterReplicaDirRequest]
+    val responseMap = {
+      if (authorize(request.session, Alter, Resource.ClusterResource))
+        replicaManager.alterReplicaDir(alterReplicaDirRequest.partitionDirs.asScala)
+      else
+        alterReplicaDirRequest.partitionDirs.asScala.keys.map((_, Errors.CLUSTER_AUTHORIZATION_FAILED)).toMap
+    }
+    sendResponseMaybeThrottle(request, requestThrottleMs => new AlterReplicaDirResponse(requestThrottleMs, responseMap.asJava))
+  }
+
+  def handleDescribeLogDirsRequest(request: RequestChannel.Request): Unit = {
+    val describeLogDirsDirRequest = request.body[DescribeLogDirsRequest]
+    val logDirInfos = {
+      if (authorize(request.session, Describe, Resource.ClusterResource)) {
+        val partitions =
+          if (describeLogDirsDirRequest.isAllTopicPartitions)
+            replicaManager.logManager.allLogs().map(_.topicPartition).toSet
+          else
+            describeLogDirsDirRequest.topicPartitions().asScala
+
+        replicaManager.describeLogDirs(partitions)
+      } else {
+        Map.empty[String, LogDirInfo]
+      }
+    }
+    sendResponseMaybeThrottle(request, throttleTimeMs => new DescribeLogDirsResponse(throttleTimeMs, logDirInfos.asJava))
+  }
+
   def authorizeClusterAction(request: RequestChannel.Request): Unit = {
     if (!authorize(request.session, ClusterAction, Resource.ClusterResource))
       throw new ClusterAuthorizationException(s"Request $request is not authorized.")
@@ -1969,16 +2001,19 @@ class KafkaApis(val requestChannel: RequestChannel,
   private def closeConnection(request: RequestChannel.Request): Unit = {
     // This case is used when the request handler has encountered an error, but the client
     // does not expect a response (e.g. when produce request has acks set to 0)
-    requestChannel.sendResponse(new RequestChannel.Response(request, None, CloseConnectionAction))
+    requestChannel.sendResponse(new RequestChannel.Response(request, None, CloseConnectionAction, None))
   }
 
   private def sendResponse(request: RequestChannel.Request, responseOpt: Option[AbstractResponse]): Unit = {
     responseOpt match {
       case Some(response) =>
         val responseSend = request.context.buildResponse(response)
-        requestChannel.sendResponse(new RequestChannel.Response(request, Some(responseSend), SendAction))
+        val responseString =
+          if (RequestChannel.isRequestLoggingEnabled) Some(response.toString(request.context.header.apiVersion))
+          else None
+        requestChannel.sendResponse(new RequestChannel.Response(request, Some(responseSend), SendAction, responseString))
       case None =>
-        requestChannel.sendResponse(new RequestChannel.Response(request, None, NoOpAction))
+        requestChannel.sendResponse(new RequestChannel.Response(request, None, NoOpAction, None))
     }
   }
 

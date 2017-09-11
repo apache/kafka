@@ -201,7 +201,7 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
   }
 
   private def consumeRecords(consumer: Consumer[Array[Byte], Array[Byte]],
-                             numRecords: Int = 1,
+                             numRecords: Int,
                              startingOffset: Int = 0,
                              topic: String = topic,
                              part: Int = part) {
