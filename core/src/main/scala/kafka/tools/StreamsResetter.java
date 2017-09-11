@@ -61,6 +61,13 @@ public class StreamsResetter {
     private static OptionSpec<String> applicationIdOption;
     private static OptionSpec<String> inputTopicsOption;
     private static OptionSpec<String> intermediateTopicsOption;
+    private static OptionSpec<Long> toOffsetOption;
+    private static OptionSpec<String> toDatetimeOption;
+    private static OptionSpec<String> byDurationOption;
+    private static OptionSpecBuilder toEarliestOption;
+    private static OptionSpecBuilder toLatestOption;
+    private static OptionSpecBuilder toCurrentOption;
+    private static OptionSpec<Long> shiftByOption;
     private static OptionSpecBuilder dryRunOption;
 
     private OptionSet options = null;
@@ -126,6 +133,22 @@ public class StreamsResetter {
             .ofType(String.class)
             .withValuesSeparatedBy(',')
             .describedAs("list");
+        toOffsetOption = optionParser.accepts("to-offset", "Reset offsets to a specific offset.")
+                .withRequiredArg()
+                .ofType(Long.class);
+        toDatetimeOption = optionParser.accepts("to-datetime", "Reset offsets to offset from datetime. Format: 'YYYY-MM-DDTHH:mm:SS.sss'")
+                .withRequiredArg()
+                .ofType(String.class);
+        byDurationOption = optionParser.accepts("by-duration", "Reset offsets to offset by duration from current timestamp. Format: 'PnDTnHnMnS'")
+                .withRequiredArg()
+                .ofType(String.class);
+        toEarliestOption = optionParser.accepts("to-earliest", "Reset offsets to earliest offset.");
+        toLatestOption = optionParser.accepts("to-latest", "Reset offsets to latest offset.");
+        toCurrentOption = optionParser.accepts("to-current", "Reset offsets to current offset.");
+        shiftByOption = optionParser.accepts("shift-by", "Reset offsets shifting current offset by 'n', where 'n' can be positive or negative")
+                .withRequiredArg()
+                .describedAs("number-of-offsets")
+                .ofType(Long.class);
         dryRunOption = optionParser.accepts("dry-run", "Display the actions that would be performed without executing the reset commands.");
 
         try {
