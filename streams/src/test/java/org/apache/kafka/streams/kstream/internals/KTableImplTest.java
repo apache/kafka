@@ -27,6 +27,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -437,19 +438,21 @@ public class KTableImplTest {
         table.join(table, MockValueJoiner.TOSTRING_JOINER, null, null);
     }
 
+    @SuppressWarnings("unchecked")
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullStoreSupplierInJoin() {
-        table.join(table, MockValueJoiner.TOSTRING_JOINER, null);
+        table.join(table, MockValueJoiner.TOSTRING_JOINER, (StateStoreSupplier) null);
     }
 
+    @SuppressWarnings("unchecked")
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullStoreSupplierInLeftJoin() {
-        table.leftJoin(table, MockValueJoiner.TOSTRING_JOINER, null);
+        table.leftJoin(table, MockValueJoiner.TOSTRING_JOINER, (StateStoreSupplier) null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullStoreSupplierInOuterJoin() {
-        table.outerJoin(table, MockValueJoiner.TOSTRING_JOINER, null);
+        table.outerJoin(table, MockValueJoiner.TOSTRING_JOINER, (StateStoreSupplier) null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -495,5 +498,20 @@ public class KTableImplTest {
                 return false;
             }
         }, (Materialized<String, String, KeyValueStore<Bytes, byte[]>>) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerOnJoinWhenMaterializedIsNull() {
+        table.join(table, MockValueJoiner.TOSTRING_JOINER, (Materialized) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerOnLeftJoinWhenMaterializedIsNull() {
+        table.leftJoin(table, MockValueJoiner.TOSTRING_JOINER, (Materialized) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerOnOuterJoinWhenMaterializedIsNull() {
+        table.leftJoin(table, MockValueJoiner.TOSTRING_JOINER, (Materialized) null);
     }
 }
