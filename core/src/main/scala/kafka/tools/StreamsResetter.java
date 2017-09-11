@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.tools;
+package kafka.tools;
 
 
 import joptsimple.*;
@@ -85,15 +85,8 @@ public class StreamsResetter {
         try (AdminClient adminClient = KafkaAdminClient.create(consumerConfig)){
             dryRun = options.has(dryRunOption);
 
-            //final String groupId = options.valueOf(applicationIdOption);
-
             allTopics.clear();
             allTopics.addAll(adminClient.listTopics().names().get());
-
-            /*if (!adminClient.describeConsumerGroup(groupId, 0).consumers().get().isEmpty()) {
-                throw new IllegalStateException("Consumer group '" + groupId + "' is still active. " +
-                            "Make sure to stop all running application instances before running the reset tool.");
-            }*/
 
             if (dryRun) {
                 System.out.println("----Dry run displays the actions which will be performed when running Streams Reset Tool----");
@@ -147,88 +140,24 @@ public class StreamsResetter {
         final List<String> inputTopics = options.valuesOf(inputTopicsOption);
         final List<String> intermediateTopics = options.valuesOf(intermediateTopicsOption);
 
-        /*final List<String> notFoundInputTopics = new ArrayList<>();
-        final List<String> notFoundIntermediateTopics = new ArrayList<>();
-
-        String groupId = options.valueOf(applicationIdOption);*/
-
         if (inputTopics.size() == 0 && intermediateTopics.size() == 0) {
             System.out.println("No input or intermediate topics specified. Skipping seek.");
             return;
         }
 
         if (inputTopics.size() != 0) {
-            System.out.println("Seek-to-beginning for input topics " + inputTopics);
+            String scenario = "";
+            System.out.println("Seek-" + scenario + " for input topics " + inputTopics);
         }
         if (intermediateTopics.size() != 0) {
             System.out.println("Seek-to-end for intermediate topics " + intermediateTopics);
         }
 
-        /*final Set<String> topicsToSubscribe = new HashSet<>(inputTopics.size() + intermediateTopics.size());
-
-        for (final String topic : inputTopics) {
-            if (!allTopics.contains(topic)) {
-                notFoundInputTopics.add(topic);
-            } else {
-                topicsToSubscribe.add(topic);
-            }
-        }
-        for (final String topic : intermediateTopics) {
-            if (!allTopics.contains(topic)) {
-                notFoundIntermediateTopics.add(topic);
-            } else {
-                topicsToSubscribe.add(topic);
-            }
-        }*/
-
-        /*final Properties config = new Properties();
-        config.putAll(consumerConfig);
-        config.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        config.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");*/
-
-        try
-        //        (final KafkaConsumer<byte[], byte[]> client = new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()))
-        {
-            /*client.subscribe(topicsToSubscribe);
-            client.poll(1);*/
-
-            //final Set<TopicPartition> partitions = client.assignment();
-
-            /*for (final TopicPartition p : partitions) {
-                final String topic = p.topic();
-                if (isInputTopic(topic)) {
-                    inputTopicPartitions.add(p);
-                } else if (isIntermediateTopic(topic)) {
-                    intermediateTopicPartitions.add(p);
-                } else {
-                    System.err.println("Skipping invalid partition: " + p);
-                }
-            }*/
+        try {
 
             maybeResetInputTopicPartitions(inputTopics);
 
             maybeResetIntermediateTopicPartitions(intermediateTopics);
-
-            //if (!dryRun) {
-                /*for (final TopicPartition p : partitions) {
-                    client.position(p);
-                }
-                client.commitSync();*/
-            //}
-
-            /*if (notFoundInputTopics.size() > 0) {
-                System.out.println("Following input topics are not found, skipping them");
-                for (final String topic : notFoundInputTopics) {
-                    System.out.println("Topic: " + topic);
-                }
-            }
-
-            if (notFoundIntermediateTopics.size() > 0) {
-                System.out.println("Following intermediate topics are not found, skipping them");
-                for (final String topic : notFoundIntermediateTopics) {
-                    System.out.println("Topic:" + topic);
-                }
-            }*/
 
         } catch (final RuntimeException e) {
             System.err.println("ERROR: Resetting offsets failed.");
@@ -253,7 +182,6 @@ public class StreamsResetter {
             }
             String inputTopicList = intermediateTopicValue.substring(0, intermediateTopicValue.length() - 1);
             if (!dryRun) {
-                //client.seekToEnd(intermediateTopics);
                 ConsumerGroupCommand.main(new String[]{"--reset-offsets",
                         "--topic", inputTopicList,
                         "--to-latest",
@@ -273,14 +201,14 @@ public class StreamsResetter {
             System.out.println("Following input topics offsets will be reset to beginning (for consumer group " + groupId + ")");
             StringBuilder inputTopicsValue = new StringBuilder();
             for (final String topic : inputTopics) {
-                if (allTopics.contains(topic)) {
+                String topicName = topic.split(":")[0];
+                if (allTopics.contains(topicName)) {
                     inputTopicsValue.append(topic).append(",");
                     System.out.println("Topic: " + topic);
                 }
             }
             String inputTopicList = inputTopicsValue.substring(0, inputTopicsValue.length() - 1);
             if (!dryRun) {
-                //client.seekToBeginning(inputTopicPartitions);
                 ConsumerGroupCommand.main(new String[]{"--reset-offsets",
                         "--topic", inputTopicList,
                         "--to-earliest",
@@ -290,14 +218,6 @@ public class StreamsResetter {
             }
         }
     }
-
-    /*private boolean isInputTopic(final String topic) {
-        return options.valuesOf(inputTopicsOption).contains(topic);
-    }
-
-    private boolean isIntermediateTopic(final String topic) {
-        return options.valuesOf(intermediateTopicsOption).contains(topic);
-    }*/
 
     private void maybeDeleteInternalTopics(AdminClient adminClient) {
 

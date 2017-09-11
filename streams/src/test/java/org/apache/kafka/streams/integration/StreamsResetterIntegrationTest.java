@@ -18,7 +18,7 @@ package org.apache.kafka.streams.integration;
 
 import kafka.admin.AdminClient;
 import kafka.server.KafkaConfig$;
-import org.apache.kafka.streams.tools.StreamsResetter;
+import kafka.tools.StreamsResetter;
 import kafka.utils.MockTime;
 import kafka.utils.ZkUtils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -342,7 +342,7 @@ public class StreamsResetterIntegrationTest {
             parameters = new String[]{
                 "--application-id", APP_ID + testNo,
                 "--bootstrap-server", CLUSTER.bootstrapServers(),
-                "--input-topics", INPUT_TOPIC,
+                "--input-topics", INPUT_TOPIC + ",testtest",
                 "--intermediate-topics", INTERMEDIATE_USER_TOPIC
             };
         } else {
