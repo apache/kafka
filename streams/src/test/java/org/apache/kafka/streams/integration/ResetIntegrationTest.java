@@ -63,7 +63,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
  * Tests local state store and global application cleanup.
  */
 @Category({IntegrationTest.class})
-public class StreamsResetterIntegrationTest {
+public class ResetIntegrationTest {
     private static final int NUM_BROKERS = 1;
 
     @ClassRule
