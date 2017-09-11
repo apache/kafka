@@ -19,17 +19,16 @@ package kafka.tools;
 
 import joptsimple.*;
 import kafka.admin.ConsumerGroupCommand;
+import kafka.utils.CommandLineUtils;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.utils.Exit;
+import scala.collection.mutable.HashSet;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Properties;
+import java.util.*;
 
 /**
  * {@link StreamsResetter} resets the processing state of a Kafka Streams application so that, for example, you can reprocess its input from scratch.
@@ -74,6 +73,7 @@ public class StreamsResetter {
     private final Properties consumerConfig = new Properties();
     private final List<String> allTopics = new LinkedList<>();
     private boolean dryRun = false;
+    private String scenario = "to-earliest";
 
     public int run(final String[] args) {
         return run(args, new Properties());
@@ -157,6 +157,23 @@ public class StreamsResetter {
             printHelp(optionParser);
             throw e;
         }
+
+        HashSet<OptionSpec<?>> allScenarioOptions = new HashSet<>();
+        allScenarioOptions.add(toOffsetOption);
+        allScenarioOptions.add(toDatetimeOption);
+        allScenarioOptions.add(byDurationOption);
+        allScenarioOptions.add(toEarliestOption);
+        allScenarioOptions.add(toLatestOption);
+        allScenarioOptions.add(toCurrentOption);
+        allScenarioOptions.add(shiftByOption);
+
+        CommandLineUtils.checkInvalidArgs(optionParser, options, toOffsetOption, allScenarioOptions.$minus$eq(toOffsetOption));
+        CommandLineUtils.checkInvalidArgs(optionParser, options, toDatetimeOption, allScenarioOptions.$minus$eq(toDatetimeOption));
+        CommandLineUtils.checkInvalidArgs(optionParser, options, byDurationOption, allScenarioOptions.$minus$eq(byDurationOption));
+        CommandLineUtils.checkInvalidArgs(optionParser, options, toEarliestOption, allScenarioOptions.$minus$eq(toEarliestOption));
+        CommandLineUtils.checkInvalidArgs(optionParser, options, toLatestOption, allScenarioOptions.$minus$eq(toLatestOption));
+        CommandLineUtils.checkInvalidArgs(optionParser, options, toCurrentOption, allScenarioOptions.$minus$eq(toCurrentOption));
+        CommandLineUtils.checkInvalidArgs(optionParser, options, shiftByOption, allScenarioOptions.$minus$eq(shiftByOption));
     }
 
     private void maybeResetInputAndSeekToEndIntermediateTopicOffsets() {
@@ -169,7 +186,20 @@ public class StreamsResetter {
         }
 
         if (inputTopics.size() != 0) {
-            String scenario = "";
+            if (options.has(toOffsetOption)) {
+                scenario = "to-offset " + options.valueOf(toOffsetOption).toString();
+            } else if (options.has(toDatetimeOption)) {
+                scenario = "to-datetime " + options.valueOf(toDatetimeOption);
+            } else if (options.has(byDurationOption)) {
+                scenario = "by-duration " + options.valueOf(byDurationOption);
+            } else if (options.has(toLatestOption)) {
+                scenario = "to-latest ";
+            } else if (options.has(toCurrentOption)) {
+                scenario = "to-current ";
+            } else if (options.has(shiftByOption)) {
+                scenario = "shift-by " + options.valueOf(shiftByOption);
+            }
+
             System.out.println("Seek-" + scenario + " for input topics " + inputTopics);
         }
         if (intermediateTopics.size() != 0) {
@@ -240,13 +270,13 @@ public class StreamsResetter {
             if (!dryRun) {
                 ConsumerGroupCommand.main(new String[]{"--reset-offsets",
                         "--topic", inputTopicList,
-                        "--to-earliest",
+                        "--" + scenario,
                         "--group", groupId,
                         "--bootstrap-server", bootstrapServer});
             } else {
                 ConsumerGroupCommand.main(new String[]{"--reset-offsets",
                         "--topic", inputTopicList,
-                        "--to-earliest",
+                        "--" + scenario,
                         "--group", groupId,
                         "--bootstrap-server", bootstrapServer,
                         "--dry-run"});
