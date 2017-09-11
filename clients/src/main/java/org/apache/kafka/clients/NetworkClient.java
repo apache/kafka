@@ -974,6 +974,19 @@ public class NetworkClient implements KafkaClient {
         public ClientResponse disconnected(long timeMs) {
             return new ClientResponse(header, callback, destination, createdTimeMs, timeMs, true, null, null);
         }
+        
+        @Override
+        public String toString() {
+            return "InFlightRequest(header=" + header +
+                    ", destination=" + destination +
+                    ", expectResponse=" + expectResponse +
+                    ", createdTimeMs=" + createdTimeMs +
+                    ", sendTimeMs=" + sendTimeMs +
+                    ", isInternalRequest=" + isInternalRequest +
+                    ", request=" + request +
+                    ", callback=" + callback +
+                    ", send=" + send + ")";
+        }
     }
 
     public boolean discoverBrokerVersions() {
