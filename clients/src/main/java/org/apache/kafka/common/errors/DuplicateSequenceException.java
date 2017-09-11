@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.errors;
 
-public class DuplicateSequenceException extends RetriableException {
+public class DuplicateSequenceException extends ApiException {
 
     public DuplicateSequenceException(String message) {
         super(message);

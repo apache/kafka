@@ -437,7 +437,7 @@ public class TransactionManager {
             inflightBatchesBySequence.get(batch.topicPartition).remove(batch);
     }
 
-    synchronized void setLastAckedSequence(TopicPartition topicPartition, int sequence) {
+    synchronized void maybeUpdateLastAckedSequence(TopicPartition topicPartition, int sequence) {
         if (sequence > lastAckedSequence(topicPartition))
             lastAckedSequence.put(topicPartition, sequence);
     }

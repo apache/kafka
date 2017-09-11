@@ -959,6 +959,53 @@ public class SenderTest {
         assertFalse(transactionManager.hasProducerId());
     }
 
+    @Test
+    public void testCorrectHandlingOfDuplicateSequenceError() throws Exception {
+        final long producerId = 343434L;
+        TransactionManager transactionManager = new TransactionManager();
+        setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
+
+        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+
+        // Send first ProduceRequest
+        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
+        sender.run(time.milliseconds());
+        String nodeId = client.requests().peek().destination();
+        Node node = new Node(Integer.valueOf(nodeId), "localhost", 0);
+        assertEquals(1, client.inFlightRequestCount());
+        assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(-1, transactionManager.lastAckedSequence(tp0));
+
+        // Send second ProduceRequest
+        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
+        sender.run(time.milliseconds());
+        assertEquals(2, client.inFlightRequestCount());
+        assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(-1, transactionManager.lastAckedSequence(tp0));
+        assertFalse(request1.isDone());
+        assertFalse(request2.isDone());
+        assertTrue(client.isReady(node, time.milliseconds()));
+
+        ClientRequest firstClientRequest = client.requests().peek();
+        ClientRequest secondClientRequest = (ClientRequest) client.requests().toArray()[1];
+
+        client.respondToRequest(secondClientRequest, produceResponse(tp0, 1, Errors.NONE, -1));
+
+        sender.run(time.milliseconds()); // receive response 1
+
+        assertEquals(1, transactionManager.lastAckedSequence(tp0));
+
+        client.respondToRequest(firstClientRequest, produceResponse(tp0, -1, Errors.DUPLICATE_SEQUENCE_NUMBER, -1));
+
+        sender.run(time.milliseconds()); // receive response 0
+
+        // Make sure that the last ack'd sequence doesn't change.
+        assertEquals(1, transactionManager.lastAckedSequence(tp0));
+        assertFalse(client.hasInFlightRequests());
+    }
+
     void sendIdempotentProducerResponse(final int expectedSequence, TopicPartition tp, Errors responseError, long responseOffset) {
         client.respond(new MockClient.RequestMatcher() {
             @Override

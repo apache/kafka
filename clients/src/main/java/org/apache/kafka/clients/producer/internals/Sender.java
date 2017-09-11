@@ -528,6 +528,13 @@ public class Sender implements Runnable {
                             "batch but the producer id changed from " + batch.producerId() + " to " +
                             transactionManager.producerIdAndEpoch().producerId + " in the mean time. This batch will be dropped."), false);
                 }
+            } else if (error == Errors.DUPLICATE_SEQUENCE_NUMBER) {
+                // If we have received a duplicate sequence error, it means that the sequence number has advanced beyond
+                // the sequence of the current batch, and we haven't retained batch metadata on the broker to return
+                // the correct offset and timestamp.
+                //
+                // The only thing we can do is to return success to the user and not return a valid offset and timestamp.
+                completeBatch(batch, response);
             } else {
                 final RuntimeException exception;
                 if (error == Errors.TOPIC_AUTHORIZATION_FAILED)
@@ -563,7 +570,7 @@ public class Sender implements Runnable {
     private void completeBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response) {
         if (transactionManager != null) {
             if (transactionManager.hasProducerIdAndEpoch(batch.producerId(), batch.producerEpoch())) {
-                transactionManager.setLastAckedSequence(batch.topicPartition, batch.baseSequence() + batch.recordCount - 1);
+                transactionManager.maybeUpdateLastAckedSequence(batch.topicPartition, batch.baseSequence() + batch.recordCount - 1);
                 log.debug("ProducerId: {}; Set last ack'd sequence number for topic-partition {} to {}", batch.producerId(), batch.topicPartition,
                         transactionManager.lastAckedSequence(batch.topicPartition));
             }
@@ -571,7 +578,6 @@ public class Sender implements Runnable {
         }
 
         batch.done(response.baseOffset, response.logAppendTime, null);
-        this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
         this.accumulator.deallocate(batch);
     }
 
