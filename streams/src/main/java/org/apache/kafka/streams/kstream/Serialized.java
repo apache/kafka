@@ -27,8 +27,8 @@ import org.apache.kafka.common.serialization.Serde;
  */
 public class Serialized<K, V> {
 
-    private Serde<K> keySerde;
-    private Serde<V> valueSerde;
+    protected Serde<K> keySerde;
+    protected Serde<V> valueSerde;
 
     private Serialized(final Serde<K> keySerde,
                        final Serde<V> valueSerde) {
@@ -36,12 +36,8 @@ public class Serialized<K, V> {
         this.valueSerde = valueSerde;
     }
 
-    public Serde<K> keySerde() {
-        return keySerde;
-    }
-
-    public Serde<V> valueSerde() {
-        return valueSerde;
+    protected Serialized(final Serialized<K, V> serialized) {
+        this(serialized.keySerde, serialized.valueSerde);
     }
 
     /**

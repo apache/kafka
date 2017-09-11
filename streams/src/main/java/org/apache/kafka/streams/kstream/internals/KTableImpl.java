@@ -691,8 +691,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         // select the aggregate key and values (old and new), it would require parent to send old values
         builder.internalTopologyBuilder.addProcessor(selectName, selectSupplier, this.name);
         this.enableSendingOldValues();
-
-        return new KGroupedTableImpl<>(builder, selectName, this.name, serialized.keySerde(), serialized.valueSerde());
+        final SerializedInternal<K1, V1> serializedInternal  = new SerializedInternal<>(serialized);
+        return new KGroupedTableImpl<>(builder,
+                                       selectName,
+                                       this.name,
+                                       serializedInternal.keySerde(),
+                                       serializedInternal.valueSerde());
     }
 
     @SuppressWarnings("unchecked")
