@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.config.internals;
 
-import org.apache.kafka.common.security.auth.DefaultKafkaPrincipalBuilder;
-
 import java.util.Collections;
 import java.util.List;
 
@@ -34,7 +32,6 @@ public class BrokerSecurityConfigs {
             "KafkaPrincipalBuilder interface, which is used to build the KafkaPrincipal object used during " +
             "authorization. This config also supports the deprecated PrincipalBuilder interface which was previously " +
             "used for connections with the SSL SecurityProtocol.";
-    public static final String DEFAULT_PRINCIPAL_BUILDER_CLASS = DefaultKafkaPrincipalBuilder.class.getName();
 
     public static final String SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG = "sasl.kerberos.principal.to.local.rules";
     public static final String SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_DOC = "A list of rules for mapping from principal " +

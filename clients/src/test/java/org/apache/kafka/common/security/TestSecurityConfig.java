@@ -33,8 +33,7 @@ public class TestSecurityConfig extends AbstractConfig {
             .define(SaslConfigs.SASL_ENABLED_MECHANISMS, Type.LIST, SaslConfigs.DEFAULT_SASL_ENABLED_MECHANISMS,
                     Importance.MEDIUM, SaslConfigs.SASL_ENABLED_MECHANISMS_DOC)
             .define(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Type.CLASS,
-                    BrokerSecurityConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS, Importance.MEDIUM,
-                    BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_DOC)
+                    null, Importance.MEDIUM, BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_DOC)
             .withClientSslSupport()
             .withClientSaslSupport();
 

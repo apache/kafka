@@ -16,14 +16,13 @@
  */
 package org.apache.kafka.common.network;
 
+import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.test.TestSslUtils;
+
 import java.io.File;
 import java.net.InetAddress;
 import java.util.HashMap;
 import java.util.Map;
-
-import org.apache.kafka.common.config.SslConfigs;
-import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
-import org.apache.kafka.test.TestSslUtils;
 
 public class CertStores {
 
@@ -46,8 +45,6 @@ public class CertStores {
         Mode mode = server ? Mode.SERVER : Mode.CLIENT;
         File truststoreFile = File.createTempFile(name + "TS", ".jks");
         sslConfig = TestSslUtils.createSslConfig(!server, true, mode, truststoreFile, name, commonName, certBuilder);
-        if (server)
-            sslConfig.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SslConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
     }
 
     public Map<String, Object> getTrustingConfig(CertStores truststoreConfig) {

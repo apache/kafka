@@ -115,6 +115,10 @@ public class SslChannelBuilder implements ChannelBuilder {
         return new InetSocketAddress(socketChannel.socket().getInetAddress(), 0).getHostString();
     }
 
+    /**
+     * Note that client SSL authentication is handled in {@link SslTransportLayer}. This class is only used
+     * to transform the derived principal using a {@link KafkaPrincipalBuilder} configured by the user.
+     */
     private static class SslAuthenticator implements Authenticator {
         private final SslTransportLayer transportLayer;
         private KafkaPrincipalBuilder principalBuilder;

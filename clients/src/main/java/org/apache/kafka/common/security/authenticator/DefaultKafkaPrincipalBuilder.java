@@ -14,12 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.auth;
+package org.apache.kafka.common.security.authenticator;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.network.TransportLayer;
+import org.apache.kafka.common.security.auth.AuthenticationContext;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
+import org.apache.kafka.common.security.auth.PlaintextAuthenticationContext;
+import org.apache.kafka.common.security.auth.PrincipalBuilder;
+import org.apache.kafka.common.security.auth.SaslAuthenticationContext;
+import org.apache.kafka.common.security.auth.SslAuthenticationContext;
 import org.apache.kafka.common.security.kerberos.KerberosName;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
 
@@ -36,6 +43,8 @@ import static java.util.Objects.requireNonNull;
  * SSL authentication and SASL authentication. In the latter case, when GSSAPI is used, this
  * class applies {@link org.apache.kafka.common.security.kerberos.KerberosShortNamer} to transform
  * the name.
+ *
+ * NOTE: This is an internal class and can change without notice
  */
 public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, AutoCloseable {
     private final PrincipalBuilder oldPrincipalBuilder;
