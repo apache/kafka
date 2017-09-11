@@ -180,14 +180,20 @@ public class StreamsResetter {
                     System.out.println("Topic: " + topic);
                 }
             }
-            String inputTopicList = intermediateTopicValue.substring(0, intermediateTopicValue.length() - 1);
+            String intermediateTopicList = intermediateTopicValue.substring(0, intermediateTopicValue.length() - 1);
             if (!dryRun) {
                 ConsumerGroupCommand.main(new String[]{"--reset-offsets",
-                        "--topic", inputTopicList,
+                        "--topic", intermediateTopicList,
+                        "--to-latest",
+                        "--group", groupId,
+                        "--bootstrap-server", bootstrapServer});
+            } else {
+                ConsumerGroupCommand.main(new String[]{"--reset-offsets",
+                        "--topic", intermediateTopicList,
                         "--to-latest",
                         "--group", groupId,
                         "--bootstrap-server", bootstrapServer,
-                        "--execute"}); //TODO update the `ConsumerGroupCommand` to support `dry-run` option
+                        "--dry-run"});
             }
         }
     }
@@ -213,8 +219,14 @@ public class StreamsResetter {
                         "--topic", inputTopicList,
                         "--to-earliest",
                         "--group", groupId,
+                        "--bootstrap-server", bootstrapServer});
+            } else {
+                ConsumerGroupCommand.main(new String[]{"--reset-offsets",
+                        "--topic", inputTopicList,
+                        "--to-earliest",
+                        "--group", groupId,
                         "--bootstrap-server", bootstrapServer,
-                        "--execute"}); //TODO update the `ConsumerGroupCommand` to support `dry-run` option
+                        "--dry-run"});
             }
         }
     }
