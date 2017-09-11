@@ -1199,7 +1199,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
     }
   }
 
-  case class BrokerChange(currentBrokerList: Seq[String]) extends ControllerEvent {
+  case class BrokerChange(brokersOnEventReceived: Seq[String]) extends ControllerEvent {
 
     def state = ControllerState.BrokerChange
 
@@ -1209,8 +1209,11 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
       // the odds of processing recent broker changes in a single ControllerEvent (KAFKA-5502).
       val curBrokers = zkUtils.getAllBrokersInCluster().toSet
       val curBrokerIds = curBrokers.map(_.id)
+      val brokerIdsOnEventReceived = brokersOnEventReceived.map(_.toInt).toSet
       val liveOrShuttingDownBrokerIds = controllerContext.liveOrShuttingDownBrokerIds
-      val newBrokerIds = curBrokerIds -- liveOrShuttingDownBrokerIds
+      // Also call onBrokerStartup for brokers in (curBrokerIds -- brokerIdsOnEventReceived) to take care of the
+      // scenario that the broker has started after the event is received but before the event is processed
+      val newBrokerIds = (curBrokerIds -- liveOrShuttingDownBrokerIds) ++ (curBrokerIds -- brokerIdsOnEventReceived)
       val deadBrokerIds = liveOrShuttingDownBrokerIds -- curBrokerIds
       val newBrokers = curBrokers.filter(broker => newBrokerIds(broker.id))
       controllerContext.liveBrokers = curBrokers
@@ -1699,6 +1702,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
 class BrokerChangeListener(controller: KafkaController, eventManager: ControllerEventManager) extends IZkChildListener with Logging {
   override def handleChildChange(parentPath: String, currentChilds: java.util.List[String]): Unit = {
     import JavaConverters._
+    info(s"Received broker change event with broker list ${currentChilds.asScala.mkString(",")}")
     eventManager.put(controller.BrokerChange(currentChilds.asScala))
   }
 }
