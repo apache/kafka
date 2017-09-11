@@ -346,6 +346,9 @@ public final class RecordAccumulator {
     // The deque for the partition may have to be reordered in situations where leadership changes in between
     // batch drains. Since the requests are on different connections, we no longer have any guarantees about ordering
     // of the responses. Hence we will have to check if there is anything out of order and correct the order in the queue.
+    //
+    // Note that this assumes that all the batches in the queue which have an assigned sequence also have the current
+    // producer id. We will not attempt to reorder messages if the producer id has changed.
     private void maybeEnsureQueueIsOrdered(Deque<ProducerBatch> deque, ProducerBatch batch) {
         if (transactionManager != null) {
             // When we are requeing and have enabled idempotence, the reenqueued batch must always have a sequence.
@@ -353,7 +356,12 @@ public final class RecordAccumulator {
                 throw new IllegalStateException("Trying to reenqueue a batch which doesn't have a sequence even " +
                         "though idempotence is enabled.");
 
-            if (batch.baseSequence() != transactionManager.nextBatchBySequence(batch.topicPartition).baseSequence()) {
+            // If there are no inflight batches being tracked by the transaction manager, it means that the producer
+            // id must have changed and the batches being re enqueued are from the old producer id. In this case
+            // we don't try to ensure ordering amongst them. They will eventually fail with an OutOfOrderSequence,
+            // or they will succeed.
+            if (transactionManager.nextBatchBySequence(batch.topicPartition) != null &&
+                    batch.baseSequence() != transactionManager.nextBatchBySequence(batch.topicPartition).baseSequence()) {
                 // The head of the queues have diverged. This means that the incoming batch should be placed somewhere further back.
                 // We need to find the right place for the incoming batch and insert it there.
                 // We will only enter this branch if we have multiple inflights sent to different brokers, perhaps
@@ -367,7 +375,7 @@ public final class RecordAccumulator {
                     orderedBatches.add(deque.pollFirst());
 
                 log.debug("Reordered incoming batch with sequence {} for partition {}. It was placed in the queue at " +
-                        "position {}" + incomingBatch.baseSequence(), incomingBatch.topicPartition, orderedBatches.size());
+                        "position {}", incomingBatch.baseSequence(), incomingBatch.topicPartition, orderedBatches.size());
                 // Either we have reached a point where there are batches without a sequence (ie. never been drained
                 // and are hence in order by default), or the batch at the front of the queue has a sequence greater
                 // than the incoming batch. This is the right place to add the incoming batch.

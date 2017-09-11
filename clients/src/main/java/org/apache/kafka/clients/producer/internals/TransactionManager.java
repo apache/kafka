@@ -519,7 +519,7 @@ public class TransactionManager {
                 (lastAckedSequence.containsKey(topicPartition) && (sequence - lastAckedSequence.get(topicPartition) == 1));
     }
 
-    synchronized  void setNextSequence(TopicPartition topicPartition, int sequence) {
+    private synchronized void setNextSequence(TopicPartition topicPartition, int sequence) {
         if (!nextSequence.containsKey(topicPartition) && sequence != 0)
             throw new IllegalStateException("Trying to set the sequence number for " + topicPartition + " to " + sequence +
             ", but the sequence number was never set for this partition.");
