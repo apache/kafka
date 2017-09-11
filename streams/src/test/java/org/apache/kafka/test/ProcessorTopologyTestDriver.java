@@ -31,6 +31,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.InternalTopologyAccessor;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.Topology;
@@ -38,6 +39,7 @@ import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.GlobalProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.GlobalStateManagerImpl;
 import org.apache.kafka.streams.processor.internals.GlobalStateUpdateTask;
@@ -156,6 +158,32 @@ public class ProcessorTopologyTestDriver {
     private final StateRestoreListener stateRestoreListener = new MockStateRestoreListener();
     private StreamTask task;
     private GlobalStateUpdateTask globalStateTask;
+
+
+    /**
+     * Create a new test diver instance
+     * @param config the stream configuration for the topology
+     * @param topologyBuilder the topology builder whose {@link InternalTopologyBuilder} will
+     *                        be use to create the topology instance.
+     *
+     * Note that {@link TopologyBuilder} is deprecated and this constructor will eventually
+     *                        be removed.
+     */
+    public ProcessorTopologyTestDriver(final StreamsConfig config,
+                                       final TopologyBuilder topologyBuilder) {
+        this(config, InternalTopologyAccessor.getInternalTopologyBuilder(topologyBuilder));
+    }
+
+    /**
+     * Create a new test diver instance
+     * @param config the stream configuration for the topology
+     * @param topology the {@link Topology} whose {@link InternalTopologyBuilder} will
+     *                        be use to create the topology instance.
+     */
+    public ProcessorTopologyTestDriver(final StreamsConfig config,
+                                       final Topology topology) {
+        this(config, InternalTopologyAccessor.getInternalTopologyBuilder(topology));
+    }
 
     /**
      * Create a new test driver instance.
@@ -373,7 +401,7 @@ public class ProcessorTopologyTestDriver {
 
     /**
      * Get the {@link StateStore} with the given name. The name should have been supplied via
-     * {@link #ProcessorTopologyTestDriver(StreamsConfig, InternalTopologyBuilder) this object's constructor}, and is
+     * {@link #ProcessorTopologyTestDriver(StreamsConfig, Topology) this object's constructor}, and is
      * presumed to be used by a Processor within the topology.
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
@@ -389,7 +417,7 @@ public class ProcessorTopologyTestDriver {
 
     /**
      * Get the {@link KeyValueStore} with the given name. The name should have been supplied via
-     * {@link #ProcessorTopologyTestDriver(StreamsConfig, InternalTopologyBuilder) this object's constructor}, and is
+     * {@link #ProcessorTopologyTestDriver(StreamsConfig, Topology) this object's constructor}, and is
      * presumed to be used by a Processor within the topology.
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
