@@ -24,7 +24,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.security.JaasContext
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.clients.{ApiVersions, ClientResponse, ManualMetadataUpdater, NetworkClient}
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.requests.AbstractRequest.Builder
@@ -43,7 +43,8 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
                                  metrics: Metrics,
                                  time: Time,
                                  fetcherId: Int,
-                                 clientId: String) extends BlockingSend {
+                                 clientId: String,
+                                 logContext: LogContext) extends BlockingSend {
 
   private val sourceNode = new Node(sourceBroker.id, sourceBroker.host, sourceBroker.port)
   private val socketTimeout: Int = brokerConfig.replicaSocketTimeoutMs
@@ -65,7 +66,8 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
       "replica-fetcher",
       Map("broker-id" -> sourceBroker.id.toString, "fetcher-id" -> fetcherId.toString).asJava,
       false,
-      channelBuilder
+      channelBuilder,
+      logContext
     )
     new NetworkClient(
       selector,
@@ -79,7 +81,8 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
       brokerConfig.requestTimeoutMs,
       time,
       false,
-      new ApiVersions
+      new ApiVersions,
+      logContext
     )
   }
 

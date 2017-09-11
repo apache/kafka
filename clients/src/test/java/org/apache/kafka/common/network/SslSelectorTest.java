@@ -38,6 +38,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.security.ssl.SslFactory;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestSslUtils;
 import org.junit.After;
@@ -65,7 +66,7 @@ public class SslSelectorTest extends SelectorTest {
         this.channelBuilder = new SslChannelBuilder(Mode.CLIENT);
         this.channelBuilder.configure(sslClientConfigs);
         this.metrics = new Metrics();
-        this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder);
+        this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext());
     }
 
     @After
@@ -98,7 +99,7 @@ public class SslSelectorTest extends SelectorTest {
             }
         };
         channelBuilder.configure(sslClientConfigs);
-        Selector selector = new Selector(5000, metrics, time, "MetricGroup2", channelBuilder);
+        Selector selector = new Selector(5000, metrics, time, "MetricGroup2", channelBuilder, new LogContext());
         try {
             int reqs = 500;
             String node = "0";
@@ -183,7 +184,7 @@ public class SslSelectorTest extends SelectorTest {
         channelBuilder = new SslChannelBuilder(Mode.SERVER);
         channelBuilder.configure(sslServerConfigs);
         selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup", 
-                new HashMap<String, String>(), true, false, channelBuilder, pool);
+                new HashMap<String, String>(), true, false, channelBuilder, pool, new LogContext());
 
         try (ServerSocketChannel ss = ServerSocketChannel.open()) {
             ss.bind(new InetSocketAddress(0));

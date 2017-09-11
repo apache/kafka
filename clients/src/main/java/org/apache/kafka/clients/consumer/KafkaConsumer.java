@@ -704,7 +704,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             Sensor throttleTimeSensor = Fetcher.throttleTimeSensor(metrics, metricsRegistry.fetcherMetrics);
 
             NetworkClient netClient = new NetworkClient(
-                    new Selector(config.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, channelBuilder),
+                    new Selector(config.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, channelBuilder, logContext),
                     this.metadata,
                     clientId,
                     100, // a fixed large enough value will suffice for max in-flight requests
@@ -716,7 +716,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     time,
                     true,
                     new ApiVersions(),
-                    throttleTimeSensor);
+                    throttleTimeSensor,
+                    logContext);
             this.client = new ConsumerNetworkClient(
                     logContext,
                     netClient,
