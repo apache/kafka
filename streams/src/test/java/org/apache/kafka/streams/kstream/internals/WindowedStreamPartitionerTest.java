@@ -145,28 +145,11 @@ public class WindowedStreamPartitionerTest {
     }
     
     @Test
-    public void testWindowSerializeExpectedWindowSize() {
-        final long randomLong = 5000000;
-        final Map<String, String> props = new HashMap<>();
-        final WindowedDeserializer<StringSerializer> windowedDeserializer = new WindowedDeserializer<>(randomLong);
-        props.put("key.deserializer.inner.class", "org.apache.kafka.common.serialization.StringDeserializer");
-        props.put("deserializer.inner.class", "org.apache.kafka.common.serialization.StringDeserializer");
-        windowedDeserializer.configure(props, true);
-        //test for serializer expected window end time
-        final byte[] byteValues = stringSerializer.serialize(topicName, "dummy string"); //dummy string, serves no real purpose
-        final Windowed<?> windowed = windowedDeserializer.deserialize(topicName, byteValues);
-        final long actualSize = windowed.window().end() - windowed.window().start(); //find actual window time
-        assertEquals(randomLong, actualSize); //testing if window size matches up with expected one
-        windowedDeserializer.close();
-    }
-    
-    @Test
     public void testWindowDeserializeExpectedWindowSize() {
         final long randomLong = 5000000;
         final Map<String, String> props = new HashMap<>();
         final WindowedDeserializer<StringSerializer> windowedDeserializer = new WindowedDeserializer<>(randomLong);
         props.put("key.deserializer.inner.class", "org.apache.kafka.common.serialization.StringDeserializer");
-        props.put("deserializer.inner.class", "org.apache.kafka.common.serialization.StringDeserializer");
         windowedDeserializer.configure(props, true);
         //test for deserializer expected window end time
         final byte[] byteValues = stringSerializer.serialize(topicName, "dummy string"); //dummy string, serves no real purpose
