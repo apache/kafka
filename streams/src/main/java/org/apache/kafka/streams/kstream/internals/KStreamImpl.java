@@ -785,12 +785,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                               final Serialized<KR, V> serialized) {
         Objects.requireNonNull(selector, "selector can't be null");
         Objects.requireNonNull(serialized, "serialized can't be null");
+        final SerializedInternal<KR, V> serializedInternal = new SerializedInternal<>(serialized);
         String selectName = internalSelectKey(selector);
         return new KGroupedStreamImpl<>(builder,
                                         selectName,
                                         sourceNodes,
-                                        serialized.keySerde(),
-                                        serialized.valueSerde(),
+                                        serializedInternal.keySerde(),
+                                        serializedInternal.valueSerde(),
                                         true);
     }
 
@@ -809,11 +810,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public KGroupedStream<K, V> groupByKey(final Serialized<K, V> serialized) {
+        final SerializedInternal<K, V> serializedInternal = new SerializedInternal<>(serialized);
         return new KGroupedStreamImpl<>(builder,
                                         this.name,
                                         sourceNodes,
-                                        serialized.keySerde(),
-                                        serialized.valueSerde(),
+                                        serializedInternal.keySerde(),
+                                        serializedInternal.valueSerde(),
                                         this.repartitionRequired);
 
     }
