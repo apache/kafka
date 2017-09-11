@@ -405,4 +405,5 @@ public class KTableAggregateTest {
         driver.process("tableOne", "1", "5");
         assertEquals(Long.valueOf(4L), reduceResults.get("2"));
     }
+
 }

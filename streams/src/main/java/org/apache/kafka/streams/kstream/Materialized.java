@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.StateStore;
@@ -70,13 +71,15 @@ public class Materialized<K, V, S extends StateStore> {
     /**
      * Materialize a {@link StateStore} with the given name.
      *
-     * @param storeName name of the store to materialize
+     * @param storeName  the name of the underlying {@link KTable} state store; valid characters are ASCII
+     * alphanumerics, '.', '_' and '-'.
      * @param <K>       key type of the store
      * @param <V>       value type of the store
      * @param <S>       type of the {@link StateStore}
      * @return a new {@link Materialized} instance with the given storeName
      */
     public static <K, V, S extends StateStore> Materialized<K, V, S> as(final String storeName) {
+        Topic.validate(storeName);
         return new Materialized<>(storeName);
     }
 
