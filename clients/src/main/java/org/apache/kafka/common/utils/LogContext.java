@@ -43,6 +43,10 @@ public class LogContext {
         return new KafkaLogger(clazz, logPrefix);
     }
 
+    public String logPrefix() {
+        return logPrefix;
+    }
+
     private static class KafkaLogger implements Logger {
         private final Logger logger;
         private final String logPrefix;
