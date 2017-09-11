@@ -27,10 +27,11 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.trogdor.common.Node;
 import org.apache.kafka.trogdor.common.Platform;
+import org.apache.kafka.trogdor.fault.DoneState;
 import org.apache.kafka.trogdor.fault.Fault;
 import org.apache.kafka.trogdor.fault.FaultSet;
 import org.apache.kafka.trogdor.fault.FaultSpec;
-import org.apache.kafka.trogdor.fault.FaultState;
+import org.apache.kafka.trogdor.fault.SendingState;
 import org.apache.kafka.trogdor.rest.CoordinatorFaultsResponse;
 import org.apache.kafka.trogdor.rest.CreateCoordinatorFaultRequest;
 import org.apache.kafka.trogdor.rest.JsonRestServer;
@@ -115,9 +116,9 @@ public final class Coordinator {
     private final FaultSet pendingFaults = new FaultSet();
 
     /**
-     * The set of faults which have been sent to the agents.
+     * The set of faults which have been sent to the NodeManagers.
      */
-    private final FaultSet doneFaults = new FaultSet();
+    private final FaultSet processedFaults = new FaultSet();
 
     class CoordinatorRunnable implements Runnable {
         @Override
@@ -130,16 +131,19 @@ public final class Coordinator {
                     List<Fault> toStart = new ArrayList<>();
                     lock.lock();
                     try {
+                        if (shutdown) {
+                            break;
+                        }
                         if (nextWakeMs > now) {
                             if (cond.await(nextWakeMs - now, TimeUnit.MILLISECONDS)) {
                                 log.trace("CoordinatorRunnable woke up early.");
                             }
+                            now = time.milliseconds();
+                            if (shutdown) {
+                                break;
+                            }
                         }
                         nextWakeMs = now + (60L * 60L * 1000L);
-                        if (shutdown) {
-                            log.info("CoordinatorRunnable shutting down.");
-                            return;
-                        }
                         Iterator<Fault> iter = pendingFaults.iterateByStart();
                         while (iter.hasNext()) {
                             Fault fault = iter.next();
@@ -149,13 +153,13 @@ public final class Coordinator {
                             }
                             toStart.add(fault);
                             iter.remove();
-                            doneFaults.add(fault);
+                            processedFaults.add(fault);
                         }
                     } finally {
                         lock.unlock();
                     }
                     for (Fault fault: toStart) {
-                        startFault(fault);
+                        startFault(now, fault);
                     }
                 }
             } catch (Throwable t) {
@@ -206,7 +210,7 @@ public final class Coordinator {
         return this.restServer.port();
     }
 
-    private void startFault(Fault fault) {
+    private void startFault(long now, Fault fault) {
         Set<String> affectedNodes = fault.targetNodes(platform.topology());
         Set<NodeManager> affectedManagers = new HashSet<>();
         Set<String> nonexistentNodes = new HashSet<>();
@@ -226,6 +230,11 @@ public final class Coordinator {
         }
         log.info("Applying fault {} on {} node(s): {}", fault.id(),
                 nodeNames.size(), Utils.join(nodeNames, ", "));
+        if (nodeNames.isEmpty()) {
+            fault.setState(new DoneState(now, ""));
+        } else {
+            fault.setState(new SendingState(nodeNames));
+        }
         for (NodeManager nodeManager : affectedManagers) {
             nodeManager.enqueueFault(fault);
         }
@@ -258,8 +267,8 @@ public final class Coordinator {
         Map<String, CoordinatorFaultsResponse.FaultData> faultData = new TreeMap<>();
         lock.lock();
         try {
-            getFaultsImpl(faultData, pendingFaults, FaultState.PENDING);
-            getFaultsImpl(faultData, doneFaults, FaultState.DONE);
+            getFaultsImpl(faultData, pendingFaults);
+            getFaultsImpl(faultData, processedFaults);
         } finally {
             lock.unlock();
         }
@@ -267,12 +276,12 @@ public final class Coordinator {
     }
 
     private void getFaultsImpl(Map<String, CoordinatorFaultsResponse.FaultData> faultData,
-                               FaultSet faultSet, FaultState state) {
+                               FaultSet faultSet) {
         for (Iterator<Fault> iter = faultSet.iterateByStart();
              iter.hasNext(); ) {
             Fault fault = iter.next();
             CoordinatorFaultsResponse.FaultData data =
-                new CoordinatorFaultsResponse.FaultData(fault.spec(), state);
+                new CoordinatorFaultsResponse.FaultData(fault.spec(), fault.state());
             faultData.put(fault.id(), data);
         }
     }
@@ -327,13 +336,15 @@ public final class Coordinator {
         JsonRestServer restServer = new JsonRestServer(
             Node.Util.getTrogdorCoordinatorPort(platform.curNode()));
         CoordinatorRestResource resource = new CoordinatorRestResource();
-        Coordinator coordinator = new Coordinator(platform, Time.SYSTEM,
+        final Coordinator coordinator = new Coordinator(platform, Time.SYSTEM,
             restServer, resource);
         restServer.start(resource);
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
             public void run() {
-                log.error("Coordinator shutting down...");
+                log.error("Running shutdown hook...");
+                coordinator.beginShutdown();
+                coordinator.waitForShutdown();
             }
         });
         coordinator.waitForShutdown();

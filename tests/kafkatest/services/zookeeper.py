@@ -82,7 +82,7 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
         start_cmd += "%s/zookeeper.properties &>> %s &" % (ZookeeperService.ROOT, self.logs["zk_log"]["path"])
         node.account.ssh(start_cmd)
 
-        wait_until(lambda: self.listening(node), timeout_sec=10, err_msg="Zookeeper node failed to start")
+        wait_until(lambda: self.listening(node), timeout_sec=30, err_msg="Zookeeper node failed to start")
 
     def listening(self, node):
         try:
@@ -119,7 +119,7 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
 
 
     def connect_setting(self, chroot=None):
-        if chroot and not chroot.starts_with("/"):
+        if chroot and not chroot.startswith("/"):
             raise Exception("ZK chroot must start with '/', invalid chroot: %s" % chroot)
 
         chroot = '' if chroot is None else chroot
@@ -138,7 +138,7 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
         """
         Queries zookeeper for data associated with 'path' and returns all fields in the schema
         """
-        if chroot and not chroot.starts_with("/"):
+        if chroot and not chroot.startswith("/"):
             raise Exception("ZK chroot must start with '/', invalid chroot: %s" % chroot)
 
         chroot_path = ('' if chroot is None else chroot) + path

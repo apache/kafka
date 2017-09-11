@@ -26,7 +26,6 @@ import org.apache.kafka.clients.consumer.internals.ConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
-import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
@@ -191,9 +190,10 @@ public class KafkaConsumerTest {
     @Test(expected = IllegalArgumentException.class)
     public void testSubscriptionOnNullTopicCollection() {
         KafkaConsumer<byte[], byte[]> consumer = newConsumer();
+        List<String> nullList = null;
 
         try {
-            consumer.subscribe(null);
+            consumer.subscribe(nullList);
         } finally {
             consumer.close();
         }
@@ -229,7 +229,7 @@ public class KafkaConsumerTest {
         Pattern pattern = null;
 
         try {
-            consumer.subscribe(pattern, new NoOpConsumerRebalanceListener());
+            consumer.subscribe(pattern);
         } finally {
             consumer.close();
         }

@@ -26,6 +26,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -36,6 +37,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Reducer;
+import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
@@ -196,7 +198,7 @@ public class KStreamKTableJoinIntegrationTest {
         //
         // Because this is a KStream ("record stream"), multiple records for the same user will be
         // considered as separate click-count events, each of which will be added to the total count.
-        final KStream<String, Long> userClicksStream = builder.stream(stringSerde, longSerde, userClicksTopic);
+        final KStream<String, Long> userClicksStream = builder.stream(userClicksTopic, Consumed.with(Serdes.String(), Serdes.Long()));
         // This KTable contains information such as "alice" -> "europe".
         //
         // Because this is a KTable ("changelog stream"), only the latest value (here: region) for a
@@ -242,7 +244,7 @@ public class KStreamKTableJoinIntegrationTest {
                 }
             })
             // Compute the total per region by summing the individual click counts per region.
-            .groupByKey(stringSerde, longSerde)
+            .groupByKey(Serialized.with(stringSerde, longSerde))
             .reduce(new Reducer<Long>() {
                 @Override
                 public Long apply(final Long value1, final Long value2) {

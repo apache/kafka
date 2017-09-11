@@ -65,6 +65,7 @@ import java.util.concurrent.Future;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.requests.ResourceType.TOPIC;
+import static org.apache.kafka.common.requests.ResourceType.BROKER;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -323,6 +324,8 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
             env.kafkaClient().setNode(nodes.get(0));
+            assertEquals(time, env.time());
+            assertEquals(env.time(), ((KafkaAdminClient) env.adminClient()).time());
 
             // Make a request with an extremely short timeout.
             // Then wait for it to fail by not supplying any response.
@@ -354,6 +357,22 @@ public class KafkaAdminClientTest {
                 new ConfigResource(ConfigResource.Type.TOPIC, "foo")));
             time.sleep(5000);
             result2.values().get(new ConfigResource(ConfigResource.Type.TOPIC, "foo")).get();
+        }
+    }
+
+    @Test
+    public void testDescribeConfigs() throws Exception {
+        try (MockKafkaAdminClientEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
+            env.kafkaClient().setNode(env.cluster().controller());
+            env.kafkaClient().prepareResponse(new DescribeConfigsResponse(0,
+                Collections.singletonMap(new org.apache.kafka.common.requests.Resource(BROKER, "0"),
+                    new DescribeConfigsResponse.Config(ApiError.NONE,
+                        Collections.<DescribeConfigsResponse.ConfigEntry>emptySet()))));
+            DescribeConfigsResult result2 = env.adminClient().describeConfigs(Collections.singleton(
+                new ConfigResource(ConfigResource.Type.BROKER, "0")));
+            result2.all().get();
         }
     }
 

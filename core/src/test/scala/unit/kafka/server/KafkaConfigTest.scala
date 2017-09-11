@@ -718,6 +718,14 @@ class KafkaConfigTest {
     assertEquals(Sensor.RecordingLevel.DEBUG.toString, config.metricRecordingLevel)
   }
 
+  @Test
+  def testNonroutableAdvertisedListeners() {
+    val props = new Properties()
+    props.put(KafkaConfig.ZkConnectProp, "127.0.0.1:2181")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://0.0.0.0:9092")
+    assertFalse(isValidKafkaConfig(props))
+  }
+
   private def assertPropertyInvalid(validRequiredProps: => Properties, name: String, values: Any*) {
     values.foreach((value) => {
       val props = validRequiredProps

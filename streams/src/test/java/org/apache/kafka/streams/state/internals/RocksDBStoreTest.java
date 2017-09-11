@@ -22,11 +22,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.processor.Cancellable;
-import org.apache.kafka.streams.processor.PunctuationType;
-import org.apache.kafka.streams.processor.Punctuator;
-import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.internals.AbstractProcessorContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
@@ -106,7 +101,7 @@ public class RocksDBStoreTest {
         configs.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "test-server:9092");
         configs.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
         MockRocksDbConfigSetter.called = false;
-        subject.openDB(new ConfigurableProcessorContext(new StreamsConfig(configs), tempDir));
+        subject.openDB(new MockProcessorContext(tempDir, new StreamsConfig(configs)));
 
         assertTrue(MockRocksDbConfigSetter.called);
     }
@@ -329,47 +324,5 @@ public class RocksDBStoreTest {
         entries.add(new KeyValue<>("2".getBytes("UTF-8"), "b".getBytes("UTF-8")));
         entries.add(new KeyValue<>("3".getBytes("UTF-8"), "c".getBytes("UTF-8")));
         return entries;
-    }
-
-    private static class ConfigurableProcessorContext extends AbstractProcessorContext {
-        private final File stateDir;
-
-        ConfigurableProcessorContext(final StreamsConfig config,
-                                     final File stateDir) {
-            super(null, null, config, null, null, null);
-            this.stateDir = stateDir;
-        }
-
-        @Override
-        public File stateDir() {
-            return stateDir;
-        }
-
-        @Override
-        public StateStore getStateStore(final String name) {
-            return null;
-        }
-
-        @Override
-        public Cancellable schedule(final long interval,
-                                    final PunctuationType type,
-                                    final Punctuator callback) {
-            return null;
-        }
-
-        @Override
-        public void schedule(long interval) { }
-
-        @Override
-        public <K, V> void forward(K key, V value) { }
-
-        @Override
-        public <K, V> void forward(K key, V value, int childIndex) { }
-
-        @Override
-        public <K, V> void forward(K key, V value, String childName) { }
-
-        @Override
-        public void commit() { }
     }
 }

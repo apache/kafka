@@ -27,9 +27,11 @@ import org.apache.kafka.trogdor.common.CapturingCommandRunner;
 import org.apache.kafka.trogdor.common.ExpectedFaults;
 import org.apache.kafka.trogdor.common.MiniTrogdorCluster;
 
-import org.apache.kafka.trogdor.fault.FaultState;
+import org.apache.kafka.trogdor.fault.DoneState;
 import org.apache.kafka.trogdor.fault.NetworkPartitionFaultSpec;
 import org.apache.kafka.trogdor.fault.NoOpFaultSpec;
+import org.apache.kafka.trogdor.fault.PendingState;
+import org.apache.kafka.trogdor.fault.RunningState;
 import org.apache.kafka.trogdor.rest.CoordinatorStatusResponse;
 import org.apache.kafka.trogdor.rest.CreateCoordinatorFaultRequest;
 import org.junit.Rule;
@@ -69,16 +71,16 @@ public class CoordinatorTest {
                 build()) {
             new ExpectedFaults().waitFor(cluster.coordinatorClient());
 
-            NoOpFaultSpec noOpFaultSpec = new NoOpFaultSpec(10, 2);
+            NoOpFaultSpec noOpFaultSpec = new NoOpFaultSpec(1, 2);
             cluster.coordinatorClient().putFault(
                 new CreateCoordinatorFaultRequest("fault1", noOpFaultSpec));
             new ExpectedFaults().
-                addFault("fault1", noOpFaultSpec, FaultState.PENDING).
+                addFault("fault1", noOpFaultSpec, new PendingState()).
                 waitFor(cluster.coordinatorClient());
 
-            time.sleep(11);
+            time.sleep(2);
             new ExpectedFaults().
-                addFault("fault1", noOpFaultSpec, FaultState.DONE).
+                addFault("fault1", noOpFaultSpec, new DoneState(2, "")).
                 waitFor(cluster.coordinatorClient());
         }
     }
@@ -99,7 +101,7 @@ public class CoordinatorTest {
             NoOpFaultSpec noOpFaultSpec = new NoOpFaultSpec(10, 2);
             coordinatorClient.putFault(new CreateCoordinatorFaultRequest("fault1", noOpFaultSpec));
             new ExpectedFaults().
-                addFault("fault1", noOpFaultSpec, FaultState.PENDING).
+                addFault("fault1", noOpFaultSpec, new PendingState()).
                 waitFor(coordinatorClient);
             new ExpectedFaults().
                 waitFor(agentClient1).
@@ -107,10 +109,10 @@ public class CoordinatorTest {
 
             time.sleep(10);
             new ExpectedFaults().
-                addFault("fault1", noOpFaultSpec, FaultState.DONE).
+                addFault("fault1", noOpFaultSpec, new DoneState(10, "")).
                 waitFor(coordinatorClient);
             new ExpectedFaults().
-                addFault("fault1", noOpFaultSpec, FaultState.RUNNING).
+                addFault("fault1", noOpFaultSpec, new RunningState(10)).
                 waitFor(agentClient1).
                 waitFor(agentClient2);
         }

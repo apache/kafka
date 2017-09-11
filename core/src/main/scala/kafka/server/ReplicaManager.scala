@@ -30,13 +30,14 @@ import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{KafkaStorageException, ControllerMovedException, CorruptRecordException, InvalidTimestampException, InvalidTopicException, NotEnoughReplicasException, NotLeaderForPartitionException, OffsetOutOfRangeException, PolicyViolationException, _}
+import org.apache.kafka.common.errors.{ControllerMovedException, CorruptRecordException, LogDirNotFoundException, InvalidTimestampException, InvalidTopicException, KafkaStorageException, NotEnoughReplicasException, NotLeaderForPartitionException, OffsetOutOfRangeException, PolicyViolationException, _}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION
 import org.apache.kafka.common.protocol.Errors.KAFKA_STORAGE_ERROR
 import org.apache.kafka.common.record._
+import org.apache.kafka.common.requests.DescribeLogDirsResponse.{LogDirInfo, ReplicaInfo}
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
@@ -535,6 +536,92 @@ class ReplicaManager(val config: KafkaConfig,
   private def delayedDeleteRecordsRequired(localDeleteRecordsResults: Map[TopicPartition, LogDeleteRecordsResult]): Boolean = {
     localDeleteRecordsResults.exists{ case (tp, deleteRecordsResult) =>
       deleteRecordsResult.exception.isEmpty && deleteRecordsResult.lowWatermark < deleteRecordsResult.requestedOffset
+    }
+  }
+
+  /*
+   * For each pair of partition and log directory specified in the map, record the pair in the memory so that the partition
+   * will be created in the specified log directory when broker receives LeaderAndIsrRequest for the partition later.
+   *
+   * This API is currently only useful if the replica has not been created yet. We will be able to move replicas
+   * that are already created to the user-specified log directory after KIP-113 is fully implemented
+   *
+   */
+  def alterReplicaDir(partitionDirs: Map[TopicPartition, String]): Map[TopicPartition, Errors] = {
+    partitionDirs.map { case (topicPartition, destinationDir) =>
+      try {
+        if (!logManager.isLogDirOnline(destinationDir))
+          throw new KafkaStorageException(s"Log directory $destinationDir is offline")
+
+        // If the log for this partition has not been created yet:
+        // 1) Respond with ReplicaNotAvailableException for this partition in the AlterReplicaDirResponse
+        // 2) Record the destination log directory in the memory so that the partition will be created in this log directory
+        //    when broker receives LeaderAndIsrRequest for this partition later.
+        getReplica(topicPartition) match {
+          case Some(_) => // The support for moving replica between log directories on the same broker is not available yet.
+          case None =>
+            logManager.updatePreferredLogDir(topicPartition, destinationDir)
+            throw new ReplicaNotAvailableException(s"Replica $localBrokerId is not available for partition $topicPartition")
+        }
+
+        (topicPartition, Errors.NONE)
+      } catch {
+        case e@(_: LogDirNotFoundException |
+                _: ReplicaNotAvailableException |
+                _: KafkaStorageException) =>
+          (topicPartition, Errors.forException(e))
+        case t: Throwable =>
+          error("Error while changing replica dir for partition %s".format(topicPartition), t)
+          (topicPartition, Errors.forException(t))
+      }
+    }
+  }
+
+  /*
+   * Get the LogDirInfo for the specified list of partitions.
+   *
+   * Each LogDirInfo specifies the following information for a given log directory:
+   * 1) Error of the log directory, e.g. whether the log is online or offline
+   * 2) size and lag of current and future logs for each partition in the given log directory. Only logs of the queried partitions
+   *    are included. There may be future logs (which will replace the current logs of the partition in the future) on the broker after KIP-113 is implemented.
+   */
+  def describeLogDirs(partitions: Set[TopicPartition]): Map[String, LogDirInfo] = {
+    val logsByDir = logManager.allLogs().groupBy(log => log.dir.getParent)
+
+    config.logDirs.toSet.map { logDir: String =>
+      val absolutePath = new File(logDir).getAbsolutePath
+      try {
+        if (!logManager.isLogDirOnline(absolutePath))
+          throw new KafkaStorageException(s"Log directory $absolutePath is offline")
+
+        logsByDir.get(absolutePath) match {
+          case Some(logs) =>
+            val replicaInfos = logs.filter(log =>
+              partitions.contains(log.topicPartition)
+            ).map(log => log.topicPartition -> new ReplicaInfo(log.size, getLogEndOffsetLag(log.topicPartition), false)).toMap
+
+            (absolutePath, new LogDirInfo(Errors.NONE, replicaInfos.asJava))
+          case None =>
+            (absolutePath, new LogDirInfo(Errors.NONE, Map.empty[TopicPartition, ReplicaInfo].asJava))
+        }
+
+      } catch {
+        case e: KafkaStorageException =>
+          (absolutePath, new LogDirInfo(Errors.KAFKA_STORAGE_ERROR, Map.empty[TopicPartition, ReplicaInfo].asJava))
+        case t: Throwable =>
+          error(s"Error while describing replica in dir $absolutePath", t)
+          (absolutePath, new LogDirInfo(Errors.forException(t), Map.empty[TopicPartition, ReplicaInfo].asJava))
+      }
+    }.toMap
+  }
+
+  def getLogEndOffsetLag(topicPartition: TopicPartition): Long = {
+    getReplica(topicPartition) match {
+      case Some(replica) =>
+          math.max(replica.highWatermark.messageOffset - replica.log.get.logEndOffset, 0)
+      case None =>
+        // return -1L to indicate that the LEO lag is not available if broker is neither follower or leader of this partition
+        DescribeLogDirsResponse.INVALID_OFFSET_LAG
     }
   }
 
@@ -1230,6 +1317,7 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
+  // logDir should be an absolute path
   def handleLogDirFailure(dir: String) {
     if (!logManager.isLogDirOnline(dir))
       return

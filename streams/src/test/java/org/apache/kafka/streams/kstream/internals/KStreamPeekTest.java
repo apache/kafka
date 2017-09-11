@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.ForeachAction;
@@ -44,7 +45,7 @@ public class KStreamPeekTest {
     @Test
     public void shouldObserveStreamElements() {
         final StreamsBuilder builder = new StreamsBuilder();
-        final KStream<Integer, String> stream = builder.stream(intSerd, stringSerd, topicName);
+        final KStream<Integer, String> stream = builder.stream(topicName, Consumed.with(intSerd, stringSerd));
         final List<KeyValue<Integer, String>> peekObserved = new ArrayList<>(), streamObserved = new ArrayList<>();
         stream.peek(collect(peekObserved)).foreach(collect(streamObserved));
 
@@ -63,7 +64,7 @@ public class KStreamPeekTest {
     @Test
     public void shouldNotAllowNullAction() {
         final StreamsBuilder builder = new StreamsBuilder();
-        final KStream<Integer, String> stream = builder.stream(intSerd, stringSerd, topicName);
+        final KStream<Integer, String> stream = builder.stream(topicName, Consumed.with(intSerd, stringSerd));
         try {
             stream.peek(null);
             fail("expected null action to throw NPE");

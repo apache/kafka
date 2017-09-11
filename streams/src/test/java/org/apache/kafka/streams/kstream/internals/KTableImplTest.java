@@ -18,15 +18,18 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
@@ -474,4 +477,23 @@ public class KTableImplTest {
         table.leftJoin(null, MockValueJoiner.TOSTRING_JOINER);
     }
 
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerOnFilterWhenMaterializedIsNull() {
+        table.filter(new Predicate<String, String>() {
+            @Override
+            public boolean test(final String key, final String value) {
+                return false;
+            }
+        }, (Materialized<String, String, KeyValueStore<Bytes, byte[]>>) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerOnFilterNotWhenMaterializedIsNull() {
+        table.filterNot(new Predicate<String, String>() {
+            @Override
+            public boolean test(final String key, final String value) {
+                return false;
+            }
+        }, (Materialized<String, String, KeyValueStore<Bytes, byte[]>>) null);
+    }
 }
