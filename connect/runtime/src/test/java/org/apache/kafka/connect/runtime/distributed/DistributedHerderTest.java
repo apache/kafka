@@ -341,6 +341,7 @@ public class DistributedHerderTest {
 
         PowerMock.replayAll();
 
+        EasyMock.expect(worker.getConnectorType(CONN2)).andReturn(ConnectorType.SOURCE);
         herder.putConnectorConfig(CONN2, CONN2_CONFIG, false, putConnectorCallback);
         herder.tick();
 
