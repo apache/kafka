@@ -42,7 +42,7 @@ public class Produced<K, V> {
         this.partitioner = partitioner;
     }
 
-    public Produced(final Produced<K, V> produced) {
+    protected Produced(final Produced<K, V> produced) {
         this.keySerde = produced.keySerde;
         this.valueSerde = produced.valueSerde;
         this.partitioner = produced.partitioner;
