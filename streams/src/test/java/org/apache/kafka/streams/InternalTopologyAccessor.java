@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams;
 
-import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 
@@ -29,10 +28,5 @@ public class InternalTopologyAccessor {
 
     public static InternalTopologyBuilder getInternalTopologyBuilder(Topology topology) {
         return topology.internalTopologyBuilder;
-    }
-
-    @Deprecated
-    public static InternalTopologyBuilder getInternalTopologyBuilder(TopologyBuilder topologyBuilder) {
-        return topologyBuilder.internalTopologyBuilder;
     }
 }

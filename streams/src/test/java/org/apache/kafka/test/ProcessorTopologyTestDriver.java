@@ -39,7 +39,6 @@ import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.GlobalProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.GlobalStateManagerImpl;
 import org.apache.kafka.streams.processor.internals.GlobalStateUpdateTask;
@@ -159,20 +158,6 @@ public class ProcessorTopologyTestDriver {
     private StreamTask task;
     private GlobalStateUpdateTask globalStateTask;
 
-
-    /**
-     * Create a new test diver instance
-     * @param config the stream configuration for the topology
-     * @param topologyBuilder the topology builder whose {@link InternalTopologyBuilder} will
-     *                        be use to create the topology instance.
-     *
-     * Note that {@link TopologyBuilder} is deprecated and this constructor will eventually
-     *                        be removed.
-     */
-    public ProcessorTopologyTestDriver(final StreamsConfig config,
-                                       final TopologyBuilder topologyBuilder) {
-        this(config, InternalTopologyAccessor.getInternalTopologyBuilder(topologyBuilder));
-    }
 
     /**
      * Create a new test diver instance
