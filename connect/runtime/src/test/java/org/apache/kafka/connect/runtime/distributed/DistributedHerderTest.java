@@ -1318,6 +1318,7 @@ public class DistributedHerderTest {
 
         // Apply new config.
         FutureCallback<Herder.Created<ConnectorInfo>> putConfigCb = new FutureCallback<>();
+        EasyMock.expect(worker.getConnectorType(CONN1)).andReturn(ConnectorType.SOURCE);
         herder.putConnectorConfig(CONN1, CONN1_CONFIG_UPDATED, true, putConfigCb);
         herder.tick();
         assertTrue(putConfigCb.isDone());

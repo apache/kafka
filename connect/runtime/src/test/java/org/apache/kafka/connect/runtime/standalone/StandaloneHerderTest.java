@@ -442,6 +442,7 @@ public class StandaloneHerderTest {
 
         herder.putConnectorConfig(CONNECTOR_NAME, connConfig, false, createCallback);
         herder.connectors(listConnectorsCb);
+        EasyMock.expect(worker.getConnectorType(CONNECTOR_NAME)).andReturn(ConnectorType.SOURCE);
         herder.connectorInfo(CONNECTOR_NAME, connectorInfoCb);
         herder.connectorConfig(CONNECTOR_NAME, connectorConfigCb);
         herder.taskConfigs(CONNECTOR_NAME, taskConfigsCb);
@@ -579,7 +580,8 @@ public class StandaloneHerderTest {
         worker.startTask(new ConnectorTaskId(CONNECTOR_NAME, 0), connectorConfig(sourceSink), generatedTaskProps, herder, TargetState.STARTED);
         EasyMock.expectLastCall().andReturn(true);
 
-        EasyMock.expect(worker.isSinkConnector(CONNECTOR_NAME)).andReturn(sourceSink == SourceSink.SINK);
+        EasyMock.expect(worker.getConnectorType(CONNECTOR_NAME))
+            .andReturn(sourceSink == SourceSink.SINK ? ConnectorType.SINK : ConnectorType.SOURCE);
         worker.isSinkConnector(CONNECTOR_NAME);
         PowerMock.expectLastCall().andReturn(sourceSink == SourceSink.SINK);
     }

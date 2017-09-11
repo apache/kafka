@@ -25,6 +25,7 @@ import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -245,6 +246,13 @@ public class Worker {
         } finally {
             Plugins.compareAndSwapLoaders(savedLoader);
         }
+    }
+
+    /*
+     * @return the ConnectorType for the given connector name
+     */
+    public ConnectorType getConnectorType(String connName) {
+        return isSinkConnector(connName) ? ConnectorType.SINK : ConnectorType.SOURCE;
     }
 
     /**

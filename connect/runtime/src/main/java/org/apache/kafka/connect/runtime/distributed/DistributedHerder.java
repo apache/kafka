@@ -40,7 +40,6 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.sink.SinkConnector;
-import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.Callback;
@@ -532,9 +531,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
                         // Note that we use the updated connector config despite the fact that we don't have an updated
                         // snapshot yet. The existing task info should still be accurate.
-                        Connector connector = getConnector(infos.name());
                         ConnectorInfo info = new ConnectorInfo(connName, config, configState.tasks(connName),
-                            connector instanceof SourceConnector ? ConnectorType.SOURCE : ConnectorType.SINK);
+                            worker.getConnectorType(connName));
                         callback.onCompletion(null, new Created<>(!exists, info));
                         return null;
                     }
