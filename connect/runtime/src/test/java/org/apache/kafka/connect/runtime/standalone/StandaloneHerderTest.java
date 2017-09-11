@@ -105,10 +105,12 @@ public class StandaloneHerderTest {
 
     @Before
     public void setup() {
+        worker = PowerMock.createMock(Worker.class);
         herder = new StandaloneHerder(worker, WORKER_ID, statusBackingStore, new MemoryConfigBackingStore());
         plugins = PowerMock.createMock(Plugins.class);
         pluginLoader = PowerMock.createMock(PluginClassLoader.class);
         delegatingLoader = PowerMock.createMock(DelegatingClassLoader.class);
+        //EasyMock.expect(worker.getConnectorType(CONNECTOR_NAME)).andReturn(ConnectorType.SOURCE).anyTimes();
         PowerMock.mockStatic(Plugins.class);
     }
 
@@ -442,7 +444,7 @@ public class StandaloneHerderTest {
 
         herder.putConnectorConfig(CONNECTOR_NAME, connConfig, false, createCallback);
         herder.connectors(listConnectorsCb);
-        EasyMock.expect(worker.getConnectorType(CONNECTOR_NAME)).andReturn(ConnectorType.SOURCE);
+        EasyMock.expect(worker.getConnectorType(CONNECTOR_NAME)).andReturn(ConnectorType.SOURCE).anyTimes();
         herder.connectorInfo(CONNECTOR_NAME, connectorInfoCb);
         herder.connectorConfig(CONNECTOR_NAME, connectorConfigCb);
         herder.taskConfigs(CONNECTOR_NAME, taskConfigsCb);

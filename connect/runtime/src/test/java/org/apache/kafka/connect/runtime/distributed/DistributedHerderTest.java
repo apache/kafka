@@ -167,6 +167,8 @@ public class DistributedHerderTest {
     public void setUp() throws Exception {
         worker = PowerMock.createMock(Worker.class);
         EasyMock.expect(worker.isSinkConnector(CONN1)).andStubReturn(Boolean.FALSE);
+        EasyMock.expect(worker.getConnectorType(CONN1)).andReturn(ConnectorType.SOURCE).anyTimes();
+        EasyMock.expect(worker.getConnectorType(CONN2)).andReturn(ConnectorType.SOURCE).anyTimes();
         time = new MockTime();
 
         herder = PowerMock.createPartialMock(DistributedHerder.class, new String[]{"backoff", "updateDeletedConnectorStatus"},
@@ -341,7 +343,6 @@ public class DistributedHerderTest {
 
         PowerMock.replayAll();
 
-        EasyMock.expect(worker.getConnectorType(CONN2)).andReturn(ConnectorType.SOURCE);
         herder.putConnectorConfig(CONN2, CONN2_CONFIG, false, putConnectorCallback);
         herder.tick();
 
@@ -1319,7 +1320,6 @@ public class DistributedHerderTest {
 
         // Apply new config.
         FutureCallback<Herder.Created<ConnectorInfo>> putConfigCb = new FutureCallback<>();
-        EasyMock.expect(worker.getConnectorType(CONN1)).andReturn(ConnectorType.SOURCE);
         herder.putConnectorConfig(CONN1, CONN1_CONFIG_UPDATED, true, putConfigCb);
         herder.tick();
         assertTrue(putConfigCb.isDone());
