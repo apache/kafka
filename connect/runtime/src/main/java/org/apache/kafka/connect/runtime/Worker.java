@@ -249,7 +249,10 @@ public class Worker {
     }
 
     /*
+     * Retrieves the connector type by connector name
+     *
      * @return the ConnectorType for the given connector name
+     * @throws ConnectException if the worker does not manage a connector with the given name.
      */
     public ConnectorType getConnectorType(String connName) {
         return isSinkConnector(connName) ? ConnectorType.SINK : ConnectorType.SOURCE;
