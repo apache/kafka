@@ -232,7 +232,7 @@ public class GlobalKTableIntegrationTest {
         kafkaStreams.start();
     }
 
-    private void produceTopicValues(final String topic) throws java.util.concurrent.ExecutionException, InterruptedException {
+    private void produceTopicValues(final String topic) throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronously(
                 topic,
                 Arrays.asList(
@@ -249,7 +249,7 @@ public class GlobalKTableIntegrationTest {
                 mockTime);
     }
 
-    private void produceInitialGlobalTableValues() throws java.util.concurrent.ExecutionException, InterruptedException {
+    private void produceInitialGlobalTableValues() throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronously(
                 globalOne,
                 Arrays.asList(
@@ -265,7 +265,7 @@ public class GlobalKTableIntegrationTest {
                 mockTime);
     }
 
-    private void produceGlobalTableValues() throws java.util.concurrent.ExecutionException, InterruptedException {
+    private void produceGlobalTableValues() throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronously(
                 globalOne,
                 Arrays.asList(

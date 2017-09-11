@@ -49,7 +49,7 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
     private final StateSerdes<String, String> stateSerdes = new StateSerdes<>("foo", Serdes.String(), Serdes.String());
 
     @Test
-    public void shouldIterateOverValueFromBothIterators() throws Exception {
+    public void shouldIterateOverValueFromBothIterators() {
         final List<KeyValue<Long, byte[]>> expectedKvPairs = new ArrayList<>();
         for (long t = 0; t < 100; t += 20) {
             final byte[] v1Bytes = String.valueOf(t).getBytes();
@@ -84,7 +84,7 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
     }
 
     @Test
-    public void shouldPeekNextStoreKey() throws Exception {
+    public void shouldPeekNextStoreKey() {
         windowStoreKvPairs.add(KeyValue.pair(10L, "a".getBytes()));
         cache.put(namespace, SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(WindowStoreUtils.toBinaryKey("a", 0, 0, stateSerdes)), new LRUCacheEntry("b".getBytes()));
         Bytes fromBytes = WindowStoreUtils.toBinaryKey("a", 0, 0, stateSerdes);
@@ -103,7 +103,7 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
     }
 
     @Test
-    public void shouldPeekNextCacheKey() throws Exception {
+    public void shouldPeekNextCacheKey() {
         windowStoreKvPairs.add(KeyValue.pair(0L, "a".getBytes()));
         cache.put(namespace, SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(WindowStoreUtils.toBinaryKey("a", 10L, 0, stateSerdes)), new LRUCacheEntry("b".getBytes()));
         Bytes fromBytes = WindowStoreUtils.toBinaryKey("a", 0, 0, stateSerdes);

@@ -31,7 +31,7 @@ import static org.junit.Assert.assertEquals;
 public class StreamsMetricsImplTest {
 
     @Test(expected = NullPointerException.class)
-    public void testNullMetrics() throws Exception {
+    public void testNullMetrics() {
         String groupName = "doesNotMatter";
         Map<String, String> tags = new HashMap<>();
         StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(null, groupName, tags);

@@ -47,6 +47,7 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -107,7 +108,7 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
 
 
     @BeforeClass
-    public static void startKafkaCluster() throws Exception {
+    public static void startKafkaCluster() throws InterruptedException {
         CLUSTER.createTopics(
             TOPIC_1_0,
             TOPIC_2_0,
@@ -135,7 +136,7 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
     }
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() throws IOException {
 
         Properties props = new Properties();
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -274,7 +275,7 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
     }
 
     @Test
-    public void shouldThrowStreamsExceptionNoResetSpecified() throws Exception {
+    public void shouldThrowStreamsExceptionNoResetSpecified() throws InterruptedException {
         Properties props = new Properties();
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
 

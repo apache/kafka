@@ -62,7 +62,7 @@ public class KStreamKStreamJoinTest {
     }
 
     @Test
-    public void testJoin() throws Exception {
+    public void testJoin() {
         StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -163,7 +163,7 @@ public class KStreamKStreamJoinTest {
     }
 
     @Test
-    public void testOuterJoin() throws Exception {
+    public void testOuterJoin() {
         StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -264,7 +264,7 @@ public class KStreamKStreamJoinTest {
     }
 
     @Test
-    public void testWindowing() throws Exception {
+    public void testWindowing() {
         long time = 0L;
 
         StreamsBuilder builder = new StreamsBuilder();
@@ -494,7 +494,7 @@ public class KStreamKStreamJoinTest {
     }
 
     @Test
-    public void testAsymetricWindowingAfter() throws Exception {
+    public void testAsymetricWindowingAfter() {
         long time = 1000L;
 
         StreamsBuilder builder = new StreamsBuilder();
@@ -608,7 +608,7 @@ public class KStreamKStreamJoinTest {
     }
 
     @Test
-    public void testAsymetricWindowingBefore() throws Exception {
+    public void testAsymetricWindowingBefore() {
         long time = 1000L;
 
         StreamsBuilder builder = new StreamsBuilder();

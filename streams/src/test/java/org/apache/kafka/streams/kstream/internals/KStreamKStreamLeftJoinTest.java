@@ -62,7 +62,7 @@ public class KStreamKStreamLeftJoinTest {
     }
 
     @Test
-    public void testLeftJoin() throws Exception {
+    public void testLeftJoin() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -153,7 +153,7 @@ public class KStreamKStreamLeftJoinTest {
     }
 
     @Test
-    public void testWindowing() throws Exception {
+    public void testWindowing() {
         final StreamsBuilder builder = new StreamsBuilder();
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
         long time = 0L;

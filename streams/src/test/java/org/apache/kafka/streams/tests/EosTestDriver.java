@@ -58,7 +58,7 @@ public class EosTestDriver extends SmokeTestUtil {
 
     private static boolean isRunning = true;
 
-    static void generate(final String kafka) throws Exception {
+    static void generate(final String kafka) {
 
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override

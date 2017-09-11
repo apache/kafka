@@ -125,7 +125,7 @@ public class StreamThreadStateStoreProviderTest {
     }
     
     @Test
-    public void shouldFindKeyValueStores() throws Exception {
+    public void shouldFindKeyValueStores() {
         mockThread(true);
         final List<ReadOnlyKeyValueStore<String, String>> kvStores =
             provider.stores("kv-store", QueryableStoreTypes.<String, String>keyValueStore());
@@ -133,7 +133,7 @@ public class StreamThreadStateStoreProviderTest {
     }
 
     @Test
-    public void shouldFindWindowStores() throws Exception {
+    public void shouldFindWindowStores() {
         mockThread(true);
         final List<ReadOnlyWindowStore<Object, Object>>
             windowStores =
@@ -142,21 +142,21 @@ public class StreamThreadStateStoreProviderTest {
     }
 
     @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowInvalidStoreExceptionIfWindowStoreClosed() throws Exception {
+    public void shouldThrowInvalidStoreExceptionIfWindowStoreClosed() {
         mockThread(true);
         taskOne.getStore("window-store").close();
         provider.stores("window-store", QueryableStoreTypes.windowStore());
     }
 
     @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowInvalidStoreExceptionIfKVStoreClosed() throws Exception {
+    public void shouldThrowInvalidStoreExceptionIfKVStoreClosed() {
         mockThread(true);
         taskOne.getStore("kv-store").close();
         provider.stores("kv-store", QueryableStoreTypes.keyValueStore());
     }
 
     @Test
-    public void shouldReturnEmptyListIfNoStoresFoundWithName() throws Exception {
+    public void shouldReturnEmptyListIfNoStoresFoundWithName() {
         mockThread(true);
         assertEquals(Collections.emptyList(), provider.stores("not-a-store", QueryableStoreTypes
             .keyValueStore()));
@@ -164,14 +164,14 @@ public class StreamThreadStateStoreProviderTest {
 
 
     @Test
-    public void shouldReturnEmptyListIfStoreExistsButIsNotOfTypeValueStore() throws Exception {
+    public void shouldReturnEmptyListIfStoreExistsButIsNotOfTypeValueStore() {
         mockThread(true);
         assertEquals(Collections.emptyList(), provider.stores("window-store",
                                                               QueryableStoreTypes.keyValueStore()));
     }
 
     @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowInvalidStoreExceptionIfNotAllStoresAvailable() throws Exception {
+    public void shouldThrowInvalidStoreExceptionIfNotAllStoresAvailable() {
         mockThread(false);
         provider.stores("kv-store", QueryableStoreTypes.keyValueStore());
     }

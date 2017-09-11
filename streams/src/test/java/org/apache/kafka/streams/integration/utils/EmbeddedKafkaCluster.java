@@ -215,7 +215,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      *
      * @param topic the name of the topic
      */
-    public void deleteTopic(final String topic) throws Exception {
+    public void deleteTopic(final String topic) throws InterruptedException {
         deleteTopicsAndWait(-1L, topic);
     }
 
@@ -224,7 +224,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      *
      * @param topic the name of the topic
      */
-    public void deleteTopicAndWait(final String topic) throws Exception {
+    public void deleteTopicAndWait(final String topic) throws InterruptedException {
         deleteTopicsAndWait(TOPIC_DELETION_TIMEOUT, topic);
     }
 
@@ -234,7 +234,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      * @param timeoutMs the max time to wait for the topic to be deleted (does not block if {@code <= 0})
      * @param topic the name of the topic
      */
-    public void deleteTopicAndWait(final long timeoutMs, final String topic) throws Exception {
+    public void deleteTopicAndWait(final long timeoutMs, final String topic) throws InterruptedException {
         deleteTopicsAndWait(timeoutMs, topic);
     }
 
@@ -243,7 +243,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      *
      * @param topics the name of the topics
      */
-    public void deleteTopics(final String... topics) throws Exception {
+    public void deleteTopics(final String... topics) throws InterruptedException {
         deleteTopicsAndWait(-1, topics);
     }
 
@@ -252,7 +252,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      *
      * @param topics the name of the topics
      */
-    public void deleteTopicsAndWait(final String... topics) throws Exception {
+    public void deleteTopicsAndWait(final String... topics) throws InterruptedException {
         deleteTopicsAndWait(TOPIC_DELETION_TIMEOUT, topics);
     }
 
@@ -262,7 +262,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      * @param timeoutMs the max time to wait for the topics to be deleted (does not block if {@code <= 0})
      * @param topics the name of the topics
      */
-    public void deleteTopicsAndWait(final long timeoutMs, final String... topics) throws Exception {
+    public void deleteTopicsAndWait(final long timeoutMs, final String... topics) throws InterruptedException {
         for (final String topic : topics) {
             try {
                 brokers[0].deleteTopic(topic);
@@ -274,12 +274,12 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         }
     }
 
-    public void deleteAndRecreateTopics(final String... topics) throws Exception {
+    public void deleteAndRecreateTopics(final String... topics) throws InterruptedException {
         deleteTopicsAndWait(TOPIC_DELETION_TIMEOUT, topics);
         createTopics(topics);
     }
 
-    public void deleteAndRecreateTopics(final long timeoutMs, final String... topics) throws Exception {
+    public void deleteAndRecreateTopics(final long timeoutMs, final String... topics) throws InterruptedException {
         deleteTopicsAndWait(timeoutMs, topics);
         createTopics(topics);
     }
