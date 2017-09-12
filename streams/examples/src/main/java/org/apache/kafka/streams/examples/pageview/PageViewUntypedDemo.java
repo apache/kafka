@@ -34,6 +34,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
@@ -73,10 +74,10 @@ public class PageViewUntypedDemo {
         final Deserializer<JsonNode> jsonDeserializer = new JsonDeserializer();
         final Serde<JsonNode> jsonSerde = Serdes.serdeFrom(jsonSerializer, jsonDeserializer);
 
-        KStream<String, JsonNode> views = builder.stream("streams-pageview-input", Consumed.with(Serdes.String(), jsonSerde));
+        final Consumed<String, JsonNode> consumed = Consumed.with(Serdes.String(), jsonSerde);
+        KStream<String, JsonNode> views = builder.stream("streams-pageview-input", consumed);
 
-        KTable<String, JsonNode> users = builder.table(Serdes.String(), jsonSerde,
-            "streams-userprofile-input", "streams-userprofile-store-name");
+        KTable<String, JsonNode> users = builder.table("streams-userprofile-input", consumed);
 
         KTable<String, String> userRegions = users.mapValues(new ValueMapper<JsonNode, String>() {
             @Override
@@ -121,7 +122,7 @@ public class PageViewUntypedDemo {
                 });
 
         // write to the result topic
-        regionCount.to(jsonSerde, jsonSerde, "streams-pageviewstats-untyped-output");
+        regionCount.to("streams-pageviewstats-untyped-output", Produced.with(jsonSerde, jsonSerde));
 
         KafkaStreams streams = new KafkaStreams(builder.build(), props);
         streams.start();

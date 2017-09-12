@@ -25,8 +25,16 @@ import java.util.Map;
 
 public class MaterializedInternal<K, V, S extends StateStore> extends Materialized<K, V, S> {
 
+    private final boolean queryable;
+
     public MaterializedInternal(final Materialized<K, V, S> materialized) {
+        this(materialized, true);
+    }
+
+    public MaterializedInternal(final Materialized<K, V, S> materialized,
+                                final boolean queryable) {
         super(materialized);
+        this.queryable = queryable;
     }
 
     public String storeName() {
@@ -58,5 +66,9 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
 
     public boolean cachingEnabled() {
         return cachingEnabled;
+    }
+
+    public boolean isQueryable() {
+        return queryable;
     }
 }

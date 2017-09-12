@@ -61,6 +61,7 @@ public class KStreamImplTest {
 
     final private Serde<String> stringSerde = Serdes.String();
     final private Serde<Integer> intSerde = Serdes.Integer();
+    private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());
     private KStream<String, String> testStream;
     private StreamsBuilder builder;
     private final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
@@ -361,7 +362,7 @@ public class KStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullValueMapperOnTableJoin() {
-        testStream.leftJoin(builder.table(Serdes.String(), Serdes.String(), "topic", "store"), null);
+        testStream.leftJoin(builder.table("topic", stringConsumed), null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -383,14 +384,14 @@ public class KStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullMapperOnJoinWithGlobalTable() {
-        testStream.join(builder.globalTable(Serdes.String(), Serdes.String(), null, "global", "global"),
+        testStream.join(builder.globalTable("global", stringConsumed),
                         null,
                         MockValueJoiner.TOSTRING_JOINER);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullJoinerOnJoinWithGlobalTable() {
-        testStream.join(builder.globalTable(Serdes.String(), Serdes.String(), null, "global", "global"),
+        testStream.join(builder.globalTable("global", stringConsumed),
                         MockKeyValueMapper.<String, String>SelectValueMapper(),
                         null);
     }
@@ -404,14 +405,14 @@ public class KStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullMapperOnLeftJoinWithGlobalTable() {
-        testStream.leftJoin(builder.globalTable(Serdes.String(), Serdes.String(), null, "global", "global"),
+        testStream.leftJoin(builder.globalTable("global", stringConsumed),
                         null,
                         MockValueJoiner.TOSTRING_JOINER);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullJoinerOnLeftJoinWithGlobalTable() {
-        testStream.leftJoin(builder.globalTable(Serdes.String(), Serdes.String(), null, "global", "global"),
+        testStream.leftJoin(builder.globalTable("global", stringConsumed),
                         MockKeyValueMapper.<String, String>SelectValueMapper(),
                         null);
     }
