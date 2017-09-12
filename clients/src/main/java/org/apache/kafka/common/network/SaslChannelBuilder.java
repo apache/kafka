@@ -116,13 +116,12 @@ public class SaslChannelBuilder implements ChannelBuilder {
             TransportLayer transportLayer = buildTransportLayer(id, key, socketChannel);
             Authenticator authenticator;
             if (mode == Mode.SERVER)
-                authenticator = new SaslServerAuthenticator(id, jaasContext, loginManager.subject(),
+                authenticator = new SaslServerAuthenticator(configs, id, jaasContext, loginManager.subject(),
                         kerberosShortNamer, credentialCache, listenerName, securityProtocol, transportLayer);
             else
-                authenticator = new SaslClientAuthenticator(id, loginManager.subject(), loginManager.serviceName(),
+                authenticator = new SaslClientAuthenticator(configs, id, loginManager.subject(), loginManager.serviceName(),
                         socketChannel.socket().getInetAddress().getHostName(), clientSaslMechanism,
                         handshakeRequestEnable, transportLayer);
-            authenticator.configure(this.configs);
             return new KafkaChannel(id, transportLayer, authenticator, maxReceiveSize, memoryPool != null ? memoryPool : MemoryPool.NONE);
         } catch (Exception e) {
             log.info("Failed to create channel due to ", e);

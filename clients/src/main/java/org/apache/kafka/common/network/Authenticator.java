@@ -20,20 +20,11 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.Map;
 
 /**
  * Authentication for Channel
  */
 public interface Authenticator extends Closeable {
-
-    /**
-     * Configures Authenticator using the provided parameters.
-     *
-     * @param configs Additional configuration parameters as key/value pairs
-     */
-    void configure(Map<String, ?> configs);
-
     /**
      * Implements any authentication mechanism. Use transportLayer to read or write tokens.
      * If no further authentication needs to be done returns.

@@ -33,7 +33,9 @@ public class BrokerSecurityConfigs {
     public static final String PRINCIPAL_BUILDER_CLASS_DOC = "The fully qualified name of a class that implements the " +
             "KafkaPrincipalBuilder interface, which is used to build the KafkaPrincipal object used during " +
             "authorization. This config also supports the deprecated PrincipalBuilder interface which was previously " +
-            "used for connections with the SSL SecurityProtocol.";
+            "used for connections with the SSL SecurityProtocol. If not defined, a principal derived from the client " +
+            "certificate will be used in the case of client SSL authentication; for SASL, the authentication ID will " +
+            "be used as the principal name.";
 
     public static final String SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG = "sasl.kerberos.principal.to.local.rules";
     public static final String SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_DOC = "A list of rules for mapping from principal " +

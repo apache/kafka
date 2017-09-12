@@ -93,9 +93,11 @@ public class SaslServerAuthenticator implements Authenticator {
     private final String connectionId;
     private final JaasContext jaasContext;
     private final Subject subject;
-    private final KerberosShortNamer kerberosNamer;
     private final CredentialCache credentialCache;
     private final TransportLayer transportLayer;
+    private final Set<String> enabledMechanisms;
+    private final Map<String, ?> configs;
+    private final KafkaPrincipalBuilder principalBuilder;
 
     // Current SASL state
     private SaslState saslState = SaslState.GSSAPI_OR_HANDSHAKE_REQUEST;
@@ -104,17 +106,13 @@ public class SaslServerAuthenticator implements Authenticator {
     private SaslServer saslServer;
     private String saslMechanism;
     private AuthCallbackHandler callbackHandler;
-    private KafkaPrincipalBuilder principalBuilder;
-
-    // assigned in `configure`
-    private Set<String> enabledMechanisms;
-    private Map<String, ?> configs;
 
     // buffers used in `authenticate`
     private NetworkReceive netInBuffer;
     private Send netOutBuffer;
 
-    public SaslServerAuthenticator(String connectionId,
+    public SaslServerAuthenticator(Map<String, ?> configs,
+                                   String connectionId,
                                    JaasContext jaasContext,
                                    Subject subject,
                                    KerberosShortNamer kerberosNameParser,
@@ -127,15 +125,11 @@ public class SaslServerAuthenticator implements Authenticator {
         this.connectionId = connectionId;
         this.jaasContext = jaasContext;
         this.subject = subject;
-        this.kerberosNamer = kerberosNameParser;
         this.credentialCache = credentialCache;
         this.listenerName = listenerName;
         this.securityProtocol = securityProtocol;
         this.transportLayer = transportLayer;
-    }
 
-    @Override
-    public void configure(Map<String, ?> configs) {
         this.configs = configs;
         List<String> enabledMechanisms = (List<String>) this.configs.get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG);
         if (enabledMechanisms == null || enabledMechanisms.isEmpty())
@@ -144,7 +138,7 @@ public class SaslServerAuthenticator implements Authenticator {
 
         // Note that the old principal builder does not support SASL, so we do not need to pass the
         // authenticator or the transport layer
-        this.principalBuilder = ChannelBuilders.createPrincipalBuilder(configs, null, null, kerberosNamer);
+        this.principalBuilder = ChannelBuilders.createPrincipalBuilder(configs, null, null, kerberosNameParser);
     }
 
     private void createSaslServer(String mechanism) throws IOException {
@@ -286,7 +280,7 @@ public class SaslServerAuthenticator implements Authenticator {
 
     @Override
     public void close() throws IOException {
-        if (principalBuilder != null && principalBuilder instanceof Closeable)
+        if (principalBuilder instanceof Closeable)
             Utils.closeQuietly((Closeable) principalBuilder, "principal builder");
         if (saslServer != null)
             saslServer.dispose();

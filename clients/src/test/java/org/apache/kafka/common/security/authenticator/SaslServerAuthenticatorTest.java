@@ -48,9 +48,9 @@ public class SaslServerAuthenticatorTest {
     @Test(expected = InvalidReceiveException.class)
     public void testOversizeRequest() throws IOException {
         TransportLayer transportLayer = EasyMock.mock(TransportLayer.class);
-        SaslServerAuthenticator authenticator = setupAuthenticator(transportLayer);
         Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
                 Collections.singletonList(SCRAM_SHA_256.mechanismName()));
+        SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer);
 
         final Capture<ByteBuffer> size = EasyMock.newCapture();
         EasyMock.expect(transportLayer.read(EasyMock.capture(size))).andAnswer(new IAnswer<Integer>() {
@@ -63,16 +63,15 @@ public class SaslServerAuthenticatorTest {
 
         EasyMock.replay(transportLayer);
 
-        authenticator.configure(configs);
         authenticator.authenticate();
     }
 
     @Test
     public void testUnexpectedRequestType() throws IOException {
         TransportLayer transportLayer = EasyMock.mock(TransportLayer.class);
-        SaslServerAuthenticator authenticator = setupAuthenticator(transportLayer);
         Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
                 Collections.singletonList(SCRAM_SHA_256.mechanismName()));
+        SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer);
 
         final RequestHeader header = new RequestHeader(ApiKeys.METADATA, (short) 0, "clientId", 13243);
         final Struct headerStruct = header.toStruct();
@@ -98,7 +97,6 @@ public class SaslServerAuthenticatorTest {
 
         EasyMock.replay(transportLayer);
 
-        authenticator.configure(configs);
         try {
             authenticator.authenticate();
             fail("Expected authenticate() to raise an exception");
@@ -107,12 +105,12 @@ public class SaslServerAuthenticatorTest {
         }
     }
 
-    private SaslServerAuthenticator setupAuthenticator(TransportLayer transportLayer) throws IOException {
+    private SaslServerAuthenticator setupAuthenticator(Map<String, ?> configs, TransportLayer transportLayer) throws IOException {
         TestJaasConfig jaasConfig = new TestJaasConfig();
         jaasConfig.addEntry("jaasContext", PlainLoginModule.class.getName(), new HashMap<String, Object>());
         JaasContext jaasContext = new JaasContext("jaasContext", JaasContext.Type.SERVER, jaasConfig);
         Subject subject = new Subject();
-        return new SaslServerAuthenticator("node", jaasContext, subject, null, new CredentialCache(),
+        return new SaslServerAuthenticator(configs, "node", jaasContext, subject, null, new CredentialCache(),
                 new ListenerName("ssl"), SecurityProtocol.SASL_SSL, transportLayer);
     }
 

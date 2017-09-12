@@ -58,8 +58,7 @@ public class SslChannelBuilder implements ChannelBuilder {
     public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize, MemoryPool memoryPool) throws KafkaException {
         try {
             SslTransportLayer transportLayer = buildTransportLayer(sslFactory, id, key, peerHost(key));
-            Authenticator authenticator = new SslAuthenticator(transportLayer);
-            authenticator.configure(this.configs);
+            Authenticator authenticator = new SslAuthenticator(configs, transportLayer);
             return new KafkaChannel(id, transportLayer, authenticator, maxReceiveSize,
                     memoryPool != null ? memoryPool : MemoryPool.NONE);
         } catch (Exception e) {
@@ -121,17 +120,12 @@ public class SslChannelBuilder implements ChannelBuilder {
      */
     private static class SslAuthenticator implements Authenticator {
         private final SslTransportLayer transportLayer;
-        private KafkaPrincipalBuilder principalBuilder;
+        private final KafkaPrincipalBuilder principalBuilder;
 
-        private SslAuthenticator(SslTransportLayer transportLayer) {
+        private SslAuthenticator(Map<String, ?> configs, SslTransportLayer transportLayer) {
             this.transportLayer = transportLayer;
-        }
-
-        @Override
-        public void configure(Map<String, ?> configs) {
             this.principalBuilder = ChannelBuilders.createPrincipalBuilder(configs, transportLayer, this, null);
         }
-
         /**
          * No-Op for plaintext authenticator
          */

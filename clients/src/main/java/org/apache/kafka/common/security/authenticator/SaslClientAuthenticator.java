@@ -69,14 +69,11 @@ public class SaslClientAuthenticator implements Authenticator {
     private final String host;
     private final String node;
     private final String mechanism;
-    private final boolean handshakeRequestEnable;
     private final TransportLayer transportLayer;
-
-    // assigned in `configure`
-    private SaslClient saslClient;
-    private Map<String, ?> configs;
-    private String clientPrincipalName;
-    private AuthCallbackHandler callbackHandler;
+    private final SaslClient saslClient;
+    private final Map<String, ?> configs;
+    private final String clientPrincipalName;
+    private final AuthCallbackHandler callbackHandler;
 
     // buffers used in `authenticate`
     private NetworkReceive netInBuffer;
@@ -91,7 +88,8 @@ public class SaslClientAuthenticator implements Authenticator {
     // Request header for which response from the server is pending
     private RequestHeader currentRequestHeader;
 
-    public SaslClientAuthenticator(String node,
+    public SaslClientAuthenticator(Map<String, ?> configs,
+                                   String node,
                                    Subject subject,
                                    String servicePrincipal,
                                    String host,
@@ -103,16 +101,11 @@ public class SaslClientAuthenticator implements Authenticator {
         this.host = host;
         this.servicePrincipal = servicePrincipal;
         this.mechanism = mechanism;
-        this.handshakeRequestEnable = handshakeRequestEnable;
         this.correlationId = -1;
         this.transportLayer = transportLayer;
-    }
+        this.configs = configs;
 
-    @Override
-    public void configure(Map<String, ?> configs) throws KafkaException {
         try {
-            this.configs = configs;
-
             setSaslState(handshakeRequestEnable ? SaslState.SEND_HANDSHAKE_REQUEST : SaslState.INITIAL);
 
             // determine client principal from subject for Kerberos to use as authorization id for the SaslClient.
