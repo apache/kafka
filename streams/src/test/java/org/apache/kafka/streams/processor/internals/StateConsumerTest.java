@@ -26,6 +26,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -46,7 +47,7 @@ public class StateConsumerTest {
     private StateMaintainerStub stateMaintainer;
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         partitionOffsets.put(topicOne, 20L);
         partitionOffsets.put(topicTwo, 30L);
         stateMaintainer = new StateMaintainerStub(partitionOffsets);
@@ -54,20 +55,20 @@ public class StateConsumerTest {
     }
 
     @Test
-    public void shouldAssignPartitionsToConsumer() throws Exception {
+    public void shouldAssignPartitionsToConsumer() {
         stateConsumer.initialize();
         assertEquals(Utils.mkSet(topicOne, topicTwo), consumer.assignment());
     }
 
     @Test
-    public void shouldSeekToInitialOffsets() throws Exception {
+    public void shouldSeekToInitialOffsets() {
         stateConsumer.initialize();
         assertEquals(20L, consumer.position(topicOne));
         assertEquals(30L, consumer.position(topicTwo));
     }
 
     @Test
-    public void shouldUpdateStateWithReceivedRecordsForPartition() throws Exception {
+    public void shouldUpdateStateWithReceivedRecordsForPartition() {
         stateConsumer.initialize();
         consumer.addRecord(new ConsumerRecord<>("topic-one", 1, 20L, new byte[0], new byte[0]));
         consumer.addRecord(new ConsumerRecord<>("topic-one", 1, 21L, new byte[0], new byte[0]));
@@ -76,7 +77,7 @@ public class StateConsumerTest {
     }
 
     @Test
-    public void shouldUpdateStateWithReceivedRecordsForAllTopicPartition() throws Exception {
+    public void shouldUpdateStateWithReceivedRecordsForAllTopicPartition() {
         stateConsumer.initialize();
         consumer.addRecord(new ConsumerRecord<>("topic-one", 1, 20L, new byte[0], new byte[0]));
         consumer.addRecord(new ConsumerRecord<>("topic-two", 1, 31L, new byte[0], new byte[0]));
@@ -87,7 +88,7 @@ public class StateConsumerTest {
     }
 
     @Test
-    public void shouldFlushStoreWhenFlushIntervalHasLapsed() throws Exception {
+    public void shouldFlushStoreWhenFlushIntervalHasLapsed() {
         stateConsumer.initialize();
         consumer.addRecord(new ConsumerRecord<>("topic-one", 1, 20L, new byte[0], new byte[0]));
         time.sleep(FLUSH_INTERVAL);
@@ -97,7 +98,7 @@ public class StateConsumerTest {
     }
 
     @Test
-    public void shouldNotFlushOffsetsWhenFlushIntervalHasNotLapsed() throws Exception {
+    public void shouldNotFlushOffsetsWhenFlushIntervalHasNotLapsed() {
         stateConsumer.initialize();
         consumer.addRecord(new ConsumerRecord<>("topic-one", 1, 20L, new byte[0], new byte[0]));
         time.sleep(FLUSH_INTERVAL / 2);
@@ -106,7 +107,7 @@ public class StateConsumerTest {
     }
 
     @Test
-    public void shouldNotFlushWhenFlushIntervalIsZero() throws Exception {
+    public void shouldNotFlushWhenFlushIntervalIsZero() {
         stateConsumer = new GlobalStreamThread.StateConsumer(new LogContext("test "), consumer, stateMaintainer, time, 10L, -1);
         stateConsumer.initialize();
         time.sleep(100);
@@ -115,13 +116,13 @@ public class StateConsumerTest {
     }
 
     @Test
-    public void shouldCloseConsumer() throws Exception {
+    public void shouldCloseConsumer() throws IOException {
         stateConsumer.close();
         assertTrue(consumer.closed());
     }
 
     @Test
-    public void shouldCloseStateMaintainer() throws Exception {
+    public void shouldCloseStateMaintainer() throws IOException {
         stateConsumer.close();
         assertTrue(stateMaintainer.closed);
     }

@@ -144,7 +144,7 @@ public class KStreamKTableJoinIntegrationTest {
         countClicksPerRegion(10 * 1024 * 1024);
     }
 
-    private void countClicksPerRegion(final int cacheSizeBytes) throws java.util.concurrent.ExecutionException, InterruptedException {
+    private void countClicksPerRegion(final int cacheSizeBytes) throws Exception {
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
         // Input 1: Clicks per user (multiple records allowed per user).
         final List<KeyValue<String, Long>> userClicks = Arrays.asList(

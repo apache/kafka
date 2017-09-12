@@ -73,7 +73,7 @@ public class RocksDBSessionStoreSupplierTest {
     }
 
     @Test
-    public void shouldCreateLoggingEnabledStoreWhenStoreLogged() throws Exception {
+    public void shouldCreateLoggingEnabledStoreWhenStoreLogged() {
         store = createStore(true, false);
         context.setTime(1);
         store.init(context, store);
@@ -82,7 +82,7 @@ public class RocksDBSessionStoreSupplierTest {
     }
 
     @Test
-    public void shouldNotBeLoggingEnabledStoreWhenLoggingNotEnabled() throws Exception {
+    public void shouldNotBeLoggingEnabledStoreWhenLoggingNotEnabled() {
         store = createStore(false, false);
         context.setTime(1);
         store.init(context, store);
@@ -91,7 +91,7 @@ public class RocksDBSessionStoreSupplierTest {
     }
 
     @Test
-    public void shouldReturnCachedSessionStoreWhenCachingEnabled() throws Exception {
+    public void shouldReturnCachedSessionStoreWhenCachingEnabled() {
         store = createStore(false, true);
         store.init(context, store);
         context.setTime(1);
@@ -100,9 +100,9 @@ public class RocksDBSessionStoreSupplierTest {
         assertThat(((WrappedStateStore) store).wrappedStore(), is(instanceOf(CachingSessionStore.class)));
         assertThat(cache.size(), is(2L));
     }
-    
+
     @Test
-    public void shouldHaveMeteredStoreWhenCached() throws Exception {
+    public void shouldHaveMeteredStoreWhenCached() {
         store = createStore(false, true);
         store.init(context, store);
         final StreamsMetrics metrics = context.metrics();
@@ -110,7 +110,7 @@ public class RocksDBSessionStoreSupplierTest {
     }
 
     @Test
-    public void shouldHaveMeteredStoreWhenLogged() throws Exception {
+    public void shouldHaveMeteredStoreWhenLogged() {
         store = createStore(true, false);
         store.init(context, store);
         final StreamsMetrics metrics = context.metrics();
@@ -118,7 +118,7 @@ public class RocksDBSessionStoreSupplierTest {
     }
 
     @Test
-    public void shouldHaveMeteredStoreWhenNotLoggedOrCached() throws Exception {
+    public void shouldHaveMeteredStoreWhenNotLoggedOrCached() {
         store = createStore(false, false);
         store.init(context, store);
         final StreamsMetrics metrics = context.metrics();

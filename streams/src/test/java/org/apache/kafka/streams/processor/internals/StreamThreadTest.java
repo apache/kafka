@@ -90,7 +90,7 @@ public class StreamThreadTest {
     private final ConsumedInternal<Object, Object> consumed = new ConsumedInternal<>();
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         processId = UUID.randomUUID();
 
         internalTopologyBuilder = InternalStreamsBuilderTest.internalTopologyBuilder(internalStreamsBuilder);
@@ -129,7 +129,7 @@ public class StreamThreadTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void testPartitionAssignmentChangeForSingleGroup() throws Exception {
+    public void testPartitionAssignmentChangeForSingleGroup() {
         internalTopologyBuilder.addSource(null, "source1", null, null, null, "topic1");
 
         final StreamThread thread = getStreamThread();
@@ -223,7 +223,7 @@ public class StreamThreadTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void testPartitionAssignmentChangeForMultipleGroups() throws Exception {
+    public void testPartitionAssignmentChangeForMultipleGroups() {
         internalTopologyBuilder.addSource(null, "source1", null, null, null, "topic1");
         internalTopologyBuilder.addSource(null, "source2", null, null, null, "topic2");
         internalTopologyBuilder.addSource(null, "source3", null, null, null, "topic3");
@@ -744,7 +744,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldCloseSuspendedTasksThatAreNoLongerAssignedToThisStreamThreadBeforeCreatingNewTasks() throws Exception {
+    public void shouldCloseSuspendedTasksThatAreNoLongerAssignedToThisStreamThreadBeforeCreatingNewTasks() {
         internalStreamsBuilder.stream(Collections.singleton("t1"), consumed).groupByKey().count("count-one");
         internalStreamsBuilder.stream(Collections.singleton("t2"), consumed).groupByKey().count("count-two");
 
@@ -810,7 +810,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldCloseTaskAsZombieAndRemoveFromActiveTasksIfProducerWasFencedWhileProcessing() throws Exception {
+    public void shouldCloseTaskAsZombieAndRemoveFromActiveTasksIfProducerWasFencedWhileProcessing() throws InterruptedException {
         internalTopologyBuilder.addSource(null, "source", null, null, null, TOPIC);
         internalTopologyBuilder.addSink("sink", "dummyTopic", null, null, null, "source");
 
@@ -871,7 +871,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldCloseTaskAsZombieAndRemoveFromActiveTasksIfProducerGotFencedAtBeginTransactionWhenTaskIsResumed() throws Exception {
+    public void shouldCloseTaskAsZombieAndRemoveFromActiveTasksIfProducerGotFencedAtBeginTransactionWhenTaskIsResumed() {
         internalTopologyBuilder.addSource(null, "name", null, null, null, "topic");
         internalTopologyBuilder.addSink("out", "output", null, null, null);
 

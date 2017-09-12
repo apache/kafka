@@ -457,19 +457,19 @@ public class TopologyBuilderTest {
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullNameWhenAddingSink() throws Exception {
+    public void shouldNotAllowNullNameWhenAddingSink() {
         final TopologyBuilder builder = new TopologyBuilder();
         builder.addSink(null, "topic");
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullTopicWhenAddingSink() throws Exception {
+    public void shouldNotAllowNullTopicWhenAddingSink() {
         final TopologyBuilder builder = new TopologyBuilder();
         builder.addSink("name", null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullNameWhenAddingProcessor() throws Exception {
+    public void shouldNotAllowNullNameWhenAddingProcessor() {
         final TopologyBuilder builder = new TopologyBuilder();
         builder.addProcessor(null, new ProcessorSupplier() {
             @Override
@@ -480,37 +480,37 @@ public class TopologyBuilderTest {
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullProcessorSupplier() throws Exception {
+    public void shouldNotAllowNullProcessorSupplier() {
         final TopologyBuilder builder = new TopologyBuilder();
         builder.addProcessor("name", null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullNameWhenAddingSource() throws Exception {
+    public void shouldNotAllowNullNameWhenAddingSource() {
         final TopologyBuilder builder = new TopologyBuilder();
         builder.addSource(null, Pattern.compile(".*"));
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullProcessorNameWhenConnectingProcessorAndStateStores() throws Exception {
+    public void shouldNotAllowNullProcessorNameWhenConnectingProcessorAndStateStores() {
         final TopologyBuilder builder = new TopologyBuilder();
         builder.connectProcessorAndStateStores(null, "store");
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAddNullInternalTopic() throws Exception {
+    public void shouldNotAddNullInternalTopic() {
         final TopologyBuilder builder = new TopologyBuilder();
         builder.addInternalTopic(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotSetApplicationIdToNull() throws Exception {
+    public void shouldNotSetApplicationIdToNull() {
         final TopologyBuilder builder = new TopologyBuilder();
         builder.setApplicationId(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAddNullStateStoreSupplier() throws Exception {
+    public void shouldNotAddNullStateStoreSupplier() {
         final TopologyBuilder builder = new TopologyBuilder();
         builder.addStateStore(null);
     }
@@ -524,7 +524,7 @@ public class TopologyBuilderTest {
     }
 
     @Test
-    public void shouldAssociateStateStoreNameWhenStateStoreSupplierIsInternal() throws Exception {
+    public void shouldAssociateStateStoreNameWhenStateStoreSupplierIsInternal() {
         final TopologyBuilder builder = new TopologyBuilder();
         builder.addSource("source", "topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
@@ -535,7 +535,7 @@ public class TopologyBuilderTest {
     }
 
     @Test
-    public void shouldAssociateStateStoreNameWhenStateStoreSupplierIsExternal() throws Exception {
+    public void shouldAssociateStateStoreNameWhenStateStoreSupplierIsExternal() {
         final TopologyBuilder builder = new TopologyBuilder();
         builder.addSource("source", "topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
@@ -546,7 +546,7 @@ public class TopologyBuilderTest {
     }
 
     @Test
-    public void shouldCorrectlyMapStateStoreToInternalTopics() throws Exception {
+    public void shouldCorrectlyMapStateStoreToInternalTopics() {
         final TopologyBuilder builder = new TopologyBuilder();
         builder.setApplicationId("appId");
         builder.addInternalTopic("internal-topic");
@@ -560,7 +560,7 @@ public class TopologyBuilderTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldAddInternalTopicConfigWithCompactAndDeleteSetForWindowStores() throws Exception {
+    public void shouldAddInternalTopicConfigWithCompactAndDeleteSetForWindowStores() {
         final TopologyBuilder builder = new TopologyBuilder();
         builder.setApplicationId("appId");
         builder.addSource("source", "topic");
@@ -580,7 +580,7 @@ public class TopologyBuilderTest {
     }
 
     @Test
-    public void shouldAddInternalTopicConfigWithCompactForNonWindowStores() throws Exception {
+    public void shouldAddInternalTopicConfigWithCompactForNonWindowStores() {
         final TopologyBuilder builder = new TopologyBuilder();
         builder.setApplicationId("appId");
         builder.addSource("source", "topic");
@@ -596,7 +596,7 @@ public class TopologyBuilderTest {
     }
 
     @Test
-    public void shouldAddInternalTopicConfigWithCleanupPolicyDeleteForInternalTopics() throws Exception {
+    public void shouldAddInternalTopicConfigWithCleanupPolicyDeleteForInternalTopics() {
         final TopologyBuilder builder = new TopologyBuilder();
         builder.setApplicationId("appId");
         builder.addInternalTopic("foo");
@@ -701,7 +701,7 @@ public class TopologyBuilderTest {
     }
 
     @Test
-    public void shouldAddTimestampExtractorPerSource() throws Exception {
+    public void shouldAddTimestampExtractorPerSource() {
         final TopologyBuilder builder = new TopologyBuilder();
         builder.addSource(new MockTimestampExtractor(), "source", "topic");
         final ProcessorTopology processorTopology = builder.build(null);
@@ -709,7 +709,7 @@ public class TopologyBuilderTest {
     }
 
     @Test
-    public void shouldAddTimestampExtractorWithOffsetResetPerSource() throws Exception {
+    public void shouldAddTimestampExtractorWithOffsetResetPerSource() {
         final TopologyBuilder builder = new TopologyBuilder();
         builder.addSource(null, new MockTimestampExtractor(), "source", "topic");
         final ProcessorTopology processorTopology = builder.build(null);
@@ -717,7 +717,7 @@ public class TopologyBuilderTest {
     }
 
     @Test
-    public void shouldAddTimestampExtractorWithPatternPerSource() throws Exception {
+    public void shouldAddTimestampExtractorWithPatternPerSource() {
         final TopologyBuilder builder = new TopologyBuilder();
         final Pattern pattern = Pattern.compile("t.*");
         builder.addSource(new MockTimestampExtractor(), "source", pattern);
@@ -726,7 +726,7 @@ public class TopologyBuilderTest {
     }
 
     @Test
-    public void shouldAddTimestampExtractorWithOffsetResetAndPatternPerSource() throws Exception {
+    public void shouldAddTimestampExtractorWithOffsetResetAndPatternPerSource() {
         final TopologyBuilder builder = new TopologyBuilder();
         final Pattern pattern = Pattern.compile("t.*");
         builder.addSource(null, new MockTimestampExtractor(), "source", pattern);
@@ -735,7 +735,7 @@ public class TopologyBuilderTest {
     }
 
     @Test
-    public void shouldAddTimestampExtractorWithOffsetResetAndKeyValSerdesPerSource() throws Exception {
+    public void shouldAddTimestampExtractorWithOffsetResetAndKeyValSerdesPerSource() {
         final TopologyBuilder builder = new TopologyBuilder();
         builder.addSource(null, "source", new MockTimestampExtractor(), null, null, "topic");
         final ProcessorTopology processorTopology = builder.build(null);
@@ -743,7 +743,7 @@ public class TopologyBuilderTest {
     }
 
     @Test
-    public void shouldAddTimestampExtractorWithOffsetResetAndKeyValSerdesAndPatternPerSource() throws Exception {
+    public void shouldAddTimestampExtractorWithOffsetResetAndKeyValSerdesAndPatternPerSource() {
         final TopologyBuilder builder = new TopologyBuilder();
         final Pattern pattern = Pattern.compile("t.*");
         builder.addSource(null, "source", new MockTimestampExtractor(), null, null, pattern);
@@ -751,6 +751,7 @@ public class TopologyBuilderTest {
         assertThat(processorTopology.source(pattern.pattern()).getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
+    @Test
     public void shouldConnectRegexMatchedTopicsToStateStore() throws Exception {
 
         final TopologyBuilder topologyBuilder = new TopologyBuilder()

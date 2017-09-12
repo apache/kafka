@@ -63,56 +63,56 @@ public class KGroupedTableImplTest {
     }
 
     @Test
-    public void shouldAllowNullStoreNameOnAggregate() throws Exception {
+    public void shouldAllowNullStoreNameOnAggregate() {
         groupedTable.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, (String) null);
     }
 
     @Test(expected = InvalidTopicException.class)
-    public void shouldNotAllowInvalidStoreNameOnAggregate() throws Exception {
+    public void shouldNotAllowInvalidStoreNameOnAggregate() {
         groupedTable.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, INVALID_STORE_NAME);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullInitializerOnAggregate() throws Exception {
+    public void shouldNotAllowNullInitializerOnAggregate() {
         groupedTable.aggregate(null, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, "store");
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullAdderOnAggregate() throws Exception {
+    public void shouldNotAllowNullAdderOnAggregate() {
         groupedTable.aggregate(MockInitializer.STRING_INIT, null, MockAggregator.TOSTRING_REMOVER, "store");
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullSubtractorOnAggregate() throws Exception {
+    public void shouldNotAllowNullSubtractorOnAggregate() {
         groupedTable.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, null, "store");
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullAdderOnReduce() throws Exception {
+    public void shouldNotAllowNullAdderOnReduce() {
         groupedTable.reduce(null, MockReducer.STRING_REMOVER, "store");
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullSubtractorOnReduce() throws Exception {
+    public void shouldNotAllowNullSubtractorOnReduce() {
         groupedTable.reduce(MockReducer.STRING_ADDER, null, "store");
     }
 
     @Test
-    public void shouldAllowNullStoreNameOnReduce() throws Exception {
+    public void shouldAllowNullStoreNameOnReduce() {
         groupedTable.reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, (String) null);
     }
 
     @Test(expected = InvalidTopicException.class)
-    public void shouldNotAllowInvalidStoreNameOnReduce() throws Exception {
+    public void shouldNotAllowInvalidStoreNameOnReduce() {
         groupedTable.reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, INVALID_STORE_NAME);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullStoreSupplierOnReduce() throws Exception {
+    public void shouldNotAllowNullStoreSupplierOnReduce() {
         groupedTable.reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, (StateStoreSupplier<KeyValueStore>) null);
     }
 
-    private void doShouldReduce(final KTable<String, Integer> reduced, final String topic) throws Exception {
+    private void doShouldReduce(final KTable<String, Integer> reduced, final String topic) {
         final Map<String, Integer> results = new HashMap<>();
         reduced.foreach(new ForeachAction<String, Integer>() {
             @Override
@@ -141,7 +141,7 @@ public class KGroupedTableImplTest {
     }
 
     @Test
-    public void shouldReduce() throws Exception {
+    public void shouldReduce() {
         final String topic = "input";
         final KeyValueMapper<String, Number, KeyValue<String, Integer>> intProjection =
             new KeyValueMapper<String, Number, KeyValue<String, Integer>>() {
@@ -160,7 +160,7 @@ public class KGroupedTableImplTest {
     }
 
     @Test
-    public void shouldReduceWithInternalStoreName() throws Exception {
+    public void shouldReduceWithInternalStoreName() {
         final String topic = "input";
         final KeyValueMapper<String, Number, KeyValue<String, Integer>> intProjection =
             new KeyValueMapper<String, Number, KeyValue<String, Integer>>() {

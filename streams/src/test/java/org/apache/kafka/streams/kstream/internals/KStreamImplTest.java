@@ -260,157 +260,157 @@ public class KStreamImplTest {
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullPredicateOnFilter() throws Exception {
+    public void shouldNotAllowNullPredicateOnFilter() {
         testStream.filter(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullPredicateOnFilterNot() throws Exception {
+    public void shouldNotAllowNullPredicateOnFilterNot() {
         testStream.filterNot(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullMapperOnSelectKey() throws Exception {
+    public void shouldNotAllowNullMapperOnSelectKey() {
         testStream.selectKey(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullMapperOnMap() throws Exception {
+    public void shouldNotAllowNullMapperOnMap() {
         testStream.map(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullMapperOnMapValues() throws Exception {
+    public void shouldNotAllowNullMapperOnMapValues() {
         testStream.mapValues(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullFilePathOnWriteAsText() throws Exception {
+    public void shouldNotAllowNullFilePathOnWriteAsText() {
         testStream.writeAsText(null);
     }
 
     @Test(expected = TopologyException.class)
-    public void shouldNotAllowEmptyFilePathOnWriteAsText() throws Exception {
+    public void shouldNotAllowEmptyFilePathOnWriteAsText() {
         testStream.writeAsText("\t    \t");
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullMapperOnFlatMap() throws Exception {
+    public void shouldNotAllowNullMapperOnFlatMap() {
         testStream.flatMap(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullMapperOnFlatMapValues() throws Exception {
+    public void shouldNotAllowNullMapperOnFlatMapValues() {
         testStream.flatMapValues(null);
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void shouldHaveAtLeastOnPredicateWhenBranching() throws Exception {
+    public void shouldHaveAtLeastOnPredicateWhenBranching() {
         testStream.branch();
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldCantHaveNullPredicate() throws Exception {
+    public void shouldCantHaveNullPredicate() {
         testStream.branch((Predicate) null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullTopicOnThrough() throws Exception {
+    public void shouldNotAllowNullTopicOnThrough() {
         testStream.through(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullTopicOnTo() throws Exception {
+    public void shouldNotAllowNullTopicOnTo() {
         testStream.to(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullTransformSupplierOnTransform() throws Exception {
+    public void shouldNotAllowNullTransformSupplierOnTransform() {
         testStream.transform(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullTransformSupplierOnTransformValues() throws Exception {
+    public void shouldNotAllowNullTransformSupplierOnTransformValues() {
         testStream.transformValues(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullProcessSupplier() throws Exception {
+    public void shouldNotAllowNullProcessSupplier() {
         testStream.process(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullOtherStreamOnJoin() throws Exception {
+    public void shouldNotAllowNullOtherStreamOnJoin() {
         testStream.join(null, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(10));
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullValueJoinerOnJoin() throws Exception {
+    public void shouldNotAllowNullValueJoinerOnJoin() {
         testStream.join(testStream, null, JoinWindows.of(10));
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullJoinWindowsOnJoin() throws Exception {
+    public void shouldNotAllowNullJoinWindowsOnJoin() {
         testStream.join(testStream, MockValueJoiner.TOSTRING_JOINER, null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullTableOnTableJoin() throws Exception {
+    public void shouldNotAllowNullTableOnTableJoin() {
         testStream.leftJoin((KTable) null, MockValueJoiner.TOSTRING_JOINER);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullValueMapperOnTableJoin() throws Exception {
+    public void shouldNotAllowNullValueMapperOnTableJoin() {
         testStream.leftJoin(builder.table(Serdes.String(), Serdes.String(), "topic", "store"), null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullSelectorOnGroupBy() throws Exception {
+    public void shouldNotAllowNullSelectorOnGroupBy() {
         testStream.groupBy(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullActionOnForEach() throws Exception {
+    public void shouldNotAllowNullActionOnForEach() {
         testStream.foreach(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullTableOnJoinWithGlobalTable() throws Exception {
+    public void shouldNotAllowNullTableOnJoinWithGlobalTable() {
         testStream.join((GlobalKTable) null,
                         MockKeyValueMapper.<String, String>SelectValueMapper(),
                         MockValueJoiner.TOSTRING_JOINER);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullMapperOnJoinWithGlobalTable() throws Exception {
+    public void shouldNotAllowNullMapperOnJoinWithGlobalTable() {
         testStream.join(builder.globalTable(Serdes.String(), Serdes.String(), null, "global", "global"),
                         null,
                         MockValueJoiner.TOSTRING_JOINER);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullJoinerOnJoinWithGlobalTable() throws Exception {
+    public void shouldNotAllowNullJoinerOnJoinWithGlobalTable() {
         testStream.join(builder.globalTable(Serdes.String(), Serdes.String(), null, "global", "global"),
                         MockKeyValueMapper.<String, String>SelectValueMapper(),
                         null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullTableOnJLeftJoinWithGlobalTable() throws Exception {
+    public void shouldNotAllowNullTableOnJLeftJoinWithGlobalTable() {
         testStream.leftJoin((GlobalKTable) null,
                         MockKeyValueMapper.<String, String>SelectValueMapper(),
                         MockValueJoiner.TOSTRING_JOINER);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullMapperOnLeftJoinWithGlobalTable() throws Exception {
+    public void shouldNotAllowNullMapperOnLeftJoinWithGlobalTable() {
         testStream.leftJoin(builder.globalTable(Serdes.String(), Serdes.String(), null, "global", "global"),
                         null,
                         MockValueJoiner.TOSTRING_JOINER);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullJoinerOnLeftJoinWithGlobalTable() throws Exception {
+    public void shouldNotAllowNullJoinerOnLeftJoinWithGlobalTable() {
         testStream.leftJoin(builder.globalTable(Serdes.String(), Serdes.String(), null, "global", "global"),
                         MockKeyValueMapper.<String, String>SelectValueMapper(),
                         null);

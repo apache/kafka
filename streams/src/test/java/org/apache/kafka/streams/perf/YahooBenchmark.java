@@ -89,7 +89,7 @@ public class YahooBenchmark {
     private boolean maybeSetupPhaseCampaigns(final String topic, final String clientId,
                                              final boolean skipIfAllTests,
                                              final int numCampaigns, final int adsPerCampaign,
-                                             final List<String> ads) throws Exception {
+                                             final List<String> ads) {
         parent.resetStats();
         // initialize topics
         if (parent.loadPhase) {
@@ -128,7 +128,7 @@ public class YahooBenchmark {
     // just for Yahoo benchmark
     private boolean maybeSetupPhaseEvents(final String topic, final String clientId,
                                           final boolean skipIfAllTests, final int numRecords,
-                                          final List<String> ads) throws Exception {
+                                          final List<String> ads) {
         parent.resetStats();
         String[] eventTypes = new String[]{"view", "click", "purchase"};
         Random rand = new Random();
@@ -181,7 +181,7 @@ public class YahooBenchmark {
     }
 
 
-    public void run() throws Exception {
+    public void run() {
         int numCampaigns = 100;
         int adsPerCampaign = 10;
 

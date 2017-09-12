@@ -47,14 +47,14 @@ public class CopartitionedTopicsValidatorTest {
     }
 
     @Test(expected = TopologyBuilderException.class)
-    public void shouldThrowTopologyBuilderExceptionIfNoPartitionsFoundForCoPartitionedTopic() throws Exception {
+    public void shouldThrowTopologyBuilderExceptionIfNoPartitionsFoundForCoPartitionedTopic() {
         validator.validate(Collections.singleton("topic"),
                            Collections.<String, StreamPartitionAssignor.InternalTopicMetadata>emptyMap(),
                            cluster);
     }
 
     @Test(expected = TopologyBuilderException.class)
-    public void shouldThrowTopologyBuilderExceptionIfPartitionCountsForCoPartitionedTopicsDontMatch() throws Exception {
+    public void shouldThrowTopologyBuilderExceptionIfPartitionCountsForCoPartitionedTopicsDontMatch() {
         partitions.remove(new TopicPartition("second", 0));
         validator.validate(Utils.mkSet("first", "second"),
                            Collections.<String, StreamPartitionAssignor.InternalTopicMetadata>emptyMap(),
@@ -63,7 +63,7 @@ public class CopartitionedTopicsValidatorTest {
 
 
     @Test
-    public void shouldEnforceCopartitioningOnRepartitionTopics() throws Exception {
+    public void shouldEnforceCopartitioningOnRepartitionTopics() {
         final StreamPartitionAssignor.InternalTopicMetadata metadata = createTopicMetadata("repartitioned", 10);
 
         validator.validate(Utils.mkSet("first", "second", metadata.config.name()),
@@ -76,7 +76,7 @@ public class CopartitionedTopicsValidatorTest {
 
 
     @Test
-    public void shouldSetNumPartitionsToMaximumPartitionsWhenAllTopicsAreRepartitionTopics() throws Exception {
+    public void shouldSetNumPartitionsToMaximumPartitionsWhenAllTopicsAreRepartitionTopics() {
         final StreamPartitionAssignor.InternalTopicMetadata one = createTopicMetadata("one", 1);
         final StreamPartitionAssignor.InternalTopicMetadata two = createTopicMetadata("two", 15);
         final StreamPartitionAssignor.InternalTopicMetadata three = createTopicMetadata("three", 5);
@@ -99,7 +99,7 @@ public class CopartitionedTopicsValidatorTest {
     }
 
     @Test
-    public void shouldSetRepartitionTopicsPartitionCountToNotAvailableIfAnyNotAvaliable() throws Exception {
+    public void shouldSetRepartitionTopicsPartitionCountToNotAvailableIfAnyNotAvaliable() {
         final StreamPartitionAssignor.InternalTopicMetadata one = createTopicMetadata("one", 1);
         final StreamPartitionAssignor.InternalTopicMetadata two = createTopicMetadata("two", StreamPartitionAssignor.NOT_AVAILABLE);
         final Map<String, StreamPartitionAssignor.InternalTopicMetadata> repartitionTopicConfig = new HashMap<>();

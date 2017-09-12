@@ -119,7 +119,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     @Test
-    public void shouldCreateSingleSessionWhenWithinGap() throws Exception {
+    public void shouldCreateSingleSessionWhenWithinGap() {
         context.setTime(0);
         processor.process("john", "first");
         context.setTime(500);
@@ -132,7 +132,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
 
     @Test
-    public void shouldMergeSessions() throws Exception {
+    public void shouldMergeSessions() {
         context.setTime(0);
         final String sessionId = "mel";
         processor.process(sessionId, "first");
@@ -156,7 +156,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     @Test
-    public void shouldUpdateSessionIfTheSameTime() throws Exception {
+    public void shouldUpdateSessionIfTheSameTime() {
         context.setTime(0);
         processor.process("mel", "first");
         processor.process("mel", "second");
@@ -166,7 +166,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     @Test
-    public void shouldHaveMultipleSessionsForSameIdWhenTimestampApartBySessionGap() throws Exception {
+    public void shouldHaveMultipleSessionsForSameIdWhenTimestampApartBySessionGap() {
         final String sessionId = "mel";
         long time = 0;
         context.setTime(time);
@@ -191,7 +191,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
 
     @Test
-    public void shouldRemoveMergedSessionsFromStateStore() throws Exception {
+    public void shouldRemoveMergedSessionsFromStateStore() {
         context.setTime(0);
         processor.process("a", "1");
 
@@ -209,7 +209,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     @Test
-    public void shouldHandleMultipleSessionsAndMerging() throws Exception {
+    public void shouldHandleMultipleSessionsAndMerging() {
         context.setTime(0);
         processor.process("a", "1");
         processor.process("b", "1");
@@ -239,7 +239,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
 
     @Test
-    public void shouldGetAggregatedValuesFromValueGetter() throws Exception {
+    public void shouldGetAggregatedValuesFromValueGetter() {
         final KTableValueGetter<Windowed<String>, Long> getter = sessionAggregator.view().get();
         getter.init(context);
         context.setTime(0);
@@ -254,7 +254,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     @Test
-    public void shouldImmediatelyForwardNewSessionWhenNonCachedStore() throws Exception {
+    public void shouldImmediatelyForwardNewSessionWhenNonCachedStore() {
         initStore(false);
         processor.init(context);
 
@@ -269,7 +269,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     @Test
-    public void shouldImmediatelyForwardRemovedSessionsWhenMerging() throws Exception {
+    public void shouldImmediatelyForwardRemovedSessionsWhenMerging() {
         initStore(false);
         processor.init(context);
 

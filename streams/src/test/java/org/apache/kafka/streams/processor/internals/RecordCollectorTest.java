@@ -124,7 +124,7 @@ public class RecordCollectorTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldRetryWhenTimeoutExceptionOccursOnSend() throws Exception {
+    public void shouldRetryWhenTimeoutExceptionOccursOnSend() {
         final AtomicInteger attempt = new AtomicInteger(0);
         final RecordCollectorImpl collector = new RecordCollectorImpl(
                 new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
@@ -146,7 +146,7 @@ public class RecordCollectorTest {
 
     @SuppressWarnings("unchecked")
     @Test(expected = StreamsException.class)
-    public void shouldThrowStreamsExceptionAfterMaxAttempts() throws Exception {
+    public void shouldThrowStreamsExceptionAfterMaxAttempts() {
         final RecordCollector collector = new RecordCollectorImpl(
                 new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
                     @Override
@@ -163,7 +163,7 @@ public class RecordCollectorTest {
 
     @SuppressWarnings("unchecked")
     @Test(expected = StreamsException.class)
-    public void shouldThrowStreamsExceptionOnSubsequentCallIfASendFails() throws Exception {
+    public void shouldThrowStreamsExceptionOnSubsequentCallIfASendFails() {
         final RecordCollector collector = new RecordCollectorImpl(
                 new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
                     @Override
@@ -180,7 +180,7 @@ public class RecordCollectorTest {
 
     @SuppressWarnings("unchecked")
     @Test(expected = StreamsException.class)
-    public void shouldThrowStreamsExceptionOnFlushIfASendFailed() throws Exception {
+    public void shouldThrowStreamsExceptionOnFlushIfASendFailed() {
         final RecordCollector collector = new RecordCollectorImpl(
                 new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
                     @Override
@@ -197,7 +197,7 @@ public class RecordCollectorTest {
 
     @SuppressWarnings("unchecked")
     @Test(expected = StreamsException.class)
-    public void shouldThrowStreamsExceptionOnCloseIfASendFailed() throws Exception {
+    public void shouldThrowStreamsExceptionOnCloseIfASendFailed() {
         final RecordCollector collector = new RecordCollectorImpl(
                 new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
                     @Override

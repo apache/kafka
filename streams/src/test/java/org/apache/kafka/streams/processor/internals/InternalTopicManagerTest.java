@@ -56,21 +56,21 @@ public class InternalTopicManagerTest {
     }
 
     @Test
-    public void shouldReturnCorrectPartitionCounts() throws Exception {
+    public void shouldReturnCorrectPartitionCounts() {
         InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1,
             WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT, time);
         Assert.assertEquals(Collections.singletonMap(topic, 1), internalTopicManager.getNumPartitions(Collections.singleton(topic)));
     }
 
     @Test
-    public void shouldCreateRequiredTopics() throws Exception {
+    public void shouldCreateRequiredTopics() {
         InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1,
             WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT, time);
         internalTopicManager.makeReady(Collections.singletonMap(new InternalTopicConfig(topic, Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), null), 1));
     }
 
     @Test
-    public void shouldNotCreateTopicIfExistsWithDifferentPartitions() throws Exception {
+    public void shouldNotCreateTopicIfExistsWithDifferentPartitions() {
         InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1,
             WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT, time);
         boolean exceptionWasThrown = false;
@@ -83,7 +83,7 @@ public class InternalTopicManagerTest {
     }
 
     @Test
-    public void shouldNotThrowExceptionIfExistsWithDifferentReplication() throws Exception {
+    public void shouldNotThrowExceptionIfExistsWithDifferentReplication() {
 
         // create topic the first time with replication 2
         InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 2,
@@ -101,7 +101,7 @@ public class InternalTopicManagerTest {
     }
 
     @Test
-    public void shouldNotThrowExceptionForEmptyTopicMap() throws Exception {
+    public void shouldNotThrowExceptionForEmptyTopicMap() {
         InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1,
             WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT, time);
         internalTopicManager.makeReady(Collections.EMPTY_MAP);

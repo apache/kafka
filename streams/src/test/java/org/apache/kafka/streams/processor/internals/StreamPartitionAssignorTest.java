@@ -708,7 +708,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void shouldThrowExceptionIfApplicationServerConfigPortIsNotAnInteger() throws Exception {
+    public void shouldThrowExceptionIfApplicationServerConfigPortIsNotAnInteger() {
         final String myEndPoint = "localhost:j87yhk";
         final String applicationId = "application-id";
         builder.setApplicationId(applicationId);
@@ -760,7 +760,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void shouldReturnEmptyClusterMetadataIfItHasntBeenBuilt() throws Exception {
+    public void shouldReturnEmptyClusterMetadataIfItHasntBeenBuilt() {
         final Cluster cluster = partitionAssignor.clusterMetadata();
         assertNotNull(cluster);
     }
@@ -968,12 +968,12 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test(expected = KafkaException.class)
-    public void shouldThrowKafkaExceptionIfStreamThreadNotConfigured() throws Exception {
+    public void shouldThrowKafkaExceptionIfStreamThreadNotConfigured() {
         partitionAssignor.configure(Collections.singletonMap(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1));
     }
 
     @Test(expected = KafkaException.class)
-    public void shouldThrowKafkaExceptionIfStreamThreadConfigIsNotThreadDataProviderInstance() throws Exception {
+    public void shouldThrowKafkaExceptionIfStreamThreadConfigIsNotThreadDataProviderInstance() {
         final Map<String, Object> config = new HashMap<>();
         config.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         config.put(StreamsConfig.InternalConfig.STREAM_THREAD_INSTANCE, "i am not a stream thread");

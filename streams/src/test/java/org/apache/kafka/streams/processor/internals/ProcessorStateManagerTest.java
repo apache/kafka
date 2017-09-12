@@ -318,7 +318,7 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
-    public void shouldRegisterStoreWithoutLoggingEnabledAndNotBackedByATopic() throws Exception {
+    public void shouldRegisterStoreWithoutLoggingEnabledAndNotBackedByATopic() throws IOException {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             new TaskId(0, 1),
             noPartitions,
@@ -333,7 +333,7 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
-    public void shouldNotChangeOffsetsIfAckedOffsetsIsNull() throws Exception {
+    public void shouldNotChangeOffsetsIfAckedOffsetsIsNull() throws IOException {
         final Map<TopicPartition, Long> offsets = Collections.singletonMap(persistentStorePartition, 99L);
         checkpoint.write(offsets);
 
@@ -354,7 +354,7 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
-    public void shouldWriteCheckpointForPersistentLogEnabledStore() throws Exception {
+    public void shouldWriteCheckpointForPersistentLogEnabledStore() throws IOException {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             taskId,
             noPartitions,
@@ -372,7 +372,7 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
-    public void shouldWriteCheckpointForStandbyReplica() throws Exception {
+    public void shouldWriteCheckpointForStandbyReplica() throws IOException {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             taskId,
             noPartitions,
@@ -401,7 +401,7 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
-    public void shouldNotWriteCheckpointForNonPersistent() throws Exception {
+    public void shouldNotWriteCheckpointForNonPersistent() throws IOException {
         final TopicPartition topicPartition = new TopicPartition(nonPersistentStoreTopicName, 1);
 
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
@@ -422,7 +422,7 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
-    public void shouldNotWriteCheckpointForStoresWithoutChangelogTopic() throws Exception {
+    public void shouldNotWriteCheckpointForStoresWithoutChangelogTopic() throws IOException {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             taskId,
             noPartitions,
@@ -443,7 +443,7 @@ public class ProcessorStateManagerTest {
 
 
     @Test
-    public void shouldThrowIllegalArgumentExceptionIfStoreNameIsSameAsCheckpointFileName() throws Exception {
+    public void shouldThrowIllegalArgumentExceptionIfStoreNameIsSameAsCheckpointFileName() throws IOException {
         final ProcessorStateManager stateManager = new ProcessorStateManager(
             taskId,
             noPartitions,
@@ -463,7 +463,7 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
-    public void shouldThrowIllegalArgumentExceptionOnRegisterWhenStoreHasAlreadyBeenRegistered() throws Exception {
+    public void shouldThrowIllegalArgumentExceptionOnRegisterWhenStoreHasAlreadyBeenRegistered() throws IOException {
         final ProcessorStateManager stateManager = new ProcessorStateManager(
             taskId,
             noPartitions,
@@ -486,7 +486,7 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
-    public void shouldThrowProcessorStateExceptionOnCloseIfStoreThrowsAnException() throws Exception {
+    public void shouldThrowProcessorStateExceptionOnCloseIfStoreThrowsAnException() throws IOException {
 
         final ProcessorStateManager stateManager = new ProcessorStateManager(
             taskId,
@@ -515,7 +515,7 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
-    public void shouldDeleteCheckpointFileOnCreationIfEosEnabled() throws Exception {
+    public void shouldDeleteCheckpointFileOnCreationIfEosEnabled() throws IOException {
         checkpoint.write(Collections.<TopicPartition, Long>emptyMap());
         assertTrue(checkpointFile.exists());
 

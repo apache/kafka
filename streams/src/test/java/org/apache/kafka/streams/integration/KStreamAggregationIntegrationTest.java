@@ -66,7 +66,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -645,8 +644,7 @@ public class KStreamAggregationIntegrationTest {
     }
 
 
-    private void produceMessages(final long timestamp)
-        throws ExecutionException, InterruptedException {
+    private void produceMessages(final long timestamp) throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             streamOneInput,
             Arrays.asList(
