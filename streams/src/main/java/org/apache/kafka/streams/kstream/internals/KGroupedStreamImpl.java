@@ -272,12 +272,8 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     public <W extends Window> KTable<Windowed<K>, Long> count(final Windows<W> windows,
                                                               final StateStoreSupplier<WindowStore> storeSupplier) {
         return aggregate(
-                countInitializer, new Aggregator<K, V, Long>() {
-                    @Override
-                    public Long apply(K aggKey, V value, Long aggregate) {
-                        return aggregate + 1;
-                    }
-                },
+                countInitializer,
+                countAggregator,
                 windows,
                 storeSupplier);
     }
@@ -360,13 +356,6 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                                            final StateStoreSupplier<SessionStore> storeSupplier) {
         Objects.requireNonNull(sessionWindows, "sessionWindows can't be null");
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
-        final Initializer<Long> initializer = countInitializer;
-        final Aggregator<K, V, Long> aggregator = new Aggregator<K, V, Long>() {
-            @Override
-            public Long apply(final K aggKey, final V value, final Long aggregate) {
-                return aggregate + 1;
-            }
-        };
         final Merger<K, Long> sessionMerger = new Merger<K, Long>() {
             @Override
             public Long apply(final K aggKey, final Long aggOne, final Long aggTwo) {
@@ -374,7 +363,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
             }
         };
 
-        return aggregate(initializer, aggregator, sessionMerger, sessionWindows, Serdes.Long(), storeSupplier);
+        return aggregate(countInitializer, countAggregator, sessionMerger, sessionWindows, Serdes.Long(), storeSupplier);
     }
 
 
@@ -472,6 +461,6 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
         if (!repartitionRequired) {
             return this.name;
         }
-        return KStreamImpl.createReparitionedSource(this.builder, keySerde, valSerde, queryableStoreName, name);
+        return KStreamImpl.createReparitionedSource(builder, keySerde, valSerde, queryableStoreName, name);
     }
 }

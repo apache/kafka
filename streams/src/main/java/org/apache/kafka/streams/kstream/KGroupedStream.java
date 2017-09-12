@@ -428,7 +428,7 @@ public interface KGroupedStream<K, V> {
      * and "-changelog" is a fixed suffix.
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      *
-     * @param reducer   a {@link Reducer} that computes a new aggregate result
+     * @param reducer   a {@link Reducer} that computes a new aggregate result. Cannot be {@code null}.
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
      */
@@ -485,8 +485,8 @@ public interface KGroupedStream<K, V> {
      * provide {@code queryableStoreName}, and "-changelog" is a fixed suffix.
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      *
-     * @param reducer   a {@link Reducer} that computes a new aggregate result
-     * @param queryableStoreName the name of the underlying {@link KTable} state store; valid characters are ASCII
+     * @param reducer               a {@link Reducer} that computes a new aggregate result. Cannot be {@code null}.
+     * @param queryableStoreName    the name of the underlying {@link KTable} state store; valid characters are ASCII
      * alphanumerics, '.', '_' and '-'. If {@code null} then this will be equivalent to {@link KGroupedStream#reduce(Reducer)} ()}.
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
@@ -542,7 +542,7 @@ public interface KGroupedStream<K, V> {
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
-     * @param reducer   a {@link Reducer} that computes a new aggregate result
+     * @param reducer       a {@link Reducer} that computes a new aggregate result. Cannot be {@code null}.
      * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
@@ -596,7 +596,7 @@ public interface KGroupedStream<K, V> {
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
-     * @param reducer   a {@link Reducer} that computes a new aggregate result
+     * @param reducer       a {@link Reducer} that computes a new aggregate result. Cannot be {@code null}.
      * @param materialized  an instance of {@link Materialized} used to materialize a state store. Cannot be {@code null}.
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
@@ -767,7 +767,7 @@ public interface KGroupedStream<K, V> {
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
-     * @param reducer       a {@link Reducer} that computes a new aggregate result
+     * @param reducer       a {@link Reducer} that computes a new aggregate result. Cannot be {@code null}.
      * @param windows       the specification of the aggregation {@link Windows}
      * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
@@ -832,7 +832,7 @@ public interface KGroupedStream<K, V> {
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "queryableStoreName" is the
      * provide {@code queryableStoreName}, and "-changelog" is a fixed suffix.
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
-     * @param reducer           the instance of {@link Reducer}
+     * @param reducer           a {@link Reducer} that computes a new aggregate result. Cannot be {@code null}.
      * @param sessionWindows    the specification of the aggregation {@link SessionWindows}
      * @param queryableStoreName     the name of the state store created from this operation; valid characters are ASCII
      * alphanumerics, '.', '_' and '-'. If {@code null} then this will be equivalent to {@link KGroupedStream#reduce(Reducer, SessionWindows)} ()}.
@@ -867,7 +867,7 @@ public interface KGroupedStream<K, V> {
      * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
      * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
      * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
-     * @param reducer           the instance of {@link Reducer}
+     * @param reducer           a {@link Reducer} that computes a new aggregate result. Cannot be {@code null}.
      * @param sessionWindows    the specification of the aggregation {@link SessionWindows}
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
@@ -930,7 +930,7 @@ public interface KGroupedStream<K, V> {
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "queryableStoreName" is the
      * provide {@code queryableStoreName}, and "-changelog" is a fixed suffix.
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
-     * @param reducer           the instance of {@link Reducer}
+     * @param reducer           a {@link Reducer} that computes a new aggregate result. Cannot be {@code null}.
      * @param sessionWindows    the specification of the aggregation {@link SessionWindows}
      * @param storeSupplier     user defined state store supplier. Cannot be {@code null}.
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
