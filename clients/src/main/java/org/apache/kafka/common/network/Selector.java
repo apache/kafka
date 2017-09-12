@@ -395,6 +395,9 @@ public class Selector implements Selectable, AutoCloseable {
             //poll from channels where the underlying socket has more data
             pollSelectionKeys(readyKeys, false, endSelect);
             pollSelectionKeys(immediatelyConnectedKeys, true, endSelect);
+
+            // Clear all selected keys so that they are included in the ready count for the next select
+            readyKeys.clear();
         } else {
             madeReadProgressLastPoll = true; //no work is also "progress"
         }
@@ -409,9 +412,6 @@ public class Selector implements Selectable, AutoCloseable {
         // Add to completedReceives after closing expired connections to avoid removing
         // channels with completed receives until all staged receives are completed.
         addToCompletedReceives();
-
-        // Clear all selected keys so that they are included in the ready count for the next select
-        this.nioSelector.selectedKeys().clear();
     }
 
     /**
