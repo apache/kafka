@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package integration.kafka.api
+package kafka.api
 
 import kafka.api.{EndToEndAuthorizationTest, ZkSasl}
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
