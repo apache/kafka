@@ -213,6 +213,17 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
       case t: Throwable => error("Error when freeing index buffer", t)
     }
   }
+  
+  /**
+   * Forces unmapping on Windows OS since "Shard Delete" operation on open
+   * mmap segment isn't supported.
+   *
+   */
+  def forceUnmapOnWindows() {
+	if (OperatingSystem.IS_WINDOWS) {
+		CoreUtils.swallow(forceUnmap(mmap))
+	} 
+  }  
 
   /**
    * Execute the given function in a lock only if we are running on windows. We do this

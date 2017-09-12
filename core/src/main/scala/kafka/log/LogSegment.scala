@@ -29,6 +29,7 @@ import kafka.utils._
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record.FileRecords.LogOffsetPosition
 import org.apache.kafka.common.record._
+import org.apache.kafka.common.utils.OperatingSystem
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.JavaConverters._
@@ -389,14 +390,19 @@ class LogSegment(val log: FileRecords,
     def kafkaStorageException(fileType: String, e: IOException) =
       new KafkaStorageException(s"Failed to change the $fileType file suffix from $oldSuffix to $newSuffix for log segment $baseOffset", e)
 
+	if (OperatingSystem.IS_WINDOWS) {
+		log.close
+	}
     try log.renameTo(new File(CoreUtils.replaceSuffix(log.file.getPath, oldSuffix, newSuffix)))
     catch {
       case e: IOException => throw kafkaStorageException("log", e)
     }
+	index.forceUnmapOnWindows
     try index.renameTo(new File(CoreUtils.replaceSuffix(index.file.getPath, oldSuffix, newSuffix)))
     catch {
       case e: IOException => throw kafkaStorageException("index", e)
     }
+	timeIndex.forceUnmapOnWindows
     try timeIndex.renameTo(new File(CoreUtils.replaceSuffix(timeIndex.file.getPath, oldSuffix, newSuffix)))
     catch {
       case e: IOException => throw kafkaStorageException("timeindex", e)
