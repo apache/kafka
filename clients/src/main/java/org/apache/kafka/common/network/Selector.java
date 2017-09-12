@@ -409,6 +409,9 @@ public class Selector implements Selectable, AutoCloseable {
         // Add to completedReceives after closing expired connections to avoid removing
         // channels with completed receives until all staged receives are completed.
         addToCompletedReceives();
+
+        // Clear all selected keys so that they are included in the ready count for the next select
+        this.nioSelector.selectedKeys().clear();
     }
 
     /**
@@ -424,7 +427,6 @@ public class Selector implements Selectable, AutoCloseable {
         Iterator<SelectionKey> iterator = determineHandlingOrder(selectionKeys).iterator();
         while (iterator.hasNext()) {
             SelectionKey key = iterator.next();
-            iterator.remove();
             KafkaChannel channel = channel(key);
             long channelStartTimeNanos = recordTimePerConnection ? time.nanoseconds() : 0;
 
@@ -498,7 +500,6 @@ public class Selector implements Selectable, AutoCloseable {
 
         if (!outOfMemory && memoryPool.availableMemory() < lowMemThreshold) {
             List<SelectionKey> temp = new ArrayList<>(selectionKeys);
-            selectionKeys.clear(); // needed for next `select` to count these keys
             Collections.shuffle(temp);
             inHandlingOrder = temp;
         } else {
