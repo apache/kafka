@@ -125,7 +125,7 @@ public class StreamsResetter {
             .ofType(String.class)
             .describedAs("id")
             .required();
-        bootstrapServerOption = optionParser.accepts("bootstrap-server", "Comma-separated list of broker urls with format: HOST1:PORT1,HOST2:PORT2")
+        bootstrapServerOption = optionParser.accepts("bootstrap-servers", "Comma-separated list of broker urls with format: HOST1:PORT1,HOST2:PORT2")
             .withRequiredArg()
             .ofType(String.class)
             .defaultsTo("localhost:9092")
