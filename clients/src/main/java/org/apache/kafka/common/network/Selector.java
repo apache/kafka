@@ -498,6 +498,7 @@ public class Selector implements Selectable, AutoCloseable {
 
         if (!outOfMemory && memoryPool.availableMemory() < lowMemThreshold) {
             List<SelectionKey> temp = new ArrayList<>(selectionKeys);
+            selectionKeys.clear(); // needed for next `select` to count these keys
             Collections.shuffle(temp);
             inHandlingOrder = temp;
         } else {
