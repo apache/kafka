@@ -341,14 +341,14 @@ public class ResetIntegrationTest {
         if (intermediateUserTopic != null) {
             parameters = new String[]{
                 "--application-id", APP_ID + testNo,
-                "--bootstrap-server", CLUSTER.bootstrapServers(),
-                "--input-topics", INPUT_TOPIC + ",testtest",
+                "--bootstrap-servers", CLUSTER.bootstrapServers(),
+                "--input-topics", INPUT_TOPIC,
                 "--intermediate-topics", INTERMEDIATE_USER_TOPIC
             };
         } else {
             parameters = new String[]{
                 "--application-id", APP_ID + testNo,
-                "--bootstrap-server", CLUSTER.bootstrapServers(),
+                "--bootstrap-servers", CLUSTER.bootstrapServers(),
                 "--input-topics", INPUT_TOPIC
             };
         }
