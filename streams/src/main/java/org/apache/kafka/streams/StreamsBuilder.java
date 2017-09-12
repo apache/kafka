@@ -36,7 +36,6 @@ import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -338,8 +337,7 @@ public class StreamsBuilder {
      *
      * @param topic         the topic name; cannot be {@code null}
      * @param consumed      the instance of {@link Consumed} used to define optional parameters; can't be {@code null}
-     * @param materialized  the state store name; if {@code null} an internal store name will be automatically given;
-     *                      can't be {@code null}
+     * @param materialized   the instance of {@link Materialized} used to materialize a state store; cannot be {@code null}
      * @return a {@link GlobalKTable} for the specified topic
      */
     public synchronized <K, V> GlobalKTable<K, V> globalTable(final String topic,
@@ -380,7 +378,7 @@ public class StreamsBuilder {
      * This {@link ProcessorNode} should be used to keep the {@link StateStore} up-to-date.
      * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
      *
-     * @param storeBuilder          user defined {@link KeyValueStoreBuilder}; can't be {@code null}
+     * @param storeBuilder          user defined {@link StoreBuilder}; can't be {@code null}
      * @param sourceName            name of the {@link SourceNode} that will be automatically added
      * @param topic                 the topic to source the data from
      * @param consumed              the instance of {@link Consumed} used to define optional parameters; can't be {@code null}
@@ -389,7 +387,7 @@ public class StreamsBuilder {
      * @return itself
      * @throws TopologyException if the processor of state is already registered
      */
-    public synchronized StreamsBuilder addGlobalStore(final KeyValueStoreBuilder storeBuilder,
+    public synchronized StreamsBuilder addGlobalStore(final StoreBuilder storeBuilder,
                                                       final String topic,
                                                       final String sourceName,
                                                       final Consumed consumed,
