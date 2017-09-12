@@ -1031,6 +1031,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
      */
     public void shutdown() {
         log.info("Informed to shut down");
+        setState(State.PENDING_SHUTDOWN);
     }
 
     public Map<TaskId, Task> tasks() {
