@@ -121,7 +121,7 @@ public interface KGroupedTable<K, V> {
      * '.', '_' and '-'.
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      *
-     * @param materialized the instance of {@link Materialized} used to materialize the state store.
+     * @param materialized the instance of {@link Materialized} used to materialize the state store. Cannot be {@code null}
      * @return a {@link KTable} that contains "update" records with unmodified keys and {@link Long} values that
      * represent the latest (rolling) count (i.e., number of records) for each key
      */
@@ -334,7 +334,7 @@ public interface KGroupedTable<K, V> {
      *
      * @param adder         a {@link Reducer} that adds a new value to the aggregate result
      * @param subtractor    a {@link Reducer} that removed an old value from the aggregate result
-     * @param materialized  the instance of {@link Materialized} used to materialize the state store.
+     * @param materialized  the instance of {@link Materialized} used to materialize the state store. Cannot be {@code null}
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
      */
@@ -625,7 +625,7 @@ public interface KGroupedTable<K, V> {
      * @param initializer   an {@link Initializer} that provides an initial aggregate result value
      * @param adder         an {@link Aggregator} that adds a new record to the aggregate result
      * @param subtractor    an {@link Aggregator} that removed an old record from the aggregate result
-     * @param materialized  the instance of {@link Materialized} used to materialize the state store.
+     * @param materialized  the instance of {@link Materialized} used to materialize the state store. Cannot be {@code null}
      * @param <VR>          the value type of the aggregated {@link KTable}
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
@@ -784,7 +784,9 @@ public interface KGroupedTable<K, V> {
      * @param <VR>          the value type of the aggregated {@link KTable}
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
+     * @deprecated use {@link #aggregate(Initializer, Aggregator, Aggregator, Materialized)}
      */
+    @Deprecated
     <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
                                  final Aggregator<? super K, ? super V, VR> adder,
                                  final Aggregator<? super K, ? super V, VR> subtractor,

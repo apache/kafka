@@ -30,6 +30,7 @@ import org.apache.kafka.streams.state.WindowStore;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Used to describe how a {@link StateStore} should be materialized.
@@ -92,6 +93,7 @@ public class Materialized<K, V, S extends StateStore> {
      * @return a new {@link Materialized} instance with the given supplier
      */
     public static <K, V> Materialized<K, V, WindowStore<Bytes, byte[]>> as(final WindowBytesStoreSupplier supplier) {
+        Objects.requireNonNull(supplier, "supplier can't be null");
         return new Materialized<>(supplier);
     }
 
@@ -101,9 +103,11 @@ public class Materialized<K, V, S extends StateStore> {
      * @param supplier the {@link SessionBytesStoreSupplier} used to materialize the store
      * @param <K>      key type of the store
      * @param <V>      value type of the store
-     * @return a new {@link Materialized} instance with the given supplier
+     * @return a new {@link Materialized} instance with the given sup
+     * plier
      */
     public static <K, V> Materialized<K, V, SessionStore<Bytes, byte[]>> as(final SessionBytesStoreSupplier supplier) {
+        Objects.requireNonNull(supplier, "supplier can't be null");
         return new Materialized<>(supplier);
     }
 
@@ -116,6 +120,7 @@ public class Materialized<K, V, S extends StateStore> {
      * @return a new {@link Materialized} instance with the given supplier
      */
     public static <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> as(final KeyValueBytesStoreSupplier supplier) {
+        Objects.requireNonNull(supplier, "supplier can't be null");
         return new Materialized<>(supplier);
     }
 
