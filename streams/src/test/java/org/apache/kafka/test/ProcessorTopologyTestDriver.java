@@ -31,6 +31,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.InternalTopologyAccessor;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.Topology;
@@ -156,6 +157,18 @@ public class ProcessorTopologyTestDriver {
     private final StateRestoreListener stateRestoreListener = new MockStateRestoreListener();
     private StreamTask task;
     private GlobalStateUpdateTask globalStateTask;
+
+
+    /**
+     * Create a new test diver instance
+     * @param config the stream configuration for the topology
+     * @param topology the {@link Topology} whose {@link InternalTopologyBuilder} will
+     *                        be use to create the topology instance.
+     */
+    public ProcessorTopologyTestDriver(final StreamsConfig config,
+                                       final Topology topology) {
+        this(config, InternalTopologyAccessor.getInternalTopologyBuilder(topology));
+    }
 
     /**
      * Create a new test driver instance.
