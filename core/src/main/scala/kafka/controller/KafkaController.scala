@@ -129,7 +129,7 @@ class ControllerContext(val zkUtils: ZkUtils) {
 
 
 object KafkaController extends Logging {
-  
+
   val InitialControllerEpoch = 1
   val InitialControllerEpochZkVersion = 1
 
@@ -1206,10 +1206,12 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
 
     override def process(): Unit = {
       if (!isActive) return
+
       // Read the current broker list from ZK again instead of using currentBrokerList to increase
       // the odds of processing recent broker changes in a single ControllerEvent (KAFKA-5502).
       val curBrokers = zkUtils.getAllBrokersInCluster().toSet
       val curBrokerIds = curBrokers.map(_.id)
+      info(s"Process broker change event with broker list ${curBrokerIds.mkString(",")}")
       val liveOrShuttingDownBrokerIds = controllerContext.liveOrShuttingDownBrokerIds
       val newBrokerIds = curBrokerIds -- liveOrShuttingDownBrokerIds
       val deadBrokerIds = liveOrShuttingDownBrokerIds -- curBrokerIds
@@ -1314,6 +1316,8 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
 
     override def process(): Unit = {
       if (!isActive) return
+
+      info(s"Process partition reassignment event for partitions ${partitionReassignment.keys.mkString(",")}")
       val partitionsToBeReassigned = partitionReassignment.filterNot(p => controllerContext.partitionsBeingReassigned.contains(p._1))
       partitionsToBeReassigned.foreach { partitionToBeReassigned =>
         if(topicDeletionManager.isTopicQueuedUpForDeletion(partitionToBeReassigned._1.topic)) {
@@ -1366,16 +1370,17 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
     def state = ControllerState.IsrChange
 
     override def process(): Unit = {
+      val currentSequenceNumbers = zkUtils.getChildrenParentMayNotExist(ZkUtils.IsrChangeNotificationPath)
       if (!isActive) return
       try {
-        val topicAndPartitions = sequenceNumbers.flatMap(getTopicAndPartition).toSet
+        val topicAndPartitions = currentSequenceNumbers.flatMap(getTopicAndPartition).toSet
         if (topicAndPartitions.nonEmpty) {
           updateLeaderAndIsrCache(topicAndPartitions)
           processUpdateNotifications(topicAndPartitions)
         }
       } finally {
         // delete the notifications
-        sequenceNumbers.map(x => controllerContext.zkUtils.deletePath(ZkUtils.IsrChangeNotificationPath + "/" + x))
+        currentSequenceNumbers.map(x => controllerContext.zkUtils.deletePath(ZkUtils.IsrChangeNotificationPath + "/" + x))
       }
     }
 
@@ -1414,6 +1419,8 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
       val zkUtils = controllerContext.zkUtils
       try {
         val brokerIds = sequenceNumbers.flatMap(LogDirUtils.getBrokerIdFromLogDirEvent(zkUtils, _))
+        info(s"Process log dir event with broker list ${brokerIds.mkString(",")}")
+
         onBrokerLogDirFailure(brokerIds)
       } finally {
         // delete processed children
@@ -1587,6 +1594,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
     def state = ControllerState.ControllerChange
 
     override def process(): Unit = {
+      info(s"Process controller change event with new controller id $newControllerId")
       val wasActiveBeforeChange = isActive
       activeControllerId = newControllerId
       if (wasActiveBeforeChange && !isActive) {
@@ -1601,6 +1609,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
     def state = ControllerState.ControllerChange
 
     override def process(): Unit = {
+      info(s"Process controller re-elect event")
       val wasActiveBeforeChange = isActive
       activeControllerId = getControllerID()
       if (wasActiveBeforeChange && !isActive) {
@@ -1757,6 +1766,7 @@ class TopicDeletionListener(controller: KafkaController, eventManager: Controlle
 class PartitionReassignmentListener(controller: KafkaController, eventManager: ControllerEventManager) extends IZkDataListener with Logging {
   override def handleDataChange(dataPath: String, data: Any): Unit = {
     val partitionReassignment = ZkUtils.parsePartitionReassignmentData(data.toString)
+    info(s"Received partition reassignment event for partitions ${partitionReassignment.keys.mkString(",")}")
     eventManager.put(controller.PartitionReassignment(partitionReassignment))
   }
 
@@ -1799,12 +1809,15 @@ class PreferredReplicaElectionListener(controller: KafkaController, eventManager
   override def handleDataDeleted(dataPath: String): Unit = {}
 }
 
-class ControllerChangeListener(controller: KafkaController, eventManager: ControllerEventManager) extends IZkDataListener {
+class ControllerChangeListener(controller: KafkaController, eventManager: ControllerEventManager) extends IZkDataListener with Logging {
   override def handleDataChange(dataPath: String, data: Any): Unit = {
-    eventManager.put(controller.ControllerChange(KafkaController.parseControllerId(data.toString)))
+    val controllerId = KafkaController.parseControllerId(data.toString)
+    info(s"Received controller change event with new controller id $controllerId")
+    eventManager.put(controller.ControllerChange(controllerId))
   }
 
   override def handleDataDeleted(dataPath: String): Unit = {
+    info(s"Received controller re-elect event due to data deleted")
     eventManager.put(controller.Reelect)
   }
 }
@@ -1822,6 +1835,7 @@ class SessionExpirationListener(controller: KafkaController, eventManager: Contr
     */
   @throws[Exception]
   override def handleNewSession(): Unit = {
+    info(s"Received controller re-elect event due to new session")
     eventManager.put(controller.Reelect)
   }
 
