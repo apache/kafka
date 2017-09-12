@@ -84,7 +84,7 @@ public interface KTable<K, V> {
      * have delete semantics.
      * Thus, for tombstones the provided filter predicate is not evaluated but the tombstone record is forwarded
      * directly if required (i.e., if there is anything to be deleted).
-     * Furthermore, for each record that gets dropped (i.e., dot not satisfied the given predicate) a tombstone record
+     * Furthermore, for each record that gets dropped (i.e., dot not satisfy the given predicate) a tombstone record
      * is forwarded.
      *
      * @param predicate a filter {@link Predicate} that is applied to each record
@@ -106,7 +106,7 @@ public interface KTable<K, V> {
      * have delete semantics.
      * Thus, for tombstones the provided filter predicate is not evaluated but the tombstone record is forwarded
      * directly if required (i.e., if there is anything to be deleted).
-     * Furthermore, for each record that gets dropped (i.e., dot not satisfied the given predicate) a tombstone record
+     * Furthermore, for each record that gets dropped (i.e., dot not satisfy the given predicate) a tombstone record
      * is forwarded.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
@@ -124,7 +124,7 @@ public interface KTable<K, V> {
      *
      * @param predicate     a filter {@link Predicate} that is applied to each record
      * @param materialized  a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
-     *                      should be materialized
+     *                      should be materialized. Cannot be {@code null}
      * @return a {@code KTable} that contains only those records that satisfy the given predicate
      * @see #filterNot(Predicate, Materialized)
      */
@@ -144,7 +144,7 @@ public interface KTable<K, V> {
      * have delete semantics.
      * Thus, for tombstones the provided filter predicate is not evaluated but the tombstone record is forwarded
      * directly if required (i.e., if there is anything to be deleted).
-     * Furthermore, for each record that gets dropped (i.e., dot not satisfied the given predicate) a tombstone record
+     * Furthermore, for each record that gets dropped (i.e., dot not satisfy the given predicate) a tombstone record
      * is forwarded.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
@@ -184,7 +184,7 @@ public interface KTable<K, V> {
      * have delete semantics.
      * Thus, for tombstones the provided filter predicate is not evaluated but the tombstone record is forwarded
      * directly if required (i.e., if there is anything to be deleted).
-     * Furthermore, for each record that gets dropped (i.e., dot not satisfied the given predicate) a tombstone record
+     * Furthermore, for each record that gets dropped (i.e., dot not satisfy the given predicate) a tombstone record
      * is forwarded.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
@@ -260,7 +260,7 @@ public interface KTable<K, V> {
      * <p>
      * @param predicate a filter {@link Predicate} that is applied to each record
      * @param materialized  a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
-     *                      should be materialized
+     *                      should be materialized. Cannot be {@code null}
      * @return a {@code KTable} that contains only those records that do <em>not</em> satisfy the given predicate
      * @see #filter(Predicate, Materialized)
      */
@@ -412,7 +412,7 @@ public interface KTable<K, V> {
      *
      * @param mapper a {@link ValueMapper} that computes a new output value
      * @param materialized  a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
-     *                      should be materialized
+     *                      should be materialized. Cannot be {@code null}
      * @param <VR>   the value type of the result {@code KTable}
      *
      * @return a {@code KTable} that contains records with unmodified keys and new values (possibly of different type)
@@ -1344,7 +1344,8 @@ public interface KTable<K, V> {
      *
      * @param other         the other {@code KTable} to be joined with this {@code KTable}
      * @param joiner        a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param materialized  an instance of {@link Materialized} used to describe how the state store should be materialized
+     * @param materialized  an instance of {@link Materialized} used to describe how the state store should be materialized.
+     *                      Cannot be {@code null}
      * @param <VO>          the value type of the other {@code KTable}
      * @param <VR>          the value type of the result {@code KTable}
      * @return a {@code KTable} that contains join-records for each key and values computed by the given
@@ -1670,7 +1671,8 @@ public interface KTable<K, V> {
      *
      * @param other         the other {@code KTable} to be joined with this {@code KTable}
      * @param joiner        a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param materialized  an instance of {@link Materialized} used to describe how the state store should be materialized
+     * @param materialized  an instance of {@link Materialized} used to describe how the state store should be materialized.
+     *                      Cannot be {@code null}
      * @param <VO>          the value type of the other {@code KTable}
      * @param <VR>          the value type of the result {@code KTable}
      * @return a {@code KTable} that contains join-records for each key and values computed by the given
@@ -1763,8 +1765,8 @@ public interface KTable<K, V> {
      * @return a {@code KTable} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
      * left {@code KTable}
-     * @see #join(KTable, ValueJoiner)
-     * @see #outerJoin(KTable, ValueJoiner)
+     * @see #join(KTable, ValueJoiner, Materialized)
+     * @see #outerJoin(KTable, ValueJoiner, Materialized)
      * @deprecated use {@link #leftJoin(KTable, ValueJoiner, Materialized)}
      */
     @Deprecated
@@ -2011,7 +2013,8 @@ public interface KTable<K, V> {
      *
      * @param other         the other {@code KTable} to be joined with this {@code KTable}
      * @param joiner        a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param materialized  an instance of {@link Materialized} used to describe how the state store should be materialized
+     * @param materialized  an instance of {@link Materialized} used to describe how the state store should be materialized.
+     *                      Cannot be {@code null}
      * @param <VO>          the value type of the other {@code KTable}
      * @param <VR>          the value type of the result {@code KTable}
      * @return a {@code KTable} that contains join-records for each key and values computed by the given
