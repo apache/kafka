@@ -395,6 +395,9 @@ public class Selector implements Selectable, AutoCloseable {
             //poll from channels where the underlying socket has more data
             pollSelectionKeys(readyKeys, false, endSelect);
             pollSelectionKeys(immediatelyConnectedKeys, true, endSelect);
+
+            // Clear all selected keys so that they are included in the ready count for the next select
+            readyKeys.clear();
         } else {
             madeReadProgressLastPoll = true; //no work is also "progress"
         }
@@ -424,7 +427,6 @@ public class Selector implements Selectable, AutoCloseable {
         Iterator<SelectionKey> iterator = determineHandlingOrder(selectionKeys).iterator();
         while (iterator.hasNext()) {
             SelectionKey key = iterator.next();
-            iterator.remove();
             KafkaChannel channel = channel(key);
             long channelStartTimeNanos = recordTimePerConnection ? time.nanoseconds() : 0;
 

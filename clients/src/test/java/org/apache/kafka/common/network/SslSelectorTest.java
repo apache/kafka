@@ -18,6 +18,7 @@ package org.apache.kafka.common.network;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import java.nio.channels.SelectionKey;
@@ -42,7 +43,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestSslUtils;
 import org.junit.After;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -203,7 +203,7 @@ public class SslSelectorTest extends SelectorTest {
             selector.register("clientX", channelX);
             selector.register("clientY", channelY);
 
-            boolean success = false;
+            boolean handshaked = false;
             NetworkReceive firstReceive = null;
             long deadline = System.currentTimeMillis() + 5000;
             //keep calling poll until:
@@ -224,22 +224,18 @@ public class SslSelectorTest extends SelectorTest {
                     assertTrue("only expecting single request", completed.isEmpty());
                 }
 
-                boolean handshaked = sender1.waitForHandshake(1);
-                handshaked = handshaked && sender2.waitForHandshake(1);
+                handshaked = sender1.waitForHandshake(1) && sender2.waitForHandshake(1);
 
-                if (handshaked && firstReceive != null) {
-                    success = true;
+                if (handshaked && firstReceive != null && selector.isOutOfMemory())
                     break;
-                }
             }
-            if (!success) {
-                Assert.fail("could not initiate connections within timeout");
-            }
+            assertTrue("could not initiate connections within timeout", handshaked);
 
             selector.poll(10);
             assertTrue(selector.completedReceives().isEmpty());
             assertEquals(0, pool.availableMemory());
-            assertTrue(selector.isOutOfMemory());
+            assertNotNull("First receive not complete", firstReceive);
+            assertTrue("Selector not out of memory", selector.isOutOfMemory());
 
             firstReceive.close();
             assertEquals(900, pool.availableMemory()); //memory has been released back to pool
