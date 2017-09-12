@@ -17,7 +17,11 @@
 package kafka.tools;
 
 
-import joptsimple.*;
+import joptsimple.OptionException;
+import joptsimple.OptionParser;
+import joptsimple.OptionSet;
+import joptsimple.OptionSpec;
+import joptsimple.OptionSpecBuilder;
 import kafka.admin.ConsumerGroupCommand;
 import kafka.utils.CommandLineUtils;
 import org.apache.kafka.clients.admin.AdminClient;
@@ -28,7 +32,10 @@ import org.apache.kafka.common.utils.Exit;
 import scala.collection.mutable.HashSet;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Properties;
 
 /**
  * {@link StreamsResetter} resets the processing state of a Kafka Streams application so that, for example, you can reprocess its input from scratch.
@@ -89,7 +96,7 @@ public class StreamsResetter {
 
         int exitCode = EXIT_CODE_SUCCESS;
 
-        try (AdminClient adminClient = KafkaAdminClient.create(consumerConfig)){
+        try (AdminClient adminClient = KafkaAdminClient.create(consumerConfig)) {
             dryRun = options.has(dryRunOption);
 
             allTopics.clear();
@@ -196,6 +203,8 @@ public class StreamsResetter {
                 scenario = "to-latest ";
             } else if (options.has(toCurrentOption)) {
                 scenario = "to-current ";
+            } else if (options.has(toEarliestOption)) {
+                scenario = "to-earliest ";
             } else if (options.has(shiftByOption)) {
                 scenario = "shift-by " + options.valueOf(shiftByOption);
             }
@@ -236,17 +245,17 @@ public class StreamsResetter {
             String intermediateTopicList = intermediateTopicValue.substring(0, intermediateTopicValue.length() - 1);
             if (!dryRun) {
                 ConsumerGroupCommand.main(new String[]{"--reset-offsets",
-                        "--topic", intermediateTopicList,
-                        "--to-latest",
-                        "--group", groupId,
-                        "--bootstrap-server", bootstrapServer});
+                    "--topic", intermediateTopicList,
+                    "--to-latest",
+                    "--group", groupId,
+                    "--bootstrap-server", bootstrapServer});
             } else {
                 ConsumerGroupCommand.main(new String[]{"--reset-offsets",
-                        "--topic", intermediateTopicList,
-                        "--to-latest",
-                        "--group", groupId,
-                        "--bootstrap-server", bootstrapServer,
-                        "--dry-run"});
+                    "--topic", intermediateTopicList,
+                    "--to-latest",
+                    "--group", groupId,
+                    "--bootstrap-server", bootstrapServer,
+                    "--dry-run"});
             }
         }
     }
@@ -269,17 +278,17 @@ public class StreamsResetter {
             String inputTopicList = inputTopicsValue.substring(0, inputTopicsValue.length() - 1);
             if (!dryRun) {
                 ConsumerGroupCommand.main(new String[]{"--reset-offsets",
-                        "--topic", inputTopicList,
-                        "--" + scenario,
-                        "--group", groupId,
-                        "--bootstrap-server", bootstrapServer});
+                    "--topic", inputTopicList,
+                    "--" + scenario,
+                    "--group", groupId,
+                    "--bootstrap-server", bootstrapServer});
             } else {
                 ConsumerGroupCommand.main(new String[]{"--reset-offsets",
-                        "--topic", inputTopicList,
-                        "--" + scenario,
-                        "--group", groupId,
-                        "--bootstrap-server", bootstrapServer,
-                        "--dry-run"});
+                    "--topic", inputTopicList,
+                    "--" + scenario,
+                    "--group", groupId,
+                    "--bootstrap-server", bootstrapServer,
+                    "--dry-run"});
             }
         }
     }
@@ -299,7 +308,7 @@ public class StreamsResetter {
         if (!dryRun) {
             adminClient.deleteTopics(internalTopics);
         } else {
-            for (final String internalTopic : internalTopics){
+            for (final String internalTopic : internalTopics) {
                 System.out.println("Topic: " + internalTopic);
             }
         }
