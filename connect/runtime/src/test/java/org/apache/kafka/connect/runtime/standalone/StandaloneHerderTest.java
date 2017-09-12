@@ -110,7 +110,6 @@ public class StandaloneHerderTest {
         plugins = PowerMock.createMock(Plugins.class);
         pluginLoader = PowerMock.createMock(PluginClassLoader.class);
         delegatingLoader = PowerMock.createMock(DelegatingClassLoader.class);
-        //EasyMock.expect(worker.getConnectorType(CONNECTOR_NAME)).andReturn(ConnectorType.SOURCE).anyTimes();
         PowerMock.mockStatic(Plugins.class);
     }
 
@@ -418,6 +417,7 @@ public class StandaloneHerderTest {
         connector = PowerMock.createMock(BogusSourceConnector.class);
         expectAdd(SourceSink.SOURCE);
         expectConfigValidation(connConfig);
+        EasyMock.expect(worker.getConnectorType(CONNECTOR_NAME)).andReturn(ConnectorType.SOURCE).anyTimes();
 
         // Validate accessors with 1 connector
         listConnectorsCb.onCompletion(null, singleton(CONNECTOR_NAME));
@@ -444,7 +444,6 @@ public class StandaloneHerderTest {
 
         herder.putConnectorConfig(CONNECTOR_NAME, connConfig, false, createCallback);
         herder.connectors(listConnectorsCb);
-        EasyMock.expect(worker.getConnectorType(CONNECTOR_NAME)).andReturn(ConnectorType.SOURCE).anyTimes();
         herder.connectorInfo(CONNECTOR_NAME, connectorInfoCb);
         herder.connectorConfig(CONNECTOR_NAME, connectorConfigCb);
         herder.taskConfigs(CONNECTOR_NAME, taskConfigsCb);
@@ -466,6 +465,7 @@ public class StandaloneHerderTest {
         expectAdd(SourceSink.SOURCE);
         Connector connectorMock = PowerMock.createMock(Connector.class);
         expectConfigValidation(connectorMock, true, connConfig);
+        EasyMock.expect(worker.getConnectorType(CONNECTOR_NAME)).andReturn(ConnectorType.SOURCE).anyTimes();
 
         // Should get first config
         connectorConfigCb.onCompletion(null, connConfig);
