@@ -40,7 +40,7 @@ import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.protocol.types.SchemaException
 import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
-import org.apache.kafka.common.utils.{KafkaThread, Time}
+import org.apache.kafka.common.utils.{KafkaThread, LogContext, Time}
 
 import scala.collection._
 import JavaConverters._
@@ -62,7 +62,8 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
   private val maxConnectionsPerIp = config.maxConnectionsPerIp
   private val maxConnectionsPerIpOverrides = config.maxConnectionsPerIpOverrides
 
-  this.logIdent = "[Socket Server on Broker " + config.brokerId + "], "
+  private val logContext = new LogContext(s"[SocketServer brokerId=${config.brokerId}] ")
+  this.logIdent = logContext.logPrefix
 
   private val memoryPoolSensor = metrics.sensor("MemoryPoolUtilization")
   private val memoryPoolDepletedPercentMetricName = metrics.metricName("MemoryPoolAvgDepletedPercent", "socket-server-metrics")
@@ -166,7 +167,8 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
       config,
       metrics,
       credentialProvider,
-      memoryPool
+      memoryPool,
+      logContext
     )
   }
 
@@ -382,7 +384,8 @@ private[kafka] class Processor(val id: Int,
                                config: KafkaConfig,
                                metrics: Metrics,
                                credentialProvider: CredentialProvider,
-                               memoryPool: MemoryPool) extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
+                               memoryPool: MemoryPool,
+                               logContext: LogContext) extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
 
   private object ConnectionId {
     def fromString(s: String): Option[ConnectionId] = s.split("-") match {
@@ -430,7 +433,8 @@ private[kafka] class Processor(val id: Int,
     false,
     true,
     channelBuilder,
-    memoryPool)
+    memoryPool,
+    logContext)
 
   // Connection ids have the format `localAddr:localPort-remoteAddr:remotePort-index`. The index is a
   // non-negative incrementing value that ensures that even if remotePort is reused after a connection is

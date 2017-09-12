@@ -48,9 +48,9 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * A nioSelector interface for doing non-blocking multi-connection network I/O.
@@ -84,8 +84,8 @@ import org.slf4j.LoggerFactory;
 public class Selector implements Selectable, AutoCloseable {
 
     public static final long NO_IDLE_TIMEOUT_MS = -1;
-    private static final Logger log = LoggerFactory.getLogger(Selector.class);
 
+    private final Logger log;
     private final java.nio.channels.Selector nioSelector;
     private final Map<String, KafkaChannel> channels;
     private final Set<KafkaChannel> explicitlyMutedChannels;
@@ -113,7 +113,6 @@ public class Selector implements Selectable, AutoCloseable {
 
     /**
      * Create a new nioSelector
-     *
      * @param maxReceiveSize Max size in bytes of a single network receive (use {@link NetworkReceive#UNLIMITED} for no limit)
      * @param connectionMaxIdleMs Max idle connection time (use {@link #NO_IDLE_TIMEOUT_MS} to disable idle timeout)
      * @param metrics Registry for Selector metrics
@@ -122,17 +121,19 @@ public class Selector implements Selectable, AutoCloseable {
      * @param metricTags Additional tags to add to metrics registered by Selector
      * @param metricsPerConnection Whether or not to enable per-connection metrics
      * @param channelBuilder Channel builder for every new connection
+     * @param logContext Context for logging with additional info
      */
     public Selector(int maxReceiveSize,
-                    long connectionMaxIdleMs,
-                    Metrics metrics,
-                    Time time,
-                    String metricGrpPrefix,
-                    Map<String, String> metricTags,
-                    boolean metricsPerConnection,
-                    boolean recordTimePerConnection,
-                    ChannelBuilder channelBuilder,
-                    MemoryPool memoryPool) {
+            long connectionMaxIdleMs,
+            Metrics metrics,
+            Time time,
+            String metricGrpPrefix,
+            Map<String, String> metricTags,
+            boolean metricsPerConnection,
+            boolean recordTimePerConnection,
+            ChannelBuilder channelBuilder,
+            MemoryPool memoryPool,
+            LogContext logContext) {
         try {
             this.nioSelector = java.nio.channels.Selector.open();
         } catch (IOException e) {
@@ -158,6 +159,7 @@ public class Selector implements Selectable, AutoCloseable {
         this.idleExpiryManager = connectionMaxIdleMs < 0 ? null : new IdleExpiryManager(time, connectionMaxIdleMs);
         this.memoryPool = memoryPool;
         this.lowMemThreshold = (long) (0.1 * this.memoryPool.size());
+        this.log = logContext.logger(Selector.class);
     }
 
     public Selector(int maxReceiveSize,
@@ -167,12 +169,13 @@ public class Selector implements Selectable, AutoCloseable {
             String metricGrpPrefix,
             Map<String, String> metricTags,
             boolean metricsPerConnection,
-            ChannelBuilder channelBuilder) {
-        this(maxReceiveSize, connectionMaxIdleMs, metrics, time, metricGrpPrefix, metricTags, metricsPerConnection, false, channelBuilder, MemoryPool.NONE);
+            ChannelBuilder channelBuilder,
+            LogContext logContext) {
+        this(maxReceiveSize, connectionMaxIdleMs, metrics, time, metricGrpPrefix, metricTags, metricsPerConnection, false, channelBuilder, MemoryPool.NONE, logContext);
     }
 
-    public Selector(long connectionMaxIdleMS, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder) {
-        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, metrics, time, metricGrpPrefix, Collections.<String, String>emptyMap(), true, channelBuilder);
+    public Selector(long connectionMaxIdleMS, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder, LogContext logContext) {
+        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, metrics, time, metricGrpPrefix, Collections.<String, String>emptyMap(), true, channelBuilder, logContext);
     }
 
     /**

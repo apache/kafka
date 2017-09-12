@@ -25,6 +25,7 @@ import static org.junit.Assert.assertTrue;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.SecurityProtocol;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
@@ -42,7 +43,7 @@ public class NetworkTestUtils {
     }
 
     public static Selector createSelector(ChannelBuilder channelBuilder) {
-        return new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder);
+        return new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder, new LogContext());
     }
 
     public static void checkClientConnection(Selector selector, String node, int minMessageSize, int messageCount) throws Exception {
