@@ -143,7 +143,7 @@ public class ChannelBuilders {
         final KafkaPrincipalBuilder builder;
 
         if (principalBuilderClass == null || principalBuilderClass == DefaultKafkaPrincipalBuilder.class) {
-            builder = new DefaultKafkaPrincipalBuilder(authenticator, transportLayer, null, kerberosShortNamer);
+            builder = new DefaultKafkaPrincipalBuilder(kerberosShortNamer);
         } else if (KafkaPrincipalBuilder.class.isAssignableFrom(principalBuilderClass)) {
             builder = (KafkaPrincipalBuilder) Utils.newInstance(principalBuilderClass);
         } else if (PrincipalBuilder.class.isAssignableFrom(principalBuilderClass)) {

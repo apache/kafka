@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.config.internals;
 
+import org.apache.kafka.common.config.SaslConfigs;
+
 import java.util.Collections;
 import java.util.List;
 
@@ -42,5 +44,21 @@ public class BrokerSecurityConfigs {
             "Note that this configuration is ignored if an extension of KafkaPrincipalBuilder is provided by the " +
             "<code>" + PRINCIPAL_BUILDER_CLASS_CONFIG + "</code> configuration.";
     public static final List<String> DEFAULT_SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES = Collections.singletonList("DEFAULT");
+
+    public static final String SSL_CLIENT_AUTH_CONFIG = "ssl.client.auth";
+    public static final String SSL_CLIENT_AUTH_DOC = "Configures kafka broker to request client authentication."
+            + " The following settings are common: "
+            + " <ul>"
+            + " <li><code>ssl.client.auth=required</code> If set to required"
+            + " client authentication is required."
+            + " <li><code>ssl.client.auth=requested</code> This means client authentication is optional."
+            + " unlike requested , if this option is set client can choose not to provide authentication information about itself"
+            + " <li><code>ssl.client.auth=none</code> This means client authentication is not needed.";
+
+    public static final String SASL_ENABLED_MECHANISMS_CONFIG = "sasl.enabled.mechanisms";
+    public static final String SASL_ENABLED_MECHANISMS_DOC = "The list of SASL mechanisms enabled in the Kafka server. "
+            + "The list may contain any mechanism for which a security provider is available. "
+            + "Only GSSAPI is enabled by default.";
+    public static final List<String> DEFAULT_SASL_ENABLED_MECHANISMS = Collections.singletonList(SaslConfigs.GSSAPI_MECHANISM);
 
 }

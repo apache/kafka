@@ -26,7 +26,9 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Closeable;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
@@ -67,9 +69,7 @@ public class SslChannelBuilder implements ChannelBuilder {
     }
 
     @Override
-    public void close() {
-
-    }
+    public void close() {}
 
     protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key, String host) throws IOException {
         SocketChannel socketChannel = (SocketChannel) key.channel();
@@ -123,7 +123,7 @@ public class SslChannelBuilder implements ChannelBuilder {
         private final SslTransportLayer transportLayer;
         private KafkaPrincipalBuilder principalBuilder;
 
-        public SslAuthenticator(SslTransportLayer transportLayer) {
+        private SslAuthenticator(SslTransportLayer transportLayer) {
             this.transportLayer = transportLayer;
         }
 
@@ -144,13 +144,15 @@ public class SslChannelBuilder implements ChannelBuilder {
          */
         @Override
         public KafkaPrincipal principal() {
-            SslAuthenticationContext context = new SslAuthenticationContext(transportLayer.sslSession());
+            InetAddress clientAddress = transportLayer.socketChannel().socket().getInetAddress();
+            SslAuthenticationContext context = new SslAuthenticationContext(transportLayer.sslSession(), clientAddress);
             return principalBuilder.build(context);
         }
 
         @Override
         public void close() throws IOException {
-            Utils.closeQuietly(principalBuilder, "principal builder");
+            if (principalBuilder instanceof Closeable)
+                Utils.closeQuietly((Closeable) principalBuilder, "principal builder");
         }
 
         /**

@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
@@ -77,7 +78,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
             this.configs = configs;
             boolean hasKerberos;
             if (mode == Mode.SERVER) {
-                List<String> enabledMechanisms = (List<String>) this.configs.get(SaslConfigs.SASL_ENABLED_MECHANISMS);
+                List<String> enabledMechanisms = (List<String>) this.configs.get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG);
                 hasKerberos = enabledMechanisms == null || enabledMechanisms.contains(SaslConfigs.GSSAPI_MECHANISM);
             } else {
                 hasKerberos = clientSaslMechanism.equals(SaslConfigs.GSSAPI_MECHANISM);
@@ -116,8 +117,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
             Authenticator authenticator;
             if (mode == Mode.SERVER)
                 authenticator = new SaslServerAuthenticator(id, jaasContext, loginManager.subject(),
-                        kerberosShortNamer, socketChannel.socket().getLocalAddress(), credentialCache,
-                        listenerName, securityProtocol, transportLayer);
+                        kerberosShortNamer, credentialCache, listenerName, securityProtocol, transportLayer);
             else
                 authenticator = new SaslClientAuthenticator(id, loginManager.subject(), loginManager.serviceName(),
                         socketChannel.socket().getInetAddress().getHostName(), clientSaslMechanism,

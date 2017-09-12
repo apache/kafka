@@ -45,15 +45,15 @@ class SslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   import kafka.api.SslEndToEndAuthorizationTest.TestPrincipalBuilder
 
   override protected def securityProtocol = SecurityProtocol.SSL
-  this.serverConfig.setProperty(SslConfigs.SSL_CLIENT_AUTH_CONFIG, "required")
+  this.serverConfig.setProperty(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required")
   this.serverConfig.setProperty(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[TestPrincipalBuilder].getName)
   override val clientPrincipal = "client"
   override val kafkaPrincipal = "server"
 
   @Before
-  override def setUp {
+  override def setUp() {
     startSasl(jaasSections(List.empty, None, ZkSasl))
-    super.setUp
+    super.setUp()
   }
 
 }

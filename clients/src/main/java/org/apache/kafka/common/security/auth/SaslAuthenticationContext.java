@@ -17,15 +17,30 @@
 package org.apache.kafka.common.security.auth;
 
 import javax.security.sasl.SaslServer;
+import java.net.InetAddress;
 
 public class SaslAuthenticationContext implements AuthenticationContext {
     private final SaslServer server;
+    private final String securityProtocol;
+    private final InetAddress clientAddress;
 
-    public SaslAuthenticationContext(SaslServer server) {
+    public SaslAuthenticationContext(SaslServer server, String securityProtocol, InetAddress clientAddress) {
         this.server = server;
+        this.securityProtocol = securityProtocol;
+        this.clientAddress = clientAddress;
     }
 
     public SaslServer server() {
         return server;
+    }
+
+    @Override
+    public String securityProtocol() {
+        return securityProtocol;
+    }
+
+    @Override
+    public InetAddress clientAddress() {
+        return clientAddress;
     }
 }

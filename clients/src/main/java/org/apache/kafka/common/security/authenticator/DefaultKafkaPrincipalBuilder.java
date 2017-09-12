@@ -33,6 +33,7 @@ import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
 import javax.net.ssl.SSLPeerUnverifiedException;
 import javax.net.ssl.SSLSession;
 import javax.security.sasl.SaslServer;
+import java.io.Closeable;
 import java.io.IOException;
 import java.security.Principal;
 
@@ -44,16 +45,19 @@ import static java.util.Objects.requireNonNull;
  * class applies {@link org.apache.kafka.common.security.kerberos.KerberosShortNamer} to transform
  * the name.
  *
- * NOTE: This is an internal class and can change without notice
+ * NOTE: This is an internal class and can change without notice. Unlike normal implementations
+ * of {@link KafkaPrincipalBuilder}, there is no default no-arg constructor since this class
+ * must adapt implementations of the older {@link PrincipalBuilder} interface.
  */
-public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, AutoCloseable {
+public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, Closeable {
     private final PrincipalBuilder oldPrincipalBuilder;
     private final Authenticator authenticator;
     private final TransportLayer transportLayer;
     private final KerberosShortNamer kerberosShortNamer;
 
     /**
-     * Construct a new instance.
+     * Construct a new instance which wraps an instance of the older {@link PrincipalBuilder}.
+     *
      * @param authenticator The authenticator in use
      * @param transportLayer The underlying transport layer
      * @param oldPrincipalBuilder Instance of {@link PrincipalBuilder} or null if none is configured
@@ -65,7 +69,19 @@ public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, Auto
                                         KerberosShortNamer kerberosShortNamer) {
         this.authenticator = requireNonNull(authenticator);
         this.transportLayer = requireNonNull(transportLayer);
-        this.oldPrincipalBuilder = oldPrincipalBuilder;
+        this.oldPrincipalBuilder = requireNonNull(oldPrincipalBuilder);
+        this.kerberosShortNamer = kerberosShortNamer;
+    }
+
+    /**
+     * Construct a new instance.
+     *
+     * @param kerberosShortNamer Kerberos name rewrite rules or null if none have been configured
+     */
+    public DefaultKafkaPrincipalBuilder(KerberosShortNamer kerberosShortNamer) {
+        this.authenticator = null;
+        this.transportLayer = null;
+        this.oldPrincipalBuilder = null;
         this.kerberosShortNamer = kerberosShortNamer;
     }
 

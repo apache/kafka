@@ -27,7 +27,8 @@ import java.security.Principal;
 
 /**
  * PrincipalBuilder for Authenticator
- * @deprecated As of Kafka 1.0.0, use {@link KafkaPrincipalBuilder} instead.
+ * @deprecated As of Kafka 1.0.0, use {@link KafkaPrincipalBuilder} instead. This will be removed in
+ *             a future major release.
  */
 @InterfaceStability.Unstable
 @Deprecated

@@ -18,6 +18,7 @@ package org.apache.kafka.common.security.authenticator;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.errors.InvalidRequestException;
@@ -65,6 +66,7 @@ import javax.security.auth.Subject;
 import javax.security.sasl.Sasl;
 import javax.security.sasl.SaslException;
 import javax.security.sasl.SaslServer;
+import java.io.Closeable;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
@@ -82,7 +84,7 @@ public class SaslServerAuthenticator implements Authenticator {
     static final int MAX_RECEIVE_SIZE = 524288;
     private static final Logger LOG = LoggerFactory.getLogger(SaslServerAuthenticator.class);
 
-    public enum SaslState {
+    private enum SaslState {
         GSSAPI_OR_HANDSHAKE_REQUEST, HANDSHAKE_REQUEST, AUTHENTICATE, COMPLETE, FAILED
     }
 
@@ -92,7 +94,6 @@ public class SaslServerAuthenticator implements Authenticator {
     private final JaasContext jaasContext;
     private final Subject subject;
     private final KerberosShortNamer kerberosNamer;
-    private final InetAddress clientAddress;
     private final CredentialCache credentialCache;
     private final TransportLayer transportLayer;
 
@@ -117,7 +118,6 @@ public class SaslServerAuthenticator implements Authenticator {
                                    JaasContext jaasContext,
                                    Subject subject,
                                    KerberosShortNamer kerberosNameParser,
-                                   InetAddress clientAddress,
                                    CredentialCache credentialCache,
                                    ListenerName listenerName,
                                    SecurityProtocol securityProtocol,
@@ -128,7 +128,6 @@ public class SaslServerAuthenticator implements Authenticator {
         this.jaasContext = jaasContext;
         this.subject = subject;
         this.kerberosNamer = kerberosNameParser;
-        this.clientAddress = clientAddress;
         this.credentialCache = credentialCache;
         this.listenerName = listenerName;
         this.securityProtocol = securityProtocol;
@@ -138,14 +137,14 @@ public class SaslServerAuthenticator implements Authenticator {
     @Override
     public void configure(Map<String, ?> configs) {
         this.configs = configs;
-        List<String> enabledMechanisms = (List<String>) this.configs.get(SaslConfigs.SASL_ENABLED_MECHANISMS);
+        List<String> enabledMechanisms = (List<String>) this.configs.get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG);
         if (enabledMechanisms == null || enabledMechanisms.isEmpty())
             throw new IllegalArgumentException("No SASL mechanisms are enabled");
         this.enabledMechanisms = new HashSet<>(enabledMechanisms);
 
         // Note that the old principal builder does not support SASL, so we do not need to pass the
         // authenticator or the transport layer
-        this.principalBuilder = ChannelBuilders.createPrincipalBuilder(configs, transportLayer, this, kerberosNamer);
+        this.principalBuilder = ChannelBuilders.createPrincipalBuilder(configs, null, null, kerberosNamer);
     }
 
     private void createSaslServer(String mechanism) throws IOException {
@@ -161,7 +160,8 @@ public class SaslServerAuthenticator implements Authenticator {
             try {
                 saslServer = Subject.doAs(subject, new PrivilegedExceptionAction<SaslServer>() {
                     public SaslServer run() throws SaslException {
-                        return Sasl.createSaslServer(saslMechanism, "kafka", clientAddress.getHostName(), configs, callbackHandler);
+                        return Sasl.createSaslServer(saslMechanism, "kafka", serverAddress().getHostName(),
+                                configs, callbackHandler);
                     }
                 });
             } catch (PrivilegedActionException e) {
@@ -275,7 +275,7 @@ public class SaslServerAuthenticator implements Authenticator {
 
     @Override
     public KafkaPrincipal principal() {
-        SaslAuthenticationContext context = new SaslAuthenticationContext(saslServer);
+        SaslAuthenticationContext context = new SaslAuthenticationContext(saslServer, securityProtocol.name, clientAddress());
         return principalBuilder.build(context);
     }
 
@@ -286,8 +286,8 @@ public class SaslServerAuthenticator implements Authenticator {
 
     @Override
     public void close() throws IOException {
-        if (principalBuilder != null)
-            Utils.closeQuietly(principalBuilder, "principal builder");
+        if (principalBuilder != null && principalBuilder instanceof Closeable)
+            Utils.closeQuietly((Closeable) principalBuilder, "principal builder");
         if (saslServer != null)
             saslServer.dispose();
         if (callbackHandler != null)
@@ -321,6 +321,14 @@ public class SaslServerAuthenticator implements Authenticator {
         return netOutBuffer.completed();
     }
 
+    private InetAddress serverAddress() {
+        return transportLayer.socketChannel().socket().getLocalAddress();
+    }
+
+    private InetAddress clientAddress() {
+        return transportLayer.socketChannel().socket().getInetAddress();
+    }
+
     private boolean handleKafkaRequest(byte[] requestBytes) throws IOException, AuthenticationException {
         boolean isKafkaRequest = false;
         String clientMechanism = null;
@@ -341,7 +349,8 @@ public class SaslServerAuthenticator implements Authenticator {
 
             LOG.debug("Handling Kafka request {}", apiKey);
 
-            RequestContext requestContext = new RequestContext(header, connectionId, clientAddress,
+
+            RequestContext requestContext = new RequestContext(header, connectionId, clientAddress(),
                     KafkaPrincipal.ANONYMOUS, listenerName, securityProtocol);
             RequestAndSize requestAndSize = requestContext.parseRequest(requestBuffer);
             if (apiKey == ApiKeys.API_VERSIONS)

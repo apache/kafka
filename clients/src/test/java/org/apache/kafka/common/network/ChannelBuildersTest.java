@@ -27,6 +27,7 @@ import org.apache.kafka.common.security.auth.PrincipalBuilder;
 import org.easymock.EasyMock;
 import org.junit.Test;
 
+import java.net.InetAddress;
 import java.security.Principal;
 import java.util.HashMap;
 import java.util.Map;
@@ -38,7 +39,7 @@ public class ChannelBuildersTest {
 
     @Test
     @SuppressWarnings("deprecation")
-    public void testCreateOldPrincipalBuilder() {
+    public void testCreateOldPrincipalBuilder() throws Exception {
         TransportLayer transportLayer = EasyMock.mock(TransportLayer.class);
         Authenticator authenticator = EasyMock.mock(Authenticator.class);
 
@@ -50,19 +51,16 @@ public class ChannelBuildersTest {
         assertTrue(OldPrincipalBuilder.configured);
 
         // test delegation
-        KafkaPrincipal principal = builder.build(new PlaintextAuthenticationContext());
+        KafkaPrincipal principal = builder.build(new PlaintextAuthenticationContext(InetAddress.getLocalHost()));
         assertEquals(OldPrincipalBuilder.PRINCIPAL_NAME, principal.getName());
         assertEquals(KafkaPrincipal.USER_TYPE, principal.getPrincipalType());
     }
 
     @Test
     public void testCreateConfigurableKafkaPrincipalBuilder() {
-        TransportLayer transportLayer = EasyMock.mock(TransportLayer.class);
-        Authenticator authenticator = EasyMock.mock(Authenticator.class);
-
         Map<String, Object> configs = new HashMap<>();
         configs.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, ConfigurableKafkaPrincipalBuilder.class);
-        KafkaPrincipalBuilder builder = ChannelBuilders.createPrincipalBuilder(configs, transportLayer, authenticator, null);
+        KafkaPrincipalBuilder builder = ChannelBuilders.createPrincipalBuilder(configs, null, null, null);
         assertTrue(builder instanceof ConfigurableKafkaPrincipalBuilder);
         assertTrue(((ConfigurableKafkaPrincipalBuilder) builder).configured);
     }

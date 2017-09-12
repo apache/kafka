@@ -25,7 +25,9 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Closeable;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.nio.channels.SelectionKey;
 import java.util.Map;
 
@@ -52,9 +54,7 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
     }
 
     @Override
-    public void close() {
-
-    }
+    public void close() {}
 
     private static class PlaintextAuthenticator implements Authenticator {
         private final PlaintextTransportLayer transportLayer;
@@ -70,13 +70,12 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
         }
 
         @Override
-        public void authenticate() throws IOException {
-
-        }
+        public void authenticate() throws IOException {}
 
         @Override
         public KafkaPrincipal principal() {
-            return principalBuilder.build(PlaintextAuthenticationContext.INSTANCE);
+            InetAddress clientAddress = transportLayer.socketChannel().socket().getInetAddress();
+            return principalBuilder.build(new PlaintextAuthenticationContext(clientAddress));
         }
 
         @Override
@@ -86,7 +85,8 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
 
         @Override
         public void close() {
-            Utils.closeQuietly(principalBuilder, "principal builder");
+            if (principalBuilder instanceof Closeable)
+                Utils.closeQuietly((Closeable) principalBuilder, "principal builder");
         }
     }
 

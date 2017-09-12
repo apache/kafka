@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.security.authenticator;
 
-import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.network.InvalidReceiveException;
 import org.apache.kafka.common.network.ListenerName;
@@ -34,7 +34,6 @@ import org.junit.Test;
 
 import javax.security.auth.Subject;
 import java.io.IOException;
-import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
@@ -50,7 +49,7 @@ public class SaslServerAuthenticatorTest {
     public void testOversizeRequest() throws IOException {
         TransportLayer transportLayer = EasyMock.mock(TransportLayer.class);
         SaslServerAuthenticator authenticator = setupAuthenticator(transportLayer);
-        Map<String, ?> configs = Collections.singletonMap(SaslConfigs.SASL_ENABLED_MECHANISMS,
+        Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
                 Collections.singletonList(SCRAM_SHA_256.mechanismName()));
 
         final Capture<ByteBuffer> size = EasyMock.newCapture();
@@ -72,7 +71,7 @@ public class SaslServerAuthenticatorTest {
     public void testUnexpectedRequestType() throws IOException {
         TransportLayer transportLayer = EasyMock.mock(TransportLayer.class);
         SaslServerAuthenticator authenticator = setupAuthenticator(transportLayer);
-        Map<String, ?> configs = Collections.singletonMap(SaslConfigs.SASL_ENABLED_MECHANISMS,
+        Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
                 Collections.singletonList(SCRAM_SHA_256.mechanismName()));
 
         final RequestHeader header = new RequestHeader(ApiKeys.METADATA, (short) 0, "clientId", 13243);
@@ -113,8 +112,8 @@ public class SaslServerAuthenticatorTest {
         jaasConfig.addEntry("jaasContext", PlainLoginModule.class.getName(), new HashMap<String, Object>());
         JaasContext jaasContext = new JaasContext("jaasContext", JaasContext.Type.SERVER, jaasConfig);
         Subject subject = new Subject();
-        return new SaslServerAuthenticator("node", jaasContext, subject, null, InetAddress.getLocalHost(),
-                new CredentialCache(), new ListenerName("ssl"), SecurityProtocol.SASL_SSL, transportLayer);
+        return new SaslServerAuthenticator("node", jaasContext, subject, null, new CredentialCache(),
+                new ListenerName("ssl"), SecurityProtocol.SASL_SSL, transportLayer);
     }
 
 }

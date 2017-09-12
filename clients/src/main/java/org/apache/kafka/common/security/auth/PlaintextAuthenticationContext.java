@@ -16,7 +16,23 @@
  */
 package org.apache.kafka.common.security.auth;
 
+import java.net.InetAddress;
+
 public class PlaintextAuthenticationContext implements AuthenticationContext {
-    public static final PlaintextAuthenticationContext INSTANCE = new PlaintextAuthenticationContext();
+    private final InetAddress clientAddress;
+
+    public PlaintextAuthenticationContext(InetAddress clientAddress) {
+        this.clientAddress = clientAddress;
+    }
+
+    @Override
+    public String securityProtocol() {
+        return "PLAINTEXT";
+    }
+
+    @Override
+    public InetAddress clientAddress() {
+        return clientAddress;
+    }
 
 }

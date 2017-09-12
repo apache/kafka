@@ -59,7 +59,7 @@ public class KafkaPrincipal implements Principal {
      *
      * @param str The input string formatted as "{principalType}:{principalName}"
      * @return The parsed {@link KafkaPrincipal} instance
-     * @deprecated As of 1.0.0. This method may be removed in a future major release.
+     * @deprecated As of 1.0.0. This method will be removed in a future major release.
      */
     @Deprecated
     public static KafkaPrincipal fromString(String str) {

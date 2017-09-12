@@ -16,10 +16,21 @@
  */
 package org.apache.kafka.common.security.auth;
 
+import java.net.InetAddress;
+
 /**
  * An object representing contextual information from the authentication session. See
  * {@link SaslAuthenticationContext} and {@link SslAuthenticationContext}.
  */
 public interface AuthenticationContext {
+    /**
+     * Underlying security protocol of the authentication session.
+     * @return The name of the security protocol (i.e. PLAINTEXT, SASL_PLAINTEXT, SASL_SSL, SSL)
+     */
+    String securityProtocol();
 
+    /**
+     * Address of the authenticated client
+     */
+    InetAddress clientAddress();
 }

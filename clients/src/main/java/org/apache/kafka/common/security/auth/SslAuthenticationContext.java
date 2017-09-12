@@ -17,16 +17,28 @@
 package org.apache.kafka.common.security.auth;
 
 import javax.net.ssl.SSLSession;
+import java.net.InetAddress;
 
 public class SslAuthenticationContext implements AuthenticationContext {
     private final SSLSession session;
+    private final InetAddress clientAddress;
 
-    public SslAuthenticationContext(SSLSession session) {
+    public SslAuthenticationContext(SSLSession session, InetAddress clientAddress) {
         this.session = session;
+        this.clientAddress = clientAddress;
     }
 
     public SSLSession session() {
         return session;
     }
 
+    @Override
+    public String securityProtocol() {
+        return "SSL";
+    }
+
+    @Override
+    public InetAddress clientAddress() {
+        return clientAddress;
+    }
 }
