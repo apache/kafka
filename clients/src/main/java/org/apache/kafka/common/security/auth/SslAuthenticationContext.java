@@ -14,31 +14,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.network;
+package org.apache.kafka.common.security.auth;
 
-import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.protocol.SecurityProtocol;
 
-import java.io.Closeable;
-import java.io.IOException;
+import javax.net.ssl.SSLSession;
+import java.net.InetAddress;
 
-/**
- * Authentication for Channel
- */
-public interface Authenticator extends Closeable {
-    /**
-     * Implements any authentication mechanism. Use transportLayer to read or write tokens.
-     * If no further authentication needs to be done returns.
-     */
-    void authenticate() throws IOException;
+public class SslAuthenticationContext implements AuthenticationContext {
+    private final SSLSession session;
+    private final InetAddress clientAddress;
 
-    /**
-     * Returns Principal using PrincipalBuilder
-     */
-    KafkaPrincipal principal();
+    public SslAuthenticationContext(SSLSession session, InetAddress clientAddress) {
+        this.session = session;
+        this.clientAddress = clientAddress;
+    }
 
-    /**
-     * returns true if authentication is complete otherwise returns false;
-     */
-    boolean complete();
+    public SSLSession session() {
+        return session;
+    }
 
+    @Override
+    public String securityProtocolName() {
+        return SecurityProtocol.SSL.name;
+    }
+
+    @Override
+    public InetAddress clientAddress() {
+        return clientAddress;
+    }
 }

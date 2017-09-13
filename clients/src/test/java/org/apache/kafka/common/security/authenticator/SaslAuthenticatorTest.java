@@ -19,6 +19,7 @@ package org.apache.kafka.common.security.authenticator;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.CertStores;
 import org.apache.kafka.common.network.ChannelBuilder;
@@ -634,7 +635,7 @@ public class SaslAuthenticatorTest {
     public void testDynamicJaasConfiguration() throws Exception {
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "PLAIN");
-        saslServerConfigs.put(SaslConfigs.SASL_ENABLED_MECHANISMS, Arrays.asList("PLAIN"));
+        saslServerConfigs.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, Arrays.asList("PLAIN"));
         Map<String, Object> serverOptions = new HashMap<>();
         serverOptions.put("user_user1", "user1-secret");
         serverOptions.put("user_user2", "user2-secret");
@@ -676,7 +677,7 @@ public class SaslAuthenticatorTest {
     public void testJaasConfigurationForListener() throws Exception {
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "PLAIN");
-        saslServerConfigs.put(SaslConfigs.SASL_ENABLED_MECHANISMS, Arrays.asList("PLAIN"));
+        saslServerConfigs.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, Arrays.asList("PLAIN"));
 
         TestJaasConfig staticJaasConfig = new TestJaasConfig();
 
@@ -782,7 +783,7 @@ public class SaslAuthenticatorTest {
 
     private TestJaasConfig configureMechanisms(String clientMechanism, List<String> serverMechanisms) {
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, clientMechanism);
-        saslServerConfigs.put(SaslConfigs.SASL_ENABLED_MECHANISMS, serverMechanisms);
+        saslServerConfigs.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, serverMechanisms);
         return TestJaasConfig.createConfiguration(clientMechanism, serverMechanisms);
     }
 
@@ -860,7 +861,7 @@ public class SaslAuthenticatorTest {
 
     @SuppressWarnings("unchecked")
     private void updateScramCredentialCache(String username, String password) throws NoSuchAlgorithmException {
-        for (String mechanism : (List<String>) saslServerConfigs.get(SaslConfigs.SASL_ENABLED_MECHANISMS)) {
+        for (String mechanism : (List<String>) saslServerConfigs.get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG)) {
             ScramMechanism scramMechanism = ScramMechanism.forMechanismName(mechanism);
             if (scramMechanism != null) {
                 ScramFormatter formatter = new ScramFormatter(scramMechanism);

@@ -14,31 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.network;
+package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
-import java.io.Closeable;
-import java.io.IOException;
+public class SecurityUtils {
 
-/**
- * Authentication for Channel
- */
-public interface Authenticator extends Closeable {
-    /**
-     * Implements any authentication mechanism. Use transportLayer to read or write tokens.
-     * If no further authentication needs to be done returns.
-     */
-    void authenticate() throws IOException;
+    public static KafkaPrincipal parseKafkaPrincipal(String str) {
+        if (str == null || str.isEmpty()) {
+            throw new IllegalArgumentException("expected a string in format principalType:principalName but got " + str);
+        }
 
-    /**
-     * Returns Principal using PrincipalBuilder
-     */
-    KafkaPrincipal principal();
+        String[] split = str.split(":", 2);
 
-    /**
-     * returns true if authentication is complete otherwise returns false;
-     */
-    boolean complete();
+        if (split.length != 2) {
+            throw new IllegalArgumentException("expected a string in format principalType:principalName but got " + str);
+        }
+
+        return new KafkaPrincipal(split[0], split[1]);
+    }
 
 }

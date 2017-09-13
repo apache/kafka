@@ -17,17 +17,15 @@
 package org.apache.kafka.common.network;
 
 
-import java.io.IOException;
+import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.utils.Utils;
 
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.nio.channels.SelectionKey;
-
-import java.security.Principal;
-
 import java.util.Objects;
-import org.apache.kafka.common.memory.MemoryPool;
-import org.apache.kafka.common.utils.Utils;
 
 public class KafkaChannel {
     private final String id;
@@ -66,7 +64,7 @@ public class KafkaChannel {
     /**
      * Returns the principal returned by `authenticator.principal()`.
      */
-    public Principal principal() throws IOException {
+    public KafkaPrincipal principal() {
         return authenticator.principal();
     }
 

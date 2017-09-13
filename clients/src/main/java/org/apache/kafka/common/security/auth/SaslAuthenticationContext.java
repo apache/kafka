@@ -16,18 +16,33 @@
  */
 package org.apache.kafka.common.security.auth;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.apache.kafka.common.protocol.SecurityProtocol;
 
-public class KafkaPrincipalTest {
+import javax.security.sasl.SaslServer;
+import java.net.InetAddress;
 
-    @Test
-    public void testEqualsAndHashCode() {
-        String name = "KafkaUser";
-        KafkaPrincipal principal1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, name);
-        KafkaPrincipal principal2 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, name);
+public class SaslAuthenticationContext implements AuthenticationContext {
+    private final SaslServer server;
+    private final SecurityProtocol securityProtocol;
+    private final InetAddress clientAddress;
 
-        Assert.assertEquals(principal1.hashCode(), principal2.hashCode());
-        Assert.assertEquals(principal1, principal2);
+    public SaslAuthenticationContext(SaslServer server, SecurityProtocol securityProtocol, InetAddress clientAddress) {
+        this.server = server;
+        this.securityProtocol = securityProtocol;
+        this.clientAddress = clientAddress;
+    }
+
+    public SaslServer server() {
+        return server;
+    }
+
+    @Override
+    public String securityProtocolName() {
+        return securityProtocol.name;
+    }
+
+    @Override
+    public InetAddress clientAddress() {
+        return clientAddress;
     }
 }

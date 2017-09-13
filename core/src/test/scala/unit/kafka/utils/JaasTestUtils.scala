@@ -158,9 +158,9 @@ object JaasTestUtils {
     kafkaClientModule(mechanism, keytabLocation, KafkaClientPrincipal, KafkaPlainUser, KafkaPlainPassword, KafkaScramUser, KafkaScramPassword).toString
 
   def zkSections: Seq[JaasSection] = Seq(
-    new JaasSection(ZkServerContextName, Seq(ZkDigestModule(debug = false,
+    JaasSection(ZkServerContextName, Seq(ZkDigestModule(debug = false,
       Map("user_super" -> ZkUserSuperPasswd, s"user_$ZkUser" -> ZkUserPassword)))),
-    new JaasSection(ZkClientContextName, Seq(ZkDigestModule(debug = false,
+    JaasSection(ZkClientContextName, Seq(ZkDigestModule(debug = false,
       Map("username" -> ZkUser, "password" -> ZkUserPassword))))
   )
 
@@ -191,7 +191,7 @@ object JaasTestUtils {
           debug = false)
       case mechanism => throw new IllegalArgumentException("Unsupported server mechanism " + mechanism)
     }
-    new JaasSection(contextName, modules)
+    JaasSection(contextName, modules)
   }
 
   // consider refactoring if more mechanisms are added
@@ -227,7 +227,7 @@ object JaasTestUtils {
    * Used for the static JAAS configuration and it uses the credentials for client#2
    */
   def kafkaClientSection(mechanism: Option[String], keytabLocation: Option[File]): JaasSection = {
-    new JaasSection(KafkaClientContextName, mechanism.map(m =>
+    JaasSection(KafkaClientContextName, mechanism.map(m =>
       kafkaClientModule(m, keytabLocation, KafkaClientPrincipal2, KafkaPlainUser2, KafkaPlainPassword2, KafkaScramUser2, KafkaScramPassword2)).toSeq)
   }
 
