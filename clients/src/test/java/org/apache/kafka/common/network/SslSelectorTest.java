@@ -18,6 +18,7 @@ package org.apache.kafka.common.network;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import java.nio.channels.SelectionKey;
@@ -38,10 +39,10 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.security.ssl.SslFactory;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestSslUtils;
 import org.junit.After;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -65,7 +66,7 @@ public class SslSelectorTest extends SelectorTest {
         this.channelBuilder = new SslChannelBuilder(Mode.CLIENT);
         this.channelBuilder.configure(sslClientConfigs);
         this.metrics = new Metrics();
-        this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder);
+        this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext());
     }
 
     @After
@@ -73,6 +74,11 @@ public class SslSelectorTest extends SelectorTest {
         this.selector.close();
         this.server.close();
         this.metrics.close();
+    }
+
+    @Override
+    public SecurityProtocol securityProtocol() {
+        return SecurityProtocol.PLAINTEXT;
     }
 
     /**
@@ -93,7 +99,7 @@ public class SslSelectorTest extends SelectorTest {
             }
         };
         channelBuilder.configure(sslClientConfigs);
-        Selector selector = new Selector(5000, metrics, time, "MetricGroup2", channelBuilder);
+        Selector selector = new Selector(5000, metrics, time, "MetricGroup2", channelBuilder, new LogContext());
         try {
             int reqs = 500;
             String node = "0";
@@ -178,7 +184,7 @@ public class SslSelectorTest extends SelectorTest {
         channelBuilder = new SslChannelBuilder(Mode.SERVER);
         channelBuilder.configure(sslServerConfigs);
         selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup", 
-                new HashMap<String, String>(), true, false, channelBuilder, pool);
+                new HashMap<String, String>(), true, false, channelBuilder, pool, new LogContext());
 
         try (ServerSocketChannel ss = ServerSocketChannel.open()) {
             ss.bind(new InetSocketAddress(0));
@@ -197,7 +203,7 @@ public class SslSelectorTest extends SelectorTest {
             selector.register("clientX", channelX);
             selector.register("clientY", channelY);
 
-            boolean success = false;
+            boolean handshaked = false;
             NetworkReceive firstReceive = null;
             long deadline = System.currentTimeMillis() + 5000;
             //keep calling poll until:
@@ -218,22 +224,18 @@ public class SslSelectorTest extends SelectorTest {
                     assertTrue("only expecting single request", completed.isEmpty());
                 }
 
-                boolean handshaked = sender1.waitForHandshake(1);
-                handshaked = handshaked && sender2.waitForHandshake(1);
+                handshaked = sender1.waitForHandshake(1) && sender2.waitForHandshake(1);
 
-                if (handshaked && firstReceive != null) {
-                    success = true;
+                if (handshaked && firstReceive != null && selector.isOutOfMemory())
                     break;
-                }
             }
-            if (!success) {
-                Assert.fail("could not initiate connections within timeout");
-            }
+            assertTrue("could not initiate connections within timeout", handshaked);
 
             selector.poll(10);
             assertTrue(selector.completedReceives().isEmpty());
             assertEquals(0, pool.availableMemory());
-            assertTrue(selector.isOutOfMemory());
+            assertNotNull("First receive not complete", firstReceive);
+            assertTrue("Selector not out of memory", selector.isOutOfMemory());
 
             firstReceive.close();
             assertEquals(900, pool.availableMemory()); //memory has been released back to pool

@@ -38,7 +38,7 @@ public class FaultDataMap {
 
         @JsonCreator
         public FaultData(@JsonProperty("spec") FaultSpec spec,
-                @JsonProperty("status") FaultState state) {
+                @JsonProperty("state") FaultState state) {
             this.spec = spec;
             this.state = state;
         }

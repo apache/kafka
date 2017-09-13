@@ -49,7 +49,7 @@
 
     <p>
         With 1.0 a major API refactoring was accomplished and the new API is cleaner and easier to use.
-        This change includes the five main classes <code>KafakStreams<code>, <code>KStreamBuilder</code>,
+        This change includes the five main classes <code>KafkaStreams<code>, <code>KStreamBuilder</code>,
         <code>KStream</code>, <code>KTable</code>, and <code>TopologyBuilder</code> (and some more others).
         All changes are fully backward compatible as old API is only deprecated but not removed.
         We recommend to move to the new API as soon as you can.
@@ -66,7 +66,7 @@
         The new classes have basically the same methods as the old ones to build a topology via DSL or Processor API.
         However, some internal methods that were public in <code>KStreamBuilder</code>
         and <code>TopologyBuilder</code> but not part of the actual API are not present
-        in the new classe any longer.
+        in the new classes any longer.
         Furthermore, some overloads were simplified compared to the original classes.
         See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-120%3A+Cleanup+Kafka+Streams+builder+API">KIP-120</a>
         and <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-182%3A+Reduce+Streams+DSL+overloads+and+allow+easier+use+of+custom+storage+engines">KIP-182</a>
@@ -86,6 +86,18 @@
     </p>
 
     <p>
+        With the introduction of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-182%3A+Reduce+Streams+DSL+overloads+and+allow+easier+use+of+custom+storage+engines">KIP-182</a>
+        you should no longer pass in <code>Serde</code> to <code>KStream#print</code> operations.
+        If you can't rely on using <code>toString</code> to print your keys an values, you should instead you provide a custom <code>KeyValueMapper</code> via the <code>Printed#withKeyValueMapper</code> call.
+    </p>
+
+    <p>
+        Windowed aggregations have moved from <code>KGroupedStream</code> to <code>WindowedKStream</code>.
+        You can now perform a windowed aggregation by, for example, using <code>KGroupedStream#windowedBy(Windows)#reduce(Reducer)</code>.
+        Note: the previous aggregate functions on <code>KGroupedStream</code> still work, but have been deprecated.
+    </p>
+
+    <p>
         The Processor API was extended to allow users to schedule <code>punctuate</code> functions either based on data-driven <b>stream time</b> or wall-clock time.
         As a result, the original <code>ProcessorContext#schedule</code> is deprecated with a new overloaded function that accepts a user customizable <code>Punctuator</code> callback interface, which triggers its <code>punctuate</code> API method periodically based on the <code>PunctuationType</code>.
         The <code>PunctuationType</code> determines what notion of time is used for the punctuation scheduling: either <a href="/{{version}}/documentation/streams/core-concepts#streams_time">stream time</a> or wall-clock time (by default, <b>stream time</b> is configured to represent event time via <code>TimestampExtractor</code>).
@@ -95,8 +107,8 @@
     <p>
         Before this, users could only schedule based on stream time (i.e. <code>PunctuationType.STREAM_TIME</code>) and hence the <code>punctuate</code> function was data-driven only because stream time is determined (and advanced forward) by the timestamps derived from the input data.
         If there is no data arriving at the processor, the stream time would not advance and hence punctuation will not be triggered.
-        On the other hand, When wall-clock time (i.e. <code>PunctuationType.SYSTEM_TIME</code>) is used, <code>punctuate</code> will be triggered purely based on wall-clock time.
-        So for example if the <code>Punctuator</code> function is scheduled based on <code>PunctuationType.SYSTEM_TIME</code>, if these 60 records were processed within 20 seconds,
+        On the other hand, When wall-clock time (i.e. <code>PunctuationType.WALL_CLOCK_TIME</code>) is used, <code>punctuate</code> will be triggered purely based on wall-clock time.
+        So for example if the <code>Punctuator</code> function is scheduled based on <code>PunctuationType.WALL_CLOCK_TIME</code>, if these 60 records were processed within 20 seconds,
         <code>punctuate</code> would be called 2 times (one time every 10 seconds);
         if these 60 records were processed within 5 seconds, then no <code>punctuate</code> would be called at all.
         Users can schedule multiple <code>Punctuator</code> callbacks with different <code>PunctuationType</code>s within the same processor by simply calling <code>ProcessorContext#schedule</code> multiple times inside processor's <code>init()</code> method.

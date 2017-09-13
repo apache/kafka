@@ -289,6 +289,7 @@ public class KafkaAdminClient extends AdminClient {
         ChannelBuilder channelBuilder = null;
         Selector selector = null;
         ApiVersions apiVersions = new ApiVersions();
+        LogContext logContext = createLogContext(clientId);
 
         try {
             // Since we only request node information, it's safe to pass true for allowAutoTopicCreation (and it
@@ -307,7 +308,7 @@ public class KafkaAdminClient extends AdminClient {
             String metricGrpPrefix = "admin-client";
             channelBuilder = ClientUtils.createChannelBuilder(config);
             selector = new Selector(config.getLong(AdminClientConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
-                    metrics, time, metricGrpPrefix, channelBuilder);
+                    metrics, time, metricGrpPrefix, channelBuilder, logContext);
             networkClient = new NetworkClient(
                 selector,
                 metadata,
@@ -320,9 +321,10 @@ public class KafkaAdminClient extends AdminClient {
                 (int) TimeUnit.HOURS.toMillis(1),
                 time,
                 true,
-                apiVersions);
+                apiVersions,
+                logContext);
             return new KafkaAdminClient(config, clientId, time, metadata, metrics, networkClient,
-                timeoutProcessorFactory);
+                timeoutProcessorFactory, logContext);
         } catch (Throwable exc) {
             closeQuietly(metrics, "Metrics");
             closeQuietly(networkClient, "NetworkClient");
@@ -338,18 +340,23 @@ public class KafkaAdminClient extends AdminClient {
 
         try {
             metrics = new Metrics(new MetricConfig(), new LinkedList<MetricsReporter>(), time);
-            return new KafkaAdminClient(config, clientId, time, metadata, metrics, client, null);
+            return new KafkaAdminClient(config, clientId, time, metadata, metrics, client, null,
+                    createLogContext(clientId));
         } catch (Throwable exc) {
             closeQuietly(metrics, "Metrics");
             throw new KafkaException("Failed create new KafkaAdminClient", exc);
         }
     }
 
+    private static LogContext createLogContext(String clientId) {
+        return new LogContext("[AdminClient clientId=" + clientId + "] ");
+    }
+
     private KafkaAdminClient(AdminClientConfig config, String clientId, Time time, Metadata metadata,
-                     Metrics metrics, KafkaClient client, TimeoutProcessorFactory timeoutProcessorFactory) {
+                     Metrics metrics, KafkaClient client, TimeoutProcessorFactory timeoutProcessorFactory,
+                     LogContext logContext) {
         this.defaultTimeoutMs = config.getInt(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.clientId = clientId;
-        LogContext logContext = new LogContext("[AdminClient clientId=" + clientId + "] ");
         this.log = logContext.logger(KafkaAdminClient.class);
         this.time = time;
         this.metadata = metadata;
@@ -368,6 +375,10 @@ public class KafkaAdminClient extends AdminClient {
         AppInfoParser.registerAppInfo(JMX_PREFIX, clientId);
         log.debug("Kafka admin client initialized");
         thread.start();
+    }
+
+    Time time() {
+        return time;
     }
 
     @Override

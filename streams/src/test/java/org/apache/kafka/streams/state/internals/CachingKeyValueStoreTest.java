@@ -63,7 +63,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     private String topic;
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         final String storeName = "store";
         underlyingStore = new InMemoryKeyValueStore<>(storeName, Serdes.Bytes(), Serdes.ByteArray());
         cacheFlushListener = new CacheFlushListenerStub<>();
@@ -108,7 +108,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldPutGetToFromCache() throws Exception {
+    public void shouldPutGetToFromCache() {
         store.put(bytesKey("key"), bytesValue("value"));
         store.put(bytesKey("key2"), bytesValue("value2"));
         assertThat(store.get(bytesKey("key")), equalTo(bytesValue("value")));
@@ -127,7 +127,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldFlushEvictedItemsIntoUnderlyingStore() throws Exception {
+    public void shouldFlushEvictedItemsIntoUnderlyingStore() throws IOException {
         int added = addItemsToCache();
         // all dirty entries should have been flushed
         assertEquals(added, underlyingStore.approximateNumEntries());
@@ -136,13 +136,13 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldForwardDirtyItemToListenerWhenEvicted() throws Exception {
+    public void shouldForwardDirtyItemToListenerWhenEvicted() throws IOException {
         int numRecords = addItemsToCache();
         assertEquals(numRecords, cacheFlushListener.forwarded.size());
     }
 
     @Test
-    public void shouldForwardDirtyItemsWhenFlushCalled() throws Exception {
+    public void shouldForwardDirtyItemsWhenFlushCalled() {
         store.put(bytesKey("1"), bytesValue("a"));
         store.flush();
         assertEquals("a", cacheFlushListener.forwarded.get("1").newValue);
@@ -150,7 +150,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldForwardOldValuesWhenEnabled() throws Exception {
+    public void shouldForwardOldValuesWhenEnabled() {
         store.put(bytesKey("1"), bytesValue("a"));
         store.flush();
         store.put(bytesKey("1"), bytesValue("b"));
@@ -160,7 +160,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldIterateAllStoredItems() throws Exception {
+    public void shouldIterateAllStoredItems() throws IOException {
         int items = addItemsToCache();
         final KeyValueIterator<Bytes, byte[]> all = store.all();
         final List<Bytes> results = new ArrayList<>();
@@ -171,7 +171,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldIterateOverRange() throws Exception {
+    public void shouldIterateOverRange() throws IOException {
         int items = addItemsToCache();
         final KeyValueIterator<Bytes, byte[]> range = store.range(bytesKey(String.valueOf(0)), bytesKey(String.valueOf(items)));
         final List<Bytes> results = new ArrayList<>();
@@ -182,7 +182,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldDeleteItemsFromCache() throws Exception {
+    public void shouldDeleteItemsFromCache() {
         store.put(bytesKey("a"), bytesValue("a"));
         store.delete(bytesKey("a"));
         assertNull(store.get(bytesKey("a")));
@@ -191,7 +191,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldNotShowItemsDeletedFromCacheButFlushedToStoreBeforeDelete() throws Exception {
+    public void shouldNotShowItemsDeletedFromCacheButFlushedToStoreBeforeDelete() {
         store.put(bytesKey("a"), bytesValue("a"));
         store.flush();
         store.delete(bytesKey("a"));
@@ -201,7 +201,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldClearNamespaceCacheOnClose() throws Exception {
+    public void shouldClearNamespaceCacheOnClose() {
         store.put(bytesKey("a"), bytesValue("a"));
         assertEquals(1, cache.size());
         store.close();
@@ -209,43 +209,43 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowIfTryingToGetFromClosedCachingStore() throws Exception {
+    public void shouldThrowIfTryingToGetFromClosedCachingStore() {
         store.close();
         store.get(bytesKey("a"));
     }
 
     @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowIfTryingToWriteToClosedCachingStore() throws Exception {
+    public void shouldThrowIfTryingToWriteToClosedCachingStore() {
         store.close();
         store.put(bytesKey("a"), bytesValue("a"));
     }
 
     @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowIfTryingToDoRangeQueryOnClosedCachingStore() throws Exception {
+    public void shouldThrowIfTryingToDoRangeQueryOnClosedCachingStore() {
         store.close();
         store.range(bytesKey("a"), bytesKey("b"));
     }
 
     @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowIfTryingToDoAllQueryOnClosedCachingStore() throws Exception {
+    public void shouldThrowIfTryingToDoAllQueryOnClosedCachingStore() {
         store.close();
         store.all();
     }
 
     @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowIfTryingToDoGetApproxSizeOnClosedCachingStore() throws Exception {
+    public void shouldThrowIfTryingToDoGetApproxSizeOnClosedCachingStore() {
         store.close();
         store.approximateNumEntries();
     }
 
     @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowIfTryingToDoPutAllClosedCachingStore() throws Exception {
+    public void shouldThrowIfTryingToDoPutAllClosedCachingStore() {
         store.close();
         store.putAll(Collections.singletonList(KeyValue.pair(bytesKey("a"), bytesValue("a"))));
     }
 
     @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowIfTryingToDoPutIfAbsentClosedCachingStore() throws Exception {
+    public void shouldThrowIfTryingToDoPutIfAbsentClosedCachingStore() {
         store.close();
         store.putIfAbsent(bytesKey("b"), bytesValue("c"));
     }
@@ -295,7 +295,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowIfTryingToDeleteFromClosedCachingStore() throws Exception {
+    public void shouldThrowIfTryingToDeleteFromClosedCachingStore() {
         store.close();
         store.delete(bytesKey("key"));
     }

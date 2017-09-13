@@ -24,6 +24,7 @@ import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
@@ -35,6 +36,8 @@ import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 
+import java.util.Collection;
+import java.util.Collections;
 import java.util.regex.Pattern;
 
 /**
@@ -66,17 +69,35 @@ public class StreamsBuilder {
      * If this is not the case it is the user's responsibility to repartition the data before any key based operation
      * (like aggregation or join) is applied to the returned {@link KStream}.
      *
-     * @param topics the topic names; must contain at least one topic name
+     * @param topic the topic name; cannot be {@code null}
      * @return a {@link KStream} for the specified topics
      */
-    public synchronized <K, V> KStream<K, V> stream(final String... topics) {
-        return internalStreamsBuilder.stream(null, null, null, null, topics);
+    public synchronized <K, V> KStream<K, V> stream(final String topic) {
+        return stream(Collections.singleton(topic));
     }
 
     /**
      * Create a {@link KStream} from the specified topics.
-     * The default {@link TimestampExtractor} and default key and value deserializers as specified in the
-     * {@link StreamsConfig config} are used.
+     * The {@code "auto.offset.reset"} strategy, {@link TimestampExtractor}, key and value deserializers
+     * are defined by the options in {@link Consumed}.
+     * <p>
+     * Note that the specified input topics must be partitioned by key.
+     * If this is not the case it is the user's responsibility to repartition the data before any key based operation
+     * (like aggregation or join) is applied to the returned {@link KStream}.
+     *
+     * @param topic the topic names; cannot be {@code null}
+     * @param consumed      the instance of {@link Consumed} used to define optional parameters
+     * @return a {@link KStream} for the specified topics
+     */
+    public synchronized <K, V> KStream<K, V> stream(final String topic,
+                                                    final Consumed<K, V> consumed) {
+        return stream(Collections.singleton(topic), consumed);
+    }
+
+    /**
+     * Create a {@link KStream} from the specified topics.
+     * The default {@code "auto.offset.reset"} strategy, default {@link TimestampExtractor}, and default key and value
+     * deserializers as specified in the {@link StreamsConfig config} are used.
      * <p>
      * If multiple topics are specified there is no ordering guarantee for records from different topics.
      * <p>
@@ -84,15 +105,33 @@ public class StreamsBuilder {
      * If this is not the case it is the user's responsibility to repartition the data before any key based operation
      * (like aggregation or join) is applied to the returned {@link KStream}.
      *
-     * @param offsetReset the {@code "auto.offset.reset"} policy to use for the specified topics if no valid committed
-     *                    offsets are available
-     * @param topics      the topic names; must contain at least one topic name
+     * @param topics the topic names; must contain at least one topic name
      * @return a {@link KStream} for the specified topics
      */
-    public synchronized <K, V> KStream<K, V> stream(final Topology.AutoOffsetReset offsetReset,
-                                                    final String... topics) {
-        return internalStreamsBuilder.stream(offsetReset, null, null, null, topics);
+    public synchronized <K, V> KStream<K, V> stream(final Collection<String> topics) {
+        return stream(topics, Consumed.<K, V>with(null, null, null, null));
     }
+
+    /**
+     * Create a {@link KStream} from the specified topics.
+     * The {@code "auto.offset.reset"} strategy, {@link TimestampExtractor}, key and value deserializers
+     * are defined by the options in {@link Consumed}.
+     * <p>
+     * If multiple topics are specified there is no ordering guarantee for records from different topics.
+     * <p>
+     * Note that the specified input topics must be partitioned by key.
+     * If this is not the case it is the user's responsibility to repartition the data before any key based operation
+     * (like aggregation or join) is applied to the returned {@link KStream}.
+     *
+     * @param topics the topic names; must contain at least one topic name
+     * @param consumed      the instance of {@link Consumed} used to define optional parameters
+     * @return a {@link KStream} for the specified topics
+     */
+    public synchronized <K, V> KStream<K, V> stream(final Collection<String> topics,
+                                                    final Consumed<K, V> consumed) {
+        return internalStreamsBuilder.stream(topics, new ConsumedInternal<>(consumed));
+    }
+
 
     /**
      * Create a {@link KStream} from the specified topic pattern.
@@ -110,13 +149,13 @@ public class StreamsBuilder {
      * @return a {@link KStream} for topics matching the regex pattern.
      */
     public synchronized <K, V> KStream<K, V> stream(final Pattern topicPattern) {
-        return internalStreamsBuilder.stream(null, null,  null, null, topicPattern);
+        return stream(topicPattern, Consumed.<K, V>with(null, null));
     }
 
     /**
      * Create a {@link KStream} from the specified topic pattern.
-     * The default {@link TimestampExtractor} and default key and value deserializers as specified in the
-     * {@link StreamsConfig config} are used.
+     * The {@code "auto.offset.reset"} strategy, {@link TimestampExtractor}, key and value deserializers
+     * are defined by the options in {@link Consumed}.
      * <p>
      * If multiple topics are matched by the specified pattern, the created {@link KStream} will read data from all of
      * them and there is no ordering guarantee between records from different topics.
@@ -125,226 +164,13 @@ public class StreamsBuilder {
      * If this is not the case it is the user's responsibility to repartition the data before any key based operation
      * (like aggregation or join) is applied to the returned {@link KStream}.
      *
-     * @param offsetReset  the {@code "auto.offset.reset"} policy to use for the matched topics if no valid committed
-     *                     offsets are available
-     * @param topicPattern the pattern to match for topic names
+     * @param topicPattern  the pattern to match for topic names
+     * @param consumed      the instance of {@link Consumed} used to define optional parameters
      * @return a {@link KStream} for topics matching the regex pattern.
      */
-    public synchronized <K, V> KStream<K, V> stream(final Topology.AutoOffsetReset offsetReset,
-                                                    final Pattern topicPattern) {
-        return internalStreamsBuilder.stream(offsetReset, null, null, null, topicPattern);
-    }
-
-    /**
-     * Create a {@link KStream} from the specified topics.
-     * The default {@code "auto.offset.reset"} strategy and default {@link TimestampExtractor} as specified in the
-     * {@link StreamsConfig config} are used.
-     * <p>
-     * If multiple topics are specified there is no ordering guarantee for records from different topics.
-     * <p>
-     * Note that the specified input topics must be partitioned by key.
-     * If this is not the case it is the user's responsibility to repartition the data before any key based operation
-     * (like aggregation or join) is applied to the returned {@link KStream}.
-     *
-     * @param keySerde   key serde used to read this source {@link KStream},
-     *                   if not specified the default serde defined in the configs will be used
-     * @param valueSerde value serde used to read this source {@link KStream},
-     *                   if not specified the default serde defined in the configs will be used
-     * @param topics     the topic names; must contain at least one topic name
-     * @return a {@link KStream} for the specified topics
-     */
-    public synchronized <K, V> KStream<K, V> stream(final Serde<K> keySerde,
-                                                    final Serde<V> valueSerde,
-                                                    final String... topics) {
-        return internalStreamsBuilder.stream(null, null, keySerde, valueSerde, topics);
-    }
-
-    /**
-     * Create a {@link KStream} from the specified topics.
-     * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
-     * <p>
-     * If multiple topics are specified there is no ordering guarantee for records from different topics.
-     * <p>
-     * Note that the specified input topics must be partitioned by key.
-     * If this is not the case it is the user's responsibility to repartition the data before any key based operation
-     * (like aggregation or join) is applied to the returned {@link KStream}.
-     *
-     * @param offsetReset the {@code "auto.offset.reset"} policy to use for the specified topics if no valid committed
-     *                    offsets are available
-     * @param keySerde    key serde used to read this source {@link KStream},
-     *                    if not specified the default serde defined in the configs will be used
-     * @param valueSerde  value serde used to read this source {@link KStream},
-     *                    if not specified the default serde defined in the configs will be used
-     * @param topics      the topic names; must contain at least one topic name
-     * @return a {@link KStream} for the specified topics
-     */
-    public synchronized <K, V> KStream<K, V> stream(final Topology.AutoOffsetReset offsetReset,
-                                                    final Serde<K> keySerde,
-                                                    final Serde<V> valueSerde,
-                                                    final String... topics) {
-        return internalStreamsBuilder.stream(offsetReset, null, keySerde, valueSerde, topics);
-    }
-
-    /**
-     * Create a {@link KStream} from the specified topics.
-     * The default {@code "auto.offset.reset"} strategy as specified in the {@link StreamsConfig config} is used.
-     * <p>
-     * If multiple topics are specified there is no ordering guarantee for records from different topics.
-     * <p>
-     * Note that the specified input topics must be partitioned by key.
-     * If this is not the case it is the user's responsibility to repartition the data before any key based operation
-     * (like aggregation or join) is applied to the returned {@link KStream}.
-     *
-     * @param timestampExtractor the stateless timestamp extractor used for this source {@link KStream},
-     *                           if not specified the default extractor defined in the configs will be used
-     * @param keySerde           key serde used to read this source {@link KStream}, if not specified the default
-     *                           serde defined in the configs will be used
-     * @param valueSerde         value serde used to read this source {@link KStream},
-     *                           if not specified the default serde defined in the configs will be used
-     * @param topics             the topic names; must contain at least one topic name
-     * @return a {@link KStream} for the specified topics
-     */
-    public synchronized <K, V> KStream<K, V> stream(final TimestampExtractor timestampExtractor,
-                                                    final Serde<K> keySerde,
-                                                    final Serde<V> valueSerde,
-                                                    final String... topics) {
-        return internalStreamsBuilder.stream(null, timestampExtractor, keySerde, valueSerde, topics);
-    }
-
-    /**
-     * Create a {@link KStream} from the specified topics.
-     * <p>
-     * If multiple topics are specified there is no ordering guarantee for records from different topics.
-     * <p>
-     * Note that the specified input topics must be partitioned by key.
-     * If this is not the case it is the user's responsibility to repartition the data before any key based operation
-     * (like aggregation or join) is applied to the returned {@link KStream}.
-     *
-     * @param offsetReset        the {@code "auto.offset.reset"} policy to use for the specified topics
-     *                           if no valid committed offsets are available
-     * @param timestampExtractor the stateless timestamp extractor used for this source {@link KStream},
-     *                           if not specified the default extractor defined in the configs will be used
-     * @param keySerde           key serde used to read this source {@link KStream},
-     *                           if not specified the default serde defined in the configs will be used
-     * @param valueSerde         value serde used to read this source {@link KStream},
-     *                           if not specified the default serde defined in the configs will be used
-     * @param topics             the topic names; must contain at least one topic name
-     * @return a {@link KStream} for the specified topics
-     */
-    public synchronized <K, V> KStream<K, V> stream(final Topology.AutoOffsetReset offsetReset,
-                                                    final TimestampExtractor timestampExtractor,
-                                                    final Serde<K> keySerde,
-                                                    final Serde<V> valueSerde,
-                                                    final String... topics) {
-        return internalStreamsBuilder.stream(offsetReset, timestampExtractor, keySerde, valueSerde, topics);
-    }
-
-    /**
-     * Create a {@link KStream} from the specified topic pattern.
-     * The default {@code "auto.offset.reset"} strategy and default {@link TimestampExtractor}
-     * as specified in the {@link StreamsConfig config} are used.
-     * <p>
-     * If multiple topics are matched by the specified pattern, the created {@link KStream} will read data from all of
-     * them and there is no ordering guarantee between records from different topics.
-     * <p>
-     * Note that the specified input topics must be partitioned by key.
-     * If this is not the case it is the user's responsibility to repartition the data before any key based operation
-     * (like aggregation or join) is applied to the returned {@link KStream}.
-     *
-     * @param keySerde     key serde used to read this source {@link KStream},
-     *                     if not specified the default serde defined in the configs will be used
-     * @param valueSerde   value serde used to read this source {@link KStream},
-     *                     if not specified the default serde defined in the configs will be used
-     * @param topicPattern the pattern to match for topic names
-     * @return a {@link KStream} for topics matching the regex pattern.
-     */
-    public synchronized <K, V> KStream<K, V> stream(final Serde<K> keySerde,
-                                                    final Serde<V> valueSerde,
-                                                    final Pattern topicPattern) {
-        return internalStreamsBuilder.stream(null, null, keySerde, valueSerde, topicPattern);
-    }
-
-    /**
-     * Create a {@link KStream} from the specified topic pattern.
-     * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
-     * <p>
-     * If multiple topics are matched by the specified pattern, the created {@link KStream} will read data from all of
-     * them and there is no ordering guarantee between records from different topics.
-     * <p>
-     * Note that the specified input topics must be partitioned by key.
-     * If this is not the case it is the user's responsibility to repartition the data before any key based operation
-     * (like aggregation or join) is applied to the returned {@link KStream}.
-     *
-     * @param offsetReset  the {@code "auto.offset.reset"} policy to use for the matched topics if no valid committed
-     *                     offsets are available
-     * @param keySerde     key serde used to read this source {@link KStream},
-     *                     if not specified the default serde defined in the configs will be used
-     * @param valueSerde   value serde used to read this source {@link KStream},
-     *                     if not specified the default serde defined in the configs will be used
-     * @param topicPattern the pattern to match for topic names
-     * @return a {@link KStream} for topics matching the regex pattern.
-     */
-    public synchronized <K, V> KStream<K, V> stream(final Topology.AutoOffsetReset offsetReset,
-                                                    final Serde<K> keySerde,
-                                                    final Serde<V> valueSerde,
-                                                    final Pattern topicPattern) {
-        return internalStreamsBuilder.stream(offsetReset, null, keySerde, valueSerde, topicPattern);
-    }
-
-    /**
-     * Create a {@link KStream} from the specified topic pattern.
-     * The default {@code "auto.offset.reset"} strategy as specified in the {@link StreamsConfig config} is used.
-     * <p>
-     * If multiple topics are matched by the specified pattern, the created {@link KStream} will read data from all of
-     * them and there is no ordering guarantee between records from different topics.
-     * <p>
-     * Note that the specified input topics must be partitioned by key.
-     * If this is not the case it is the user's responsibility to repartition the data before any key based operation
-     * (like aggregation or join) is applied to the returned {@link KStream}.
-     *
-     * @param timestampExtractor the stateless timestamp extractor used for this source {@link KStream},
-     *                           if not specified the default extractor defined in the configs will be used
-     * @param keySerde           key serde used to read this source {@link KStream},
-     *                           if not specified the default serde defined in the configs will be used
-     * @param valueSerde         value serde used to read this source {@link KStream},
-     *                           if not specified the default serde defined in the configs will be used
-     * @param topicPattern       the pattern to match for topic names
-     * @return a {@link KStream} for topics matching the regex pattern.
-     */
-    public synchronized <K, V> KStream<K, V> stream(final TimestampExtractor timestampExtractor,
-                                                    final Serde<K> keySerde,
-                                                    final Serde<V> valueSerde,
-                                                    final Pattern topicPattern) {
-        return internalStreamsBuilder.stream(null, timestampExtractor, keySerde, valueSerde, topicPattern);
-    }
-
-    /**
-     * Create a {@link KStream} from the specified topic pattern.
-     * <p>
-     * If multiple topics are matched by the specified pattern, the created {@link KStream} will read data from all of
-     * them and there is no ordering guarantee between records from different topics.
-     * <p>
-     * Note that the specified input topics must be partitioned by key.
-     * If this is not the case it is the user's responsibility to repartition the data before any key based operation
-     * (like aggregation or join) is applied to the returned {@link KStream}.
-     *
-     * @param offsetReset        the {@code "auto.offset.reset"} policy to use for the matched topics if no valid
-     *                           committed  offsets are available
-     * @param timestampExtractor the stateless timestamp extractor used for this source {@link KStream},
-     *                           if not specified the default extractor defined in the configs will be used
-     * @param keySerde           key serde used to read this source {@link KStream},
-     *                           if not specified the default serde defined in the configs will be used
-     * @param valueSerde         value serde used to read this source {@link KStream},
-     *                           if not specified the default serde defined in the configs will be used
-     * @param topicPattern       the pattern to match for topic names
-     * @return a {@link KStream} for topics matching the regex pattern.
-     */
-    public synchronized <K, V> KStream<K, V> stream(final Topology.AutoOffsetReset offsetReset,
-                                                    final TimestampExtractor timestampExtractor,
-                                                    final Serde<K> keySerde,
-                                                    final Serde<V> valueSerde,
-                                                    final Pattern topicPattern) {
-        return internalStreamsBuilder.stream(offsetReset, timestampExtractor, keySerde, valueSerde, topicPattern);
+    public synchronized <K, V> KStream<K, V> stream(final Pattern topicPattern,
+                                                    final Consumed<K, V> consumed) {
+        return internalStreamsBuilder.stream(topicPattern, new ConsumedInternal<>(consumed));
     }
 
     /**
@@ -378,7 +204,7 @@ public class StreamsBuilder {
      */
     public synchronized <K, V> KTable<K, V> table(final String topic,
                                                   final String queryableStoreName) {
-        return internalStreamsBuilder.table(null, null,  null, null, topic, queryableStoreName);
+        return internalStreamsBuilder.table(topic, new ConsumedInternal<K, V>(), queryableStoreName);
     }
 
     /**
@@ -433,7 +259,30 @@ public class StreamsBuilder {
      * @return a {@link KTable} for the specified topic
      */
     public synchronized <K, V> KTable<K, V> table(final String topic) {
-        return internalStreamsBuilder.table(null, null, null, null, topic, (String) null);
+        return internalStreamsBuilder.table(topic, new ConsumedInternal<K, V>(), null);
+    }
+
+    /**
+     * Create a {@link KTable} for the specified topic.
+     * The {@code "auto.offset.reset"} strategy, {@link TimestampExtractor}, key and value deserializers
+     * are defined by the options in {@link Consumed}.
+     * Input {@link KeyValue records} with {@code null} key will be dropped.
+     * <p>
+     * Note that the specified input topics must be partitioned by key.
+     * If this is not the case the returned {@link KTable} will be corrupted.
+     * <p>
+     * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} with an internal
+     * store name. Note that that store name may not be queriable through Interactive Queries.
+     * No internal changelog topic is created since the original input topic can be used for recovery (cf.
+     * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
+     *
+     * @param topic     the topic name; cannot be {@code null}
+     * @param consumed  the instance of {@link Consumed} used to define optional parameters
+     * @return a {@link KTable} for the specified topic
+     */
+    public synchronized <K, V> KTable<K, V> table(final String topic,
+                                                  final Consumed<K, V> consumed) {
+        return internalStreamsBuilder.table(topic, new ConsumedInternal<>(consumed), null);
     }
 
     /**
@@ -464,13 +313,13 @@ public class StreamsBuilder {
      *                           offsets are available
      * @param topic              the topic name; cannot be {@code null}
      * @param queryableStoreName the state store name; if {@code null} this is the equivalent of
-     *                           {@link #table(Topology.AutoOffsetReset, String)}
+     *                           {@link #table(String, Consumed)}
      * @return a {@link KTable} for the specified topic
      */
     public synchronized <K, V> KTable<K, V> table(final Topology.AutoOffsetReset offsetReset,
                                                   final String topic,
                                                   final String queryableStoreName) {
-        return internalStreamsBuilder.table(offsetReset, null, null, null, topic, queryableStoreName);
+        return internalStreamsBuilder.table(topic, new ConsumedInternal<>(Consumed.<K, V>with(offsetReset)), queryableStoreName);
     }
 
     /**
@@ -512,29 +361,6 @@ public class StreamsBuilder {
 
     /**
      * Create a {@link KTable} for the specified topic.
-     * The default key and value deserializers as specified in the {@link StreamsConfig config} are used.
-     * Input {@link KeyValue records} with {@code null} key will be dropped.
-     * <p>
-     * Note that the specified input topics must be partitioned by key.
-     * If this is not the case the returned {@link KTable} will be corrupted.
-     * <p>
-     * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} with an internal
-     * store name. Note that that store name may not be queriable through Interactive Queries.
-     * No internal changelog topic is created since the original input topic can be used for recovery (cf.
-     * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
-     * <p>
-     * @param offsetReset the {@code "auto.offset.reset"} policy to use for the specified topic if no valid committed
-     *                    offsets are available
-     * @param topic       the topic name; cannot be {@code null}
-     * @return a {@link KTable} for the specified topic
-     */
-    public synchronized <K, V> KTable<K, V> table(final Topology.AutoOffsetReset offsetReset,
-                                                  final String topic) {
-        return internalStreamsBuilder.table(offsetReset, null, null, null, topic, (String) null);
-    }
-
-    /**
-     * Create a {@link KTable} for the specified topic.
      * The default {@code "auto.offset.reset"} strategy and default key and value deserializers
      * as specified in the {@link StreamsConfig config} are used.
      * Input {@link KeyValue} pairs with {@code null} key will be dropped.
@@ -567,7 +393,7 @@ public class StreamsBuilder {
     public synchronized <K, V> KTable<K, V> table(final TimestampExtractor timestampExtractor,
                                                   final String topic,
                                                   final String queryableStoreName) {
-        return internalStreamsBuilder.table(null, timestampExtractor, null, null, topic, queryableStoreName);
+        return internalStreamsBuilder.table(topic, new ConsumedInternal<>(Consumed.<K, V>with(timestampExtractor)), queryableStoreName);
     }
 
     /**
@@ -606,7 +432,8 @@ public class StreamsBuilder {
                                                   final TimestampExtractor timestampExtractor,
                                                   final String topic,
                                                   final String queryableStoreName) {
-        return internalStreamsBuilder.table(offsetReset, timestampExtractor, null, null, topic, queryableStoreName);
+        final Consumed<K, V> consumed = Consumed.<K, V>with(offsetReset).withTimestampExtractor(timestampExtractor);
+        return internalStreamsBuilder.table(topic, new ConsumedInternal<>(consumed), queryableStoreName);
     }
 
     /**
@@ -646,7 +473,9 @@ public class StreamsBuilder {
                                                   final Serde<V> valueSerde,
                                                   final String topic,
                                                   final String queryableStoreName) {
-        return internalStreamsBuilder.table(null, null, keySerde, valueSerde, topic, queryableStoreName);
+        return internalStreamsBuilder.table(topic,
+                                            new ConsumedInternal<>(keySerde, valueSerde, null, null),
+                                            queryableStoreName);
     }
 
     /**
@@ -691,32 +520,6 @@ public class StreamsBuilder {
 
     /**
      * Create a {@link KTable} for the specified topic.
-     * The default {@code "auto.offset.reset"} strategy as specified in the {@link StreamsConfig config} is used.
-     * Input {@link KeyValue records} with {@code null} key will be dropped.
-     * <p>
-     * Note that the specified input topics must be partitioned by key.
-     * If this is not the case the returned {@link KTable} will be corrupted.
-     * <p>
-     * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} with an internal
-     * store name. Note that that store name may not be queriable through Interactive Queries.
-     * No internal changelog topic is created since the original input topic can be used for recovery (cf.
-     * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
-     * <p>
-     * @param keySerde   key serde used to send key-value pairs,
-     *                   if not specified the default key serde defined in the configuration will be used
-     * @param valueSerde value serde used to send key-value pairs,
-     *                   if not specified the default value serde defined in the configuration will be used
-     * @param topic      the topic name; cannot be {@code null}
-     * @return a {@link KTable} for the specified topic
-     */
-    public synchronized <K, V> KTable<K, V> table(final Serde<K> keySerde,
-                                                  final Serde<V> valueSerde,
-                                                  final String topic) {
-        return internalStreamsBuilder.table(null, null, keySerde, valueSerde, topic, (String) null);
-    }
-
-    /**
-     * Create a {@link KTable} for the specified topic.
      * Input {@link KeyValue records} with {@code null} key will be dropped.
      * <p>
      * Note that the specified input topics must be partitioned by key.
@@ -753,7 +556,8 @@ public class StreamsBuilder {
                                                   final Serde<V> valueSerde,
                                                   final String topic,
                                                   final String queryableStoreName) {
-        return internalStreamsBuilder.table(offsetReset, null, keySerde, valueSerde, topic, queryableStoreName);
+        final ConsumedInternal<K, V> consumed = new ConsumedInternal<>(keySerde, valueSerde, null, offsetReset);
+        return internalStreamsBuilder.table(topic, consumed, queryableStoreName);
     }
 
     /**
@@ -795,7 +599,8 @@ public class StreamsBuilder {
                                                   final Serde<V> valueSerde,
                                                   final String topic,
                                                   final String queryableStoreName) {
-        return internalStreamsBuilder.table(null, timestampExtractor, keySerde, valueSerde, topic, queryableStoreName);
+        final ConsumedInternal<K, V> consumed = new ConsumedInternal<>(keySerde, valueSerde, timestampExtractor, null);
+        return internalStreamsBuilder.table(topic, consumed, queryableStoreName);
     }
 
     /**
@@ -839,36 +644,9 @@ public class StreamsBuilder {
                                                   final Serde<V> valueSerde,
                                                   final String topic,
                                                   final String queryableStoreName) {
-        return internalStreamsBuilder.table(offsetReset, timestampExtractor, keySerde, valueSerde, topic, queryableStoreName);
-    }
-
-    /**
-     * Create a {@link KTable} for the specified topic.
-     * The default {@code "auto.offset.reset"} strategy as specified in the {@link StreamsConfig config} is used.
-     * Input {@link KeyValue records} with {@code null} key will be dropped.
-     * <p>
-     * Note that the specified input topics must be partitioned by key.
-     * If this is not the case the returned {@link KTable} will be corrupted.
-     * <p>
-     * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} with an internal
-     * store name. Note that that store name may not be queriable through Interactive Queries.
-     * No internal changelog topic is created since the original input topic can be used for recovery (cf.
-     * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
-     * <p>
-     * @param offsetReset the {@code "auto.offset.reset"} policy to use for the specified topic if no valid committed
-     *                    offsets are available
-     * @param keySerde    key serde used to send key-value pairs,
-     *                    if not specified the default key serde defined in the configuration will be used
-     * @param valueSerde  value serde used to send key-value pairs,
-     *                    if not specified the default value serde defined in the configuration will be used
-     * @param topic       the topic name; cannot be {@code null}
-     * @return a {@link KTable} for the specified topic
-     */
-    public synchronized <K, V> KTable<K, V> table(final Topology.AutoOffsetReset offsetReset,
-                                                  final Serde<K> keySerde,
-                                                  final Serde<V> valueSerde,
-                                                  final String topic) {
-        return internalStreamsBuilder.table(offsetReset, null, keySerde, valueSerde, topic, (String) null);
+        return internalStreamsBuilder.table(topic,
+                                            new ConsumedInternal<>(keySerde, valueSerde, timestampExtractor, offsetReset),
+                                            queryableStoreName);
     }
 
     /**
@@ -942,7 +720,28 @@ public class StreamsBuilder {
      */
     public synchronized <K, V> GlobalKTable<K, V> globalTable(final String topic,
                                                               final String queryableStoreName) {
-        return internalStreamsBuilder.globalTable(null, null, null,  topic, queryableStoreName);
+        return internalStreamsBuilder.globalTable(topic, new ConsumedInternal<K, V>(), queryableStoreName);
+    }
+
+    /**
+     * Create a {@link GlobalKTable} for the specified topic.
+     * Input {@link KeyValue records} with {@code null} key will be dropped.
+     * <p>
+     * The resulting {@link GlobalKTable} will be materialized in a local {@link KeyValueStore} with an internal
+     * store name. Note that that store name may not be queriable through Interactive Queries.
+     * No internal changelog topic is created since the original input topic can be used for recovery (cf.
+     * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
+     * <p>
+     * Note that {@link GlobalKTable} always applies {@code "auto.offset.reset"} strategy {@code "earliest"}
+     * regardless of the specified value in {@link StreamsConfig}.
+     *
+     * @param topic the topic name; cannot be {@code null}
+     * @param consumed  the instance of {@link Consumed} used to define optional parameters
+     * @return a {@link GlobalKTable} for the specified topic
+     */
+    public synchronized <K, V> GlobalKTable<K, V> globalTable(final String topic,
+                                                              final Consumed<K, V> consumed) {
+        return internalStreamsBuilder.globalTable(topic, new ConsumedInternal<>(consumed), null);
     }
 
     /**
@@ -962,7 +761,7 @@ public class StreamsBuilder {
      * @return a {@link GlobalKTable} for the specified topic
      */
     public synchronized <K, V> GlobalKTable<K, V> globalTable(final String topic) {
-        return internalStreamsBuilder.globalTable(null, null, null, topic, null);
+        return internalStreamsBuilder.globalTable(topic, new ConsumedInternal<K, V>(), null);
     }
 
     /**
@@ -1002,7 +801,9 @@ public class StreamsBuilder {
                                                               final TimestampExtractor timestampExtractor,
                                                               final String topic,
                                                               final String queryableStoreName) {
-        return internalStreamsBuilder.globalTable(keySerde, valueSerde, timestampExtractor, topic, queryableStoreName);
+        return internalStreamsBuilder.globalTable(topic,
+                                                  new ConsumedInternal<>(keySerde, valueSerde, timestampExtractor, null),
+                                                  queryableStoreName);
     }
 
     /**
@@ -1074,33 +875,9 @@ public class StreamsBuilder {
                                                               final Serde<V> valueSerde,
                                                               final String topic,
                                                               final String queryableStoreName) {
-        return internalStreamsBuilder.globalTable(keySerde, valueSerde, null, topic, queryableStoreName);
-    }
-
-    /**
-     * Create a {@link GlobalKTable} for the specified topic.
-     * The default key and value deserializers as specified in the {@link StreamsConfig config} are used.
-     * Input {@link KeyValue records} with {@code null} key will be dropped.
-     * <p>
-     * The resulting {@link GlobalKTable} will be materialized in a local {@link KeyValueStore} with an internal
-     * store name. Note that that store name may not be queriable through Interactive Queries.
-     * No internal changelog topic is created since the original input topic can be used for recovery (cf.
-     * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
-     * <p>
-     * Note that {@link GlobalKTable} always applies {@code "auto.offset.reset"} strategy {@code "earliest"}
-     * regardless of the specified value in {@link StreamsConfig}.
-     *
-     * @param keySerde   key serde used to send key-value pairs,
-     *                   if not specified the default key serde defined in the configuration will be used
-     * @param valueSerde value serde used to send key-value pairs,
-     *                   if not specified the default value serde defined in the configuration will be used
-     * @param topic      the topic name; cannot be {@code null}
-     * @return a {@link GlobalKTable} for the specified topic
-     */
-    public synchronized <K, V> GlobalKTable<K, V> globalTable(final Serde<K> keySerde,
-                                                              final Serde<V> valueSerde,
-                                                              final String topic) {
-        return internalStreamsBuilder.globalTable(keySerde, valueSerde, null, topic, null);
+        return internalStreamsBuilder.globalTable(topic,
+                                                  new ConsumedInternal<>(Consumed.with(keySerde, valueSerde)),
+                                                  queryableStoreName);
     }
 
     /**

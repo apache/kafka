@@ -29,6 +29,7 @@ import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
@@ -204,7 +205,8 @@ public class SslFactory implements Configurable {
         private final Password password;
 
         private SecurityStore(String type, String path, Password password) {
-            this.type = type == null ? KeyStore.getDefaultType() : type;
+            Objects.requireNonNull(type, "type must not be null");
+            this.type = type;
             this.path = path;
             this.password = password;
         }
