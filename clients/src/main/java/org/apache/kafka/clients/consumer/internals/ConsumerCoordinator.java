@@ -408,17 +408,19 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     @Override
-    protected void onJoinPrepare(int generation, String memberId) {
+    protected Exception onJoinPrepare(int generation, String memberId) {
         // commit offsets prior to rebalance if auto-commit enabled
         maybeAutoCommitOffsetsSync(rebalanceTimeoutMs);
 
         // execute the user's callback before rebalance
         ConsumerRebalanceListener listener = subscriptions.listener();
         log.info("Revoking previously assigned partitions {}", subscriptions.assignedPartitions());
+        Exception exception = null;
         try {
             Set<TopicPartition> revoked = new HashSet<>(subscriptions.assignedPartitions());
             listener.onPartitionsRevoked(revoked);
         } catch (WakeupException | InterruptException e) {
+            exception = e;
             throw e;
         } catch (Exception e) {
             log.error("User provided listener {} failed on partition revocation", listener.getClass().getName(), e);
@@ -426,6 +428,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         isLeader = false;
         subscriptions.resetGroupSubscription();
+        return exception;
     }
 
     @Override

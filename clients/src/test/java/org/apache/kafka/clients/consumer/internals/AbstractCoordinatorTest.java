@@ -592,8 +592,9 @@ public class AbstractCoordinatorTest {
         }
 
         @Override
-        protected void onJoinPrepare(int generation, String memberId) {
+        protected Exception onJoinPrepare(int generation, String memberId) {
             onJoinPrepareInvokes++;
+            return null;
         }
 
         @Override
