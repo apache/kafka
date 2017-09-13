@@ -506,11 +506,14 @@ public class SenderTest {
 
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(0, transactionManager.lastAckedSequence(tp0));
+        assertNotNull(request1.get());
+        assertFalse(request2.isDone());
 
         sendIdempotentProducerResponse(1, tp0, Errors.NONE, 1L);
         sender.run(time.milliseconds()); // receive response 1
         assertEquals(1, transactionManager.lastAckedSequence(tp0));
         assertFalse(client.hasInFlightRequests());
+        assertNotNull(request2.get());
     }
 
 
@@ -567,11 +570,15 @@ public class SenderTest {
         sender.run(time.milliseconds());  // receive response 0
         assertEquals(0, transactionManager.lastAckedSequence(tp0));
         assertEquals(0, client.inFlightRequestCount());
+        assertFalse(request2.isDone());
+        assertNotNull(request1.get());
+
         sender.run(time.milliseconds()); // send request 1
         assertEquals(1, client.inFlightRequestCount());
         sendIdempotentProducerResponse(1, tp0, Errors.NONE, 1L);
         sender.run(time.milliseconds());  // receive response 1
 
+        assertNotNull(request2.get());
         assertFalse(client.hasInFlightRequests());
         assertEquals(1, transactionManager.lastAckedSequence(tp0));
     }
@@ -607,7 +614,7 @@ public class SenderTest {
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(3, transactionManager.sequenceNumber(tp0).longValue());
         assertEquals(1, transactionManager.lastAckedSequence(tp0));
-        assertTrue(request1.isDone());
+        assertNotNull(request1.get());
         assertFalse(request2.isDone());
         assertTrue(client.isReady(node, time.milliseconds()));
 
@@ -678,6 +685,8 @@ public class SenderTest {
         assertEquals(1, queuedBatches.peekLast().baseSequence());
         assertEquals(-1, transactionManager.lastAckedSequence(tp0));
         assertEquals(0, client.inFlightRequestCount());
+        assertFalse(request1.isDone());
+        assertFalse(request2.isDone());
 
         sender.run(time.milliseconds()); // send request 0
         assertEquals(1, client.inFlightRequestCount());
@@ -691,6 +700,7 @@ public class SenderTest {
         sender.run(time.milliseconds());  // receive response 0
         assertEquals(0, transactionManager.lastAckedSequence(tp0));
         assertEquals(0, client.inFlightRequestCount());
+        assertNotNull(request1.get());
         sender.run(time.milliseconds()); // send request 1
         assertEquals(1, client.inFlightRequestCount());
         sendIdempotentProducerResponse(1, tp0, Errors.NONE, 1L);
@@ -698,6 +708,7 @@ public class SenderTest {
 
         assertFalse(client.hasInFlightRequests());
         assertEquals(1, transactionManager.lastAckedSequence(tp0));
+        assertNotNull(request2.get());
     }
 
     @Test
