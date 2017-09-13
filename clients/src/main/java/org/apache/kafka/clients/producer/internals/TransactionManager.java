@@ -489,11 +489,16 @@ public class TransactionManager {
         return inflightBatchesBySequence.containsKey(topicPartition) && !inflightBatchesBySequence.get(topicPartition).isEmpty();
     }
 
+    synchronized boolean hasUnresolvedSequences() {
+        return !partitionsWithUnresolvedSequences.isEmpty();
+    }
+
     synchronized boolean hasUnresolvedSequence(TopicPartition topicPartition) {
         return partitionsWithUnresolvedSequences.contains(topicPartition);
     }
 
     synchronized void markSequenceUnresolved(TopicPartition topicPartition) {
+        log.debug("{}Marking partition {} unresolved", logPrefix, topicPartition);
         partitionsWithUnresolvedSequences.add(topicPartition);
     }
 
@@ -501,7 +506,7 @@ public class TransactionManager {
     // the producer id needs a reset, false otherwise.
     synchronized boolean shouldResetProducerStateAfterResolvingSequences() {
         if (isTransactional())
-            // We should not reset producer state if we are transactional. We should transition to a fatal error instead.
+            // We should not reset producer state if we are transactional. We will transition to a fatal error instead.
             return false;
         for (TopicPartition topicPartition : partitionsWithUnresolvedSequences) {
             if (!hasInflightBatches(topicPartition)) {
