@@ -324,7 +324,7 @@ for filename in os.listdir(artifacts_dir):
     dir, fname = os.path.split(full_path)
     cmd("Generating MD5 for " + full_path, "gpg --print-md md5 %s > %s.md5" % (fname, fname), shell=True, cwd=dir)
     cmd("Generating SHA1 for " + full_path, "gpg --print-md sha1 %s > %s.sha1" % (fname, fname), shell=True, cwd=dir)
-    cmd("Generating SHA2 for " + full_path, "gpg --print-md sha512 %s > %s.sha512" % (fname, fname), shell=True, cwd=dir)
+    cmd("Generating SHA512 for " + full_path, "gpg --print-md sha512 %s > %s.sha512" % (fname, fname), shell=True, cwd=dir)
 
 cmd("Listing artifacts to be uploaded:", "ls -R %s" % artifacts_dir)
 if not user_ok("Going to upload the artifacts in %s, listed above, to your Apache home directory. Ok (y/n)?): " % artifacts_dir):
