@@ -194,6 +194,7 @@ subprojects {
   def testExceptionFormat = 'full'
 
   // Exclude PowerMock tests when running with Java 9 until a version of PowerMock that supports Java 9 is released
+  // The relevant issue is https://github.com/powermock/powermock/issues/783
   String[] testsToExclude = []
   if (JavaVersion.current().isJava9Compatible()) {
     testsToExclude = [
