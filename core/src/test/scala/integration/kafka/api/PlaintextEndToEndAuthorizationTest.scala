@@ -28,7 +28,7 @@ object PlaintextEndToEndAuthorizationTest {
   class TestClientPrincipalBuilder extends KafkaPrincipalBuilder {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
       context match {
-        case ctx: PlaintextAuthenticationContext =>
+        case ctx: PlaintextAuthenticationContext if ctx.clientAddress != null =>
           new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "client")
         case _ =>
           KafkaPrincipal.ANONYMOUS
