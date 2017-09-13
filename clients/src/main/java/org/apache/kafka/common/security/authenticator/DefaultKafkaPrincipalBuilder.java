@@ -50,6 +50,7 @@ import static java.util.Objects.requireNonNull;
  * must adapt implementations of the older {@link PrincipalBuilder} interface.
  */
 public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, Closeable {
+    @SuppressWarnings("deprecation")
     private final PrincipalBuilder oldPrincipalBuilder;
     private final Authenticator authenticator;
     private final TransportLayer transportLayer;
@@ -60,16 +61,29 @@ public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, Clos
      *
      * @param authenticator The authenticator in use
      * @param transportLayer The underlying transport layer
-     * @param oldPrincipalBuilder Instance of {@link PrincipalBuilder} or null if none is configured
+     * @param oldPrincipalBuilder Instance of {@link PrincipalBuilder}
      * @param kerberosShortNamer Kerberos name rewrite rules or null if none have been configured
      */
-    public DefaultKafkaPrincipalBuilder(Authenticator authenticator,
-                                        TransportLayer transportLayer,
-                                        PrincipalBuilder oldPrincipalBuilder,
-                                        KerberosShortNamer kerberosShortNamer) {
-        this.authenticator = requireNonNull(authenticator);
-        this.transportLayer = requireNonNull(transportLayer);
-        this.oldPrincipalBuilder = requireNonNull(oldPrincipalBuilder);
+    @SuppressWarnings("deprecation")
+    public static DefaultKafkaPrincipalBuilder fromOldPrincipalBuilder(Authenticator authenticator,
+                                                                       TransportLayer transportLayer,
+                                                                       PrincipalBuilder oldPrincipalBuilder,
+                                                                       KerberosShortNamer kerberosShortNamer) {
+        return new DefaultKafkaPrincipalBuilder(
+                requireNonNull(authenticator),
+                requireNonNull(transportLayer),
+                requireNonNull(oldPrincipalBuilder),
+                kerberosShortNamer);
+    }
+
+    @SuppressWarnings("deprecation")
+    private DefaultKafkaPrincipalBuilder(Authenticator authenticator,
+                                         TransportLayer transportLayer,
+                                         PrincipalBuilder oldPrincipalBuilder,
+                                         KerberosShortNamer kerberosShortNamer) {
+        this.authenticator = authenticator;
+        this.transportLayer = transportLayer;
+        this.oldPrincipalBuilder = oldPrincipalBuilder;
         this.kerberosShortNamer = kerberosShortNamer;
     }
 
@@ -79,10 +93,7 @@ public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, Clos
      * @param kerberosShortNamer Kerberos name rewrite rules or null if none have been configured
      */
     public DefaultKafkaPrincipalBuilder(KerberosShortNamer kerberosShortNamer) {
-        this.authenticator = null;
-        this.transportLayer = null;
-        this.oldPrincipalBuilder = null;
-        this.kerberosShortNamer = kerberosShortNamer;
+        this(null, null, null, kerberosShortNamer);
     }
 
     @Override

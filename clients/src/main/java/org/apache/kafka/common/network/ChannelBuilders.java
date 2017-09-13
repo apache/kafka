@@ -148,7 +148,8 @@ public class ChannelBuilders {
             builder = (KafkaPrincipalBuilder) Utils.newInstance(principalBuilderClass);
         } else if (PrincipalBuilder.class.isAssignableFrom(principalBuilderClass)) {
             PrincipalBuilder oldPrincipalBuilder = createPrincipalBuilder(principalBuilderClass, configs);
-            builder = new DefaultKafkaPrincipalBuilder(authenticator, transportLayer, oldPrincipalBuilder, kerberosShortNamer);
+            builder = DefaultKafkaPrincipalBuilder.fromOldPrincipalBuilder(authenticator, transportLayer,
+                    oldPrincipalBuilder, kerberosShortNamer);
         } else {
             throw new InvalidConfigurationException("Type " + principalBuilderClass.getName() + " is not " +
                     "an instance of " + PrincipalBuilder.class.getName() + " or " + KafkaPrincipalBuilder.class.getName());

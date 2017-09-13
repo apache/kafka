@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.security.auth;
 
+import org.apache.kafka.common.protocol.SecurityProtocol;
+
 import javax.net.ssl.SSLSession;
 import java.net.InetAddress;
 
@@ -33,8 +35,8 @@ public class SslAuthenticationContext implements AuthenticationContext {
     }
 
     @Override
-    public String securityProtocol() {
-        return "SSL";
+    public String securityProtocolName() {
+        return SecurityProtocol.SSL.name;
     }
 
     @Override

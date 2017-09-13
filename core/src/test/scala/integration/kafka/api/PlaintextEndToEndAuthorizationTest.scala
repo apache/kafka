@@ -16,11 +16,10 @@
  */
 package kafka.api
 
-import kafka.api.{EndToEndAuthorizationTest, ZkSasl}
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder}
+import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder, PlaintextAuthenticationContext}
 import org.junit.Before
 
 // This test case uses a separate listener for client and inter-broker communication, from
@@ -28,13 +27,23 @@ import org.junit.Before
 object PlaintextEndToEndAuthorizationTest {
   class TestClientPrincipalBuilder extends KafkaPrincipalBuilder {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
-      new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "client")
+      context match {
+        case ctx: PlaintextAuthenticationContext =>
+          new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "client")
+        case _ =>
+          KafkaPrincipal.ANONYMOUS
+      }
     }
   }
 
   class TestServerPrincipalBuilder extends KafkaPrincipalBuilder {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
-      new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "server")
+      context match {
+        case ctx: PlaintextAuthenticationContext =>
+          new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "server")
+        case _ =>
+          KafkaPrincipal.ANONYMOUS
+      }
     }
   }
 }

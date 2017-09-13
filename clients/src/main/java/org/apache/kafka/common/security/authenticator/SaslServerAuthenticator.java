@@ -269,7 +269,7 @@ public class SaslServerAuthenticator implements Authenticator {
 
     @Override
     public KafkaPrincipal principal() {
-        SaslAuthenticationContext context = new SaslAuthenticationContext(saslServer, securityProtocol.name, clientAddress());
+        SaslAuthenticationContext context = new SaslAuthenticationContext(saslServer, securityProtocol, clientAddress());
         return principalBuilder.build(context);
     }
 

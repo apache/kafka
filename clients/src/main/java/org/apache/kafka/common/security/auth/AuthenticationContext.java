@@ -27,7 +27,7 @@ public interface AuthenticationContext {
      * Underlying security protocol of the authentication session.
      * @return The name of the security protocol (i.e. PLAINTEXT, SASL_PLAINTEXT, SASL_SSL, SSL)
      */
-    String securityProtocol();
+    String securityProtocolName();
 
     /**
      * Address of the authenticated client

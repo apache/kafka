@@ -16,6 +16,22 @@
  */
 package org.apache.kafka.common.network;
 
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.protocol.SecurityProtocol;
+import org.apache.kafka.common.security.JaasContext;
+import org.apache.kafka.common.security.authenticator.CredentialCache;
+import org.apache.kafka.common.security.authenticator.LoginManager;
+import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
+import org.apache.kafka.common.security.authenticator.SaslServerAuthenticator;
+import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
+import org.apache.kafka.common.security.ssl.SslFactory;
+import org.apache.kafka.common.utils.Java;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -23,22 +39,6 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.List;
 import java.util.Map;
-
-import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
-import org.apache.kafka.common.memory.MemoryPool;
-import org.apache.kafka.common.security.JaasContext;
-import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
-import org.apache.kafka.common.security.authenticator.CredentialCache;
-import org.apache.kafka.common.security.authenticator.LoginManager;
-import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
-import org.apache.kafka.common.security.authenticator.SaslServerAuthenticator;
-import org.apache.kafka.common.security.ssl.SslFactory;
-import org.apache.kafka.common.utils.Java;
-import org.apache.kafka.common.protocol.SecurityProtocol;
-import org.apache.kafka.common.KafkaException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class SaslChannelBuilder implements ChannelBuilder {
     private static final Logger log = LoggerFactory.getLogger(SaslChannelBuilder.class);
@@ -92,7 +92,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
                     defaultRealm = "";
                 }
                 @SuppressWarnings("unchecked")
-                List<String> principalToLocalRules = (List<String>) configs.get(SaslConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES);
+                List<String> principalToLocalRules = (List<String>) configs.get(BrokerSecurityConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG);
                 if (principalToLocalRules != null)
                     kerberosShortNamer = KerberosShortNamer.fromUnparsedRules(defaultRealm, principalToLocalRules);
             }

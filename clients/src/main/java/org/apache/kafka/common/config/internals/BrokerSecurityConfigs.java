@@ -30,14 +30,19 @@ import java.util.List;
 public class BrokerSecurityConfigs {
 
     public static final String PRINCIPAL_BUILDER_CLASS_CONFIG = "principal.builder.class";
+    public static final String SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG = "sasl.kerberos.principal.to.local.rules";
+    public static final String SSL_CLIENT_AUTH_CONFIG = "ssl.client.auth";
+    public static final String SASL_ENABLED_MECHANISMS_CONFIG = "sasl.enabled.mechanisms";
+
     public static final String PRINCIPAL_BUILDER_CLASS_DOC = "The fully qualified name of a class that implements the " +
             "KafkaPrincipalBuilder interface, which is used to build the KafkaPrincipal object used during " +
             "authorization. This config also supports the deprecated PrincipalBuilder interface which was previously " +
-            "used for connections with the SSL SecurityProtocol. If not defined, a principal derived from the client " +
-            "certificate will be used in the case of client SSL authentication; for SASL, the authentication ID will " +
-            "be used as the principal name.";
+            "used for client authentication over SSL. If no principal builder is defined, the default behavior depends " +
+            "on the security protocol in use. For SSL authentication, a principal derived from the client " +
+            "certificate will be used. For SASL authentication, the principal will be derived using the rules " +
+            "defined by <code>" + SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG + "</code> if GSSAPI is in use, and the SASL " +
+            "authentication ID for other methods. For PLAINTEXT, the principal will be ANONYMOUS.";
 
-    public static final String SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG = "sasl.kerberos.principal.to.local.rules";
     public static final String SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_DOC = "A list of rules for mapping from principal " +
             "names to short names (typically operating system usernames). The rules are evaluated in order and the " +
             "first rule that matches a principal name is used to map it to a short name. Any later rules in the list are " +
@@ -47,7 +52,6 @@ public class BrokerSecurityConfigs {
             "<code>" + PRINCIPAL_BUILDER_CLASS_CONFIG + "</code> configuration.";
     public static final List<String> DEFAULT_SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES = Collections.singletonList("DEFAULT");
 
-    public static final String SSL_CLIENT_AUTH_CONFIG = "ssl.client.auth";
     public static final String SSL_CLIENT_AUTH_DOC = "Configures kafka broker to request client authentication."
             + " The following settings are common: "
             + " <ul>"
@@ -57,7 +61,6 @@ public class BrokerSecurityConfigs {
             + " unlike requested , if this option is set client can choose not to provide authentication information about itself"
             + " <li><code>ssl.client.auth=none</code> This means client authentication is not needed.";
 
-    public static final String SASL_ENABLED_MECHANISMS_CONFIG = "sasl.enabled.mechanisms";
     public static final String SASL_ENABLED_MECHANISMS_DOC = "The list of SASL mechanisms enabled in the Kafka server. "
             + "The list may contain any mechanism for which a security provider is available. "
             + "Only GSSAPI is enabled by default.";
