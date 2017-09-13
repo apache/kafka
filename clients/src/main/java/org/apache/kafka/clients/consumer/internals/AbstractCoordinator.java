@@ -339,7 +339,7 @@ public abstract class AbstractCoordinator implements Closeable {
         try {
             thread.join();
         } catch (InterruptedException e) {
-            Thread.interrupted();
+            Thread.currentThread().interrupt();
             log.warn("Interrupted while waiting for consumer heartbeat thread to close");
             throw new InterruptException(e);
         }
