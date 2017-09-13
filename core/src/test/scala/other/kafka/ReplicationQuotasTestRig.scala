@@ -251,7 +251,7 @@ object ReplicationQuotasTestRig {
       for (broker <- servers) {
         val leaderRate: Double = measuredRate(broker, QuotaType.LeaderReplication)
         if (broker.config.brokerId == 100)
-          info("waiting... Leader rate on 101 is " + leaderRate)
+          info("Waiting... Leader rate on 101 is " + leaderRate)
         record(leaderRates, broker.config.brokerId, leaderRate)
         if (leaderRate > 0)
           trace("Leader Rate on " + broker.config.brokerId + " is " + leaderRate)

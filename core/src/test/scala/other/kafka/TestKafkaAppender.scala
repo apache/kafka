@@ -40,7 +40,7 @@ object TestKafkaAppender extends Logging {
     }
 
     for (_ <- 1 to 10)
-      info("test")    
+      info("Test")
   }
 }
 

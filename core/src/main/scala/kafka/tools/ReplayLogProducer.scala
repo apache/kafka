@@ -151,7 +151,7 @@ object ReplayLogProducer extends Logging {
       }
       info("Sent " + messageCount + " messages")
       shutdownLatch.countDown
-      info("thread finished execution !" )
+      info("Thread finished execution !" )
     }
 
     def shutdown() {

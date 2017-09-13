@@ -109,7 +109,7 @@ class AutoOffsetResetTest extends KafkaServerTestHarness with Logging {
       }
     } catch {
       case _: ConsumerTimeoutException =>
-        info("consumer timed out after receiving " + received + " messages.")
+        info("Consumer timed out after receiving " + received + " messages.")
     } finally {
       producer.close()
       consumerConnector.shutdown

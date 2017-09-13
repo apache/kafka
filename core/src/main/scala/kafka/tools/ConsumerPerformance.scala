@@ -83,7 +83,7 @@ object ConsumerPerformance {
 
       logger.info("Sleeping for 1 second.")
       Thread.sleep(1000)
-      logger.info("starting threads")
+      logger.info("Starting threads")
       startMs = System.currentTimeMillis
       for (thread <- threadList)
         thread.start

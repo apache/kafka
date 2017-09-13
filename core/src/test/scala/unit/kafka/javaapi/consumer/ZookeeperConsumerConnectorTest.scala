@@ -78,7 +78,7 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
       case _: MessageStreamsExistException => // expected
     }
     zkConsumerConnector1.shutdown
-    info("all consumer connectors stopped")
+    info("All consumer connectors stopped")
     requestHandlerLogger.setLevel(Level.ERROR)
   }
 
