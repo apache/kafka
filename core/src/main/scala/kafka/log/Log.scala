@@ -514,8 +514,10 @@ class Log(@volatile var dir: File,
     completedTxns.foreach(producerStateManager.completeTxn)
   }
 
-  private[log] def activeProducers: Map[Long, ProducerIdEntry] = lock synchronized {
-    producerStateManager.activeProducers
+  private[log] def activeProducersWithLastSequence: Map[Long, Int] = lock synchronized {
+    producerStateManager.activeProducers.map { case (producerId, producerIdEntry) =>
+      (producerId, producerIdEntry.lastSeq)
+    }
   }
 
   /**

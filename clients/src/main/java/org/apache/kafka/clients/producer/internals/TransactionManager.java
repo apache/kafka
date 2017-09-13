@@ -500,6 +500,9 @@ public class TransactionManager {
     // Checks if there are any partitions with unresolved partitions which may now be resolved. Returns true if
     // the producer id needs a reset, false otherwise.
     synchronized boolean shouldResetProducerStateAfterResolvingSequences() {
+        if (isTransactional())
+            // We should not reset producer state if we are transactional. We should transition to a fatal error instead.
+            return false;
         for (TopicPartition topicPartition : partitionsWithUnresolvedSequences) {
             if (!hasInflightBatches(topicPartition)) {
                 // The partition has been fully drained. At this point, the last ack'd sequence should be once less than

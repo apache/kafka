@@ -418,14 +418,11 @@ class LogTest {
 
     log.truncateTo(baseOffset + 4)
 
-    val activeProducers = log.activeProducers
+    val activeProducers = log.activeProducersWithLastSequence
     assertTrue(activeProducers.contains(pid))
 
-    val entry = activeProducers(pid)
-    assertEquals(0, entry.firstSeq)
-    assertEquals(baseOffset, entry.firstOffset)
-    assertEquals(3, entry.lastSeq)
-    assertEquals(baseOffset + 3, entry.lastDataOffset)
+    val lastSeq = activeProducers(pid)
+    assertEquals(3, lastSeq)
   }
 
   @Test
@@ -462,14 +459,11 @@ class LogTest {
 
     log.truncateTo(baseOffset + 2)
 
-    val activeProducers = log.activeProducers
+    val activeProducers = log.activeProducersWithLastSequence
     assertTrue(activeProducers.contains(pid))
 
-    val entry = activeProducers(pid)
-    assertEquals(0, entry.firstSeq)
-    assertEquals(baseOffset, entry.firstOffset)
-    assertEquals(1, entry.lastSeq)
-    assertEquals(baseOffset + 1, entry.lastDataOffset)
+    val lastSeq = activeProducers(pid)
+    assertEquals(1, lastSeq)
   }
 
   @Test
@@ -498,14 +492,11 @@ class LogTest {
     val filteredRecords = MemoryRecords.readableRecords(filtered)
 
     log.appendAsFollower(filteredRecords)
-    val activeProducers = log.activeProducers
+    val activeProducers = log.activeProducersWithLastSequence
     assertTrue(activeProducers.contains(pid))
 
-    val entry = activeProducers(pid)
-    assertEquals(0, entry.firstSeq)
-    assertEquals(baseOffset, entry.firstOffset)
-    assertEquals(3, entry.lastSeq)
-    assertEquals(baseOffset + 3, entry.lastDataOffset)
+    val lastSeq = activeProducers(pid)
+    assertEquals(3, lastSeq)
   }
 
   @Test
@@ -547,13 +538,13 @@ class LogTest {
     }
 
     log.truncateTo(1L)
-    assertEquals(1, log.activeProducers.size)
+    assertEquals(1, log.activeProducersWithLastSequence.size)
 
-    val pidEntryOpt = log.activeProducers.get(pid)
-    assertTrue(pidEntryOpt.isDefined)
+    val lastSeqOpt = log.activeProducersWithLastSequence.get(pid)
+    assertTrue(lastSeqOpt.isDefined)
 
-    val pidEntry = pidEntryOpt.get
-    assertEquals(0, pidEntry.lastSeq)
+    val lastSeq = lastSeqOpt.get
+    assertEquals(0, lastSeq)
   }
 
   @Test
@@ -568,21 +559,21 @@ class LogTest {
       producerEpoch = epoch, sequence = 0), leaderEpoch = 0)
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord(mockTime.milliseconds(), "b".getBytes)), producerId = pid2,
       producerEpoch = epoch, sequence = 0), leaderEpoch = 0)
-    assertEquals(2, log.activeProducers.size)
+    assertEquals(2, log.activeProducersWithLastSequence.size)
 
     log.maybeIncrementLogStartOffset(1L)
 
-    assertEquals(1, log.activeProducers.size)
-    val retainedEntryOpt = log.activeProducers.get(pid2)
-    assertTrue(retainedEntryOpt.isDefined)
-    assertEquals(0, retainedEntryOpt.get.lastSeq)
+    assertEquals(1, log.activeProducersWithLastSequence.size)
+    val retainedLastSeqOpt = log.activeProducersWithLastSequence.get(pid2)
+    assertTrue(retainedLastSeqOpt.isDefined)
+    assertEquals(0, retainedLastSeqOpt.get)
 
     log.close()
 
     val reloadedLog = createLog(logDir, logConfig, logStartOffset = 1L)
-    assertEquals(1, reloadedLog.activeProducers.size)
-    val reloadedEntryOpt = log.activeProducers.get(pid2)
-    assertEquals(retainedEntryOpt, reloadedEntryOpt)
+    assertEquals(1, reloadedLog.activeProducersWithLastSequence.size)
+    val reloadedLastSeqOpt = log.activeProducersWithLastSequence.get(pid2)
+    assertEquals(retainedLastSeqOpt, reloadedLastSeqOpt)
   }
 
   @Test
@@ -600,24 +591,24 @@ class LogTest {
       producerEpoch = epoch, sequence = 0), leaderEpoch = 0)
 
     assertEquals(2, log.logSegments.size)
-    assertEquals(2, log.activeProducers.size)
+    assertEquals(2, log.activeProducersWithLastSequence.size)
 
     log.maybeIncrementLogStartOffset(1L)
     log.onHighWatermarkIncremented(log.logEndOffset)
     log.deleteOldSegments()
 
     assertEquals(1, log.logSegments.size)
-    assertEquals(1, log.activeProducers.size)
-    val retainedEntryOpt = log.activeProducers.get(pid2)
-    assertTrue(retainedEntryOpt.isDefined)
-    assertEquals(0, retainedEntryOpt.get.lastSeq)
+    assertEquals(1, log.activeProducersWithLastSequence.size)
+    val retainedLastSeqOpt = log.activeProducersWithLastSequence.get(pid2)
+    assertTrue(retainedLastSeqOpt.isDefined)
+    assertEquals(0, retainedLastSeqOpt.get)
 
     log.close()
 
     val reloadedLog = createLog(logDir, logConfig, logStartOffset = 1L)
-    assertEquals(1, reloadedLog.activeProducers.size)
-    val reloadedEntryOpt = log.activeProducers.get(pid2)
-    assertEquals(retainedEntryOpt, reloadedEntryOpt)
+    assertEquals(1, reloadedLog.activeProducersWithLastSequence.size)
+    val reloadedEntryOpt = log.activeProducersWithLastSequence.get(pid2)
+    assertEquals(retainedLastSeqOpt, reloadedEntryOpt)
   }
 
   @Test
@@ -659,13 +650,13 @@ class LogTest {
     log.takeProducerSnapshot()
 
     assertEquals(3, log.logSegments.size)
-    assertEquals(Set(pid1, pid2), log.activeProducers.keySet)
+    assertEquals(Set(pid1, pid2), log.activeProducersWithLastSequence.keySet)
 
     log.onHighWatermarkIncremented(log.logEndOffset)
     log.deleteOldSegments()
 
     assertEquals(2, log.logSegments.size)
-    assertEquals(Set(pid2), log.activeProducers.keySet)
+    assertEquals(Set(pid2), log.activeProducersWithLastSequence.keySet)
   }
 
   @Test
@@ -749,13 +740,13 @@ class LogTest {
     val records = Seq(new SimpleRecord(mockTime.milliseconds(), "foo".getBytes))
     log.appendAsLeader(TestUtils.records(records, producerId = pid, producerEpoch = 0, sequence = 0), leaderEpoch = 0)
 
-    assertEquals(Set(pid), log.activeProducers.keySet)
+    assertEquals(Set(pid), log.activeProducersWithLastSequence.keySet)
 
     mockTime.sleep(producerIdExpirationCheckIntervalMs)
-    assertEquals(Set(pid), log.activeProducers.keySet)
+    assertEquals(Set(pid), log.activeProducersWithLastSequence.keySet)
 
     mockTime.sleep(producerIdExpirationCheckIntervalMs)
-    assertEquals(Set(), log.activeProducers.keySet)
+    assertEquals(Set(), log.activeProducersWithLastSequence.keySet)
   }
 
   @Test

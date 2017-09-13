@@ -51,7 +51,7 @@ private[log] case class TxnMetadata(producerId: Long, var firstOffset: LogOffset
 
 private[log] object ProducerIdEntry {
   private[log] val NumBatchesToRetain = 5
-  def empty(producerId: Long) = new ProducerIdEntry(producerId, new ConcurrentLinkedDeque[BatchMetadata](), RecordBatch.NO_PRODUCER_EPOCH, -1, None)
+  def empty(producerId: Long) = new ProducerIdEntry(producerId, mutable.Queue[BatchMetadata](), RecordBatch.NO_PRODUCER_EPOCH, -1, None)
 }
 
 private[log] case class BatchMetadata(lastSeq: Int, lastOffset: Long, offsetDelta: Int, timestamp: Long) {
@@ -71,25 +71,25 @@ private[log] case class BatchMetadata(lastSeq: Int, lastOffset: Long, offsetDelt
 // the batchMetadata is ordered such that the batch with the lowest sequence is at the head of the queue while the
 // batch with the highest sequence is at the tail of the queue. We will retain at most ProducerIdEntry.NumBatchesToRetain
 // elements in the queue. When the queue is at capacity, we remove the first element to make space for the incoming batch.
-private[log] class ProducerIdEntry(val producerId: Long, val batchMetadata: ConcurrentLinkedDeque[BatchMetadata],
+private[log] class ProducerIdEntry(val producerId: Long, val batchMetadata: mutable.Queue[BatchMetadata],
                                    var producerEpoch: Short, var coordinatorEpoch: Int,
                                    var currentTxnFirstOffset: Option[Long]) {
 
-  def firstSeq: Int = if (batchMetadata.isEmpty) RecordBatch.NO_SEQUENCE else batchMetadata.peekFirst.firstSeq
-  def firstOffset: Long = if (batchMetadata.isEmpty) -1L else batchMetadata.peekFirst.firstOffset
+  def firstSeq: Int = if (batchMetadata.isEmpty) RecordBatch.NO_SEQUENCE else batchMetadata.front.firstSeq
+  def firstOffset: Long = if (batchMetadata.isEmpty) -1L else batchMetadata.front.firstOffset
 
-  def lastSeq: Int = if (batchMetadata.isEmpty) RecordBatch.NO_SEQUENCE else batchMetadata.peekLast.lastSeq
-  def lastDataOffset: Long = if (batchMetadata.isEmpty) -1L else batchMetadata.peekLast.lastOffset
-  def lastTimestamp = if (batchMetadata.isEmpty) RecordBatch.NO_TIMESTAMP else batchMetadata.peekLast.timestamp
-  def lastOffsetDelta : Int = if (batchMetadata.isEmpty) 0 else batchMetadata.peekLast.offsetDelta
+  def lastSeq: Int = if (batchMetadata.isEmpty) RecordBatch.NO_SEQUENCE else batchMetadata.last.lastSeq
+  def lastDataOffset: Long = if (batchMetadata.isEmpty) -1L else batchMetadata.last.lastOffset
+  def lastTimestamp = if (batchMetadata.isEmpty) RecordBatch.NO_TIMESTAMP else batchMetadata.last.timestamp
+  def lastOffsetDelta : Int = if (batchMetadata.isEmpty) 0 else batchMetadata.last.offsetDelta
 
   def addBatchMetadata(producerEpoch: Short, lastSeq: Int, lastOffset: Long, offsetDelta: Int, timestamp: Long) = {
     maybeUpdateEpoch(producerEpoch)
 
     if (batchMetadata.size == ProducerIdEntry.NumBatchesToRetain)
-      batchMetadata.pollFirst()
+      batchMetadata.dequeue()
 
-    batchMetadata.addLast(BatchMetadata(lastSeq, lastOffset, offsetDelta, timestamp))
+    batchMetadata.enqueue(BatchMetadata(lastSeq, lastOffset, offsetDelta, timestamp))
   }
 
   def maybeUpdateEpoch(producerEpoch: Short): Boolean = {
@@ -102,14 +102,7 @@ private[log] class ProducerIdEntry(val producerId: Long, val batchMetadata: Conc
     }
   }
 
-  def removeBatchesOlderThan(offset: Long) = {
-    val iterator = batchMetadata.iterator()
-    while (iterator.hasNext) {
-      val metadata = iterator.next()
-      if (metadata.lastOffset < offset)
-        iterator.remove()
-    }
-  }
+  def removeBatchesOlderThan(offset: Long) = batchMetadata.dropWhile(_.lastOffset < offset)
 
   def duplicateOf(batch: RecordBatch): Option[BatchMetadata] = {
     if (batch.producerEpoch() != producerEpoch)
@@ -120,11 +113,10 @@ private[log] class ProducerIdEntry(val producerId: Long, val batchMetadata: Conc
 
   // Return the batch metadata of the cached batch having the exact sequence range, if any.
   def batchWithSequenceRange(firstSeq: Int, lastSeq: Int): Option[BatchMetadata] = {
-    for (metadata <- batchMetadata.asScala) {
-      if (firstSeq == metadata.firstSeq && lastSeq == metadata.lastSeq)
-        return Some(metadata)
+    val duplicate = batchMetadata.filter { case(metadata) =>
+      firstSeq == metadata.firstSeq && lastSeq == metadata.lastSeq
     }
-    None
+    duplicate.headOption
   }
 
   override def toString: String = {
@@ -248,14 +240,6 @@ private[log] class ProducerAppendInfo(val producerId: Long,
       throw new TransactionCoordinatorFencedException(s"Invalid coordinator epoch: ${endTxnMarker.coordinatorEpoch} " +
         s"(zombie), ${currentEntry.coordinatorEpoch} (current)")
 
-    // TODO(reviewers): The semantics of the ProducerIdEntry have changed so that now explicitly caches the metadata
-    // of the last 5 RecordBatches appended to the partition by a producer. So we don't need to care about the offset
-    // of the control batches anymore, since they never need to de-duped. I think that the new code is simpler, but
-    // it would be worth discussing whether we want to preserve the old behavior of retaining the offset of the control
-    // batch in the review.
-
-    // it is possible that this control record is the first record seen from a new epoch, for instance if the coordinator
-    // times out a transaction. In this case, we bump the epoch and reset the sequence numbers
     currentEntry.maybeUpdateEpoch(producerEpoch)
 
     val firstOffset = currentEntry.currentTxnFirstOffset match {
@@ -355,9 +339,7 @@ object ProducerStateManager {
         val offsetDelta = producerEntryStruct.getInt(OffsetDeltaField)
         val coordinatorEpoch = producerEntryStruct.getInt(CoordinatorEpochField)
         val currentTxnFirstOffset = producerEntryStruct.getLong(CurrentTxnFirstOffsetField)
-        val initialMetadata = new ConcurrentLinkedDeque[BatchMetadata]()
-        initialMetadata.add(BatchMetadata(seq, offset, offsetDelta, timestamp))
-        val newEntry = new ProducerIdEntry(producerId, initialMetadata, producerEpoch,
+        val newEntry = new ProducerIdEntry(producerId, mutable.Queue[BatchMetadata](BatchMetadata(seq, offset, offsetDelta, timestamp)), producerEpoch,
           coordinatorEpoch, if (currentTxnFirstOffset >= 0) Some(currentTxnFirstOffset) else None)
         newEntry
       }
