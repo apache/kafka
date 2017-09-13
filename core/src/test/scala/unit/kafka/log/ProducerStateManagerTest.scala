@@ -95,13 +95,7 @@ class ProducerStateManagerTest extends JUnitSuite {
 
     val lastEntry = maybeLastEntry.get
     assertEquals(epoch, lastEntry.producerEpoch)
-    // TODO(reviewers): The semantics of the producer state manager have been changed so that we store the
-    // last N batches. As such, the ProducerIdEntry.firstSeq returns the first seq of the first batch in the cache.
-    // The ProducerIdEntry.lastSeq is the last seq of the last batch in the cache. As a result, during wraparound
-    // the firstSeq could be greater than the lastSeq.
-    //
-    // This seems reasonable, but it is worth at least discussing the new semantics of these methods when reviewing
-    // the new code.
+
     assertEquals(Int.MaxValue, lastEntry.firstSeq)
     assertEquals(0, lastEntry.lastSeq)
   }

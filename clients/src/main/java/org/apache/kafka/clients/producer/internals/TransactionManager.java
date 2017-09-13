@@ -508,7 +508,7 @@ public class TransactionManager {
                 // The partition has been fully drained. At this point, the last ack'd sequence should be once less than
                 // next sequence destined for the partition. If so, the partition is fully resolved. If not, we should
                 // reset the sequence number if necessary.
-                if (lastAckedSequence(topicPartition) == sequenceNumber(topicPartition) - 1) {
+                if (isNextSequence(topicPartition, sequenceNumber(topicPartition))) {
                     // This would happen when a batch was expired, but subsequent batches succeeded.
                     partitionsWithUnresolvedSequences.remove(topicPartition);
                 } else {
