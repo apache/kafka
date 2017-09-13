@@ -54,7 +54,7 @@ public abstract class CommandOptions {
         if (this.ns.get(option) instanceof Boolean)
             return this.ns.getBoolean(option);
         else
-            return this.ns.getAttrs().get(option) != null;
+            return this.ns.get(option) != null;
     }
 
     /**
