@@ -16,8 +16,12 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
+import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,6 +54,7 @@ public class WorkerConnector {
     private final ConnectorStatus.Listener statusListener;
     private final ConnectorContext ctx;
     private final Connector connector;
+    private final ConnectorMetricsGroup metrics;
 
     private Map<String, String> config;
     private State state;
@@ -57,12 +62,14 @@ public class WorkerConnector {
     public WorkerConnector(String connName,
                            Connector connector,
                            ConnectorContext ctx,
+                           ConnectMetrics metrics,
                            ConnectorStatus.Listener statusListener) {
         this.connName = connName;
         this.ctx = ctx;
         this.connector = connector;
         this.statusListener = statusListener;
         this.state = State.INIT;
+        this.metrics = new ConnectorMetricsGroup(metrics);
     }
 
     public void initialize(ConnectorConfig connectorConfig) {
@@ -93,12 +100,14 @@ public class WorkerConnector {
         try {
             switch (state) {
                 case STARTED:
+                    metrics.recordRunning();
                     return false;
 
                 case INIT:
                 case STOPPED:
                     connector.start(config);
                     this.state = State.STARTED;
+                    metrics.recordRunning();
                     return true;
 
                 default:
@@ -114,6 +123,7 @@ public class WorkerConnector {
     private void onFailure(Throwable t) {
         statusListener.onFailure(connName, t);
         this.state = State.FAILED;
+        metrics.recordFailed();
     }
 
     private void resume() {
@@ -138,11 +148,13 @@ public class WorkerConnector {
 
                 case STARTED:
                     connector.stop();
+                    metrics.recordPaused();
                     // fall through
 
                 case INIT:
                     statusListener.onPause(connName);
                     this.state = State.STOPPED;
+                    metrics.recordPaused();
                     break;
 
                 default:
@@ -160,9 +172,11 @@ public class WorkerConnector {
             if (state == State.STARTED)
                 connector.stop();
             this.state = State.STOPPED;
+            metrics.recordStopped();
         } catch (Throwable t) {
             log.error("{} Error while shutting down connector", this, t);
             this.state = State.FAILED;
+            metrics.recordFailed();
         } finally {
             statusListener.onShutdown(connName);
         }
@@ -195,10 +209,91 @@ public class WorkerConnector {
         return connector;
     }
 
+    ConnectorMetricsGroup metrics() {
+        return metrics;
+    }
+
     @Override
     public String toString() {
         return "WorkerConnector{" +
                 "id=" + connName +
                 '}';
+    }
+
+    class ConnectorMetricsGroup {
+        private final MetricGroup metricGroup;
+        private final MetricName statusRunningName;
+        private final MetricName statusPausedName;
+        private final MetricName statusFailedName;
+        private final Sensor statusRunning;
+        private final Sensor statusPaused;
+        private final Sensor statusFailed;
+
+        public ConnectorMetricsGroup(ConnectMetrics connectMetrics) {
+            this.metricGroup = connectMetrics.group("connector-metrics",
+                    "connector", connName);
+
+            this.statusRunningName = metricGroup.metricName("status-running",
+                    "Signals whether the connector is in the running state.");
+            this.statusRunning = metricGroup.metrics().sensor("status-running");
+            this.statusRunning.add(statusRunningName, new Value());
+
+            this.statusPausedName = metricGroup.metricName("status-paused",
+                    "Signals whether the connector is in the paused state.");
+            this.statusPaused = metricGroup.metrics().sensor("status-paused");
+            this.statusPaused.add(statusPausedName, new Value());
+
+            this.statusFailedName = metricGroup.metricName("status-failed",
+                    "Signals whether the connector is in the failed state.");
+            this.statusFailed = metricGroup.metrics().sensor("status-failed");
+            this.statusFailed.add(statusFailedName, new Value());
+
+            recordInitialized();
+        }
+
+        public void recordInitialized() {
+            this.statusRunning.record(0);
+            this.statusPaused.record(0);
+            this.statusFailed.record(0);
+        }
+
+        public void recordStopped() {
+            this.statusRunning.record(0);
+            this.statusPaused.record(0);
+            this.statusFailed.record(0);
+        }
+
+        public void recordRunning() {
+            this.statusRunning.record(1);
+            this.statusPaused.record(0);
+            this.statusFailed.record(0);
+        }
+
+        public void recordPaused() {
+            this.statusRunning.record(0);
+            this.statusPaused.record(1);
+            this.statusFailed.record(0);
+        }
+        public void recordFailed() {
+            this.statusRunning.record(0);
+            this.statusPaused.record(0);
+            this.statusFailed.record(1);
+        }
+        public boolean isRunning() {
+            return asBoolean(statusRunningName);
+        }
+
+        public boolean isPaused() {
+            return asBoolean(statusPausedName);
+        }
+
+        public boolean isFailed() {
+            return asBoolean(statusFailedName);
+        }
+
+        private boolean asBoolean(MetricName metric) {
+            double value = this.metricGroup.metrics().metric(metric).value();
+            return value > 0.00001d || value < -0.000001d;
+        }
     }
 }

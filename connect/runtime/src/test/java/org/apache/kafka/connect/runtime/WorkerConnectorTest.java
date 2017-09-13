@@ -31,6 +31,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.easymock.EasyMock.expectLastCall;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 @RunWith(EasyMockRunner.class)
 public class WorkerConnectorTest extends EasyMockSupport {
@@ -42,6 +44,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
         CONFIG.put(ConnectorConfig.NAME_CONFIG, CONNECTOR);
     }
     public ConnectorConfig connectorConfig;
+    public ConnectMetrics metrics;
 
     @Mock Plugins plugins;
     @Mock Connector connector;
@@ -51,6 +54,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
     @Before
     public void setup() {
         connectorConfig = new ConnectorConfig(plugins, CONFIG);
+        metrics = new MockConnectorMetrics();
     }
 
     @Test
@@ -68,10 +72,12 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, listener);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener);
 
         workerConnector.initialize(connectorConfig);
+        assertFailedMetric(workerConnector);
         workerConnector.shutdown();
+        assertStoppedMetric(workerConnector);
 
         verifyAll();
     }
@@ -93,11 +99,15 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, listener);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener);
 
+        assertStoppedMetric(workerConnector);
         workerConnector.initialize(connectorConfig);
+        assertFailedMetric(workerConnector);
         workerConnector.transitionTo(TargetState.STARTED);
+        assertFailedMetric(workerConnector);
         workerConnector.shutdown();
+        assertStoppedMetric(workerConnector);
 
         verifyAll();
     }
@@ -121,11 +131,15 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, listener);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener);
 
+        assertStoppedMetric(workerConnector);
         workerConnector.initialize(connectorConfig);
+        assertInitializedMetric(workerConnector);
         workerConnector.transitionTo(TargetState.STARTED);
+        assertRunningMetric(workerConnector);
         workerConnector.shutdown();
+        assertStoppedMetric(workerConnector);
 
         verifyAll();
     }
@@ -152,12 +166,17 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, listener);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener);
 
+        assertStoppedMetric(workerConnector);
         workerConnector.initialize(connectorConfig);
+        assertInitializedMetric(workerConnector);
         workerConnector.transitionTo(TargetState.STARTED);
+        assertRunningMetric(workerConnector);
         workerConnector.transitionTo(TargetState.PAUSED);
+        assertPausedMetric(workerConnector);
         workerConnector.shutdown();
+        assertStoppedMetric(workerConnector);
 
         verifyAll();
     }
@@ -184,12 +203,17 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, listener);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener);
 
+        assertStoppedMetric(workerConnector);
         workerConnector.initialize(connectorConfig);
+        assertInitializedMetric(workerConnector);
         workerConnector.transitionTo(TargetState.PAUSED);
+        assertPausedMetric(workerConnector);
         workerConnector.transitionTo(TargetState.STARTED);
+        assertRunningMetric(workerConnector);
         workerConnector.shutdown();
+        assertStoppedMetric(workerConnector);
 
         verifyAll();
     }
@@ -209,11 +233,15 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, listener);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener);
 
+        assertStoppedMetric(workerConnector);
         workerConnector.initialize(connectorConfig);
+        assertInitializedMetric(workerConnector);
         workerConnector.transitionTo(TargetState.PAUSED);
+        assertPausedMetric(workerConnector);
         workerConnector.shutdown();
+        assertStoppedMetric(workerConnector);
 
         verifyAll();
     }
@@ -236,11 +264,15 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, listener);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener);
 
+        assertStoppedMetric(workerConnector);
         workerConnector.initialize(connectorConfig);
+        assertInitializedMetric(workerConnector);
         workerConnector.transitionTo(TargetState.STARTED);
+        assertFailedMetric(workerConnector);
         workerConnector.shutdown();
+        assertStoppedMetric(workerConnector);
 
         verifyAll();
     }
@@ -266,11 +298,15 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, listener);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener);
 
+        assertStoppedMetric(workerConnector);
         workerConnector.initialize(connectorConfig);
+        assertInitializedMetric(workerConnector);
         workerConnector.transitionTo(TargetState.STARTED);
+        assertRunningMetric(workerConnector);
         workerConnector.shutdown();
+        assertFailedMetric(workerConnector);
 
         verifyAll();
     }
@@ -295,12 +331,17 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, listener);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener);
 
+        assertStoppedMetric(workerConnector);
         workerConnector.initialize(connectorConfig);
+        assertInitializedMetric(workerConnector);
         workerConnector.transitionTo(TargetState.STARTED);
+        assertRunningMetric(workerConnector);
         workerConnector.transitionTo(TargetState.STARTED);
+        assertRunningMetric(workerConnector);
         workerConnector.shutdown();
+        assertStoppedMetric(workerConnector);
 
         verifyAll();
     }
@@ -327,15 +368,51 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, listener);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener);
 
+        assertStoppedMetric(workerConnector);
         workerConnector.initialize(connectorConfig);
+        assertInitializedMetric(workerConnector);
         workerConnector.transitionTo(TargetState.STARTED);
+        assertRunningMetric(workerConnector);
         workerConnector.transitionTo(TargetState.PAUSED);
+        assertPausedMetric(workerConnector);
         workerConnector.transitionTo(TargetState.PAUSED);
+        assertPausedMetric(workerConnector);
         workerConnector.shutdown();
+        assertStoppedMetric(workerConnector);
 
         verifyAll();
+    }
+
+    protected void assertFailedMetric(WorkerConnector workerConnector) {
+        assertTrue(workerConnector.metrics().isFailed());
+        assertFalse(workerConnector.metrics().isPaused());
+        assertFalse(workerConnector.metrics().isRunning());
+    }
+
+    protected void assertPausedMetric(WorkerConnector workerConnector) {
+        assertFalse(workerConnector.metrics().isFailed());
+        assertTrue(workerConnector.metrics().isPaused());
+        assertFalse(workerConnector.metrics().isRunning());
+    }
+
+    protected void assertRunningMetric(WorkerConnector workerConnector) {
+        assertFalse(workerConnector.metrics().isFailed());
+        assertFalse(workerConnector.metrics().isPaused());
+        assertTrue(workerConnector.metrics().isRunning());
+    }
+
+    protected void assertStoppedMetric(WorkerConnector workerConnector) {
+        assertFalse(workerConnector.metrics().isFailed());
+        assertFalse(workerConnector.metrics().isPaused());
+        assertFalse(workerConnector.metrics().isRunning());
+    }
+
+    protected void assertInitializedMetric(WorkerConnector workerConnector) {
+        assertFalse(workerConnector.metrics().isFailed());
+        assertFalse(workerConnector.metrics().isPaused());
+        assertFalse(workerConnector.metrics().isRunning());
     }
 
     private static abstract class TestConnector extends Connector {
