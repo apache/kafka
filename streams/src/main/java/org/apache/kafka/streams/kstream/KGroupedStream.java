@@ -164,7 +164,7 @@ public interface KGroupedStream<K, V> {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
      * <pre>{@code
      * KafkaStreams streams = ... // counting words
-     * String queryableStoreName = "count-store";
+     * String queryableStoreName = "count-store"; // the queryableStoreName should be the name of the store as defined by the Materialized instance
      * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-word";
      * Long countForWord = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
@@ -588,7 +588,7 @@ public interface KGroupedStream<K, V> {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
      * <pre>{@code
      * KafkaStreams streams = ... // compute sum
-     * String queryableStoreName = "storeName"
+     * String queryableStoreName = "storeName" // the queryableStoreName should be the name of the store as defined by the Materialized instance
      * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long sumForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)

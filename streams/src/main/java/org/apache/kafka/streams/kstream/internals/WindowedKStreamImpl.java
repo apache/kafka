@@ -85,8 +85,7 @@ public class WindowedKStreamImpl<K, V, W extends Window> extends AbstractStream<
         final String storeName = builder.newStoreName(AGGREGATE_NAME);
         return (KTable<Windowed<K>, VR>) aggregateBuilder.build(new KStreamWindowAggregate<>(windows, storeName, initializer, aggregator),
                                                                 AGGREGATE_NAME,
-                                                                windowStoreBuilder(storeName,
-                                                                                   aggValueSerde),
+                                                                windowStoreBuilder(storeName, aggValueSerde),
                                                                 false);
     }
 
