@@ -279,7 +279,7 @@ public class MemoryRecordsBuilder {
         aborted = true;
     }
 
-    public void unsetProducerState() {
+    public void reopen() {
         if (aborted)
             throw new IllegalStateException("Should not reopen a batch which is already aborted.");
 

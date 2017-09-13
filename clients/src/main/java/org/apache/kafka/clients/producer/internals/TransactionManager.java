@@ -429,12 +429,17 @@ public class TransactionManager {
 
 
     synchronized ProducerBatch nextBatchBySequence(TopicPartition topicPartition) {
-        return inflightBatchesBySequence.get(topicPartition).peek();
+        PriorityQueue<ProducerBatch> queue = inflightBatchesBySequence.get(topicPartition);
+        if (queue == null)
+            return null;
+        return queue.peek();
     }
 
     synchronized void removeInFlightBatch(ProducerBatch batch) {
-        if (inflightBatchesBySequence.containsKey(batch.topicPartition))
-            inflightBatchesBySequence.get(batch.topicPartition).remove(batch);
+        PriorityQueue<ProducerBatch> queue = inflightBatchesBySequence.get(batch.topicPartition);
+        if (queue == null)
+            return;
+        queue.remove(batch);
     }
 
     synchronized void maybeUpdateLastAckedSequence(TopicPartition topicPartition, int sequence) {
@@ -484,7 +489,7 @@ public class TransactionManager {
         return inflightBatchesBySequence.containsKey(topicPartition) && !inflightBatchesBySequence.get(topicPartition).isEmpty();
     }
 
-    synchronized boolean partitionHasUnresolvedSequence(TopicPartition topicPartition) {
+    synchronized boolean hasUnresolvedSequence(TopicPartition topicPartition) {
         return partitionsWithUnresolvedSequences.contains(topicPartition);
     }
 
@@ -515,8 +520,7 @@ public class TransactionManager {
     }
 
     synchronized boolean isNextSequence(TopicPartition topicPartition, int sequence) {
-        return (!lastAckedSequence.containsKey(topicPartition) && sequence == 0) ||
-                (lastAckedSequence.containsKey(topicPartition) && (sequence - lastAckedSequence.get(topicPartition) == 1));
+        return sequence - lastAckedSequence(topicPartition) == 1;
     }
 
     private synchronized void setNextSequence(TopicPartition topicPartition, int sequence) {
@@ -621,7 +625,7 @@ public class TransactionManager {
 
     synchronized boolean canRetryOutOfOrderSequenceException(ProducerBatch batch) {
         return hasProducerId(batch.producerId())
-                && !partitionHasUnresolvedSequence(batch.topicPartition)
+                && !hasUnresolvedSequence(batch.topicPartition)
                 && !isNextSequence(batch.topicPartition, batch.baseSequence());
     }
 

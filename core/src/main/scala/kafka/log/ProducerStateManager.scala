@@ -79,8 +79,9 @@ private[log] class ProducerIdEntry(val producerId: Long, val batchMetadata: Conc
   def firstOffset: Long = if (batchMetadata.isEmpty) -1L else batchMetadata.peekFirst.firstOffset
 
   def lastSeq: Int = if (batchMetadata.isEmpty) RecordBatch.NO_SEQUENCE else batchMetadata.peekLast.lastSeq
-  def lastOffset: Long = if (batchMetadata.isEmpty) -1L else batchMetadata.peekLast.lastOffset
+  def lastDataOffset: Long = if (batchMetadata.isEmpty) -1L else batchMetadata.peekLast.lastOffset
   def lastTimestamp = if (batchMetadata.isEmpty) RecordBatch.NO_TIMESTAMP else batchMetadata.peekLast.timestamp
+  def lastOffsetDelta : Int = if (batchMetadata.isEmpty) 0 else batchMetadata.peekLast.offsetDelta
 
   def addBatchMetadata(producerEpoch: Short, lastSeq: Int, lastOffset: Long, offsetDelta: Int, timestamp: Long) = {
     maybeUpdateEpoch(producerEpoch)
@@ -95,9 +96,10 @@ private[log] class ProducerIdEntry(val producerId: Long, val batchMetadata: Conc
     if (this.producerEpoch != producerEpoch) {
       batchMetadata.clear()
       this.producerEpoch = producerEpoch
-      return true
+      true
+    } else {
+      false
     }
-    false
   }
 
   def removeBatchesOlderThan(offset: Long) = {
@@ -111,9 +113,9 @@ private[log] class ProducerIdEntry(val producerId: Long, val batchMetadata: Conc
 
   def duplicateOf(batch: RecordBatch): Option[BatchMetadata] = {
     if (batch.producerEpoch() != producerEpoch)
-      return None
-
-    batchWithSequenceRange(batch.baseSequence(), batch.lastSequence())
+       None
+    else
+      batchWithSequenceRange(batch.baseSequence(), batch.lastSequence())
   }
 
   // Return the batch metadata of the cached batch having the exact sequence range, if any.
@@ -374,10 +376,10 @@ object ProducerStateManager {
         val producerEntryStruct = struct.instance(ProducerEntriesField)
         producerEntryStruct.set(ProducerIdField, producerId)
           .set(ProducerEpochField, entry.producerEpoch)
-          .set(LastSequenceField, entry.batchMetadata.peekLast.lastSeq)
-          .set(LastOffsetField, entry.batchMetadata.peekLast.lastOffset)
-          .set(OffsetDeltaField, entry.batchMetadata.peekLast.offsetDelta)
-          .set(TimestampField, entry.batchMetadata.peekLast.timestamp)
+          .set(LastSequenceField, entry.lastSeq)
+          .set(LastOffsetField, entry.lastDataOffset)
+          .set(OffsetDeltaField, entry.lastOffsetDelta)
+          .set(TimestampField, entry.lastTimestamp)
           .set(CoordinatorEpochField, entry.coordinatorEpoch)
           .set(CurrentTxnFirstOffsetField, entry.currentTxnFirstOffset.getOrElse(-1L))
         producerEntryStruct
@@ -609,7 +611,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
 
   private def isProducerRetained(producerIdEntry: ProducerIdEntry, logStartOffset: Long): Boolean = {
     producerIdEntry.removeBatchesOlderThan(logStartOffset)
-    producerIdEntry.lastOffset >= logStartOffset
+    producerIdEntry.lastDataOffset >= logStartOffset
   }
 
   /**

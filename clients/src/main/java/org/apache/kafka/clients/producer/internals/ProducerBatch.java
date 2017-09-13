@@ -389,7 +389,7 @@ public final class ProducerBatch {
     }
 
     public void resetProducerState(ProducerIdAndEpoch producerIdAndEpoch, int baseSequence, boolean isTransactional) {
-        recordsBuilder.unsetProducerState();
+        recordsBuilder.reopen();
         recordsBuilder.setProducerState(producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, baseSequence, isTransactional);
     }
 

@@ -792,7 +792,7 @@ public class SenderTest {
         } catch (ExecutionException e) {
             assertTrue(e.getCause() instanceof TimeoutException);
         }
-        assertFalse(transactionManager.partitionHasUnresolvedSequence(tp0));
+        assertFalse(transactionManager.hasUnresolvedSequence(tp0));
     }
 
     @Test
@@ -830,7 +830,7 @@ public class SenderTest {
         } catch (ExecutionException e) {
             assertTrue(e.getCause() instanceof TimeoutException);
         }
-        assertTrue(transactionManager.partitionHasUnresolvedSequence(tp0));
+        assertTrue(transactionManager.hasUnresolvedSequence(tp0));
         // let's enqueue another batch, which should not be dequeued until the unresolved state is clear.
         Future<RecordMetadata> request3 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
 
@@ -848,10 +848,10 @@ public class SenderTest {
         assertFalse(batches.peekFirst().hasSequence());
         assertFalse(client.hasInFlightRequests());
         assertEquals(2L, transactionManager.sequenceNumber(tp0).longValue());
-        assertTrue(transactionManager.partitionHasUnresolvedSequence(tp0));
+        assertTrue(transactionManager.hasUnresolvedSequence(tp0));
 
         sender.run(time.milliseconds());  // clear the unresolved state, send the pending request.
-        assertFalse(transactionManager.partitionHasUnresolvedSequence(tp0));
+        assertFalse(transactionManager.hasUnresolvedSequence(tp0));
         assertTrue(transactionManager.hasProducerId());
         assertEquals(0, batches.size());
         assertEquals(1, client.inFlightRequestCount());
@@ -893,7 +893,7 @@ public class SenderTest {
         } catch (ExecutionException e) {
             assertTrue(e.getCause() instanceof TimeoutException);
         }
-        assertTrue(transactionManager.partitionHasUnresolvedSequence(tp0));
+        assertTrue(transactionManager.hasUnresolvedSequence(tp0));
         // let's enqueue another batch, which should not be dequeued until the unresolved state is clear.
         Future<RecordMetadata> request3 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
 
@@ -914,7 +914,7 @@ public class SenderTest {
 
         // The producer state should be reset.
         assertFalse(transactionManager.hasProducerId());
-        assertFalse(transactionManager.partitionHasUnresolvedSequence(tp0));
+        assertFalse(transactionManager.hasUnresolvedSequence(tp0));
     }
 
     @Test
@@ -949,7 +949,7 @@ public class SenderTest {
         } catch (ExecutionException e) {
             assertTrue(e.getCause() instanceof TimeoutException);
         }
-        assertTrue(transactionManager.partitionHasUnresolvedSequence(tp0));
+        assertTrue(transactionManager.hasUnresolvedSequence(tp0));
         assertFalse(client.hasInFlightRequests());
         Deque<ProducerBatch> batches = accumulator.batches().get(tp0);
         assertEquals(0, batches.size());
