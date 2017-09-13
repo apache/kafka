@@ -544,7 +544,7 @@ public class Sender implements Runnable {
                 else
                     exception = error.exception();
                 // tell the user the result of their request. We only adjust sequence numbers if the batch didn't exhaust
-                // its retries -- if it did, we don't know the whether the sequence number was accepted or not, and
+                // its retries -- if it did, we don't know whether the sequence number was accepted or not, and
                 // thus it is not safe to reassign the sequence.
                 failBatch(batch, response, exception, batch.attempts() < this.retries);
             }
