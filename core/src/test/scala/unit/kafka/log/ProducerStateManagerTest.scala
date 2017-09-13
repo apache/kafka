@@ -129,7 +129,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertEquals(epoch, lastEntry.producerEpoch)
     assertEquals(sequence, lastEntry.firstSeq)
     assertEquals(sequence, lastEntry.lastSeq)
-    assertEquals(offset, lastEntry.lastOffset)
+    assertEquals(offset, lastEntry.lastDataOffset)
     assertEquals(offset, lastEntry.firstOffset)
   }
 
@@ -210,7 +210,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertEquals(0, lastEntry.firstSeq)
     assertEquals(5, lastEntry.lastSeq)
     assertEquals(9L, lastEntry.firstOffset)
-    assertEquals(20L, lastEntry.lastOffset)
+    assertEquals(20L, lastEntry.lastDataOffset)
     assertEquals(Some(16L), lastEntry.currentTxnFirstOffset)
     assertEquals(List(new TxnMetadata(producerId, 16L)), appendInfo.startedTransactions)
 
@@ -220,7 +220,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertEquals(0, lastEntry.firstSeq)
     assertEquals(10, lastEntry.lastSeq)
     assertEquals(9L, lastEntry.firstOffset)
-    assertEquals(30L, lastEntry.lastOffset)
+    assertEquals(30L, lastEntry.lastDataOffset)
     assertEquals(Some(16L), lastEntry.currentTxnFirstOffset)
     assertEquals(List(new TxnMetadata(producerId, 16L)), appendInfo.startedTransactions)
 
@@ -237,7 +237,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertEquals(0, lastEntry.firstSeq)
     assertEquals(10, lastEntry.lastSeq)
     assertEquals(9L, lastEntry.firstOffset)
-    assertEquals(30L, lastEntry.lastOffset)
+    assertEquals(30L, lastEntry.lastDataOffset)
     assertEquals(coordinatorEpoch, lastEntry.coordinatorEpoch)
     assertEquals(None, lastEntry.currentTxnFirstOffset)
     assertEquals(List(new TxnMetadata(producerId, 16L)), appendInfo.startedTransactions)
@@ -429,7 +429,7 @@ class ProducerStateManagerTest extends JUnitSuite {
 
     val maybeEntry = stateManager.lastEntry(anotherPid)
     assertTrue(maybeEntry.isDefined)
-    assertEquals(3L, maybeEntry.get.lastOffset)
+    assertEquals(3L, maybeEntry.get.lastDataOffset)
 
     stateManager.truncateHead(3)
     assertEquals(Set(anotherPid), stateManager.activeProducers.keySet)
@@ -460,7 +460,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     val entry = stateManager.lastEntry(pid2)
     assertTrue(entry.isDefined)
     assertEquals(0, entry.get.lastSeq)
-    assertEquals(1L, entry.get.lastOffset)
+    assertEquals(1L, entry.get.lastDataOffset)
   }
 
   @Test
@@ -671,7 +671,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertFalse(snapshotToTruncate.exists())
 
     val loadedProducerState = reloadedStateManager.activeProducers(producerId)
-    assertEquals(0L, loadedProducerState.lastOffset)
+    assertEquals(0L, loadedProducerState.lastDataOffset)
   }
 
   private def appendEndTxnMarker(mapping: ProducerStateManager,

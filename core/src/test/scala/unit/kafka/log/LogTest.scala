@@ -425,7 +425,7 @@ class LogTest {
     assertEquals(0, entry.firstSeq)
     assertEquals(baseOffset, entry.firstOffset)
     assertEquals(3, entry.lastSeq)
-    assertEquals(baseOffset + 3, entry.lastOffset)
+    assertEquals(baseOffset + 3, entry.lastDataOffset)
   }
 
   @Test
@@ -469,7 +469,7 @@ class LogTest {
     assertEquals(0, entry.firstSeq)
     assertEquals(baseOffset, entry.firstOffset)
     assertEquals(1, entry.lastSeq)
-    assertEquals(baseOffset + 1, entry.lastOffset)
+    assertEquals(baseOffset + 1, entry.lastDataOffset)
   }
 
   @Test
@@ -505,7 +505,7 @@ class LogTest {
     assertEquals(0, entry.firstSeq)
     assertEquals(baseOffset, entry.firstOffset)
     assertEquals(3, entry.lastSeq)
-    assertEquals(baseOffset + 3, entry.lastOffset)
+    assertEquals(baseOffset + 3, entry.lastDataOffset)
   }
 
   @Test
