@@ -146,8 +146,8 @@ public class PageViewTypedDemo {
 
         KStream<String, PageView> views = builder.stream("streams-pageview-input", Consumed.with(Serdes.String(), pageViewSerde));
 
-        final Consumed<String, UserProfile> consumed = Consumed.with(Serdes.String(), userProfileSerde);
-        KTable<String, UserProfile> users = builder.table("streams-userprofile-input", consumed);
+        KTable<String, UserProfile> users = builder.table("streams-userprofile-input",
+                                                          Consumed.with(Serdes.String(), userProfileSerde));
 
         KStream<WindowedPageViewByRegion, RegionCount> regionCount = views
                 .leftJoin(users, new ValueJoiner<PageView, UserProfile, PageViewByRegion>() {

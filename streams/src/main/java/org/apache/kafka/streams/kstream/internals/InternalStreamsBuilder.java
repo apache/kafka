@@ -74,7 +74,20 @@ public class InternalStreamsBuilder {
                                      final ConsumedInternal<K, V> consumed,
                                      final StateStoreSupplier<KeyValueStore> storeSupplier) {
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
-        return doTable(consumed, topic, storeSupplier);
+        final String source = newName(KStreamImpl.SOURCE_NAME);
+        final String name = newName(KTableImpl.SOURCE_NAME);
+
+        final KTable<K, V> kTable = createKTable(consumed,
+                                                 topic,
+                                                 storeSupplier.name(),
+                                                 true,
+                                                 source,
+                                                 name);
+
+        internalTopologyBuilder.addStateStore(storeSupplier, name);
+        internalTopologyBuilder.connectSourceStoreAndTopic(storeSupplier.name(), topic);
+
+        return kTable;
     }
 
     @SuppressWarnings("unchecked")
@@ -82,27 +95,15 @@ public class InternalStreamsBuilder {
                                      final ConsumedInternal<K, V> consumed,
                                      final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         final StoreBuilder<KeyValueStore<K, V>> storeBuilder = new KeyValueStoreMaterializer<>(materialized).materialize();
-        return doTable(consumed, topic, storeBuilder, materialized.isQueryable());
-    }
 
-    private <K, V> KTable<K, V> doTable(final ConsumedInternal<K, V> consumed,
-                                        final String topic,
-                                        final StoreBuilder<KeyValueStore<K, V>> storeBuilder,
-                                        final boolean isQueryable) {
         final String source = newName(KStreamImpl.SOURCE_NAME);
         final String name = newName(KTableImpl.SOURCE_NAME);
-        final ProcessorSupplier<K, V> processorSupplier = new KTableSource<>(storeBuilder.name());
-
-        internalTopologyBuilder.addSource(consumed.offsetResetPolicy(),
-                                          source,
-                                          consumed.timestampExtractor(),
-                                          consumed.keySerde() == null ? null : consumed.keySerde().deserializer(),
-                                          consumed.valueSerde() == null ? null : consumed.valueSerde().deserializer(),
-                                          topic);
-        internalTopologyBuilder.addProcessor(name, processorSupplier, source);
-
-        final KTableImpl<K, ?, V> kTable = new KTableImpl<>(this, name, processorSupplier,
-            consumed.keySerde(), consumed.valueSerde(), Collections.singleton(source), storeBuilder.name(), isQueryable);
+        final KTable<K, V> kTable = createKTable(consumed,
+                                                 topic,
+                                                 storeBuilder.name(),
+                                                 materialized.isQueryable(),
+                                                 source,
+                                                 name);
 
         internalTopologyBuilder.addStateStore(storeBuilder, name);
         internalTopologyBuilder.connectSourceStoreAndTopic(storeBuilder.name(), topic);
@@ -110,12 +111,14 @@ public class InternalStreamsBuilder {
         return kTable;
     }
 
-    private <K, V> KTable<K, V> doTable(final ConsumedInternal<K, V> consumed,
-                                        final String topic,
-                                        final StateStoreSupplier<KeyValueStore> storeSupplier) {
-        final String source = newName(KStreamImpl.SOURCE_NAME);
-        final String name = newName(KTableImpl.SOURCE_NAME);
-        final ProcessorSupplier<K, V> processorSupplier = new KTableSource<>(storeSupplier.name());
+
+    private <K, V> KTable<K, V> createKTable(final ConsumedInternal<K, V> consumed,
+                                             final String topic,
+                                             final String storeName,
+                                             final boolean isQueryable,
+                                             final String source,
+                                             final String name) {
+        final ProcessorSupplier<K, V> processorSupplier = new KTableSource<>(storeName);
 
         internalTopologyBuilder.addSource(consumed.offsetResetPolicy(),
                                           source,
@@ -125,19 +128,8 @@ public class InternalStreamsBuilder {
                                           topic);
         internalTopologyBuilder.addProcessor(name, processorSupplier, source);
 
-        final KTableImpl<K, ?, V> kTable = new KTableImpl<>(this,
-                                                            name,
-                                                            processorSupplier,
-                                                            consumed.keySerde(),
-                                                            consumed.valueSerde(),
-                                                            Collections.singleton(source),
-                                                            storeSupplier.name(),
-                                                            true);
-
-        internalTopologyBuilder.addStateStore(storeSupplier, name);
-        internalTopologyBuilder.connectSourceStoreAndTopic(storeSupplier.name(), topic);
-
-        return kTable;
+        return new KTableImpl<>(this, name, processorSupplier,
+                                consumed.keySerde(), consumed.valueSerde(), Collections.singleton(source), storeName, isQueryable);
     }
 
     public <K, V> GlobalKTable<K, V> globalTable(final String topic,
@@ -180,20 +172,8 @@ public class InternalStreamsBuilder {
         return prefix + String.format(KTableImpl.STATE_STORE_NAME + "%010d", index.getAndIncrement());
     }
 
-    public synchronized void addStateStore(final StoreBuilder builder,
-                                           final String... processorNames) {
-        internalTopologyBuilder.addStateStore(builder, processorNames);
-    }
-
-    public synchronized void addGlobalStore(final StateStoreSupplier<KeyValueStore> storeSupplier,
-                                            final String sourceName,
-                                            final Deserializer keyDeserializer,
-                                            final Deserializer valueDeserializer,
-                                            final String topic,
-                                            final String processorName,
-                                            final ProcessorSupplier stateUpdateSupplier) {
-        internalTopologyBuilder.addGlobalStore(storeSupplier, sourceName, null, keyDeserializer,
-            valueDeserializer, topic, processorName, stateUpdateSupplier);
+    public synchronized void addStateStore(final StoreBuilder builder) {
+        internalTopologyBuilder.addStateStore(builder);
     }
 
     public synchronized void addGlobalStore(final StoreBuilder<KeyValueStore> storeBuilder,

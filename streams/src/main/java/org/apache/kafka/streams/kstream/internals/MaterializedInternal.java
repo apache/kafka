@@ -64,11 +64,11 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
         return topicConfig;
     }
 
-    public boolean cachingEnabled() {
+    boolean cachingEnabled() {
         return cachingEnabled;
     }
 
-    public boolean isQueryable() {
+    boolean isQueryable() {
         return queryable;
     }
 }
