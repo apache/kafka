@@ -258,7 +258,7 @@ public class Worker {
         WorkerConnector workerConnector = connectors.get(connName);
         if (workerConnector == null)
             return null;
-        return isSinkConnector(connName) ? ConnectorType.SINK : ConnectorType.SOURCE;
+        return workerConnector.getConnectorType();
     }
 
     /**

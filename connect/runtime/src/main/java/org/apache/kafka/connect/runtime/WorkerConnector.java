@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -189,6 +190,10 @@ public class WorkerConnector {
 
     public boolean isSinkConnector() {
         return SinkConnector.class.isAssignableFrom(connector.getClass());
+    }
+
+    public ConnectorType getConnectorType() {
+        return isSinkConnector() ? ConnectorType.SINK : ConnectorType.SOURCE;
     }
 
     public Connector connector() {
