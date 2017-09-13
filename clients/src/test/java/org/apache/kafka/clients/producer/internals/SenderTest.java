@@ -506,14 +506,16 @@ public class SenderTest {
 
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(0, transactionManager.lastAckedSequence(tp0));
-        assertNotNull(request1.get());
+        assertTrue(request1.isDone());
+        assertEquals(0, request1.get().offset());
         assertFalse(request2.isDone());
 
         sendIdempotentProducerResponse(1, tp0, Errors.NONE, 1L);
         sender.run(time.milliseconds()); // receive response 1
         assertEquals(1, transactionManager.lastAckedSequence(tp0));
         assertFalse(client.hasInFlightRequests());
-        assertNotNull(request2.get());
+        assertTrue(request2.isDone());
+        assertEquals(1, request2.get().offset());
     }
 
 
@@ -570,15 +572,18 @@ public class SenderTest {
         sender.run(time.milliseconds());  // receive response 0
         assertEquals(0, transactionManager.lastAckedSequence(tp0));
         assertEquals(0, client.inFlightRequestCount());
+
         assertFalse(request2.isDone());
-        assertNotNull(request1.get());
+        assertTrue(request1.isDone());
+        assertEquals(0, request1.get().offset());
 
         sender.run(time.milliseconds()); // send request 1
         assertEquals(1, client.inFlightRequestCount());
         sendIdempotentProducerResponse(1, tp0, Errors.NONE, 1L);
         sender.run(time.milliseconds());  // receive response 1
 
-        assertNotNull(request2.get());
+        assertTrue(request2.isDone());
+        assertEquals(1, request2.get().offset());
         assertFalse(client.hasInFlightRequests());
         assertEquals(1, transactionManager.lastAckedSequence(tp0));
     }
@@ -614,7 +619,8 @@ public class SenderTest {
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(3, transactionManager.sequenceNumber(tp0).longValue());
         assertEquals(1, transactionManager.lastAckedSequence(tp0));
-        assertNotNull(request1.get());
+        assertTrue(request1.isDone());
+        assertEquals(0, request1.get().offset());
         assertFalse(request2.isDone());
         assertTrue(client.isReady(node, time.milliseconds()));
 
@@ -700,7 +706,9 @@ public class SenderTest {
         sender.run(time.milliseconds());  // receive response 0
         assertEquals(0, transactionManager.lastAckedSequence(tp0));
         assertEquals(0, client.inFlightRequestCount());
-        assertNotNull(request1.get());
+        assertTrue(request1.isDone());
+        assertEquals(0, request1.get().offset());
+
         sender.run(time.milliseconds()); // send request 1
         assertEquals(1, client.inFlightRequestCount());
         sendIdempotentProducerResponse(1, tp0, Errors.NONE, 1L);
@@ -708,7 +716,8 @@ public class SenderTest {
 
         assertFalse(client.hasInFlightRequests());
         assertEquals(1, transactionManager.lastAckedSequence(tp0));
-        assertNotNull(request2.get());
+        assertTrue(request2.isDone());
+        assertEquals(1, request2.get().offset());
     }
 
     @Test
@@ -739,10 +748,11 @@ public class SenderTest {
         ClientRequest firstClientRequest = client.requests().peek();
         ClientRequest secondClientRequest = (ClientRequest) client.requests().toArray()[1];
 
-        client.respondToRequest(secondClientRequest, produceResponse(tp0, 1, Errors.NONE, -1));
+        client.respondToRequest(secondClientRequest, produceResponse(tp0, 1, Errors.NONE, 1));
 
         sender.run(time.milliseconds()); // receive response 1
-        assertNotNull(request2.get());
+        assertTrue(request2.isDone());
+        assertEquals(1, request2.get().offset());
         assertFalse(request1.isDone());
         Deque<ProducerBatch> queuedBatches = accumulator.batches().get(tp0);
 
@@ -774,7 +784,8 @@ public class SenderTest {
         assertEquals(0, client.inFlightRequestCount());
 
         assertFalse(client.hasInFlightRequests());
-        assertNotNull(request1.get());
+        assertTrue(request1.isDone());
+        assertEquals(0, request1.get().offset());
     }
 
     @Test
@@ -852,7 +863,8 @@ public class SenderTest {
         sender.run(time.milliseconds());  // send second request
         sendIdempotentProducerResponse(1, tp0, Errors.NONE, 1);
         sender.run(time.milliseconds()); // receive second response, the third request shouldn't be sent since we are in an unresolved state.
-        assertNotNull(request2.get());
+        assertTrue(request2.isDone());
+        assertEquals(1, request2.get().offset());
         Deque<ProducerBatch> batches = accumulator.batches().get(tp0);
 
         assertEquals(1, batches.size());
