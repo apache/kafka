@@ -451,7 +451,7 @@ public class TransactionManager {
         Integer currentLastAckedSequence = lastAckedSequence.get(topicPartition);
         if (currentLastAckedSequence == null)
             return -1;
-        return lastAckedSequence.get(topicPartition);
+        return currentLastAckedSequence;
     }
 
     // If a batch is failed fatally, the sequence numbers for future batches bound for the partition must be adjusted
