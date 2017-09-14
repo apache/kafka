@@ -38,9 +38,7 @@ import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.JoinGroupRequest.ProtocolMetadata;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
@@ -891,9 +889,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             this.commitLatency.add(metrics.metricName("commit-latency-max",
                 this.metricGrpName,
                 "The max time taken for a commit request"), new Max());
-            this.commitLatency.add(metrics.metricName("commit-rate",
-                this.metricGrpName,
-                "The number of commit calls per second"), new Rate(new Count()));
+            this.commitLatency.add(createMeter(metrics, metricGrpName, "commit", "commit calls"));
 
             Measurable numParts =
                 new Measurable() {

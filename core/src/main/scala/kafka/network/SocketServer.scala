@@ -33,7 +33,7 @@ import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.common.memory.{MemoryPool, SimpleMemoryPool}
 import org.apache.kafka.common.metrics._
-import org.apache.kafka.common.metrics.stats.Rate
+import org.apache.kafka.common.metrics.stats.Meter
 import org.apache.kafka.common.network.{ChannelBuilder, ChannelBuilders, KafkaChannel, ListenerName, Selectable, Send, Selector => KSelector}
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
@@ -64,7 +64,8 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
 
   private val memoryPoolSensor = metrics.sensor("MemoryPoolUtilization")
   private val memoryPoolDepletedPercentMetricName = metrics.metricName("MemoryPoolAvgDepletedPercent", "socket-server-metrics")
-  memoryPoolSensor.add(memoryPoolDepletedPercentMetricName, new Rate(TimeUnit.MILLISECONDS))
+  private val memoryPoolDepletedTimeMetricName = metrics.metricName("MemoryPoolDepletedTimeTotal", "socket-server-metrics")
+  memoryPoolSensor.add(new Meter(TimeUnit.MILLISECONDS, memoryPoolDepletedPercentMetricName, memoryPoolDepletedTimeMetricName))
   private val memoryPool = if (config.queuedMaxBytes > 0) new SimpleMemoryPool(config.queuedMaxBytes, config.socketRequestMaxBytes, false, memoryPoolSensor) else MemoryPool.NONE
   val requestChannel = new RequestChannel(totalProcessorThreads, maxQueuedRequests)
   private val processors = new Array[Processor](totalProcessorThreads)
