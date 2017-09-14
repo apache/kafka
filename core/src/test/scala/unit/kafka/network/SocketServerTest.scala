@@ -161,18 +161,12 @@ class SocketServerTest extends JUnitSuite {
   @Test
   def simpleRequest() {
     val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
-    val traceSocket = connect(protocol = SecurityProtocol.TRACE)
     val serializedBytes = producerRequestBytes
 
     // Test PLAINTEXT socket
     sendRequest(plainSocket, serializedBytes)
     processRequest(server.requestChannel)
     assertEquals(serializedBytes.toSeq, receiveResponse(plainSocket).toSeq)
-
-    // Test TRACE socket
-    sendRequest(traceSocket, serializedBytes)
-    processRequest(server.requestChannel)
-    assertEquals(serializedBytes.toSeq, receiveResponse(traceSocket).toSeq)
   }
 
   @Test
@@ -377,12 +371,9 @@ class SocketServerTest extends JUnitSuite {
     // open a connection
     val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
     plainSocket.setTcpNoDelay(true)
-    val traceSocket = connect(protocol = SecurityProtocol.TRACE)
-    traceSocket.setTcpNoDelay(true)
     val bytes = new Array[Byte](40)
     // send a request first to make sure the connection has been picked up by the socket server
     sendRequest(plainSocket, bytes, Some(0))
-    sendRequest(traceSocket, bytes, Some(0))
     processRequest(server.requestChannel)
     // the following sleep is necessary to reliably detect the connection close when we send data below
     Thread.sleep(200L)
@@ -397,13 +388,6 @@ class SocketServerTest extends JUnitSuite {
     try {
       sendRequest(plainSocket, largeChunkOfBytes, Some(0))
       fail("expected exception when writing to closed plain socket")
-    } catch {
-      case _: IOException => // expected
-    }
-
-    try {
-      sendRequest(traceSocket, largeChunkOfBytes, Some(0))
-      fail("expected exception when writing to closed trace socket")
     } catch {
       case _: IOException => // expected
     }
