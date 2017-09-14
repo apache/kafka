@@ -34,6 +34,7 @@ import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.TaskConfig;
 import org.apache.kafka.connect.runtime.TaskStatus;
 import org.apache.kafka.connect.runtime.Worker;
+import org.apache.kafka.connect.runtime.WorkerConnector;
 import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -465,7 +466,7 @@ public class StandaloneHerderTest {
         expectAdd(SourceSink.SOURCE);
         Connector connectorMock = PowerMock.createMock(Connector.class);
         expectConfigValidation(connectorMock, true, connConfig);
-        EasyMock.expect(worker.getConnectorType(CONNECTOR_NAME)).andReturn(ConnectorType.SOURCE).anyTimes();
+        EasyMock.expect(WorkerConnector.getConnectorType(BogusSourceConnector.class.toString())).andReturn(ConnectorType.SOURCE).anyTimes();
 
         // Should get first config
         connectorConfigCb.onCompletion(null, connConfig);

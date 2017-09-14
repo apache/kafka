@@ -34,6 +34,7 @@ import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.Worker;
+import org.apache.kafka.connect.runtime.WorkerConnector;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
@@ -432,7 +433,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                             callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
                         } else {
                             callback.onCompletion(null, new ConnectorInfo(connName, configState.connectorConfig(connName),
-                                configState.tasks(connName), worker.getConnectorType(connName)));
+                                configState.tasks(connName),
+                                WorkerConnector.getConnectorType(configState.connectorConfig(connName).get(ConnectorConfig.CONNECTOR_CLASS_CONFIG))));
                         }
                         return null;
                     }
@@ -529,8 +531,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
                         // Note that we use the updated connector config despite the fact that we don't have an updated
                         // snapshot yet. The existing task info should still be accurate.
+                        Map<String, String> map = configState.connectorConfig(connName);
                         ConnectorInfo info = new ConnectorInfo(connName, config, configState.tasks(connName),
-                            worker.getConnectorType(connName));
+                            map == null ? null : WorkerConnector.getConnectorType(map.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)));
                         callback.onCompletion(null, new Created<>(!exists, info));
                         return null;
                     }
