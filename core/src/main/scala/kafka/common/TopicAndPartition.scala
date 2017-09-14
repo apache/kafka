@@ -37,5 +37,5 @@ case class TopicAndPartition(topic: String, partition: Int) {
 
   def asTopicPartition = new TopicPartition(topic, partition)
 
-  override def toString(): String = s"$topic-$partition"
+  override def toString: String = s"$topic-$partition"
 }

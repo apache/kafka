@@ -200,7 +200,7 @@ abstract class AbstractFetcherThread(name: String,
                       logger.error(s"Error while processing data for partition $topicPartition", e)
                       updatePartitionsWithError(topicPartition)
                     case e: Throwable =>
-                      throw new KafkaException(s"error processing data for partition $topicPartition " +
+                      throw new KafkaException(s"Error processing data for partition $topicPartition " +
                         s"offset ${currentPartitionFetchState.fetchOffset}", e)
                   }
                 case Errors.OFFSET_OUT_OF_RANGE =>
@@ -211,7 +211,7 @@ abstract class AbstractFetcherThread(name: String,
                   } catch {
                     case e: FatalExitError => throw e
                     case e: Throwable =>
-                      error(s"Error getting offset for partition $topicPartition to broker ${sourceBroker.id}")
+                      error(s"Error getting offset for partition $topicPartition to broker ${sourceBroker.id}", e)
                       updatePartitionsWithError(topicPartition)
                   }
                 case _ =>

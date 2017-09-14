@@ -236,9 +236,8 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
     }
     catch {
       case t: Throwable =>
-        stateChangeLogger.error(("Controller %d epoch %d initiated state change of replica %d for partition " +
-          "%s from %s to %s failed")
-          .format(controllerId, controller.epoch, replicaId, topicAndPartition, currState, targetState), t)
+        stateChangeLogger.error(s"Controller $controllerId epoch ${controller.epoch} initiated state change of " +
+          s"replica $replicaId for partition $topicAndPartition from $currState to $targetState failed", t)
     }
   }
 
