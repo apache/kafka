@@ -18,12 +18,10 @@ package org.apache.kafka.common.protocol;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 
 public enum SecurityProtocol {
     /** Un-authenticated, non-encrypted channel */
