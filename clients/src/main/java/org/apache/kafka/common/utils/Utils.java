@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.utils;
 
-import java.text.DecimalFormat;
 import org.apache.kafka.common.KafkaException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,6 +30,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
@@ -43,6 +44,7 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -284,14 +286,14 @@ public class Utils {
      * Instantiate the class
      */
     public static <T> T newInstance(Class<T> c) {
+        if (c == null)
+            throw new KafkaException("class cannot be null");
         try {
-            return c.newInstance();
-        } catch (IllegalAccessException e) {
+            return c.getDeclaredConstructor().newInstance();
+        } catch (NoSuchMethodException e) {
+            throw new KafkaException("Could not find a public no-argument constructor for " + c.getName(), e);
+        } catch (ReflectiveOperationException | RuntimeException e) {
             throw new KafkaException("Could not instantiate class " + c.getName(), e);
-        } catch (InstantiationException e) {
-            throw new KafkaException("Could not instantiate class " + c.getName() + " Does it have a public no-argument constructor?", e);
-        } catch (NullPointerException e) {
-            throw new KafkaException("Requested class was null", e);
         }
     }
 
@@ -304,6 +306,42 @@ public class Utils {
      */
     public static <T> T newInstance(String klass, Class<T> base) throws ClassNotFoundException {
         return Utils.newInstance(Class.forName(klass, true, Utils.getContextOrKafkaClassLoader()).asSubclass(base));
+    }
+
+    /**
+     * Construct a new object using a class name and parameters.
+     *
+     * @param className                 The full name of the class to construct.
+     * @param params                    A sequence of (type, object) elements.
+     * @param <T>                       The type of object to construct.
+     * @return                          The new object.
+     * @throws ClassNotFoundException   If there was a problem constructing the object.
+     */
+    public static <T> T newParameterizedInstance(String className, Object... params)
+            throws ClassNotFoundException {
+        Class<?>[] argTypes = new Class<?>[params.length / 2];
+        Object[] args = new Object[params.length / 2];
+        try {
+            Class c = Class.forName(className, true, Utils.getContextOrKafkaClassLoader());
+            for (int i = 0; i < params.length / 2; i++) {
+                argTypes[i] = (Class<?>) params[2 * i];
+                args[i] = params[(2 * i) + 1];
+            }
+            Constructor<T> constructor = c.getConstructor(argTypes);
+            return constructor.newInstance(args);
+        } catch (NoSuchMethodException e) {
+            throw new ClassNotFoundException(String.format("Failed to find " +
+                "constructor with %s for %s", Utils.join(argTypes, ", "), className), e);
+        } catch (InstantiationException e) {
+            throw new ClassNotFoundException(String.format("Failed to instantiate " +
+                "%s", className), e);
+        } catch (IllegalAccessException e) {
+            throw new ClassNotFoundException(String.format("Unable to access " +
+                "constructor of %s", className), e);
+        } catch (InvocationTargetException e) {
+            throw new ClassNotFoundException(String.format("Unable to invoke " +
+                "constructor of %s", className), e);
+        }
     }
 
     /**
@@ -681,7 +719,7 @@ public class Utils {
             try {
                 closeable.close();
             } catch (Throwable t) {
-                log.warn("Failed to close {}", name, t);
+                log.warn("Failed to close {} with type {}", name, closeable.getClass().getName(), t);
             }
         }
     }

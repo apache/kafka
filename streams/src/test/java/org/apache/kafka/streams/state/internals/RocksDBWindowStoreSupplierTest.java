@@ -59,7 +59,7 @@ public class RocksDBWindowStoreSupplierTest {
     }
 
     @Test
-    public void shouldCreateLoggingEnabledStoreWhenWindowStoreLogged() throws Exception {
+    public void shouldCreateLoggingEnabledStoreWhenWindowStoreLogged() {
         store = createStore(true, false, 3);
         final List<ProducerRecord> logged = new ArrayList<>();
         final NoOpRecordCollector collector = new NoOpRecordCollector() {
@@ -86,7 +86,7 @@ public class RocksDBWindowStoreSupplierTest {
     }
 
     @Test
-    public void shouldNotBeLoggingEnabledStoreWhenLogginNotEnabled() throws Exception {
+    public void shouldNotBeLoggingEnabledStoreWhenLogginNotEnabled() {
         store = createStore(false, false, 3);
         final List<ProducerRecord> logged = new ArrayList<>();
         final NoOpRecordCollector collector = new NoOpRecordCollector() {
@@ -113,30 +113,24 @@ public class RocksDBWindowStoreSupplierTest {
     }
 
     @Test
-    public void shouldBeCachedWindowStoreWhenCachingEnabled() throws Exception {
+    public void shouldBeCachedWindowStoreWhenCachingEnabled() {
         store = createStore(false, true, 3);
         store.init(context, store);
         context.setTime(1);
         store.put("a", "b");
         store.put("b", "c");
-        assertThat(store, is(instanceOf(CachingWindowStore.class)));
+        assertThat(((WrappedStateStore) store).wrappedStore(), is(instanceOf(CachingWindowStore.class)));
         assertThat(context.getCache().size(), is(2L));
     }
 
     @Test
-    public void shouldReturnRocksDbStoreWhenCachingAndLoggingDisabled() throws Exception {
-        store = createStore(false, false, 3);
-        assertThat(store, is(instanceOf(RocksDBWindowStore.class)));
+    public void shouldHaveMeteredStoreAsOuterMost() {
+        assertThat(createStore(false, false, 2), instanceOf(MeteredWindowStore.class));
+        assertThat(createStore(false, true, 2), instanceOf(MeteredWindowStore.class));
+        assertThat(createStore(true, false, 2), instanceOf(MeteredWindowStore.class));
     }
-
     @Test
-    public void shouldReturnRocksDbStoreWhenCachingDisabled() throws Exception {
-        store = createStore(true, false, 3);
-        assertThat(store, is(instanceOf(RocksDBWindowStore.class)));
-    }
-
-    @Test
-    public void shouldHaveMeteredStoreWhenCached() throws Exception {
+    public void shouldHaveMeteredStoreWhenCached() {
         store = createStore(false, true, 3);
         store.init(context, store);
         final StreamsMetrics metrics = context.metrics();
@@ -144,7 +138,7 @@ public class RocksDBWindowStoreSupplierTest {
     }
 
     @Test
-    public void shouldHaveMeteredStoreWhenLogged() throws Exception {
+    public void shouldHaveMeteredStoreWhenLogged() {
         store = createStore(true, false, 3);
         store.init(context, store);
         final StreamsMetrics metrics = context.metrics();
@@ -152,7 +146,7 @@ public class RocksDBWindowStoreSupplierTest {
     }
 
     @Test
-    public void shouldHaveMeteredStoreWhenNotLoggedOrCached() throws Exception {
+    public void shouldHaveMeteredStoreWhenNotLoggedOrCached() {
         store = createStore(false, false, 3);
         store.init(context, store);
         final StreamsMetrics metrics = context.metrics();
@@ -160,7 +154,7 @@ public class RocksDBWindowStoreSupplierTest {
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void shouldThrowIllegalArgumentExceptionIfNumSegmentsLessThanTwo() throws Exception {
+    public void shouldThrowIllegalArgumentExceptionIfNumSegmentsLessThanTwo() {
         createStore(true, true, 1);
     }
 

@@ -23,7 +23,9 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -37,7 +39,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-public abstract class AbstractTask {
+public abstract class AbstractTask implements Task {
     private static final Logger log = LoggerFactory.getLogger(AbstractTask.class);
 
     final TaskId id;
@@ -48,6 +50,8 @@ public abstract class AbstractTask {
     final Consumer consumer;
     final String logPrefix;
     final boolean eosEnabled;
+    boolean taskInitialized;
+    private final StateDirectory stateDirectory;
 
     InternalProcessorContext processorContext;
 
@@ -69,6 +73,7 @@ public abstract class AbstractTask {
         this.topology = topology;
         this.consumer = consumer;
         this.eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
+        this.stateDirectory = stateDirectory;
 
         logPrefix = String.format("%s [%s]", isStandby ? "standby-task" : "task", id());
 
@@ -87,32 +92,32 @@ public abstract class AbstractTask {
         }
     }
 
-    public abstract void resume();
-
-    public abstract void commit();
-    public abstract void suspend();
-    public abstract void close(final boolean clean);
-
-    public final TaskId id() {
+    @Override
+    public TaskId id() {
         return id;
     }
 
+    @Override
     public final String applicationId() {
         return applicationId;
     }
 
+    @Override
     public final Set<TopicPartition> partitions() {
         return partitions;
     }
 
+    @Override
     public final ProcessorTopology topology() {
         return topology;
     }
 
+    @Override
     public final ProcessorContext context() {
         return processorContext;
     }
 
+    @Override
     public StateStore getStore(final String name) {
         return stateMgr.getStore(name);
     }
@@ -188,6 +193,20 @@ public abstract class AbstractTask {
     }
 
     void initializeStateStores() {
+        if (topology.stateStores().isEmpty()) {
+            return;
+        }
+
+        try {
+            if (!stateDirectory.lock(id, 5)) {
+                throw new LockException(String.format("%s Failed to lock the state directory for task %s",
+                                                      logPrefix, id));
+            }
+        } catch (IOException e) {
+            throw new StreamsException(String.format("%s fatal error while trying to lock the state directory for task %s",
+                                                     logPrefix,
+                                                     id));
+        }
         log.trace("{} Initializing state stores", logPrefix);
 
         // set initial offset limits
@@ -199,13 +218,38 @@ public abstract class AbstractTask {
         }
     }
 
+
     /**
      * @throws ProcessorStateException if there is an error while closing the state manager
      * @param writeCheckpoint boolean indicating if a checkpoint file should be written
      */
     void closeStateManager(final boolean writeCheckpoint) throws ProcessorStateException {
+        ProcessorStateException exception = null;
         log.trace("{} Closing state manager", logPrefix);
-        stateMgr.close(writeCheckpoint ? recordCollectorOffsets() : null);
+        try {
+            stateMgr.close(writeCheckpoint ? recordCollectorOffsets() : null);
+        } catch (final ProcessorStateException e) {
+            exception = e;
+        } finally {
+            try {
+                stateDirectory.unlock(id);
+            } catch (IOException e) {
+                if (exception == null) {
+                    exception = new ProcessorStateException(String.format("%s Failed to release state dir lock", logPrefix), e);
+                }
+            }
+        }
+        if (exception != null) {
+            throw exception;
+        }
     }
 
+
+    public boolean hasStateStores() {
+        return !topology.stateStores().isEmpty();
+    }
+
+    public Collection<TopicPartition> changelogPartitions() {
+        return stateMgr.changelogPartitions();
+    }
 }

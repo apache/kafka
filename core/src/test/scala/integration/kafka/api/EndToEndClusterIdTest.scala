@@ -25,6 +25,7 @@ import kafka.common.TopicAndPartition
 import kafka.integration.KafkaServerTestHarness
 import kafka.server._
 import kafka.utils._
+import kafka.utils.Implicits._
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{ClusterResource, ClusterResourceListener, TopicPartition}
@@ -105,7 +106,7 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
   override def generateConfigs = {
     val cfgs = TestUtils.createBrokerConfigs(serverCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties)
-    cfgs.foreach(_.putAll(serverConfig))
+    cfgs.foreach(_ ++= serverConfig)
     cfgs.map(KafkaConfig.fromProps)
   }
 
@@ -200,7 +201,7 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
   }
 
   private def consumeRecords(consumer: Consumer[Array[Byte], Array[Byte]],
-                             numRecords: Int = 1,
+                             numRecords: Int,
                              startingOffset: Int = 0,
                              topic: String = topic,
                              part: Int = part) {

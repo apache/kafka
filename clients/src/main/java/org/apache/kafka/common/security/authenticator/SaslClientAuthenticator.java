@@ -38,7 +38,6 @@ import org.apache.kafka.common.requests.SaslHandshakeRequest;
 import org.apache.kafka.common.requests.SaslHandshakeResponse;
 import org.apache.kafka.common.security.auth.AuthCallbackHandler;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
-import org.apache.kafka.common.security.auth.PrincipalBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,14 +69,11 @@ public class SaslClientAuthenticator implements Authenticator {
     private final String host;
     private final String node;
     private final String mechanism;
-    private final boolean handshakeRequestEnable;
-
-    // assigned in `configure`
-    private SaslClient saslClient;
-    private Map<String, ?> configs;
-    private String clientPrincipalName;
-    private AuthCallbackHandler callbackHandler;
-    private TransportLayer transportLayer;
+    private final TransportLayer transportLayer;
+    private final SaslClient saslClient;
+    private final Map<String, ?> configs;
+    private final String clientPrincipalName;
+    private final AuthCallbackHandler callbackHandler;
 
     // buffers used in `authenticate`
     private NetworkReceive netInBuffer;
@@ -92,21 +88,24 @@ public class SaslClientAuthenticator implements Authenticator {
     // Request header for which response from the server is pending
     private RequestHeader currentRequestHeader;
 
-    public SaslClientAuthenticator(String node, Subject subject, String servicePrincipal, String host, String mechanism, boolean handshakeRequestEnable) throws IOException {
+    public SaslClientAuthenticator(Map<String, ?> configs,
+                                   String node,
+                                   Subject subject,
+                                   String servicePrincipal,
+                                   String host,
+                                   String mechanism,
+                                   boolean handshakeRequestEnable,
+                                   TransportLayer transportLayer) throws IOException {
         this.node = node;
         this.subject = subject;
         this.host = host;
         this.servicePrincipal = servicePrincipal;
         this.mechanism = mechanism;
-        this.handshakeRequestEnable = handshakeRequestEnable;
         this.correlationId = -1;
-    }
+        this.transportLayer = transportLayer;
+        this.configs = configs;
 
-    public void configure(TransportLayer transportLayer, PrincipalBuilder principalBuilder, Map<String, ?> configs) throws KafkaException {
         try {
-            this.transportLayer = transportLayer;
-            this.configs = configs;
-
             setSaslState(handshakeRequestEnable ? SaslState.SEND_HANDSHAKE_REQUEST : SaslState.INITIAL);
 
             // determine client principal from subject for Kerberos to use as authorization id for the SaslClient.
@@ -159,7 +158,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 // fetch supported versions.
                 String clientId = (String) configs.get(CommonClientConfigs.CLIENT_ID_CONFIG);
                 SaslHandshakeRequest handshakeRequest = new SaslHandshakeRequest(mechanism);
-                currentRequestHeader = new RequestHeader(ApiKeys.SASL_HANDSHAKE.id,
+                currentRequestHeader = new RequestHeader(ApiKeys.SASL_HANDSHAKE,
                         handshakeRequest.version(), clientId, correlationId++);
                 send(handshakeRequest.toSend(node, currentRequestHeader));
                 setSaslState(SaslState.RECEIVE_HANDSHAKE_RESPONSE);
@@ -252,7 +251,7 @@ public class SaslClientAuthenticator implements Authenticator {
         return serverPacket;
     }
 
-    public Principal principal() {
+    public KafkaPrincipal principal() {
         return new KafkaPrincipal(KafkaPrincipal.USER_TYPE, clientPrincipalName);
     }
 
@@ -308,20 +307,18 @@ public class SaslClientAuthenticator implements Authenticator {
 
     private void handleKafkaResponse(RequestHeader requestHeader, byte[] responseBytes) {
         AbstractResponse response;
-        ApiKeys apiKey;
         try {
             response = NetworkClient.parseResponse(ByteBuffer.wrap(responseBytes), requestHeader);
-            apiKey = ApiKeys.forId(requestHeader.apiKey());
         } catch (SchemaException | IllegalArgumentException e) {
             LOG.debug("Invalid SASL mechanism response, server may be expecting only GSSAPI tokens");
             throw new AuthenticationException("Invalid SASL mechanism response", e);
         }
-        switch (apiKey) {
+        switch (requestHeader.apiKey()) {
             case SASL_HANDSHAKE:
                 handleSaslHandshakeResponse((SaslHandshakeResponse) response);
                 break;
             default:
-                throw new IllegalStateException("Unexpected API key during handshake: " + apiKey);
+                throw new IllegalStateException("Unexpected API key during handshake: " + requestHeader.apiKey());
         }
     }
 

@@ -34,7 +34,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion
 import org.apache.kafka.common.requests.DescribeGroupsResponse.GroupMetadata
 import org.apache.kafka.common.requests.OffsetFetchResponse
-import org.apache.kafka.common.utils.{KafkaThread, Time, Utils}
+import org.apache.kafka.common.utils.{LogContext, KafkaThread, Time, Utils}
 import org.apache.kafka.common.{Cluster, Node, TopicPartition}
 
 import scala.collection.JavaConverters._
@@ -452,7 +452,8 @@ object AdminClient {
       metrics,
       time,
       "admin",
-      channelBuilder)
+      channelBuilder,
+      new LogContext())
 
     val networkClient = new NetworkClient(
       selector,
@@ -466,9 +467,11 @@ object AdminClient {
       requestTimeoutMs,
       time,
       true,
-      new ApiVersions)
+      new ApiVersions,
+      new LogContext())
 
     val highLevelClient = new ConsumerNetworkClient(
+      new LogContext(),
       networkClient,
       metadata,
       time,

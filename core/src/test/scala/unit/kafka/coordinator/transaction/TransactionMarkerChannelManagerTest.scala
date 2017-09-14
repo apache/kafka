@@ -28,7 +28,7 @@ import org.junit.Assert._
 import org.junit.Test
 import com.yammer.metrics.Metrics
 import kafka.common.RequestAndCompletionHandler
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -296,7 +296,8 @@ class TransactionMarkerChannelManagerTest {
 
     val response = new WriteTxnMarkersResponse(createPidErrorMap(Errors.NONE))
     for (requestAndHandler <- requestAndHandlers) {
-      requestAndHandler.handler.onComplete(new ClientResponse(new RequestHeader(0, 0, "client", 1), null, null, 0, 0, false, null, response))
+      requestAndHandler.handler.onComplete(new ClientResponse(new RequestHeader(ApiKeys.PRODUCE, 0, "client", 1),
+        null, null, 0, 0, false, null, response))
     }
 
     EasyMock.verify(txnStateManager)
@@ -344,7 +345,8 @@ class TransactionMarkerChannelManagerTest {
 
     val response = new WriteTxnMarkersResponse(createPidErrorMap(Errors.NONE))
     for (requestAndHandler <- requestAndHandlers) {
-      requestAndHandler.handler.onComplete(new ClientResponse(new RequestHeader(0, 0, "client", 1), null, null, 0, 0, false, null, response))
+      requestAndHandler.handler.onComplete(new ClientResponse(new RequestHeader(ApiKeys.PRODUCE, 0, "client", 1),
+        null, null, 0, 0, false, null, response))
     }
 
     EasyMock.verify(txnStateManager)
@@ -398,7 +400,8 @@ class TransactionMarkerChannelManagerTest {
 
     val response = new WriteTxnMarkersResponse(createPidErrorMap(Errors.NONE))
     for (requestAndHandler <- requestAndHandlers) {
-      requestAndHandler.handler.onComplete(new ClientResponse(new RequestHeader(0, 0, "client", 1), null, null, 0, 0, false, null, response))
+      requestAndHandler.handler.onComplete(new ClientResponse(new RequestHeader(ApiKeys.PRODUCE, 0, "client", 1),
+        null, null, 0, 0, false, null, response))
     }
 
     // call this again so that append log will be retried
@@ -422,12 +425,12 @@ class TransactionMarkerChannelManagerTest {
 
   @Test
   def shouldCreateMetricsOnStarting(): Unit = {
-    val metrics = Metrics.defaultRegistry.allMetrics
+    val metrics = Metrics.defaultRegistry.allMetrics.asScala
 
-    assertEquals(1, Metrics.defaultRegistry.allMetrics.asScala
+    assertEquals(1, metrics
       .filterKeys(_.getMBeanName == "kafka.coordinator.transaction:type=TransactionMarkerChannelManager,name=UnknownDestinationQueueSize")
       .size)
-    assertEquals(1, Metrics.defaultRegistry.allMetrics.asScala
+    assertEquals(1, metrics
       .filterKeys(_.getMBeanName == "kafka.coordinator.transaction:type=TransactionMarkerChannelManager,name=LogAppendRetryQueueSize")
       .size)
   }

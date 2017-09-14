@@ -35,10 +35,10 @@ import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.ResponseHeader;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -59,7 +59,7 @@ import java.util.Random;
  */
 public class NetworkClient implements KafkaClient {
 
-    private static final Logger log = LoggerFactory.getLogger(NetworkClient.class);
+    private final Logger log;
 
     /* the selector used to perform network i/o */
     private final Selectable selector;
@@ -118,11 +118,12 @@ public class NetworkClient implements KafkaClient {
                          int requestTimeoutMs,
                          Time time,
                          boolean discoverBrokerVersions,
-                         ApiVersions apiVersions) {
+                         ApiVersions apiVersions,
+                         LogContext logContext) {
         this(null, metadata, selector, clientId, maxInFlightRequestsPerConnection,
              reconnectBackoffMs, reconnectBackoffMax,
              socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time,
-             discoverBrokerVersions, apiVersions, null);
+             discoverBrokerVersions, apiVersions, null, logContext);
     }
 
     public NetworkClient(Selectable selector,
@@ -137,12 +138,12 @@ public class NetworkClient implements KafkaClient {
             Time time,
             boolean discoverBrokerVersions,
             ApiVersions apiVersions,
-            Sensor throttleTimeSensor) {
-
+            Sensor throttleTimeSensor,
+            LogContext logContext) {
         this(null, metadata, selector, clientId, maxInFlightRequestsPerConnection,
              reconnectBackoffMs, reconnectBackoffMax,
              socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time,
-             discoverBrokerVersions, apiVersions, throttleTimeSensor);
+             discoverBrokerVersions, apiVersions, throttleTimeSensor, logContext);
     }
 
     public NetworkClient(Selectable selector,
@@ -156,11 +157,12 @@ public class NetworkClient implements KafkaClient {
                          int requestTimeoutMs,
                          Time time,
                          boolean discoverBrokerVersions,
-                         ApiVersions apiVersions) {
+                         ApiVersions apiVersions,
+                         LogContext logContext) {
         this(metadataUpdater, null, selector, clientId, maxInFlightRequestsPerConnection,
              reconnectBackoffMs, reconnectBackoffMax,
              socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time,
-             discoverBrokerVersions, apiVersions, null);
+             discoverBrokerVersions, apiVersions, null, logContext);
     }
 
     private NetworkClient(MetadataUpdater metadataUpdater,
@@ -176,7 +178,8 @@ public class NetworkClient implements KafkaClient {
                           Time time,
                           boolean discoverBrokerVersions,
                           ApiVersions apiVersions,
-                          Sensor throttleTimeSensor) {
+                          Sensor throttleTimeSensor,
+                          LogContext logContext) {
         /* It would be better if we could pass `DefaultMetadataUpdater` from the public constructor, but it's not
          * possible because `DefaultMetadataUpdater` is an inner class and it can only be instantiated after the
          * super constructor is invoked.
@@ -202,6 +205,7 @@ public class NetworkClient implements KafkaClient {
         this.discoverBrokerVersions = discoverBrokerVersions;
         this.apiVersions = apiVersions;
         this.throttleTimeSensor = throttleTimeSensor;
+        this.log = logContext.logger(NetworkClient.class);
     }
 
     /**
@@ -226,6 +230,11 @@ public class NetworkClient implements KafkaClient {
         return false;
     }
 
+    // Visible for testing
+    boolean canConnect(Node node, long now) {
+        return connectionStates.canConnect(node.idString(), now);
+    }
+
     /**
      * Disconnects the connection to a particular node, if there is one.
      * Any pending ClientRequests for this connection will receive disconnections.
@@ -234,16 +243,19 @@ public class NetworkClient implements KafkaClient {
      */
     @Override
     public void disconnect(String nodeId) {
+        if (connectionStates.isDisconnected(nodeId))
+            return;
+
         selector.close(nodeId);
         List<ApiKeys> requestTypes = new ArrayList<>();
         long now = time.milliseconds();
         for (InFlightRequest request : inFlightRequests.clearAll(nodeId)) {
             if (request.isInternalRequest) {
-                if (request.header.apiKey() == ApiKeys.METADATA.id) {
+                if (request.header.apiKey() == ApiKeys.METADATA) {
                     metadataUpdater.handleDisconnection(request.destination);
                 }
             } else {
-                requestTypes.add(ApiKeys.forId(request.header.apiKey()));
+                requestTypes.add(request.header.apiKey());
                 abortedSends.add(new ClientResponse(request.header,
                         request.callback, request.destination, request.createdTimeMs, now,
                         true, null, null));
@@ -267,7 +279,7 @@ public class NetworkClient implements KafkaClient {
     public void close(String nodeId) {
         selector.close(nodeId);
         for (InFlightRequest request : inFlightRequests.clearAll(nodeId))
-            if (request.isInternalRequest && request.header.apiKey() == ApiKeys.METADATA.id)
+            if (request.isInternalRequest && request.header.apiKey() == ApiKeys.METADATA)
                 metadataUpdater.handleDisconnection(request.destination);
         connectionStates.remove(nodeId);
     }
@@ -548,25 +560,19 @@ public class NetworkClient implements KafkaClient {
     }
 
     public static AbstractResponse parseResponse(ByteBuffer responseBuffer, RequestHeader requestHeader) {
-        return createResponse(parseStructMaybeUpdateThrottleTimeMetrics(responseBuffer, requestHeader,
-                null, 0), requestHeader);
+        Struct responseStruct = parseStructMaybeUpdateThrottleTimeMetrics(responseBuffer, requestHeader, null, 0);
+        return AbstractResponse.parseResponse(requestHeader.apiKey(), responseStruct);
     }
 
     private static Struct parseStructMaybeUpdateThrottleTimeMetrics(ByteBuffer responseBuffer, RequestHeader requestHeader,
                                                                     Sensor throttleTimeSensor, long now) {
         ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer);
-        ApiKeys apiKey = ApiKeys.forId(requestHeader.apiKey());
         // Always expect the response version id to be the same as the request version id
-        Struct responseBody = apiKey.parseResponse(requestHeader.apiVersion(), responseBuffer);
+        Struct responseBody = requestHeader.apiKey().parseResponse(requestHeader.apiVersion(), responseBuffer);
         correlate(requestHeader, responseHeader);
         if (throttleTimeSensor != null && responseBody.hasField(AbstractResponse.THROTTLE_TIME_KEY_NAME))
             throttleTimeSensor.record(responseBody.getInt(AbstractResponse.THROTTLE_TIME_KEY_NAME), now);
         return responseBody;
-    }
-
-    private static AbstractResponse createResponse(Struct responseStruct, RequestHeader requestHeader) {
-        ApiKeys apiKey = ApiKeys.forId(requestHeader.apiKey());
-        return AbstractResponse.getResponse(apiKey, responseStruct);
     }
 
     /**
@@ -594,7 +600,7 @@ public class NetworkClient implements KafkaClient {
         for (InFlightRequest request : this.inFlightRequests.clearAll(nodeId)) {
             log.trace("Cancelled request {} with correlation id {} due to node {} being disconnected", request.request,
                     request.header.correlationId(), nodeId);
-            if (request.isInternalRequest && request.header.apiKey() == ApiKeys.METADATA.id)
+            if (request.isInternalRequest && request.header.apiKey() == ApiKeys.METADATA)
                 metadataUpdater.handleDisconnection(request.destination);
             else
                 responses.add(request.disconnected(now));
@@ -658,9 +664,9 @@ public class NetworkClient implements KafkaClient {
                 throttleTimeSensor, now);
             if (log.isTraceEnabled()) {
                 log.trace("Completed receive from node {} for {} with correlation id {}, received {}", req.destination,
-                    ApiKeys.forId(req.header.apiKey()), req.header.correlationId(), responseStruct);
+                    req.header.apiKey(), req.header.correlationId(), responseStruct);
             }
-            AbstractResponse body = createResponse(responseStruct, req.header);
+            AbstractResponse body = AbstractResponse.parseResponse(req.header.apiKey(), responseStruct);
             if (req.isInternalRequest && body instanceof MetadataResponse)
                 metadataUpdater.handleCompletedMetadataResponse(req.header, now, (MetadataResponse) body);
             else if (req.isInternalRequest && body instanceof ApiVersionsResponse)
@@ -967,6 +973,19 @@ public class NetworkClient implements KafkaClient {
 
         public ClientResponse disconnected(long timeMs) {
             return new ClientResponse(header, callback, destination, createdTimeMs, timeMs, true, null, null);
+        }
+        
+        @Override
+        public String toString() {
+            return "InFlightRequest(header=" + header +
+                    ", destination=" + destination +
+                    ", expectResponse=" + expectResponse +
+                    ", createdTimeMs=" + createdTimeMs +
+                    ", sendTimeMs=" + sendTimeMs +
+                    ", isInternalRequest=" + isInternalRequest +
+                    ", request=" + request +
+                    ", callback=" + callback +
+                    ", send=" + send + ")";
         }
     }
 

@@ -28,7 +28,7 @@ import org.junit.Assert._
 import kafka.common.KafkaException
 import kafka.utils.CoreUtils.inLock
 import org.junit.Test
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{Base64, Utils}
 
 class UtilsTest extends JUnitSuite {
 
@@ -157,13 +157,15 @@ class UtilsTest extends JUnitSuite {
   def testUrlSafeBase64EncodeUUID() {
 
     // Test a UUID that has no + or / characters in base64 encoding [a149b4a3-06e1-4b49-a8cb-8a9c4a59fa46 ->(base64)-> oUm0owbhS0moy4qcSln6Rg==]
-    val clusterId1 = CoreUtils.urlSafeBase64EncodeNoPadding(CoreUtils.getBytesFromUuid(UUID.fromString("a149b4a3-06e1-4b49-a8cb-8a9c4a59fa46")))
+    val clusterId1 = Base64.urlEncoderNoPadding.encodeToString(CoreUtils.getBytesFromUuid(UUID.fromString(
+      "a149b4a3-06e1-4b49-a8cb-8a9c4a59fa46")))
     assertEquals(clusterId1, "oUm0owbhS0moy4qcSln6Rg")
     assertEquals(clusterId1.length, 22)
     assertTrue(clusterIdPattern.matcher(clusterId1).matches())
 
     // Test a UUID that has + or / characters in base64 encoding [d418ec02-277e-4853-81e6-afe30259daec ->(base64)-> 1BjsAid+SFOB5q/jAlna7A==]
-    val clusterId2 = CoreUtils.urlSafeBase64EncodeNoPadding(CoreUtils.getBytesFromUuid(UUID.fromString("d418ec02-277e-4853-81e6-afe30259daec")))
+    val clusterId2 = Base64.urlEncoderNoPadding.encodeToString(CoreUtils.getBytesFromUuid(UUID.fromString(
+      "d418ec02-277e-4853-81e6-afe30259daec")))
     assertEquals(clusterId2, "1BjsAid-SFOB5q_jAlna7A")
     assertEquals(clusterId2.length, 22)
     assertTrue(clusterIdPattern.matcher(clusterId2).matches())

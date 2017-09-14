@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -25,7 +24,6 @@ import org.apache.kafka.common.record.RecordBatch;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -123,15 +121,6 @@ public class ApiVersionsResponse extends AbstractResponse {
         return createApiVersionsResponse(throttleTimeMs, maxMagic);
     }
 
-    /**
-     * Returns Errors.UNSUPPORTED_VERSION response with version 0 since we don't support the requested version.
-     */
-    public static Send unsupportedVersionSend(String destination, RequestHeader requestHeader) {
-        ApiVersionsResponse response = new ApiVersionsResponse(DEFAULT_THROTTLE_TIME, Errors.UNSUPPORTED_VERSION,
-                Collections.<ApiVersion>emptyList());
-        return response.toSend(destination, (short) 0, requestHeader.toResponseHeader());
-    }
-
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -169,4 +158,5 @@ public class ApiVersionsResponse extends AbstractResponse {
         }
         return tempApiIdToApiVersion;
     }
+
 }

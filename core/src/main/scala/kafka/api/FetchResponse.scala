@@ -33,7 +33,7 @@ object FetchResponsePartitionData {
     val messageSetSize = buffer.getInt
     val messageSetBuffer = buffer.slice()
     messageSetBuffer.limit(messageSetSize)
-    buffer.position(buffer.position + messageSetSize)
+    buffer.position(buffer.position() + messageSetSize)
     new FetchResponsePartitionData(error, hw, new ByteBufferMessageSet(messageSetBuffer))
   }
 
@@ -73,6 +73,7 @@ case class TopicData(topic: String, partitionData: Seq[(Int, FetchResponsePartit
   val headerSize = TopicData.headerSize(topic)
 }
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 object FetchResponse {
 
   // The request version is used to determine which fields we can expect in the response
@@ -115,6 +116,7 @@ object FetchResponse {
   }
 }
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 case class FetchResponse(correlationId: Int,
                          data: Seq[(TopicAndPartition, FetchResponsePartitionData)],
                          requestVersion: Int = 0,

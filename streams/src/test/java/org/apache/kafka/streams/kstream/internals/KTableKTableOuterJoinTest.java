@@ -61,7 +61,7 @@ public class KTableKTableOuterJoinTest {
     }
 
     @Test
-    public void testJoin() throws Exception {
+    public void testJoin() {
         StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -166,7 +166,7 @@ public class KTableKTableOuterJoinTest {
     }
 
     @Test
-    public void testNotSendingOldValue() throws Exception {
+    public void testNotSendingOldValue() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -254,7 +254,7 @@ public class KTableKTableOuterJoinTest {
     }
 
     @Test
-    public void testSendingOldValue() throws Exception {
+    public void testSendingOldValue() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};

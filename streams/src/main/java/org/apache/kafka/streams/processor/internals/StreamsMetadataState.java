@@ -192,10 +192,10 @@ public class StreamsMetadataState {
     /**
      * Respond to changes to the HostInfo -> TopicPartition mapping. Will rebuild the
      * metadata
-     * @param currentState  the current mapping of {@link HostInfo} -> {@link TopicPartition}s
+     * @param currentState       the current mapping of {@link HostInfo} -> {@link TopicPartition}s
      * @param clusterMetadata    the current clusterMetadata {@link Cluster}
      */
-    public synchronized void onChange(final Map<HostInfo, Set<TopicPartition>> currentState, final Cluster clusterMetadata) {
+    synchronized void onChange(final Map<HostInfo, Set<TopicPartition>> currentState, final Cluster clusterMetadata) {
         this.clusterMetadata = clusterMetadata;
         rebuildMetadata(currentState);
     }

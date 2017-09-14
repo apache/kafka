@@ -128,7 +128,7 @@ public class SmokeTestUtil {
 
     static Serde<Double> doubleSerde = Serdes.Double();
 
-    static File createDir(final File parent, final String child) throws Exception {
+    static File createDir(final File parent, final String child) {
         final File dir = new File(parent, child);
 
         dir.mkdir();

@@ -184,7 +184,7 @@ object TestLinearWriteSpeed {
     def write(): Int = {
       buffer.put(content)
       content.rewind()
-      content.limit
+      content.limit()
     }
     def close() {
       raf.close()
@@ -198,7 +198,7 @@ object TestLinearWriteSpeed {
     def write(): Int = {
       channel.write(content)
       content.rewind()
-      content.limit
+      content.limit()
     }
     def close() {
       raf.close()

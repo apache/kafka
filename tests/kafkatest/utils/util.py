@@ -103,3 +103,12 @@ def is_int_with_prefix(msg):
                         "prefix dot integer value, but one of the two parts (before or after dot) "
                         "are not integers. Message: %s" % (msg))
 
+def node_is_reachable(src_node, dst_node):
+    """
+    Returns true if a node is unreachable from another node.
+
+    :param src_node:        The source node to check from reachability from.
+    :param dst_node:        The destination node to check for reachability to.
+    :return:                True only if dst is reachable from src.
+    """
+    return 0 == src_node.account.ssh("nc -w 3 -z %s 22" % dst_node.account.hostname, allow_fail=True)

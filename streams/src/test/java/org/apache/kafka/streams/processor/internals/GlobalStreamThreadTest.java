@@ -69,7 +69,7 @@ public class GlobalStreamThreadTest {
     }
 
     @Test
-    public void shouldThrowStreamsExceptionOnStartupIfThereIsAStreamsException() throws Exception {
+    public void shouldThrowStreamsExceptionOnStartupIfThereIsAStreamsException() {
         // should throw as the MockConsumer hasn't been configured and there are no
         // partitions available
         try {
@@ -83,7 +83,7 @@ public class GlobalStreamThreadTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldThrowStreamsExceptionOnStartupIfExceptionOccurred() throws Exception {
+    public void shouldThrowStreamsExceptionOnStartupIfExceptionOccurred() {
         final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer(OffsetResetStrategy.EARLIEST) {
             @Override
             public List<PartitionInfo> partitionsFor(final String topic) {
@@ -110,28 +110,28 @@ public class GlobalStreamThreadTest {
 
 
     @Test
-    public void shouldBeRunningAfterSuccessfulStart() throws Exception {
+    public void shouldBeRunningAfterSuccessfulStart() {
         initializeConsumer();
         globalStreamThread.start();
         assertTrue(globalStreamThread.stillRunning());
     }
 
     @Test(timeout = 30000)
-    public void shouldStopRunningWhenClosedByUser() throws Exception {
+    public void shouldStopRunningWhenClosedByUser() throws InterruptedException {
         initializeConsumer();
         globalStreamThread.start();
-        globalStreamThread.close();
+        globalStreamThread.shutdown();
         globalStreamThread.join();
         assertEquals(GlobalStreamThread.State.DEAD, globalStreamThread.state());
     }
 
     @Test
-    public void shouldCloseStateStoresOnClose() throws Exception {
+    public void shouldCloseStateStoresOnClose() throws InterruptedException {
         initializeConsumer();
         globalStreamThread.start();
         final StateStore globalStore = builder.globalStateStores().get("bar");
         assertTrue(globalStore.isOpen());
-        globalStreamThread.close();
+        globalStreamThread.shutdown();
         globalStreamThread.join();
         assertFalse(globalStore.isOpen());
     }
@@ -142,7 +142,7 @@ public class GlobalStreamThreadTest {
 
         initializeConsumer();
         globalStreamThread.start();
-        globalStreamThread.close();
+        globalStreamThread.shutdown();
         globalStreamThread.join();
 
         assertEquals(GlobalStreamThread.State.DEAD, globalStreamThread.state());
@@ -154,9 +154,9 @@ public class GlobalStreamThreadTest {
 
         initializeConsumer();
         globalStreamThread.start();
-        globalStreamThread.close();
+        globalStreamThread.shutdown();
         globalStreamThread.join();
-        globalStreamThread.close();
+        globalStreamThread.shutdown();
 
         assertEquals(GlobalStreamThread.State.DEAD, globalStreamThread.state());
     }
@@ -173,7 +173,7 @@ public class GlobalStreamThreadTest {
                 return globalStreamThread.state() == RUNNING;
             }
         }, 10 * 1000, "Thread never started.");
-        globalStreamThread.close();
+        globalStreamThread.shutdown();
     }
 
 

@@ -97,7 +97,7 @@ public class EosIntegrationTest {
     private int testNumber = 0;
 
     @Before
-    public void createTopics() throws Exception {
+    public void createTopics() throws InterruptedException {
         applicationId = "appId-" + ++testNumber;
         CLUSTER.deleteTopicsAndWait(
             SINGLE_PARTITION_INPUT_TOPIC, MULTI_PARTITION_INPUT_TOPIC,
@@ -701,7 +701,7 @@ public class EosIntegrationTest {
     }
 
     private List<KeyValue<Long, Long>> readResult(final int numberOfRecords,
-                                                  final String groupId) throws Exception {
+                                                  final String groupId) throws InterruptedException {
         if (groupId != null) {
             return IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
                 TestUtils.consumerConfig(

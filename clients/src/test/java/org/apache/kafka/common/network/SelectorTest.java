@@ -16,37 +16,47 @@
  */
 package org.apache.kafka.common.network;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.memory.SimpleMemoryPool;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.protocol.SecurityProtocol;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.test.TestUtils;
+import org.easymock.IMocksControl;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.net.ServerSocket;
-import java.nio.ByteBuffer;
-
 import java.util.Random;
-import org.apache.kafka.common.memory.MemoryPool;
-import org.apache.kafka.common.memory.SimpleMemoryPool;
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.protocol.SecurityProtocol;
-import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import java.util.Set;
+
+import static org.easymock.EasyMock.createControl;
+import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.expectLastCall;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
 
 /**
  * A set of tests for the selector. These use a test harness that runs a simple socket server that echos back responses.
@@ -70,7 +80,7 @@ public class SelectorTest {
         this.channelBuilder = new PlaintextChannelBuilder();
         this.channelBuilder.configure(configs);
         this.metrics = new Metrics();
-        this.selector = new Selector(5000, this.metrics, time, "MetricGroup", channelBuilder);
+        this.selector = new Selector(5000, this.metrics, time, "MetricGroup", channelBuilder, new LogContext());
     }
 
     @After
@@ -78,6 +88,10 @@ public class SelectorTest {
         this.selector.close();
         this.server.close();
         this.metrics.close();
+    }
+
+    public SecurityProtocol securityProtocol() {
+        return SecurityProtocol.PLAINTEXT;
     }
 
     /**
@@ -104,13 +118,20 @@ public class SelectorTest {
     /**
      * Sending a request with one already in flight should result in an exception
      */
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void testCantSendWithInProgress() throws Exception {
         String node = "0";
         blockingConnect(node);
         selector.send(createSend(node, "test1"));
-        selector.send(createSend(node, "test2"));
-        selector.poll(1000L);
+        try {
+            selector.send(createSend(node, "test2"));
+            fail("IllegalStateException not thrown when sending a request with one in flight");
+        } catch (IllegalStateException e) {
+            // Expected exception
+        }
+        selector.poll(0);
+        assertTrue("Channel not closed", selector.disconnected().containsKey(node));
+        assertEquals(ChannelState.FAILED_SEND, selector.disconnected().get(node));
     }
 
     /**
@@ -267,6 +288,49 @@ public class SelectorTest {
         assertEquals("The response should be from the previously muted node", "1", selector.completedReceives().get(0).source());
     }
 
+    @Test
+    public void registerFailure() throws Exception {
+        ChannelBuilder channelBuilder = new PlaintextChannelBuilder() {
+            @Override
+            public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize,
+                    MemoryPool memoryPool) throws KafkaException {
+                throw new RuntimeException("Test exception");
+            }
+            @Override
+            public void close() {
+            }
+        };
+        Selector selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder, new LogContext());
+        SocketChannel socketChannel = SocketChannel.open();
+        socketChannel.configureBlocking(false);
+        try {
+            selector.register("1", socketChannel);
+            fail("Register did not fail");
+        } catch (IOException e) {
+            assertTrue("Unexpected exception: " + e, e.getCause().getMessage().contains("Test exception"));
+            assertFalse("Socket not closed", socketChannel.isOpen());
+        }
+        selector.close();
+    }
+
+    @Test
+    public void testCloseConnectionInClosingState() throws Exception {
+        KafkaChannel channel = createConnectionWithStagedReceives(5);
+        String id = channel.id();
+        selector.mute(id); // Mute to allow channel to be expired even if more data is available for read
+        time.sleep(6000);  // The max idle time is 5000ms
+        selector.poll(0);
+        assertNull("Channel not expired", selector.channel(id));
+        assertEquals(channel, selector.closingChannel(id));
+        assertEquals(ChannelState.EXPIRED, channel.state());
+        selector.close(id);
+        assertNull("Channel not removed from channels", selector.channel(id));
+        assertNull("Channel not removed from closingChannels", selector.closingChannel(id));
+        assertTrue("Unexpected disconnect notification", selector.disconnected().isEmpty());
+        assertEquals(ChannelState.EXPIRED, channel.state());
+        selector.poll(0);
+        assertTrue("Unexpected disconnect notification", selector.disconnected().isEmpty());
+    }
 
     @Test
     public void testCloseOldestConnection() throws Exception {
@@ -290,22 +354,32 @@ public class SelectorTest {
         verifyCloseOldestConnectionWithStagedReceives(5);
     }
 
-    private void verifyCloseOldestConnectionWithStagedReceives(int maxStagedReceives) throws Exception {
+    private KafkaChannel createConnectionWithStagedReceives(int maxStagedReceives) throws Exception {
         String id = "0";
         blockingConnect(id);
         KafkaChannel channel = selector.channel(id);
+        int retries = 100;
 
-        selector.mute(id);
-        for (int i = 0; i <= maxStagedReceives; i++) {
-            selector.send(createSend(id, String.valueOf(i)));
-            selector.poll(1000);
-        }
-
-        selector.unmute(id);
         do {
-            selector.poll(1000);
-        } while (selector.completedReceives().isEmpty());
+            selector.mute(id);
+            for (int i = 0; i <= maxStagedReceives; i++) {
+                selector.send(createSend(id, String.valueOf(i)));
+                selector.poll(1000);
+            }
 
+            selector.unmute(id);
+            do {
+                selector.poll(1000);
+            } while (selector.completedReceives().isEmpty());
+        } while (selector.numStagedReceives(channel) == 0 && --retries > 0);
+        assertTrue("No staged receives after 100 attempts", selector.numStagedReceives(channel) > 0);
+
+        return channel;
+    }
+
+    private void verifyCloseOldestConnectionWithStagedReceives(int maxStagedReceives) throws Exception {
+        KafkaChannel channel = createConnectionWithStagedReceives(maxStagedReceives);
+        String id = channel.id();
         int stagedReceives = selector.numStagedReceives(channel);
         int completedReceives = 0;
         while (selector.disconnected().isEmpty()) {
@@ -331,13 +405,15 @@ public class SelectorTest {
         assertTrue("Unexpected receive", selector.completedReceives().isEmpty());
     }
 
+
+
     @Test
     public void testMuteOnOOM() throws Exception {
         //clean up default selector, replace it with one that uses a finite mem pool
         selector.close();
         MemoryPool pool = new SimpleMemoryPool(900, 900, false, null);
         selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup",
-            new HashMap<String, String>(), true, false, channelBuilder, pool);
+            new HashMap<String, String>(), true, false, channelBuilder, pool, new LogContext());
 
         try (ServerSocketChannel ss = ServerSocketChannel.open()) {
             ss.bind(new InetSocketAddress(0));
@@ -411,6 +487,46 @@ public class SelectorTest {
         System.arraycopy(prefix, 0, payload, 0, prefix.length);
         return payload;
     }
+
+    /**
+     * Tests that a connect and disconnect in a single poll invocation results in the channel id being
+     * in `disconnected`, but not `connected`.
+     */
+    @Test
+    public void testConnectDisconnectDuringInSinglePoll() throws Exception {
+        IMocksControl control = createControl();
+
+        // channel is connected, not ready and it throws an exception during prepare
+        KafkaChannel kafkaChannel = control.createMock(KafkaChannel.class);
+        expect(kafkaChannel.id()).andStubReturn("1");
+        expect(kafkaChannel.socketDescription()).andStubReturn("");
+        expect(kafkaChannel.state()).andStubReturn(ChannelState.NOT_CONNECTED);
+        expect(kafkaChannel.finishConnect()).andReturn(true);
+        expect(kafkaChannel.isConnected()).andStubReturn(true);
+        // record void method invocations
+        kafkaChannel.disconnect();
+        kafkaChannel.close();
+        expect(kafkaChannel.ready()).andReturn(false);
+        // prepare throws an exception
+        kafkaChannel.prepare();
+        expectLastCall().andThrow(new IOException());
+
+        SelectionKey selectionKey = control.createMock(SelectionKey.class);
+        expect(selectionKey.channel()).andReturn(SocketChannel.open());
+        expect(selectionKey.readyOps()).andStubReturn(SelectionKey.OP_CONNECT);
+
+        control.replay();
+
+        selectionKey.attach(kafkaChannel);
+        Set<SelectionKey> selectionKeys = Utils.mkSet(selectionKey);
+        selector.pollSelectionKeys(selectionKeys, false, System.nanoTime());
+
+        assertFalse(selector.connected().contains(kafkaChannel.id()));
+        assertTrue(selector.disconnected().containsKey(kafkaChannel.id()));
+
+        control.verify();
+    }
+
 
     private String blockingRequest(String node, String s) throws IOException {
         selector.send(createSend(node, s));

@@ -112,6 +112,7 @@ public final class Metadata {
      * will be reset on the next update.
      */
     public synchronized void add(String topic) {
+        Objects.requireNonNull(topic, "topic cannot be null");
         if (topics.put(topic, TOPIC_EXPIRY_NEEDS_UPDATE) == null) {
             requestUpdateForNewTopics();
         }

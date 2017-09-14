@@ -35,14 +35,14 @@ public class ProcessorNodeTest {
 
     @SuppressWarnings("unchecked")
     @Test (expected = StreamsException.class)
-    public void shouldThrowStreamsExceptionIfExceptionCaughtDuringInit() throws Exception {
+    public void shouldThrowStreamsExceptionIfExceptionCaughtDuringInit() {
         final ProcessorNode node = new ProcessorNode("name", new ExceptionalProcessor(), Collections.emptySet());
         node.init(null);
     }
 
     @SuppressWarnings("unchecked")
     @Test (expected = StreamsException.class)
-    public void shouldThrowStreamsExceptionIfExceptionCaughtDuringClose() throws Exception {
+    public void shouldThrowStreamsExceptionIfExceptionCaughtDuringClose() {
         final ProcessorNode node = new ProcessorNode("name", new ExceptionalProcessor(), Collections.emptySet());
         node.close();
     }
@@ -102,16 +102,16 @@ public class ProcessorNodeTest {
                 "The average number of occurrence of " + opName + " operation per second.", metricTags)));
 
     }
+
     @Test
     public void testMetrics() {
         final StateSerdes anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
 
-        final MockProcessorContext context = new MockProcessorContext(anyStateSerde,  new RecordCollectorImpl(null, null));
+        final Metrics metrics = new Metrics();
+        final MockProcessorContext context = new MockProcessorContext(anyStateSerde,  new RecordCollectorImpl(null, null), metrics);
         final ProcessorNode node = new ProcessorNode("name", new NoOpProcessor(), Collections.emptySet());
         node.init(context);
 
-        Metrics metrics = context.baseMetrics();
-        String name = "task." + context.taskId();
         String[] latencyOperations = {"process", "punctuate", "create", "destroy"};
         String throughputOperation =  "forward";
         String groupName = "stream-processor-node-metrics";

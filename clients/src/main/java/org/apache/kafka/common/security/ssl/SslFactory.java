@@ -19,6 +19,7 @@ package org.apache.kafka.common.security.ssl;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.config.types.Password;
 
@@ -29,6 +30,7 @@ import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
@@ -96,7 +98,7 @@ public class SslFactory implements Configurable {
 
         String clientAuthConfig = clientAuthConfigOverride;
         if (clientAuthConfig == null)
-            clientAuthConfig = (String) configs.get(SslConfigs.SSL_CLIENT_AUTH_CONFIG);
+            clientAuthConfig = (String) configs.get(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG);
         if (clientAuthConfig != null) {
             if (clientAuthConfig.equals("required"))
                 this.needClientAuth = true;
@@ -204,7 +206,8 @@ public class SslFactory implements Configurable {
         private final Password password;
 
         private SecurityStore(String type, String path, Password password) {
-            this.type = type == null ? KeyStore.getDefaultType() : type;
+            Objects.requireNonNull(type, "type must not be null");
+            this.type = type;
             this.path = path;
             this.password = password;
         }
