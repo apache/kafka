@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.security.auth;
 
-import org.apache.kafka.common.protocol.SecurityProtocol;
-
 import javax.security.sasl.SaslServer;
 import java.net.InetAddress;
 

@@ -25,12 +25,11 @@ import java.lang.management._
 import java.util.{Properties, UUID}
 import javax.management._
 
-import org.apache.kafka.common.protocol.SecurityProtocol
-
 import scala.collection._
 import scala.collection.mutable
 import kafka.cluster.EndPoint
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{Base64, KafkaThread, Utils}
 
 /**
