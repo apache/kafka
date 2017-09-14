@@ -382,12 +382,9 @@ public class SaslServerAuthenticator implements Authenticator {
 
             try {
                 byte[] responseToken = saslServer.evaluateResponse(Utils.readBytes(saslAuthenticateRequest.saslAuthBytes()));
-                // For versions without SASL_AUTHENTICATE header, send a response only if there is a response token to be sent.
                 // For versions with SASL_AUTHENTICATE header, send a response to SASL_AUTHENTICATE request even if token is empty.
-                if (responseToken != null || enableKafkaSaslAuthenticateHeaders) {
-                    ByteBuffer responseBuf = responseToken == null ? EMPTY_BUFFER : ByteBuffer.wrap(responseToken);
-                    sendKafkaResponse(requestContext, new SaslAuthenticateResponse(Errors.NONE, null, responseBuf));
-                }
+                ByteBuffer responseBuf = responseToken == null ? EMPTY_BUFFER : ByteBuffer.wrap(responseToken);
+                sendKafkaResponse(requestContext, new SaslAuthenticateResponse(Errors.NONE, null, responseBuf));
             } catch (SaslException e) {
                 this.error = Errors.AUTHENTICATION_FAILED;
                 sendKafkaResponse(requestContext, new SaslAuthenticateResponse(this.error,
