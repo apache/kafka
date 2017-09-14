@@ -464,7 +464,7 @@ public class TransactionManager {
             // Sequence numbers are not being tracked for this partition. This could happen if the producer id was just
             // reset due to a previous OutOfOrderSequenceException.
             return;
-        log.debug("{}producerId: {}, send to partition {} failed fatally. Reducing future sequence numbers by {}", logPrefix,
+        log.debug("producerId: {}, send to partition {} failed fatally. Reducing future sequence numbers by {}",
                 batch.producerId(), batch.topicPartition, batch.recordCount);
         int currentSequence = sequenceNumber(batch.topicPartition);
         currentSequence -= batch.recordCount;
@@ -499,7 +499,7 @@ public class TransactionManager {
     }
 
     synchronized void markSequenceUnresolved(TopicPartition topicPartition) {
-        log.debug("{}Marking partition {} unresolved", logPrefix, topicPartition);
+        log.debug("Marking partition {} unresolved", topicPartition);
         partitionsWithUnresolvedSequences.add(topicPartition);
     }
 
