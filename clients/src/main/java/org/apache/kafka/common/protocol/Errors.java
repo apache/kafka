@@ -25,7 +25,7 @@ import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.LogDirNotFoundException;
-import org.apache.kafka.common.errors.DuplicateSequenceNumberException;
+import org.apache.kafka.common.errors.DuplicateSequenceException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
@@ -432,7 +432,7 @@ public enum Errors {
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {
-                return new DuplicateSequenceNumberException(message);
+                return new DuplicateSequenceException(message);
             }
         }),
     INVALID_PRODUCER_EPOCH(47, "Producer attempted an operation with an old epoch. Either there is a newer producer " +

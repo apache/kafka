@@ -224,6 +224,16 @@ public class MockClient implements KafkaClient {
         respond(response);
     }
 
+    // Utility method to enable out of order responses
+    public void respondToRequest(ClientRequest clientRequest, AbstractResponse response) {
+        AbstractRequest request = clientRequest.requestBuilder().build();
+        requests.remove(clientRequest);
+        short version = clientRequest.requestBuilder().desiredOrLatestVersion();
+        responses.add(new ClientResponse(clientRequest.makeHeader(version), clientRequest.callback(), clientRequest.destination(),
+                clientRequest.createdTimeMs(), time.milliseconds(), false, null, response));
+    }
+
+
     public void respond(AbstractResponse response, boolean disconnected) {
         ClientRequest request = requests.remove();
         short version = request.requestBuilder().desiredOrLatestVersion();
