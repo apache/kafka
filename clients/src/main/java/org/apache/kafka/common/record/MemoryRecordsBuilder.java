@@ -75,6 +75,7 @@ public class MemoryRecordsBuilder {
 
     private MemoryRecords builtRecords;
     private boolean aborted = false;
+    private boolean reopened = false;
 
     public MemoryRecordsBuilder(ByteBufferOutputStream bufferStream,
                                 byte magic,
@@ -279,11 +280,19 @@ public class MemoryRecordsBuilder {
         aborted = true;
     }
 
-    public void reopen() {
+    public void reopenAndResetProducerState(long producerId, short producerEpoch, int baseSequence, boolean isTransactional) {
         if (aborted)
             throw new IllegalStateException("Should not reopen a batch which is already aborted.");
-
         builtRecords = null;
+        reopened = true;
+        this.producerId = producerId;
+        this.producerEpoch = producerEpoch;
+        this.baseSequence = baseSequence;
+        this.isTransactional = isTransactional;
+    }
+
+    public boolean isReopened() {
+        return reopened;
     }
 
     public void close() {
@@ -311,6 +320,7 @@ public class MemoryRecordsBuilder {
             buffer.position(initialPosition);
             builtRecords = MemoryRecords.readableRecords(buffer.slice());
         }
+        reopened = false;
     }
 
     private void validateProducerState() {

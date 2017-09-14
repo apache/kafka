@@ -30,6 +30,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
+import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -588,6 +589,72 @@ public class SenderTest {
     }
 
     @Test
+    public void testIdempotenceWithMultipleInflightsWhereFirstFailsFatallyAndSequenceOfFutureBatchesIsAdjusted() throws Exception {
+        final long producerId = 343434L;
+        TransactionManager transactionManager = new TransactionManager();
+        setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
+
+        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+
+        // Send first ProduceRequest
+        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
+        sender.run(time.milliseconds());
+        String nodeId = client.requests().peek().destination();
+        Node node = new Node(Integer.valueOf(nodeId), "localhost", 0);
+        assertEquals(1, client.inFlightRequestCount());
+        assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(-1, transactionManager.lastAckedSequence(tp0));
+
+        // Send second ProduceRequest
+        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
+        sender.run(time.milliseconds());
+        assertEquals(2, client.inFlightRequestCount());
+        assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(-1, transactionManager.lastAckedSequence(tp0));
+        assertFalse(request1.isDone());
+        assertFalse(request2.isDone());
+        assertTrue(client.isReady(node, time.milliseconds()));
+
+        sendIdempotentProducerResponse(0, tp0, Errors.MESSAGE_TOO_LARGE, -1L);
+
+        sender.run(time.milliseconds()); // receive response 0, should adjust sequences of future batches.
+
+        assertTrue(request1.isDone());
+        try {
+            request1.get();
+            fail("Should have raised an error");
+        } catch (Exception e) {
+            assertTrue(e.getCause() instanceof RecordTooLargeException);
+        }
+
+        assertEquals(1, client.inFlightRequestCount());
+        assertEquals(-1, transactionManager.lastAckedSequence(tp0));
+
+        sendIdempotentProducerResponse(1, tp0, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, -1L);
+
+        sender.run(time.milliseconds()); // receive response 1
+
+        assertEquals(-1, transactionManager.lastAckedSequence(tp0));
+        assertEquals(0, client.inFlightRequestCount());
+
+        sender.run(time.milliseconds()); // resend request 1
+
+        assertEquals(1, client.inFlightRequestCount());
+
+        assertEquals(-1, transactionManager.lastAckedSequence(tp0));
+
+        sendIdempotentProducerResponse(0, tp0, Errors.NONE, 0L);
+        sender.run(time.milliseconds());  // receive response 1
+        assertEquals(0, transactionManager.lastAckedSequence(tp0));
+        assertEquals(0, client.inFlightRequestCount());
+
+        assertTrue(request1.isDone());
+        assertEquals(0, request2.get().offset());
+    }
+
+    @Test
     public void testMustNotRetryOutOfOrderSequenceForNextBatch() throws Exception {
         final long producerId = 343434L;
         TransactionManager transactionManager = new TransactionManager();
@@ -835,7 +902,7 @@ public class SenderTest {
 
         assertEquals(2, client.inFlightRequestCount());
 
-        sendIdempotentProducerResponse(0, tp0, Errors.NOT_LEADER_FOR_PARTITION, -1);
+        sendIdempotentProducerResponse(0, tp0, Errors.REQUEST_TIMED_OUT, -1);
         sender.run(time.milliseconds());  // receive first response
 
         Node node = this.cluster.nodes().get(0);
@@ -927,6 +994,14 @@ public class SenderTest {
         sendIdempotentProducerResponse(1, tp0, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, 1);
         sender.run(time.milliseconds()); // receive second response, the third request shouldn't be sent since we are in an unresolved state.
         assertTrue(request2.isDone());
+
+        try {
+            request2.get();
+            fail("should have failed with an exception");
+        } catch (Exception e) {
+            assertTrue(e.getCause() instanceof OutOfOrderSequenceException);
+        }
+
         Deque<ProducerBatch> batches = accumulator.batches().get(tp0);
 
         // The second request should not be requeued.

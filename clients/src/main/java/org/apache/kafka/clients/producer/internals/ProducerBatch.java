@@ -388,8 +388,7 @@ public final class ProducerBatch {
     }
 
     public void resetProducerState(ProducerIdAndEpoch producerIdAndEpoch, int baseSequence, boolean isTransactional) {
-        recordsBuilder.reopen();
-        recordsBuilder.setProducerState(producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, baseSequence, isTransactional);
+        recordsBuilder.reopenAndResetProducerState(producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, baseSequence, isTransactional);
     }
 
     /**
@@ -459,4 +458,9 @@ public final class ProducerBatch {
     public boolean isTransactional() {
         return recordsBuilder.isTransactional();
     }
+
+    public boolean sequenceHasBeenReset() {
+        return recordsBuilder.isReopened();
+    }
+
 }

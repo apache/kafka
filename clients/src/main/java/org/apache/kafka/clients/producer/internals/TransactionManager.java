@@ -464,7 +464,8 @@ public class TransactionManager {
             // Sequence numbers are not being tracked for this partition. This could happen if the producer id was just
             // reset due to a previous OutOfOrderSequenceException.
             return;
-
+        log.debug("{}producerId: {}, send to partition {} failed fatally. Reducing future sequence numbers by {}", logPrefix,
+                batch.producerId(), batch.topicPartition, batch.recordCount);
         int currentSequence = sequenceNumber(batch.topicPartition);
         currentSequence -= batch.recordCount;
         if (currentSequence < 0)
@@ -480,7 +481,7 @@ public class TransactionManager {
                 throw new IllegalStateException("Sequence number for batch with sequence " + inFlightBatch.baseSequence()
                         + " for partition " + batch.topicPartition + " is going to become negative :" + newSequence);
 
-            log.debug("Setting sequence number of batch with current sequence {} for partition {} to {}", batch.baseSequence(), batch.topicPartition, newSequence);
+            log.info("Resetting sequence number of batch with current sequence {} for partition {} to {}", inFlightBatch.baseSequence(), batch.topicPartition, newSequence);
             inFlightBatch.resetProducerState(new ProducerIdAndEpoch(inFlightBatch.producerId(), inFlightBatch.producerEpoch()), newSequence, inFlightBatch.isTransactional());
         }
     }
@@ -632,9 +633,8 @@ public class TransactionManager {
     }
 
     synchronized boolean canRetryOutOfOrderSequenceException(ProducerBatch batch) {
-        return hasProducerId(batch.producerId())
-                && !hasUnresolvedSequence(batch.topicPartition)
-                && !isNextSequence(batch.topicPartition, batch.baseSequence());
+        return hasProducerId(batch.producerId()) && !hasUnresolvedSequence(batch.topicPartition) &&
+                (batch.sequenceHasBeenReset() || !isNextSequence(batch.topicPartition, batch.baseSequence()));
     }
 
     // visible for testing
