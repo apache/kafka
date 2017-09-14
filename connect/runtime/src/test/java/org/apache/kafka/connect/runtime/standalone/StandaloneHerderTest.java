@@ -80,7 +80,7 @@ import static org.junit.Assert.fail;
 
 @RunWith(PowerMockRunner.class)
 @SuppressWarnings("unchecked")
-@PrepareForTest({StandaloneHerder.class, Plugins.class})
+@PrepareForTest({StandaloneHerder.class, Plugins.class, WorkerConnector.class})
 public class StandaloneHerderTest {
     private static final String CONNECTOR_NAME = "test";
     private static final List<String> TOPICS_LIST = Arrays.asList("topic1", "topic2");
@@ -112,6 +112,7 @@ public class StandaloneHerderTest {
         pluginLoader = PowerMock.createMock(PluginClassLoader.class);
         delegatingLoader = PowerMock.createMock(DelegatingClassLoader.class);
         PowerMock.mockStatic(Plugins.class);
+        PowerMock.mockStatic(WorkerConnector.class);
     }
 
     @Test
@@ -220,7 +221,8 @@ public class StandaloneHerderTest {
 
         Map<String, String> config = connectorConfig(SourceSink.SINK);
         expectConfigValidation(config);
-
+        EasyMock.expect(WorkerConnector.getConnectorType(BogusSinkConnector.class.getName()))
+            .andReturn(ConnectorType.SINK).anyTimes();
         PowerMock.replayAll();
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
@@ -418,7 +420,6 @@ public class StandaloneHerderTest {
         connector = PowerMock.createMock(BogusSourceConnector.class);
         expectAdd(SourceSink.SOURCE);
         expectConfigValidation(connConfig);
-        EasyMock.expect(worker.getConnectorType(CONNECTOR_NAME)).andReturn(ConnectorType.SOURCE).anyTimes();
 
         // Validate accessors with 1 connector
         listConnectorsCb.onCompletion(null, singleton(CONNECTOR_NAME));
@@ -466,7 +467,6 @@ public class StandaloneHerderTest {
         expectAdd(SourceSink.SOURCE);
         Connector connectorMock = PowerMock.createMock(Connector.class);
         expectConfigValidation(connectorMock, true, connConfig);
-        EasyMock.expect(WorkerConnector.getConnectorType(BogusSourceConnector.class.toString())).andReturn(ConnectorType.SOURCE).anyTimes();
 
         // Should get first config
         connectorConfigCb.onCompletion(null, connConfig);
@@ -583,8 +583,8 @@ public class StandaloneHerderTest {
         worker.startTask(new ConnectorTaskId(CONNECTOR_NAME, 0), connectorConfig(sourceSink), generatedTaskProps, herder, TargetState.STARTED);
         EasyMock.expectLastCall().andReturn(true);
 
-        EasyMock.expect(worker.getConnectorType(CONNECTOR_NAME))
-            .andReturn(sourceSink == SourceSink.SINK ? ConnectorType.SINK : ConnectorType.SOURCE);
+        EasyMock.expect(WorkerConnector.getConnectorType(BogusSourceConnector.class.getName()))
+            .andReturn(ConnectorType.SOURCE).anyTimes();
         worker.isSinkConnector(CONNECTOR_NAME);
         PowerMock.expectLastCall().andReturn(sourceSink == SourceSink.SINK);
     }
