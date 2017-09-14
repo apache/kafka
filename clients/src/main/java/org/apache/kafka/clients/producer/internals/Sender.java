@@ -236,11 +236,6 @@ public class Sender implements Runnable {
     private long sendProducerData(long now) {
         Cluster cluster = metadata.fetch();
 
-
-        if (transactionManager != null && transactionManager.shouldResetProducerStateAfterResolvingSequences()) {
-            transactionManager.resetProducerId();
-            return 0;
-        }
         // get the list of partitions with data ready to send
         RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(cluster, now);
 
