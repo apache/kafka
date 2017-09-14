@@ -26,6 +26,7 @@ import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
+import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -258,7 +259,12 @@ public class Worker {
         ClassLoader savedLoader = plugins.currentThreadLoader();
         try {
             savedLoader = plugins.compareAndSwapLoaders(clsName);
-            return WorkerConnector.connectorType(clsName);
+            try {
+                return SinkConnector.class.isAssignableFrom(Class.forName(clsName)) ?
+                    ConnectorType.SINK : ConnectorType.SOURCE;
+            } catch (Exception e) {
+                throw new ConnectException("Cannot determine the type for " + clsName);
+            }
         } finally {
             Plugins.compareAndSwapLoaders(savedLoader);
         }
