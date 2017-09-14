@@ -62,8 +62,9 @@
     </pre>
 
     <p>
-        The <code>pom.xml</code> file included in the project already has the Streams dependency defined,
-        and there are already several example programs written with Streams library under <code>src/main/java</code>.
+        <strong>Important:</strong> You must manually update the setting of <code>&lt;kafka.version&gt;</code> in the generated <code>pom.xml</code> file from <code>0.11.0.1-SNAPSHOT</code> to <code>0.11.0.1</code>.
+        <strong>Note:</strong> in the next release the above step will not be required.
+        There are already several example programs written with Streams library under <code>src/main/java</code>.
         Since we are going to start writing such programs from scratch, we can now delete these examples:
     </p>
 
