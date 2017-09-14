@@ -18,9 +18,23 @@
 <script><!--#include virtual="../js/templateData.js" --></script>
 
 <script id="streams-template" type="text/x-handlebars-template">
-    <h1>Kafka Streams API</h1>
+    <h1>Kafka Streams</h1>
 
     <h3 style="max-width: 75rem;">The easiest way to write mission-critical real-time applications and microservices with all the benefits of Kafka's server-side cluster technology.</h3>
+
+    <p>The Streams API of Apache Kafka, available through a Java library, can be used to build highly scalable, elastic, fault-tolerant, distributed applications and microservices. With the Kafka Streams API you can create real-time applications that power your core business. It is the easiest yet the most powerful technology to process data stored in Kafka. It builds upon important concepts for stream processing such as efficient management of application state, fast and efficient aggregations and joins, properly distinguishing between event-time and processing-time, and seamless handling of late-arriving and out-of-order data.</p>
+
+    <p>A unique feature of the Kafka Streams API is that the applications you build with it are normal Java applications. These applications can be packaged, deployed, and monitored like any other Java application – there is no need to install separate processing clusters or similar special-purpose and expensive infrastructure!</p>
+
+    <h2>Documentation</h2>
+
+    <ul>
+    <li><a href="/documentation/streams/quickstart">Quickstart</a></li>
+    <li><a href="/documentation/streams/architecture">Architecture</a></li>
+    <li><a href="/documentation/streams/core-concepts">Concepts</a></li>
+    <li><a href="/documentation/streams/developer-guide">Developer Guide</a></li>
+    <li><a href="/documentation/streams/upgrade-guide">Upgrade</a></li>
+    </ul>
 
     <div class="hero">
         <div class="hero__diagram">
@@ -35,19 +49,19 @@
     <ul class="feature-list">
         <li>Write standard Java applications</li>
         <li>Exactly-once processing semantics</li>
-        <li>No seperate processing cluster required</li>
+        <li>No separate processing cluster required</li>
         <li>Develop on Mac, Linux, Windows</li>
         <li>Elastic, highly scalable, fault-tolerant</li>
         <li>Deploy to containers, VMs, bare metal, cloud</li>
-        <li>Equally viable for small, medium, &amp; large use cases</li>
+        <li>Equally viable for small, medium, and large use cases</li>
         <li>Fully integrated with Kafka security</li>
     </ul>
 
-    <div class="cards">
+    <!-- <div class="cards">
         <a class="card" href="/{{version}}/documentation/streams/developer-guide">
             <img class="card__icon" src="/{{version}}/images/icons/documentation.png" />
             <img class="card__icon card__icon--hover" src="/{{version}}/images/icons/documentation--white.png" />
-            <span class="card__label">Developer manual</span>
+            <span class="card__label">Developer Guide</span>
         </a>
         <a style="display: none;" class="card" href="/{{version}}/documentation/streams/tutorial">
             <img class="card__icon" src="/{{version}}/images/icons/tutorials.png" />
@@ -60,9 +74,10 @@
             <span class="card__label">Concepts</span>
         </a>
     </div>
+    -->
 
     <h3>Hello Kafka Streams</h3>
-    <p>The code example below implements a WordCount application that is elastic, highly scalable, fault-tolerant, stateful, and ready to run in production at large scale</p>
+    <p>The code example below implements a WordCount application that is elastic, highly scalable, fault-tolerant, stateful, and ready to run in production at large scale.</p>
 
     <div class="code-example">
         <div class="btn-group">
@@ -201,7 +216,6 @@
             </pre>
         </div>
     </div>
-
     
 
     <div class="pagination">

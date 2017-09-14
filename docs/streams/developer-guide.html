@@ -18,35 +18,88 @@
 <script><!--#include virtual="../js/templateData.js" --></script>
 
 <script id="content-template" type="text/x-handlebars-template">
-    <h1>Developer Manual</h1>
+    <h1>Developer Guide for Streams</h1>
 
     <p>
-        There is a <a href="/{{version}}/documentation/#quickstart_kafkastreams">quickstart</a> example that provides how to run a stream processing program coded in the Kafka Streams library.
-        This section focuses on how to write, configure, and execute a Kafka Streams application.
+        This developer guide describes how to write, configure, and execute a Kafka Streams application. There is a <a href="/{{version}}/documentation/#quickstart_kafkastreams">quickstart</a> example that provides how to run a stream processing program coded in the Kafka Streams library.
     </p>
 
     <p>
-        As we have mentioned above, the computational logic of a Kafka Streams application is defined as a <a href="/{{version}}/documentation/streams/core-concepts#streams_topology">processor topology</a>.
-        Currently Kafka Streams provides two sets of APIs to define the processor topology, which will be described in the subsequent sections.
+        The computational logic of a Kafka Streams application is defined as a <a href="/{{version}}/documentation/streams/core-concepts#streams_topology">processor topology</a>. Kafka Streams provide two sets of APIs to define the processor topology, Low-Level Processor API and High-Level Streams DSL.
     </p>
+
+    <h3>Contents</h3>
+    <ul>
+    <li><!-- H3 --><a href="#streams_processor">Low-Level Processor API</a>
+    <ul>
+        <li><!-- H4 --><a href="#streams_processor_process">Processor</a></li>
+        <li><!-- H4 --><a href="#streams_processor_topology">Processor Topology</a></li>
+        <li><!-- H4 --><a href="#streams_processor_statestore">State Stores</a></li>
+        <li><!-- H4 --><a href="#streams_processor_describe">Describe a Topology</a></li>
+    </ul>
+    </li>
+    <li><!-- H3 --><a href="#streams_dsl">High-Level Streams DSL</a>
+        <ul>
+        <li><!-- H4 --><a href="#streams_duality">Duality of Streams and Tables</a>
+            <ul>
+            <li><!-- H5 --><a href="#streams_kstream_ktable">KStream, KTable, and GlobalKTable</a></li>
+            </ul>
+        </li>
+        <li><!-- H4 --><a href="#streams_dsl_source">Create Source Streams from Kafka</a></li>
+        <li><!-- H4 --><a href="#streams_dsl_windowing">Windowing a stream</a></li>
+        <li><!-- H4 --><a href="#streams_dsl_joins">Join multiple streams</a>
+            <ul>
+            <li><!-- H5 --><a href="#streams_dsl_aggregations">Aggregate a stream</a></li>
+            </ul>
+        </li>
+        <li><!-- H4 --><a href="#streams_dsl_transform">Transform a stream</a></li>
+        <li><!-- H4 --><a href="#streams_dsl_sink">Write streams back to Kafka</a></li>
+        <li><!-- H4 --><a href="#streams_dsl_build">Generate the processor topology</a></li>
+        </ul>
+    <li><!-- H3 --><a href="#streams_interactive_queries">Interactive Queries</a>
+        <ul>
+        <li><!-- H4 --><a href="#treams_developer-guide_interactive-queries_your_app">Your application and interactive queries</a></li>
+        <li><!-- H4 --><a href="#streams_developer-guide_interactive-queries_local-stores">Querying local state stores (for an application instance)</a></li>
+        <li><!-- H4 --><a href="#streams_developer-guide_interactive-queries_local-key-value-stores">Querying local key-value stores</a></li>
+        <li><!-- H4 --><a href="#streams_developer-guide_interactive-queries_local-window-stores">Querying local window stores</a></li>
+        <li><!-- H4 --><a href="#streams_developer-guide_interactive-queries_custom-stores">Querying local custom state stores</a></li>
+        <li><!-- H4 --><a href="#streams_developer-guide_interactive-queries_discovery">Querying remote state stores (for the entire application)</a></li>
+        <li><!-- H4 --><a href="#streams_developer-guide_interactive-queries_rpc-layer">Adding an RPC layer to your application</a></li>
+        <li><!-- H4 --><a href="#streams_developer-guide_interactive-queries_expose-rpc">Exposing the RPC endpoints of your application</a></li>
+        <li><!-- H4 --><a href="#streams_developer-guide_interactive-queries_discover-app-instances-and-stores">Discovering and accessing application instances and their respective local state stores</a></li>
+        </ul>
+    <li><!-- H3 --><a href="#streams_developer-guide_memory-management">Memory Management</a>
+        <ul>
+        <li><!-- H4 --><a href="#streams_developer-guide_memory-management_record-cache">Record caches in the DSL</a></li>
+        <li><!-- H4 --><a href="#streams_developer-guide_memory-management_state-store-cache">State store caches in the Processor API</a></li>
+        <li><!-- H4 --><a href="#streams_developer-guide_memory-management_other_memory_usage">Other memory usage</a></li>    
+        </ul>
+    <li><!-- H3 --><a href="#streams_configure_execute">Application Configuration and Execution</a>
+        <ul>
+        <li><!-- H4 --><a href="#streams_clients_config">Producer and Consumer Configuration</a></li>
+        <li><!-- H4 --><a href="#streams_broker_config">Broker Configuration</a></li>
+        <li><!-- H4 --><a href="#streams_topic_config">Internal Topic Configuration</a></li>
+        <li><!-- H4 --><a href="#streams_execute">Executing Your Kafka Streams Application</a></li>
+        </ul>
+    </li>
+    </ul>
 
     <h3><a id="streams_processor" href="#streams_processor">Low-Level Processor API</a></h3>
 
     <h4><a id="streams_processor_process" href="#streams_processor_process">Processor</a></h4>
 
     <p>
-        As mentioned in the <a href="/{{version}}/documentation/streams/core-concepts"><b>Core Concepts</b></a> section, a stream processor is a node in the processor topology that represents a single processing step.
-        With the <code>Processor</code> API developers can define arbitrary stream processors that process one received record at a time, and connect these processors with
+        A <a href="/{{version}}/documentation/streams/core-concepts"><b>stream processor</b></a> is a node in the processor topology that represents a single processing step.
+        With the <code>Processor</code> API, you can define arbitrary stream processors that process one received record at a time, and connect these processors with
         their associated state stores to compose the processor topology that represents their customized processing logic.
     </p>
 
     <p>
-        The <code>Processor</code> interface provides one main API method, the <code>process</code> method,
-        which is performed on each of the received records.
-        In addition, the processor can maintain the current <code>ProcessorContext</code> instance variable initialized in the <code>init</code> method
+        The <code>Processor</code> interface provides the <code>process</code> method API, which is performed on each record that is received.
+        The processor can maintain the current <code>ProcessorContext</code> instance variable initialized in the <code>init</code> method
         and use the context to schedule a periodically called punctuation function (<code>context().schedule</code>),
-        to forward the modified / new key-value pair to downstream processors (<code>context().forward</code>),
-        to commit the current processing progress (<code>context().commit</code>), etc.
+        to forward the modified or new key-value pair to downstream processors (<code>context().forward</code>),
+        to commit the current processing progress (<code>context().commit</code>), and so on.
     </p>
 
     <p>
@@ -110,7 +163,7 @@
     </pre>
 
     <p>
-        In the above implementation, the following actions are performed:
+        In the previous example, the following actions are performed:
     </p>
 
     <ul>
@@ -123,7 +176,7 @@
     <h4><a id="streams_processor_topology" href="#streams_processor_topology">Processor Topology</a></h4>
 
     <p>
-        With the customized processors defined in the Processor API, developers can use <code>Topology</code> to build a processor topology
+        With the customized processors defined in the Processor API, you can use <code>Topology</code> to build a processor topology
         by connecting these processors together:
     </p>
 
@@ -153,22 +206,20 @@
     .addSink("SINK3", "sink-topic3", "PROCESS3");
     </pre>
 
-    There are several steps in the above code to build the topology, and here is a quick walk through:
+    Here is a quick walk through of the previous code to build the topology:
 
     <ul>
-        <li>First of all a source node named "SOURCE" is added to the topology using the <code>addSource</code> method, with one Kafka topic "src-topic" fed to it.</li>
-        <li>Three processor nodes are then added using the <code>addProcessor</code> method; here the first processor is a child of the "SOURCE" node, but is the parent of the other two processors.</li>
-        <li>Finally three sink nodes are added to complete the topology using the <code>addSink</code> method, each piping from a different parent processor node and writing to a separate topic.</li>
+        <li>A source node (<code>"SOURCE"</code>) is added to the topology using the <code>addSource</code> method, with one Kafka topic (<code>"src-topic"</code>) fed to it.</li>
+        <li>Three processor nodes are then added using the <code>addProcessor</code> method; here the first processor is a child of the source node, but is the parent of the other two processors.</li>
+        <li>Three sink nodes are added to complete the topology using the <code>addSink</code> method, each piping from a different parent processor node and writing to a separate topic.</li>
     </ul>
 
     <h4><a id="streams_processor_statestore" href="#streams_processor_statestore">State Stores</a></h4>
 
     <p>
-        Note that the <code>Processor</code> API is not limited to only accessing the current records as they arrive in the <code>process()</code> method, but can also maintain processing states
-        that keep recently arrived records to use in stateful processing operations such as windowed joins or aggregation.
-        To take advantage of these states, users can define a state store by implementing the <code>StateStore</code> interface (the Kafka Streams library also has a few extended interfaces such as <code>KeyValueStore</code>);
-        in practice, though, users usually do not need to customize such a state store from scratch but can simply use the <code>Stores</code> factory to define a state store by specifying whether it should be persistent, log-backed, etc.
-        In the following example, a persistent key-value store named "Counts" with key type <code>String</code> and value type <code>Long</code> is created.
+        The <code>Processor</code> API accesses the current records as they arrive in the <code>process()</code> method and maintains processing states. This allows recently arrived records to be used in stateful processing operations, such as windowed joins or aggregation.
+        To take advantage of these states, you can define a state store by implementing the <code>StateStore</code> interface (the Kafka Streams library also has a few extended interfaces such as <code>KeyValueStore</code>). You can usually use the <code>Stores</code> factory to define a state store, by specifying whether it should be persistent, log-backed, and so on. If this is not sufficient, you will need to customize a state store from scratch.
+        In the following example, a persistent key-value store (<code>"Counts"</code>) with key type <code>String</code> and value type <code>Long</code> is created.
     </p>
 
     <pre class="brush: java;">
@@ -180,8 +231,8 @@
     </pre>
 
     <p>
-        To take advantage of these state stores, developers can use the <code>Topology.addStateStore</code> method when building the
-        processor topology to create the local state and associate it with the processor nodes that needs to access it; or they can connect a created
+        To take advantage of these state stores, you can use the <code>Topology.addStateStore</code> method when building the
+        processor topology to create the local state and associate it with the processor nodes that require to access it; or you can connect a created
         state store with the existing processor nodes through <code>Topology.connectProcessorAndStateStores</code>.
     </p>
 
@@ -207,14 +258,14 @@
     <h4><a id="streams_processor_describe" href="#streams_processor_describe">Describe a <code>Topology</code></a></h4>
 
     <p>
-        After a <code>Topology</code> is specified it is possible to retrieve a description of the corresponding DAG via <code>#describe()</code> that returns a <code>TopologyDescription</code>.
+        After a <code>Topology</code> is specified, it is possible to retrieve a description of the corresponding DAG via <code>#describe()</code> that returns a <code>TopologyDescription</code>.
         A <code>TopologyDescription</code> contains all added source, processor, and sink nodes as well as all attached stores.
-        For source and sink nodes one can access the specified input/output topic name/pattern.
-        For processor nodes the attached stores are added to the description.
+        You can access the specified input and output topic names and patterns for source and sink nodes.
+        For processor nodes, the attached stores are added to the description.
         Additionally, all nodes have a list to all their connected successor and predecessor nodes.
         Thus, <code>TopologyDescritpion</code> allows to retrieve the DAG structure of the specified topology.
         <br />
-        Note that global stores are listed explicitly as they are accessible by all nodes without the need to explicitly connect them.
+        Note that global stores are listed explicitly because they are accessible by all nodes without the need to explicitly connect them.
         Furthermore, nodes are grouped by <code>Sub-topologies</code>, where each sub-topology is a group of processor nodes that are directly connected to each other (i.e., either by a direct connection&mdash;but not a topic&mdash;or by sharing a store).
         During execution, each <code>Sub-topology</code> will be processed by <a href="/{{version}}/documentation/streams/architecture#streams_architecture_tasks">one or multiple tasks</a>.
         Thus, each <code>Sub-topology</code> describes an independent unit of works that can be executed by different threads in parallel.
@@ -230,7 +281,7 @@
 
     To build a <code>Topology</code> using the Streams DSL, developers can apply the <code>StreamsBuilder</code> class.
     A simple example is included with the source code for Kafka in the <code>streams/examples</code> package. The rest of this section will walk
-    through some code to demonstrate the key steps in creating a topology using the Streams DSL, but we recommend developers to read the full example source
+    through some code to demonstrate the key steps in creating a topology using the Streams DSL, but it is recommend that you read the full example source
     codes for details.
 
     <h4><a id="streams_duality" href="#streams_duality">Duality of Streams and Tables</a></h4>
@@ -501,7 +552,7 @@
     <ol>
         <li><a href="#streams_developer-guide_interactive-queries_local-stores">Querying local state stores (for an application instance)</a>:  You can query that (part of the full) state that is managed locally by an instance of your application.  Here, an application instance can directly query its own local state stores.  You can thus use the corresponding (local) data in other parts of your application code that are not related to calling the Kafka Streams API.  Querying state stores is always *read-only* to guarantee that the underlying state stores   will never be mutated out-of-band, e.g. you cannot add new entries; state stores should only ever be mutated by the corresponding processor topology and the input data it operates on.
         </li>
-        <li><a href="#streams_developer-guide_interactive-queries_discovery">Querying remote state stores (for the entire application)</a>:  To query the full state of your entire application we must be able to piece together the various local fragments of the state.  In addition to being able to (a) query local state stores as described in the previous bullet point, we also need to (b) discover all the running instances of your application in the network, including their respective state stores and (c) have a way to communicate with these instances over the network, i.e. an RPC layer.  Collectively, these building blocks enable intra-app communcation (between instances of the same app) as well as inter-app communication (from other applications) for interactive queries.
+        <li><a href="#streams_developer-guide_interactive-queries_discovery">Querying remote state stores (for the entire application)</a>:  To query the full state of your entire application we must be able to piece together the various local fragments of the state.  In addition to being able to (a) query local state stores as described in the previous bullet point, we also need to (b) discover all the running instances of your application in the network, including their respective state stores and (c) have a way to communicate with these instances over the network, i.e. an RPC layer.  Collectively, these building blocks enable intra-app communication (between instances of the same app) as well as inter-app communication (from other applications) for interactive queries.
         </li>
     </ol>
 
@@ -939,7 +990,7 @@
           Optional&lt;Long&gt; result = streams.allMetadataForStore("word-count")
               .stream()
               .map(streamsMetadata -> {
-                  // Construct the (fictituous) full endpoint URL to query the current remote application instance
+                  // Construct the (fictitious) full endpoint URL to query the current remote application instance
                   String url = "http://" + streamsMetadata.host() + ":" + streamsMetadata.port() + "/word-count/alice";
                   // Read and return the count for 'alice', if any.
                   return http.getLong(url);
@@ -1204,7 +1255,7 @@
     <p>
         Introduced in 0.11.0 is a new broker config that is particularly relevant to Kafka Streams applications, <code>group.initial.rebalance.delay.ms</code>.
         This config specifies the time, in milliseconds, that the <code>GroupCoordinator</code> will delay the initial consumer rebalance.
-        The rebalance will be further delayed by the value of <code>group.initial.rebalance.delay.ms</code> as each new member joins the consumer group, up to a maximum of the value set by <code>max.poll.interval.ms</code>.
+        The re-balance will be further delayed by the value of <code>group.initial.rebalance.delay.ms</code> as each new member joins the consumer group, up to a maximum of the value set by <code>max.poll.interval.ms</code>.
         The net benefit is that this should reduce the overall startup time for Kafka Streams applications with more than one thread.
         The default value for <code>group.initial.rebalance.delay.ms</code> is 3 seconds.
     </p>
