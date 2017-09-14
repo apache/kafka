@@ -252,13 +252,16 @@ public class Worker {
      * Retrieves the connector type by connector name
      *
      * @return the ConnectorType for the given connector name.
-     *  null if the worker does not manage a connector with the given name.
+     *  null if the ConnectorType cannot be determined
      */
-    public ConnectorType getConnectorType(String connName) {
-        WorkerConnector workerConnector = connectors.get(connName);
-        if (workerConnector == null)
-            return null;
-        return workerConnector.getConnectorType();
+    public ConnectorType getConnectorType(String clsName) {
+        ClassLoader savedLoader = plugins.currentThreadLoader();
+        try {
+            savedLoader = plugins.compareAndSwapLoaders(clsName);
+            return WorkerConnector.getConnectorType(clsName);
+        } finally {
+            Plugins.compareAndSwapLoaders(savedLoader);
+        }
     }
 
     /**

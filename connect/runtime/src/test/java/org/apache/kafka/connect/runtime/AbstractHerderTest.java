@@ -23,7 +23,6 @@ import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
-import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
@@ -70,7 +69,7 @@ public class AbstractHerderTest extends EasyMockSupport {
                 .createMock();
 
         EasyMock.expect(herder.generation()).andStubReturn(generation);
-        EasyMock.expect(worker.getConnectorType(connector)).andReturn(ConnectorType.SINK);
+        //EasyMock.expect(worker.getConnectorType(connector)).andReturn(ConnectorType.SINK);
 
         EasyMock.expect(statusStore.get(connector))
                 .andReturn(new ConnectorStatus(connector, AbstractStatus.State.RUNNING, workerId, generation));

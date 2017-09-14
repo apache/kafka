@@ -26,7 +26,6 @@ import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.Worker;
-import org.apache.kafka.connect.runtime.WorkerConnector;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
@@ -112,7 +111,7 @@ public class StandaloneHerder extends AbstractHerder {
             return null;
         Map<String, String> config = configState.connectorConfig(connector);
         return new ConnectorInfo(connector, config, configState.tasks(connector),
-            WorkerConnector.getConnectorType(configState.connectorConfig(connector).get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)));
+            worker.getConnectorType(configState.connectorConfig(connector).get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)));
     }
 
     @Override

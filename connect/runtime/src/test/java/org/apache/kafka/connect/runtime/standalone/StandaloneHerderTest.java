@@ -221,7 +221,7 @@ public class StandaloneHerderTest {
 
         Map<String, String> config = connectorConfig(SourceSink.SINK);
         expectConfigValidation(config);
-        EasyMock.expect(WorkerConnector.getConnectorType(BogusSinkConnector.class.getName()))
+        EasyMock.expect(worker.getConnectorType(BogusSinkConnector.class.getName()))
             .andReturn(ConnectorType.SINK).anyTimes();
         PowerMock.replayAll();
 
@@ -583,7 +583,7 @@ public class StandaloneHerderTest {
         worker.startTask(new ConnectorTaskId(CONNECTOR_NAME, 0), connectorConfig(sourceSink), generatedTaskProps, herder, TargetState.STARTED);
         EasyMock.expectLastCall().andReturn(true);
 
-        EasyMock.expect(WorkerConnector.getConnectorType(BogusSourceConnector.class.getName()))
+        EasyMock.expect(worker.getConnectorType(BogusSourceConnector.class.getName()))
             .andReturn(ConnectorType.SOURCE).anyTimes();
         worker.isSinkConnector(CONNECTOR_NAME);
         PowerMock.expectLastCall().andReturn(sourceSink == SourceSink.SINK);

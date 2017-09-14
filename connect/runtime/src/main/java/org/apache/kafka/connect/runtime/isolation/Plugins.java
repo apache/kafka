@@ -116,6 +116,11 @@ public class Plugins {
         return current;
     }
 
+    public ClassLoader compareAndSwapLoaders(String clsName) {
+        ClassLoader connectorLoader = delegatingLoader.connectorLoader(clsName);
+        return compareAndSwapLoaders(connectorLoader);
+    }
+
     public ClassLoader compareAndSwapLoaders(Connector connector) {
         ClassLoader connectorLoader = delegatingLoader.connectorLoader(connector);
         return compareAndSwapLoaders(connectorLoader);

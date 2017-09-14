@@ -207,8 +207,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
         Collections.sort(taskStates);
 
-        return new ConnectorStateInfo(connName, connectorState, taskStates,
-            worker.getConnectorType(connName));
+        return new ConnectorStateInfo(connName, connectorState, taskStates, null);
     }
 
     @Override
