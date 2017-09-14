@@ -346,15 +346,14 @@ public class Sender implements Runnable {
                     ClientRequest clientRequest = client.newClientRequest(targetNode.idString(),
                             requestBuilder, now, true, nextRequestHandler);
                     transactionManager.setInFlightRequestCorrelationId(clientRequest.correlationId());
-                    log.debug("{}Sending transactional request {} to node {}",
-                            transactionManager.logPrefix, requestBuilder, targetNode);
+                    log.debug("Sending transactional request {} to node {}", requestBuilder, targetNode);
 
                     client.send(clientRequest, now);
                     return true;
                 }
             } catch (IOException e) {
-                log.debug("{}Disconnect from {} while trying to send request {}. Going " +
-                        "to back off and retry", transactionManager.logPrefix, targetNode, requestBuilder);
+                log.debug("Disconnect from {} while trying to send request {}. Going " +
+                        "to back off and retry", targetNode, requestBuilder);
                 if (nextRequestHandler.needsCoordinator()) {
                     // We break here so that we pick up the FindCoordinator request immediately.
                     transactionManager.lookupCoordinator(nextRequestHandler);
@@ -373,9 +372,7 @@ public class Sender implements Runnable {
     private void maybeAbortBatches(RuntimeException exception) {
         if (accumulator.hasIncomplete()) {
             String logPrefix = "";
-            if (transactionManager != null)
-                logPrefix = transactionManager.logPrefix;
-            log.error("{}Aborting producer batches due to fatal error", logPrefix, exception);
+            log.error("Aborting producer batches due to fatal error", exception);
             accumulator.abortBatches(exception);
         }
     }
