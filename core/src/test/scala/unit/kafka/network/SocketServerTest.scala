@@ -825,7 +825,7 @@ class SocketServerTest extends JUnitSuite {
   @Test
   def controlThrowable(): Unit = {
     withTestableServer { testableServer =>
-      val (socket, _) = connectAndProcessRequest(testableServer)
+      connectAndProcessRequest(testableServer)
       val testableSelector = testableServer.testableSelector
 
       testableSelector.operationCounts.clear()
@@ -974,8 +974,7 @@ class SocketServerTest extends JUnitSuite {
         exception.getOrElse(new IllegalStateException(s"Test exception during $operation"))
     }
 
-    private def onOperation(operation: SelectorOperation,
-        connectionId: Option[String] = None, onFailure: => Unit = {}): Unit = {
+    private def onOperation(operation: SelectorOperation, connectionId: Option[String], onFailure: => Unit): Unit = {
       operationCounts(operation) += 1
       failures.remove(operation).foreach { e =>
         connectionId.foreach(allFailedChannels.add)

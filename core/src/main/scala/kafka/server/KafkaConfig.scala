@@ -1151,7 +1151,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   private def getSecurityProtocol(protocolName: String, configName: String): SecurityProtocol = {
     try SecurityProtocol.forName(protocolName)
     catch {
-      case e: IllegalArgumentException =>
+      case _: IllegalArgumentException =>
         throw new ConfigException(s"Invalid security protocol `$protocolName` defined in $configName")
     }
   }
