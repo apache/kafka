@@ -255,7 +255,6 @@ public final class ProducerBatch {
             ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId(), producerEpoch());
             for (ProducerBatch newBatch : batches) {
                 newBatch.setProducerState(producerIdAndEpoch, sequence, isTransactional());
-                newBatch.retry = true;
                 sequence += newBatch.recordCount;
             }
         }

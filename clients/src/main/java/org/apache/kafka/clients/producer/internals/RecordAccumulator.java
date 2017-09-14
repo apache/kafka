@@ -360,12 +360,15 @@ public final class RecordAccumulator {
             throw new IllegalStateException("Trying to reenqueue a batch which doesn't have a sequence even " +
                     "though idempotence is enabled.");
 
+        if (transactionManager.nextBatchBySequence(batch.topicPartition) == null)
+            throw new IllegalStateException("We are reenqueueing a batch which is not tracked as part of the in flight " +
+                    "requests. batch.topicPartition: " + batch.topicPartition + "; batch.baseSequence: " + batch.baseSequence());
+
         // If there are no inflight batches being tracked by the transaction manager, it means that the producer
         // id must have changed and the batches being re enqueued are from the old producer id. In this case
         // we don't try to ensure ordering amongst them. They will eventually fail with an OutOfOrderSequence,
         // or they will succeed.
-        if (transactionManager.nextBatchBySequence(batch.topicPartition) != null &&
-                batch.baseSequence() != transactionManager.nextBatchBySequence(batch.topicPartition).baseSequence()) {
+        if (batch.baseSequence() != transactionManager.nextBatchBySequence(batch.topicPartition).baseSequence()) {
             // The incoming batch can't be inserted at the front of the queue without violating the sequence ordering.
             // This means that the incoming batch should be placed somewhere further back.
             // We need to find the right place for the incoming batch and insert it there.
@@ -536,8 +539,7 @@ public final class RecordAccumulator {
                                                 break;
 
                                             if (first.hasSequence()
-                                                    && transactionManager.nextBatchBySequence(first.topicPartition) != null
-                                                    && !first.equals(transactionManager.nextBatchBySequence(first.topicPartition)))
+                                                    && first.baseSequence() != transactionManager.nextBatchBySequence(first.topicPartition).baseSequence())
                                                 // If the queued batch already has an assigned sequence, then it is being
                                                 // retried. In this case, we wait until the next immediate batch is ready
                                                 // and drain that. We only move on when the next in line batch is complete (either successfully
