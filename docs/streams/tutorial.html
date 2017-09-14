@@ -62,7 +62,7 @@
     </pre>
 
     <p>
-        You will need to update the <code>pom.xml</code> file included in the project to remove SNAPSHOT from the defined Streams dependency.
+        <strong>Important:</strong> You must manually update the setting of <code>&lt;kafka.version&gt;</code> in the generated <code>pom.xml</code> file from <code>0.11.0.1-SNAPSHOT</code> to <code>0.11.0.1</code>.
         There are already several example programs written with Streams library under <code>src/main/java</code>.
         Since we are going to start writing such programs from scratch, we can now delete these examples:
     </p>
