@@ -37,8 +37,8 @@ public class SaslAuthenticationContext implements AuthenticationContext {
     }
 
     @Override
-    public String securityProtocolName() {
-        return securityProtocol.name;
+    public SecurityProtocol securityProtocol() {
+        return securityProtocol;
     }
 
     @Override

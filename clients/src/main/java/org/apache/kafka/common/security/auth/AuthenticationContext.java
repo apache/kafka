@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.security.auth;
 
+import org.apache.kafka.common.protocol.SecurityProtocol;
+
 import java.net.InetAddress;
 
 /**
@@ -25,9 +27,8 @@ import java.net.InetAddress;
 public interface AuthenticationContext {
     /**
      * Underlying security protocol of the authentication session.
-     * @return The name of the security protocol (i.e. PLAINTEXT, SASL_PLAINTEXT, SASL_SSL, SSL)
      */
-    String securityProtocolName();
+    SecurityProtocol securityProtocol();
 
     /**
      * Address of the authenticated client

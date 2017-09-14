@@ -35,8 +35,8 @@ public class SslAuthenticationContext implements AuthenticationContext {
     }
 
     @Override
-    public String securityProtocolName() {
-        return SecurityProtocol.SSL.name;
+    public SecurityProtocol securityProtocol() {
+        return SecurityProtocol.SSL;
     }
 
     @Override

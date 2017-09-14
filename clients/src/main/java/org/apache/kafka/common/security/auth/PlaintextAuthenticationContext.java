@@ -28,8 +28,8 @@ public class PlaintextAuthenticationContext implements AuthenticationContext {
     }
 
     @Override
-    public String securityProtocolName() {
-        return SecurityProtocol.PLAINTEXT.name;
+    public SecurityProtocol securityProtocol() {
+        return SecurityProtocol.PLAINTEXT;
     }
 
     @Override

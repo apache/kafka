@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.auth;
+package org.apache.kafka.common.security.authenticator;
 
 import org.apache.kafka.common.security.JaasContext;
 
