@@ -39,15 +39,8 @@ public class MeterTest {
         Meter meter = new Meter(rateMetricName, totalMetricName);
         List<NamedMeasurable> stats = meter.stats();
         assertEquals(2, stats.size());
-        NamedMeasurable rate;
-        NamedMeasurable total;
-        if (stats.get(0).name().equals(rateMetricName)) {
-            rate = stats.get(0);
-            total = stats.get(1);
-        } else {
-            rate = stats.get(1);
-            total = stats.get(0);
-        }
+        NamedMeasurable total = stats.get(0);
+        NamedMeasurable rate = stats.get(1);
         assertEquals(rateMetricName, rate.name());
         assertEquals(totalMetricName, total.name());
         Rate rateStat = (Rate) rate.stat();
@@ -60,6 +53,8 @@ public class MeterTest {
         double intervalMs = 100;
         double delta = 5.0;
 
+        // Record values in multiple windows and verify that rates are reported
+        // for time windows and that the total is cumulative.
         for (int i = 1; i <= 100; i++) {
             for (; now < i * 1000; now += intervalMs, nextValue += delta) {
                 expectedTotal += nextValue;

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.metrics.stats;
 
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -36,41 +36,47 @@ public class Meter implements CompoundStat {
     private final Rate rate;
     private final Total total;
 
+    /**
+     * Construct a Meter with seconds as time unit and {@link SampledTotal} stats for Rate
+     */
     public Meter(MetricName rateMetricName, MetricName totalMetricName) {
         this(TimeUnit.SECONDS, new SampledTotal(), rateMetricName, totalMetricName);
     }
 
+    /**
+     * Construct a Meter with provided time unit and {@link SampledTotal} stats for Rate
+     */
     public Meter(TimeUnit unit, MetricName rateMetricName, MetricName totalMetricName) {
         this(unit, new SampledTotal(), rateMetricName, totalMetricName);
     }
 
-    public Meter(SampledStat total, MetricName rateMetricName, MetricName totalMetricName) {
-        this(TimeUnit.SECONDS, total, rateMetricName, totalMetricName);
+    /**
+     * Construct a Meter with seconds as time unit and provided {@link SampledStat} stats for Rate
+     */
+    public Meter(SampledStat rateStat, MetricName rateMetricName, MetricName totalMetricName) {
+        this(TimeUnit.SECONDS, rateStat, rateMetricName, totalMetricName);
     }
 
-    public Meter(TimeUnit unit, SampledStat sampledStat, MetricName rateMetricName, MetricName totalMetricName) {
+    /**
+     * Construct a Meter with provided time unit and provided {@link SampledStat} stats for Rate
+     */
+    public Meter(TimeUnit unit, SampledStat rateStat, MetricName rateMetricName, MetricName totalMetricName) {
         this.total = new Total();
-        this.rate = new Rate(unit, sampledStat) {
-            @Override
-            public void record(MetricConfig config, double value, long now) {
-                super.record(config, value, now);
-                total.record(config, value, now);
-            }
-        };
+        this.rate = new Rate(unit, rateStat);
         this.rateMetricName = rateMetricName;
         this.totalMetricName = totalMetricName;
     }
 
     @Override
     public List<NamedMeasurable> stats() {
-        List<NamedMeasurable> stats = new ArrayList<NamedMeasurable>(2);
-        stats.add(new NamedMeasurable(totalMetricName, total));
-        stats.add(new NamedMeasurable(rateMetricName, rate));
-        return stats;
+        return Arrays.asList(
+            new NamedMeasurable(totalMetricName, total),
+            new NamedMeasurable(rateMetricName, rate));
     }
 
     @Override
     public void record(MetricConfig config, double value, long timeMs) {
         rate.record(config, value, timeMs);
+        total.record(config, value, timeMs);
     }
 }

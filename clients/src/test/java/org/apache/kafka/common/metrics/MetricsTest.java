@@ -55,7 +55,7 @@ public class MetricsTest {
 
     @Before
     public void setup() {
-        this.metrics = new Metrics(config, Arrays.asList((MetricsReporter) new JmxReporter("mytest")), time, true);
+        this.metrics = new Metrics(config, Arrays.asList((MetricsReporter) new JmxReporter()), time, true);
     }
 
     @After
@@ -89,8 +89,10 @@ public class MetricsTest {
         s.add(metrics.metricName("test.avg", "grp1"), new Avg());
         s.add(metrics.metricName("test.max", "grp1"), new Max());
         s.add(metrics.metricName("test.min", "grp1"), new Min());
-        s.add(new Meter(TimeUnit.SECONDS, metrics.metricName("test.rate", "grp1"), metrics.metricName("test.total", "grp1")));
-        s.add(new Meter(TimeUnit.SECONDS, new Count(), metrics.metricName("test.occurences", "grp1"), metrics.metricName("test.occurences.total", "grp1")));
+        s.add(new Meter(TimeUnit.SECONDS, metrics.metricName("test.rate", "grp1"),
+                metrics.metricName("test.total", "grp1")));
+        s.add(new Meter(TimeUnit.SECONDS, new Count(), metrics.metricName("test.occurences", "grp1"),
+                metrics.metricName("test.occurences.total", "grp1")));
         s.add(metrics.metricName("test.count", "grp1"), new Count());
         s.add(new Percentiles(100, -100, 100, BucketSizing.CONSTANT,
                              new Percentile(metrics.metricName("test.median", "grp1"), 50.0),

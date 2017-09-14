@@ -877,9 +877,9 @@ public class Selector implements Selectable, AutoCloseable {
                     "outgoing-byte", "outgoing bytes sent to all servers"));
             this.bytesSent.add(createMeter(metrics, metricGrpName, metricTags, new Count(),
                     "request", "requests sent"));
-            MetricName metricName = metrics.metricName("request-size-avg", metricGrpName, "The average size of all requests in the window..", metricTags);
+            MetricName metricName = metrics.metricName("request-size-avg", metricGrpName, "The average size of requests sent.", metricTags);
             this.bytesSent.add(metricName, new Avg());
-            metricName = metrics.metricName("request-size-max", metricGrpName, "The maximum size of any request sent in the window.", metricTags);
+            metricName = metrics.metricName("request-size-max", metricGrpName, "The maximum size of any request sent.", metricTags);
             this.bytesSent.add(metricName, new Max());
 
             this.bytesReceived = sensor("bytes-received:" + tagsSuffix.toString(), bytesTransferred);
@@ -893,12 +893,12 @@ public class Selector implements Selectable, AutoCloseable {
                     new Count(), "select", "times the I/O layer checked for new I/O to perform"));
             metricName = metrics.metricName("io-wait-time-ns-avg", metricGrpName, "The average length of time the I/O thread spent waiting for a socket ready for reads or writes in nanoseconds.", metricTags);
             this.selectTime.add(metricName, new Avg());
-            this.selectTime.add(createRatioMeter(metrics, metricGrpName, metricTags, "io-wait", "waiting"));
+            this.selectTime.add(createIOThreadRatioMeter(metrics, metricGrpName, metricTags, "io-wait", "waiting"));
 
             this.ioTime = sensor("io-time:" + tagsSuffix.toString());
             metricName = metrics.metricName("io-time-ns-avg", metricGrpName, "The average length of time for I/O per select call in nanoseconds.", metricTags);
             this.ioTime.add(metricName, new Avg());
-            this.ioTime.add(createRatioMeter(metrics, metricGrpName, metricTags, "io", "doing I/O"));
+            this.ioTime.add(createIOThreadRatioMeter(metrics, metricGrpName, metricTags, "io", "doing I/O"));
 
             metricName = metrics.metricName("connection-count", metricGrpName, "The current number of active connections.", metricTags);
             topLevelMetricNames.add(metricName);
@@ -926,7 +926,7 @@ public class Selector implements Selectable, AutoCloseable {
             return createMeter(metrics, groupName, metricTags, null, baseName, descriptiveName);
         }
 
-        private Meter createRatioMeter(Metrics metrics, String groupName,  Map<String, String> metricTags,
+        private Meter createIOThreadRatioMeter(Metrics metrics, String groupName,  Map<String, String> metricTags,
                 String baseName, String action) {
             MetricName rateMetricName = metrics.metricName(baseName + "-ratio", groupName,
                     String.format("The fraction of time the I/O thread spent %s", action), metricTags);
@@ -954,25 +954,17 @@ public class Selector implements Selectable, AutoCloseable {
                     tags.put("node-id", "node-" + connectionId);
 
                     nodeRequest = sensor(nodeRequestName);
-                    MetricName rateMetricName = metrics.metricName("outgoing-byte-rate", metricGrpName, tags);
-                    MetricName totalMetricName = metrics.metricName("outgoing-byte-total", metricGrpName, tags);
-                    nodeRequest.add(new Meter(rateMetricName, totalMetricName));
-                    rateMetricName = metrics.metricName("request-rate", metricGrpName, "The average number of requests sent per second.", tags);
-                    totalMetricName = metrics.metricName("request-total", metricGrpName, "The total number of requests sent.", tags);
-                    nodeRequest.add(new Meter(new Count(), rateMetricName, totalMetricName));
-                    MetricName metricName = metrics.metricName("request-size-avg", metricGrpName, "The average size of all requests in the window..", tags);
+                    nodeRequest.add(createMeter(metrics, metricGrpName, tags, "outgoing-byte", "outgoing bytes"));
+                    nodeRequest.add(createMeter(metrics, metricGrpName, tags, new Count(), "request", "requests sent"));
+                    MetricName metricName = metrics.metricName("request-size-avg", metricGrpName, "The average size of requests sent.", tags);
                     nodeRequest.add(metricName, new Avg());
-                    metricName = metrics.metricName("request-size-max", metricGrpName, "The maximum size of any request sent in the window.", tags);
+                    metricName = metrics.metricName("request-size-max", metricGrpName, "The maximum size of any request sent.", tags);
                     nodeRequest.add(metricName, new Max());
 
                     String nodeResponseName = "node-" + connectionId + ".bytes-received";
                     Sensor nodeResponse = sensor(nodeResponseName);
-                    metricName = metrics.metricName("incoming-byte-rate", metricGrpName, tags);
-                    totalMetricName = metrics.metricName("incoming-byte-total", metricGrpName, tags);
-                    nodeResponse.add(new Meter(metricName, totalMetricName));
-                    metricName = metrics.metricName("response-rate", metricGrpName, "The average number of responses received per second.", tags);
-                    totalMetricName = metrics.metricName("response-total", metricGrpName, "The total number of responses received.", tags);
-                    nodeResponse.add(new Meter(new Count(), metricName, totalMetricName));
+                    nodeResponse.add(createMeter(metrics, metricGrpName, tags, "incoming-byte", "incoming bytes"));
+                    nodeResponse.add(createMeter(metrics, metricGrpName, tags, new Count(), "response", "responses received"));
 
                     String nodeTimeName = "node-" + connectionId + ".latency";
                     Sensor nodeRequestTime = sensor(nodeTimeName);

@@ -1508,9 +1508,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     servers.foreach(assertNoExemptRequestMetric(_))
   }
 
+  // Rate metrics of both Producer and Consumer are verified by this test
   @Test
   def testRateMetricsHaveCumulativeCount() {
-    val numRecords = 1000
+    val numRecords = 100
     sendRecords(numRecords)
 
     val consumer = this.consumers.head
@@ -1518,8 +1519,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.seek(tp, 0)
     consumeAndVerifyRecords(consumer, numRecords = numRecords, startingOffset = 0)
 
-    def exists(name: String, metricName: MetricName, allMetricNames: Set[MetricName]): Boolean = {
-      allMetricNames.contains(new MetricName(name, metricName.group, "", metricName.tags))
+    def exists(name: String, rateMetricName: MetricName, allMetricNames: Set[MetricName]): Boolean = {
+      allMetricNames.contains(new MetricName(name, rateMetricName.group, "", rateMetricName.tags))
     }
 
     def verify(rateMetricName: MetricName, allMetricNames: Set[MetricName]): Unit = {
@@ -1541,19 +1542,19 @@ class PlaintextConsumerTest extends BaseConsumerTest {
         .filterNot(metricName => producerExclusions.contains(metricName.name))
         .foreach(verify(_, producerMetricNames))
 
-    // Check a couple of metrics to ensure that values are set
-    def metric(name: String, metrics: Map[MetricName, Metric]): (MetricName, Metric) =
-      metrics.filter(e => e._1.name.equals(name)).head
+    def verifyMetric(name: String, metrics: java.util.Map[MetricName, _ <: Metric], entity: String): Unit = {
+      val entry = metrics.asScala.find { case (metricName, _) => metricName.name == name }
+      assertTrue(s"$entity metric not defined $name", entry.nonEmpty)
+      entry.foreach { case (metricName, metric) =>
+        assertTrue(s"$entity metric not recorded $metricName", metric.value > 0.0)
+      }
+    }
 
-    val (cRateMetricName, cRateMetric) = metric("records-consumed-rate", consumer.metrics.asScala.toMap)
-    val (cTotalMetricName, cTotalMetric) = metric("records-consumed-total", consumer.metrics.asScala.toMap)
-    assertTrue(s"Consumer metric not recorded $cRateMetricName", cRateMetric.value > 0.0)
-    assertTrue(s"Consumer metric not recorded $cTotalMetricName", cTotalMetric.value > 0.0)
-
-    val (pRateMetricName, pRateMetric) = metric("record-send-rate", producer.metrics.asScala.toMap)
-    val (pTotalMetricName, pTotalMetric) = metric("record-send-total", producer.metrics.asScala.toMap)
-    assertTrue(s"Producer metric not recorded $pRateMetricName", pRateMetric.value > 0.0)
-    assertTrue(s"Producer metric not recorded $pTotalMetricName", pTotalMetric.value > 0.0)
+    // Check a couple of metrics of consumer and producer to ensure that values are set
+    verifyMetric("records-consumed-rate", consumer.metrics, "Consumer")
+    verifyMetric("records-consumed-total", consumer.metrics, "Consumer")
+    verifyMetric("record-send-rate", producer.metrics, "Producer")
+    verifyMetric("record-send-total", producer.metrics, "Producer")
   }
 
   def runMultiConsumerSessionTimeoutTest(closeConsumer: Boolean): Unit = {
