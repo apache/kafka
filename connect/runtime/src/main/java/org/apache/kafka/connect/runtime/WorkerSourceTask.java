@@ -86,9 +86,10 @@ class WorkerSourceTask extends WorkerTask {
                             OffsetStorageReader offsetReader,
                             OffsetStorageWriter offsetWriter,
                             WorkerConfig workerConfig,
+                            ConnectMetrics connectMetrics,
                             ClassLoader loader,
                             Time time) {
-        super(id, statusListener, initialState, loader);
+        super(id, statusListener, initialState, loader, connectMetrics);
 
         this.workerConfig = workerConfig;
         this.task = task;
@@ -186,6 +187,7 @@ class WorkerSourceTask extends WorkerTask {
      */
     private boolean sendRecords() {
         int processed = 0;
+        recordBatch(toSend.size());
         for (final SourceRecord preTransformRecord : toSend) {
             final SourceRecord record = transformationChain.apply(preTransformRecord);
 
@@ -303,6 +305,7 @@ class WorkerSourceTask extends WorkerTask {
                     if (timeoutMs <= 0) {
                         log.error("{} Failed to flush, timed out while waiting for producer to flush outstanding {} messages", this, outstandingMessages.size());
                         finishFailedFlush();
+                        recordCommitFailure(time.milliseconds() - started, null);
                         return false;
                     }
                     this.wait(timeoutMs);
@@ -312,6 +315,7 @@ class WorkerSourceTask extends WorkerTask {
                     // to stop immediately
                     log.error("{} Interrupted while flushing messages, offsets will not be committed", this);
                     finishFailedFlush();
+                    recordCommitFailure(time.milliseconds() - started, null);
                     return false;
                 }
             }
@@ -322,8 +326,10 @@ class WorkerSourceTask extends WorkerTask {
                 // flush time, which can be used for monitoring even if the connector doesn't record any
                 // offsets.
                 finishSuccessfulFlush();
+                long durationMillis = time.milliseconds() - started;
+                recordCommitSuccess(durationMillis);
                 log.debug("{} Finished offset commitOffsets successfully in {} ms",
-                        this, time.milliseconds() - started);
+                        this, durationMillis);
 
                 commitSourceTask();
                 return true;
@@ -345,6 +351,7 @@ class WorkerSourceTask extends WorkerTask {
         // any data
         if (flushFuture == null) {
             finishFailedFlush();
+            recordCommitFailure(time.milliseconds() - started, null);
             return false;
         }
         try {
@@ -356,20 +363,25 @@ class WorkerSourceTask extends WorkerTask {
         } catch (InterruptedException e) {
             log.warn("{} Flush of offsets interrupted, cancelling", this);
             finishFailedFlush();
+            recordCommitFailure(time.milliseconds() - started, e);
             return false;
         } catch (ExecutionException e) {
             log.error("{} Flush of offsets threw an unexpected exception: ", this, e);
             finishFailedFlush();
+            recordCommitFailure(time.milliseconds() - started, e);
             return false;
         } catch (TimeoutException e) {
             log.error("{} Timed out waiting to flush offsets to storage", this);
             finishFailedFlush();
+            recordCommitFailure(time.milliseconds() - started, null);
             return false;
         }
 
         finishSuccessfulFlush();
+        long durationMillis = time.milliseconds() - started;
+        recordCommitSuccess(durationMillis);
         log.info("{} Finished commitOffsets successfully in {} ms",
-                this, time.milliseconds() - started);
+                this, durationMillis);
 
         commitSourceTask();
 

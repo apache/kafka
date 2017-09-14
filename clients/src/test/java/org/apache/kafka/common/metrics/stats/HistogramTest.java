@@ -90,8 +90,8 @@ public class HistogramTest {
         assertEquals("Check boundary of bucket 3", 3, scheme.toBin(3.9999));
         assertEquals("Check boundary of bucket 4", 4, scheme.toBin(4.0000));
         assertEquals("Check boundary of bucket 4", 4, scheme.toBin(4.9999));
-        assertEquals("Check boundary of bucket 4", 4, scheme.toBin(5.000));
-        assertEquals("Check boundary of bucket 4", 4, scheme.toBin(5.001));
+        assertEquals("Check boundary of bucket 4", 4, scheme.toBin(5.0000));
+        assertEquals("Check boundary of bucket 4", 4, scheme.toBin(5.0001));
         assertEquals(Float.NEGATIVE_INFINITY, scheme.fromBin(-1), 0.001d);
         assertEquals(Float.POSITIVE_INFINITY, scheme.fromBin(5), 0.001d);
         assertEquals(0.0, scheme.fromBin(0), 0.001d);

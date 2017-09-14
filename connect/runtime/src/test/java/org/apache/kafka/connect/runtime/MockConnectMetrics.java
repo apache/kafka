@@ -21,7 +21,7 @@ import org.apache.kafka.connect.util.MockTime;
 import java.util.HashMap;
 import java.util.Map;
 
-public class MockConnectorMetrics extends ConnectMetrics {
+public class MockConnectMetrics extends ConnectMetrics {
 
     private static final Map<String, String> DEFAULT_WORKER_CONFIG = new HashMap<>();
     static {
@@ -31,7 +31,7 @@ public class MockConnectorMetrics extends ConnectMetrics {
         DEFAULT_WORKER_CONFIG.put(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
     }
 
-    public MockConnectorMetrics() {
+    public MockConnectMetrics() {
         super("mock", new WorkerConfig(WorkerConfig.baseConfigDef(), DEFAULT_WORKER_CONFIG), new MockTime());
     }
 
