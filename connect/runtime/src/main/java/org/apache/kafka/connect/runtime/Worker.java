@@ -252,7 +252,7 @@ public class Worker {
      * Retrieves the connector type by connector name
      *
      * @return the ConnectorType for the given connector name.
-     *  null if the ConnectorType cannot be determined
+     * @throws ConnectException if the ConnectorType cannot be determined
      */
     public ConnectorType connectorType(String clsName) {
         ClassLoader savedLoader = plugins.currentThreadLoader();

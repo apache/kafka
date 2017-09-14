@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.slf4j.Logger;
@@ -194,12 +195,12 @@ public class WorkerConnector {
 
     public static ConnectorType connectorType(String clsname) {
         if (null == clsname || clsname.isEmpty())
-            return null;
+            throw new IllegalArgumentException("Cannot determine the type for empty class");
         try {
             return SinkConnector.class.isAssignableFrom(Class.forName(clsname)) ?
                 ConnectorType.SINK : ConnectorType.SOURCE;
         } catch (Exception e) {
-            return null;
+            throw new ConnectException("Cannot determine the type for " + clsname);
         }
     }
 
