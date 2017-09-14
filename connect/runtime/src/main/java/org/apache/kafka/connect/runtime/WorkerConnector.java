@@ -192,11 +192,7 @@ public class WorkerConnector {
         return SinkConnector.class.isAssignableFrom(connector.getClass());
     }
 
-    public ConnectorType getConnectorType() {
-        return isSinkConnector() ? ConnectorType.SINK : ConnectorType.SOURCE;
-    }
-
-    public static ConnectorType getConnectorType(String clsname) {
+    public static ConnectorType connectorType(String clsname) {
         if (null == clsname || clsname.isEmpty())
             return null;
         try {

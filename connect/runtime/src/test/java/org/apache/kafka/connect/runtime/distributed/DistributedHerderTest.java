@@ -167,7 +167,7 @@ public class DistributedHerderTest {
     public void setUp() throws Exception {
         worker = PowerMock.createMock(Worker.class);
         EasyMock.expect(worker.isSinkConnector(CONN1)).andStubReturn(Boolean.FALSE);
-        EasyMock.expect(worker.getConnectorType(BogusSourceConnector.class.getName())).andReturn(ConnectorType.SOURCE).anyTimes();
+        EasyMock.expect(worker.connectorType(BogusSourceConnector.class.getName())).andReturn(ConnectorType.SOURCE).anyTimes();
         time = new MockTime();
 
         herder = PowerMock.createPartialMock(DistributedHerder.class, new String[]{"backoff", "updateDeletedConnectorStatus"},

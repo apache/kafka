@@ -254,11 +254,11 @@ public class Worker {
      * @return the ConnectorType for the given connector name.
      *  null if the ConnectorType cannot be determined
      */
-    public ConnectorType getConnectorType(String clsName) {
+    public ConnectorType connectorType(String clsName) {
         ClassLoader savedLoader = plugins.currentThreadLoader();
         try {
             savedLoader = plugins.compareAndSwapLoaders(clsName);
-            return WorkerConnector.getConnectorType(clsName);
+            return WorkerConnector.connectorType(clsName);
         } finally {
             Plugins.compareAndSwapLoaders(savedLoader);
         }

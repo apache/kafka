@@ -111,7 +111,7 @@ public class StandaloneHerder extends AbstractHerder {
             return null;
         Map<String, String> config = configState.connectorConfig(connector);
         return new ConnectorInfo(connector, config, configState.tasks(connector),
-            worker.getConnectorType(configState.connectorConfig(connector).get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)));
+            worker.connectorType(configState.connectorConfig(connector).get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)));
     }
 
     @Override
