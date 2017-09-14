@@ -391,7 +391,7 @@ public class SimpleBenchmark {
             try {
                 latch.await();
             } catch (InterruptedException ex) {
-                Thread.interrupted();
+                Thread.currentThread().interrupt();
             }
         }
         long endTime = System.currentTimeMillis();
