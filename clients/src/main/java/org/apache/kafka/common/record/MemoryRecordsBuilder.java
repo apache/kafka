@@ -279,6 +279,17 @@ public class MemoryRecordsBuilder {
         aborted = true;
     }
 
+    public void reopenAndRewriteProducerState(long producerId, short producerEpoch, int baseSequence, boolean isTransactional) {
+        if (aborted)
+            throw new IllegalStateException("Should not reopen a batch which is already aborted.");
+        builtRecords = null;
+        this.producerId = producerId;
+        this.producerEpoch = producerEpoch;
+        this.baseSequence = baseSequence;
+        this.isTransactional = isTransactional;
+    }
+
+
     public void close() {
         if (aborted)
             throw new IllegalStateException("Cannot close MemoryRecordsBuilder as it has already been aborted");
@@ -766,4 +777,7 @@ public class MemoryRecordsBuilder {
         return this.producerEpoch;
     }
 
+    public int baseSequence() {
+        return this.baseSequence;
+    }
 }

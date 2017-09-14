@@ -418,14 +418,11 @@ class LogTest {
 
     log.truncateTo(baseOffset + 4)
 
-    val activeProducers = log.activeProducers
+    val activeProducers = log.activeProducersWithLastSequence
     assertTrue(activeProducers.contains(pid))
 
-    val entry = activeProducers(pid)
-    assertEquals(0, entry.firstSeq)
-    assertEquals(baseOffset, entry.firstOffset)
-    assertEquals(3, entry.lastSeq)
-    assertEquals(baseOffset + 3, entry.lastOffset)
+    val lastSeq = activeProducers(pid)
+    assertEquals(3, lastSeq)
   }
 
   @Test
@@ -462,14 +459,11 @@ class LogTest {
 
     log.truncateTo(baseOffset + 2)
 
-    val activeProducers = log.activeProducers
+    val activeProducers = log.activeProducersWithLastSequence
     assertTrue(activeProducers.contains(pid))
 
-    val entry = activeProducers(pid)
-    assertEquals(0, entry.firstSeq)
-    assertEquals(baseOffset, entry.firstOffset)
-    assertEquals(1, entry.lastSeq)
-    assertEquals(baseOffset + 1, entry.lastOffset)
+    val lastSeq = activeProducers(pid)
+    assertEquals(1, lastSeq)
   }
 
   @Test
@@ -498,14 +492,11 @@ class LogTest {
     val filteredRecords = MemoryRecords.readableRecords(filtered)
 
     log.appendAsFollower(filteredRecords)
-    val activeProducers = log.activeProducers
+    val activeProducers = log.activeProducersWithLastSequence
     assertTrue(activeProducers.contains(pid))
 
-    val entry = activeProducers(pid)
-    assertEquals(0, entry.firstSeq)
-    assertEquals(baseOffset, entry.firstOffset)
-    assertEquals(3, entry.lastSeq)
-    assertEquals(baseOffset + 3, entry.lastOffset)
+    val lastSeq = activeProducers(pid)
+    assertEquals(3, lastSeq)
   }
 
   @Test
@@ -547,13 +538,13 @@ class LogTest {
     }
 
     log.truncateTo(1L)
-    assertEquals(1, log.activeProducers.size)
+    assertEquals(1, log.activeProducersWithLastSequence.size)
 
-    val pidEntryOpt = log.activeProducers.get(pid)
-    assertTrue(pidEntryOpt.isDefined)
+    val lastSeqOpt = log.activeProducersWithLastSequence.get(pid)
+    assertTrue(lastSeqOpt.isDefined)
 
-    val pidEntry = pidEntryOpt.get
-    assertEquals(0, pidEntry.lastSeq)
+    val lastSeq = lastSeqOpt.get
+    assertEquals(0, lastSeq)
   }
 
   @Test
@@ -568,21 +559,21 @@ class LogTest {
       producerEpoch = epoch, sequence = 0), leaderEpoch = 0)
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord(mockTime.milliseconds(), "b".getBytes)), producerId = pid2,
       producerEpoch = epoch, sequence = 0), leaderEpoch = 0)
-    assertEquals(2, log.activeProducers.size)
+    assertEquals(2, log.activeProducersWithLastSequence.size)
 
     log.maybeIncrementLogStartOffset(1L)
 
-    assertEquals(1, log.activeProducers.size)
-    val retainedEntryOpt = log.activeProducers.get(pid2)
-    assertTrue(retainedEntryOpt.isDefined)
-    assertEquals(0, retainedEntryOpt.get.lastSeq)
+    assertEquals(1, log.activeProducersWithLastSequence.size)
+    val retainedLastSeqOpt = log.activeProducersWithLastSequence.get(pid2)
+    assertTrue(retainedLastSeqOpt.isDefined)
+    assertEquals(0, retainedLastSeqOpt.get)
 
     log.close()
 
     val reloadedLog = createLog(logDir, logConfig, logStartOffset = 1L)
-    assertEquals(1, reloadedLog.activeProducers.size)
-    val reloadedEntryOpt = log.activeProducers.get(pid2)
-    assertEquals(retainedEntryOpt, reloadedEntryOpt)
+    assertEquals(1, reloadedLog.activeProducersWithLastSequence.size)
+    val reloadedLastSeqOpt = log.activeProducersWithLastSequence.get(pid2)
+    assertEquals(retainedLastSeqOpt, reloadedLastSeqOpt)
   }
 
   @Test
@@ -600,24 +591,24 @@ class LogTest {
       producerEpoch = epoch, sequence = 0), leaderEpoch = 0)
 
     assertEquals(2, log.logSegments.size)
-    assertEquals(2, log.activeProducers.size)
+    assertEquals(2, log.activeProducersWithLastSequence.size)
 
     log.maybeIncrementLogStartOffset(1L)
     log.onHighWatermarkIncremented(log.logEndOffset)
     log.deleteOldSegments()
 
     assertEquals(1, log.logSegments.size)
-    assertEquals(1, log.activeProducers.size)
-    val retainedEntryOpt = log.activeProducers.get(pid2)
-    assertTrue(retainedEntryOpt.isDefined)
-    assertEquals(0, retainedEntryOpt.get.lastSeq)
+    assertEquals(1, log.activeProducersWithLastSequence.size)
+    val retainedLastSeqOpt = log.activeProducersWithLastSequence.get(pid2)
+    assertTrue(retainedLastSeqOpt.isDefined)
+    assertEquals(0, retainedLastSeqOpt.get)
 
     log.close()
 
     val reloadedLog = createLog(logDir, logConfig, logStartOffset = 1L)
-    assertEquals(1, reloadedLog.activeProducers.size)
-    val reloadedEntryOpt = log.activeProducers.get(pid2)
-    assertEquals(retainedEntryOpt, reloadedEntryOpt)
+    assertEquals(1, reloadedLog.activeProducersWithLastSequence.size)
+    val reloadedEntryOpt = log.activeProducersWithLastSequence.get(pid2)
+    assertEquals(retainedLastSeqOpt, reloadedEntryOpt)
   }
 
   @Test
@@ -659,13 +650,13 @@ class LogTest {
     log.takeProducerSnapshot()
 
     assertEquals(3, log.logSegments.size)
-    assertEquals(Set(pid1, pid2), log.activeProducers.keySet)
+    assertEquals(Set(pid1, pid2), log.activeProducersWithLastSequence.keySet)
 
     log.onHighWatermarkIncremented(log.logEndOffset)
     log.deleteOldSegments()
 
     assertEquals(2, log.logSegments.size)
-    assertEquals(Set(pid2), log.activeProducers.keySet)
+    assertEquals(Set(pid2), log.activeProducersWithLastSequence.keySet)
   }
 
   @Test
@@ -749,13 +740,13 @@ class LogTest {
     val records = Seq(new SimpleRecord(mockTime.milliseconds(), "foo".getBytes))
     log.appendAsLeader(TestUtils.records(records, producerId = pid, producerEpoch = 0, sequence = 0), leaderEpoch = 0)
 
-    assertEquals(Set(pid), log.activeProducers.keySet)
+    assertEquals(Set(pid), log.activeProducersWithLastSequence.keySet)
 
     mockTime.sleep(producerIdExpirationCheckIntervalMs)
-    assertEquals(Set(pid), log.activeProducers.keySet)
+    assertEquals(Set(pid), log.activeProducersWithLastSequence.keySet)
 
     mockTime.sleep(producerIdExpirationCheckIntervalMs)
-    assertEquals(Set(), log.activeProducers.keySet)
+    assertEquals(Set(), log.activeProducersWithLastSequence.keySet)
   }
 
   @Test
@@ -805,16 +796,22 @@ class LogTest {
       case _: OutOfOrderSequenceException => // Good!
     }
 
-    // Append a Duplicate of an entry in the middle of the log. This is not allowed.
+    // Append a duplicate of the batch which is 4th from the tail. This should succeed without error since we
+    // retain the batch metadata of the last 5 batches.
+    val duplicateOfFourth = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds, "key".getBytes, "value".getBytes)),
+      producerId = pid, producerEpoch = epoch, sequence = 2)
+    log.appendAsLeader(duplicateOfFourth, leaderEpoch = 0)
+
+    // Append a Duplicate of an entry older than the last 5 appended batches. This should result in a DuplicateSequenceNumberException.
      try {
       val records = TestUtils.records(
         List(new SimpleRecord(mockTime.milliseconds, s"key-1".getBytes, s"value-1".getBytes)),
         producerId = pid, producerEpoch = epoch, sequence = 1)
       log.appendAsLeader(records, leaderEpoch = 0)
-      fail ("Should have received an OutOfOrderSequenceException since we attempted to append a duplicate of a records " +
-        "in the middle of the log.")
+      fail ("Should have received an DuplicateSequenceNumberException since we attempted to append a duplicate of a batch" +
+        "which is older than the last 5 appended batches.")
     } catch {
-      case _: OutOfOrderSequenceException => // Good!
+      case _: DuplicateSequenceException => // Good!
     }
 
     // Append a duplicate entry with a single records at the tail of the log. This should return the appendInfo of the original entry.
@@ -872,7 +869,7 @@ class LogTest {
     }
   }
 
-  @Test(expected = classOf[DuplicateSequenceNumberException])
+  @Test(expected = classOf[DuplicateSequenceException])
   def testDuplicateAppendToFollower() : Unit = {
     val logConfig = createLogConfig(segmentBytes = 1024 * 1024 * 5)
     val log = createLog(logDir, logConfig)
@@ -888,7 +885,7 @@ class LogTest {
       partitionLeaderEpoch, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
   }
 
-  @Test(expected = classOf[DuplicateSequenceNumberException])
+  @Test(expected = classOf[DuplicateSequenceException])
   def testMultipleProducersWithDuplicatesInSingleAppend() : Unit = {
     val logConfig = createLogConfig(segmentBytes = 1024 * 1024 * 5)
     val log = createLog(logDir, logConfig)
