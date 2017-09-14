@@ -107,7 +107,6 @@ public class ChannelBuilders {
                         clientSaslMechanism, saslHandshakeRequestEnable, credentialCache);
                 break;
             case PLAINTEXT:
-            case TRACE:
                 channelBuilder = new PlaintextChannelBuilder();
                 break;
             default:
