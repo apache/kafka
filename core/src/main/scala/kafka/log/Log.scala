@@ -775,17 +775,11 @@ class Log(@volatile var dir: File,
 
       // if this is a client produce request, there will be upto 5 batches which could have been duplicated.
       // If we find a duplicate, we return the metadata of the appended batch to the client.
-      if (isFromClient) {
-        maybeLastEntry match {
-          case Some(lastEntry) =>
-            lastEntry.duplicateOf(batch) match {
-              case Some(duplicateBatch) =>
-                return (updatedProducers, completedTxns.toList, Option(duplicateBatch))
-              case _ =>
-            }
-          case _ =>
+      if (isFromClient)
+        maybeLastEntry.flatMap(_.duplicateOf(batch)).foreach { duplicate =>
+          return (updatedProducers, completedTxns.toList, Some(duplicate))
         }
-      }
+
       val maybeCompletedTxn = updateProducers(batch, updatedProducers, loadingFromLog = false)
       maybeCompletedTxn.foreach(completedTxns += _)
     }

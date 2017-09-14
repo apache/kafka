@@ -1050,10 +1050,10 @@ public class SenderTest {
         assertFalse(client.hasInFlightRequests());
         Deque<ProducerBatch> batches = accumulator.batches().get(tp0);
         assertEquals(0, batches.size());
-        assertTrue(transactionManager.hasProducerId());
-
-        sender.run(time.milliseconds());  // we should reset the producer state.
-        assertFalse(transactionManager.hasProducerId());
+        assertTrue(transactionManager.hasProducerId(producerId));
+        // We should now clear the old producerId and get a new one in a single run loop.
+        prepareAndReceiveInitProducerId(producerId + 1, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId(producerId + 1));
     }
 
     @Test

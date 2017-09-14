@@ -75,6 +75,7 @@ public final class ProducerBatch {
     private long drainedMs;
     private String expiryErrorMessage;
     private boolean retry;
+    private boolean reopened = false;
 
     public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long now) {
         this(tp, recordsBuilder, now, false);
@@ -388,7 +389,8 @@ public final class ProducerBatch {
     }
 
     public void resetProducerState(ProducerIdAndEpoch producerIdAndEpoch, int baseSequence, boolean isTransactional) {
-        recordsBuilder.reopenAndResetProducerState(producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, baseSequence, isTransactional);
+        reopened = true;
+        recordsBuilder.reopenAndRewriteProducerState(producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, baseSequence, isTransactional);
     }
 
     /**
@@ -406,6 +408,7 @@ public final class ProducerBatch {
                                                        recordsBuilder.compressionType(),
                                                        (float) recordsBuilder.compressionRatio());
         }
+        reopened = false;
     }
 
     /**
@@ -460,7 +463,7 @@ public final class ProducerBatch {
     }
 
     public boolean sequenceHasBeenReset() {
-        return recordsBuilder.isReopened();
+        return reopened;
     }
 
 }

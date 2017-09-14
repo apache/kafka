@@ -200,13 +200,17 @@ public class Sender implements Runnable {
      */
     void run(long now) {
         if (transactionManager != null) {
+            if (transactionManager.shouldResetProducerStateAfterResolvingSequences())
+                // Check if the previous run expired batches which requires a reset of the producer state.
+                transactionManager.resetProducerId();
+
             if (!transactionManager.isTransactional()) {
                 // this is an idempotent producer, so make sure we have a producer id
                 maybeWaitForProducerId();
-            } else if (transactionManager.isTransactional() && transactionManager.hasUnresolvedSequences() && !transactionManager.hasFatalError()) {
+            } else if (transactionManager.hasUnresolvedSequences() && !transactionManager.hasFatalError()) {
                 transactionManager.transitionToFatalError(new KafkaException("The client hasn't received acknowledgment for " +
                         "some previously sent messages and can no longer retry them. It isn't safe to continue."));
-            } else if (transactionManager.hasInFlightRequest() || maybeSendTransactionalRequest(now)) {
+            } else if (transactionManager.hasInFlightTransactionalRequest() || maybeSendTransactionalRequest(now)) {
                 // as long as there are outstanding transactional requests, we simply wait for them to return
                 client.poll(retryBackoffMs, now);
                 return;
@@ -348,7 +352,7 @@ public class Sender implements Runnable {
 
                     ClientRequest clientRequest = client.newClientRequest(targetNode.idString(),
                             requestBuilder, now, true, nextRequestHandler);
-                    transactionManager.setInFlightRequestCorrelationId(clientRequest.correlationId());
+                    transactionManager.setInFlightTransactionalRequestCorrelationId(clientRequest.correlationId());
                     log.debug("Sending transactional request {} to node {}", requestBuilder, targetNode);
 
                     client.send(clientRequest, now);
