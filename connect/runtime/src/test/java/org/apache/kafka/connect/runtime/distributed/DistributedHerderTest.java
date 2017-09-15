@@ -167,7 +167,6 @@ public class DistributedHerderTest {
     public void setUp() throws Exception {
         worker = PowerMock.createMock(Worker.class);
         EasyMock.expect(worker.isSinkConnector(CONN1)).andStubReturn(Boolean.FALSE);
-        EasyMock.expect(worker.connectorType(BogusSourceConnector.class.getName())).andReturn(ConnectorType.SOURCE).anyTimes();
         time = new MockTime();
 
         herder = PowerMock.createPartialMock(DistributedHerder.class, new String[]{"backoff", "updateDeletedConnectorStatus"},
@@ -176,6 +175,7 @@ public class DistributedHerderTest {
         configUpdateListener = herder.new ConfigUpdateListener();
         rebalanceListener = herder.new RebalanceListener();
         plugins = PowerMock.createMock(Plugins.class);
+        EasyMock.expect(plugins.connectorType(BogusSourceConnector.class.getName())).andReturn(ConnectorType.SOURCE).anyTimes();
         pluginLoader = PowerMock.createMock(PluginClassLoader.class);
         delegatingLoader = PowerMock.createMock(DelegatingClassLoader.class);
         PowerMock.mockStatic(Plugins.class);
@@ -1208,6 +1208,7 @@ public class DistributedHerderTest {
     @Test
     public void testAccessors() throws Exception {
         EasyMock.expect(member.memberId()).andStubReturn("leader");
+        EasyMock.expect(worker.getPlugins()).andReturn(plugins).anyTimes();
         expectRebalance(1, Collections.<String>emptyList(), Collections.<ConnectorTaskId>emptyList());
         expectPostRebalanceCatchup(SNAPSHOT);
 
@@ -1272,7 +1273,7 @@ public class DistributedHerderTest {
 
         // config validation
         Connector connectorMock = PowerMock.createMock(Connector.class);
-        EasyMock.expect(worker.getPlugins()).andReturn(plugins).times(5);
+        EasyMock.expect(worker.getPlugins()).andReturn(plugins).anyTimes();
         EasyMock.expect(plugins.compareAndSwapLoaders(connectorMock)).andReturn(delegatingLoader);
         EasyMock.expect(plugins.newConnector(EasyMock.anyString())).andReturn(connectorMock);
         EasyMock.expect(connectorMock.config()).andReturn(new ConfigDef());
