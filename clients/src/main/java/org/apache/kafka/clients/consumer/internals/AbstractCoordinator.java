@@ -167,8 +167,9 @@ public abstract class AbstractCoordinator implements Closeable {
      * cleanup from the previous generation (such as committing offsets for the consumer)
      * @param generation The previous generation or -1 if there was none
      * @param memberId The identifier of this member in the previous group or "" if there was none
+     * @return 
      */
-    protected abstract void onJoinPrepare(int generation, String memberId);
+    protected abstract Exception onJoinPrepare(int generation, String memberId);
 
     /**
      * Perform assignment for the group. This is used by the leader to push state to all the members
@@ -354,8 +355,9 @@ public abstract class AbstractCoordinator implements Closeable {
             // on each iteration of the loop because an event requiring a rebalance (such as a metadata
             // refresh which changes the matched subscription set) can occur while another rebalance is
             // still in progress.
+            Exception onJoinPrepareException = null;
             if (needsJoinPrepare) {
-                onJoinPrepare(generation.generationId, generation.memberId);
+                onJoinPrepareException = onJoinPrepare(generation.generationId, generation.memberId);
                 needsJoinPrepare = false;
             }
 
@@ -363,7 +365,9 @@ public abstract class AbstractCoordinator implements Closeable {
             client.poll(future);
 
             if (future.succeeded()) {
-                onJoinComplete(generation.generationId, generation.memberId, generation.protocol, future.value());
+                if (onJoinPrepareException == null) {
+                    onJoinComplete(generation.generationId, generation.memberId, generation.protocol, future.value());
+                }
 
                 // We reset the join group future only after the completion callback returns. This ensures
                 // that if the callback is woken up, we will retry it on the next joinGroupIfNeeded.
