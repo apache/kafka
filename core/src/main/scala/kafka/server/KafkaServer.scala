@@ -598,7 +598,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
       } catch {
         case e : IOException =>
           offlineDirs += logDir
-          error(s"Fail to read ${brokerMetaPropsFile} under log directory ${logDir}", e)
+          error(s"Fail to read $brokerMetaPropsFile under log directory $logDir", e)
       }
     }
 
