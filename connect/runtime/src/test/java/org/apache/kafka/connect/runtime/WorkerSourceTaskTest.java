@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import com.sun.xml.internal.ws.util.CompletedFuture;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -34,6 +33,7 @@ import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.TestFuture;
 import org.apache.kafka.connect.util.ThreadedTest;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
@@ -263,7 +263,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
             @Override
             public Future<Void> answer() throws Throwable {
                 polledRecordsAndOffsetCaptures.addCurrentlyWrittenOffsets(writtenAndFlushedOffsets);
-                return new CompletedFuture<>(null, null);
+                TestFuture<Void> future = new TestFuture<Void>();
+                future.resolveOnGet((Void)null);
+                return future;
             }
         });
         final List<List<SourceRecord>> polledRecordAtTimeOfCommit = new ArrayList<>();
