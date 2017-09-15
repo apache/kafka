@@ -657,15 +657,13 @@ public class TransactionManager {
         return currentState == State.IN_TRANSACTION || isCompleting() || hasAbortableError();
     }
 
-
     synchronized boolean canRetry(ProduceResponse.PartitionResponse response, ProducerBatch batch) {
         if (!hasProducerId(batch.producerId()))
             return false;
 
         Errors error = response.error;
-        if (error == Errors.OUT_OF_ORDER_SEQUENCE_NUMBER &&
-                (batch.sequenceHasBeenReset() || (!hasUnresolvedSequence(batch.topicPartition)
-                        && !isNextSequence(batch.topicPartition, batch.baseSequence()))))
+        if (error == Errors.OUT_OF_ORDER_SEQUENCE_NUMBER && !hasUnresolvedSequence(batch.topicPartition) &&
+                (batch.sequenceHasBeenReset() || !isNextSequence(batch.topicPartition, batch.baseSequence())))
             return true;
 
         long lastOffset = -1;
