@@ -20,7 +20,7 @@ then
   exit 1
 fi
 
-# CYGINW == 1 if Cygwin is detected, else 0.
+# CYGWIN == 1 if Cygwin is detected, else 0.
 if [[ $(uname -a) =~ "CYGWIN" ]]; then
   CYGWIN=1
 else
@@ -32,7 +32,7 @@ if [ -z "$INCLUDE_TEST_JARS" ]; then
 fi
 
 # Exclude jars not necessary for running commands.
-regex="(-(test|src|scaladoc|javadoc)\.jar|jar.asc)$"
+regex="(-(test|sources|scaladoc|javadoc)\.jar|jar.asc)$"
 should_include_file() {
   if [ "$INCLUDE_TEST_JARS" = true ]; then
     return 0
@@ -66,28 +66,15 @@ do
   fi
 done
 
-for file in "$base_dir"/examples/build/libs/kafka-examples*.jar;
-do
-  if should_include_file "$file"; then
-    CLASSPATH="$CLASSPATH":"$file"
-  fi
-done
+files=("$base_dir"/examples/build/libs/kafka-examples*.jar
+        "$base_dir"/clients/build/libs/kafka-clients*.jar
+        "$base_dir"/streams/build/libs/kafka-streams*.jar
+        "$base_dir"/streams/examples/build/libs/kafka-streams-examples*.jar
+        "$base_dir"/tools/build/libs/kafka-tools*.jar
+        "$base_dir"/libs/* # classpath addition for release
+        "$base_dir"/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar)
 
-for file in "$base_dir"/clients/build/libs/kafka-clients*.jar;
-do
-  if should_include_file "$file"; then
-    CLASSPATH="$CLASSPATH":"$file"
-  fi
-done
-
-for file in "$base_dir"/streams/build/libs/kafka-streams*.jar;
-do
-  if should_include_file "$file"; then
-    CLASSPATH="$CLASSPATH":"$file"
-  fi
-done
-
-for file in "$base_dir"/streams/examples/build/libs/kafka-streams-examples*.jar;
+for file in ${files[*]}
 do
   if should_include_file "$file"; then
     CLASSPATH="$CLASSPATH":"$file"
@@ -97,13 +84,6 @@ done
 for file in "$base_dir"/streams/build/dependant-libs-${SCALA_VERSION}/rocksdb*.jar;
 do
   CLASSPATH="$CLASSPATH":"$file"
-done
-
-for file in "$base_dir"/tools/build/libs/kafka-tools*.jar;
-do
-  if should_include_file "$file"; then
-    CLASSPATH="$CLASSPATH":"$file"
-  fi
 done
 
 for dir in "$base_dir"/tools/build/dependant-libs-${SCALA_VERSION}*;
@@ -119,35 +99,21 @@ do
       CLASSPATH="$CLASSPATH":"$file"
     fi
   done
-  if [ -d "$base_dir/connect/${cc_pkg}/build/dependant-libs" ] ; then
+  if [ -d "$base_dir/connect/${cc_pkg}/build/dependant-libs" ]; then
     CLASSPATH="$CLASSPATH:$base_dir/connect/${cc_pkg}/build/dependant-libs/*"
   fi
 done
 
-# classpath addition for release
-for file in "$base_dir"/libs/*;
-do
-  if should_include_file "$file"; then
-    CLASSPATH="$CLASSPATH":"$file"
-  fi
-done
-
-for file in "$base_dir"/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar;
-do
-  if should_include_file "$file"; then
-    CLASSPATH="$CLASSPATH":"$file"
-  fi
-done
 shopt -u nullglob
 
-if [ -z "$CLASSPATH" ] ; then
+if [ -z "$CLASSPATH" ]; then
   echo "Classpath is empty. Please build the project first e.g. by running './gradlew jar -Pscala_version=$SCALA_VERSION'"
   exit 1
 fi
 
 # JMX settings
 if [ -z "$KAFKA_JMX_OPTS" ]; then
-  KAFKA_JMX_OPTS="-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false  -Dcom.sun.management.jmxremote.ssl=false "
+  KAFKA_JMX_OPTS="-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false "
 fi
 
 # JMX port to use
