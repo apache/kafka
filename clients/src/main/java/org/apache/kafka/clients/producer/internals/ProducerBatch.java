@@ -75,6 +75,7 @@ public final class ProducerBatch {
     private long drainedMs;
     private String expiryErrorMessage;
     private boolean retry;
+    private boolean reopened = false;
 
     public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long now) {
         this(tp, recordsBuilder, now, false);
@@ -249,6 +250,15 @@ public final class ProducerBatch {
 
         produceFuture.set(ProduceResponse.INVALID_OFFSET, NO_TIMESTAMP, new RecordBatchTooLargeException());
         produceFuture.done();
+
+        if (hasSequence()) {
+            int sequence = baseSequence();
+            ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId(), producerEpoch());
+            for (ProducerBatch newBatch : batches) {
+                newBatch.setProducerState(producerIdAndEpoch, sequence, isTransactional());
+                sequence += newBatch.recordCount;
+            }
+        }
         return batches;
     }
 
@@ -375,8 +385,12 @@ public final class ProducerBatch {
     }
 
     public void setProducerState(ProducerIdAndEpoch producerIdAndEpoch, int baseSequence, boolean isTransactional) {
-        recordsBuilder.setProducerState(producerIdAndEpoch.producerId, producerIdAndEpoch.epoch,
-                baseSequence, isTransactional);
+        recordsBuilder.setProducerState(producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, baseSequence, isTransactional);
+    }
+
+    public void resetProducerState(ProducerIdAndEpoch producerIdAndEpoch, int baseSequence, boolean isTransactional) {
+        reopened = true;
+        recordsBuilder.reopenAndRewriteProducerState(producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, baseSequence, isTransactional);
     }
 
     /**
@@ -394,6 +408,7 @@ public final class ProducerBatch {
                                                        recordsBuilder.compressionType(),
                                                        (float) recordsBuilder.compressionRatio());
         }
+        reopened = false;
     }
 
     /**
@@ -434,4 +449,21 @@ public final class ProducerBatch {
     public short producerEpoch() {
         return recordsBuilder.producerEpoch();
     }
+
+    public int baseSequence() {
+        return recordsBuilder.baseSequence();
+    }
+
+    public boolean hasSequence() {
+        return baseSequence() != RecordBatch.NO_SEQUENCE;
+    }
+
+    public boolean isTransactional() {
+        return recordsBuilder.isTransactional();
+    }
+
+    public boolean sequenceHasBeenReset() {
+        return reopened;
+    }
+
 }

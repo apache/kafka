@@ -19,6 +19,7 @@ package org.apache.kafka.common.security.ssl;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.config.types.Password;
 
@@ -97,7 +98,7 @@ public class SslFactory implements Configurable {
 
         String clientAuthConfig = clientAuthConfigOverride;
         if (clientAuthConfig == null)
-            clientAuthConfig = (String) configs.get(SslConfigs.SSL_CLIENT_AUTH_CONFIG);
+            clientAuthConfig = (String) configs.get(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG);
         if (clientAuthConfig != null) {
             if (clientAuthConfig.equals("required"))
                 this.needClientAuth = true;

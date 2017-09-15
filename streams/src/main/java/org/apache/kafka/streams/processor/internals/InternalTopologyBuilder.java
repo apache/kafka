@@ -898,54 +898,21 @@ public class InternalTopologyBuilder {
                 processorMap.put(node.name(), node);
 
                 if (factory instanceof ProcessorNodeFactory) {
-                    for (final String predecessor : ((ProcessorNodeFactory) factory).predecessors) {
-                        final ProcessorNode<?, ?> predecessorNode = processorMap.get(predecessor);
-                        predecessorNode.addChild(node);
-                    }
-                    for (final String stateStoreName : ((ProcessorNodeFactory) factory).stateStoreNames) {
-                        if (!stateStoreMap.containsKey(stateStoreName)) {
-                            if (stateFactories.containsKey(stateStoreName)) {
-                                final StateStoreFactory stateStoreFactory = stateFactories.get(stateStoreName);
+                    buildProcessorNode(processorMap,
+                                       stateStoreMap,
+                                       (ProcessorNodeFactory) factory,
+                                       node);
 
-                                // remember the changelog topic if this state store is change-logging enabled
-                                if (stateStoreFactory.loggingEnabled() && !storeToChangelogTopic.containsKey(stateStoreName)) {
-                                    final String changelogTopic = ProcessorStateManager.storeChangelogTopic(applicationId, stateStoreName);
-                                    storeToChangelogTopic.put(stateStoreName, changelogTopic);
-                                }
-                                stateStoreMap.put(stateStoreName, stateStoreFactory.build());
-                            } else {
-                                stateStoreMap.put(stateStoreName, globalStateStores.get(stateStoreName));
-                            }
-
-
-                        }
-                    }
                 } else if (factory instanceof SourceNodeFactory) {
-                    final SourceNodeFactory sourceNodeFactory = (SourceNodeFactory) factory;
-                    final List<String> topics = (sourceNodeFactory.pattern != null) ?
-                            sourceNodeFactory.getTopics(subscriptionUpdates.getUpdates()) :
-                            sourceNodeFactory.topics;
+                    buildSourceNode(topicSourceMap,
+                                    (SourceNodeFactory) factory,
+                                    (SourceNode) node);
 
-                    for (final String topic : topics) {
-                        if (internalTopicNames.contains(topic)) {
-                            // prefix the internal topic name with the application id
-                            topicSourceMap.put(decorateTopic(topic), (SourceNode) node);
-                        } else {
-                            topicSourceMap.put(topic, (SourceNode) node);
-                        }
-                    }
                 } else if (factory instanceof SinkNodeFactory) {
-                    final SinkNodeFactory sinkNodeFactory = (SinkNodeFactory) factory;
-
-                    for (final String predecessor : sinkNodeFactory.predecessors) {
-                        processorMap.get(predecessor).addChild(node);
-                        if (internalTopicNames.contains(sinkNodeFactory.topic)) {
-                            // prefix the internal topic name with the application id
-                            topicSinkMap.put(decorateTopic(sinkNodeFactory.topic), (SinkNode) node);
-                        } else {
-                            topicSinkMap.put(sinkNodeFactory.topic, (SinkNode) node);
-                        }
-                    }
+                    buildSinkNode(processorMap,
+                                  topicSinkMap,
+                                  (SinkNodeFactory) factory,
+                                  node);
                 } else {
                     throw new TopologyException("Unknown definition class: " + factory.getClass().getName());
                 }
@@ -953,6 +920,67 @@ public class InternalTopologyBuilder {
         }
 
         return new ProcessorTopology(processorNodes, topicSourceMap, topicSinkMap, new ArrayList<>(stateStoreMap.values()), storeToChangelogTopic, new ArrayList<>(globalStateStores.values()));
+    }
+
+    private void buildSinkNode(final Map<String, ProcessorNode> processorMap,
+                               final Map<String, SinkNode> topicSinkMap,
+                               final SinkNodeFactory sinkNodeFactory,
+                               final ProcessorNode node) {
+
+        for (final String predecessor : sinkNodeFactory.predecessors) {
+            processorMap.get(predecessor).addChild(node);
+            if (internalTopicNames.contains(sinkNodeFactory.topic)) {
+                // prefix the internal topic name with the application id
+                topicSinkMap.put(decorateTopic(sinkNodeFactory.topic), (SinkNode) node);
+            } else {
+                topicSinkMap.put(sinkNodeFactory.topic, (SinkNode) node);
+            }
+        }
+    }
+
+    private void buildSourceNode(final Map<String, SourceNode> topicSourceMap,
+                                 final SourceNodeFactory sourceNodeFactory,
+                                 final SourceNode node) {
+
+        final List<String> topics = (sourceNodeFactory.pattern != null) ?
+                                    sourceNodeFactory.getTopics(subscriptionUpdates.getUpdates()) :
+                                    sourceNodeFactory.topics;
+
+        for (final String topic : topics) {
+            if (internalTopicNames.contains(topic)) {
+                // prefix the internal topic name with the application id
+                topicSourceMap.put(decorateTopic(topic), node);
+            } else {
+                topicSourceMap.put(topic, node);
+            }
+        }
+    }
+
+    private void buildProcessorNode(final Map<String, ProcessorNode> processorMap,
+                                    final Map<String, StateStore> stateStoreMap,
+                                    final ProcessorNodeFactory factory,
+                                    final ProcessorNode node) {
+
+        for (final String predecessor : factory.predecessors) {
+            final ProcessorNode<?, ?> predecessorNode = processorMap.get(predecessor);
+            predecessorNode.addChild(node);
+        }
+        for (final String stateStoreName : factory.stateStoreNames) {
+            if (!stateStoreMap.containsKey(stateStoreName)) {
+                if (stateFactories.containsKey(stateStoreName)) {
+                    final StateStoreFactory stateStoreFactory = stateFactories.get(stateStoreName);
+
+                    // remember the changelog topic if this state store is change-logging enabled
+                    if (stateStoreFactory.loggingEnabled() && !storeToChangelogTopic.containsKey(stateStoreName)) {
+                        final String changelogTopic = ProcessorStateManager.storeChangelogTopic(applicationId, stateStoreName);
+                        storeToChangelogTopic.put(stateStoreName, changelogTopic);
+                    }
+                    stateStoreMap.put(stateStoreName, stateStoreFactory.build());
+                } else {
+                    stateStoreMap.put(stateStoreName, globalStateStores.get(stateStoreName));
+                }
+            }
+        }
     }
 
     /**

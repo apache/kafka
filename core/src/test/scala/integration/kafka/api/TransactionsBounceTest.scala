@@ -24,11 +24,14 @@ import kafka.server.KafkaConfig
 import kafka.utils.{ShutdownableThread, TestUtils}
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.Test
 
 import scala.collection.JavaConverters._
 import org.junit.Assert._
+
+import scala.collection.mutable
 
 
 class TransactionsBounceTest extends KafkaServerTestHarness {
@@ -76,12 +79,12 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
     // basic idea is to seed a topic with 10000 records, and copy it transactionally while bouncing brokers
     // constantly through the period.
     val consumerGroup = "myGroup"
-    val numInputRecords = 5000
+    val numInputRecords = 10000
     createTopics()
 
     TestUtils.seedTopicWithNumberedRecords(inputTopic, numInputRecords, servers)
     val consumer = createConsumerAndSubscribeToTopics(consumerGroup, List(inputTopic))
-    val producer = TestUtils.createTransactionalProducer("test-txn", servers)
+    val producer = TestUtils.createTransactionalProducer("test-txn", servers, 512)
 
     producer.initTransactions()
 
@@ -125,9 +128,20 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
     scheduler.shutdown()
 
     val verifyingConsumer = createConsumerAndSubscribeToTopics("randomGroup", List(outputTopic), readCommitted = true)
-    val outputRecords = TestUtils.pollUntilAtLeastNumRecords(verifyingConsumer, numInputRecords).map { record =>
-      TestUtils.assertCommittedAndGetValue(record).toInt
+    val recordsByPartition = new mutable.HashMap[TopicPartition, mutable.ListBuffer[Int]]()
+    TestUtils.pollUntilAtLeastNumRecords(verifyingConsumer, numInputRecords).foreach { record =>
+      val value = TestUtils.assertCommittedAndGetValue(record).toInt
+      val topicPartition = new TopicPartition(record.topic(), record.partition())
+      recordsByPartition.getOrElseUpdate(topicPartition, new mutable.ListBuffer[Int])
+        .append(value)
     }
+
+    val outputRecords = new mutable.ListBuffer[Int]()
+    recordsByPartition.values.foreach { case (partitionValues) =>
+      assertEquals("Out of order messages detected", partitionValues, partitionValues.sorted)
+      outputRecords.appendAll(partitionValues)
+    }
+
     val recordSet = outputRecords.toSet
     assertEquals(numInputRecords, recordSet.size)
 

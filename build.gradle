@@ -193,6 +193,20 @@ subprojects {
   def testShowStandardStreams = false
   def testExceptionFormat = 'full'
 
+  // Exclude PowerMock tests when running with Java 9 until a version of PowerMock that supports Java 9 is released
+  // The relevant issue is https://github.com/powermock/powermock/issues/783
+  String[] testsToExclude = []
+  if (JavaVersion.current().isJava9Compatible()) {
+    testsToExclude = [
+      "**/KafkaProducerTest.*", "**/BufferPoolTest.*",
+      "**/SourceTaskOffsetCommitterTest.*", "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*",
+      "**/WorkerSourceTaskTest.*", "**/WorkerTest.*", "**/DistributedHerderTest.*", "**/WorkerCoordinatorTest.*",
+      "**/RestServerTest.*", "**/ConnectorPluginsResourceTest.*", "**/ConnectorsResourceTest.*",
+      "**/StandaloneHerderTest.*", "**/FileOffsetBakingStoreTest.*", "**/KafkaConfigBackingStoreTest.*",
+      "**/KafkaOffsetBackingStoreTest.*", "**/OffsetStorageWriterTest.*", "**/KafkaBasedLogTest.*"
+    ]
+  }
+
   test {
     maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
 
@@ -206,6 +220,7 @@ subprojects {
       exceptionFormat = testExceptionFormat
     }
 
+    exclude(testsToExclude)
   }
 
   task integrationTest(type: Test, dependsOn: compileJava) {
@@ -220,9 +235,13 @@ subprojects {
       showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
       exceptionFormat = testExceptionFormat
     }
+
     useJUnit {
       includeCategories 'org.apache.kafka.test.IntegrationTest'
     }
+
+    exclude(testsToExclude)
+
   }
 
   task unitTest(type: Test, dependsOn: compileJava) {
@@ -237,9 +256,12 @@ subprojects {
       showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
       exceptionFormat = testExceptionFormat
     }
+
     useJUnit {
       excludeCategories 'org.apache.kafka.test.IntegrationTest'
     }
+
+    exclude(testsToExclude)
   }
 
   jar {
