@@ -18,6 +18,11 @@
 package kafka.controller
 
 import kafka.utils.Logging
+import org.slf4j.LoggerFactory
+
+object StateChangeLogger {
+  private val Logger = LoggerFactory.getLogger("state.change.logger")
+}
 
 /**
  * Simple class that sets `logIdent` appropriately depending on whether the state change logger is being used in the
@@ -29,7 +34,7 @@ class StateChangeLogger(brokerId: Int, inControllerContext: Boolean, controllerE
   if (controllerEpoch.isDefined && !inControllerContext)
     throw new IllegalArgumentException("Controller epoch should only be defined if inControllerContext is true")
 
-  override val loggerName = "state.change.logger"
+  override val logger = StateChangeLogger.Logger
 
   locally {
     val prefix = if (inControllerContext) "Controller" else "Broker"
@@ -37,5 +42,7 @@ class StateChangeLogger(brokerId: Int, inControllerContext: Boolean, controllerE
     logIdent = s"[$prefix id=$brokerId$epochEntry] "
   }
 
-  def withControllerEpoch(controllerEpoch: Int) = new StateChangeLogger(brokerId, inControllerContext, Some(controllerEpoch))
+  def withControllerEpoch(controllerEpoch: Int): StateChangeLogger =
+    new StateChangeLogger(brokerId, inControllerContext, Some(controllerEpoch))
+
 }
