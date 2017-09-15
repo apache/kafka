@@ -365,10 +365,6 @@ public final class RecordAccumulator {
             throw new IllegalStateException("We are reenqueueing a batch which is not tracked as part of the in flight " +
                     "requests. batch.topicPartition: " + batch.topicPartition + "; batch.baseSequence: " + batch.baseSequence());
 
-        // If there are no inflight batches being tracked by the transaction manager, it means that the producer
-        // id must have changed and the batches being re enqueued are from the old producer id. In this case
-        // we don't try to ensure ordering amongst them. They will eventually fail with an OutOfOrderSequence,
-        // or they will succeed.
         if (batch.baseSequence() != transactionManager.nextBatchBySequence(batch.topicPartition).baseSequence()) {
             // The incoming batch can't be inserted at the front of the queue without violating the sequence ordering.
             // This means that the incoming batch should be placed somewhere further back.

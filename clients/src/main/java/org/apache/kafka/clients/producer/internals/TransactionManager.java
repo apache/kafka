@@ -396,6 +396,7 @@ public class TransactionManager {
         this.lastAckedSequence.clear();
         this.inflightBatchesBySequence.clear();
         this.partitionsWithUnresolvedSequences.clear();
+        this.lastAckedOffset.clear();
     }
 
     /**
@@ -460,13 +461,19 @@ public class TransactionManager {
         return currentLastAckedSequence;
     }
 
-    synchronized void updateLastAckedOffset(ProducerBatch batch) {
-        long currentOffset = -1;
-        if (lastAckedOffset.containsKey(batch.topicPartition))
-            currentOffset = lastAckedOffset.get(batch.topicPartition);
+    synchronized long lastAckedOffset(TopicPartition topicPartition) {
+        Long offset = lastAckedOffset.get(topicPartition);
+        if (offset == null)
+            return -1;
+        return offset;
+    }
 
-        if (batch.lastOffset() > currentOffset)
-            lastAckedOffset.put(batch.topicPartition, batch.lastOffset());
+    synchronized void updateLastAckedOffset(ProduceResponse.PartitionResponse response, ProducerBatch batch) {
+        if (response.baseOffset == ProduceResponse.INVALID_OFFSET)
+            return;
+        long lastOffset = response.baseOffset + batch.recordCount - 1;
+        if (lastOffset > lastAckedOffset(batch.topicPartition))
+            lastAckedOffset.put(batch.topicPartition, lastOffset);
     }
 
     // If a batch is failed fatally, the sequence numbers for future batches bound for the partition must be adjusted
@@ -504,11 +511,15 @@ public class TransactionManager {
     private synchronized void startSequencesAtBeginning(TopicPartition topicPartition) {
         int sequence = 0;
         for (ProducerBatch inFlightBatch : inflightBatchesBySequence.get(topicPartition)) {
+            log.info("Resetting sequence number of batch with current sequence {} for partition {} to {}",
+                    inFlightBatch.baseSequence(), inFlightBatch.topicPartition, sequence);
             inFlightBatch.resetProducerState(new ProducerIdAndEpoch(inFlightBatch.producerId(),
                     inFlightBatch.producerEpoch()), sequence, inFlightBatch.isTransactional());
+
             sequence += inFlightBatch.recordCount;
         }
         setNextSequence(topicPartition, sequence);
+        lastAckedSequence.remove(topicPartition);
     }
 
     synchronized boolean hasInflightBatches(TopicPartition topicPartition) {
@@ -675,18 +686,17 @@ public class TransactionManager {
             return true;
 
         if (error == Errors.UNKNOWN_PRODUCER) {
-            if (lastOffset < response.logStartOffset) {
+            if (batch.sequenceHasBeenReset()) {
+                // When the first inflight batch fails due to the truncation case, then the sequences of all the other
+                // in flight batches would have been restarted from the beginning. However, when those responses
+                // come back from the broker, they would also come with an UNKNOWN_PRODUCER error. In this case, we should not
+                // reset the sequence numbers to the beginning.
+                return true;
+            } else if (lastOffset < response.logStartOffset) {
                 // The head of the log has been removed, probably due to the retention time elapsing. In this case,
                 // we expect to lose the producer state. Reset the sequences of all inflight batches to be from the beginning
                 // and retry them.
                 startSequencesAtBeginning(batch.topicPartition);
-                return true;
-            } else if (batch.sequenceHasBeenReset()) {
-                // When the first inflight batch fails due to the truncation case, then the sequences of all the other
-                // in flight batches would have been restarted from the beginning. However, when those responses
-                // come back from the broker, they would also come with an UNKNOWN_PRODUCER error, and the logStartOffset
-                // will actually be less than the lastAckedOffset for the partition (since a previous batch was successfully
-                // appended). However, the batch should still be retried. This is what is achieved in the current branch.
                 return true;
             }
         }

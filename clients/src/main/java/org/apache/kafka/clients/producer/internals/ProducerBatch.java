@@ -466,8 +466,4 @@ public final class ProducerBatch {
         return reopened;
     }
 
-    public long lastOffset() {
-        return recordsBuilder.lastOffset();
-    }
-
 }
