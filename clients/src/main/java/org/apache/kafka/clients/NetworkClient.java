@@ -18,6 +18,7 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelState;
@@ -313,6 +314,18 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
+     * Check if authentication to this node has failed, based on the connection state. Authentication failures are
+     * permanent and should not be resumed in the next {@link #ready(org.apache.kafka.common.Node, long)} } call.
+     *
+     * @param node the node to check
+     * @return an ApiException iff authentication has failed, null otherwise
+     */
+    @Override
+    public ApiException authenticationException(Node node) {
+        return connectionStates.authenticationException(node.idString());
+    }
+
+    /**
      * Check if the node with the given id is ready to send more requests.
      *
      * @param node The node
@@ -589,6 +602,7 @@ public class NetworkClient implements KafkaClient {
         nodesNeedingApiVersionsFetch.remove(nodeId);
         switch (disconnectState.state()) {
             case AUTHENTICATION_FAILED:
+                connectionStates.authenticationFailed(nodeId, now, Errors.AUTHENTICATION_FAILED.exception());
                 log.error("Connection to node {} failed authentication due to: {}", nodeId, disconnectState.exception().getMessage());
                 break;
             case AUTHENTICATE:
@@ -597,6 +611,7 @@ public class NetworkClient implements KafkaClient {
                         "that authentication failed due to invalid credentials.", nodeId);
                 break;
             case NOT_CONNECTED:
+                connectionStates.disconnected(nodeId, now);
                 log.warn("Connection to node {} could not be established. Broker may not be available.", nodeId);
                 break;
             default:
@@ -610,6 +625,9 @@ public class NetworkClient implements KafkaClient {
             else
                 responses.add(request.disconnected(now));
         }
+        ApiException authenticationException = connectionStates.authenticationException(nodeId);
+        if (authenticationException != null)
+            metadataUpdater.handleAuthenticationFailure(authenticationException);
     }
 
     /**
@@ -848,6 +866,13 @@ public class NetworkClient implements KafkaClient {
         }
 
         @Override
+        public void handleAuthenticationFailure(ApiException exception) {
+            metadataFetchInProgress = false;
+            if (metadata.updateRequested())
+                metadata.failedUpdate(time.milliseconds(), exception);
+        }
+
+        @Override
         public void handleCompletedMetadataResponse(RequestHeader requestHeader, long now, MetadataResponse response) {
             this.metadataFetchInProgress = false;
             Cluster cluster = response.cluster();
@@ -862,7 +887,7 @@ public class NetworkClient implements KafkaClient {
                 this.metadata.update(cluster, response.unavailableTopics(), now);
             } else {
                 log.trace("Ignoring empty metadata response with correlation id {}.", requestHeader.correlationId());
-                this.metadata.failedUpdate(now);
+                this.metadata.failedUpdate(now, null);
             }
         }
 

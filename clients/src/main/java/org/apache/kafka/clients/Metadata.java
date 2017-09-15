@@ -20,6 +20,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,6 +60,7 @@ public final class Metadata {
     private int version;
     private long lastRefreshMs;
     private long lastSuccessfulRefreshMs;
+    private ApiException nonRetriableException;
     private Cluster cluster;
     private boolean needUpdate;
     /* Topics with expiry time */
@@ -150,13 +152,22 @@ public final class Metadata {
      */
     public synchronized void awaitUpdate(final int lastVersion, final long maxWaitMs) throws InterruptedException {
         if (maxWaitMs < 0) {
-            throw new IllegalArgumentException("Max time to wait for metadata updates should not be < 0 milli seconds");
+            throw new IllegalArgumentException("Max time to wait for metadata updates should not be < 0 milliseconds");
         }
         long begin = System.currentTimeMillis();
         long remainingWaitMs = maxWaitMs;
         while (this.version <= lastVersion) {
-            if (remainingWaitMs != 0)
+            nonRetriableException = null;
+            if (remainingWaitMs != 0) {
                 wait(remainingWaitMs);
+                if (nonRetriableException != null) {
+                    ApiException exception = nonRetriableException;
+                    topics.clear();
+                    this.needUpdate = false;
+                    nonRetriableException = null;
+                    throw exception;
+                }
+            }
             long elapsed = System.currentTimeMillis() - begin;
             if (elapsed >= maxWaitMs)
                 throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
@@ -256,8 +267,11 @@ public final class Metadata {
      * Record an attempt to update the metadata that failed. We need to keep track of this
      * to avoid retrying immediately.
      */
-    public synchronized void failedUpdate(long now) {
+    public synchronized void failedUpdate(long now, ApiException nonRetriableException) {
         this.lastRefreshMs = now;
+        this.nonRetriableException = nonRetriableException;
+        if (nonRetriableException != null)
+            this.notifyAll();
     }
 
     /**

@@ -17,6 +17,7 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 
@@ -65,6 +66,11 @@ public class ManualMetadataUpdater implements MetadataUpdater {
 
     @Override
     public void handleDisconnection(String destination) {
+        // Do nothing
+    }
+
+    @Override
+    public void handleAuthenticationFailure(ApiException exception) {
         // Do nothing
     }
 

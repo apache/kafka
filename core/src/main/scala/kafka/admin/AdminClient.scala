@@ -26,7 +26,7 @@ import org.apache.kafka.clients._
 import org.apache.kafka.clients.consumer.internals.{ConsumerNetworkClient, ConsumerProtocol, RequestFuture, RequestFutureAdapter}
 import org.apache.kafka.common.config.ConfigDef.{Importance, Type}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
-import org.apache.kafka.common.errors.TimeoutException
+import org.apache.kafka.common.errors.{ApiException, TimeoutException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.Selector
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -52,15 +52,28 @@ class AdminClient(val time: Time,
                   val bootstrapBrokers: List[Node]) extends Logging {
 
   @volatile var running: Boolean = true
+  @volatile var nonRetriableException: Option[ApiException] = null
   val pendingFutures = new ConcurrentLinkedQueue[RequestFuture[ClientResponse]]()
 
   val networkThread = new KafkaThread("admin-client-network-thread", new Runnable {
     override def run() {
       try {
         while (running) {
+          var authenticationPerformed = true
           client.poll(Long.MaxValue)
+          bootstrapBrokers.foreach { broker =>
+            val apiException = client.authenticationFailed(broker)
+            if (apiException != null)
+              throw apiException
+            if (!client.isReady(broker))
+              authenticationPerformed = false
+          }
+          if (authenticationPerformed)
+            nonRetriableException = None
         }
       } catch {
+        case e : ApiException =>
+          nonRetriableException = Some(e)
         case t : Throwable =>
           error("admin-client-network-thread exited", t)
       } finally {
@@ -77,6 +90,8 @@ class AdminClient(val time: Time,
   }, true)
 
   networkThread.start()
+
+  def getNonRetriableException = this.nonRetriableException
 
   private def send(target: Node,
                    api: ApiKeys,
@@ -478,11 +493,20 @@ object AdminClient {
       retryBackoffMs,
       requestTimeoutMs.toLong)
 
-    new AdminClient(
+    val adminClient = new AdminClient(
       time,
       requestTimeoutMs,
       retryBackoffMs,
       highLevelClient,
       bootstrapCluster.nodes.asScala.toList)
+
+    // wait until an necessary authentication is performed
+    while (adminClient.getNonRetriableException == null)
+      Thread.sleep(retryBackoffMs)
+
+    if (adminClient.getNonRetriableException.isDefined)
+      throw adminClient.getNonRetriableException.get
+
+    adminClient
   }
 }

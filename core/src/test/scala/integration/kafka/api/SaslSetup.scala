@@ -100,6 +100,24 @@ trait SaslSetup {
     }
   }
 
+  protected def jaasSectionsInvalidClientCredentials(kafkaServerSaslMechanisms: Seq[String],
+                                                     kafkaClientSaslMechanism: Option[String],
+                                                     mode: SaslSetupMode = Both,
+                                                     kafkaServerEntryName: String = JaasTestUtils.KafkaServerContextName): Seq[JaasSection] = {
+    val hasKerberos = mode != ZkSasl &&
+      (kafkaServerSaslMechanisms.contains("GSSAPI") || kafkaClientSaslMechanism.exists(_ == "GSSAPI"))
+    if (hasKerberos)
+      maybeCreateEmptyKeytabFiles()
+    mode match {
+      case ZkSasl => JaasTestUtils.zkSectionsInvalidCredentials
+      case KafkaSasl =>
+        Seq(JaasTestUtils.kafkaServerSection(kafkaServerEntryName, kafkaServerSaslMechanisms, serverKeytabFile),
+          JaasTestUtils.kafkaClientSectionInvalidCredentials(kafkaClientSaslMechanism, clientKeytabFile))
+      case Both => Seq(JaasTestUtils.kafkaServerSection(kafkaServerEntryName, kafkaServerSaslMechanisms, serverKeytabFile),
+        JaasTestUtils.kafkaClientSectionInvalidCredentials(kafkaClientSaslMechanism, clientKeytabFile)) ++ JaasTestUtils.zkSections
+    }
+  }
+
   private def writeJaasConfigurationToFile(jaasSections: Seq[JaasSection]) {
     val file = JaasTestUtils.writeJaasContextsToFile(jaasSections)
     System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, file.getAbsolutePath)

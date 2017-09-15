@@ -419,6 +419,8 @@ object ConsumerGroupCommand extends Logging {
     // `consumer` is only needed for `describe`, so we instantiate it lazily
     private var consumer: KafkaConsumer[String, String] = null
 
+    def getNonRetriableException = adminClient.getNonRetriableException
+
     def listGroups(): List[String] = {
       adminClient.listAllConsumerGroupsFlattened().map(_.groupId)
     }

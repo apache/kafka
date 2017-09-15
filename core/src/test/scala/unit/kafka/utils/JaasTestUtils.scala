@@ -107,8 +107,10 @@ object JaasTestUtils {
   private val ZkServerContextName = "Server"
   private val ZkClientContextName = "Client"
   private val ZkUserSuperPasswd = "adminpasswd"
+  private val ZkUserSuperPasswdInvalid = "adminpasswd-invalid"
   private val ZkUser = "fpj"
   private val ZkUserPassword = "fpjsecret"
+  private val ZkUserPasswordInvalid = "fpjsecret-invalid"
 
   val KafkaServerContextName = "KafkaServer"
   val KafkaServerPrincipalUnqualifiedName = "kafka"
@@ -118,11 +120,12 @@ object JaasTestUtils {
   private val KafkaClientPrincipal = KafkaClientPrincipalUnqualifiedName + "@EXAMPLE.COM"
   val KafkaClientPrincipalUnqualifiedName2 = "client2"
   private val KafkaClientPrincipal2 = KafkaClientPrincipalUnqualifiedName2 + "@EXAMPLE.COM"
-  
+
   val KafkaPlainUser = "plain-user"
   private val KafkaPlainPassword = "plain-user-secret"
   val KafkaPlainUser2 = "plain-user2"
   val KafkaPlainPassword2 = "plain-user2-secret"
+  val KafkaPlainPassword2Invalid = "plain-user2-secret-invalid"
   val KafkaPlainAdmin = "plain-admin"
   private val KafkaPlainAdminPassword = "plain-admin-secret"
 
@@ -130,6 +133,7 @@ object JaasTestUtils {
   val KafkaScramPassword = "scram-user-secret"
   val KafkaScramUser2 = "scram-user2"
   val KafkaScramPassword2 = "scram-user2-secret"
+  val KafkaScramPassword2Invalid = "scram-user2-secret-invalid"
   val KafkaScramAdmin = "scram-admin"
   val KafkaScramAdminPassword = "scram-admin-secret"
 
@@ -164,6 +168,13 @@ object JaasTestUtils {
       Map("username" -> ZkUser, "password" -> ZkUserPassword))))
   )
 
+  def zkSectionsInvalidCredentials: Seq[JaasSection] = Seq(
+    JaasSection(ZkServerContextName, Seq(ZkDigestModule(debug = false,
+      Map("user_super" -> ZkUserSuperPasswdInvalid, s"user_$ZkUser" -> ZkUserPasswordInvalid)))),
+    JaasSection(ZkClientContextName, Seq(ZkDigestModule(debug = false,
+      Map("username" -> ZkUser, "password" -> ZkUserPasswordInvalid))))
+  )
+
   def kafkaServerSection(contextName: String, mechanisms: Seq[String], keytabLocation: Option[File]): JaasSection = {
     val modules = mechanisms.map {
       case "GSSAPI" =>
@@ -195,9 +206,9 @@ object JaasTestUtils {
   }
 
   // consider refactoring if more mechanisms are added
-  private def kafkaClientModule(mechanism: String, 
+  private def kafkaClientModule(mechanism: String,
       keytabLocation: Option[File], clientPrincipal: String,
-      plainUser: String, plainPassword: String, 
+      plainUser: String, plainPassword: String,
       scramUser: String, scramPassword: String): JaasModule = {
     mechanism match {
       case "GSSAPI" =>
@@ -229,6 +240,11 @@ object JaasTestUtils {
   def kafkaClientSection(mechanism: Option[String], keytabLocation: Option[File]): JaasSection = {
     JaasSection(KafkaClientContextName, mechanism.map(m =>
       kafkaClientModule(m, keytabLocation, KafkaClientPrincipal2, KafkaPlainUser2, KafkaPlainPassword2, KafkaScramUser2, KafkaScramPassword2)).toSeq)
+  }
+
+  def kafkaClientSectionInvalidCredentials(mechanism: Option[String], keytabLocation: Option[File]): JaasSection = {
+    JaasSection(KafkaClientContextName, mechanism.map(m =>
+      kafkaClientModule(m, keytabLocation, KafkaClientPrincipal2, KafkaPlainUser2, KafkaPlainPassword2Invalid, KafkaScramUser2, KafkaScramPassword2Invalid)).toSeq)
   }
 
   private def jaasSectionsToString(jaasSections: Seq[JaasSection]): String =

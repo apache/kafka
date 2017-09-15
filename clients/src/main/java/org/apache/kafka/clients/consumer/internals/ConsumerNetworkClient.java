@@ -22,6 +22,7 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -367,9 +368,13 @@ public class ConsumerNetworkClient implements Closeable {
                 Collection<ClientRequest> requests = unsent.remove(node);
                 for (ClientRequest request : requests) {
                     RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) request.callback();
-                    handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().desiredOrLatestVersion()),
-                        request.callback(), request.destination(), request.createdTimeMs(), now, true,
-                        null, null));
+                    ApiException authenticationException = client.authenticationException(node);
+                    if (authenticationException !=  null)
+                        handler.onFailure(authenticationException);
+                    else
+                        handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().desiredOrLatestVersion()),
+                            request.callback(), request.destination(), request.createdTimeMs(), now, true,
+                            null, null));
                 }
             }
         }
@@ -459,6 +464,26 @@ public class ConsumerNetworkClient implements Closeable {
     public boolean connectionFailed(Node node) {
         synchronized (this) {
             return client.connectionFailed(node);
+        }
+    }
+
+    /**
+     * Find whether a previous connection has succeeded.
+     * @param node Node to connect to if possible
+     */
+    public boolean isReady(Node node) {
+        synchronized (this) {
+            return client.isReady(node, System.currentTimeMillis());
+        }
+    }
+
+    /**
+     * Find whether a previous connection has failed authentication.
+     * @param node Node to connect to if possible
+     */
+    public ApiException authenticationFailed(Node node) {
+        synchronized (this) {
+            return client.authenticationException(node);
         }
     }
 
