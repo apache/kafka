@@ -18,18 +18,20 @@ package kafka.server
 
 import java.util.{Collections, Properties}
 
-import kafka.admin.AdminUtils
+import kafka.admin.{AdminOperationException, AdminUtils}
 import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
+import org.apache.kafka.clients.admin.NewPartitions
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource}
-import org.apache.kafka.common.errors.{ApiException, InvalidRequestException, PolicyViolationException}
+import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.CreateTopicsRequest._
-import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError, DescribeConfigsResponse, Resource, ResourceType}
+import org.apache.kafka.common.requests._
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
 
@@ -40,6 +42,7 @@ class AdminManager(val config: KafkaConfig,
                    val metrics: Metrics,
                    val metadataCache: MetadataCache,
                    val zkUtils: ZkUtils) extends Logging with KafkaMetricsGroup {
+
   this.logIdent = "[Admin Manager on Broker " + config.brokerId + "]: "
 
   private val topicPurgatory = DelayedOperationPurgatory[DelayedOperation]("topic", config.brokerId)
@@ -191,6 +194,64 @@ class AdminManager(val config: KafkaConfig,
       val delayedDeleteKeys = topics.map(new TopicKey(_)).toSeq
       // try to complete the request immediately, otherwise put it into the purgatory
       topicPurgatory.tryCompleteElseWatch(delayedDelete, delayedDeleteKeys)
+    }
+  }
+
+  def createPartitions(timeout: Int,
+                       newPartitions: Map[String, NewPartitions],
+                       validateOnly: Boolean,
+                       listenerName: ListenerName,
+                       callback: Map[String, ApiError] => Unit): Unit = {
+    var waiting = Map.empty[String, NewPartitions]
+    var done = Map.empty[String, ApiError]
+
+    newPartitions.foreach{case (topic, newPartition: NewPartitions) =>
+      try {
+        val oldNumPartitions = zkUtils.getTopicPartitionCount(topic) match {
+          case Some(count) => count
+          case None => throw new InvalidTopicException()
+        }
+        val newNumPartitions = newPartition.totalCount
+        val numPartitionsIncrement = newNumPartitions - oldNumPartitions
+        if (numPartitionsIncrement <= 0) {
+          throw new InvalidPartitionsException(s"Topic currently has $oldNumPartitions partitions: Cannot create $numPartitionsIncrement partitions.")
+        }
+        val reassignmentStr = if (newPartition.assignments == null) {
+          ""
+        } else {
+          val assignments = newPartition.assignments.asScala.map(inner => inner.asScala.toList)
+          // check each broker exists
+          val unknownBrokers = assignments.flatten.toSet -- zkUtils.getAllBrokersInCluster.map(broker => broker.id)
+          if (unknownBrokers.nonEmpty) {
+            throw new InvalidPartitionsException(s"Unknown broker(s): $unknownBrokers.")
+          }
+          if (assignments.size != numPartitionsIncrement) {
+            throw new InvalidRequestException(s"Increasing the number of partitions by $numPartitionsIncrement but ${assignments.size} assignments provided.")
+          }
+          "," * (oldNumPartitions) + assignments.map(_.mkString(":")).mkString(",")
+        }
+
+        AdminUtils.addPartitions(zkUtils, topic, newPartition.totalCount, reassignmentStr, validateOnly=validateOnly)
+        if (validateOnly) {
+          done += topic -> ApiError.NONE
+        } else {
+          waiting += topic -> newPartition
+        }
+      } catch {
+        case e: AdminOperationException =>
+          done += topic -> ApiError.fromThrowable(e)
+        case e: ApiException =>
+          done += topic -> ApiError.fromThrowable(e)
+      }
+    }
+
+    if (waiting.nonEmpty) {
+      // wait for the updates to hit the metadata cache
+      val delayedCreateKeys = waiting.keySet.map(new TopicKey(_)).toSeq
+      val delayedCreate = new DelayedCreatePartitions(timeout, done, waiting, this, listenerName, callback)
+      topicPurgatory.tryCompleteElseWatch(delayedCreate, delayedCreateKeys)
+    } else {
+      callback(done)
     }
   }
 

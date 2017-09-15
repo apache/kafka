@@ -417,4 +417,33 @@ public abstract class AdminClient implements AutoCloseable {
      * @return              The DescribeReplicaLogDirResult
      */
     public abstract DescribeReplicaLogDirResult describeReplicaLogDir(Collection<TopicPartitionReplica> replicas, DescribeReplicaLogDirOptions options);
+
+    /**
+     * Increase the number of partitions of the topics given as the keys of {@code newPartitions}
+     * according to the corresponding values.
+     *
+     * This operation is supported by brokers with version 1.0.0 or higher.
+     *
+     * @param newPartitions The topics which should have new partitions created, and corresponding parameters
+     *                      for the created partitions.
+     * @return              The CreatePartitionsResult.
+     */
+    public CreatePartitionsResult createPartitions(Map<String, NewPartitions> newPartitions) {
+        return createPartitions(newPartitions, new CreatePartitionsOptions());
+    }
+
+    /**
+     * Increase the number of partitions of the topics given as the keys of {@code newPartitions}
+     * according to the corresponding values.
+     *
+     * This operation is supported by brokers with version 1.0.0 or higher.
+     *
+     * @param newPartitions The topics which should have new partitions created, and corresponding parameters
+     *                      for the created partitions.
+     * @param options       The options to use when creating the new paritions.
+     * @return              The CreatePartitionsResult.
+     */
+    public abstract CreatePartitionsResult createPartitions(Map<String, NewPartitions> newPartitions,
+                                                            CreatePartitionsOptions options);
+
 }

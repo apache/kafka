@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBinding;
@@ -24,6 +25,8 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
@@ -68,6 +71,7 @@ import java.util.Set;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
+import static java.util.Collections.singletonMap;
 import static org.apache.kafka.test.TestUtils.toBuffer;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -241,6 +245,10 @@ public class RequestResponseTest {
         checkRequest(createDescribeConfigsRequestWithConfigEntries());
         checkErrorResponse(createDescribeConfigsRequest(), new UnknownServerException());
         checkResponse(createDescribeConfigsResponse(), 0);
+        checkRequest(createCreatePartitionsRequest());
+        checkRequest(createCreatePartitionsRequestWithAssignments());
+        checkErrorResponse(createCreatePartitionsRequest(), new InvalidTopicException());
+        checkResponse(createCreatePartitionsErrorResponse(), 0);
     }
 
     @Test
@@ -1075,4 +1083,22 @@ public class RequestResponseTest {
         errors.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.TOPIC, "topic"), new ApiError(Errors.INVALID_REQUEST, "This request is invalid"));
         return new AlterConfigsResponse(20, errors);
     }
+
+    private CreatePartitionsRequest createCreatePartitionsRequest() {
+        Map<String, NewPartitions> assignments = singletonMap("my_topic", NewPartitions.increaseTo(3));
+        return new CreatePartitionsRequest(assignments, 0, false, (short) 0);
+    }
+
+    private CreatePartitionsRequest createCreatePartitionsRequestWithAssignments() {
+        Map<String, NewPartitions> assignments = singletonMap("my_topic", NewPartitions.increaseTo(3, asList(asList(2))));
+        return new CreatePartitionsRequest(assignments, 0, false, (short) 0);
+    }
+
+    private CreatePartitionsResponse createCreatePartitionsErrorResponse() {
+        Map<String, ApiError> results = singletonMap(
+                "my_topic", ApiError.fromThrowable(new InvalidReplicaAssignmentException("The assigned brokers included an unknown broker"))
+        );
+        return new CreatePartitionsResponse(42, results);
+    }
+
 }

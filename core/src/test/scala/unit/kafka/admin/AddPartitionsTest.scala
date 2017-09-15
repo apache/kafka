@@ -26,6 +26,7 @@ import kafka.utils.TestUtils
 import kafka.cluster.Broker
 import kafka.client.ClientUtils
 import kafka.server.{KafkaConfig, KafkaServer}
+import org.apache.kafka.common.errors.{InvalidReplicaAssignmentException, InvalidTopicException}
 import org.apache.kafka.common.network.ListenerName
 import org.junit.{After, Before, Test}
 
@@ -69,7 +70,7 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
       AdminUtils.addPartitions(zkUtils, "Blah", 1)
       fail("Topic should not exist")
     } catch {
-      case _: AdminOperationException => //this is good
+      case _: InvalidTopicException => //this is good
     }
   }
 
@@ -79,7 +80,7 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
       AdminUtils.addPartitions(zkUtils, topic1, 2, "0:1,0:1:2")
       fail("Add partitions should fail")
     } catch {
-      case _: AdminOperationException => //this is good
+      case _: InvalidReplicaAssignmentException => //this is good
     }
   }
 

@@ -25,7 +25,7 @@ import java.util.Random
 import java.util.Properties
 
 import kafka.common.TopicAlreadyMarkedForDeletionException
-import org.apache.kafka.common.errors.{InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidReplicationFactorException, InvalidTopicException, TopicExistsException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.errors._
 
 import scala.collection._
 import scala.collection.JavaConverters._
@@ -134,17 +134,17 @@ object AdminUtils extends Logging with AdminUtilities {
                               fixedStartIndex: Int = -1,
                               startPartitionId: Int = -1): Map[Int, Seq[Int]] = {
     if (nPartitions <= 0)
-      throw new InvalidPartitionsException("number of partitions must be larger than 0")
+      throw new InvalidPartitionsException("Number of partitions must be larger than 0.")
     if (replicationFactor <= 0)
-      throw new InvalidReplicationFactorException("replication factor must be larger than 0")
+      throw new InvalidReplicationFactorException("Replication factor must be larger than 0.")
     if (replicationFactor > brokerMetadatas.size)
-      throw new InvalidReplicationFactorException(s"replication factor: $replicationFactor larger than available brokers: ${brokerMetadatas.size}")
+      throw new InvalidReplicationFactorException(s"Replication factor: $replicationFactor larger than available brokers: ${brokerMetadatas.size}.")
     if (brokerMetadatas.forall(_.rack.isEmpty))
       assignReplicasToBrokersRackUnaware(nPartitions, replicationFactor, brokerMetadatas.map(_.id), fixedStartIndex,
         startPartitionId)
     else {
       if (brokerMetadatas.exists(_.rack.isEmpty))
-        throw new AdminOperationException("Not all brokers have rack information for replica rack aware assignment")
+        throw new AdminOperationException("Not all brokers have rack information for replica rack aware assignment.")
       assignReplicasToBrokersRackAware(nPartitions, replicationFactor, brokerMetadatas, fixedStartIndex,
         startPartitionId)
     }
@@ -272,18 +272,25 @@ object AdminUtils extends Logging with AdminUtilities {
                     numPartitions: Int = 1,
                     replicaAssignmentStr: String = "",
                     checkBrokerAvailable: Boolean = true,
-                    rackAwareMode: RackAwareMode = RackAwareMode.Enforced) {
+                    rackAwareMode: RackAwareMode = RackAwareMode.Enforced,
+                    validateOnly: Boolean = false) {
+    if (zkUtils.pathExists(ZkUtils.ReassignPartitionsPath)) {
+      // We prevent addition partitions while a reassignment is in progress, since
+      // during reassignment there is no meaningful notion of replication factor
+      throw new ReassignmentInProgressException("A partition reassignment is in progress.")
+    }
+
     val existingPartitionsReplicaList = zkUtils.getReplicaAssignmentForTopics(List(topic))
     if (existingPartitionsReplicaList.isEmpty)
-      throw new AdminOperationException("The topic %s does not exist".format(topic))
+      throw new InvalidTopicException(s"The topic $topic does not exist")
 
     val existingReplicaListForPartitionZero = existingPartitionsReplicaList.find(p => p._1.partition == 0) match {
-      case None => throw new AdminOperationException("the topic does not have partition with id 0, it should never happen")
+      case None => throw new AdminOperationException("The topic does not have partition with id 0, it should never happen.")
       case Some(headPartitionReplica) => headPartitionReplica._2
     }
     val partitionsToAdd = numPartitions - existingPartitionsReplicaList.size
     if (partitionsToAdd <= 0)
-      throw new AdminOperationException("The number of partitions for a topic can only be increased")
+      throw new InvalidPartitionsException(s"The number of partitions for a topic can only be increased, topic $topic currently has ${existingPartitionsReplicaList.size} partitions.")
 
     // create the new partition replication list
     val brokerMetadatas = getBrokerMetadatas(zkUtils, rackAwareMode)
@@ -300,14 +307,14 @@ object AdminUtils extends Logging with AdminUtilities {
     // check if manual assignment has the right replication factor
     val unmatchedRepFactorList = newPartitionReplicaList.values.filter(p => p.size != existingReplicaListForPartitionZero.size)
     if (unmatchedRepFactorList.nonEmpty)
-      throw new AdminOperationException("The replication factor in manual replication assignment " +
-        " is not equal to the existing replication factor for the topic " + existingReplicaListForPartitionZero.size)
-
-    info("Add partition list for %s is %s".format(topic, newPartitionReplicaList))
-    val partitionReplicaList = existingPartitionsReplicaList.map(p => p._1.partition -> p._2)
-    // add the new list
-    partitionReplicaList ++= newPartitionReplicaList
-    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, partitionReplicaList, update = true)
+      throw new InvalidReplicaAssignmentException(s"Existing topic replication factor of ${existingReplicaListForPartitionZero.size}, but manual replication assignment would imply replication factor(s) of ${unmatchedRepFactorList.map(_.size).mkString(",")}.")
+    if (!validateOnly) {
+      info(s"Add partition list for $topic is $newPartitionReplicaList.")
+      val partitionReplicaList = existingPartitionsReplicaList.map(p => p._1.partition -> p._2)
+      // add the new list
+      partitionReplicaList ++= newPartitionReplicaList
+      AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, partitionReplicaList, update = true)
+    }
   }
 
   def getManualReplicaAssignment(replicaAssignmentList: String, availableBrokerList: Set[Int], startPartitionId: Int, checkBrokerAvailable: Boolean = true): Map[Int, List[Int]] = {
@@ -318,15 +325,14 @@ object AdminUtils extends Logging with AdminUtilities {
     for (i <- partitionList.indices) {
       val brokerList = partitionList(i).split(":").map(s => s.trim().toInt)
       if (brokerList.isEmpty)
-        throw new AdminOperationException("replication factor must be larger than 0")
+        throw new InvalidReplicaAssignmentException("Replication factor must be larger than 0.")
       if (brokerList.size != brokerList.toSet.size)
-        throw new AdminOperationException("duplicate brokers in replica assignment: " + brokerList)
+        throw new InvalidReplicaAssignmentException(s"Duplicate brokers in replica assignment: $brokerList.")
       if (checkBrokerAvailable && !brokerList.toSet.subsetOf(availableBrokerList))
-        throw new AdminOperationException("some specified brokers not available. specified brokers: " + brokerList +
-          "available broker:" + availableBrokerList)
+        throw new AdminOperationException(s"Some specified brokers not available. Specified brokers: $brokerList, available brokers: $availableBrokerList.")
       ret.put(partitionId, brokerList.toList)
       if (ret(partitionId).size != ret(startPartitionId).size)
-        throw new AdminOperationException("partition " + i + " has different replication factor: " + brokerList)
+        throw new AdminOperationException(s"Partition $i has different replication factor: $brokerList.")
       partitionId = partitionId + 1
     }
     ret.toMap
