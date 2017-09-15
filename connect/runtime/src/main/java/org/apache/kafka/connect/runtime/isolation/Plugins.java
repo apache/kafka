@@ -124,7 +124,10 @@ public class Plugins {
                 return SinkConnector.class.isAssignableFrom(Class.forName(clsName)) ?
                     ConnectorType.SINK : ConnectorType.SOURCE;
             } catch (Exception e) {
-                throw new ConnectException("Cannot determine the type for " + clsName);
+                // try to load the Connector
+                Connector conn = newConnector(clsName);
+                return SinkConnector.class.isAssignableFrom(conn.getClass()) ?
+                    ConnectorType.SINK : ConnectorType.SOURCE;
             }
         } finally {
             Plugins.compareAndSwapLoaders(savedLoader);
