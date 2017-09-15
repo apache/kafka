@@ -20,7 +20,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
@@ -248,13 +248,15 @@ public class BufferPoolTest {
         Metrics mockedMetrics = createNiceMock(Metrics.class);
         Sensor mockedSensor = createNiceMock(Sensor.class);
         MetricName metricName = createNiceMock(MetricName.class);
+        MetricName rateMetricName = createNiceMock(MetricName.class);
+        MetricName totalMetricName = createNiceMock(MetricName.class);
 
         expect(mockedMetrics.sensor(BufferPool.WAIT_TIME_SENSOR_NAME)).andReturn(mockedSensor);
 
         mockedSensor.record(anyDouble(), anyLong());
         expectLastCall().andThrow(new OutOfMemoryError());
         expect(mockedMetrics.metricName(anyString(), eq(metricGroup), anyString())).andReturn(metricName);
-        mockedSensor.add(metricName, new Rate(TimeUnit.NANOSECONDS));
+        mockedSensor.add(new Meter(TimeUnit.NANOSECONDS, rateMetricName, totalMetricName));
 
         replay(mockedMetrics, mockedSensor, metricName);
 

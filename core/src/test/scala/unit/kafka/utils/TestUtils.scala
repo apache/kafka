@@ -197,19 +197,23 @@ object TestUtils extends Logging {
     *
     * Note that if `interBrokerSecurityProtocol` is defined, the listener for the `SecurityProtocol` will be enabled.
     */
-  def createBrokerConfig(nodeId: Int, zkConnect: String,
-    enableControlledShutdown: Boolean = true,
-    enableDeleteTopic: Boolean = false,
-    port: Int = RandomPort,
-    interBrokerSecurityProtocol: Option[SecurityProtocol] = None,
-    trustStoreFile: Option[File] = None,
-    saslProperties: Option[Properties] = None,
-    enablePlaintext: Boolean = true,
-    enableSaslPlaintext: Boolean = false, saslPlaintextPort: Int = RandomPort,
-    enableSsl: Boolean = false, sslPort: Int = RandomPort,
-    enableSaslSsl: Boolean = false, saslSslPort: Int = RandomPort, rack: Option[String] = None, logDirCount: Int = 1)
-  : Properties = {
-
+  def createBrokerConfig(nodeId: Int,
+                         zkConnect: String,
+                         enableControlledShutdown: Boolean = true,
+                         enableDeleteTopic: Boolean = false,
+                         port: Int = RandomPort,
+                         interBrokerSecurityProtocol: Option[SecurityProtocol] = None,
+                         trustStoreFile: Option[File] = None,
+                         saslProperties: Option[Properties] = None,
+                         enablePlaintext: Boolean = true,
+                         enableSaslPlaintext: Boolean = false,
+                         saslPlaintextPort: Int = RandomPort,
+                         enableSsl: Boolean = false,
+                         sslPort: Int = RandomPort,
+                         enableSaslSsl: Boolean = false,
+                         saslSslPort: Int = RandomPort,
+                         rack: Option[String] = None,
+                         logDirCount: Int = 1): Properties = {
     def shouldEnable(protocol: SecurityProtocol) = interBrokerSecurityProtocol.fold(false)(_ == protocol)
 
     val protocolAndPorts = ArrayBuffer[(SecurityProtocol, Int)]()
@@ -1375,11 +1379,12 @@ object TestUtils extends Logging {
     records
   }
 
-  def createTransactionalProducer(transactionalId: String, servers: Seq[KafkaServer]) = {
+  def createTransactionalProducer(transactionalId: String, servers: Seq[KafkaServer], batchSize: Int = 16384) = {
     val props = new Properties()
     props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
-    props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1")
+    props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "5")
     props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
+    props.put(ProducerConfig.BATCH_SIZE_CONFIG, batchSize.toString)
     TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers), retries = Integer.MAX_VALUE, acks = -1, props = Some(props))
   }
 

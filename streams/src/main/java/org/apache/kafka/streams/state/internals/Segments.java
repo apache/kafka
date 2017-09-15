@@ -69,7 +69,7 @@ class Segments {
     String segmentName(final long segmentId) {
         // previous format used - as a separator so if this changes in the future
         // then we should use something different.
-        return name + ":" + segmentId;
+        return name + ":" + segmentId * segmentInterval;
     }
 
     Segment getSegmentForTimestamp(final long timestamp) {
@@ -196,24 +196,23 @@ class Segments {
             final Date date;
             try {
                 date = formatter.parse(datePart);
+                final long segmentId = date.getTime() / segmentInterval;
+                final File newName = new File(parent, segmentName(segmentId));
+                final File oldName = new File(parent, segmentName);
+                if (!oldName.renameTo(newName)) {
+                    throw new ProcessorStateException("Unable to rename old style segment from: "
+                                                              + oldName
+                                                              + " to new name: "
+                                                              + newName);
+                }
+                return segmentId;
             } catch (ParseException e) {
-                throw new ProcessorStateException("Unable to parse segmentName:"
-                                                          + segmentName
-                                                          + " to a date");
+                log.warn("Unable to parse segmentName {} to a date. This segment will be skipped", segmentName);
+                return -1L;
             }
-            final long segmentId = date.getTime() / segmentInterval;
-            final File newName = new File(parent, segmentName(segmentId));
-            final File oldName = new File(parent, segmentName);
-            if (!oldName.renameTo(newName)) {
-                throw new ProcessorStateException("Unable to rename old style segment from: "
-                                                          + oldName
-                                                          + " to new name: "
-                                                          + newName);
-            }
-            return segmentId;
         } else {
             try {
-                return Long.parseLong(segmentName.substring(name.length() + 1));
+                return Long.parseLong(segmentName.substring(name.length() + 1)) / segmentInterval;
             } catch (NumberFormatException e) {
                 throw new ProcessorStateException("Unable to parse segment id as long from segmentName: " + segmentName);
             }

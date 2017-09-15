@@ -58,7 +58,7 @@ public class RocksDBStoreTest {
     private File dir;
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         subject = new RocksDBStore<>("test", Serdes.String(), Serdes.String());
         dir = TestUtils.tempDirectory();
         context = new MockProcessorContext(dir,
@@ -69,7 +69,7 @@ public class RocksDBStoreTest {
     }
 
     @After
-    public void tearDown() throws Exception {
+    public void tearDown() {
         subject.close();
     }
 
@@ -95,7 +95,7 @@ public class RocksDBStoreTest {
     }
 
     @Test
-    public void verifyRocksDbConfigSetterIsCalled() throws Exception {
+    public void verifyRocksDbConfigSetterIsCalled() {
         final Map<String, Object> configs = new HashMap<>();
         configs.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-application");
         configs.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "test-server:9092");

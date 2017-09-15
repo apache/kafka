@@ -27,17 +27,15 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersRequest}
 import org.apache.kafka.common.security.JaasContext
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.WriteTxnMarkersRequest.TxnMarkerEntry
-
 import com.yammer.metrics.core.Gauge
-
 import java.util
 import java.util.concurrent.{BlockingQueue, ConcurrentHashMap, LinkedBlockingQueue}
 
 import collection.JavaConverters._
-import scala.collection.{concurrent, immutable, mutable}
+import scala.collection.{concurrent, immutable}
 
 object TransactionMarkerChannelManager {
   def apply(config: KafkaConfig,
@@ -45,8 +43,8 @@ object TransactionMarkerChannelManager {
             metadataCache: MetadataCache,
             txnStateManager: TransactionStateManager,
             txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker],
-            time: Time): TransactionMarkerChannelManager = {
-
+            time: Time,
+            logContext: LogContext): TransactionMarkerChannelManager = {
     val channelBuilder = ChannelBuilders.clientChannelBuilder(
       config.interBrokerSecurityProtocol,
       JaasContext.Type.SERVER,
@@ -63,7 +61,8 @@ object TransactionMarkerChannelManager {
       "txn-marker-channel",
       Map.empty[String, String].asJava,
       false,
-      channelBuilder
+      channelBuilder,
+      logContext
     )
     val networkClient = new NetworkClient(
       selector,
@@ -77,7 +76,8 @@ object TransactionMarkerChannelManager {
       config.requestTimeoutMs,
       time,
       false,
-      new ApiVersions
+      new ApiVersions,
+      logContext
     )
 
     new TransactionMarkerChannelManager(config,

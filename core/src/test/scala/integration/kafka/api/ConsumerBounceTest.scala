@@ -177,7 +177,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
       }, 2, TimeUnit.SECONDS)
     consumer.poll(0)
 
-    def sendRecords(numRecords: Int, topic: String = this.topic) {
+    def sendRecords(numRecords: Int, topic: String) {
       var remainingRecords = numRecords
       val endTimeMs = System.currentTimeMillis + 20000
       while (remainingRecords > 0 && System.currentTimeMillis < endTimeMs) {

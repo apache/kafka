@@ -452,7 +452,8 @@ object AdminClient {
       metrics,
       time,
       "admin",
-      channelBuilder)
+      channelBuilder,
+      new LogContext())
 
     val networkClient = new NetworkClient(
       selector,
@@ -466,7 +467,8 @@ object AdminClient {
       requestTimeoutMs,
       time,
       true,
-      new ApiVersions)
+      new ApiVersions,
+      new LogContext())
 
     val highLevelClient = new ConsumerNetworkClient(
       new LogContext(),

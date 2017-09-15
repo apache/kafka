@@ -27,6 +27,7 @@ import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.WindowedKStream;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -39,8 +40,8 @@ import java.util.Set;
 
 class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStream<K, V> {
 
-    private static final String REDUCE_NAME = "KSTREAM-REDUCE-";
-    private static final String AGGREGATE_NAME = "KSTREAM-AGGREGATE-";
+    static final String REDUCE_NAME = "KSTREAM-REDUCE-";
+    static final String AGGREGATE_NAME = "KSTREAM-AGGREGATE-";
 
     private final Serde<K> keySerde;
     private final Serde<V> valSerde;
@@ -102,7 +103,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     @Override
     public <W extends Window> KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
                                                             final Windows<W> windows) {
-        return reduce(reducer, windows, (String) null);
+        return windowedBy(windows).reduce(reducer);
     }
 
     @SuppressWarnings("unchecked")
@@ -164,7 +165,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                                                                   final Aggregator<? super K, ? super V, T> aggregator,
                                                                   final Windows<W> windows,
                                                                   final Serde<T> aggValueSerde) {
-        return aggregate(initializer, aggregator, windows, aggValueSerde, null);
+        return windowedBy(windows).aggregate(initializer, aggregator, aggValueSerde);
     }
 
     @SuppressWarnings("unchecked")
@@ -219,7 +220,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
 
     @Override
     public <W extends Window> KTable<Windowed<K>, Long> count(final Windows<W> windows) {
-        return count(windows, (String) null);
+        return windowedBy(windows).count();
     }
 
     @Override
@@ -289,6 +290,17 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                 AGGREGATE_NAME,
                 storeSupplier);
 
+    }
+
+    @Override
+    public <W extends Window> WindowedKStream<K, V> windowedBy(final Windows<W> windows) {
+        return new WindowedKStreamImpl<>(windows,
+                                         builder,
+                                         sourceNodes,
+                                         name,
+                                         keySerde,
+                                         valSerde,
+                                         repartitionRequired);
     }
 
     @SuppressWarnings("unchecked")

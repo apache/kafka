@@ -112,7 +112,7 @@ public class RocksDBWindowStoreTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldOnlyIterateOpenSegments() throws Exception {
+    public void shouldOnlyIterateOpenSegments() {
         windowStore = createWindowStore(context, false, true);
         long currentTime = 0;
         context.setRecordContext(createRecordContext(currentTime));
@@ -640,7 +640,7 @@ public class RocksDBWindowStoreTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldCloseOpenIteratorsWhenStoreIsClosedAndThrowInvalidStateStoreExceptionOnHasNextAndNext() throws Exception {
+    public void shouldCloseOpenIteratorsWhenStoreIsClosedAndThrowInvalidStateStoreExceptionOnHasNextAndNext() {
         windowStore = createWindowStore(context, false, true);
         context.setRecordContext(createRecordContext(0));
         windowStore.put(1, "one", 1L);
@@ -667,7 +667,7 @@ public class RocksDBWindowStoreTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldFetchAndIterateOverExactKeys() throws Exception {
+    public void shouldFetchAndIterateOverExactKeys() {
         final long windowSize = 0x7a00000000000000L;
         final long retentionPeriod = 0x7a00000000000000L;
         final RocksDBWindowStoreSupplier<String, String> supplier =
@@ -710,38 +710,38 @@ public class RocksDBWindowStoreTest {
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerExceptionOnPutNullKey() throws Exception {
+    public void shouldThrowNullPointerExceptionOnPutNullKey() {
         windowStore = createWindowStore(context, false, true);
         windowStore.put(null, "anyValue");
     }
 
     @Test
-    public void shouldNotThrowNullPointerExceptionOnPutNullValue() throws Exception {
+    public void shouldNotThrowNullPointerExceptionOnPutNullValue() {
         windowStore = createWindowStore(context, false, true);
         windowStore.put(1, null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerExceptionOnGetNullKey() throws Exception {
+    public void shouldThrowNullPointerExceptionOnGetNullKey() {
         windowStore = createWindowStore(context, false, true);
         windowStore.fetch(null, 1L, 2L);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerExceptionOnRangeNullFromKey() throws Exception {
+    public void shouldThrowNullPointerExceptionOnRangeNullFromKey() {
         windowStore = createWindowStore(context, false, true);
         windowStore.fetch(null, 2, 1L, 2L);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerExceptionOnRangeNullToKey() throws Exception {
+    public void shouldThrowNullPointerExceptionOnRangeNullToKey() {
         windowStore = createWindowStore(context, false, true);
         windowStore.fetch(1, null, 1L, 2L);
     }
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldFetchAndIterateOverExactBinaryKeys() throws Exception {
+    public void shouldFetchAndIterateOverExactBinaryKeys() {
         final RocksDBWindowStoreSupplier<Bytes, String> supplier =
                 new RocksDBWindowStoreSupplier<>(
                         "window",

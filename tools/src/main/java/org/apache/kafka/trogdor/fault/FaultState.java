@@ -17,11 +17,35 @@
 
 package org.apache.kafka.trogdor.fault;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonSubTypes;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import org.apache.kafka.trogdor.common.JsonUtil;
+import java.util.Objects;
 
-@JsonFormat(shape = JsonFormat.Shape.STRING)
-public enum FaultState {
-    PENDING,
-    RUNNING,
-    DONE
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME,
+    include = JsonTypeInfo.As.PROPERTY,
+    property = "stateName")
+@JsonSubTypes({
+        @JsonSubTypes.Type(value = DoneState.class, name = "done"),
+        @JsonSubTypes.Type(value = PendingState.class, name = "pending"),
+        @JsonSubTypes.Type(value = RunningState.class, name = "running"),
+        @JsonSubTypes.Type(value = SendingState.class, name = "sending")
+    })
+public abstract class FaultState {
+    @Override
+    public final boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        return toString().equals(o.toString());
+    }
+
+    @Override
+    public final int hashCode() {
+        return Objects.hashCode(toString());
+    }
+
+    @Override
+    public final String toString() {
+        return JsonUtil.toJsonString(this);
+    }
 }

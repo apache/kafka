@@ -16,9 +16,22 @@
  */
 package org.apache.kafka.common.errors;
 
-public class DuplicateSequenceNumberException extends RetriableException {
+/**
+ * Thrown when a request is made for a log directory that is not present on the broker
+ */
+public class LogDirNotFoundException extends ApiException {
 
-    public DuplicateSequenceNumberException(String message) {
+    private static final long serialVersionUID = 1L;
+
+    public LogDirNotFoundException(String message) {
         super(message);
+    }
+
+    public LogDirNotFoundException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
+    public LogDirNotFoundException(Throwable cause) {
+        super(cause);
     }
 }

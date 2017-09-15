@@ -54,7 +54,7 @@ class ReplicaVerificationToolTest {
     val output = sb.toString.trim
 
     assertTrue(s"Max lag information should be in output: `$output`",
-      output.endsWith(": max lag is 10 for partition [a,0] at offset 10 among 3 partitions"))
+      output.endsWith(": max lag is 10 for partition a-0 at offset 10 among 3 partitions"))
   }
 
 }

@@ -27,6 +27,8 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreamsTest;
 import org.apache.kafka.streams.KeyValue;
@@ -38,11 +40,13 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
@@ -123,7 +127,7 @@ public class QueryableStateIntegrationTest {
     }
 
     @Before
-    public void before() throws IOException, InterruptedException {
+    public void before() throws Exception {
         testNo++;
         createTopics();
         streamsConfiguration = new Properties();
@@ -191,7 +195,7 @@ public class QueryableStateIntegrationTest {
     private KafkaStreams createCountStream(final String inputTopic, final String outputTopic, final Properties streamsConfiguration) {
         final StreamsBuilder builder = new StreamsBuilder();
         final Serde<String> stringSerde = Serdes.String();
-        final KStream<String, String> textLines = builder.stream(stringSerde, stringSerde, inputTopic);
+        final KStream<String, String> textLines = builder.stream(inputTopic, Consumed.with(stringSerde, stringSerde));
 
         final KGroupedStream<String, String> groupedByWord = textLines
             .flatMapValues(new ValueMapper<String, Iterable<String>>() {
@@ -251,7 +255,7 @@ public class QueryableStateIntegrationTest {
 
     private void verifyAllKVKeys(final StreamRunnable[] streamRunnables, final KafkaStreams streams,
                                  final KafkaStreamsTest.StateListenerStub stateListenerStub,
-                                 final Set<String> keys, final String storeName) throws Exception {
+                                 final Set<String> keys, final String storeName) throws InterruptedException {
         for (final String key : keys) {
             TestUtils.waitForCondition(new TestCondition() {
                 @Override
@@ -283,7 +287,7 @@ public class QueryableStateIntegrationTest {
     private void verifyAllWindowedKeys(final StreamRunnable[] streamRunnables, final KafkaStreams streams,
                                        final KafkaStreamsTest.StateListenerStub stateListenerStub,
                                        final Set<String> keys, final String storeName,
-                                       final Long from, final Long to) throws Exception {
+                                       final Long from, final Long to) throws InterruptedException {
         for (final String key : keys) {
             TestUtils.waitForCondition(new TestCondition() {
                 @Override
@@ -313,7 +317,7 @@ public class QueryableStateIntegrationTest {
 
 
     @Test
-    public void queryOnRebalance() throws Exception {
+    public void queryOnRebalance() throws InterruptedException {
         final int numThreads = STREAM_TWO_PARTITIONS;
         final StreamRunnable[] streamRunnables = new StreamRunnable[numThreads];
         final Thread[] streamThreads = new Thread[numThreads];
@@ -365,7 +369,7 @@ public class QueryableStateIntegrationTest {
     }
 
     @Test
-    public void concurrentAccesses() throws Exception {
+    public void concurrentAccesses() throws InterruptedException {
 
         final int numIterations = 500000;
 
@@ -445,8 +449,8 @@ public class QueryableStateIntegrationTest {
             }
         };
         final KTable<String, Long> t1 = builder.table(streamOne);
-        final KTable<String, Long> t2 = t1.filter(filterPredicate, "queryFilter");
-        t1.filterNot(filterPredicate, "queryFilterNot");
+        final KTable<String, Long> t2 = t1.filter(filterPredicate, Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("queryFilter"));
+        t1.filterNot(filterPredicate, Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("queryFilterNot"));
         t2.to(outputTopic);
 
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
@@ -508,7 +512,7 @@ public class QueryableStateIntegrationTest {
             public Long apply(final String value) {
                 return Long.valueOf(value);
             }
-        }, Serdes.Long(), "queryMapValues");
+        }, Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("queryMapValues").withValueSerde(Serdes.Long()));
         t2.to(Serdes.String(), Serdes.Long(), outputTopic);
 
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
@@ -558,13 +562,13 @@ public class QueryableStateIntegrationTest {
             }
         };
         final KTable<String, String> t1 = builder.table(streamOne);
-        final KTable<String, String> t2 = t1.filter(filterPredicate, "queryFilter");
+        final KTable<String, String> t2 = t1.filter(filterPredicate, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("queryFilter"));
         final KTable<String, Long> t3 = t2.mapValues(new ValueMapper<String, Long>() {
             @Override
             public Long apply(final String value) {
                 return Long.valueOf(value);
             }
-        }, Serdes.Long(), "queryMapValues");
+        }, Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("queryMapValues").withValueSerde(Serdes.Long()));
         t3.to(Serdes.String(), Serdes.Long(), outputTopic);
 
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
@@ -586,7 +590,7 @@ public class QueryableStateIntegrationTest {
         }
     }
 
-    private void verifyCanQueryState(final int cacheSizeBytes) throws java.util.concurrent.ExecutionException, InterruptedException {
+    private void verifyCanQueryState(final int cacheSizeBytes) throws Exception {
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
         final StreamsBuilder builder = new StreamsBuilder();
         final String[] keys = {"hello", "goodbye", "welcome", "go", "kafka"};

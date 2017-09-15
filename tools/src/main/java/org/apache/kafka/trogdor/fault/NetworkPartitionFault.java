@@ -17,7 +17,6 @@
 
 package org.apache.kafka.trogdor.fault;
 
-import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Node;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.common.Topology;
@@ -28,23 +27,20 @@ import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 
-public class NetworkPartitionFault implements Fault {
+public class NetworkPartitionFault extends AbstractFault {
     private static final Logger log = LoggerFactory.getLogger(NetworkPartitionFault.class);
 
-    private final String id;
-    private final NetworkPartitionFaultSpec spec;
     private final List<Set<String>> partitions;
 
     public NetworkPartitionFault(String id, FaultSpec spec) {
-        this.id = id;
-        this.spec = (NetworkPartitionFaultSpec) spec;
+        super(id, spec);
+        NetworkPartitionFaultSpec faultSpec = (NetworkPartitionFaultSpec) spec;
         this.partitions = new ArrayList<>();
         HashSet<String> prevNodes = new HashSet<>();
-        for (List<String> partition : this.spec.partitions()) {
+        for (List<String> partition : faultSpec.partitions()) {
             for (String nodeName : partition) {
                 if (prevNodes.contains(nodeName)) {
                     throw new RuntimeException("Node " + nodeName +
@@ -57,23 +53,13 @@ public class NetworkPartitionFault implements Fault {
     }
 
     @Override
-    public String id() {
-        return id;
-    }
-
-    @Override
-    public FaultSpec spec() {
-        return spec;
-    }
-
-    @Override
-    public void activate(Platform platform) throws Exception {
+    protected void handleActivation(long now, Platform platform) throws Exception {
         log.info("Activating NetworkPartitionFault...");
         runIptablesCommands(platform, "-A");
     }
 
     @Override
-    public void deactivate(Platform platform) throws Exception {
+    protected void handleDeactivation(long now, Platform platform) throws Exception {
         log.info("Deactivating NetworkPartitionFault...");
         runIptablesCommands(platform, "-D");
     }
@@ -106,25 +92,5 @@ public class NetworkPartitionFault implements Fault {
             targetNodes.addAll(partition);
         }
         return targetNodes;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        NetworkPartitionFault that = (NetworkPartitionFault) o;
-        return Objects.equals(id, that.id) &&
-            Objects.equals(spec, that.spec) &&
-            Objects.equals(partitions, that.partitions);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(id, spec, partitions);
-    }
-
-    @Override
-    public String toString() {
-        return "NoOpFault(id=" + id + ", spec=" + JsonUtil.toJsonString(spec) + ")";
     }
 }

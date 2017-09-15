@@ -145,8 +145,8 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
           leaderIsrAndControllerEpochOpt match {
             case Some(leaderIsrAndControllerEpoch) =>
               if(leaderIsrAndControllerEpoch.leaderAndIsr.leader == replicaId)
-                throw new StateChangeFailedException("Replica %d for partition %s cannot be moved to NewReplica"
-                  .format(replicaId, topicAndPartition) + "state as it is being requested to become leader")
+                throw new StateChangeFailedException(s"Replica $replicaId for partition $topicAndPartition cannot " +
+                  s"be moved to NewReplica state as it is being requested to become leader")
               brokerRequestBatch.addLeaderAndIsrRequestForBrokers(List(replicaId),
                                                                   topic, partition, leaderIsrAndControllerEpoch,
                                                                   replicaAssignment, isNew = true)
@@ -229,21 +229,22 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
             }
           if (leaderAndIsrIsEmpty && !controller.topicDeletionManager.isPartitionToBeDeleted(topicAndPartition))
             throw new StateChangeFailedException(
-              "Failed to change state of replica %d for partition %s since the leader and isr path in zookeeper is empty"
-              .format(replicaId, topicAndPartition))
+              s"Failed to change state of replica $replicaId for partition $topicAndPartition since the leader " +
+                s"and isr path in zookeeper is empty")
+
       }
     }
     catch {
       case t: Throwable =>
-        stateChangeLogger.error("Controller %d epoch %d initiated state change of replica %d for partition [%s,%d] from %s to %s failed"
-                                  .format(controllerId, controller.epoch, replicaId, topic, partition, currState, targetState), t)
+        stateChangeLogger.error(s"Controller $controllerId epoch ${controller.epoch} initiated state change of " +
+          s"replica $replicaId for partition $topicAndPartition from $currState to $targetState failed", t)
     }
   }
 
   def areAllReplicasForTopicDeleted(topic: String): Boolean = {
     val replicasForTopic = controller.controllerContext.replicasForTopic(topic)
     val replicaStatesForTopic = replicasForTopic.map(r => (r, replicaState(r))).toMap
-    debug("Are all replicas for topic %s deleted %s".format(topic, replicaStatesForTopic))
+    debug(s"Are all replicas for topic $topic deleted $replicaStatesForTopic")
     replicaStatesForTopic.forall(_._2 == ReplicaDeletionSuccessful)
   }
 

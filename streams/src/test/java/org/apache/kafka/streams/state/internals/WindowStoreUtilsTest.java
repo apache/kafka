@@ -27,7 +27,7 @@ public class WindowStoreUtilsTest {
     protected StateSerdes<String, String> serdes = new StateSerdes<>("dummy", new Serdes.StringSerde(), new Serdes.StringSerde());
 
     @Test
-    public void testSerialization() throws Exception {
+    public void testSerialization() {
         final String key = "key1";
         final long timestamp = 99L;
         final int seqNum = 3;

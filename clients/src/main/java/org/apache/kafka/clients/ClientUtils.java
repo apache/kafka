@@ -82,8 +82,6 @@ public class ClientUtils {
      */
     public static ChannelBuilder createChannelBuilder(AbstractConfig config) {
         SecurityProtocol securityProtocol = SecurityProtocol.forName(config.getString(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
-        if (!SecurityProtocol.nonTestingValues().contains(securityProtocol))
-            throw new ConfigException("Invalid SecurityProtocol " + securityProtocol);
         String clientSaslMechanism = config.getString(SaslConfigs.SASL_MECHANISM);
         return ChannelBuilders.clientChannelBuilder(securityProtocol, JaasContext.Type.CLIENT, config, null,
                 clientSaslMechanism, true);

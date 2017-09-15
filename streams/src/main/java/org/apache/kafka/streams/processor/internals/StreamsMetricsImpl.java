@@ -24,7 +24,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.slf4j.Logger;
@@ -171,8 +171,15 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
     private void addThroughputMetrics(String scopeName, Sensor sensor, String opName, Map<String, String> tags) {
-        maybeAddMetric(sensor, metrics.metricName(opName + "-rate", groupNameFromScope(scopeName),
-            "The average number of occurrence of " + opName + " operation per second.", tags), new Rate(new Count()));
+        MetricName rateMetricName = metrics.metricName(opName + "-rate", groupNameFromScope(scopeName),
+            "The average number of occurrence of " + opName + " operation per second.", tags);
+        MetricName totalMetricName = metrics.metricName(opName + "-total", groupNameFromScope(scopeName),
+                "The total number of occurrence of " + opName + " operations.", tags);
+        if (!metrics.metrics().containsKey(rateMetricName) && !metrics.metrics().containsKey(totalMetricName)) {
+            sensor.add(new Meter(new Count(), rateMetricName, totalMetricName));
+        } else {
+            log.trace("Trying to add metric twice: {} {}", rateMetricName, totalMetricName);
+        }
     }
 
     public void maybeAddMetric(Sensor sensor, MetricName name, MeasurableStat stat) {
