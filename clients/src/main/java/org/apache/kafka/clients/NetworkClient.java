@@ -588,7 +588,7 @@ public class NetworkClient implements KafkaClient {
         nodesNeedingApiVersionsFetch.remove(nodeId);
         switch (disconnectState.state()) {
             case AUTHENTICATION_FAILED:
-                log.error("Connection to node {} failed authentication due to :", nodeId, disconnectState.exception());
+                log.error("Connection to node {} failed authentication due to: {}", nodeId, disconnectState.exception().getMessage());
                 break;
             case AUTHENTICATE:
                 // This warning applies to older brokers which dont provide feedback on authentication failures
