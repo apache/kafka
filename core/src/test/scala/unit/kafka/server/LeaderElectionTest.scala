@@ -139,7 +139,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     controllerContext.liveBrokers = brokers.toSet
     val metrics = new Metrics
     val controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig, Time.SYSTEM,
-      metrics, new StateChangeLogger(controllerId, inControllerContext = true))
+      metrics, new StateChangeLogger(controllerId, inControllerContext = true, None))
     controllerChannelManager.startup()
     try {
       val staleControllerEpoch = 0

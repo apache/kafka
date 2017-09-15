@@ -46,7 +46,7 @@ class MetadataCache(brokerId: Int) extends Logging {
   private val partitionMetadataLock = new ReentrantReadWriteLock()
 
   this.logIdent = s"[Kafka Metadata Cache on broker $brokerId] "
-  private val stateChangeLogger = new StateChangeLogger(brokerId, inControllerContext = false)
+  private val stateChangeLogger = new StateChangeLogger(brokerId, inControllerContext = false, None)
 
   // This method is the main hotspot when it comes to the performance of metadata requests,
   // we should be careful about adding additional logic here.

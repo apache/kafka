@@ -24,8 +24,18 @@ import kafka.utils.Logging
  * context of the KafkaController or not (e.g. ReplicaManager and MetadataCache log to the state change logger
  * irrespective of whether the broker is the Controller).
  */
-class StateChangeLogger(brokerId: Int, inControllerContext: Boolean) extends Logging {
+class StateChangeLogger(brokerId: Int, inControllerContext: Boolean, controllerEpoch: Option[Int]) extends Logging {
+
+  if (controllerEpoch.isDefined && !inControllerContext)
+    throw new IllegalArgumentException("Controller epoch should only be defined if inControllerContext is true")
+
   override val loggerName = "state.change.logger"
-  private val prefix = if (inControllerContext) "Controller" else "Broker"
-  logIdent = s"$prefix $brokerId "
+
+  locally {
+    val prefix = if (inControllerContext) "Controller" else "Broker"
+    val epochEntry = controllerEpoch.fold("")(epoch => s" epoch=$epoch")
+    logIdent = s"[$prefix id=$brokerId$epochEntry] "
+  }
+
+  def withControllerEpoch(controllerEpoch: Int) = new StateChangeLogger(brokerId, inControllerContext, Some(controllerEpoch))
 }
