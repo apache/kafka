@@ -526,7 +526,7 @@ public enum Errors {
                 return new AuthenticationFailedException(message);
             }
     }),
-    UNKNOWN_PRODUCER(58, "The specified producerId does not exist on the broker. This is most likely because the last" +
+    UNKNOWN_PRODUCER(59, "The specified producerId does not exist on the broker. This is most likely because the last" +
         "message with the producer id was removed because the retention time has elapsed.",
         new ApiExceptionBuilder() {
             @Override
