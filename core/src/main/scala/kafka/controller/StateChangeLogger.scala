@@ -45,4 +45,6 @@ class StateChangeLogger(brokerId: Int, inControllerContext: Boolean, controllerE
   def withControllerEpoch(controllerEpoch: Int): StateChangeLogger =
     new StateChangeLogger(brokerId, inControllerContext, Some(controllerEpoch))
 
+  def messageWithPrefix(message: String): String = msgWithLogIdent(message)
+
 }

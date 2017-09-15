@@ -231,7 +231,7 @@ class PartitionStateMachine(controller: KafkaController, stateChangeLogger: Stat
           s"assigned replicas are [${replicaAssignment.mkString(",")}], live brokers are " +
           s"[${controllerContext.liveBrokerIds}]. No assigned replica is alive."
         stateChangeLog.error(failMsg)
-        throw new StateChangeFailedException(s"${stateChangeLog.logPrefix}$failMsg")
+        throw new StateChangeFailedException(stateChangeLog.messageWithPrefix(failMsg))
 
       // leader is the first replica in the list of assigned replicas
       case Some(leader) =>
@@ -267,7 +267,7 @@ class PartitionStateMachine(controller: KafkaController, stateChangeLogger: Stat
               s"since LeaderAndIsr path already exists with value ${leaderIsrAndEpoch.leaderAndIsr} and controller " +
               s"epoch ${leaderIsrAndEpoch.controllerEpoch}"
             stateChangeLog.error(failMsg)
-            throw new StateChangeFailedException(s"${stateChangeLog.logPrefix}$failMsg")
+            throw new StateChangeFailedException(stateChangeLog.messageWithPrefix(failMsg))
         }
     }
   }
@@ -297,7 +297,7 @@ class PartitionStateMachine(controller: KafkaController, stateChangeLogger: Stat
             s"already written by another controller. This probably means that the current controller $controllerId went " +
             s"through a soft failure and another controller was elected with epoch $controllerEpoch."
           stateChangeLog.error(failMsg)
-          throw new StateChangeFailedException(s"${stateChangeLog.logPrefix}$failMsg")
+          throw new StateChangeFailedException(stateChangeLog.messageWithPrefix(failMsg))
         }
         // elect new leader or throw exception
         val (leaderAndIsr, replicas) = leaderSelector.selectLeader(topicAndPartition, currentLeaderAndIsr)
@@ -321,7 +321,7 @@ class PartitionStateMachine(controller: KafkaController, stateChangeLogger: Stat
       case sce: Throwable =>
         val failMsg = s"Encountered error while electing leader for partition $topicAndPartition due to: ${sce.getMessage}"
         stateChangeLog.error(failMsg)
-        throw new StateChangeFailedException(s"${stateChangeLog.logPrefix}$failMsg", sce)
+        throw new StateChangeFailedException(stateChangeLog.messageWithPrefix(failMsg), sce)
     }
     debug(s"After leader election, leader cache is updated to ${controllerContext.partitionLeadershipInfo}")
   }
