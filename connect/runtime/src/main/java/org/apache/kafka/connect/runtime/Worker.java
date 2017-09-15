@@ -491,11 +491,11 @@ public class Worker {
 
     private void awaitStopTask(ConnectorTaskId taskId, long timeout) {
         WorkerTask task;
-        Future<?> handle;
+        Future<?> future;
 
         synchronized (taskAndThreadLock) {
             task = tasks.remove(taskId);
-            handle = threads.remove(taskId);
+            future = threads.remove(taskId);
         }
 
         if (task == null) {
@@ -507,7 +507,7 @@ public class Worker {
             log.error("Graceful stop of task {} failed. Cancelling and forcibly interrupting.", task.id());
             task.cancel();
 
-            if (handle == null) {
+            if (future == null) {
                 log.warn("No associated Future found for task {}", taskId);
                 return;
             }
@@ -515,7 +515,7 @@ public class Worker {
             // Interrupt the thread that the task is running in since it hasn't stopped on its
             // own by this point. This prevents scenarios where a task runs indefinitely because
             // it's blocked on something (lock, network I/O, etc.).
-            handle.cancel(true);
+            future.cancel(true);
         }
     }
 
