@@ -35,9 +35,10 @@ import org.apache.kafka.common.errors.ApiException;
  *   <li>EXPIRED: Idle connections are moved to EXPIRED state on idle timeout and the channel is closed.</li>
  *   <li>FAILED_SEND: Channels transition from READY to FAILED_SEND state if the channel is closed due
  *       to a send failure.</li>
- *   <li>AUTHENTICATION_FAILED: Channels are moved to this state when brokers with versions 1.0.0 and above
- *       provide an error response during SASL authentication. {@link #exception()} gives the reason
- *       provided by the broker for authentication failure.</li>
+ *   <li>AUTHENTICATION_FAILED: Channels are moved to this state if the requested SASL mechanism is not
+ *       enabled in the broker or when brokers with versions 1.0.0 and above provide an error response
+ *       during SASL authentication. {@link #exception()} gives the reason provided by the broker for
+ *       authentication failure.</li>
  *   <li>LOCAL_CLOSE: Channels are moved to LOCAL_CLOSE state if close() is initiated locally.</li>
  * </ul>
  * If the remote endpoint closes a channel, the state of the channel reflects the state the channel

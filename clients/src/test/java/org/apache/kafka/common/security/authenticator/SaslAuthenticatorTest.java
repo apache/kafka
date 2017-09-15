@@ -460,7 +460,9 @@ public class SaslAuthenticatorTest {
         SaslHandshakeRequest request = new SaslHandshakeRequest("PLAIN");
         RequestHeader header = new RequestHeader(ApiKeys.SASL_HANDSHAKE, Short.MAX_VALUE, "someclient", 2);
         selector.send(request.toSend(node1, header));
-        NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.state()); // FIXME: why is this not authenticate state?
+        // This test uses a non-SASL PLAINTEXT client in order to do manual handshake.
+        // So the channel is in READY state.
+        NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.state());
         selector.close();
 
         // Test good connection still works
