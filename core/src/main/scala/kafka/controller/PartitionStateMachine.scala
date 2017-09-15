@@ -283,7 +283,7 @@ class PartitionStateMachine(controller: KafkaController, stateChangeLogger: Stat
     val topicAndPartition = TopicAndPartition(topic, partition)
     val stateChangeLog = stateChangeLogger.withControllerEpoch(controller.epoch)
     // handle leader election for the partitions whose leader is no longer alive
-    stateChangeLog.trace("Started leader election for partition $topicPartition")
+    stateChangeLog.trace(s"Started leader election for partition $topicAndPartition")
     try {
       var zookeeperPathUpdateSucceeded: Boolean = false
       var newLeaderAndIsr: LeaderAndIsr = null
