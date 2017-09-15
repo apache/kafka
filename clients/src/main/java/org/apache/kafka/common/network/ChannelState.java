@@ -27,14 +27,17 @@ import org.apache.kafka.common.errors.ApiException;
  *       to AUTHENTICATE. Failures in NOT_CONNECTED state typically indicate that the
  *       remote endpoint is unavailable, which may be due to misconfigured endpoints.</li>
  *   <li>AUTHENTICATE: SSL, SASL_SSL and SASL_PLAINTEXT channels are in AUTHENTICATE state during SSL and
- *       SASL handshake. Disconnections in AUTHENTICATE state may indicate that SSL or SASL
- *       authentication failed. Channels transition to READY state when authentication completes
+ *       SASL handshake. Disconnections in AUTHENTICATE state may indicate that authentication failed with
+ *       SSL or SASL (broker version < 1.0.0). Channels transition to READY state when authentication completes
  *       successfully.</li>
  *   <li>READY: Connected, authenticated channels are in READY state. Channels may transition from
  *       READY to EXPIRED, FAILED_SEND or LOCAL_CLOSE.</li>
  *   <li>EXPIRED: Idle connections are moved to EXPIRED state on idle timeout and the channel is closed.</li>
  *   <li>FAILED_SEND: Channels transition from READY to FAILED_SEND state if the channel is closed due
  *       to a send failure.</li>
+ *   <li>AUTHENTICATION_FAILED: Channels are moved to this state when brokers with versions 1.0.0 and above
+ *       provide an error response during SASL authentication. {@link #exception()} gives the reason
+ *       provided by the broker for authentication failure.</li>
  *   <li>LOCAL_CLOSE: Channels are moved to LOCAL_CLOSE state if close() is initiated locally.</li>
  * </ul>
  * If the remote endpoint closes a channel, the state of the channel reflects the state the channel
@@ -56,12 +59,11 @@ public class ChannelState {
         READY,
         EXPIRED,
         FAILED_SEND,
-        UNSUPPORTED_AUTHENTICATION_MECHANISM,
         AUTHENTICATION_FAILED,
         LOCAL_CLOSE
     };
-    // Authentication failure states have custom exceptions associated with them.
-    // For others, create a reusable `ChannelState` instance per-state.
+    // AUTHENTICATION_FAILED has a custom exception. For other states,
+    // create a reusable `ChannelState` instance per-state.
     public static final ChannelState NOT_CONNECTED = new ChannelState(State.NOT_CONNECTED);
     public static final ChannelState AUTHENTICATE = new ChannelState(State.AUTHENTICATE);
     public static final ChannelState READY = new ChannelState(State.READY);
