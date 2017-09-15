@@ -49,6 +49,7 @@ public class KStreamTestDriver extends ExternalResource {
     private ProcessorTopology topology;
     private MockProcessorContext context;
     private ProcessorTopology globalTopology;
+    private final LogContext logContext = new LogContext("testCache ");
 
     @Deprecated
     public void setUp(final KStreamBuilder builder) {
@@ -82,7 +83,7 @@ public class KStreamTestDriver extends ExternalResource {
         builder.setApplicationId("TestDriver");
         topology = builder.build(null);
         globalTopology = builder.buildGlobalStateTopology();
-        final ThreadCache cache = new ThreadCache(new LogContext("testCache "), cacheSize, new MockStreamsMetrics(new Metrics()));
+        final ThreadCache cache = new ThreadCache(logContext, cacheSize, new MockStreamsMetrics(new Metrics()));
         context = new MockProcessorContext(stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
         context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "topic"));
         // init global topology first as it will add stores to the
@@ -123,7 +124,7 @@ public class KStreamTestDriver extends ExternalResource {
         topology = internalTopologyBuilder.build(null);
         globalTopology = internalTopologyBuilder.buildGlobalStateTopology();
 
-        final ThreadCache cache = new ThreadCache(new LogContext("testCache "), cacheSize, new MockStreamsMetrics(new Metrics()));
+        final ThreadCache cache = new ThreadCache(logContext, cacheSize, new MockStreamsMetrics(new Metrics()));
         context = new MockProcessorContext(stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
         context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "topic"));
 

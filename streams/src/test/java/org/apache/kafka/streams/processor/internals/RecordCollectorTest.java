@@ -44,6 +44,8 @@ import static org.junit.Assert.assertEquals;
 
 public class RecordCollectorTest {
 
+    private final LogContext logContext = new LogContext("test ");
+
     private final List<PartitionInfo> infos = Arrays.asList(
             new PartitionInfo("topic1", 0, Node.noNode(), new Node[0], new Node[0]),
             new PartitionInfo("topic1", 1, Node.noNode(), new Node[0], new Node[0]),
@@ -137,7 +139,7 @@ public class RecordCollectorTest {
                     }
                 },
                 "test",
-                new LogContext("test "));
+                logContext);
 
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
         final Long offset = collector.offsets().get(new TopicPartition("topic1", 0));
@@ -155,7 +157,7 @@ public class RecordCollectorTest {
                     }
                 },
                 "test",
-                new LogContext("test "));
+                logContext);
 
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
 
@@ -173,7 +175,7 @@ public class RecordCollectorTest {
                     }
                 },
                 "test",
-                new LogContext("test "));
+                logContext);
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
     }
@@ -190,7 +192,7 @@ public class RecordCollectorTest {
                     }
                 },
                 "test",
-                new LogContext("test "));
+                logContext);
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
         collector.flush();
     }
@@ -207,7 +209,7 @@ public class RecordCollectorTest {
                     }
                 },
                 "test",
-                new LogContext("test "));
+                logContext);
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
         collector.close();
     }
@@ -224,7 +226,7 @@ public class RecordCollectorTest {
 
             },
             "test",
-                new LogContext("test "));
+                logContext);
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
     }
 }
