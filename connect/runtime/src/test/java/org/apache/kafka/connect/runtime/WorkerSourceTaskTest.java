@@ -61,8 +61,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.Assert.*;
-import static org.hamcrest.CoreMatchers.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertThat;
+import static org.hamcrest.CoreMatchers.equalTo;
 
 @RunWith(PowerMockRunner.class)
 public class WorkerSourceTaskTest extends ThreadedTest {
@@ -264,7 +267,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
             public Future<Void> answer() throws Throwable {
                 polledRecordsAndOffsetCaptures.addCurrentlyWrittenOffsets(writtenAndFlushedOffsets);
                 TestFuture<Void> future = new TestFuture<Void>();
-                future.resolveOnGet((Void)null);
+                future.resolveOnGet((Void) null);
                 return future;
             }
         });
@@ -317,7 +320,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         Map<Map<String, Object>, Map<String, Object>> expectedWrittenAndFlushedOffsetsAtTimeOfCommit = new HashMap<>();
         for (List<SourceRecord> records : polledRecordAtTimeOfCommit) {
             for (SourceRecord record : records) {
-                expectedWrittenAndFlushedOffsetsAtTimeOfCommit.put((Map<String, Object>)record.sourcePartition(), (Map<String, Object>)record.sourceOffset());
+                expectedWrittenAndFlushedOffsetsAtTimeOfCommit.put((Map<String, Object>) record.sourcePartition(), (Map<String, Object>) record.sourceOffset());
             }
         }
 
@@ -735,7 +738,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         void addCurrentlyWrittenOffsets(Map<Map<String, Object>, Map<String, Object>> writtenOffsets) {
             for (int i = 0; i < offsetPartitionsWritten.getValues().size(); i++) {
-                writtenOffsets.put((Map<String, Object>)offsetPartitionsWritten.getValues().get(i), (Map<String, Object>)offsetOffsetsWritten.getValues().get(i));
+                writtenOffsets.put((Map<String, Object>) offsetPartitionsWritten.getValues().get(i), (Map<String, Object>) offsetOffsetsWritten.getValues().get(i));
             }
             offsetPartitionsWritten.reset();
             offsetOffsetsWritten.reset();
@@ -753,7 +756,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
                     @Override
                     public List<SourceRecord> answer() throws Throwable {
                         int recordsToAnswer = count.getAndIncrement();
-                        List<SourceRecord> response = (recordsToAnswer < recordss.length)?recordss[recordsToAnswer]:new ArrayList();
+                        List<SourceRecord> response = (recordsToAnswer < recordss.length) ? recordss[recordsToAnswer] : new ArrayList();
                         polledRecordsAndOffsetCaptures.polledRecords.add(response);
                         if (recordsToAnswer == recordss.length - 1) allPolledLatch.countDown();
                         return response;
