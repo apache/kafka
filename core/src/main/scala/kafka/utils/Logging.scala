@@ -31,6 +31,8 @@ trait Logging {
   private def msgWithLogIdent(msg: String) = 
     if(logIdent == null) msg else logIdent + msg
 
+  def logPrefix: String = logIdent
+
   def trace(msg: => String): Unit = {
     if (logger.isTraceEnabled())
       logger.trace(msgWithLogIdent(msg))

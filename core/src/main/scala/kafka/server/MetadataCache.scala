@@ -45,7 +45,7 @@ class MetadataCache(brokerId: Int) extends Logging {
   private val aliveNodes = mutable.Map[Int, collection.Map[ListenerName, Node]]()
   private val partitionMetadataLock = new ReentrantReadWriteLock()
 
-  this.logIdent = s"[Kafka Metadata Cache on broker $brokerId] "
+  this.logIdent = s"[MetadataCache brokerId=$brokerId] "
   private val stateChangeLogger = new StateChangeLogger(brokerId, inControllerContext = false, None)
 
   // This method is the main hotspot when it comes to the performance of metadata requests,
@@ -208,12 +208,12 @@ class MetadataCache(brokerId: Int) extends Logging {
         val controllerEpoch = updateMetadataRequest.controllerEpoch
         if (info.basePartitionState.leader == LeaderAndIsr.LeaderDuringDelete) {
           removePartitionInfo(tp.topic, tp.partition)
-          stateChangeLogger.trace(s"deleted partition $tp from metadata cache in response to UpdateMetadata " +
+          stateChangeLogger.trace(s"Deleted partition $tp from metadata cache in response to UpdateMetadata " +
             s"request sent by controller $controllerId epoch $controllerEpoch with correlation id $correlationId")
           deletedPartitions += tp
         } else {
           addOrUpdatePartitionInfo(tp.topic, tp.partition, info)
-          stateChangeLogger.trace(s"cached leader info $info for partition $tp in response to " +
+          stateChangeLogger.trace(s"Cached leader info $info for partition $tp in response to " +
             s"UpdateMetadata request sent by controller $controllerId epoch $controllerEpoch with correlation id $correlationId")
         }
       }

@@ -317,7 +317,7 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   def stopReplica(topicPartition: TopicPartition, deletePartition: Boolean): Errors  = {
-    stateChangeLogger.trace(s"handling stop replica (delete=$deletePartition) for partition $topicPartition")
+    stateChangeLogger.trace(s"Handling stop replica (delete=$deletePartition) for partition $topicPartition")
     val error = Errors.NONE
     getPartition(topicPartition) match {
       case Some(partition) =>
@@ -342,9 +342,9 @@ class ReplicaManager(val config: KafkaConfig,
         // This could happen when topic is being deleted while broker is down and recovers.
         if (deletePartition && logManager.getLog(topicPartition).isDefined)
           logManager.asyncDelete(topicPartition)
-        stateChangeLogger.trace(s"ignoring stop replica (delete=$deletePartition) for partition $topicPartition as replica doesn't exist on broker")
+        stateChangeLogger.trace(s"Ignoring stop replica (delete=$deletePartition) for partition $topicPartition as replica doesn't exist on broker")
     }
-    stateChangeLogger.trace(s"finished handling stop replica (delete=$deletePartition) for partition $topicPartition")
+    stateChangeLogger.trace(s"Finished handling stop replica (delete=$deletePartition) for partition $topicPartition")
     error
   }
 
@@ -352,7 +352,7 @@ class ReplicaManager(val config: KafkaConfig,
     replicaStateChangeLock synchronized {
       val responseMap = new collection.mutable.HashMap[TopicPartition, Errors]
       if(stopReplicaRequest.controllerEpoch() < controllerEpoch) {
-        stateChangeLogger.warn("received stop replica request from an old controller epoch " +
+        stateChangeLogger.warn("Received stop replica request from an old controller epoch " +
           s"${stopReplicaRequest.controllerEpoch}. Latest known controller epoch is $controllerEpoch")
         (responseMap, Errors.STALE_CONTROLLER_EPOCH)
       } else {
@@ -366,7 +366,7 @@ class ReplicaManager(val config: KafkaConfig,
             responseMap.put(topicPartition, error)
           } catch {
             case e: KafkaStorageException =>
-              stateChangeLogger.error(s"ignoring stop replica (delete=${stopReplicaRequest.deletePartitions}) for " +
+              stateChangeLogger.error(s"Ignoring stop replica (delete=${stopReplicaRequest.deletePartitions}) for " +
                 s"partition $topicPartition due to storage exception", e)
               responseMap.put(topicPartition, Errors.KAFKA_STORAGE_ERROR)
           }
@@ -978,17 +978,16 @@ class ReplicaManager(val config: KafkaConfig,
                              leaderAndISRRequest: LeaderAndIsrRequest,
                              onLeadershipChange: (Iterable[Partition], Iterable[Partition]) => Unit): BecomeLeaderOrFollowerResult = {
     leaderAndISRRequest.partitionStates.asScala.foreach { case (topicPartition, stateInfo) =>
-      stateChangeLogger.trace(s"received LeaderAndIsr request $stateInfo " +
+      stateChangeLogger.trace(s"Received LeaderAndIsr request $stateInfo " +
         s"correlation id $correlationId from controller ${leaderAndISRRequest.controllerId} " +
         s"epoch ${leaderAndISRRequest.controllerEpoch} for partition $topicPartition")
     }
     replicaStateChangeLock synchronized {
       val responseMap = new mutable.HashMap[TopicPartition, Errors]
       if (leaderAndISRRequest.controllerEpoch < controllerEpoch) {
-        stateChangeLogger.warn(s"ignoring LeaderAndIsr request from " +
-          s"controller ${leaderAndISRRequest.controllerId} with correlation id $correlationId since " +
-          s"its controller epoch ${leaderAndISRRequest.controllerEpoch} is old. Latest known controller " +
-          s"epoch is $controllerEpoch")
+        stateChangeLogger.warn(s"Ignoring LeaderAndIsr request from controller ${leaderAndISRRequest.controllerId} with " +
+          s"correlation id $correlationId since its controller epoch ${leaderAndISRRequest.controllerEpoch} is old. " +
+          s"Latest known controller epoch is $controllerEpoch")
         BecomeLeaderOrFollowerResult(responseMap, Errors.STALE_CONTROLLER_EPOCH)
       } else {
         val controllerId = leaderAndISRRequest.controllerId
@@ -1254,8 +1253,8 @@ class ReplicaManager(val config: KafkaConfig,
       }
     } catch {
       case e: Throwable =>
-        stateChangeLogger.error(s"Error on broker $localBrokerId while processing LeaderAndIsr request with " +
-          s"correlationId $correlationId received from controller $controllerId epoch $epoch", e)
+        stateChangeLogger.error(s"Error while processing LeaderAndIsr request with correlationId $correlationId " +
+          s"received from controller $controllerId epoch $epoch", e)
         // Re-throw the exception for it to be caught in KafkaApis
         throw e
     }

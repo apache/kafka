@@ -247,8 +247,8 @@ class RequestSendThread(val controllerId: Int,
 
         val response = clientResponse.responseBody
 
-        stateChangeLogger.trace("epoch %d received response %s for a request sent to broker %s"
-          .format(controllerContext.epoch, response.toString(requestHeader.apiVersion), brokerNode.toString))
+        stateChangeLogger.withControllerEpoch(controllerContext.epoch).trace("Received response " +
+          s"${response.toString(requestHeader.apiVersion)} for a request sent to broker $brokerNode")
 
         if (callback != null) {
           callback(response)
@@ -424,7 +424,6 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
           s"for partition $tp")
       }
 
-      // Copy the updateMetadataRequestPartitionInfoMap
       val partitionStates = Map.empty ++ updateMetadataRequestPartitionInfoMap
       val updateMetadataRequestVersion: Short =
         if (controller.config.interBrokerProtocolVersion >= KAFKA_1_0_IV0) 4
