@@ -70,7 +70,8 @@ public enum ApiKeys {
     DESCRIBE_CONFIGS(32, "DescribeConfigs"),
     ALTER_CONFIGS(33, "AlterConfigs"),
     ALTER_REPLICA_DIR(34, "AlterReplicaDir"),
-    DESCRIBE_LOG_DIRS(35, "DescribeLogDirs");
+    DESCRIBE_LOG_DIRS(35, "DescribeLogDirs"),
+    SASL_AUTHENTICATE(36, "SaslAuthenticate");
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;

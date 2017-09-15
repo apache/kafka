@@ -18,6 +18,7 @@ package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
 import org.apache.kafka.common.security.auth.PlaintextAuthenticationContext;
@@ -76,6 +77,12 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
         @Override
         public boolean complete() {
             return true;
+        }
+
+        @Override
+        public Errors error() {
+            // PLAINTEXT never fails authentication
+            return Errors.NONE;
         }
 
         @Override

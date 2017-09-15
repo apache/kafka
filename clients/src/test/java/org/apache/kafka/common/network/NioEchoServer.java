@@ -53,7 +53,7 @@ public class NioEchoServer extends Thread {
     private final CredentialCache credentialCache;
 
     public NioEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol, AbstractConfig config,
-            String serverHost, ChannelBuilder channelBuilder) throws Exception {
+            String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache) throws Exception {
         super("echoserver");
         setDaemon(true);
         serverSocketChannel = ServerSocketChannel.open();
@@ -62,7 +62,7 @@ public class NioEchoServer extends Thread {
         this.port = serverSocketChannel.socket().getLocalPort();
         this.socketChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
         this.newChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
-        this.credentialCache = new CredentialCache();
+        this.credentialCache = credentialCache;
         if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL)
             ScramCredentialUtils.createCache(credentialCache, ScramMechanism.mechanismNames());
         if (channelBuilder == null)
