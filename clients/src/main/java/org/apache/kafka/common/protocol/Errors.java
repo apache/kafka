@@ -72,6 +72,7 @@ import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.TransactionCoordinatorFencedException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.errors.UnknownProducerException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
@@ -524,7 +525,15 @@ public enum Errors {
             public ApiException build(String message) {
                 return new AuthenticationFailedException(message);
             }
-        });
+    }),
+    UNKNOWN_PRODUCER(58, "The specified producerId does not exist on the broker. This is most likely because the last" +
+        "message with the producer id was removed because the retention time has elapsed.",
+        new ApiExceptionBuilder() {
+            @Override
+            public ApiException build(String message) {
+                return new UnknownProducerException(message);
+            }
+    });
 
     private interface ApiExceptionBuilder {
         ApiException build(String message);

@@ -35,6 +35,7 @@ import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
+import org.apache.kafka.common.errors.UnknownProducerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.metrics.Measurable;
@@ -511,7 +512,7 @@ public class Sender implements Runnable {
             this.accumulator.deallocate(batch);
             this.sensors.recordBatchSplit();
         } else if (error != Errors.NONE) {
-            if (canRetry(batch, error)) {
+            if (canRetry(batch, response)) {
                 log.warn("Got error produce response with correlation id {} on topic-partition {}, retrying ({} attempts left). Error: {}",
                         correlationId,
                         batch.topicPartition,
@@ -578,6 +579,7 @@ public class Sender implements Runnable {
                 log.debug("ProducerId: {}; Set last ack'd sequence number for topic-partition {} to {}", batch.producerId(), batch.topicPartition,
                         transactionManager.lastAckedSequence(batch.topicPartition));
             }
+            transactionManager.updateLastAckedOffset(batch);
             transactionManager.removeInFlightBatch(batch);
         }
 
@@ -591,7 +593,7 @@ public class Sender implements Runnable {
 
     private void failBatch(ProducerBatch batch, long baseOffset, long logAppendTime, RuntimeException exception, boolean adjustSequenceNumbers) {
         if (transactionManager != null) {
-            if (exception instanceof OutOfOrderSequenceException
+            if ((exception instanceof OutOfOrderSequenceException || exception instanceof UnknownProducerException)
                     && !transactionManager.isTransactional()
                     && transactionManager.hasProducerId(batch.producerId())) {
                 log.error("The broker received an out of order sequence number for topic-partition " +
@@ -625,11 +627,9 @@ public class Sender implements Runnable {
      * We can also retry OutOfOrderSequence exceptions for future batches, since if the first batch has failed, the future
      * batches are certain to fail with an OutOfOrderSequence exception.
      */
-    private boolean canRetry(ProducerBatch batch, Errors error) {
+    private boolean canRetry(ProducerBatch batch, ProduceResponse.PartitionResponse response) {
         return batch.attempts() < this.retries &&
-                ((error.exception() instanceof RetriableException) ||
-                        (error.exception() instanceof OutOfOrderSequenceException
-                                && transactionManager.canRetryOutOfOrderSequenceException(batch)));
+                ((response.error.exception() instanceof RetriableException) || transactionManager.canRetry(response, batch));
     }
 
     /**

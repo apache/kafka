@@ -780,4 +780,8 @@ public class MemoryRecordsBuilder {
     public int baseSequence() {
         return this.baseSequence;
     }
+
+    public long lastOffset() {
+        return this.lastOffset;
+    }
 }
