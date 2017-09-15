@@ -50,7 +50,7 @@ public class SaslHandshakeRequest extends AbstractRequest {
 
         @Override
         public SaslHandshakeRequest build(short version) {
-            return new SaslHandshakeRequest(mechanism);
+            return new SaslHandshakeRequest(mechanism, version);
         }
 
         @Override
@@ -64,7 +64,11 @@ public class SaslHandshakeRequest extends AbstractRequest {
     }
 
     public SaslHandshakeRequest(String mechanism) {
-        super(ApiKeys.SASL_HANDSHAKE.latestVersion());
+        this(mechanism, ApiKeys.SASL_HANDSHAKE.latestVersion());
+    }
+
+    public SaslHandshakeRequest(String mechanism, short version) {
+        super(version);
         this.mechanism = mechanism;
     }
 
@@ -82,6 +86,7 @@ public class SaslHandshakeRequest extends AbstractRequest {
         short versionId = version();
         switch (versionId) {
             case 0:
+            case 1:
                 List<String> enabledMechanisms = Collections.emptyList();
                 return new SaslHandshakeResponse(Errors.forException(e), enabledMechanisms);
             default:

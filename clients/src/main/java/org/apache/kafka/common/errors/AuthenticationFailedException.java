@@ -14,22 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.protocol;
+package org.apache.kafka.common.errors;
 
-import org.junit.Assert;
-import org.junit.Test;
+public class AuthenticationFailedException extends AuthenticationException {
 
-public class ProtoUtilsTest {
-    @Test
-    public void testDelayedAllocationSchemaDetection() throws Exception {
-        //verifies that schemas known to retain a reference to the underlying byte buffer are correctly detected.
-        for (ApiKeys key : ApiKeys.values()) {
-            if (key == ApiKeys.PRODUCE || key == ApiKeys.JOIN_GROUP || key == ApiKeys.SYNC_GROUP || key == ApiKeys.SASL_AUTHENTICATE) {
-                Assert.assertTrue(Protocol.requiresDelayedDeallocation(key.id));
-            } else {
-                Assert.assertFalse(Protocol.requiresDelayedDeallocation(key.id));
-            }
-        }
+    private static final long serialVersionUID = 1L;
 
+    public AuthenticationFailedException(String message) {
+        super(message);
     }
+
+    public AuthenticationFailedException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
 }
