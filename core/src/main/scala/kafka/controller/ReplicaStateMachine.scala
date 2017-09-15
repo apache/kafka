@@ -158,7 +158,7 @@ class ReplicaStateMachine(controller: KafkaController, stateChangeLogger: StateC
             case None => // new leader request will be sent to this replica when one gets elected
           }
           replicaState.put(partitionAndReplica, NewReplica)
-
+          logStateChange()
         case ReplicaDeletionStarted =>
           replicaState.put(partitionAndReplica, ReplicaDeletionStarted)
           // send stop replica command
