@@ -677,10 +677,6 @@ public class TransactionManager {
                 (batch.sequenceHasBeenReset() || !isNextSequence(batch.topicPartition, batch.baseSequence())))
             return true;
 
-        long lastOffset = -1;
-        if (lastAckedOffset.containsKey(batch.topicPartition))
-            lastOffset = lastAckedOffset.get(batch.topicPartition);
-
         if (error == Errors.UNKNOWN_PRODUCER && response.logStartOffset == -1)
             // We don't know the log start offset with this response. We should just retry the request until we get it.
             return true;
@@ -692,7 +688,7 @@ public class TransactionManager {
                 // come back from the broker, they would also come with an UNKNOWN_PRODUCER error. In this case, we should not
                 // reset the sequence numbers to the beginning.
                 return true;
-            } else if (lastOffset < response.logStartOffset) {
+            } else if (lastAckedOffset(batch.topicPartition) < response.logStartOffset) {
                 // The head of the log has been removed, probably due to the retention time elapsing. In this case,
                 // we expect to lose the producer state. Reset the sequences of all inflight batches to be from the beginning
                 // and retry them.
