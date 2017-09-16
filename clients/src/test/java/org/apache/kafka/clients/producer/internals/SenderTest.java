@@ -551,7 +551,8 @@ public class SenderTest {
 
 
     @Test
-    public void testIdempotenceWithMultipleInflightsFirstFails() throws Exception {
+    public void testIdempotenceWithMultipleInflightsRetriedInOrder() throws Exception {
+        // Send multiple in flight requests, retry them all one at a time, in the correct order.
         final long producerId = 343434L;
         TransactionManager transactionManager = new TransactionManager();
         setupWithTransactionState(transactionManager);
@@ -572,51 +573,79 @@ public class SenderTest {
         // Send second ProduceRequest
         Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
         sender.run(time.milliseconds());
-        assertEquals(2, client.inFlightRequestCount());
-        assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
+
+         // Send third ProduceRequest
+        Future<RecordMetadata> request3 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
+        sender.run(time.milliseconds());
+
+        assertEquals(3, client.inFlightRequestCount());
+        assertEquals(3, transactionManager.sequenceNumber(tp0).longValue());
         assertEquals(-1, transactionManager.lastAckedSequence(tp0));
         assertFalse(request1.isDone());
         assertFalse(request2.isDone());
+        assertFalse(request3.isDone());
         assertTrue(client.isReady(node, time.milliseconds()));
 
         sendIdempotentProducerResponse(0, tp0, Errors.LEADER_NOT_AVAILABLE, -1L);
-
         sender.run(time.milliseconds()); // receive response 0
 
-        assertEquals(1, client.inFlightRequestCount());
+        // Queue the fourth request, it shouldn't be sent until the first 3 complete.
+        Future<RecordMetadata> request4 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
+
+        assertEquals(2, client.inFlightRequestCount());
         assertEquals(-1, transactionManager.lastAckedSequence(tp0));
 
         sendIdempotentProducerResponse(1, tp0, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, -1L);
+        sender.run(time.milliseconds()); // re send request 1, receive response 2
 
-        sender.run(time.milliseconds()); // re send request 0, receive response 1
+        sendIdempotentProducerResponse(2, tp0, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, -1L);
+        sender.run(time.milliseconds()); // receive response 3
 
         assertEquals(-1, transactionManager.lastAckedSequence(tp0));
         assertEquals(1, client.inFlightRequestCount());
 
         sender.run(time.milliseconds()); // Do nothing, we are reduced to one in flight request during retries.
 
+        assertEquals(3, transactionManager.sequenceNumber(tp0).longValue());  // the batch for request 4 shouldn't have been drained, and hence the sequence should not have been incremented.
         assertEquals(1, client.inFlightRequestCount());
 
         assertEquals(-1, transactionManager.lastAckedSequence(tp0));
 
         sendIdempotentProducerResponse(0, tp0, Errors.NONE, 0L);
-        sender.run(time.milliseconds());  // receive response 0
+        sender.run(time.milliseconds());  // receive response 1
         assertEquals(0, transactionManager.lastAckedSequence(tp0));
-        assertEquals(0, client.inFlightRequestCount());
-
-        assertFalse(request2.isDone());
         assertTrue(request1.isDone());
         assertEquals(0, request1.get().offset());
 
-        sender.run(time.milliseconds()); // send request 1
-        assertEquals(1, client.inFlightRequestCount());
-        sendIdempotentProducerResponse(1, tp0, Errors.NONE, 1L);
-        sender.run(time.milliseconds());  // receive response 1
 
+        assertFalse(client.hasInFlightRequests());
+        sender.run(time.milliseconds()); // send request 2;
+        assertEquals(1, client.inFlightRequestCount());
+
+        sendIdempotentProducerResponse(1, tp0, Errors.NONE, 1L);
+        sender.run(time.milliseconds());  // receive response 2
+        assertEquals(1, transactionManager.lastAckedSequence(tp0));
         assertTrue(request2.isDone());
         assertEquals(1, request2.get().offset());
+
         assertFalse(client.hasInFlightRequests());
-        assertEquals(1, transactionManager.lastAckedSequence(tp0));
+
+        sender.run(time.milliseconds()); // send request 3
+        assertEquals(1, client.inFlightRequestCount());
+
+        sendIdempotentProducerResponse(2, tp0, Errors.NONE, 2L);
+        sender.run(time.milliseconds());  // receive response 3, send request 4 since we are out of 'retry' mode.
+        assertEquals(2, transactionManager.lastAckedSequence(tp0));
+        assertTrue(request3.isDone());
+        assertEquals(2, request3.get().offset());
+
+        assertEquals(1, client.inFlightRequestCount());
+
+        sendIdempotentProducerResponse(3, tp0, Errors.NONE, 3L);
+        sender.run(time.milliseconds());  // receive response 4
+        assertEquals(3, transactionManager.lastAckedSequence(tp0));
+        assertTrue(request4.isDone());
+        assertEquals(3, request4.get().offset());
     }
 
     @Test
