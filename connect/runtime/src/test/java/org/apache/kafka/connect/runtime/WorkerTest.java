@@ -832,7 +832,7 @@ public class WorkerTest extends ThreadedTest {
         worker.start();
 
         assertEquals(Collections.emptySet(), worker.taskIds());
-        assertFalse(worker.isTaskThreadRunning(TASK_ID));
+        assertFalse(worker.isTaskFutureRunning(TASK_ID));
 
         // Start running the task in an executor and attempt to wait a little while until
         // it starts to block indefinitely. This ensures that our call to .stopAndAwaitTask()
@@ -841,12 +841,12 @@ public class WorkerTest extends ThreadedTest {
         started.await(10, TimeUnit.SECONDS);
 
         assertEquals(Collections.singleton(TASK_ID), worker.taskIds());
-        assertTrue(worker.isTaskThreadRunning(TASK_ID));
+        assertTrue(worker.isTaskFutureRunning(TASK_ID));
 
         worker.stopAndAwaitTask(TASK_ID);
 
         assertEquals(Collections.emptySet(), worker.taskIds());
-        assertFalse(worker.isTaskThreadRunning(TASK_ID));
+        assertFalse(worker.isTaskFutureRunning(TASK_ID));
 
         worker.stop();
 

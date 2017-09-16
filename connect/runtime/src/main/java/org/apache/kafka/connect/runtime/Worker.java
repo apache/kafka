@@ -84,8 +84,8 @@ public class Worker {
 
     private final ConcurrentMap<String, WorkerConnector> connectors = new ConcurrentHashMap<>();
     private final ConcurrentMap<ConnectorTaskId, WorkerTask> tasks = new ConcurrentHashMap<>();
-    private final ConcurrentMap<ConnectorTaskId, Future<?>> threads = new ConcurrentHashMap<>();
-    private final Object taskAndThreadLock = new Object();
+    private final ConcurrentMap<ConnectorTaskId, Future<?>> futures = new ConcurrentHashMap<>();
+    private final Object taskAndFutureLock = new Object();
 
     private SourceTaskOffsetCommitter sourceTaskOffsetCommitter;
 
@@ -418,12 +418,12 @@ public class Worker {
             return false;
         }
 
-        synchronized (taskAndThreadLock) {
+        synchronized (taskAndFutureLock) {
             WorkerTask existing = tasks.putIfAbsent(id, workerTask);
             if (existing != null)
                 throw new ConnectException("Task already exists in this worker: " + id);
 
-            threads.put(id, executor.submit(workerTask));
+            futures.put(id, executor.submit(workerTask));
         }
 
         if (workerTask instanceof WorkerSourceTask) {
@@ -493,9 +493,9 @@ public class Worker {
         WorkerTask task;
         Future<?> future;
 
-        synchronized (taskAndThreadLock) {
+        synchronized (taskAndFutureLock) {
             task = tasks.remove(taskId);
-            future = threads.remove(taskId);
+            future = futures.remove(taskId);
         }
 
         if (task == null) {
@@ -520,9 +520,9 @@ public class Worker {
     }
 
     // Visible for testing
-    boolean isTaskThreadRunning(ConnectorTaskId taskId) {
-        final Future<?> thread = threads.get(taskId);
-        return thread != null && !thread.isDone();
+    boolean isTaskFutureRunning(ConnectorTaskId taskId) {
+        final Future<?> future = futures.get(taskId);
+        return future != null && !future.isDone();
     }
 
     private void awaitStopTasks(Collection<ConnectorTaskId> ids) {
