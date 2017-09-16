@@ -448,6 +448,11 @@ public interface KStream<K, V> {
     void print(final Printed<K, V> printed);
 
     /**
+     * Merges the given streams into one larger stream. 
+     * @param StreamsBuilder instance and streams wanted to be merged.
+     */
+    <K, V> KStream<K, V> merge(StreamsBuilder builder, KStream<K, V>... streams);
+    /**
      * Write the records of this stream to a file at the given path.
      * This function will use the generated name of the parent processor node to label the key/value pairs printed to
      * the file.

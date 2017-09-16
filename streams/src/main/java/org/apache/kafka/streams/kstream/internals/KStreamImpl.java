@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.JoinWindows;
@@ -153,7 +154,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                 new KeyValueMapper<K, V, KeyValue<K1, V>>() {
                     @Override
                     public KeyValue<K1, V> apply(K key, V value) {
-                        return new KeyValue<>(mapper.apply(key, value), value);
+                        return (KeyValue<K1, V>) new KeyValue<>(mapper.apply(key, value), value);
                     }
                 }
             ),
@@ -182,7 +183,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired);
     }
-
+    
+    
+    
     @Override
     public void print() {
         print(defaultKeyValueMapper, null, null, this.name);
@@ -344,7 +347,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         return branchChildren;
     }
-
+    
+    @Override 
+    public <K, V> KStream<K, V> merge(StreamsBuilder builder, KStream<K, V> ... streams) {
+        return builder.merge(streams);
+    }
+    
     public static <K, V> KStream<K, V> merge(final InternalStreamsBuilder builder,
                                              final KStream<K, V>[] streams) {
         if (streams == null || streams.length == 0) {
