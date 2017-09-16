@@ -347,6 +347,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         return branchChildren;
     }
+
     
     @Override 
     public <K, V> KStream<K, V> merge(StreamsBuilder builder, KStream<K, V> ... streams) {
