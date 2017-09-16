@@ -17,7 +17,10 @@
 package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.RecordMetadataNotAvailableException;
 import org.apache.kafka.common.record.DefaultRecord;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.requests.ProduceResponse;
 
 /**
  * The metadata for a record that has been acknowledged by the server
@@ -66,15 +69,22 @@ public final class RecordMetadata {
 
     /**
      * The offset of the record in the topic/partition.
+     * @throws RecordMetadataNotAvailableException if the offset for the record wasn't returned by the broker.
      */
-    public long offset() {
+    public long offset() throws RecordMetadataNotAvailableException {
+        if (this.offset == ProduceResponse.INVALID_OFFSET)
+            throw new RecordMetadataNotAvailableException("Could not retrieve the offset for the appended record.");
         return this.offset;
     }
 
     /**
      * The timestamp of the record in the topic/partition.
+     *
+     * @throws RecordMetadataNotAvailableException if the timestamp of the record wasn't returned by the broker.
      */
-    public long timestamp() {
+    public long timestamp() throws RecordMetadataNotAvailableException {
+        if (this.timestamp == RecordBatch.NO_TIMESTAMP)
+            throw new RecordMetadataNotAvailableException("Could not retrieve the timestamp for the appended record.");
         return timestamp;
     }
 

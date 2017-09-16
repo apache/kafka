@@ -17,10 +17,13 @@
 package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.RecordMetadataNotAvailableException;
 import org.apache.kafka.common.record.DefaultRecord;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class RecordMetadataTest {
 
@@ -37,7 +40,12 @@ public class RecordMetadataTest {
         assertEquals(tp.topic(), metadata.topic());
         assertEquals(tp.partition(), metadata.partition());
         assertEquals(timestamp, metadata.timestamp());
-        assertEquals(-1L, metadata.offset());
+        try {
+            metadata.offset();
+            fail("Should have raised a RecordMetadataNotAvailableException");
+        } catch (Exception e) {
+            assertTrue(e instanceof RecordMetadataNotAvailableException);
+        }
         assertEquals(checksum.longValue(), metadata.checksum());
         assertEquals(keySize, metadata.serializedKeySize());
         assertEquals(valueSize, metadata.serializedValueSize());
