@@ -234,7 +234,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
                                   quotaType.toString,
                                   "Tracking throttle-time per user/client-id",
                                   "user", quotaId.sanitizedUser.getOrElse(""),
-                                  "client-id", quotaId.clientId.getOrElse(""))
+                                  "client-id", quotaId.sanitizedClientId.getOrElse(""))
   }
 
   def throttleMetric(quotaType: QuotaType, quotaId: QuotaId): KafkaMetric = {

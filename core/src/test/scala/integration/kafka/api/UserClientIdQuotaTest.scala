@@ -23,6 +23,7 @@ import kafka.server._
 
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.Before
+import org.apache.kafka.common.metrics.Sanitizer
 
 class UserClientIdQuotaTest extends BaseQuotaTest {
 
@@ -30,8 +31,8 @@ class UserClientIdQuotaTest extends BaseQuotaTest {
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
 
   override val userPrincipal = "O=A client,CN=localhost"
-  override def producerQuotaId = QuotaId(Some(QuotaId.sanitize(userPrincipal)), Some(producerClientId))
-  override def consumerQuotaId = QuotaId(Some(QuotaId.sanitize(userPrincipal)), Some(consumerClientId))
+  override def producerQuotaId = QuotaId(Some(Sanitizer.sanitize(userPrincipal)), Some(producerClientId))
+  override def consumerQuotaId = QuotaId(Some(Sanitizer.sanitize(userPrincipal)), Some(consumerClientId))
 
   @Before
   override def setUp() {
@@ -58,11 +59,11 @@ class UserClientIdQuotaTest extends BaseQuotaTest {
 
   override def removeQuotaOverrides() {
     val emptyProps = new Properties
-    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, QuotaId.sanitize(userPrincipal) + "/clients/" + producerClientId, emptyProps)
-    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, QuotaId.sanitize(userPrincipal) + "/clients/" + consumerClientId, emptyProps)
+    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, Sanitizer.sanitize(userPrincipal) + "/clients/" + producerClientId, emptyProps)
+    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, Sanitizer.sanitize(userPrincipal) + "/clients/" + consumerClientId, emptyProps)
   }
 
   private def updateQuotaOverride(userPrincipal: String, clientId: String, properties: Properties) {
-    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, QuotaId.sanitize(userPrincipal) + "/clients/" + clientId, properties)
+    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, Sanitizer.sanitize(userPrincipal) + "/clients/" + clientId, properties)
   }
 }
