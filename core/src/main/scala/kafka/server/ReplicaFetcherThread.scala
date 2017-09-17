@@ -87,6 +87,7 @@ class ReplicaFetcherThread(name: String,
   // process fetched data
   def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: PartitionData) {
     val replica = replicaMgr.getReplicaOrException(topicPartition)
+    val partition = replicaMgr.getPartition(topicPartition).get
     val records = partitionData.toRecords
 
     maybeWarnIfOversizedRecords(records, topicPartition)
@@ -99,7 +100,7 @@ class ReplicaFetcherThread(name: String,
         .format(replica.logEndOffset.messageOffset, topicPartition, records.sizeInBytes, partitionData.highWatermark))
 
     // Append the leader's messages to the log
-    replica.log.get.appendAsFollower(records)
+    partition.appendRecordsToFollower(records, isFuture = false)
 
     if (logger.isTraceEnabled)
       trace("Follower has replica log end offset %d after appending %d bytes of messages for partition %s"
@@ -132,6 +133,7 @@ class ReplicaFetcherThread(name: String,
    */
   def handleOffsetOutOfRange(topicPartition: TopicPartition): Long = {
     val replica = replicaMgr.getReplicaOrException(topicPartition)
+    val partition = replicaMgr.getPartition(topicPartition).get
 
     /**
      * Unclean leader election: A follower goes down, in the meanwhile the leader keeps appending messages. The follower comes back up
@@ -159,7 +161,8 @@ class ReplicaFetcherThread(name: String,
 
       warn(s"Reset fetch offset for partition $topicPartition from ${replica.logEndOffset.messageOffset} to current " +
         s"leader's latest offset $leaderEndOffset")
-      replicaMgr.logManager.truncateTo(Map(topicPartition -> leaderEndOffset))
+      partition.truncateTo(leaderEndOffset, isFuture = false)
+      replicaMgr.replicaAlterLogDirsManager.markPartitionsForTruncation(brokerConfig.brokerId, Map(topicPartition -> leaderEndOffset))
       leaderEndOffset
     } else {
       /**
@@ -189,8 +192,10 @@ class ReplicaFetcherThread(name: String,
         s"leader's start offset $leaderStartOffset")
       val offsetToFetch = Math.max(leaderStartOffset, replica.logEndOffset.messageOffset)
       // Only truncate log when current leader's log start offset is greater than follower's log end offset.
-      if (leaderStartOffset > replica.logEndOffset.messageOffset)
-        replicaMgr.logManager.truncateFullyAndStartAt(topicPartition, leaderStartOffset)
+      if (leaderStartOffset > replica.logEndOffset.messageOffset) {
+        partition.truncateFullyAndStartAt(leaderStartOffset, isFuture = false)
+        replicaMgr.replicaAlterLogDirsManager.markPartitionsForTruncation(brokerConfig.brokerId, Map(topicPartition -> leaderStartOffset))
+      }
       offsetToFetch
     }
   }
@@ -267,6 +272,7 @@ class ReplicaFetcherThread(name: String,
     fetchedEpochs.foreach { case (tp, epochOffset) =>
       try {
         val replica = replicaMgr.getReplicaOrException(tp)
+        val partition = replicaMgr.getPartition(tp).get
 
         if (epochOffset.hasError) {
           info(s"Retrying leaderEpoch request for partition ${replica.topicPartition} as the leader reported an error: ${epochOffset.error}")
@@ -280,7 +286,8 @@ class ReplicaFetcherThread(name: String,
             else
               epochOffset.endOffset
 
-          replicaMgr.logManager.truncateTo(Map(tp -> truncationOffset))
+          partition.truncateTo(truncationOffset, isFuture = false)
+          replicaMgr.replicaAlterLogDirsManager.markPartitionsForTruncation(brokerConfig.brokerId, Map(tp -> truncationOffset))
           truncationPoints.put(tp, truncationOffset)
         }
       } catch {

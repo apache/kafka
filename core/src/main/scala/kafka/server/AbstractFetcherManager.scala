@@ -69,6 +69,22 @@ abstract class AbstractFetcherManager(protected val name: String, clientId: Stri
     Utils.abs(31 * topic.hashCode() + partitionId) % numFetchers
   }
 
+  // This method is only needed by ReplicaAlterDirManager
+  def markPartitionsForTruncation(brokerId: Int, partitionAndOffsets: Map[TopicPartition, Long]) {
+    mapLock synchronized {
+      val partitionsPerFetcher = partitionAndOffsets.groupBy { case (topicPartition, truncationOffset) =>
+        getFetcherId(topicPartition.topic, topicPartition.partition)
+      }
+
+      for ((fetcherId, partitionAndOffsets) <- partitionsPerFetcher) {
+        val brokerIdAndFetcherId = BrokerIdAndFetcherId(brokerId, fetcherId)
+        fetcherThreadMap.get(brokerIdAndFetcherId).foreach { thread =>
+          thread.markPartitionsForTruncation(partitionAndOffsets)
+        }
+      }
+    }
+  }
+
   // to be defined in subclass to create a specific fetcher
   def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread
 

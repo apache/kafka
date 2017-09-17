@@ -349,7 +349,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
   }
 
   private def getLog(broker: KafkaServer, partition: Int): Log = {
-    broker.logManager.logsByTopicPartition(new TopicPartition(topic, partition))
+    broker.logManager.getLog(new TopicPartition(topic, partition)).orNull
   }
 
   private def bounce(follower: KafkaServer): Unit = {

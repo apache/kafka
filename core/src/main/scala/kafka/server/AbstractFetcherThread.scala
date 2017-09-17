@@ -21,11 +21,10 @@ import java.util.concurrent.locks.ReentrantLock
 
 import kafka.cluster.BrokerEndPoint
 import kafka.utils.{DelayedItem, Pool, ShutdownableThread}
-import org.apache.kafka.common.errors.KafkaStorageException
+import org.apache.kafka.common.errors.{CorruptRecordException, KafkaStorageException}
 import kafka.common.{ClientIdAndBroker, KafkaException}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.inLock
-import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.protocol.Errors
 import AbstractFetcherThread._
 
@@ -56,6 +55,9 @@ abstract class AbstractFetcherThread(name: String,
   type PD <: PartitionData
 
   private[server] val partitionStates = new PartitionStates[PartitionFetchState]
+  // partitionTruncationOffsets is written by ReplicaFetcherThread when a current replica is truncated.
+  // Then it is read by ReplicaAlterDirThread to truncate the corresponding future replica if leader epoch is undefined
+  val partitionTruncationOffsets = mutable.Map.empty[TopicPartition, Long]
   private val partitionMapLock = new ReentrantLock
   private val partitionMapCond = partitionMapLock.newCondition()
 
@@ -84,7 +86,7 @@ abstract class AbstractFetcherThread(name: String,
 
   protected def fetch(fetchRequest: REQ): Seq[(TopicPartition, PD)]
 
-  override def shutdown(){
+  override def shutdown() {
     initiateShutdown()
     inLock(partitionMapLock) {
       partitionMapCond.signalAll()
@@ -135,6 +137,7 @@ abstract class AbstractFetcherThread(name: String,
         val ResultWithPartitions(truncationPoints, partitionsWithError) = maybeTruncate(leaderEpochs)
         handlePartitionsWithErrors(partitionsWithError)
         markTruncationComplete(truncationPoints)
+        truncationPoints.keys.foreach(partitionTruncationOffsets.remove)
       }
     }
   }
@@ -184,7 +187,8 @@ abstract class AbstractFetcherThread(name: String,
                     processPartitionData(topicPartition, currentPartitionFetchState.fetchOffset, partitionData)
 
                     val validBytes = records.validBytes
-                    if (validBytes > 0) {
+                    // ReplicaDirAlterThread may have removed topicPartition from the partitionStates after processing the partition data
+                    if (validBytes > 0 && partitionStates.contains(topicPartition)) {
                       // Update partitionStates only if there is no exception during processPartitionData
                       partitionStates.updateAndMoveToEnd(topicPartition, new PartitionFetchState(newOffset))
                       fetcherStats.byteRate.mark(validBytes)
@@ -195,11 +199,12 @@ abstract class AbstractFetcherThread(name: String,
                       // 1. If there is a corrupt message in a topic partition, it does not bring the fetcher thread down and cause other topic partition to also lag
                       // 2. If the message is corrupt due to a transient state in the log (truncation, partial writes can cause this), we simply continue and
                       // should get fixed in the subsequent fetches
-                      logger.error(s"Found invalid messages during fetch for partition $topicPartition offset ${currentPartitionFetchState.fetchOffset} error ${ime.getMessage}")
+                      error(s"Found invalid messages during fetch for partition $topicPartition offset ${currentPartitionFetchState.fetchOffset}", ime)
                       partitionsWithError += topicPartition
                     case e: KafkaStorageException =>
-                      logger.error(s"Error while processing data for partition $topicPartition", e)
+                      error(s"Error while processing data for partition $topicPartition", e)
                       partitionsWithError += topicPartition
+
                     case e: Throwable =>
                       throw new KafkaException(s"Error processing data for partition $topicPartition " +
                         s"offset ${currentPartitionFetchState.fetchOffset}", e)
@@ -212,12 +217,12 @@ abstract class AbstractFetcherThread(name: String,
                   } catch {
                     case e: FatalExitError => throw e
                     case e: Throwable =>
-                      error(s"Error getting offset for partition $topicPartition to broker ${sourceBroker.id}", e)
+                      error(s"Error getting offset for partition $topicPartition from broker ${sourceBroker.id}", e)
                       partitionsWithError += topicPartition
                   }
                 case _ =>
                   if (isRunning.get) {
-                    error(s"Error for partition $topicPartition to broker ${sourceBroker.id}:${partitionData.exception.get}")
+                    error(s"Error for partition $topicPartition from broker ${sourceBroker.id}", partitionData.exception.get)
                     partitionsWithError += topicPartition
                   }
               }
@@ -231,7 +236,29 @@ abstract class AbstractFetcherThread(name: String,
     handlePartitionsWithErrors(partitionsWithError)
   }
 
-  def addPartitions(partitionAndOffsets: Map[TopicPartition, Long]) {
+  def markPartitionsForTruncation(partitionAndOffsets: Map[TopicPartition, Long]) {
+    partitionMapLock.lockInterruptibly()
+    try {
+      val newStates = partitionStates.partitionStates.asScala.map { state =>
+        val maybeNeedTruncation = partitionAndOffsets.get(state.topicPartition()) match {
+          case Some(offset) =>
+            // Remember the truncation offset for this partition provided by the caller
+            // This is only used by ReplicaAlterDirThread when leader epoch is undefined
+            partitionTruncationOffsets.put(state.topicPartition(), offset)
+            // Mark this partition for truncation using leader epoch
+            PartitionFetchState(state.value.fetchOffset, state.value.delay, truncatingLog = true)
+          case None =>
+            state.value()
+        }
+        (state.topicPartition(), maybeNeedTruncation)
+      }.toMap
+
+      partitionStates.set(newStates.asJava)
+      partitionMapCond.signalAll()
+    } finally partitionMapLock.unlock()
+  }
+
+def addPartitions(partitionAndOffsets: Map[TopicPartition, Long]) {
     partitionMapLock.lockInterruptibly()
     try {
       // If the partitionMap already has the topic/partition, then do not update the map with the old offset
@@ -286,6 +313,7 @@ abstract class AbstractFetcherThread(name: String,
     try {
       topicPartitions.foreach { topicPartition =>
         partitionStates.remove(topicPartition)
+        partitionTruncationOffsets.remove(topicPartition)
         fetcherLagStats.unregister(topicPartition.topic, topicPartition.partition)
       }
     } finally partitionMapLock.unlock()

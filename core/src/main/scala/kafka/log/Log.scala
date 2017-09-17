@@ -193,7 +193,7 @@ class Log(@volatile var dir: File,
   /* the actual segments of the log */
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
 
-  val leaderEpochCache: LeaderEpochCache = initializeLeaderEpochCache()
+  var leaderEpochCache: LeaderEpochCache = initializeLeaderEpochCache()
 
   locally {
     val startMs = time.milliseconds
@@ -216,7 +216,12 @@ class Log(@volatile var dir: File,
       .format(name, segments.size(), logStartOffset, logEndOffset, time.milliseconds - startMs))
   }
 
-  private val tags = Map("topic" -> topicPartition.topic, "partition" -> topicPartition.partition.toString)
+  private val tags = {
+    if (isFuture)
+      Map("topic" -> topicPartition.topic, "partition" -> topicPartition.partition.toString, "isFuture" -> "true")
+    else
+      Map("topic" -> topicPartition.topic, "partition" -> topicPartition.partition.toString)
+  }
 
   newGauge("NumLogSegments",
     new Gauge[Int] {
@@ -571,6 +576,22 @@ class Log(@volatile var dir: File,
     }
   }
 
+  def renameDir(name: String): Boolean = {
+    lock synchronized {
+      val renamedDir = new File(dir.getParent, name)
+      val renameSuccessful = renamedDir == dir || dir.renameTo(renamedDir)
+      if (renameSuccessful && renamedDir != dir) {
+        dir = renamedDir
+        logSegments.foreach(_.updateDir(renamedDir))
+        producerStateManager.logDir = dir
+        // re-initialize leader epoch cache so that LeaderEpochCheckpointFile.checkpoint can correctly reference
+        // the checkpoint file in renamed log directory
+        leaderEpochCache = initializeLeaderEpochCache()
+      }
+      renameSuccessful
+    }
+  }
+
   /**
    * Close file handlers used by log but don't write to disk. This is used when the disk may have failed
    */
@@ -584,6 +605,7 @@ class Log(@volatile var dir: File,
 
   /**
    * Append this message set to the active segment of the log, assigning offsets and Partition Leader Epochs
+   *
    * @param records The records to append
    * @param isFromClient Whether or not this append is from a producer
    * @throws KafkaStorageException If the append fails due to an I/O error.
@@ -595,6 +617,7 @@ class Log(@volatile var dir: File,
 
   /**
    * Append this message set to the active segment of the log without assigning offsets or Partition Leader Epochs
+   *
    * @param records The records to append
    * @throws KafkaStorageException If the append fails due to an I/O error.
    * @return Information about the appended messages including the first and last offset.
@@ -1228,6 +1251,8 @@ class Log(@volatile var dir: File,
     deleteOldSegments(shouldDelete, reason = s"log start offset $logStartOffset breach")
   }
 
+  def isFuture: Boolean = dir.getName.endsWith(Log.FutureDirSuffix)
+
   /**
    * The size of the log in bytes
    */
@@ -1423,6 +1448,7 @@ class Log(@volatile var dir: File,
     maybeHandleIOException(s"Error while deleting log for $topicPartition in dir ${dir.getParent}") {
       lock synchronized {
         checkIfLogOffline()
+        removeLogMetrics()
         logSegments.foreach(_.delete())
         segments.clear()
         leaderEpochCache.clear()
@@ -1710,7 +1736,11 @@ object Log {
   /** a directory that is scheduled to be deleted */
   val DeleteDirSuffix = "-delete"
 
+  /** a directory that is used for future partition */
+  val FutureDirSuffix = "-future"
+
   private val DeleteDirPattern = Pattern.compile(s"^(\\S+)-(\\S+)\\.(\\S+)$DeleteDirSuffix")
+  private val FutureDirPattern = Pattern.compile(s"^(\\S+)-(\\S+)\\.(\\S+)$FutureDirSuffix")
 
   val UnknownLogStartOffset = -1L
 
@@ -1758,9 +1788,26 @@ object Log {
     * Return a directory name to rename the log directory to for async deletion. The name will be in the following
     * format: topic-partition.uniqueId-delete where topic, partition and uniqueId are variables.
     */
-  def logDeleteDirName(logName: String): String = {
+  def logDeleteDirName(topicPartition: TopicPartition): String = {
     val uniqueId = java.util.UUID.randomUUID.toString.replaceAll("-", "")
-    s"$logName.$uniqueId$DeleteDirSuffix"
+    s"${topicPartition.topic}-${topicPartition.partition}.$uniqueId$DeleteDirSuffix"
+  }
+
+  /**
+    * Return a future directory name for the given topic partition. The name will be in the following
+    * format: topic-partition.uniqueId-future where topic, partition and uniqueId are variables.
+    */
+  def logFutureDirName(topicPartition: TopicPartition): String = {
+    val uniqueId = java.util.UUID.randomUUID.toString.replaceAll("-", "")
+    s"${topicPartition.topic}-${topicPartition.partition}.$uniqueId$FutureDirSuffix"
+  }
+
+  /**
+    * Return a directory name for the given topic partition. The name will be in the following
+    * format: topic-partition where topic, partition are variables.
+    */
+  def logDirName(topicPartition: TopicPartition): String = {
+    s"${topicPartition.topic}-${topicPartition.partition}"
   }
 
   /**
@@ -1823,11 +1870,13 @@ object Log {
     val dirName = dir.getName
     if (dirName == null || dirName.isEmpty || !dirName.contains('-'))
       throw exception(dir)
-    if (dirName.endsWith(DeleteDirSuffix) && !DeleteDirPattern.matcher(dirName).matches)
+    if (dirName.endsWith(DeleteDirSuffix) && !DeleteDirPattern.matcher(dirName).matches ||
+        dirName.endsWith(FutureDirSuffix) && !FutureDirPattern.matcher(dirName).matches)
       throw exception(dir)
 
     val name: String =
       if (dirName.endsWith(DeleteDirSuffix)) dirName.substring(0, dirName.lastIndexOf('.'))
+      else if (dirName.endsWith(FutureDirSuffix)) dirName.substring(0, dirName.lastIndexOf('.'))
       else dirName
 
     val index = name.lastIndexOf('-')

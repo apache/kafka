@@ -457,7 +457,7 @@ object ProducerStateManager {
  */
 @nonthreadsafe
 class ProducerStateManager(val topicPartition: TopicPartition,
-                           val logDir: File,
+                           @volatile var logDir: File,
                            val maxProducerIdExpirationMs: Int = 60 * 60 * 1000) extends Logging {
   import ProducerStateManager._
   import java.util

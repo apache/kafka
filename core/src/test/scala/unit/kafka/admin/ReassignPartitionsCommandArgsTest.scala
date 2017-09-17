@@ -83,7 +83,7 @@ class ReassignPartitionsCommandArgsTest extends JUnitSuite {
       "--reassignment-json-file", "myfile.json")
     val opts = ReassignPartitionsCommand.validateAndParseArgs(args)
     assertEquals(10000L, opts.options.valueOf(opts.timeoutOpt))
-    assertEquals(-1L, opts.options.valueOf(opts.throttleOpt))
+    assertEquals(-1L, opts.options.valueOf(opts.interBrokerThrottleOpt))
   }
 
   /**
