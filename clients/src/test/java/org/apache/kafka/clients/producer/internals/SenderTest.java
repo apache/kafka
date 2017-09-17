@@ -266,8 +266,8 @@ public class SenderTest {
             selector.clear();
         }
         Map<MetricName, KafkaMetric> allMetrics = metrics.metrics();
-        KafkaMetric avgMetric = allMetrics.get(metrics.metricInstance(this.senderMetricsRegistry.produceThrottleTimeAvg));
-        KafkaMetric maxMetric = allMetrics.get(metrics.metricInstance(this.senderMetricsRegistry.produceThrottleTimeMax));
+        KafkaMetric avgMetric = allMetrics.get(this.senderMetricsRegistry.getProduceThrottleTimeAvg());
+        KafkaMetric maxMetric = allMetrics.get(this.senderMetricsRegistry.getProduceThrottleTimeMax());
         // Throttle times are ApiVersions=400, Produce=(100, 200, 300)
         assertEquals(250, avgMetric.value(), EPS);
         assertEquals(400, maxMetric.value(), EPS);
