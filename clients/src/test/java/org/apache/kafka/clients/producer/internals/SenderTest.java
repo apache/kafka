@@ -238,7 +238,7 @@ public class SenderTest {
     @Test
     public void testQuotaMetrics() throws Exception {
         MockSelector selector = new MockSelector(time);
-        Sensor throttleTimeSensor = Sender.throttleTimeSensor(metrics, this.senderMetricsRegistry);
+        Sensor throttleTimeSensor = Sender.throttleTimeSensor(this.senderMetricsRegistry);
         Cluster cluster = TestUtils.singletonCluster("test", 1);
         Node node = cluster.nodes().get(0);
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
@@ -1233,6 +1233,8 @@ public class SenderTest {
 
         int maxRetries = 10;
         Metrics m = new Metrics();
+        SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
+        
         Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
                 senderMetrics, time, REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
 
@@ -1314,6 +1316,8 @@ public class SenderTest {
 
         int maxRetries = 10;
         Metrics m = new Metrics();
+        SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
+        
         Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
                 senderMetrics, time, REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
 

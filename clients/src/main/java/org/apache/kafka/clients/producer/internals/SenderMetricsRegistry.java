@@ -33,37 +33,38 @@ public class SenderMetricsRegistry {
     final static String METRIC_GROUP_NAME = "producer-metrics";
     final static String TOPIC_METRIC_GROUP_NAME = "producer-topic-metrics";
 
-    public MetricNameTemplate batchSizeAvg;
-    public MetricNameTemplate batchSizeMax;
-    public MetricNameTemplate compressionRateAvg;
-    public MetricNameTemplate recordQueueTimeAvg;
-    public MetricNameTemplate recordQueueTimeMax;
-    public MetricNameTemplate requestLatencyAvg;
-    public MetricNameTemplate requestLatencyMax;
-    public MetricNameTemplate produceThrottleTimeAvg;
-    public MetricNameTemplate produceThrottleTimeMax;
-    public MetricNameTemplate recordSendRate;
-    public MetricNameTemplate recordSendTotal;
-    public MetricNameTemplate recordsPerRequestAvg;
-    public MetricNameTemplate recordRetryRate;
-    public MetricNameTemplate recordRetryTotal;
-    public MetricNameTemplate recordErrorRate;
-    public MetricNameTemplate recordErrorTotal;
-    public MetricNameTemplate recordSizeMax;
-    public MetricNameTemplate recordSizeAvg;
-    public MetricNameTemplate requestsInFlight;
-    public MetricNameTemplate metadataAge;
-    public MetricNameTemplate topicRecordSendRate;
-    public MetricNameTemplate topicRecordSendTotal;
-    public MetricNameTemplate topicByteRate;
-    public MetricNameTemplate topicByteTotal;
-    public MetricNameTemplate topicCompressionRate;
-    public MetricNameTemplate topicRecordRetryRate;
-    public MetricNameTemplate topicRecordRetryTotal;
-    public MetricNameTemplate topicRecordErrorRate;
-    public MetricNameTemplate topicRecordErrorTotal;
-    public MetricNameTemplate batchSplitRate;
-    public MetricNameTemplate batchSplitTotal;
+    private MetricNameTemplate batchSizeAvg;
+    private MetricNameTemplate batchSizeMax;
+    private MetricNameTemplate compressionRateAvg;
+    private MetricNameTemplate recordQueueTimeAvg;
+    private MetricNameTemplate recordQueueTimeMax;
+    private MetricNameTemplate requestLatencyAvg;
+    private MetricNameTemplate requestLatencyMax;
+    private MetricNameTemplate produceThrottleTimeAvg;
+    private MetricNameTemplate produceThrottleTimeMax;
+    private MetricNameTemplate recordSendRate;
+    private MetricNameTemplate recordSendTotal;
+    private MetricNameTemplate recordsPerRequestAvg;
+    private MetricNameTemplate recordRetryRate;
+    private MetricNameTemplate recordRetryTotal;
+    private MetricNameTemplate recordErrorRate;
+    private MetricNameTemplate recordErrorTotal;
+    private MetricNameTemplate recordSizeMax;
+    private MetricNameTemplate recordSizeAvg;
+    private MetricNameTemplate requestsInFlight;
+    private MetricNameTemplate metadataAge;
+    private MetricNameTemplate topicRecordSendRate;
+    private MetricNameTemplate topicRecordSendTotal;
+    private MetricNameTemplate topicByteRate;
+    private MetricNameTemplate topicByteTotal;
+    private MetricNameTemplate topicCompressionRate;
+    private MetricNameTemplate topicRecordRetryRate;
+    private MetricNameTemplate topicRecordRetryTotal;
+    private MetricNameTemplate topicRecordErrorRate;
+    private MetricNameTemplate topicRecordErrorTotal;
+    private MetricNameTemplate batchSplitRate;
+    private MetricNameTemplate batchSplitTotal;
+    
     private Metrics metrics;
     private Set<String> tags;
     private HashSet<String> topicTags;
@@ -146,6 +147,10 @@ public class SenderMetricsRegistry {
         return this.metrics.metricInstance(this.recordSendRate);
     }
 
+    public MetricName getRecordSendTotal() {
+        return this.metrics.metricInstance(this.recordSendTotal);
+    }
+
     public MetricName getRecordsPerRequestAvg() {
         return this.metrics.metricInstance(this.recordsPerRequestAvg);
     }
@@ -154,8 +159,16 @@ public class SenderMetricsRegistry {
         return this.metrics.metricInstance(this.recordRetryRate);
     }
 
+    public MetricName getRecordRetryTotal() {
+        return this.metrics.metricInstance(this.recordRetryTotal);
+    }
+
     public MetricName getRecordErrorRate() {
         return this.metrics.metricInstance(this.recordErrorRate);
+    }
+
+    public MetricName getRecordErrorTotal() {
+        return this.metrics.metricInstance(this.recordErrorTotal);
     }
 
     public MetricName getRecordSizeMax() {
@@ -174,8 +187,20 @@ public class SenderMetricsRegistry {
         return this.metrics.metricInstance(this.batchSplitRate);
     }
 
+    public MetricName getBatchSplitTotal() {
+        return this.metrics.metricInstance(this.batchSplitTotal);
+    }
+
     public MetricName getMetadataAge() {
         return this.metrics.metricInstance(this.metadataAge);
+    }
+
+    public MetricName getProduceThrottleTimeAvg() {
+        return this.metrics.metricInstance(this.produceThrottleTimeAvg);
+    }
+
+    public MetricName getProduceThrottleTimeMax() {
+        return this.metrics.metricInstance(this.produceThrottleTimeMax);
     }
 
     /** topic level metrics **/
@@ -183,8 +208,16 @@ public class SenderMetricsRegistry {
         return this.metrics.metricInstance(this.topicRecordSendRate, metricTags);
     }
 
+    public MetricName getTopicRecordSendTotal(Map<String, String> metricTags) {
+        return this.metrics.metricInstance(this.topicRecordSendTotal, metricTags);
+    }
+
     public MetricName getTopicByteRate(Map<String, String> metricTags) {
         return this.metrics.metricInstance(this.topicByteRate, metricTags);
+    }
+
+    public MetricName getTopicByteTotal(Map<String, String> metricTags) {
+        return this.metrics.metricInstance(this.topicByteTotal, metricTags);
     }
 
     public MetricName getTopicCompressionRate(Map<String, String> metricTags) {
@@ -195,8 +228,16 @@ public class SenderMetricsRegistry {
         return this.metrics.metricInstance(this.topicRecordRetryRate, metricTags);
     }
 
+    public MetricName getTopicRecordRetryTotal(Map<String, String> metricTags) {
+        return this.metrics.metricInstance(this.topicRecordRetryTotal, metricTags);
+    }
+
     public MetricName getTopicRecordErrorRate(Map<String, String> metricTags) {
         return this.metrics.metricInstance(this.topicRecordErrorRate, metricTags);
+    }
+
+    public MetricName getTopicRecordErrorTotal(Map<String, String> metricTags) {
+        return this.metrics.metricInstance(this.topicRecordErrorTotal, metricTags);
     }
 
     
