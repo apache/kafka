@@ -349,7 +349,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     
     @Override 
-    public <K, V> KStream<K, V> merge(KStream<K, V> stream) {
+    public KStream<K, V> merge(KStream<K, V> stream) {
         return this.builder.merge((KStream<K, V>) this, stream);
     }
     

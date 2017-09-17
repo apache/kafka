@@ -451,7 +451,7 @@ public interface KStream<K, V> {
      * Merges the given streams into one larger stream. 
      * @param StreamsBuilder instance and streams wanted to be merged.
      */
-    <K, V> KStream<K, V> merge(KStream<K, V> stream);
+    KStream<K, V> merge(KStream<K, V> stream);
 
     /**
      * Write the records of this stream to a file at the given path.
