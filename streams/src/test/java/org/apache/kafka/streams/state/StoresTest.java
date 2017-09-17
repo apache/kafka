@@ -18,11 +18,20 @@ package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
+import org.apache.kafka.streams.state.internals.MemoryNavigableLRUCache;
+import org.apache.kafka.streams.state.internals.RocksDBSessionStore;
+import org.apache.kafka.streams.state.internals.RocksDBStore;
+import org.apache.kafka.streams.state.internals.RocksDBWindowStore;
 import org.junit.Test;
 
 import java.util.Collections;
 import java.util.Map;
 
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.IsInstanceOf.instanceOf;
+import static org.hamcrest.core.IsNot.not;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -30,8 +39,9 @@ import static org.junit.Assert.fail;
 
 public class StoresTest {
 
+    @SuppressWarnings("deprecation")
     @Test
-    public void shouldCreateInMemoryStoreSupplierWithLoggedConfig() throws Exception {
+    public void shouldCreateInMemoryStoreSupplierWithLoggedConfig() {
         final StateStoreSupplier supplier = Stores.create("store")
                 .withKeys(Serdes.String())
                 .withValues(Serdes.String())
@@ -44,8 +54,9 @@ public class StoresTest {
         assertEquals("1000", config.get("retention.ms"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
-    public void shouldCreateInMemoryStoreSupplierNotLogged() throws Exception {
+    public void shouldCreateInMemoryStoreSupplierNotLogged() {
         final StateStoreSupplier supplier = Stores.create("store")
                 .withKeys(Serdes.String())
                 .withValues(Serdes.String())
@@ -56,8 +67,9 @@ public class StoresTest {
         assertFalse(supplier.loggingEnabled());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
-    public void shouldCreatePersistenStoreSupplierWithLoggedConfig() throws Exception {
+    public void shouldCreatePersistenStoreSupplierWithLoggedConfig() {
         final StateStoreSupplier supplier = Stores.create("store")
                 .withKeys(Serdes.String())
                 .withValues(Serdes.String())
@@ -70,8 +82,9 @@ public class StoresTest {
         assertEquals("1000", config.get("retention.ms"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
-    public void shouldCreatePersistenStoreSupplierNotLogged() throws Exception {
+    public void shouldCreatePersistenStoreSupplierNotLogged() {
         final StateStoreSupplier supplier = Stores.create("store")
                 .withKeys(Serdes.String())
                 .withValues(Serdes.String())
@@ -83,7 +96,7 @@ public class StoresTest {
     }
 
     @Test
-    public void shouldThrowIllegalArgumentExceptionWhenTryingToConstructWindowStoreWithLessThanTwoSegments() throws Exception {
+    public void shouldThrowIllegalArgumentExceptionWhenTryingToConstructWindowStoreWithLessThanTwoSegments() {
         final Stores.PersistentKeyValueFactory<String, String> storeFactory = Stores.create("store")
                 .withKeys(Serdes.String())
                 .withValues(Serdes.String())
@@ -94,5 +107,54 @@ public class StoresTest {
         } catch (final IllegalArgumentException e) {
          // ok
         }
+    }
+
+    @Test
+    public void shouldCreateInMemoryKeyValueStore() {
+        assertThat(Stores.inMemoryKeyValueStore("memory").get(), instanceOf(InMemoryKeyValueStore.class));
+    }
+
+    @Test
+    public void shouldCreateMemoryNavigableCache() {
+        assertThat(Stores.lruMap("map", 10).get(), instanceOf(MemoryNavigableLRUCache.class));
+    }
+
+    @Test
+    public void shouldCreateRocksDbStore() {
+        assertThat(Stores.persistentKeyValueStore("store").get(), instanceOf(RocksDBStore.class));
+    }
+
+    @Test
+    public void shouldCreateRocksDbWindowStore() {
+        assertThat(Stores.persistentWindowStore("store", 1, 3, 1, false).get(), instanceOf(RocksDBWindowStore.class));
+    }
+
+    @Test
+    public void shouldCreateRocksDbSessionStore() {
+        assertThat(Stores.persistentSessionStore("store", 1).get(), instanceOf(RocksDBSessionStore.class));
+    }
+
+    @Test
+    public void shouldBuildWindowStore() {
+        final WindowStore<String, String> store = Stores.windowStoreBuilder(Stores.persistentWindowStore("store", 3, 2, 3, true),
+                                                                      Serdes.String(),
+                                                                      Serdes.String()).build();
+        assertThat(store, not(nullValue()));
+    }
+
+    @Test
+    public void shouldBuildKeyValueStore() {
+        final KeyValueStore<String, String> store = Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("name"),
+                                                                          Serdes.String(),
+                                                                          Serdes.String()).build();
+        assertThat(store, not(nullValue()));
+    }
+
+    @Test
+    public void shouldBuildSessionStore() {
+        final SessionStore<String, String> store = Stores.sessionStoreBuilder(Stores.persistentSessionStore("name", 10),
+                                                                       Serdes.String(),
+                                                                       Serdes.String()).build();
+        assertThat(store, not(nullValue()));
     }
 }

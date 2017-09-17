@@ -80,7 +80,7 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
 
   @Before
   override def setUp() {
-    super.setUp
+    super.setUp()
 
     if (configs.isEmpty)
       throw new KafkaException("Must supply at least one server config.")

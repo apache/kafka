@@ -47,6 +47,7 @@ import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
@@ -310,6 +311,7 @@ public class KafkaAdminClientTest {
     /**
      * Test handling timeouts.
      */
+    @Ignore // The test is flaky. Should be renabled when this JIRA is fixed: https://issues.apache.org/jira/browse/KAFKA-5792
     @Test
     public void testHandleTimeout() throws Exception {
         HashMap<Integer, Node> nodes = new HashMap<>();
@@ -324,6 +326,8 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
             env.kafkaClient().setNode(nodes.get(0));
+            assertEquals(time, env.time());
+            assertEquals(env.time(), ((KafkaAdminClient) env.adminClient()).time());
 
             // Make a request with an extremely short timeout.
             // Then wait for it to fail by not supplying any response.

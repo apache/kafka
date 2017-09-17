@@ -159,7 +159,7 @@ public class KStreamBuilderTest {
     }
 
     @Test
-    public void shouldHaveCorrectSourceTopicsForTableFromMergedStream() throws Exception {
+    public void shouldHaveCorrectSourceTopicsForTableFromMergedStream() {
         final String topic1 = "topic-1";
         final String topic2 = "topic-2";
         final String topic3 = "topic-3";
@@ -192,17 +192,17 @@ public class KStreamBuilderTest {
     }
 
     @Test(expected = TopologyBuilderException.class)
-    public void shouldThrowExceptionWhenNoTopicPresent() throws Exception {
+    public void shouldThrowExceptionWhenNoTopicPresent() {
         builder.stream();
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldThrowExceptionWhenTopicNamesAreNull() throws Exception {
+    public void shouldThrowExceptionWhenTopicNamesAreNull() {
         builder.stream(Serdes.String(), Serdes.String(), null, null);
     }
 
     @Test
-    public void shouldStillMaterializeSourceKTableIfStateNameNotSpecified() throws Exception {
+    public void shouldStillMaterializeSourceKTableIfStateNameNotSpecified() {
         KTable table1 = builder.table("topic1", "table1");
         KTable table2 = builder.table("topic2", (String) null);
 
@@ -221,7 +221,7 @@ public class KStreamBuilderTest {
     }
 
     @Test
-    public void shouldBuildSimpleGlobalTableTopology() throws Exception {
+    public void shouldBuildSimpleGlobalTableTopology() {
         builder.globalTable("table", "globalTable");
 
         final ProcessorTopology topology = builder.buildGlobalStateTopology();
@@ -231,7 +231,7 @@ public class KStreamBuilderTest {
         assertEquals("globalTable", stateStores.get(0).name());
     }
 
-    private void doBuildGlobalTopologyWithAllGlobalTables() throws Exception {
+    private void doBuildGlobalTopologyWithAllGlobalTables() {
         final ProcessorTopology topology = builder.buildGlobalStateTopology();
 
         final List<StateStore> stateStores = topology.globalStateStores();
@@ -242,7 +242,7 @@ public class KStreamBuilderTest {
     }
 
     @Test
-    public void shouldBuildGlobalTopologyWithAllGlobalTables() throws Exception {
+    public void shouldBuildGlobalTopologyWithAllGlobalTables() {
         builder.globalTable("table", "globalTable");
         builder.globalTable("table2", "globalTable2");
 
@@ -250,7 +250,7 @@ public class KStreamBuilderTest {
     }
 
     @Test
-    public void shouldBuildGlobalTopologyWithAllGlobalTablesWithInternalStoreName() throws Exception {
+    public void shouldBuildGlobalTopologyWithAllGlobalTablesWithInternalStoreName() {
         builder.globalTable("table");
         builder.globalTable("table2");
 
@@ -258,7 +258,7 @@ public class KStreamBuilderTest {
     }
 
     @Test
-    public void shouldAddGlobalTablesToEachGroup() throws Exception {
+    public void shouldAddGlobalTablesToEachGroup() {
         final String one = "globalTable";
         final String two = "globalTable2";
         final GlobalKTable<String, String> globalTable = builder.globalTable("table", one);
@@ -294,7 +294,7 @@ public class KStreamBuilderTest {
     }
 
     @Test
-    public void shouldMapStateStoresToCorrectSourceTopics() throws Exception {
+    public void shouldMapStateStoresToCorrectSourceTopics() {
         final KStream<String, String> playEvents = builder.stream("events");
 
         final KTable<String, String> table = builder.table("table-topic", "table-store");
@@ -395,14 +395,14 @@ public class KStreamBuilderTest {
     }
 
     @Test
-    public void kStreamTimestampExtractorShouldBeNull() throws Exception {
+    public void kStreamTimestampExtractorShouldBeNull() {
         builder.stream("topic");
         final ProcessorTopology processorTopology = builder.build(null);
         assertNull(processorTopology.source("topic").getTimestampExtractor());
     }
 
     @Test
-    public void shouldAddTimestampExtractorToStreamWithKeyValSerdePerSource() throws Exception {
+    public void shouldAddTimestampExtractorToStreamWithKeyValSerdePerSource() {
         builder.stream(new MockTimestampExtractor(), null, null, "topic");
         final ProcessorTopology processorTopology = builder.build(null);
         for (final SourceNode sourceNode: processorTopology.sources()) {
@@ -411,28 +411,28 @@ public class KStreamBuilderTest {
     }
 
     @Test
-    public void shouldAddTimestampExtractorToStreamWithOffsetResetPerSource() throws Exception {
+    public void shouldAddTimestampExtractorToStreamWithOffsetResetPerSource() {
         builder.stream(null, new MockTimestampExtractor(), null, null, "topic");
         final ProcessorTopology processorTopology = builder.build(null);
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
     @Test
-    public void shouldAddTimestampExtractorToTablePerSource() throws Exception {
+    public void shouldAddTimestampExtractorToTablePerSource() {
         builder.table("topic", "store");
         final ProcessorTopology processorTopology = builder.build(null);
         assertNull(processorTopology.source("topic").getTimestampExtractor());
     }
 
     @Test
-    public void kTableTimestampExtractorShouldBeNull() throws Exception {
+    public void kTableTimestampExtractorShouldBeNull() {
         builder.table("topic", "store");
         final ProcessorTopology processorTopology = builder.build(null);
         assertNull(processorTopology.source("topic").getTimestampExtractor());
     }
 
     @Test
-    public void shouldAddTimestampExtractorToTableWithKeyValSerdePerSource() throws Exception {
+    public void shouldAddTimestampExtractorToTableWithKeyValSerdePerSource() {
         builder.table(null, new MockTimestampExtractor(), null, null, "topic", "store");
         final ProcessorTopology processorTopology = builder.build(null);
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));

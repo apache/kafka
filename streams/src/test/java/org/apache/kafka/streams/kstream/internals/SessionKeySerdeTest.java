@@ -39,66 +39,66 @@ public class SessionKeySerdeTest {
     final private SessionKeySerde<String> sessionKeySerde = new SessionKeySerde<>(serde);
 
     @Test
-    public void shouldSerializeDeserialize() throws Exception {
+    public void shouldSerializeDeserialize() {
         final byte[] bytes = sessionKeySerde.serializer().serialize(topic, windowedKey);
         final Windowed<String> result = sessionKeySerde.deserializer().deserialize(topic, bytes);
         assertEquals(windowedKey, result);
     }
 
     @Test
-    public void shouldSerializeNullToNull() throws Exception {
+    public void shouldSerializeNullToNull() {
         assertNull(sessionKeySerde.serializer().serialize(topic, null));
     }
 
     @Test
-    public void shouldDeSerializeEmtpyByteArrayToNull() throws Exception {
+    public void shouldDeSerializeEmtpyByteArrayToNull() {
         assertNull(sessionKeySerde.deserializer().deserialize(topic, new byte[0]));
     }
 
     @Test
-    public void shouldDeSerializeNullToNull() throws Exception {
+    public void shouldDeSerializeNullToNull() {
         assertNull(sessionKeySerde.deserializer().deserialize(topic, null));
     }
 
     @Test
-    public void shouldConvertToBinaryAndBack() throws Exception {
+    public void shouldConvertToBinaryAndBack() {
         final Bytes serialized = SessionKeySerde.toBinary(windowedKey, serde.serializer(), "dummy");
         final Windowed<String> result = SessionKeySerde.from(serialized.get(), Serdes.String().deserializer(), "dummy");
         assertEquals(windowedKey, result);
     }
 
     @Test
-    public void shouldExtractEndTimeFromBinary() throws Exception {
+    public void shouldExtractEndTimeFromBinary() {
         final Bytes serialized = SessionKeySerde.toBinary(windowedKey, serde.serializer(), "dummy");
         assertEquals(endTime, SessionKeySerde.extractEnd(serialized.get()));
     }
 
     @Test
-    public void shouldExtractStartTimeFromBinary() throws Exception {
+    public void shouldExtractStartTimeFromBinary() {
         final Bytes serialized = SessionKeySerde.toBinary(windowedKey, serde.serializer(), "dummy");
         assertEquals(startTime, SessionKeySerde.extractStart(serialized.get()));
     }
 
     @Test
-    public void shouldExtractWindowFromBindary() throws Exception {
+    public void shouldExtractWindowFromBindary() {
         final Bytes serialized = SessionKeySerde.toBinary(windowedKey, serde.serializer(), "dummy");
         assertEquals(window, SessionKeySerde.extractWindow(serialized.get()));
     }
 
     @Test
-    public void shouldExtractKeyBytesFromBinary() throws Exception {
+    public void shouldExtractKeyBytesFromBinary() {
         final Bytes serialized = SessionKeySerde.toBinary(windowedKey, serde.serializer(), "dummy");
         assertArrayEquals(key.getBytes(), SessionKeySerde.extractKeyBytes(serialized.get()));
     }
 
     @Test
-    public void shouldExtractKeyFromBinary() throws Exception {
+    public void shouldExtractKeyFromBinary() {
         final Bytes serialized = SessionKeySerde.toBinary(windowedKey, serde.serializer(), "dummy");
         assertEquals(windowedKey, SessionKeySerde.from(serialized.get(), serde.deserializer(), "dummy"));
     }
 
     @Test
-    public void shouldExtractBytesKeyFromBinary() throws Exception {
+    public void shouldExtractBytesKeyFromBinary() {
         final Bytes bytesKey = Bytes.wrap(key.getBytes());
         final Windowed<Bytes> windowedBytesKey = new Windowed<>(bytesKey, window);
         final Bytes serialized = SessionKeySerde.bytesToBinary(windowedBytesKey);

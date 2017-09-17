@@ -23,6 +23,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsBuilderTest;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -66,7 +67,7 @@ public class KTableKTableLeftJoinTest {
     }
 
     @Test
-    public void testJoin() throws Exception {
+    public void testJoin() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -160,7 +161,7 @@ public class KTableKTableLeftJoinTest {
     }
 
     @Test
-    public void testNotSendingOldValue() throws Exception {
+    public void testNotSendingOldValue() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -241,7 +242,7 @@ public class KTableKTableLeftJoinTest {
     }
 
     @Test
-    public void testSendingOldValue() throws Exception {
+    public void testSendingOldValue() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -329,7 +330,7 @@ public class KTableKTableLeftJoinTest {
      * Before the fix this would trigger an IllegalStateException.
      */
     @Test
-    public void shouldNotThrowIllegalStateExceptionWhenMultiCacheEvictions() throws Exception {
+    public void shouldNotThrowIllegalStateExceptionWhenMultiCacheEvictions() {
         final String agg = "agg";
         final String tableOne = "tableOne";
         final String tableTwo = "tableTwo";
@@ -346,7 +347,7 @@ public class KTableKTableLeftJoinTest {
                     public KeyValue<Long, String> apply(final Long key, final String value) {
                         return new KeyValue<>(key, value);
                     }
-                }, Serdes.Long(), Serdes.String()).reduce(MockReducer.STRING_ADDER, MockReducer.STRING_ADDER, "agg-store");
+                }, Serialized.with(Serdes.Long(), Serdes.String())).reduce(MockReducer.STRING_ADDER, MockReducer.STRING_ADDER, "agg-store");
 
         final KTable<Long, String> one = builder.table(Serdes.Long(), Serdes.String(), tableOne, tableOne);
         final KTable<Long, String> two = builder.table(Serdes.Long(), Serdes.String(), tableTwo, tableTwo);

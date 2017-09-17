@@ -147,7 +147,7 @@ public class RecordQueueTest {
     }
 
     @Test(expected = StreamsException.class)
-    public void shouldThrowStreamsExceptionWhenKeyDeserializationFails() throws Exception {
+    public void shouldThrowStreamsExceptionWhenKeyDeserializationFails() {
         final byte[] key = Serdes.Long().serializer().serialize("foo", 1L);
         final List<ConsumerRecord<byte[], byte[]>> records = Collections.singletonList(
                 new ConsumerRecord<>("topic", 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, key, recordValue));
@@ -156,7 +156,7 @@ public class RecordQueueTest {
     }
 
     @Test(expected = StreamsException.class)
-    public void shouldThrowStreamsExceptionWhenValueDeserializationFails() throws Exception {
+    public void shouldThrowStreamsExceptionWhenValueDeserializationFails() {
         final byte[] value = Serdes.Long().serializer().serialize("foo", 1L);
         final List<ConsumerRecord<byte[], byte[]>> records = Collections.singletonList(
                 new ConsumerRecord<>("topic", 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, value));

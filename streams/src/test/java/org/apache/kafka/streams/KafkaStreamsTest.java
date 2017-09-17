@@ -83,7 +83,7 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void testStateChanges() throws Exception {
+    public void testStateChanges() throws InterruptedException {
         final StreamsBuilder builder = new StreamsBuilder();
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
 
@@ -104,7 +104,7 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void testStateCloseAfterCreate() throws Exception {
+    public void testStateCloseAfterCreate() {
         final StreamsBuilder builder = new StreamsBuilder();
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
 
@@ -208,7 +208,7 @@ public class KafkaStreamsTest {
 
 
     @Test
-    public void testInitializesAndDestroysMetricsReporters() throws Exception {
+    public void testInitializesAndDestroysMetricsReporters() {
         final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
         final StreamsBuilder builder = new StreamsBuilder();
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
@@ -223,7 +223,7 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void testCloseIsIdempotent() throws Exception {
+    public void testCloseIsIdempotent() {
         streams.close();
         final int closeCount = MockMetricsReporter.CLOSE_COUNT.get();
 
@@ -233,7 +233,7 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void testCannotStartOnceClosed() throws Exception {
+    public void testCannotStartOnceClosed() {
         streams.start();
         streams.close();
         try {
@@ -247,7 +247,7 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void testCannotStartTwice() throws Exception {
+    public void testCannotStartTwice() {
         streams.start();
 
         try {
@@ -302,8 +302,8 @@ public class KafkaStreamsTest {
     public void testNumberDefaultMetrics() {
         final KafkaStreams streams = createKafkaStreams();
         final Map<MetricName, ? extends Metric> metrics = streams.metrics();
-        // all 15 default StreamThread metrics + 1 metric that keeps track of number of metrics
-        assertEquals(metrics.size(), 16);
+        // all 22 default StreamThread metrics + 1 metric that keeps track of number of metrics
+        assertEquals(23, metrics.size());
     }
 
     @Test
@@ -336,22 +336,22 @@ public class KafkaStreamsTest {
     }
 
     @Test(expected = IllegalStateException.class)
-    public void shouldNotGetAllTasksWhenNotRunning() throws Exception {
+    public void shouldNotGetAllTasksWhenNotRunning() {
         streams.allMetadata();
     }
 
     @Test(expected = IllegalStateException.class)
-    public void shouldNotGetAllTasksWithStoreWhenNotRunning() throws Exception {
+    public void shouldNotGetAllTasksWithStoreWhenNotRunning() {
         streams.allMetadataForStore("store");
     }
 
     @Test(expected = IllegalStateException.class)
-    public void shouldNotGetTaskWithKeyAndSerializerWhenNotRunning() throws Exception {
+    public void shouldNotGetTaskWithKeyAndSerializerWhenNotRunning() {
         streams.metadataForKey("store", "key", Serdes.String().serializer());
     }
 
     @Test(expected = IllegalStateException.class)
-    public void shouldNotGetTaskWithKeyAndPartitionerWhenNotRunning() throws Exception {
+    public void shouldNotGetTaskWithKeyAndPartitionerWhenNotRunning() {
         streams.metadataForKey("store", "key", new StreamPartitioner<String, Object>() {
             @Override
             public Integer partition(final String key, final Object value, final int numPartitions) {
@@ -374,7 +374,7 @@ public class KafkaStreamsTest {
             final String topic = "input";
             CLUSTER.createTopic(topic);
 
-            builder.stream(Serdes.String(), Serdes.String(), topic)
+            builder.stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
                     .foreach(new ForeachAction<String, String>() {
                         @Override
                         public void apply(final String key, final String value) {
@@ -438,7 +438,7 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void testCleanup() throws Exception {
+    public void testCleanup() {
         final Properties props = new Properties();
         props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "testLocalCleanup");
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -453,7 +453,7 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void testCannotCleanupWhileRunning() throws Exception {
+    public void testCannotCleanupWhileRunning() throws InterruptedException {
         final Properties props = new Properties();
         props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "testCannotCleanupWhileRunning");
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());

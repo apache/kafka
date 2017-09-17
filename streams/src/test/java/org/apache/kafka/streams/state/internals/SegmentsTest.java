@@ -57,7 +57,7 @@ public class SegmentsTest {
     }
 
     @Test
-    public void shouldGetSegmentIdsFromTimestamp() throws Exception {
+    public void shouldGetSegmentIdsFromTimestamp() {
         assertEquals(0, segments.segmentId(0));
         assertEquals(1, segments.segmentId(60000));
         assertEquals(2, segments.segmentId(120000));
@@ -65,7 +65,7 @@ public class SegmentsTest {
     }
 
     @Test
-    public void shouldBaseSegmentIntervalOnRetentionAndNumSegments() throws Exception {
+    public void shouldBaseSegmentIntervalOnRetentionAndNumSegments() {
         final Segments segments = new Segments("test", 8 * 60 * 1000, 5);
         assertEquals(0, segments.segmentId(0));
         assertEquals(0, segments.segmentId(60000));
@@ -73,14 +73,14 @@ public class SegmentsTest {
     }
 
     @Test
-    public void shouldGetSegmentNameFromId() throws Exception {
+    public void shouldGetSegmentNameFromId() {
         assertEquals("test-197001010000", segments.segmentName(0));
         assertEquals("test-197001010001", segments.segmentName(1));
         assertEquals("test-197001010002", segments.segmentName(2));
     }
 
     @Test
-    public void shouldCreateSegments() throws Exception {
+    public void shouldCreateSegments() {
         final Segment segment1 = segments.getOrCreateSegment(0, context);
         final Segment segment2 = segments.getOrCreateSegment(1, context);
         final Segment segment3 = segments.getOrCreateSegment(2, context);
@@ -93,14 +93,14 @@ public class SegmentsTest {
     }
 
     @Test
-    public void shouldNotCreateSegmentThatIsAlreadyExpired() throws Exception {
+    public void shouldNotCreateSegmentThatIsAlreadyExpired() {
         segments.getOrCreateSegment(7, context);
         assertNull(segments.getOrCreateSegment(0, context));
         assertFalse(new File(context.stateDir(), "test/test-197001010000").exists());
     }
 
     @Test
-    public void shouldCleanupSegmentsThatHaveExpired() throws Exception {
+    public void shouldCleanupSegmentsThatHaveExpired() {
         final Segment segment1 = segments.getOrCreateSegment(0, context);
         final Segment segment2 = segments.getOrCreateSegment(0, context);
         final Segment segment3 = segments.getOrCreateSegment(7, context);
@@ -113,14 +113,14 @@ public class SegmentsTest {
     }
 
     @Test
-    public void shouldGetSegmentForTimestamp() throws Exception {
+    public void shouldGetSegmentForTimestamp() {
         final Segment segment = segments.getOrCreateSegment(0, context);
         segments.getOrCreateSegment(1, context);
         assertEquals(segment, segments.getSegmentForTimestamp(0L));
     }
 
     @Test
-    public void shouldCloseAllOpenSegments() throws Exception {
+    public void shouldCloseAllOpenSegments() {
         final Segment first = segments.getOrCreateSegment(0, context);
         final Segment second = segments.getOrCreateSegment(1, context);
         final Segment third = segments.getOrCreateSegment(2, context);
@@ -132,7 +132,7 @@ public class SegmentsTest {
     }
 
     @Test
-    public void shouldOpenExistingSegments() throws Exception {
+    public void shouldOpenExistingSegments() {
         segments.getOrCreateSegment(0, context);
         segments.getOrCreateSegment(1, context);
         segments.getOrCreateSegment(2, context);
@@ -152,7 +152,7 @@ public class SegmentsTest {
     }
 
     @Test
-    public void shouldGetSegmentsWithinTimeRange() throws Exception {
+    public void shouldGetSegmentsWithinTimeRange() {
         segments.getOrCreateSegment(0, context);
         segments.getOrCreateSegment(1, context);
         segments.getOrCreateSegment(2, context);
@@ -182,7 +182,7 @@ public class SegmentsTest {
     }
 
     @Test
-    public void shouldRollSegments() throws Exception {
+    public void shouldRollSegments() {
         segments.getOrCreateSegment(0, context);
         verifyCorrectSegments(0, 1);
         segments.getOrCreateSegment(1, context);

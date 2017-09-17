@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.metrics.Metrics;
@@ -32,7 +33,8 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.metrics.stats.Meter;
+import org.apache.kafka.common.metrics.stats.SampledStat;
 import org.apache.kafka.common.metrics.stats.Sum;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
@@ -166,7 +168,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
      * @return The state this instance is in
      */
     public State state() {
-        // we do not need to use the stat lock since the variable is volatile
+        // we do not need to use the state lock since the variable is volatile
         return state;
     }
 
@@ -212,12 +214,12 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         return true;
     }
 
-    public synchronized boolean isRunningAndNotRebalancing() {
+    public boolean isRunningAndNotRebalancing() {
         // we do not need to grab stateLock since it is a single read
         return state == State.RUNNING;
     }
 
-    public synchronized boolean isRunning() {
+    public boolean isRunning() {
         synchronized (stateLock) {
             return state == State.RUNNING || state == State.PARTITIONS_REVOKED || state == State.PARTITIONS_ASSIGNED;
         }
@@ -256,14 +258,11 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                     return;
                 }
                 taskManager.createTasks(assignment);
-                final RuntimeException exception = streamThread.unAssignChangeLogPartitions();
-                if (exception != null) {
-                    throw exception;
-                }
                 streamThread.refreshMetadataState();
             } catch (final Throwable t) {
+                log.error("{} Error caught during partition assignment, " +
+                        "will abort the current process and re-throw at the end of rebalance: {}", logPrefix, t.getMessage());
                 streamThread.setRebalanceException(t);
-                throw t;
             } finally {
                 log.info("{} partition assignment took {} ms.\n" +
                                  "\tcurrent active tasks: {}\n" +
@@ -294,8 +293,9 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                     // suspend active tasks
                     taskManager.suspendTasksAndState();
                 } catch (final Throwable t) {
+                    log.error("{} Error caught during partition revocation, " +
+                            "will abort the current process and re-throw at the end of rebalance: {}", logPrefix, t.getMessage());
                     streamThread.setRebalanceException(t);
-                    throw t;
                 } finally {
                     streamThread.refreshMetadataState();
                     streamThread.clearStandbyRecords();
@@ -494,32 +494,40 @@ public class StreamThread extends Thread implements ThreadDataProvider {
             commitTimeSensor = metrics.sensor(prefix + ".commit-latency", Sensor.RecordingLevel.INFO);
             commitTimeSensor.add(metrics.metricName("commit-latency-avg", this.groupName, "The average commit time in ms", this.tags), new Avg());
             commitTimeSensor.add(metrics.metricName("commit-latency-max", this.groupName, "The maximum commit time in ms", this.tags), new Max());
-            commitTimeSensor.add(metrics.metricName("commit-rate", this.groupName, "The average per-second number of commit calls", this.tags), new Rate(new Count()));
+            commitTimeSensor.add(createMeter(metrics, new Count(), "commit", "commit calls"));
 
             pollTimeSensor = metrics.sensor(prefix + ".poll-latency", Sensor.RecordingLevel.INFO);
             pollTimeSensor.add(metrics.metricName("poll-latency-avg", this.groupName, "The average poll time in ms", this.tags), new Avg());
             pollTimeSensor.add(metrics.metricName("poll-latency-max", this.groupName, "The maximum poll time in ms", this.tags), new Max());
-            pollTimeSensor.add(metrics.metricName("poll-rate", this.groupName, "The average per-second number of record-poll calls", this.tags), new Rate(new Count()));
+            pollTimeSensor.add(createMeter(metrics, new Count(), "poll", "record-poll calls"));
 
             processTimeSensor = metrics.sensor(prefix + ".process-latency", Sensor.RecordingLevel.INFO);
             processTimeSensor.add(metrics.metricName("process-latency-avg", this.groupName, "The average process time in ms", this.tags), new Avg());
             processTimeSensor.add(metrics.metricName("process-latency-max", this.groupName, "The maximum process time in ms", this.tags), new Max());
-            processTimeSensor.add(metrics.metricName("process-rate", this.groupName, "The average per-second number of process calls", this.tags), new Rate(new Count()));
+            processTimeSensor.add(createMeter(metrics, new Count(), "process", "process calls"));
 
             punctuateTimeSensor = metrics.sensor(prefix + ".punctuate-latency", Sensor.RecordingLevel.INFO);
             punctuateTimeSensor.add(metrics.metricName("punctuate-latency-avg", this.groupName, "The average punctuate time in ms", this.tags), new Avg());
             punctuateTimeSensor.add(metrics.metricName("punctuate-latency-max", this.groupName, "The maximum punctuate time in ms", this.tags), new Max());
-            punctuateTimeSensor.add(metrics.metricName("punctuate-rate", this.groupName, "The average per-second number of punctuate calls", this.tags), new Rate(new Count()));
+            punctuateTimeSensor.add(createMeter(metrics, new Count(), "punctuate", "punctuate calls"));
 
             taskCreatedSensor = metrics.sensor(prefix + ".task-created", Sensor.RecordingLevel.INFO);
-            taskCreatedSensor.add(metrics.metricName("task-created-rate", this.groupName, "The average per-second number of newly created tasks", this.tags), new Rate(new Count()));
+            taskCreatedSensor.add(createMeter(metrics, new Count(), "task-created", "newly created tasks"));
 
             tasksClosedSensor = metrics.sensor(prefix + ".task-closed", Sensor.RecordingLevel.INFO);
-            tasksClosedSensor.add(metrics.metricName("task-closed-rate", this.groupName, "The average per-second number of closed tasks", this.tags), new Rate(new Count()));
+            tasksClosedSensor.add(createMeter(metrics, new Count(), "task-closed", "closed tasks"));
 
             skippedRecordsSensor = metrics.sensor(prefix + ".skipped-records");
-            skippedRecordsSensor.add(metrics.metricName("skipped-records-rate", this.groupName, "The average per-second number of skipped records.", this.tags), new Rate(new Sum()));
+            skippedRecordsSensor.add(createMeter(metrics, new Sum(), "skipped-records", "skipped records"));
 
+        }
+
+        private Meter createMeter(Metrics metrics, SampledStat stat, String baseName, String descriptiveName) {
+            MetricName rateMetricName = metrics.metricName(baseName + "-rate", groupName,
+                    String.format("The average per-second number of %s", descriptiveName), tags);
+            MetricName totalMetricName = metrics.metricName(baseName + "-total", groupName,
+                    String.format("The total number of %s", descriptiveName), tags);
+            return new Meter(stat, rateMetricName, totalMetricName);
         }
 
         void removeAllSensors() {
@@ -1032,7 +1040,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
      * Note that there is nothing to prevent this function from being called multiple times
      * (e.g., in testing), hence the state is set only the first time
      */
-    public synchronized void shutdown() {
+    public void shutdown() {
         log.info("{} Informed to shut down", logPrefix);
         setState(State.PENDING_SHUTDOWN);
     }
@@ -1161,17 +1169,6 @@ public class StreamThread extends Thread implements ThreadDataProvider {
 
         setState(State.DEAD);
         log.info("{} Shutdown complete", logPrefix);
-    }
-
-    private RuntimeException unAssignChangeLogPartitions() {
-        try {
-            // un-assign the change log partitions
-            restoreConsumer.assign(Collections.<TopicPartition>emptyList());
-        } catch (final RuntimeException e) {
-            log.error("{} Failed to un-assign change log partitions due to the following error:", logPrefix, e);
-            return e;
-        }
-        return null;
     }
 
     private void clearStandbyRecords() {

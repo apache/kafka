@@ -32,6 +32,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilderTest;
 import org.apache.kafka.streams.processor.StateStore;
@@ -118,7 +119,7 @@ public class StandbyTaskTest {
     private File baseDir;
     private StateDirectory stateDirectory;
 
-    private StreamsConfig createConfig(final File baseDir) throws Exception {
+    private StreamsConfig createConfig(final File baseDir) throws IOException {
         return new StreamsConfig(new Properties() {
             {
                 setProperty(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
@@ -161,7 +162,7 @@ public class StandbyTaskTest {
     }
 
     @Test
-    public void testStorePartitions() throws Exception {
+    public void testStorePartitions() throws IOException {
         StreamsConfig config = createConfig(baseDir);
         StandbyTask task = new StandbyTask(taskId, applicationId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
         task.initialize();
@@ -170,8 +171,8 @@ public class StandbyTaskTest {
     }
 
     @SuppressWarnings("unchecked")
-    @Test(expected = Exception.class)
-    public void testUpdateNonPersistentStore() throws Exception {
+    @Test(expected = ProcessorStateException.class)
+    public void testUpdateNonPersistentStore() throws IOException {
         StreamsConfig config = createConfig(baseDir);
         StandbyTask task = new StandbyTask(taskId, applicationId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
 
@@ -184,7 +185,7 @@ public class StandbyTaskTest {
     }
 
     @Test
-    public void testUpdate() throws Exception {
+    public void testUpdate() throws IOException {
         StreamsConfig config = createConfig(baseDir);
         StandbyTask task = new StandbyTask(taskId, applicationId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
         task.initialize();
@@ -230,7 +231,7 @@ public class StandbyTaskTest {
     }
 
     @Test
-    public void testUpdateKTable() throws Exception {
+    public void testUpdateKTable() throws IOException {
         consumer.assign(Utils.mkList(ktable));
         Map<TopicPartition, OffsetAndMetadata> committedOffsets = new HashMap<>();
         committedOffsets.put(new TopicPartition(ktable.topic(), ktable.partition()), new OffsetAndMetadata(0L));
@@ -322,7 +323,7 @@ public class StandbyTaskTest {
     }
 
     @Test
-    public void shouldNotThrowUnsupportedOperationExceptionWhenInitializingStateStores() throws Exception {
+    public void shouldNotThrowUnsupportedOperationExceptionWhenInitializingStateStores() throws IOException {
         final String changelogName = "test-application-my-store-changelog";
         final List<TopicPartition> partitions = Utils.mkList(new TopicPartition(changelogName, 0));
         consumer.assign(partitions);
@@ -333,7 +334,7 @@ public class StandbyTaskTest {
         restoreStateConsumer.updatePartitions(changelogName, Utils.mkList(
                 new PartitionInfo(changelogName, 0, Node.noNode(), new Node[0], new Node[0])));
         final InternalStreamsBuilder builder = new InternalStreamsBuilder(new InternalTopologyBuilder());
-        builder.stream(null, null, null, null, "topic").groupByKey().count("my-store");
+        builder.stream(Collections.singleton("topic"), new ConsumedInternal<>()).groupByKey().count("my-store");
 
         final StreamsConfig config = createConfig(baseDir);
         final InternalTopologyBuilder internalTopologyBuilder = InternalStreamsBuilderTest.internalTopologyBuilder(builder);
@@ -344,7 +345,7 @@ public class StandbyTaskTest {
     }
 
     @Test
-    public void shouldCheckpointStoreOffsetsOnCommit() throws Exception {
+    public void shouldCheckpointStoreOffsetsOnCommit() throws IOException {
         consumer.assign(Utils.mkList(ktable));
         final Map<TopicPartition, OffsetAndMetadata> committedOffsets = new HashMap<>();
         committedOffsets.put(new TopicPartition(ktable.topic(), ktable.partition()), new OffsetAndMetadata(100L));

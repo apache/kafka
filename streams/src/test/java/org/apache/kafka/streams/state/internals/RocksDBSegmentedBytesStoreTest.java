@@ -79,7 +79,7 @@ public class RocksDBSegmentedBytesStoreTest {
     }
 
     @Test
-    public void shouldPutAndFetch() throws Exception {
+    public void shouldPutAndFetch() {
         final String key = "a";
         bytesStore.put(serializeKey(new Windowed<>(key, new SessionWindow(10, 10L))), serializeValue(10L));
         bytesStore.put(serializeKey(new Windowed<>(key, new SessionWindow(500L, 1000L))), serializeValue(50L));
@@ -94,7 +94,7 @@ public class RocksDBSegmentedBytesStoreTest {
     }
 
     @Test
-    public void shouldFindValuesWithinRange() throws Exception {
+    public void shouldFindValuesWithinRange() {
         final String key = "a";
         bytesStore.put(serializeKey(new Windowed<>(key, new SessionWindow(0L, 0L))), serializeValue(50L));
         bytesStore.put(serializeKey(new Windowed<>(key, new SessionWindow(1000L, 1000L))), serializeValue(10L));
@@ -103,7 +103,7 @@ public class RocksDBSegmentedBytesStoreTest {
     }
 
     @Test
-    public void shouldRemove() throws Exception {
+    public void shouldRemove() {
         bytesStore.put(serializeKey(new Windowed<>("a", new SessionWindow(0, 1000))), serializeValue(30L));
         bytesStore.put(serializeKey(new Windowed<>("a", new SessionWindow(1500, 2500))), serializeValue(50L));
 
@@ -113,7 +113,7 @@ public class RocksDBSegmentedBytesStoreTest {
     }
 
     @Test
-    public void shouldRollSegments() throws Exception {
+    public void shouldRollSegments() {
         // just to validate directories
         final Segments segments = new Segments(storeName, retention, numSegments);
         final String key = "a";
