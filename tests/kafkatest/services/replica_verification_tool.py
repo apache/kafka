@@ -62,7 +62,7 @@ class ReplicaVerificationTool(KafkaPathResolverMixin, BackgroundThreadService):
             topic:          a topic
             partition:      a partition of the topic
         """
-        topic_partition = topic + ',' + str(partition)
+        topic_partition = topic + '-' + str(partition)
         lag = self.partition_lag.get(topic_partition, -1)
         self.logger.debug("Returning lag for {} as {}".format(topic_partition, lag))
 
