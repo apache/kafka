@@ -45,6 +45,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.TestUtils;
 
@@ -686,7 +687,7 @@ public class SimpleBenchmark {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Long, byte[]> input1 = builder.stream(kStreamTopic);
-        final KTable<Long, byte[]> input2 = builder.table(kTableTopic, kTableTopic + "-store");
+        final KTable<Long, byte[]> input2 = builder.table(kTableTopic);
 
         input1.leftJoin(input2, VALUE_JOINER).foreach(new CountDownAction(latch));
 
@@ -697,8 +698,8 @@ public class SimpleBenchmark {
                                                             String kTableTopic2, final CountDownLatch latch) {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KTable<Long, byte[]> input1 = builder.table(kTableTopic1, kTableTopic1 + "-store");
-        final KTable<Long, byte[]> input2 = builder.table(kTableTopic2, kTableTopic2 + "-store");
+        final KTable<Long, byte[]> input1 = builder.table(kTableTopic1);
+        final KTable<Long, byte[]> input2 = builder.table(kTableTopic2);
 
         input1.leftJoin(input2, VALUE_JOINER).foreach(new CountDownAction(latch));
 
@@ -725,10 +726,12 @@ public class SimpleBenchmark {
 
         StreamsBuilder builder = new StreamsBuilder();
 
+        final StoreBuilder<KeyValueStore<Integer, byte[]>> storeBuilder
+                = Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("store"), Serdes.Integer(), Serdes.ByteArray());
         if (enableCaching) {
-            builder.addStateStore(Stores.create("store").withIntegerKeys().withByteArrayValues().persistent().enableCaching().build());
+            builder.addStateStore(storeBuilder.withCachingEnabled());
         } else {
-            builder.addStateStore(Stores.create("store").withIntegerKeys().withByteArrayValues().persistent().build());
+            builder.addStateStore(storeBuilder);
         }
         KStream<Integer, byte[]> source = builder.stream(topic, Consumed.with(INTEGER_SERDE, BYTE_SERDE));
 

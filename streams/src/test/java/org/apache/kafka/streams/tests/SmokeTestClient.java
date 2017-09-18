@@ -105,9 +105,9 @@ public class SmokeTestClient extends SmokeTestUtil {
         props.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
         props.put(ProducerConfig.ACKS_CONFIG, "all");
 
-
         StreamsBuilder builder = new StreamsBuilder();
-        KStream<String, Integer> source = builder.stream("data", Consumed.with(stringSerde, intSerde));
+        Consumed<String, Integer> stringIntConsumed = Consumed.with(stringSerde, intSerde);
+        KStream<String, Integer> source = builder.stream("data", stringIntConsumed);
         source.to(stringSerde, intSerde, "echo");
         KStream<String, Integer> data = source.filter(new Predicate<String, Integer>() {
             @Override
@@ -141,7 +141,7 @@ public class SmokeTestClient extends SmokeTestUtil {
                 new Unwindow<String, Integer>()
         ).to(stringSerde, intSerde, "min");
 
-        KTable<String, Integer> minTable = builder.table(stringSerde, intSerde, "min", "minStoreName");
+        KTable<String, Integer> minTable = builder.table("min", stringIntConsumed);
         minTable.toStream().process(SmokeTestUtil.printProcessorSupplier("min"));
 
         // max
@@ -163,7 +163,7 @@ public class SmokeTestClient extends SmokeTestUtil {
                 new Unwindow<String, Integer>()
         ).to(stringSerde, intSerde, "max");
 
-        KTable<String, Integer> maxTable = builder.table(stringSerde, intSerde, "max", "maxStoreName");
+        KTable<String, Integer> maxTable = builder.table("max", stringIntConsumed);
         maxTable.toStream().process(SmokeTestUtil.printProcessorSupplier("max"));
 
         // sum
@@ -186,7 +186,8 @@ public class SmokeTestClient extends SmokeTestUtil {
         ).to(stringSerde, longSerde, "sum");
 
 
-        KTable<String, Long> sumTable = builder.table(stringSerde, longSerde, "sum", "sumStoreName");
+        Consumed<String, Long> stringLongConsumed = Consumed.with(stringSerde, longSerde);
+        KTable<String, Long> sumTable = builder.table("sum", stringLongConsumed);
         sumTable.toStream().process(SmokeTestUtil.printProcessorSupplier("sum"));
 
         // cnt
@@ -195,7 +196,7 @@ public class SmokeTestClient extends SmokeTestUtil {
                 new Unwindow<String, Long>()
         ).to(stringSerde, longSerde, "cnt");
 
-        KTable<String, Long> cntTable = builder.table(stringSerde, longSerde, "cnt", "cntStoreName");
+        KTable<String, Long> cntTable = builder.table("cnt", stringLongConsumed);
         cntTable.toStream().process(SmokeTestUtil.printProcessorSupplier("cnt"));
 
         // dif

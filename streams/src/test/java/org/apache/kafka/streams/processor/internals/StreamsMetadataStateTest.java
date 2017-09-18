@@ -22,14 +22,18 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsBuilderTest;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.HostInfo;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StreamsMetadata;
 import org.junit.Before;
 import org.junit.Test;
@@ -88,7 +92,9 @@ public class StreamsMetadataStateTest {
             }
         });
 
-        builder.globalTable("global-topic", "global-table");
+        builder.globalTable("global-topic",
+                            Consumed.with(null, null),
+                            Materialized.<Object, Object, KeyValueStore<Bytes, byte[]>>as(globalTable));
 
         StreamsBuilderTest.internalTopologyBuilder(builder).setApplicationId("appId");
 

@@ -30,8 +30,9 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
     public MaterializedInternal(final Materialized<K, V, S> materialized) {
         this(materialized, true);
     }
-
-    MaterializedInternal(final Materialized<K, V, S> materialized, final boolean queryable) {
+    
+    public MaterializedInternal(final Materialized<K, V, S> materialized,
+                                final boolean queryable) {
         super(materialized);
         this.queryable = queryable;
     }
@@ -67,7 +68,7 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
         return cachingEnabled;
     }
 
-    public boolean isQueryable() {
+    boolean isQueryable() {
         return queryable;
     }
 }

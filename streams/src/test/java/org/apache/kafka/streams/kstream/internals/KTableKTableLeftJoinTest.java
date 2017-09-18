@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsBuilderTest;
@@ -60,6 +61,7 @@ public class KTableKTableLeftJoinTest {
     private File stateDir = null;
     @Rule
     public final KStreamTestDriver driver = new KStreamTestDriver();
+    private final Consumed<Integer, String> consumed = Consumed.with(intSerde, stringSerde);
 
     @Before
     public void setUp() throws IOException {
@@ -72,8 +74,8 @@ public class KTableKTableLeftJoinTest {
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
-        KTable<Integer, String> table1 = builder.table(intSerde, stringSerde, topic1, storeName1);
-        KTable<Integer, String> table2 = builder.table(intSerde, stringSerde, topic2, storeName2);
+        KTable<Integer, String> table1 = builder.table(topic1, consumed);
+        KTable<Integer, String> table2 = builder.table(topic2, consumed);
         KTable<Integer, String> joined = table1.leftJoin(table2, MockValueJoiner.TOSTRING_JOINER);
         MockProcessorSupplier<Integer, String> processor;
         processor = new MockProcessorSupplier<>();
@@ -171,8 +173,8 @@ public class KTableKTableLeftJoinTest {
         final KTable<Integer, String> joined;
         final MockProcessorSupplier<Integer, String> proc;
 
-        table1 = builder.table(intSerde, stringSerde, topic1, storeName1);
-        table2 = builder.table(intSerde, stringSerde, topic2, storeName2);
+        table1 = builder.table(topic1, consumed);
+        table2 = builder.table(topic2, consumed);
         joined = table1.leftJoin(table2, MockValueJoiner.TOSTRING_JOINER);
 
         proc = new MockProcessorSupplier<>();
@@ -252,8 +254,8 @@ public class KTableKTableLeftJoinTest {
         KTable<Integer, String> joined;
         MockProcessorSupplier<Integer, String> proc;
 
-        table1 = builder.table(intSerde, stringSerde, topic1, storeName1);
-        table2 = builder.table(intSerde, stringSerde, topic2, storeName2);
+        table1 = builder.table(topic1, consumed);
+        table2 = builder.table(topic2, consumed);
         joined = table1.leftJoin(table2, MockValueJoiner.TOSTRING_JOINER);
 
         ((KTableImpl<?, ?, ?>) joined).enableSendingOldValues();
@@ -341,7 +343,8 @@ public class KTableKTableLeftJoinTest {
         final String[] inputs = {agg, tableOne, tableTwo, tableThree, tableFour, tableFive, tableSix};
 
         final StreamsBuilder builder = new StreamsBuilder();
-        final KTable<Long, String> aggTable = builder.table(Serdes.Long(), Serdes.String(), agg, agg)
+        final Consumed<Long, String> consumed = Consumed.with(Serdes.Long(), Serdes.String());
+        final KTable<Long, String> aggTable = builder.table(agg, consumed)
                 .groupBy(new KeyValueMapper<Long, String, KeyValue<Long, String>>() {
                     @Override
                     public KeyValue<Long, String> apply(final Long key, final String value) {
@@ -349,12 +352,12 @@ public class KTableKTableLeftJoinTest {
                     }
                 }, Serialized.with(Serdes.Long(), Serdes.String())).reduce(MockReducer.STRING_ADDER, MockReducer.STRING_ADDER, "agg-store");
 
-        final KTable<Long, String> one = builder.table(Serdes.Long(), Serdes.String(), tableOne, tableOne);
-        final KTable<Long, String> two = builder.table(Serdes.Long(), Serdes.String(), tableTwo, tableTwo);
-        final KTable<Long, String> three = builder.table(Serdes.Long(), Serdes.String(), tableThree, tableThree);
-        final KTable<Long, String> four = builder.table(Serdes.Long(), Serdes.String(), tableFour, tableFour);
-        final KTable<Long, String> five = builder.table(Serdes.Long(), Serdes.String(), tableFive, tableFive);
-        final KTable<Long, String> six = builder.table(Serdes.Long(), Serdes.String(), tableSix, tableSix);
+        final KTable<Long, String> one = builder.table(tableOne, consumed);
+        final KTable<Long, String> two = builder.table(tableTwo, consumed);
+        final KTable<Long, String> three = builder.table(tableThree, consumed);
+        final KTable<Long, String> four = builder.table(tableFour, consumed);
+        final KTable<Long, String> five = builder.table(tableFive, consumed);
+        final KTable<Long, String> six = builder.table(tableSix, consumed);
 
         final ValueMapper<String, String> mapper = new ValueMapper<String, String>() {
             @Override
