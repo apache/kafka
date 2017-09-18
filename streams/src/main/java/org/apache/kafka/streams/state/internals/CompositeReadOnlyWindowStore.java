@@ -72,7 +72,7 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
         final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction = new NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>>() {
             @Override
             public KeyValueIterator<Windowed<K>, V> apply(final ReadOnlyWindowStore<K, V> store) {
-                return store.fetch(from, to, timeFrom, timeFrom);
+                return store.fetch(from, to, timeFrom, timeTo);
             }
         };
         return new DelegatingPeekingKeyValueIterator<>(storeName,
