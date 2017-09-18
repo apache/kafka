@@ -33,6 +33,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
@@ -40,6 +41,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
@@ -52,7 +54,6 @@ import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidat
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.StreamsMetadata;
-import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.state.internals.GlobalStateStoreProvider;
 import org.apache.kafka.streams.state.internals.QueryableStoreProvider;
 import org.apache.kafka.streams.state.internals.StateStoreProvider;
@@ -494,6 +495,7 @@ public class KafkaStreams {
      *
      * @param topology the topology specifying the computational logic
      * @param props   properties for {@link StreamsConfig}
+     * @throws StreamsException if any fatal error occurs
      */
     public KafkaStreams(final Topology topology,
                         final Properties props) {
@@ -505,6 +507,7 @@ public class KafkaStreams {
      *
      * @param topology the topology specifying the computational logic
      * @param config  the Kafka Streams configuration
+     * @throws StreamsException if any fatal error occurs
      */
     public KafkaStreams(final Topology topology,
                         final StreamsConfig config) {
@@ -518,6 +521,7 @@ public class KafkaStreams {
      * @param config         the Kafka Streams configuration
      * @param clientSupplier the Kafka clients supplier which provides underlying producer and consumer clients
      *                       for the new {@code KafkaStreams} instance
+     * @throws StreamsException if any fatal error occurs
      */
     public KafkaStreams(final Topology topology,
                         final StreamsConfig config,
@@ -525,17 +529,9 @@ public class KafkaStreams {
         this(topology.internalTopologyBuilder, config, clientSupplier);
     }
 
-    /**
-     *
-     * @param internalTopologyBuilder
-     * @param config
-     * @param clientSupplier
-     *
-     * @throws org.apache.kafka.streams.errors.ProcessorStateException if {@link StateDirectory} cannot be created
-     */
     private KafkaStreams(final InternalTopologyBuilder internalTopologyBuilder,
                          final StreamsConfig config,
-                         final KafkaClientSupplier clientSupplier) {
+                         final KafkaClientSupplier clientSupplier) throws StreamsException {
         this.config = config;
 
         // The application ID is a required config and hence should always have value
@@ -553,7 +549,7 @@ public class KafkaStreams {
         final String cleanupThreadName = clientId + "-CleanupThread";
 
         internalTopologyBuilder.setApplicationId(applicationId);
-        // sanity check to fail-fast in case we cannot built a ProcessorTopology due to an exception
+        // sanity check to fail-fast in case we cannot build a ProcessorTopology due to an exception
         internalTopologyBuilder.build(null);
 
         long cacheSize = config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG);
@@ -586,8 +582,17 @@ public class KafkaStreams {
         };
 
         threads = new StreamThread[config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG)];
-        stateDirectory = new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), Time.SYSTEM);
-        streamsMetadataState = new StreamsMetadataState(internalTopologyBuilder, parseHostInfo(config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)));
+        try {
+            stateDirectory = new StateDirectory(
+                applicationId,
+                config.getString(StreamsConfig.STATE_DIR_CONFIG),
+                Time.SYSTEM);
+        } catch (final ProcessorStateException fatal) {
+            throw new StreamsException(fatal);
+        }
+        streamsMetadataState = new StreamsMetadataState(
+            internalTopologyBuilder,
+            parseHostInfo(config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)));
 
         final MetricConfig metricConfig = new MetricConfig().samples(config.getInt(StreamsConfig.METRICS_NUM_SAMPLES_CONFIG))
             .recordLevel(Sensor.RecordingLevel.forName(config.getString(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG)))

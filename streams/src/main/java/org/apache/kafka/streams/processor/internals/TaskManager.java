@@ -186,22 +186,11 @@ class TaskManager {
         firstException.compareAndSet(null, active.suspend());
         firstException.compareAndSet(null, standby.suspend());
         // remove the changelog partitions from restore consumer
-        firstException.compareAndSet(null, unAssignChangeLogPartitions());
+        restoreConsumer.assign(Collections.<TopicPartition>emptyList());
 
         if (firstException.get() != null) {
             throw new StreamsException(logPrefix + "failed to suspend stream tasks", firstException.get());
         }
-    }
-
-    private RuntimeException unAssignChangeLogPartitions() {
-        try {
-            // TODO verify: this call is save an cannot throw; code can be simplified
-            restoreConsumer.assign(Collections.<TopicPartition>emptyList());
-        } catch (final RuntimeException e) {
-            log.error("Failed to un-assign change log partitions due to the following error:", e);
-            return e;
-        }
-        return null;
     }
 
     void shutdown(final boolean clean) {
@@ -216,7 +205,7 @@ class TaskManager {
             log.error("Failed to close KafkaStreamClient due to the following error:", e);
         }
         // remove the changelog partitions from restore consumer
-        unAssignChangeLogPartitions(); // TODO this returns an exception -- should we really swallow?
+        restoreConsumer.assign(Collections.<TopicPartition>emptyList());
         taskCreator.close();
         standbyTaskCreator.close();
     }

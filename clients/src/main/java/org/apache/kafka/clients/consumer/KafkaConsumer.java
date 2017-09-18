@@ -423,7 +423,7 @@ import java.util.regex.Pattern;
  * <p>
  * Transactions were introduced in Kafka 0.11.0 wherein applications can write to multiple topics and partitions atomically.
  * In order for this to work, consumers reading from these partitions should be configured to only read committed data.
- * This can be achieved by by setting the {@code isolation.level=read_committed<} in the consumer's configuration.
+ * This can be achieved by by setting the {@code isolation.level=read_committed} in the consumer's configuration.
  *
  * <p>
  * In <code>read_committed</code> mode, the consumer will read only those transactional messages which have been
@@ -871,7 +871,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param listener Non-null listener instance to get notifications on partition assignment/revocation for the
      *                 subscribed topics
      * @throws IllegalArgumentException If topics is null or contains null or empty elements, or if listener is null
-     * @throws IllegalStateException If subscription types (topic, pattern) are mixed with each other or with assignment
+     * @throws IllegalStateException If {@code subscribe()} is called previously with pattern, or assign is called previously.
      */
     @Override
     public void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
@@ -913,7 +913,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @param topics The list of topics to subscribe to
      * @throws IllegalArgumentException If topics is null or contains null or empty elements
-     * @throws IllegalStateException If subscription types (topic, pattern) are mixed with each other or with assignment
+     * @throws IllegalStateException If {@code subscribe()} is called previously with pattern, or assign is called previously.
      */
     @Override
     public void subscribe(Collection<String> topics) {
@@ -938,7 +938,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param listener Non-null listener instance to get notifications on partition assignment/revocation for the
      *                 subscribed topics
      * @throws IllegalArgumentException If pattern or listener is null
-     * @throws IllegalStateException If subscription types (topic, pattern) are mixed with each other or with assignment
+     * @throws IllegalStateException If {@code subscribe()} is called previously with topics, or assign is called previously.
      */
     @Override
     public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
@@ -968,7 +968,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @param pattern Pattern to subscribe to
      * @throws IllegalArgumentException If pattern is null
-     * @throws IllegalStateException If subscription types (topic, pattern) are mixed with each other or with assignment
+     * @throws IllegalStateException If {@code subscribe()} is called previously with topics, or assign is called previously.
      */
     @Override
     public void subscribe(Pattern pattern) {
@@ -1002,12 +1002,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * metadata change. Note that it is not possible to use both manual partition assignment with {@link #assign(Collection)}
      * and group assignment with {@link #subscribe(Collection, ConsumerRebalanceListener)}.
      * <p>
-     * If auto-commit is enabled, a async commit (based on the old assignment) will be triggered before the new
+     * If auto-commit is enabled, an async commit (based on the old assignment) will be triggered before the new
      * assignment replaces the old one.
      *
      * @param partitions The list of partitions to assign this consumer
      * @throws IllegalArgumentException If partitions is null or contains null or empty topics
-     * @throws IllegalStateException If subscription types (topic, pattern) are mixed with each other or with assignment
+     * @throws IllegalStateException If {@code subscribe()} is called previously with topics or pattern.
      */
     @Override
     public void assign(Collection<TopicPartition> partitions) {
