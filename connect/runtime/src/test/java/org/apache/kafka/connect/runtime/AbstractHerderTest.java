@@ -76,6 +76,14 @@ public class AbstractHerderTest extends EasyMockSupport {
         EasyMock.expect(statusStore.getAll(connector))
                 .andReturn(Collections.singletonList(
                         new TaskStatus(taskId, AbstractStatus.State.UNASSIGNED, workerId, generation)));
+        EasyMock.expect(worker.getPlugins()).andStubReturn(plugins);
+        final Connector conn;
+        try {
+            conn = TestSourceConnector.class.newInstance();
+        } catch (InstantiationException | IllegalAccessException e) {
+            throw new RuntimeException("Couldn't create connector", e);
+        }
+        EasyMock.expect(plugins.newConnector(connector)).andReturn(conn);
 
         replayAll();
 

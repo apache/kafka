@@ -431,7 +431,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                             callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
                         } else {
                             callback.onCompletion(null, new ConnectorInfo(connName, configState.connectorConfig(connName),
-                                configState.tasks(connName), connectorType(connName)));
+                                configState.tasks(connName),
+                                connectorType(configState.connectorConfig(connName).get(ConnectorConfig.CONNECTOR_CLASS_CONFIG))));
                         }
                         return null;
                     }
@@ -529,7 +530,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         // snapshot yet. The existing task info should still be accurate.
                         Map<String, String> map = configState.connectorConfig(connName);
                         ConnectorInfo info = new ConnectorInfo(connName, config, configState.tasks(connName),
-                            map == null ? null : connectorType(connName));
+                            map == null ? null : connectorType(configState.connectorConfig(connName).get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)));
                         callback.onCompletion(null, new Created<>(!exists, info));
                         return null;
                     }
