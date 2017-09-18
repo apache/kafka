@@ -449,7 +449,8 @@ public interface KStream<K, V> {
     
     /**
      * Merges the given streams into one larger stream. 
-     * @param StreamsBuilder instance and streams wanted to be merged.
+     * @param a stream which is  to be merged.
+     * No guarantee of order
      */
     KStream<K, V> merge(KStream<K, V> stream);
 

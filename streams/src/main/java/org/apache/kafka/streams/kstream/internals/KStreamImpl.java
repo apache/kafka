@@ -153,7 +153,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                 new KeyValueMapper<K, V, KeyValue<K1, V>>() {
                     @Override
                     public KeyValue<K1, V> apply(K key, V value) {
-                        return (KeyValue<K1, V>) new KeyValue<>(mapper.apply(key, value), value);
+                        return new KeyValue<>(mapper.apply(key, value), value);
                     }
                 }
             ),
