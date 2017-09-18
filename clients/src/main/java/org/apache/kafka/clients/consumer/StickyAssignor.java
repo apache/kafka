@@ -355,7 +355,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
                     String otherConsumer = allPartitions.get(topicPartition);
                     int otherConsumerPartitionCount = currentAssignment.get(otherConsumer).size();
                     if (consumerPartitionCount < otherConsumerPartitionCount) {
-                        log.debug(topicPartition + " can be moved from consumer " + otherConsumer + " to consumer " + consumer + " for a more balanced assignment.");
+                        log.debug("{} can be moved from consumer {} to consumer {} for a more balanced assignment.", topicPartition, otherConsumer, consumer);
                         return false;
                     }
                 }

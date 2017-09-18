@@ -558,7 +558,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     future.raise(error);
                 } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
                         || error == Errors.NOT_COORDINATOR) {
-                    log.debug("SyncGroup failed:", error.message());
+                    log.debug("SyncGroup failed: {}", error.message());
                     coordinatorDead();
                     future.raise(error);
                 } else {

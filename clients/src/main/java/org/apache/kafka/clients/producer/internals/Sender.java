@@ -426,7 +426,7 @@ public class Sender implements Runnable {
                         transactionManager.setProducerIdAndEpoch(producerIdAndEpoch);
                         return;
                     } else if (error.exception() instanceof RetriableException) {
-                        log.debug("Retriable error from InitProducerId response", error.message());
+                        log.debug("Retriable error from InitProducerId response {}", error.message());
                     } else {
                         transactionManager.transitionToFatalError(error.exception());
                         break;
@@ -439,6 +439,7 @@ public class Sender implements Runnable {
                 transactionManager.transitionToFatalError(e);
                 break;
             } catch (IOException e) {
+                // TODO: Exception being passed into the placeholder???
                 log.debug("Broker {} disconnected while awaiting InitProducerId response", e);
             }
             log.trace("Retry InitProducerIdRequest in {}ms.", retryBackoffMs);

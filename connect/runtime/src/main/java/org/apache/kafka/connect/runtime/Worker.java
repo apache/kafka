@@ -432,6 +432,7 @@ public class Worker {
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, keyConverter,
                     valueConverter, transformationChain, loader, time);
         } else {
+            // TODO: Does this need a placeholder or is this code correct?
             log.error("Tasks must be a subclass of either SourceTask or SinkTask", task);
             throw new ConnectException("Tasks must be a subclass of either SourceTask or SinkTask");
         }
