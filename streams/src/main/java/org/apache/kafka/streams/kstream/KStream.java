@@ -252,7 +252,7 @@ public interface KStream<K, V> {
      * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
      * is applied to the result {@code KStream}. (cf. {@link #flatMap(KeyValueMapper)})
      *
-     * @param processor a {@link ValueMapper} the computes the new output values
+     * @param mapper a {@link ValueMapper} the computes the new output values
      * @param <VR>      the value type of the result stream
      * @return a {@code KStream} that contains more or less records with unmodified keys and new values of different type
      * @see #selectKey(KeyValueMapper)
@@ -262,7 +262,7 @@ public interface KStream<K, V> {
      * @see #transform(TransformerSupplier, String...)
      * @see #transformValues(ValueTransformerSupplier, String...)
      */
-    <VR> KStream<K, VR> flatMapValues(final ValueMapper<? super V, ? extends Iterable<? extends VR>> processor);
+    <VR> KStream<K, VR> flatMapValues(final ValueMapper<? super V, ? extends Iterable<? extends VR>> mapper);
 
     /**
      * Print the records of this stream to {@code System.out}.
