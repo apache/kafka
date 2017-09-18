@@ -24,8 +24,6 @@ import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
-import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
-import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.slf4j.Logger;
@@ -108,30 +106,6 @@ public class Plugins {
 
     public ClassLoader currentThreadLoader() {
         return Thread.currentThread().getContextClassLoader();
-    }
-
-    /*
-     * Retrieves the connector type by connector name
-     *
-     * @return the ConnectorType for the given connector name.
-     * @throws ConnectException if the ConnectorType cannot be determined
-     */
-    public ConnectorType connectorType(String clsName) {
-        ClassLoader savedLoader = currentThreadLoader();
-        try {
-            savedLoader = compareAndSwapLoaders(clsName);
-            try {
-                return SinkConnector.class.isAssignableFrom(Class.forName(clsName)) ?
-                    ConnectorType.SINK : ConnectorType.SOURCE;
-            } catch (Exception e) {
-                // try to load the Connector
-                Connector conn = newConnector(clsName);
-                return SinkConnector.class.isAssignableFrom(conn.getClass()) ?
-                    ConnectorType.SINK : ConnectorType.SOURCE;
-            }
-        } finally {
-            Plugins.compareAndSwapLoaders(savedLoader);
-        }
     }
 
     public ClassLoader compareAndSwapWithDelegatingLoader() {

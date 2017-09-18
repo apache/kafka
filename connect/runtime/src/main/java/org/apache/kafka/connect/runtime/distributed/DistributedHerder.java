@@ -35,7 +35,6 @@ import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.rest.RestServer;
-import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.sink.SinkConnector;
@@ -432,8 +431,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                             callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
                         } else {
                             callback.onCompletion(null, new ConnectorInfo(connName, configState.connectorConfig(connName),
-                                configState.tasks(connName),
-                                plugins().connectorType(configState.connectorConfig(connName).get(ConnectorConfig.CONNECTOR_CLASS_CONFIG))));
+                                configState.tasks(connName), connectorType(connName)));
                         }
                         return null;
                     }
@@ -508,8 +506,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 new Callable<Void>() {
                     @Override
                     public Void call() throws Exception {
-                        ConfigInfos infos = validateConnectorConfig(config);
-                        if (maybeAddConfigErrors(infos, callback)) {
+                        if (maybeAddConfigErrors(validateConnectorConfig(config), callback)) {
                             return null;
                         }
 
@@ -532,7 +529,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         // snapshot yet. The existing task info should still be accurate.
                         Map<String, String> map = configState.connectorConfig(connName);
                         ConnectorInfo info = new ConnectorInfo(connName, config, configState.tasks(connName),
-                            map == null ? null : plugins().connectorType(map.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)));
+                            map == null ? null : connectorType(connName));
                         callback.onCompletion(null, new Created<>(!exists, info));
                         return null;
                     }

@@ -221,7 +221,7 @@ public class StandaloneHerderTest {
 
         Map<String, String> config = connectorConfig(SourceSink.SINK);
         expectConfigValidation(config);
-        EasyMock.expect(plugins.connectorType(BogusSinkConnector.class.getName()))
+        EasyMock.expect(herder.connectorType(CONNECTOR_NAME))
             .andReturn(ConnectorType.SINK).anyTimes();
         PowerMock.replayAll();
 
@@ -564,6 +564,7 @@ public class StandaloneHerderTest {
     private void expectAdd(SourceSink sourceSink) throws Exception {
 
         Map<String, String> connectorProps = connectorConfig(sourceSink);
+        EasyMock.expect(worker.getPlugins()).andReturn(plugins).anyTimes();
 
         worker.startConnector(EasyMock.eq(CONNECTOR_NAME), EasyMock.eq(connectorProps), EasyMock.anyObject(HerderConnectorContext.class),
                               EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
@@ -585,8 +586,7 @@ public class StandaloneHerderTest {
         worker.startTask(new ConnectorTaskId(CONNECTOR_NAME, 0), connectorConfig(sourceSink), generatedTaskProps, herder, TargetState.STARTED);
         EasyMock.expectLastCall().andReturn(true);
 
-        EasyMock.expect(worker.getPlugins()).andReturn(plugins).times(1);
-        EasyMock.expect(plugins.connectorType(BogusSourceConnector.class.getName()))
+        EasyMock.expect(herder.connectorType(CONNECTOR_NAME))
             .andReturn(ConnectorType.SOURCE).anyTimes();
         worker.isSinkConnector(CONNECTOR_NAME);
         PowerMock.expectLastCall().andReturn(sourceSink == SourceSink.SINK);

@@ -175,7 +175,7 @@ public class DistributedHerderTest {
         configUpdateListener = herder.new ConfigUpdateListener();
         rebalanceListener = herder.new RebalanceListener();
         plugins = PowerMock.createMock(Plugins.class);
-        EasyMock.expect(plugins.connectorType(BogusSourceConnector.class.getName())).andReturn(ConnectorType.SOURCE).anyTimes();
+        EasyMock.expect(herder.connectorType(CONN1)).andReturn(ConnectorType.SOURCE).anyTimes();
         pluginLoader = PowerMock.createMock(PluginClassLoader.class);
         delegatingLoader = PowerMock.createMock(DelegatingClassLoader.class);
         PowerMock.mockStatic(Plugins.class);
