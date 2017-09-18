@@ -135,6 +135,7 @@ public class ConsumerNetworkClient implements Closeable {
         int version = this.metadata.requestUpdate();
         do {
             poll(timeout);
+            this.metadata.handleNonRetriableExceptions();
         } while (this.metadata.version() == version && time.milliseconds() - startMs < timeout);
         return this.metadata.version() > version;
     }
@@ -464,26 +465,6 @@ public class ConsumerNetworkClient implements Closeable {
     public boolean connectionFailed(Node node) {
         synchronized (this) {
             return client.connectionFailed(node);
-        }
-    }
-
-    /**
-     * Find whether a previous connection has succeeded.
-     * @param node Node to connect to if possible
-     */
-    public boolean isReady(Node node) {
-        synchronized (this) {
-            return client.isReady(node, System.currentTimeMillis());
-        }
-    }
-
-    /**
-     * Find whether a previous connection has failed authentication.
-     * @param node Node to connect to if possible
-     */
-    public ApiException authenticationFailed(Node node) {
-        synchronized (this) {
-            return client.authenticationException(node);
         }
     }
 

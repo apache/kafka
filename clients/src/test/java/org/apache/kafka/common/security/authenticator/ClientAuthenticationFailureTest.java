@@ -30,13 +30,10 @@ import org.apache.kafka.common.network.NetworkTestUtils;
 import org.apache.kafka.common.network.NioEchoServer;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.security.TestSecurityConfig;
-import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.io.File;
-import java.io.FileOutputStream;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -44,13 +41,13 @@ import java.util.Map;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-public class SaslPlainPlaintextClientsWithInvalidCredentialsTest {
+public class ClientAuthenticationFailureTest {
 
     private NioEchoServer server;
     private Map<String, Object> saslServerConfigs;
     private Map<String, Object> saslClientConfigs;
     private final String topic = "test";
-    private File jaasConfigFile;
+    private TestJaasConfig testJaasConfig;
 
     @Before
     public void setup() throws Exception {
@@ -63,21 +60,8 @@ public class SaslPlainPlaintextClientsWithInvalidCredentialsTest {
         saslClientConfigs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SASL_PLAINTEXT");
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "PLAIN");
 
-        jaasConfigFile = TestUtils.tempFile();
-        FileOutputStream propsStream = new FileOutputStream(jaasConfigFile);
-        propsStream.write("KafkaServer {\n".getBytes());
-        propsStream.write("  org.apache.kafka.common.security.plain.PlainLoginModule required\n".getBytes());
-        propsStream.write("  user_myuser=\"mypassword\";\n".getBytes());
-        propsStream.write("};".getBytes());
-        propsStream.write("\n\n".getBytes());
-        propsStream.write("KafkaClient {\n".getBytes());
-        propsStream.write("  org.apache.kafka.common.security.plain.PlainLoginModule required\n".getBytes());
-        propsStream.write("  username=\"myuser\"\n".getBytes());
-        propsStream.write("  password=\"anotherpassword\";\n".getBytes());
-        propsStream.write("};".getBytes());
-        propsStream.close();
-        System.setProperty("java.security.auth.login.config", jaasConfigFile.getAbsolutePath());
-
+        testJaasConfig = TestJaasConfig.createConfiguration("PLAIN", Arrays.asList("PLAIN"));
+        testJaasConfig.setClientOptions("PLAIN", TestJaasConfig.USERNAME, "anotherpassword");
         server = createEchoServer(securityProtocol);
     }
 
@@ -85,9 +69,6 @@ public class SaslPlainPlaintextClientsWithInvalidCredentialsTest {
     public void teardown() throws Exception {
         if (server != null)
             this.server.close();
-
-        System.clearProperty("java.security.auth.login.config");
-        jaasConfigFile.delete();
     }
 
     @Test

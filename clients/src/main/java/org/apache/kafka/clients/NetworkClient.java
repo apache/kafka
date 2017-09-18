@@ -315,7 +315,7 @@ public class NetworkClient implements KafkaClient {
 
     /**
      * Check if authentication to this node has failed, based on the connection state. Authentication failures are
-     * permanent and should not be resumed in the next {@link #ready(org.apache.kafka.common.Node, long)} } call.
+     * propagated without any retries.
      *
      * @param node the node to check
      * @return an ApiException iff authentication has failed, null otherwise
@@ -602,7 +602,7 @@ public class NetworkClient implements KafkaClient {
         nodesNeedingApiVersionsFetch.remove(nodeId);
         switch (disconnectState.state()) {
             case AUTHENTICATION_FAILED:
-                connectionStates.authenticationFailed(nodeId, now, Errors.AUTHENTICATION_FAILED.exception());
+                connectionStates.authenticationFailed(nodeId, now, disconnectState.exception());
                 log.error("Connection to node {} failed authentication due to: {}", nodeId, disconnectState.exception().getMessage());
                 break;
             case AUTHENTICATE:
@@ -611,7 +611,6 @@ public class NetworkClient implements KafkaClient {
                         "that authentication failed due to invalid credentials.", nodeId);
                 break;
             case NOT_CONNECTED:
-                connectionStates.disconnected(nodeId, now);
                 log.warn("Connection to node {} could not be established. Broker may not be available.", nodeId);
                 break;
             default:
@@ -1004,7 +1003,7 @@ public class NetworkClient implements KafkaClient {
         public ClientResponse disconnected(long timeMs) {
             return new ClientResponse(header, callback, destination, createdTimeMs, timeMs, true, null, null);
         }
-        
+
         @Override
         public String toString() {
             return "InFlightRequest(header=" + header +

@@ -148,6 +148,19 @@ public final class Metadata {
     }
 
     /**
+     * If any non-retriable exceptions were encountered during metadata update,
+     * clear and throw the exception.
+     */
+    public synchronized void handleNonRetriableExceptions() {
+        if (nonRetriableException != null) {
+            ApiException exception = nonRetriableException;
+            this.needUpdate = false;
+            nonRetriableException = null;
+            throw exception;
+        }
+    }
+
+    /**
      * Wait for metadata update until the current version is larger than the last version we know of
      */
     public synchronized void awaitUpdate(final int lastVersion, final long maxWaitMs) throws InterruptedException {
@@ -157,16 +170,9 @@ public final class Metadata {
         long begin = System.currentTimeMillis();
         long remainingWaitMs = maxWaitMs;
         while (this.version <= lastVersion) {
-            nonRetriableException = null;
             if (remainingWaitMs != 0) {
                 wait(remainingWaitMs);
-                if (nonRetriableException != null) {
-                    ApiException exception = nonRetriableException;
-                    topics.clear();
-                    this.needUpdate = false;
-                    nonRetriableException = null;
-                    throw exception;
-                }
+                handleNonRetriableExceptions();
             }
             long elapsed = System.currentTimeMillis() - begin;
             if (elapsed >= maxWaitMs)

@@ -21,14 +21,16 @@ import java.io.File
 import java.util.Properties
 import javax.security.auth.login.Configuration
 
+import kafka.admin.ConfigCommand
 import kafka.security.minikdc.MiniKdc
 import kafka.server.KafkaConfig
 import kafka.utils.JaasTestUtils.{JaasSection, Krb5LoginModule, ZkDigestModule}
 import kafka.utils.{JaasTestUtils, TestUtils}
-import org.apache.kafka.common.security.JaasUtils
-import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
+import org.apache.kafka.common.security.JaasUtils
+import org.apache.kafka.common.security.authenticator.LoginManager
+import org.apache.kafka.common.security.scram.ScramMechanism
 
 /*
  * Implements an enumeration for the modes enabled here:
@@ -100,24 +102,6 @@ trait SaslSetup {
     }
   }
 
-  protected def jaasSectionsInvalidClientCredentials(kafkaServerSaslMechanisms: Seq[String],
-                                                     kafkaClientSaslMechanism: Option[String],
-                                                     mode: SaslSetupMode = Both,
-                                                     kafkaServerEntryName: String = JaasTestUtils.KafkaServerContextName): Seq[JaasSection] = {
-    val hasKerberos = mode != ZkSasl &&
-      (kafkaServerSaslMechanisms.contains("GSSAPI") || kafkaClientSaslMechanism.exists(_ == "GSSAPI"))
-    if (hasKerberos)
-      maybeCreateEmptyKeytabFiles()
-    mode match {
-      case ZkSasl => JaasTestUtils.zkSectionsInvalidCredentials
-      case KafkaSasl =>
-        Seq(JaasTestUtils.kafkaServerSection(kafkaServerEntryName, kafkaServerSaslMechanisms, serverKeytabFile),
-          JaasTestUtils.kafkaClientSectionInvalidCredentials(kafkaClientSaslMechanism, clientKeytabFile))
-      case Both => Seq(JaasTestUtils.kafkaServerSection(kafkaServerEntryName, kafkaServerSaslMechanisms, serverKeytabFile),
-        JaasTestUtils.kafkaClientSectionInvalidCredentials(kafkaClientSaslMechanism, clientKeytabFile)) ++ JaasTestUtils.zkSections
-    }
-  }
-
   private def writeJaasConfigurationToFile(jaasSections: Seq[JaasSection]) {
     val file = JaasTestUtils.writeJaasContextsToFile(jaasSections)
     System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, file.getAbsolutePath)
@@ -152,5 +136,14 @@ trait SaslSetup {
 
   def jaasClientLoginModule(clientSaslMechanism: String): String =
     JaasTestUtils.clientLoginModule(clientSaslMechanism, clientKeytabFile)
+
+  def createScramCredentials(zkConnect: String, userName: String, password: String): Unit = {
+    val credentials = ScramMechanism.values.map(m => s"${m.mechanismName}=[iterations=4096,password=$password]")
+    val args = Array("--zookeeper", zkConnect,
+      "--alter", "--add-config", credentials.mkString(","),
+      "--entity-type", "users",
+      "--entity-name", userName)
+    ConfigCommand.main(args)
+  }
 
 }

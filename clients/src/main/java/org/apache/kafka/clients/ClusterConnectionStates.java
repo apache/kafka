@@ -144,6 +144,7 @@ final class ClusterConnectionStates {
      * Enter the authentication failed state for the given node.
      * @param id the connection identifier
      * @param now the current time
+     * @param exception the authentication exception
      */
     public void authenticationFailed(String id, long now, ApiException exception) {
         NodeConnectionState nodeState = nodeState(id);

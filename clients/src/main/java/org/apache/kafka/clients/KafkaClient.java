@@ -70,7 +70,7 @@ public interface KafkaClient extends Closeable {
 
     /**
      * Check if authentication to this node has failed, based on the connection state. Authentication failures are
-     * permanent and should not be resumed in the next {@link #ready(org.apache.kafka.common.Node, long)} } call.
+     * propagated without any retries.
      *
      * @param node the node to check
      * @return an ApiException iff authentication has failed, null otherwise
