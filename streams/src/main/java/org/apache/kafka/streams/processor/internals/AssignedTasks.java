@@ -132,7 +132,7 @@ class AssignedTasks {
         if (restored.isEmpty()) {
             return Collections.emptySet();
         }
-        log.trace("partitions restored for {}", taskTypeName, restored);
+        log.trace("{} partitions restored for {}", taskTypeName, restored);
         final Set<TopicPartition> resume = new HashSet<>();
         restoredPartitions.addAll(restored);
         for (final Iterator<Map.Entry<TaskId, Task>> it = restoring.entrySet().iterator(); it.hasNext(); ) {
