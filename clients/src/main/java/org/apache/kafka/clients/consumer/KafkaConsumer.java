@@ -1130,7 +1130,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
      *             configured groupId
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. if offset metadata
-     *             is too large or if the committed offset is invalid).
+     *             is too large or if the topic does not exist).
      */
     @Override
     public void commitSync() {
@@ -1163,8 +1163,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             this function is called
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
      *             configured groupId
+     * @throws java.lang.IllegalArgumentException if the committed offset is negative
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. if offset metadata
-     *             is too large or if the committed offset is invalid).
+     *             is too large or if the topic does not exist).
      */
     @Override
     public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets) {
