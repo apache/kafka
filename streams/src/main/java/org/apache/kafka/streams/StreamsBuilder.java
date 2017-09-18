@@ -973,6 +973,7 @@ public class StreamsBuilder {
      *
      * @param streams the {@link KStream}s to be merged
      * @return a {@link KStream} containing all records of the given streams
+     * @deprecated see {@link KStreamImpl} for the merge method
      */
     @Deprecated
     public synchronized <K, V> KStream<K, V> merge(final KStream<K, V>... streams) {
