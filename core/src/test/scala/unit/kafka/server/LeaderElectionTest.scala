@@ -25,7 +25,7 @@ import org.apache.kafka.common.requests._
 import org.junit.Assert._
 import kafka.utils.TestUtils
 import kafka.cluster.Broker
-import kafka.controller.{ControllerChannelManager, ControllerContext}
+import kafka.controller.{ControllerChannelManager, ControllerContext, StateChangeLogger}
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.metrics.Metrics
@@ -138,7 +138,8 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     val controllerContext = new ControllerContext(zkUtils)
     controllerContext.liveBrokers = brokers.toSet
     val metrics = new Metrics
-    val controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig, Time.SYSTEM, metrics)
+    val controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig, Time.SYSTEM,
+      metrics, new StateChangeLogger(controllerId, inControllerContext = true, None))
     controllerChannelManager.startup()
     try {
       val staleControllerEpoch = 0
