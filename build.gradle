@@ -887,6 +887,7 @@ project(':streams') {
     compile project(':connect:json')  // this dependency should be removed after we unify data API
     compile libs.slf4jApi
     compile libs.rocksDBJni
+    compile libs.joptSimple
 
     testCompile project(':clients').sourceSets.test.output
     testCompile project(':core')

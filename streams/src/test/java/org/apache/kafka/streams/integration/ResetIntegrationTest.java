@@ -153,8 +153,7 @@ public class ResetIntegrationTest {
         final List<KeyValue<Long, Long>> result2 = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
             resultTopicConsumerConfig,
             OUTPUT_TOPIC_2,
-            40
-        );
+            40);
 
         streams.close();
         TestUtils.waitForCondition(consumerGroupInactive, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT,
@@ -177,15 +176,16 @@ public class ResetIntegrationTest {
 
         // RE-RUN
         streams.start();
-        final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-            resultTopicConsumerConfig,
-            OUTPUT_TOPIC,
-            10);
-        final List<KeyValue<Long, Long>> resultRerun2 = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-            resultTopicConsumerConfig,
-            OUTPUT_TOPIC_2_RERUN,
-            40
-        );
+        final List<KeyValue<Long, Long>> resultRerun =
+                IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+                        resultTopicConsumerConfig,
+                        OUTPUT_TOPIC,
+                        10);
+        final List<KeyValue<Long, Long>> resultRerun2 =
+                IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+                        resultTopicConsumerConfig,
+                        OUTPUT_TOPIC_2_RERUN,
+                        40);
         streams.close();
 
         assertThat(resultRerun, equalTo(result));
@@ -343,7 +343,6 @@ public class ResetIntegrationTest {
             parameters = new String[]{
                 "--application-id", APP_ID + testNo,
                 "--bootstrap-servers", CLUSTER.bootstrapServers(),
-                "--zookeeper", CLUSTER.zKConnectString(),
                 "--input-topics", INPUT_TOPIC,
                 "--intermediate-topics", INTERMEDIATE_USER_TOPIC
             };
@@ -351,7 +350,6 @@ public class ResetIntegrationTest {
             parameters = new String[]{
                 "--application-id", APP_ID + testNo,
                 "--bootstrap-servers", CLUSTER.bootstrapServers(),
-                "--zookeeper", CLUSTER.zKConnectString(),
                 "--input-topics", INPUT_TOPIC
             };
         }
