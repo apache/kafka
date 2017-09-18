@@ -559,8 +559,29 @@ public class KGroupedStreamImplTest {
         assertThat(aggregate.get("3"), equalTo("0+E+F"));
     }
 
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldAggregateWithDefaultSerdes() {
+        final Map<String, String> results = new HashMap<>();
+        groupedStream.aggregate(MockInitializer.STRING_INIT,
+                                MockAggregator.TOSTRING_ADDER)
+                .toStream()
+                .foreach(new ForeachAction<String, String>() {
+                    @Override
+                    public void apply(final String key, final String value) {
+                        results.put(key, value);
+                    }
+                });
+
+        processData();
+
+        assertThat(results.get("1"), equalTo("0+A+C+D"));
+        assertThat(results.get("2"), equalTo("0+B"));
+        assertThat(results.get("3"), equalTo("0+E+F"));
+    }
+
     private void processData() {
-        driver.setUp(builder, TestUtils.tempDirectory(), 0);
+        driver.setUp(builder, TestUtils.tempDirectory(), Serdes.String(), Serdes.String(), 0);
         driver.setTime(0);
         driver.process(TOPIC, "1", "A");
         driver.process(TOPIC, "2", "B");

@@ -172,12 +172,32 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(aggregator, "aggregator can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
+        return aggregateMaterialized(initializer, aggregator, materialized);
+    }
+
+    private <VR> KTable<K, VR> aggregateMaterialized(final Initializer<VR> initializer,
+                                                     final Aggregator<? super K, ? super V, VR> aggregator,
+                                                     final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
         final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal
                 = new MaterializedInternal<>(materialized);
         return doAggregate(
                 new KStreamAggregate<>(materializedInternal.storeName(), initializer, aggregator),
                 AGGREGATE_NAME,
                 materializedInternal);
+    }
+
+    @Override
+    public <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer, final Aggregator<? super K, ? super V, VR> aggregator) {
+        Objects.requireNonNull(initializer, "initializer can't be null");
+        Objects.requireNonNull(aggregator, "aggregator can't be null");
+        final String storeName = builder.newStoreName(AGGREGATE_NAME);
+
+        MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal =
+                new MaterializedInternal<>(Materialized.<K, VR, KeyValueStore<Bytes, byte[]>>as(storeName), false);
+        return doAggregate(new KStreamAggregate<>(materializedInternal.storeName(), initializer, aggregator),
+                           AGGREGATE_NAME,
+                           materializedInternal);
+
     }
 
     @Override
@@ -428,7 +448,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
 
         final StoreBuilder<KeyValueStore<K, T>> storeBuilder = new KeyValueStoreMaterializer<>(materializedInternal)
                 .materialize();
-        return aggregateBuilder.build(aggregateSupplier, functionName, storeBuilder, true);
+        return aggregateBuilder.build(aggregateSupplier, functionName, storeBuilder, materializedInternal.isQueryable());
 
     }
 
