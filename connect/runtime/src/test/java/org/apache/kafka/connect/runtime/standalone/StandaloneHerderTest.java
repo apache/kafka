@@ -107,7 +107,8 @@ public class StandaloneHerderTest {
     @Before
     public void setup() {
         worker = PowerMock.createMock(Worker.class);
-        herder = new StandaloneHerder(worker, WORKER_ID, statusBackingStore, new MemoryConfigBackingStore());
+        herder = PowerMock.createPartialMock(StandaloneHerder.class, new String[]{"connectorType"},
+            worker, WORKER_ID, statusBackingStore, new MemoryConfigBackingStore());
         plugins = PowerMock.createMock(Plugins.class);
         pluginLoader = PowerMock.createMock(PluginClassLoader.class);
         delegatingLoader = PowerMock.createMock(DelegatingClassLoader.class);
@@ -221,8 +222,6 @@ public class StandaloneHerderTest {
 
         Map<String, String> config = connectorConfig(SourceSink.SINK);
         expectConfigValidation(config);
-        EasyMock.expect(herder.connectorType(CONNECTOR_NAME))
-            .andReturn(ConnectorType.SINK).anyTimes();
         PowerMock.replayAll();
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
@@ -420,7 +419,6 @@ public class StandaloneHerderTest {
         connector = PowerMock.createMock(BogusSourceConnector.class);
         expectAdd(SourceSink.SOURCE);
         expectConfigValidation(connConfig);
-        EasyMock.expect(worker.getPlugins()).andReturn(plugins).anyTimes();
 
         // Validate accessors with 1 connector
         listConnectorsCb.onCompletion(null, singleton(CONNECTOR_NAME));
@@ -564,7 +562,6 @@ public class StandaloneHerderTest {
     private void expectAdd(SourceSink sourceSink) throws Exception {
 
         Map<String, String> connectorProps = connectorConfig(sourceSink);
-        EasyMock.expect(worker.getPlugins()).andReturn(plugins).anyTimes();
 
         worker.startConnector(EasyMock.eq(CONNECTOR_NAME), EasyMock.eq(connectorProps), EasyMock.anyObject(HerderConnectorContext.class),
                               EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
