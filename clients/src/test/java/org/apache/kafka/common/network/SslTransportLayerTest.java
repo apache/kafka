@@ -159,7 +159,7 @@ public class SslTransportLayerTest {
         InetSocketAddress addr = new InetSocketAddress("127.0.0.1", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
-        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE);
+        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE.state());
     }
 
     /**
@@ -202,7 +202,7 @@ public class SslTransportLayerTest {
         };
         serverChannelBuilder.configure(sslServerConfigs);
         server = new NioEchoServer(ListenerName.forSecurityProtocol(SecurityProtocol.SSL), SecurityProtocol.SSL,
-                new TestSecurityConfig(sslServerConfigs), "localhost", serverChannelBuilder);
+                new TestSecurityConfig(sslServerConfigs), "localhost", serverChannelBuilder, null);
         server.start();
 
         createSelector(sslClientConfigs);
@@ -230,7 +230,7 @@ public class SslTransportLayerTest {
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
-        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE);
+        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE.state());
     }
     
     /**
@@ -243,7 +243,7 @@ public class SslTransportLayerTest {
         String serverHost = InetAddress.getLocalHost().getHostAddress();
         SecurityProtocol securityProtocol = SecurityProtocol.SSL;
         server = new NioEchoServer(ListenerName.forSecurityProtocol(securityProtocol), securityProtocol,
-                new TestSecurityConfig(sslServerConfigs), serverHost, null);
+                new TestSecurityConfig(sslServerConfigs), serverHost, null, null);
         server.start();
         sslClientConfigs.remove(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
         createSelector(sslClientConfigs);
@@ -295,7 +295,7 @@ public class SslTransportLayerTest {
         sslClientConfigs.remove(SslConfigs.SSL_KEY_PASSWORD_CONFIG);
         createSelector(sslClientConfigs);
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
-        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE);
+        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE.state());
         selector.close();
         server.close();
 
@@ -323,7 +323,7 @@ public class SslTransportLayerTest {
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
-        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE);
+        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE.state());
     }
     
     /**
@@ -343,7 +343,7 @@ public class SslTransportLayerTest {
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
-        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE);
+        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE.state());
     }
     
     /**
@@ -495,7 +495,7 @@ public class SslTransportLayerTest {
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
-        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE);
+        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE.state());
     }
     
     /**
@@ -512,7 +512,7 @@ public class SslTransportLayerTest {
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
-        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE);
+        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE.state());
     }
     
     /**
@@ -530,7 +530,7 @@ public class SslTransportLayerTest {
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
-        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE);
+        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE.state());
     }
 
     /**
@@ -677,7 +677,7 @@ public class SslTransportLayerTest {
     }
 
     private NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol) throws Exception {
-        return NetworkTestUtils.createEchoServer(listenerName, securityProtocol, new TestSecurityConfig(sslServerConfigs));
+        return NetworkTestUtils.createEchoServer(listenerName, securityProtocol, new TestSecurityConfig(sslServerConfigs), null);
     }
 
     private NioEchoServer createEchoServer(SecurityProtocol securityProtocol) throws Exception {

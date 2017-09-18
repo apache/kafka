@@ -22,8 +22,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.TaskId;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -36,7 +34,6 @@ import java.util.Map;
  */
 public class StandbyTask extends AbstractTask {
 
-    private static final Logger log = LoggerFactory.getLogger(StandbyTask.class);
     private Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
 
     /**
@@ -73,7 +70,7 @@ public class StandbyTask extends AbstractTask {
      */
     @Override
     public void resume() {
-        log.debug("{} Resuming", logPrefix);
+        log.debug("Resuming");
         updateOffsetLimits();
     }
 
@@ -86,7 +83,7 @@ public class StandbyTask extends AbstractTask {
      */
     @Override
     public void commit() {
-        log.trace("{} Committing", logPrefix);
+        log.trace("Committing");
         flushAndCheckpointState();
         // reinitialize offset limits
         updateOffsetLimits();
@@ -100,7 +97,7 @@ public class StandbyTask extends AbstractTask {
      */
     @Override
     public void suspend() {
-        log.debug("{} Suspending", logPrefix);
+        log.debug("Suspending");
         flushAndCheckpointState();
     }
 
@@ -124,7 +121,7 @@ public class StandbyTask extends AbstractTask {
         if (!taskInitialized) {
             return;
         }
-        log.debug("{} Closing", logPrefix);
+        log.debug("Closing");
         boolean committedSuccessfully = false;
         try {
             commit();
@@ -163,7 +160,7 @@ public class StandbyTask extends AbstractTask {
      */
     public List<ConsumerRecord<byte[], byte[]>> update(final TopicPartition partition,
                                                        final List<ConsumerRecord<byte[], byte[]>> records) {
-        log.trace("{} Updating standby replicas of its state store for partition [{}]", logPrefix, partition);
+        log.trace("Updating standby replicas of its state store for partition [{}]", partition);
         return stateMgr.updateStandbyStates(partition, records);
     }
 
