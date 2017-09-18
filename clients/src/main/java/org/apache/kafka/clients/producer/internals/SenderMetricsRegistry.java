@@ -117,24 +117,32 @@ public class SenderMetricsRegistry {
                 this.requestLatencyAvg,
                 this.requestLatencyMax,
                 this.recordSendRate,
+                this.recordSendTotal,
                 this.recordsPerRequestAvg,
                 this.recordRetryRate,
+                this.recordRetryTotal,
                 this.recordErrorRate,
+                this.recordErrorTotal,
                 this.recordSizeMax,
                 this.recordSizeAvg,
                 this.requestsInFlight,
                 this.metadataAge,
                 this.batchSplitRate,
+                this.batchSplitTotal,
                 
                 this.produceThrottleTimeAvg,
                 this.produceThrottleTimeMax,
 
                 // per-topic metrics
                 this.topicRecordSendRate,
+                this.topicRecordSendTotal,
                 this.topicByteRate,
+                this.topicByteTotal,
                 this.topicCompressionRate,
                 this.topicRecordRetryRate,
-                this.topicRecordErrorRate
+                this.topicRecordRetryTotal,
+                this.topicRecordErrorRate,
+                this.topicRecordErrorTotal
                 );
     }
 
