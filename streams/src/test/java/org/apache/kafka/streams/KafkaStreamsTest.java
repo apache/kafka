@@ -557,4 +557,5 @@ public class KafkaStreamsTest {
             mapStates.put(newState, prevCount + 1);
         }
     }
+
 }
