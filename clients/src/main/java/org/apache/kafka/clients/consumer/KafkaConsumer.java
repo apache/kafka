@@ -433,7 +433,7 @@ import java.util.regex.Pattern;
  * is known as the 'Last Stable Offset'(LSO).</p>
  *
  * <p>
- * A {@code read_committed} consumer will only read up till the LSO and filter out any transactional
+ * A {@code read_committed} consumer will only read up to the LSO and filter out any transactional
  * messages which have been aborted. The LSO also affects the behavior of {@link #seekToEnd(Collection)} and
  * {@link #endOffsets(Collection)} for {@code read_committed} consumers, details of which are in each method's documentation.
  * Finally, the fetch lag metrics are also adjusted to be relative to the LSO for {@code read_committed} consumers.
@@ -871,7 +871,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param listener Non-null listener instance to get notifications on partition assignment/revocation for the
      *                 subscribed topics
      * @throws IllegalArgumentException If topics is null or contains null or empty elements, or if listener is null
-     * @throws IllegalStateException If {@code subscribe()} is called previously with pattern, or assign is called previously.
+     * @throws IllegalStateException If {@code subscribe()} is called previously with pattern, or assign is called
+     *                               previously (without a subsequent call to {@link #unsubscribe()})
      */
     @Override
     public void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
@@ -913,7 +914,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @param topics The list of topics to subscribe to
      * @throws IllegalArgumentException If topics is null or contains null or empty elements
-     * @throws IllegalStateException If {@code subscribe()} is called previously with pattern, or assign is called previously.
+     * @throws IllegalStateException If {@code subscribe()} is called previously with pattern, or assign is called
+     *                               previously (without a subsequent call to {@link #unsubscribe()})
      */
     @Override
     public void subscribe(Collection<String> topics) {
@@ -938,7 +940,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param listener Non-null listener instance to get notifications on partition assignment/revocation for the
      *                 subscribed topics
      * @throws IllegalArgumentException If pattern or listener is null
-     * @throws IllegalStateException If {@code subscribe()} is called previously with topics, or assign is called previously.
+     * @throws IllegalStateException If {@code subscribe()} is called previously with topics, or assign is called
+     *                               previously (without a subsequent call to {@link #unsubscribe()})
      */
     @Override
     public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
@@ -968,7 +971,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @param pattern Pattern to subscribe to
      * @throws IllegalArgumentException If pattern is null
-     * @throws IllegalStateException If {@code subscribe()} is called previously with topics, or assign is called previously.
+     * @throws IllegalStateException If {@code subscribe()} is called previously with topics, or assign is called
+     *                               previously (without a subsequent call to {@link #unsubscribe()})
      */
     @Override
     public void subscribe(Pattern pattern) {
@@ -1007,7 +1011,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @param partitions The list of partitions to assign this consumer
      * @throws IllegalArgumentException If partitions is null or contains null or empty topics
-     * @throws IllegalStateException If {@code subscribe()} is called previously with topics or pattern.
+     * @throws IllegalStateException If {@code subscribe()} is called previously with topics or pattern
+     *                               (without a subsequent call to {@link #unsubscribe()})
      */
     @Override
     public void assign(Collection<TopicPartition> partitions) {
@@ -1295,7 +1300,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * is invoked for the same partition more than once, the latest offset will be used on the next poll(). Note that
      * you may lose data if this API is arbitrarily used in the middle of consumption, to reset the fetch offsets
      *
-     * @throws IllegalArgumentException if provided TopicPartition is not assigned to this consumer
+     * @throws IllegalArgumentException if the provided TopicPartition is not assigned to this consumer
      *                                  or if provided offset is negative
      */
     @Override
@@ -1315,14 +1320,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Seek to the first offset for each of the given partitions. This function evaluates lazily, seeking to the
      * first offset in all partitions only when {@link #poll(long)} or {@link #position(TopicPartition)} are called.
-     * If no partition is provided, seek to the first offset for all of the currently assigned partitions.
+     * If no partitions are provided, seek to the first offset for all of the currently assigned partitions.
      *
-     * @throws IllegalArgumentException if provided TopicPartition is not assigned to this consumer
+     * @throws IllegalArgumentException if {@code partitions} is {@code null} or the provided TopicPartition is not assigned to this consumer
      */
     public void seekToBeginning(Collection<TopicPartition> partitions) {
         acquireAndEnsureOpen();
         try {
-            Collection<TopicPartition> parts = partitions == null || partitions.size() == 0 ? this.subscriptions.assignedPartitions() : partitions;
+            if (partitions == null) {
+                throw new IllegalArgumentException("Partitions collection cannot be null");
+            }
+            Collection<TopicPartition> parts = partitions.size() == 0 ? this.subscriptions.assignedPartitions() : partitions;
             for (TopicPartition tp : parts) {
                 log.debug("Seeking to beginning of partition {}", tp);
                 subscriptions.needOffsetReset(tp, OffsetResetStrategy.EARLIEST);
@@ -1335,17 +1343,20 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Seek to the last offset for each of the given partitions. This function evaluates lazily, seeking to the
      * final offset in all partitions only when {@link #poll(long)} or {@link #position(TopicPartition)} are called.
-     * If no partition is provided, seek to the final offset for all of the currently assigned partitions.
+     * If no partitions are provided, seek to the final offset for all of the currently assigned partitions.
      * <p>
      * If {@code isolation.level=read_committed}, the end offset will be the Last Stable Offset, i.e., the offset
      * of the first message with an open transaction.
      *
-     * @throws IllegalArgumentException if provided TopicPartition is not assigned to this consumer
+     * @throws IllegalArgumentException if {@code partitions} is {@code null} or the provided TopicPartition is not assigned to this consumer
      */
     public void seekToEnd(Collection<TopicPartition> partitions) {
         acquireAndEnsureOpen();
         try {
-            Collection<TopicPartition> parts = partitions == null || partitions.size() == 0 ? this.subscriptions.assignedPartitions() : partitions;
+            if (partitions == null) {
+                throw new IllegalArgumentException("Partitions collection cannot be null");
+            }
+            Collection<TopicPartition> parts = partitions.size() == 0 ? this.subscriptions.assignedPartitions() : partitions;
             for (TopicPartition tp : parts) {
                 log.debug("Seeking to end of partition {}", tp);
                 subscriptions.needOffsetReset(tp, OffsetResetStrategy.LATEST);
@@ -1360,7 +1371,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @param partition The partition to get the position for
      * @return The offset
-     * @throws IllegalArgumentException if provided TopicPartition is not assigned to this consumer
+     * @throws IllegalArgumentException if the provided TopicPartition is not assigned to this consumer
      * @throws org.apache.kafka.clients.consumer.InvalidOffsetException if no offset is currently defined for
      *             the partition
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
