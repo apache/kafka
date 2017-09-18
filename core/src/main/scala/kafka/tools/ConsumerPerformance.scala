@@ -124,12 +124,11 @@ object ConsumerPerformance {
   }
 
   private[tools] def printHeader(showDetailedStats: Boolean, useOldConsumer: Boolean): Unit = {
-    val newFieldsInHeader = s"${if (!useOldConsumer) ", total.rebalance.time.ms, fetch.time.ms, fetch.MB.sec, fetch.nMsg.sec" else ""}"
+    val newFieldsInHeader = if (!useOldConsumer) ", rebalance.time.ms, fetch.time.ms, fetch.MB.sec, fetch.nMsg.sec" else ""
     if (!showDetailedStats) {
         println("start.time, end.time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec" + newFieldsInHeader)
       } else {
-        println("time, threadId, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec" +
-          s"${if (useOldConsumer) "" else ", rebalance.time.ms" + newFieldsInHeader}")
+        println("time, threadId, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec" + newFieldsInHeader)
     }
   }
 
@@ -149,26 +148,15 @@ object ConsumerPerformance {
     var joinStart = 0L
     var joinTimeMsInSingleRound = 0L
 
-    // Wait for group join, metadata fetch, etc
-    val joinTimeout = 10000
-    val isAssigned = new AtomicBoolean(false)
     consumer.subscribe(topics.asJava, new ConsumerRebalanceListener {
       def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) {
-        isAssigned.set(true)
         joinTime.addAndGet(System.currentTimeMillis - joinStart)
-        joinTimeMsInSingleRound = System.currentTimeMillis - joinStart
+        joinTimeMsInSingleRound += System.currentTimeMillis - joinStart
       }
       def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) {
-        isAssigned.set(false)
         joinStart = System.currentTimeMillis
       }})
-    val joinStartForFirstTime = System.currentTimeMillis()
-    while (!isAssigned.get()) {
-      if (System.currentTimeMillis() - joinStartForFirstTime >= joinTimeout) {
-        throw new Exception("Timed out waiting for initial group join.")
-      }
-      consumer.poll(100)
-    }
+    consumer.poll(0)
     consumer.seekToBeginning(Collections.emptyList())
 
     // Now start the benchmark
@@ -191,8 +179,8 @@ object ConsumerPerformance {
 
         if (currentTimeMillis - lastReportTime >= config.reportingInterval) {
           if (config.showDetailedStats)
-            printProgressMessage(0, bytesRead, lastBytesRead, messagesRead, lastMessagesRead,
-              lastReportTime, currentTimeMillis, config.dateFormat, Some(testStartTime), Some(joinTime.get), Some(joinTimeMsInSingleRound))
+            printNewConsumerProgress(0, bytesRead, lastBytesRead, messagesRead, lastMessagesRead,
+              lastReportTime, currentTimeMillis, config.dateFormat, joinTimeMsInSingleRound)
           joinTimeMsInSingleRound = 0L
           lastReportTime = currentTimeMillis
           lastMessagesRead = messagesRead
@@ -205,30 +193,57 @@ object ConsumerPerformance {
     totalBytesRead.set(bytesRead)
   }
 
-  def printProgressMessage(id: Int,
-                           bytesRead: Long,
-                           lastBytesRead: Long,
-                           messagesRead: Long,
-                           lastMessagesRead: Long,
-                           startMs: Long,
-                           endMs: Long,
-                           dateFormat: SimpleDateFormat,
-                           beginTime: Option[Long] = None,
-                           joinTimeOpt: Option[Long] = None,
-                           periodicJoinTimeInMs: Option[Long] = None) = {
+  def printOldConsumerProgress(id: Int,
+                               bytesRead: Long,
+                               lastBytesRead: Long,
+                               messagesRead: Long,
+                               lastMessagesRead: Long,
+                               startMs: Long,
+                               endMs: Long,
+                               dateFormat: SimpleDateFormat): Unit = {
+    printBasicProgress(id, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, startMs, endMs, dateFormat)
+    println()
+  }
+
+  def printNewConsumerProgress(id: Int,
+                               bytesRead: Long,
+                               lastBytesRead: Long,
+                               messagesRead: Long,
+                               lastMessagesRead: Long,
+                               startMs: Long,
+                               endMs: Long,
+                               dateFormat: SimpleDateFormat,
+                               periodicJoinTimeInMs: Long): Unit = {
+    printBasicProgress(id, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, startMs, endMs, dateFormat)
+    printExtendedProgress(bytesRead, messagesRead, startMs, endMs, periodicJoinTimeInMs)
+  }
+
+  private def printBasicProgress(id: Int,
+                                 bytesRead: Long,
+                                 lastBytesRead: Long,
+                                 messagesRead: Long,
+                                 lastMessagesRead: Long,
+                                 startMs: Long,
+                                 endMs: Long,
+                                 dateFormat: SimpleDateFormat): Unit = {
     val elapsedMs: Double = endMs - startMs
     val totalMBRead = (bytesRead * 1.0) / (1024 * 1024)
     val mbRead = ((bytesRead - lastBytesRead) * 1.0) / (1024 * 1024)
     print("%s, %d, %.4f, %.4f, %d, %.4f".format(dateFormat.format(endMs), id, totalMBRead,
       1000.0 * (mbRead / elapsedMs), messagesRead, ((messagesRead - lastMessagesRead) / elapsedMs) * 1000.0))
-    joinTimeOpt match {
-      case Some(joinTime) =>
-        val fetchTimeMs = endMs - beginTime.getOrElse(startMs) - joinTime
-        println(", %d, %d, %d, %.4f, %.4f".format(
-          periodicJoinTimeInMs.getOrElse(0L), joinTime, fetchTimeMs, (bytesRead * 1.0 / (1024 * 1024) / (fetchTimeMs / 1000.0)),
-          messagesRead / (fetchTimeMs / 1000.0)))
-      case None => println()
-    }
+  }
+
+  private def printExtendedProgress(bytesRead: Long,
+                                    messagesRead: Long,
+                                    startMs: Long,
+                                    endMs: Long,
+                                    periodicJoinTimeInMs: Long): Unit = {
+    val fetchTimeMs = if (endMs - startMs - periodicJoinTimeInMs <= 0) 0 else endMs - startMs - periodicJoinTimeInMs
+    if (fetchTimeMs > 0)
+      println(", %d, %d, %.4f, %.4f".format(periodicJoinTimeInMs, fetchTimeMs,
+        (bytesRead * 1.0 / (1024 * 1024) / (fetchTimeMs / 1000.0)), messagesRead / (fetchTimeMs / 1000.0)))
+    else
+      println(", %d, %d, %.4f, %.4f".format(periodicJoinTimeInMs, fetchTimeMs, 0.0, 0.0))
   }
 
   class ConsumerPerfConfig(args: Array[String]) extends PerfConfig(args) {
@@ -353,7 +368,7 @@ object ConsumerPerformance {
 
           if (currentTimeMillis - lastReportTime >= config.reportingInterval) {
             if (config.showDetailedStats)
-              printProgressMessage(threadId, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, lastReportTime, currentTimeMillis, config.dateFormat)
+              printOldConsumerProgress(threadId, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, lastReportTime, currentTimeMillis, config.dateFormat)
             lastReportTime = currentTimeMillis
             lastMessagesRead = messagesRead
             lastBytesRead = bytesRead
@@ -369,7 +384,8 @@ object ConsumerPerformance {
       totalMessagesRead.addAndGet(messagesRead)
       totalBytesRead.addAndGet(bytesRead)
       if (config.showDetailedStats)
-        printProgressMessage(threadId, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, startMs, System.currentTimeMillis, config.dateFormat)
+        printOldConsumerProgress(threadId, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, startMs, System.currentTimeMillis, config.dateFormat)
+
     }
 
   }
