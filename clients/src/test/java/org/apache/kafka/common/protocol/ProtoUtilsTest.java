@@ -24,7 +24,7 @@ public class ProtoUtilsTest {
     public void testDelayedAllocationSchemaDetection() throws Exception {
         //verifies that schemas known to retain a reference to the underlying byte buffer are correctly detected.
         for (ApiKeys key : ApiKeys.values()) {
-            if (key == ApiKeys.PRODUCE || key == ApiKeys.JOIN_GROUP || key == ApiKeys.SYNC_GROUP) {
+            if (key == ApiKeys.PRODUCE || key == ApiKeys.JOIN_GROUP || key == ApiKeys.SYNC_GROUP || key == ApiKeys.SASL_AUTHENTICATE) {
                 Assert.assertTrue(Protocol.requiresDelayedDeallocation(key.id));
             } else {
                 Assert.assertFalse(Protocol.requiresDelayedDeallocation(key.id));

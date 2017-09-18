@@ -16,13 +16,18 @@
  */
 package org.apache.kafka.common.network;
 
+import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
-import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.security.JaasContext;
+import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder;
 import org.apache.kafka.common.security.auth.DefaultPrincipalBuilder;
+import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
+import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.Map;
@@ -102,7 +107,6 @@ public class ChannelBuilders {
                         clientSaslMechanism, saslHandshakeRequestEnable, credentialCache);
                 break;
             case PLAINTEXT:
-            case TRACE:
                 channelBuilder = new PlaintextChannelBuilder();
                 break;
             default:
@@ -113,12 +117,13 @@ public class ChannelBuilders {
         return channelBuilder;
     }
 
-    /**
-     * Returns a configured `PrincipalBuilder`.
-     */
-    static PrincipalBuilder createPrincipalBuilder(Map<String, ?> configs) {
-        // this is a server-only config so it will always be null on the client
-        Class<?> principalBuilderClass = (Class<?>) configs.get(SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG);
+    private static void requireNonNullMode(Mode mode, SecurityProtocol securityProtocol) {
+        if (mode == null)
+            throw new IllegalArgumentException("`mode` must be non-null if `securityProtocol` is `" + securityProtocol + "`");
+    }
+
+    @SuppressWarnings("deprecation")
+    private static PrincipalBuilder createPrincipalBuilder(Class<?> principalBuilderClass, Map<String, ?> configs) {
         PrincipalBuilder principalBuilder;
         if (principalBuilderClass == null)
             principalBuilder = new DefaultPrincipalBuilder();
@@ -128,9 +133,31 @@ public class ChannelBuilders {
         return principalBuilder;
     }
 
-    private static void requireNonNullMode(Mode mode, SecurityProtocol securityProtocol) {
-        if (mode == null)
-            throw new IllegalArgumentException("`mode` must be non-null if `securityProtocol` is `" + securityProtocol + "`");
+    @SuppressWarnings("deprecation")
+    public static KafkaPrincipalBuilder createPrincipalBuilder(Map<String, ?> configs,
+                                                               TransportLayer transportLayer,
+                                                               Authenticator authenticator,
+                                                               KerberosShortNamer kerberosShortNamer) {
+        Class<?> principalBuilderClass = (Class<?>) configs.get(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG);
+        final KafkaPrincipalBuilder builder;
+
+        if (principalBuilderClass == null || principalBuilderClass == DefaultKafkaPrincipalBuilder.class) {
+            builder = new DefaultKafkaPrincipalBuilder(kerberosShortNamer);
+        } else if (KafkaPrincipalBuilder.class.isAssignableFrom(principalBuilderClass)) {
+            builder = (KafkaPrincipalBuilder) Utils.newInstance(principalBuilderClass);
+        } else if (PrincipalBuilder.class.isAssignableFrom(principalBuilderClass)) {
+            PrincipalBuilder oldPrincipalBuilder = createPrincipalBuilder(principalBuilderClass, configs);
+            builder = DefaultKafkaPrincipalBuilder.fromOldPrincipalBuilder(authenticator, transportLayer,
+                    oldPrincipalBuilder, kerberosShortNamer);
+        } else {
+            throw new InvalidConfigurationException("Type " + principalBuilderClass.getName() + " is not " +
+                    "an instance of " + PrincipalBuilder.class.getName() + " or " + KafkaPrincipalBuilder.class.getName());
+        }
+
+        if (builder instanceof Configurable)
+            ((Configurable) builder).configure(configs);
+
+        return builder;
     }
 
 }

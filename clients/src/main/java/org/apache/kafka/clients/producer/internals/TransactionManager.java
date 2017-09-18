@@ -41,8 +41,8 @@ import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest.CommittedOffset;
 import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
+import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -59,15 +59,33 @@ import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_ID;
  * A class which maintains state for transactions. Also keeps the state necessary to ensure idempotent production.
  */
 public class TransactionManager {
-    private static final Logger log = LoggerFactory.getLogger(TransactionManager.class);
     private static final int NO_INFLIGHT_REQUEST_CORRELATION_ID = -1;
 
+    private final Logger log;
     private final String transactionalId;
     private final int transactionTimeoutMs;
 
-    public final String logPrefix;
+    // The base sequence of the next batch bound for a given partition.
+    private final Map<TopicPartition, Integer> nextSequence;
 
-    private final Map<TopicPartition, Integer> sequenceNumbers;
+    // The sequence of the last record of the last ack'd batch from the given partition. When there are no
+    // in flight requests for a partition, the lastAckedSequence(topicPartition) == nextSequence(topicPartition) - 1.
+    private final Map<TopicPartition, Integer> lastAckedSequence;
+
+    // If a batch bound for a partition expired locally after being sent at least once, the partition has is considered
+    // to have an unresolved state. We keep track fo such partitions here, and cannot assign any more sequence numbers
+    // for this partition until the unresolved state gets cleared. This may happen if other inflight batches returned
+    // successfully (indicating that the expired batch actually made it to the broker). If we don't get any successful
+    // responses for the partition once the inflight request count falls to zero, we reset the producer id and
+    // consequently clear this data structure as well.
+    private final Set<TopicPartition> partitionsWithUnresolvedSequences;
+
+    // Keep track of the in flight batches bound for a partition, ordered by sequence. This helps us to ensure that
+    // we continue to order batches by the sequence numbers even when the responses come back out of order during
+    // leader failover. We add a batch to the queue when it is drained, and remove it when the batch completes
+    // (either successfully or through a fatal failure).
+    private final Map<TopicPartition, PriorityQueue<ProducerBatch>> inflightBatchesBySequence;
+
     private final PriorityQueue<TxnRequestHandler> pendingRequests;
     private final Set<TopicPartition> newPartitionsInTransaction;
     private final Set<TopicPartition> pendingPartitionsInTransaction;
@@ -142,11 +160,12 @@ public class TransactionManager {
         }
     }
 
-    public TransactionManager(String transactionalId, int transactionTimeoutMs, long retryBackoffMs) {
+    public TransactionManager(LogContext logContext, String transactionalId, int transactionTimeoutMs, long retryBackoffMs) {
         this.producerIdAndEpoch = new ProducerIdAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
-        this.sequenceNumbers = new HashMap<>();
+        this.nextSequence = new HashMap<>();
+        this.lastAckedSequence = new HashMap<>();
         this.transactionalId = transactionalId;
-        this.logPrefix = transactionalId == null ? "" : "[TransactionalId " + transactionalId + "] ";
+        this.log = logContext.logger(TransactionManager.class);
         this.transactionTimeoutMs = transactionTimeoutMs;
         this.transactionCoordinator = null;
         this.consumerGroupCoordinator = null;
@@ -161,18 +180,21 @@ public class TransactionManager {
             }
         });
 
+        this.partitionsWithUnresolvedSequences = new HashSet<>();
+        this.inflightBatchesBySequence = new HashMap<>();
+
         this.retryBackoffMs = retryBackoffMs;
     }
 
     TransactionManager() {
-        this(null, 0, 100);
+        this(new LogContext(), null, 0, 100);
     }
 
     public synchronized TransactionalRequestResult initializeTransactions() {
         ensureTransactional();
         transitionTo(State.INITIALIZING);
         setProducerIdAndEpoch(ProducerIdAndEpoch.NONE);
-        this.sequenceNumbers.clear();
+        this.nextSequence.clear();
         InitProducerIdRequest.Builder builder = new InitProducerIdRequest.Builder(transactionalId, transactionTimeoutMs);
         InitProducerIdHandler handler = new InitProducerIdHandler(builder);
         enqueueRequest(handler);
@@ -221,7 +243,7 @@ public class TransactionManager {
             throw new KafkaException("Cannot send offsets to transaction either because the producer is not in an " +
                     "active transaction");
 
-        log.debug("{}Begin adding offsets {} for consumer group {} to transaction", logPrefix, offsets, consumerGroupId);
+        log.debug("Begin adding offsets {} for consumer group {} to transaction", offsets, consumerGroupId);
         AddOffsetsToTxnRequest.Builder builder = new AddOffsetsToTxnRequest.Builder(transactionalId,
                 producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, consumerGroupId);
         AddOffsetsToTxnHandler handler = new AddOffsetsToTxnHandler(builder, offsets);
@@ -235,7 +257,7 @@ public class TransactionManager {
         if (isPartitionAdded(topicPartition) || isPartitionPendingAdd(topicPartition))
             return;
 
-        log.debug("{}Begin adding new partition {} to transaction", logPrefix, topicPartition);
+        log.debug("Begin adding new partition {} to transaction", topicPartition);
         newPartitionsInTransaction.add(topicPartition);
     }
 
@@ -338,8 +360,7 @@ public class TransactionManager {
      * Set the producer id and epoch atomically.
      */
     void setProducerIdAndEpoch(ProducerIdAndEpoch producerIdAndEpoch) {
-        log.info("{}ProducerId set to {} with epoch {}", logPrefix, producerIdAndEpoch.producerId,
-                producerIdAndEpoch.epoch);
+        log.info("ProducerId set to {} with epoch {}", producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
         this.producerIdAndEpoch = producerIdAndEpoch;
     }
 
@@ -365,28 +386,157 @@ public class TransactionManager {
             throw new IllegalStateException("Cannot reset producer state for a transactional producer. " +
                     "You must either abort the ongoing transaction or reinitialize the transactional producer instead");
         setProducerIdAndEpoch(ProducerIdAndEpoch.NONE);
-        this.sequenceNumbers.clear();
+        this.nextSequence.clear();
+        this.lastAckedSequence.clear();
+        this.inflightBatchesBySequence.clear();
+        this.partitionsWithUnresolvedSequences.clear();
     }
 
     /**
      * Returns the next sequence number to be written to the given TopicPartition.
      */
     synchronized Integer sequenceNumber(TopicPartition topicPartition) {
-        Integer currentSequenceNumber = sequenceNumbers.get(topicPartition);
+        Integer currentSequenceNumber = nextSequence.get(topicPartition);
         if (currentSequenceNumber == null) {
             currentSequenceNumber = 0;
-            sequenceNumbers.put(topicPartition, currentSequenceNumber);
+            nextSequence.put(topicPartition, currentSequenceNumber);
         }
         return currentSequenceNumber;
     }
 
     synchronized void incrementSequenceNumber(TopicPartition topicPartition, int increment) {
-        Integer currentSequenceNumber = sequenceNumbers.get(topicPartition);
+        Integer currentSequenceNumber = nextSequence.get(topicPartition);
         if (currentSequenceNumber == null)
             throw new IllegalStateException("Attempt to increment sequence number for a partition with no current sequence.");
 
         currentSequenceNumber += increment;
-        sequenceNumbers.put(topicPartition, currentSequenceNumber);
+        nextSequence.put(topicPartition, currentSequenceNumber);
+    }
+
+    synchronized void addInFlightBatch(ProducerBatch batch) {
+        if (!batch.hasSequence())
+            throw new IllegalStateException("Can't track batch for partition " + batch.topicPartition + " when sequence is not set.");
+        if (!inflightBatchesBySequence.containsKey(batch.topicPartition)) {
+            inflightBatchesBySequence.put(batch.topicPartition, new PriorityQueue<>(5, new Comparator<ProducerBatch>() {
+                @Override
+                public int compare(ProducerBatch o1, ProducerBatch o2) {
+                    return o1.baseSequence() - o2.baseSequence();
+                }
+            }));
+        }
+        inflightBatchesBySequence.get(batch.topicPartition).offer(batch);
+    }
+
+
+    synchronized ProducerBatch nextBatchBySequence(TopicPartition topicPartition) {
+        PriorityQueue<ProducerBatch> queue = inflightBatchesBySequence.get(topicPartition);
+        if (queue == null)
+            return null;
+        return queue.peek();
+    }
+
+    synchronized void removeInFlightBatch(ProducerBatch batch) {
+        PriorityQueue<ProducerBatch> queue = inflightBatchesBySequence.get(batch.topicPartition);
+        if (queue == null)
+            return;
+        queue.remove(batch);
+    }
+
+    synchronized void maybeUpdateLastAckedSequence(TopicPartition topicPartition, int sequence) {
+        if (sequence > lastAckedSequence(topicPartition))
+            lastAckedSequence.put(topicPartition, sequence);
+    }
+
+    synchronized int lastAckedSequence(TopicPartition topicPartition) {
+        Integer currentLastAckedSequence = lastAckedSequence.get(topicPartition);
+        if (currentLastAckedSequence == null)
+            return -1;
+        return currentLastAckedSequence;
+    }
+
+    // If a batch is failed fatally, the sequence numbers for future batches bound for the partition must be adjusted
+    // so that they don't fail with the OutOfOrderSequenceException.
+    //
+    // This method must only be called when we know that the batch is question has been unequivocally failed by the broker,
+    // ie. it has received a confirmed fatal status code like 'Message Too Large' or something similar.
+    synchronized void adjustSequencesDueToFailedBatch(ProducerBatch batch) {
+        if (!this.nextSequence.containsKey(batch.topicPartition))
+            // Sequence numbers are not being tracked for this partition. This could happen if the producer id was just
+            // reset due to a previous OutOfOrderSequenceException.
+            return;
+        log.debug("producerId: {}, send to partition {} failed fatally. Reducing future sequence numbers by {}",
+                batch.producerId(), batch.topicPartition, batch.recordCount);
+        int currentSequence = sequenceNumber(batch.topicPartition);
+        currentSequence -= batch.recordCount;
+        if (currentSequence < 0)
+            throw new IllegalStateException("Sequence number for partition " + batch.topicPartition + " is going to become negative : " + currentSequence);
+
+        setNextSequence(batch.topicPartition, currentSequence);
+
+        for (ProducerBatch inFlightBatch : inflightBatchesBySequence.get(batch.topicPartition)) {
+            if (inFlightBatch.baseSequence() < batch.baseSequence())
+                continue;
+            int newSequence = inFlightBatch.baseSequence() - batch.recordCount;
+            if (newSequence < 0)
+                throw new IllegalStateException("Sequence number for batch with sequence " + inFlightBatch.baseSequence()
+                        + " for partition " + batch.topicPartition + " is going to become negative :" + newSequence);
+
+            log.info("Resetting sequence number of batch with current sequence {} for partition {} to {}", inFlightBatch.baseSequence(), batch.topicPartition, newSequence);
+            inFlightBatch.resetProducerState(new ProducerIdAndEpoch(inFlightBatch.producerId(), inFlightBatch.producerEpoch()), newSequence, inFlightBatch.isTransactional());
+        }
+    }
+
+    synchronized boolean hasInflightBatches(TopicPartition topicPartition) {
+        return inflightBatchesBySequence.containsKey(topicPartition) && !inflightBatchesBySequence.get(topicPartition).isEmpty();
+    }
+
+    synchronized boolean hasUnresolvedSequences() {
+        return !partitionsWithUnresolvedSequences.isEmpty();
+    }
+
+    synchronized boolean hasUnresolvedSequence(TopicPartition topicPartition) {
+        return partitionsWithUnresolvedSequences.contains(topicPartition);
+    }
+
+    synchronized void markSequenceUnresolved(TopicPartition topicPartition) {
+        log.debug("Marking partition {} unresolved", topicPartition);
+        partitionsWithUnresolvedSequences.add(topicPartition);
+    }
+
+    // Checks if there are any partitions with unresolved partitions which may now be resolved. Returns true if
+    // the producer id needs a reset, false otherwise.
+    synchronized boolean shouldResetProducerStateAfterResolvingSequences() {
+        if (isTransactional())
+            // We should not reset producer state if we are transactional. We will transition to a fatal error instead.
+            return false;
+        for (TopicPartition topicPartition : partitionsWithUnresolvedSequences) {
+            if (!hasInflightBatches(topicPartition)) {
+                // The partition has been fully drained. At this point, the last ack'd sequence should be once less than
+                // next sequence destined for the partition. If so, the partition is fully resolved. If not, we should
+                // reset the sequence number if necessary.
+                if (isNextSequence(topicPartition, sequenceNumber(topicPartition))) {
+                    // This would happen when a batch was expired, but subsequent batches succeeded.
+                    partitionsWithUnresolvedSequences.remove(topicPartition);
+                } else {
+                    // We would enter this branch if all in flight batches were ultimately expired in the producer.
+                    log.info("No inflight batches remaining for {}, last ack'd sequence for partition is {}, next sequence is {}. " +
+                            "Going to reset producer state.", topicPartition, lastAckedSequence(topicPartition), sequenceNumber(topicPartition));
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    synchronized boolean isNextSequence(TopicPartition topicPartition, int sequence) {
+        return sequence - lastAckedSequence(topicPartition) == 1;
+    }
+
+    private synchronized void setNextSequence(TopicPartition topicPartition, int sequence) {
+        if (!nextSequence.containsKey(topicPartition) && sequence != 0)
+            throw new IllegalStateException("Trying to set the sequence number for " + topicPartition + " to " + sequence +
+            ", but the sequence number was never set for this partition.");
+        nextSequence.put(topicPartition, sequence);
     }
 
     synchronized TxnRequestHandler nextRequestHandler(boolean hasIncompleteBatches) {
@@ -403,23 +553,23 @@ public class TransactionManager {
 
         pendingRequests.poll();
         if (maybeTerminateRequestWithError(nextRequestHandler)) {
-            log.trace("{}Not sending transactional request {} because we are in an error state",
-                    logPrefix, nextRequestHandler.requestBuilder());
+            log.trace("Not sending transactional request {} because we are in an error state",
+                    nextRequestHandler.requestBuilder());
             return null;
         }
 
         if (nextRequestHandler.isEndTxn() && !transactionStarted) {
             nextRequestHandler.result.done();
             if (currentState != State.FATAL_ERROR) {
-                log.debug("{}Not sending EndTxn for completed transaction since no partitions " +
-                        "or offsets were successfully added", logPrefix);
+                log.debug("Not sending EndTxn for completed transaction since no partitions " +
+                        "or offsets were successfully added");
                 completeTransaction();
             }
             nextRequestHandler = pendingRequests.poll();
         }
 
         if (nextRequestHandler != null)
-            log.trace("{}Request {} dequeued for sending", logPrefix, nextRequestHandler.requestBuilder());
+            log.trace("Request {} dequeued for sending", nextRequestHandler.requestBuilder());
 
         return nextRequestHandler;
     }
@@ -444,15 +594,15 @@ public class TransactionManager {
         lookupCoordinator(request.coordinatorType(), request.coordinatorKey());
     }
 
-    void setInFlightRequestCorrelationId(int correlationId) {
+    void setInFlightTransactionalRequestCorrelationId(int correlationId) {
         inFlightRequestCorrelationId = correlationId;
     }
 
-    void clearInFlightRequestCorrelationId() {
+    void clearInFlightTransactionalRequestCorrelationId() {
         inFlightRequestCorrelationId = NO_INFLIGHT_REQUEST_CORRELATION_ID;
     }
 
-    boolean hasInFlightRequest() {
+    boolean hasInFlightTransactionalRequest() {
         return inFlightRequestCorrelationId != NO_INFLIGHT_REQUEST_CORRELATION_ID;
     }
 
@@ -482,6 +632,11 @@ public class TransactionManager {
         return currentState == State.IN_TRANSACTION || isCompleting() || hasAbortableError();
     }
 
+    synchronized boolean canRetryOutOfOrderSequenceException(ProducerBatch batch) {
+        return hasProducerId(batch.producerId()) && !hasUnresolvedSequence(batch.topicPartition) &&
+                (batch.sequenceHasBeenReset() || !isNextSequence(batch.topicPartition, batch.baseSequence()));
+    }
+
     // visible for testing
     synchronized boolean isReady() {
         return isTransactional() && currentState == State.READY;
@@ -507,9 +662,9 @@ public class TransactionManager {
         }
 
         if (lastError != null)
-            log.debug("{}Transition from state {} to error state {}", logPrefix, currentState, target, lastError);
+            log.debug("Transition from state {} to error state {}", currentState, target, lastError);
         else
-            log.debug("{}Transition from state {} to {}", logPrefix, currentState, target);
+            log.debug("Transition from state {} to {}", currentState, target);
 
         currentState = target;
     }
@@ -537,7 +692,7 @@ public class TransactionManager {
     }
 
     private void enqueueRequest(TxnRequestHandler requestHandler) {
-        log.debug("{}Enqueuing transactional request {}", logPrefix, requestHandler.requestBuilder());
+        log.debug("Enqueuing transactional request {}", requestHandler.requestBuilder());
         pendingRequests.add(requestHandler);
     }
 
@@ -632,17 +787,17 @@ public class TransactionManager {
             if (response.requestHeader().correlationId() != inFlightRequestCorrelationId) {
                 fatalError(new RuntimeException("Detected more than one in-flight transactional request."));
             } else {
-                clearInFlightRequestCorrelationId();
+                clearInFlightTransactionalRequestCorrelationId();
                 if (response.wasDisconnected()) {
-                    log.debug("{}Disconnected from {}. Will retry.", logPrefix, response.destination());
+                    log.debug("Disconnected from {}. Will retry.", response.destination());
                     if (this.needsCoordinator())
                         lookupCoordinator(this.coordinatorType(), this.coordinatorKey());
                     reenqueue();
                 } else if (response.versionMismatch() != null) {
                     fatalError(response.versionMismatch());
                 } else if (response.hasResponse()) {
-                    log.trace("{}Received transactional response {} for request {}", logPrefix,
-                            response.responseBody(), requestBuilder());
+                    log.trace("Received transactional response {} for request {}", response.responseBody(),
+                            requestBuilder());
                     synchronized (TransactionManager.this) {
                         handleResponse(response.responseBody());
                     }
@@ -781,10 +936,11 @@ public class TransactionManager {
                 } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                     unauthorizedTopics.add(topicPartition.topic());
                 } else if (error == Errors.OPERATION_NOT_ATTEMPTED) {
-                    log.debug("{}Did not attempt to add partition {} to transaction because other partitions in the batch had errors.", logPrefix, topicPartition);
+                    log.debug("Did not attempt to add partition {} to transaction because other partitions in the " +
+                            "batch had errors.", topicPartition);
                     hasPartitionErrors = true;
                 } else {
-                    log.error("{}Could not add partition {} due to unexpected error {}", logPrefix, topicPartition, error);
+                    log.error("Could not add partition {} due to unexpected error {}", topicPartition, error);
                     hasPartitionErrors = true;
                 }
             }
@@ -803,7 +959,7 @@ public class TransactionManager {
             } else if (hasPartitionErrors) {
                 abortableError(new KafkaException("Could not add partitions to transaction due to errors: " + errors));
             } else {
-                log.debug("{}Successfully added partitions {} to transaction", logPrefix, partitions);
+                log.debug("Successfully added partitions {} to transaction", partitions);
                 partitionsInTransaction.addAll(partitions);
                 transactionStarted = true;
                 result.done();
@@ -956,8 +1112,7 @@ public class TransactionManager {
             Errors error = addOffsetsToTxnResponse.error();
 
             if (error == Errors.NONE) {
-                log.debug("{}Successfully added partition for consumer group {} to transaction", logPrefix,
-                        builder.consumerGroupId());
+                log.debug("Successfully added partition for consumer group {} to transaction", builder.consumerGroupId());
 
                 // note the result is not completed until the TxnOffsetCommit returns
                 pendingRequests.add(txnOffsetCommitHandler(result, offsets, builder.consumerGroupId()));
@@ -1019,7 +1174,7 @@ public class TransactionManager {
                 TopicPartition topicPartition = entry.getKey();
                 Errors error = entry.getValue();
                 if (error == Errors.NONE) {
-                    log.debug("{}Successfully added offsets {} from consumer group {} to transaction.", logPrefix,
+                    log.debug("Successfully added offsets {} from consumer group {} to transaction.",
                             builder.offsets(), builder.consumerGroupId());
                     pendingTxnOffsetCommits.remove(topicPartition);
                 } else if (error == Errors.COORDINATOR_NOT_AVAILABLE

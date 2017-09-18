@@ -17,9 +17,11 @@
 
 package org.apache.kafka.jmh.cache;
 
+import java.util.concurrent.TimeUnit;
 import org.apache.kafka.common.cache.LRUCache;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Level;
+import org.openjdk.jmh.annotations.OutputTimeUnit;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
@@ -35,25 +37,39 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
  * http://hg.openjdk.java.net/code-tools/jmh/file/tip/jmh-samples/src/main/java/org/openjdk/jmh/samples/
  */
 @State(Scope.Thread)
+@OutputTimeUnit(TimeUnit.MILLISECONDS)
 public class LRUCacheBenchmark {
+
+    private static final int DISTINCT_KEYS = 10_000;
+
+    private static final String KEY = "the_key_to_use";
+
+    private static final String VALUE = "the quick brown fox jumped over the lazy dog the olympics are about to start";
+
+    private final String[] keys = new String[DISTINCT_KEYS];
+
+    private final String[] values = new String[DISTINCT_KEYS];
 
     private LRUCache<String, String> lruCache;
 
-    private final String key = "the_key_to_use";
-    private final String value = "the quick brown fox jumped over the lazy dog the olympics are about to start";
     int counter;
 
-
     @Setup(Level.Trial)
-    public void setUpCaches() {
+    public void setUp() {
+        for (int i = 0; i < DISTINCT_KEYS; ++i) {
+            keys[i] = KEY + i;
+            values[i] = VALUE + i;
+        }
         lruCache = new LRUCache<>(100);
     }
 
     @Benchmark
     public String testCachePerformance() {
         counter++;
-        lruCache.put(key + counter, value + counter);
-        return lruCache.get(key + counter);
+        int index = counter % DISTINCT_KEYS;
+        String hashkey = keys[index];
+        lruCache.put(hashkey, values[index]);
+        return lruCache.get(hashkey);
     }
 
     public static void main(String[] args) throws RunnerException {

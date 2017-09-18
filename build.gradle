@@ -220,9 +220,11 @@ subprojects {
       showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
       exceptionFormat = testExceptionFormat
     }
+
     useJUnit {
       includeCategories 'org.apache.kafka.test.IntegrationTest'
     }
+
   }
 
   task unitTest(type: Test, dependsOn: compileJava) {
@@ -237,9 +239,11 @@ subprojects {
       showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
       exceptionFormat = testExceptionFormat
     }
+
     useJUnit {
       excludeCategories 'org.apache.kafka.test.IntegrationTest'
     }
+    
   }
 
   jar {
@@ -766,7 +770,7 @@ project(':clients') {
     testCompile libs.bcpkix
     testCompile libs.junit
     testCompile libs.easymock
-    testCompile libs.powermock
+    testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
 
     testRuntime libs.slf4jlog4j
@@ -1054,7 +1058,7 @@ project(':connect:transforms') {
 
     testCompile libs.easymock
     testCompile libs.junit
-    testCompile libs.powermock
+    testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
 
     testRuntime libs.slf4jlog4j
@@ -1092,7 +1096,7 @@ project(':connect:json') {
 
     testCompile libs.easymock
     testCompile libs.junit
-    testCompile libs.powermock
+    testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
 
     testRuntime libs.slf4jlog4j
@@ -1141,7 +1145,7 @@ project(':connect:runtime') {
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.easymock
     testCompile libs.junit
-    testCompile libs.powermock
+    testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
 
     testCompile project(":connect:json")
@@ -1194,7 +1198,7 @@ project(':connect:file') {
 
     testCompile libs.easymock
     testCompile libs.junit
-    testCompile libs.powermock
+    testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
 
     testRuntime libs.slf4jlog4j

@@ -302,8 +302,8 @@ public class KafkaStreamsTest {
     public void testNumberDefaultMetrics() {
         final KafkaStreams streams = createKafkaStreams();
         final Map<MetricName, ? extends Metric> metrics = streams.metrics();
-        // all 15 default StreamThread metrics + 1 metric that keeps track of number of metrics
-        assertEquals(metrics.size(), 16);
+        // all 22 default StreamThread metrics + 1 metric that keeps track of number of metrics
+        assertEquals(23, metrics.size());
     }
 
     @Test
@@ -558,4 +558,5 @@ public class KafkaStreamsTest {
             mapStates.put(newState, prevCount + 1);
         }
     }
+
 }

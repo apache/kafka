@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.security.authenticator;
 
-import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.network.InvalidReceiveException;
 import org.apache.kafka.common.network.ListenerName;
@@ -26,7 +26,6 @@ import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.JaasContext;
-import org.apache.kafka.common.security.auth.PrincipalBuilder;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
@@ -35,7 +34,6 @@ import org.junit.Test;
 
 import javax.security.auth.Subject;
 import java.io.IOException;
-import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
@@ -49,11 +47,10 @@ public class SaslServerAuthenticatorTest {
 
     @Test(expected = InvalidReceiveException.class)
     public void testOversizeRequest() throws IOException {
-        SaslServerAuthenticator authenticator = setupAuthenticator();
         TransportLayer transportLayer = EasyMock.mock(TransportLayer.class);
-        PrincipalBuilder principalBuilder = null; // SASL authenticator does not currently use principal builder
-        Map<String, ?> configs = Collections.singletonMap(SaslConfigs.SASL_ENABLED_MECHANISMS,
+        Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
                 Collections.singletonList(SCRAM_SHA_256.mechanismName()));
+        SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer);
 
         final Capture<ByteBuffer> size = EasyMock.newCapture();
         EasyMock.expect(transportLayer.read(EasyMock.capture(size))).andAnswer(new IAnswer<Integer>() {
@@ -66,17 +63,15 @@ public class SaslServerAuthenticatorTest {
 
         EasyMock.replay(transportLayer);
 
-        authenticator.configure(transportLayer, principalBuilder, configs);
         authenticator.authenticate();
     }
 
     @Test
     public void testUnexpectedRequestType() throws IOException {
-        SaslServerAuthenticator authenticator = setupAuthenticator();
         TransportLayer transportLayer = EasyMock.mock(TransportLayer.class);
-        PrincipalBuilder principalBuilder = null; // SASL authenticator does not currently use principal builder
-        Map<String, ?> configs = Collections.singletonMap(SaslConfigs.SASL_ENABLED_MECHANISMS,
+        Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
                 Collections.singletonList(SCRAM_SHA_256.mechanismName()));
+        SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer);
 
         final RequestHeader header = new RequestHeader(ApiKeys.METADATA, (short) 0, "clientId", 13243);
         final Struct headerStruct = header.toStruct();
@@ -102,7 +97,6 @@ public class SaslServerAuthenticatorTest {
 
         EasyMock.replay(transportLayer);
 
-        authenticator.configure(transportLayer, principalBuilder, configs);
         try {
             authenticator.authenticate();
             fail("Expected authenticate() to raise an exception");
@@ -111,13 +105,13 @@ public class SaslServerAuthenticatorTest {
         }
     }
 
-    private SaslServerAuthenticator setupAuthenticator() throws IOException {
+    private SaslServerAuthenticator setupAuthenticator(Map<String, ?> configs, TransportLayer transportLayer) throws IOException {
         TestJaasConfig jaasConfig = new TestJaasConfig();
         jaasConfig.addEntry("jaasContext", PlainLoginModule.class.getName(), new HashMap<String, Object>());
         JaasContext jaasContext = new JaasContext("jaasContext", JaasContext.Type.SERVER, jaasConfig);
         Subject subject = new Subject();
-        return new SaslServerAuthenticator("node", jaasContext, subject, null, InetAddress.getLocalHost(),
-                new CredentialCache(), new ListenerName("ssl"), SecurityProtocol.SASL_SSL);
+        return new SaslServerAuthenticator(configs, "node", jaasContext, subject, null, new CredentialCache(),
+                new ListenerName("ssl"), SecurityProtocol.SASL_SSL, transportLayer);
     }
 
 }

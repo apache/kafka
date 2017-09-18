@@ -30,7 +30,7 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
     public MaterializedInternal(final Materialized<K, V, S> materialized) {
         this(materialized, true);
     }
-
+    
     public MaterializedInternal(final Materialized<K, V, S> materialized,
                                 final boolean queryable) {
         super(materialized);

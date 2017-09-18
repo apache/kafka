@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -27,6 +28,7 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.Serialized;
@@ -484,6 +486,110 @@ public class KGroupedStreamImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullStateStoreSupplierWhenCountingSessionWindows() {
         groupedStream.count(SessionWindows.with(90), (StateStoreSupplier<SessionStore>) null);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerOnReduceWhenMaterializedIsNull() {
+        groupedStream.reduce(MockReducer.STRING_ADDER, (Materialized) null);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerOnAggregateWhenMaterializedIsNull() {
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, (Materialized) null);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerOnCountWhenMaterializedIsNull() {
+        groupedStream.count((Materialized) null);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldCountAndMaterializeResults() {
+        groupedStream.count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count")
+                                    .withKeySerde(Serdes.String())
+                                    .withValueSerde(Serdes.Long()));
+
+        processData();
+
+        final KeyValueStore<String, Long> count = (KeyValueStore<String, Long>) driver.allStateStores().get("count");
+
+        assertThat(count.get("1"), equalTo(3L));
+        assertThat(count.get("2"), equalTo(1L));
+        assertThat(count.get("3"), equalTo(2L));
+    }
+
+
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldReduceAndMaterializeResults() {
+        groupedStream.reduce(MockReducer.STRING_ADDER,
+                             Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("reduce")
+                                    .withKeySerde(Serdes.String())
+                                    .withValueSerde(Serdes.String()));
+
+        processData();
+
+        final KeyValueStore<String, String> reduced = (KeyValueStore<String, String>) driver.allStateStores().get("reduce");
+
+        assertThat(reduced.get("1"), equalTo("A+C+D"));
+        assertThat(reduced.get("2"), equalTo("B"));
+        assertThat(reduced.get("3"), equalTo("E+F"));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldAggregateAndMaterializeResults() {
+        groupedStream.aggregate(MockInitializer.STRING_INIT,
+                                MockAggregator.TOSTRING_ADDER,
+                                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("aggregate")
+                                        .withKeySerde(Serdes.String())
+                                        .withValueSerde(Serdes.String()));
+
+        processData();
+
+        final KeyValueStore<String, String> aggregate = (KeyValueStore<String, String>) driver.allStateStores().get("aggregate");
+
+        assertThat(aggregate.get("1"), equalTo("0+A+C+D"));
+        assertThat(aggregate.get("2"), equalTo("0+B"));
+        assertThat(aggregate.get("3"), equalTo("0+E+F"));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldAggregateWithDefaultSerdes() {
+        final Map<String, String> results = new HashMap<>();
+        groupedStream.aggregate(MockInitializer.STRING_INIT,
+                                MockAggregator.TOSTRING_ADDER)
+                .toStream()
+                .foreach(new ForeachAction<String, String>() {
+                    @Override
+                    public void apply(final String key, final String value) {
+                        results.put(key, value);
+                    }
+                });
+
+        processData();
+
+        assertThat(results.get("1"), equalTo("0+A+C+D"));
+        assertThat(results.get("2"), equalTo("0+B"));
+        assertThat(results.get("3"), equalTo("0+E+F"));
+    }
+
+    private void processData() {
+        driver.setUp(builder, TestUtils.tempDirectory(), Serdes.String(), Serdes.String(), 0);
+        driver.setTime(0);
+        driver.process(TOPIC, "1", "A");
+        driver.process(TOPIC, "2", "B");
+        driver.process(TOPIC, "1", "C");
+        driver.process(TOPIC, "1", "D");
+        driver.process(TOPIC, "3", "E");
+        driver.process(TOPIC, "3", "F");
+        driver.flushState();
     }
 
     private void doCountWindowed(final List<KeyValue<Windowed<String>, Long>> results) {

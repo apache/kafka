@@ -16,18 +16,16 @@
  */
 package org.apache.kafka.common.network;
 
+import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.IOException;
-
 import java.net.InetAddress;
 import java.net.Socket;
 import java.nio.channels.SelectionKey;
-
-import java.security.Principal;
-
 import java.util.Objects;
-import org.apache.kafka.common.memory.MemoryPool;
-import org.apache.kafka.common.utils.Utils;
 
 public class KafkaChannel {
     private final String id;
@@ -66,7 +64,7 @@ public class KafkaChannel {
     /**
      * Returns the principal returned by `authenticator.principal()`.
      */
-    public Principal principal() throws IOException {
+    public KafkaPrincipal principal() {
         return authenticator.principal();
     }
 
@@ -76,8 +74,22 @@ public class KafkaChannel {
     public void prepare() throws IOException {
         if (!transportLayer.ready())
             transportLayer.handshake();
-        if (transportLayer.ready() && !authenticator.complete())
-            authenticator.authenticate();
+        if (transportLayer.ready() && !authenticator.complete()) {
+            try {
+                authenticator.authenticate();
+            } catch (AuthenticationException e) {
+                switch (authenticator.error()) {
+                    case AUTHENTICATION_FAILED:
+                    case ILLEGAL_SASL_STATE:
+                    case UNSUPPORTED_SASL_MECHANISM:
+                        state = new ChannelState(ChannelState.State.AUTHENTICATION_FAILED, e);
+                        break;
+                    default:
+                        // Other errors are handled as network exceptions in Selector
+                }
+                throw e;
+            }
+        }
         if (ready())
             state = ChannelState.READY;
     }
