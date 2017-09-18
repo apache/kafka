@@ -461,7 +461,7 @@
         source.flatMapValues(new ValueMapper&lt;String, Iterable&lt;String&gt;&gt;() {
                     @Override
                     public Iterable&lt;String&gt; apply(String value) {
-                        return Arrays.asList(value.toLowerCase(Locale.getDefault()));
+                        return Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+"));
                     }
                 });
     </pre>
@@ -476,7 +476,7 @@
         source.flatMapValues(new ValueMapper&lt;String, Iterable&lt;String&gt;&gt;() {
                     @Override
                     public Iterable&lt;String&gt; apply(String value) {
-                        return Arrays.asList(value.toLowerCase(Locale.getDefault()));
+                        return Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+"));
                     }
                 })
               .groupBy(new KeyValueMapper&lt;String, String, String&gt;() {
@@ -513,7 +513,7 @@
 
     <pre class="brush: java;">
         KStream&lt;String, String&gt; source = builder.stream("streams-plaintext-input");
-        source.flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault())))
+        source.flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
               .groupBy((key, value) -> value)
               .count("Counts")
               .to(Serdes.String(), Serdes.Long(), "streams-wordcount-output");
@@ -586,7 +586,7 @@
                 final StreamsBuilder builder = new StreamsBuilder();
 
                 KStream&lt;String, String&gt; source = builder.stream("streams-plaintext-input");
-                source.flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault())))
+                source.flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
                       .groupBy((key, value) -> value)
                       .count("Counts")
                       .to(Serdes.String(), Serdes.Long(), "streams-wordcount-output");
