@@ -19,7 +19,7 @@ package org.apache.kafka.clients.consumer;
 import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.FieldDef;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
@@ -189,10 +189,10 @@ public class StickyAssignor extends AbstractPartitionAssignor {
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String PARTITIONS_KEY_NAME = "partitions";
     private static final Schema TOPIC_ASSIGNMENT = new Schema(
-            new FieldDef(TOPIC_KEY_NAME, Type.STRING),
-            new FieldDef(PARTITIONS_KEY_NAME, new ArrayOf(Type.INT32)));
+            new Field(TOPIC_KEY_NAME, Type.STRING),
+            new Field(PARTITIONS_KEY_NAME, new ArrayOf(Type.INT32)));
     private static final Schema STICKY_ASSIGNOR_USER_DATA = new Schema(
-            new FieldDef(TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT)));
+            new Field(TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT)));
 
     private List<TopicPartition> memberAssignment = null;
     private PartitionMovements partitionMovements;

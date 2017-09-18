@@ -20,7 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.FieldDef;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
@@ -53,27 +53,27 @@ public class OffsetFetchResponse extends AbstractResponse {
 
     private static final Schema OFFSET_FETCH_RESPONSE_PARTITION_V0 = new Schema(
             PARTITION_ID,
-            new FieldDef(COMMIT_OFFSET_KEY_NAME, INT64, "Last committed message offset."),
-            new FieldDef(METADATA_KEY_NAME, NULLABLE_STRING, "Any associated metadata the client wants to keep."),
+            new Field(COMMIT_OFFSET_KEY_NAME, INT64, "Last committed message offset."),
+            new Field(METADATA_KEY_NAME, NULLABLE_STRING, "Any associated metadata the client wants to keep."),
             ERROR_CODE);
 
     private static final Schema OFFSET_FETCH_RESPONSE_TOPIC_V0 = new Schema(
             TOPIC_NAME,
-            new FieldDef(PARTITIONS_KEY_NAME, new ArrayOf(OFFSET_FETCH_RESPONSE_PARTITION_V0)));
+            new Field(PARTITIONS_KEY_NAME, new ArrayOf(OFFSET_FETCH_RESPONSE_PARTITION_V0)));
 
     private static final Schema OFFSET_FETCH_RESPONSE_V0 = new Schema(
-            new FieldDef(RESPONSES_KEY_NAME, new ArrayOf(OFFSET_FETCH_RESPONSE_TOPIC_V0)));
+            new Field(RESPONSES_KEY_NAME, new ArrayOf(OFFSET_FETCH_RESPONSE_TOPIC_V0)));
 
     private static final Schema OFFSET_FETCH_RESPONSE_V1 = OFFSET_FETCH_RESPONSE_V0;
 
     private static final Schema OFFSET_FETCH_RESPONSE_V2 = new Schema(
-            new FieldDef(RESPONSES_KEY_NAME, new ArrayOf(OFFSET_FETCH_RESPONSE_TOPIC_V0)),
+            new Field(RESPONSES_KEY_NAME, new ArrayOf(OFFSET_FETCH_RESPONSE_TOPIC_V0)),
             ERROR_CODE);
 
     /* v3 request is the same as v2. Throttle time has been added to v3 response */
     private static final Schema OFFSET_FETCH_RESPONSE_V3 = new Schema(
             THROTTLE_TIME_MS,
-            new FieldDef(RESPONSES_KEY_NAME, new ArrayOf(OFFSET_FETCH_RESPONSE_TOPIC_V0)),
+            new Field(RESPONSES_KEY_NAME, new ArrayOf(OFFSET_FETCH_RESPONSE_TOPIC_V0)),
             ERROR_CODE);
 
     public static Schema[] schemaVersions() {

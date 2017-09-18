@@ -18,7 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.FieldDef;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -41,12 +41,12 @@ public class DescribeConfigsRequest extends AbstractRequest {
     private static final String CONFIG_NAMES_KEY_NAME = "config_names";
 
     private static final Schema DESCRIBE_CONFIGS_REQUEST_RESOURCE_V0 = new Schema(
-            new FieldDef(RESOURCE_TYPE_KEY_NAME, INT8),
-            new FieldDef(RESOURCE_NAME_KEY_NAME, STRING),
-            new FieldDef(CONFIG_NAMES_KEY_NAME, ArrayOf.nullable(STRING)));
+            new Field(RESOURCE_TYPE_KEY_NAME, INT8),
+            new Field(RESOURCE_NAME_KEY_NAME, STRING),
+            new Field(CONFIG_NAMES_KEY_NAME, ArrayOf.nullable(STRING)));
 
     private static final Schema DESCRIBE_CONFIGS_REQUEST_V0 = new Schema(
-            new FieldDef(RESOURCES_KEY_NAME, new ArrayOf(DESCRIBE_CONFIGS_REQUEST_RESOURCE_V0), "An array of config resources to be returned."));
+            new Field(RESOURCES_KEY_NAME, new ArrayOf(DESCRIBE_CONFIGS_REQUEST_RESOURCE_V0), "An array of config resources to be returned."));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{DESCRIBE_CONFIGS_REQUEST_V0};

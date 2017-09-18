@@ -20,7 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.FieldDef;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -43,7 +43,7 @@ public class LeaderAndIsrResponse extends AbstractResponse {
             ERROR_CODE);
     private static final Schema LEADER_AND_ISR_RESPONSE_V0 = new Schema(
             ERROR_CODE,
-            new FieldDef(PARTITIONS_KEY_NAME, new ArrayOf(LEADER_AND_ISR_RESPONSE_PARTITION_V0)));
+            new Field(PARTITIONS_KEY_NAME, new ArrayOf(LEADER_AND_ISR_RESPONSE_PARTITION_V0)));
 
     // LeaderAndIsrResponse V1 may receive KAFKA_STORAGE_ERROR in the response
     private static final Schema LEADER_AND_ISR_RESPONSE_V1 = LEADER_AND_ISR_RESPONSE_V0;

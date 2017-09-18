@@ -19,7 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.FieldDef;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.Utils;
@@ -39,8 +39,8 @@ public class DeleteTopicsRequest extends AbstractRequest {
 
     /* DeleteTopic api */
     private static final Schema DELETE_TOPICS_REQUEST_V0 = new Schema(
-            new FieldDef(TOPICS_KEY_NAME, new ArrayOf(STRING), "An array of topics to be deleted."),
-            new FieldDef(TIMEOUT_KEY_NAME, INT32, "The time in ms to wait for a topic to be completely deleted on the " +
+            new Field(TOPICS_KEY_NAME, new ArrayOf(STRING), "An array of topics to be deleted."),
+            new Field(TIMEOUT_KEY_NAME, INT32, "The time in ms to wait for a topic to be completely deleted on the " +
                     "controller node. Values <= 0 will trigger topic deletion and return immediately"));
 
     /* v1 request is the same as v0. Throttle time has been added to the response */

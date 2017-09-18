@@ -19,7 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.FieldDef;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -41,12 +41,12 @@ public class DeleteTopicsResponse extends AbstractResponse {
             ERROR_CODE);
 
     private static final Schema DELETE_TOPICS_RESPONSE_V0 = new Schema(
-            new FieldDef(TOPIC_ERROR_CODES_KEY_NAME,
+            new Field(TOPIC_ERROR_CODES_KEY_NAME,
                     new ArrayOf(TOPIC_ERROR_CODE), "An array of per topic error codes."));
 
     private static final Schema DELETE_TOPICS_RESPONSE_V1 = new Schema(
             THROTTLE_TIME_MS,
-            new FieldDef(TOPIC_ERROR_CODES_KEY_NAME, new ArrayOf(TOPIC_ERROR_CODE), "An array of per topic error codes."));
+            new Field(TOPIC_ERROR_CODES_KEY_NAME, new ArrayOf(TOPIC_ERROR_CODE), "An array of per topic error codes."));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{DELETE_TOPICS_RESPONSE_V0, DELETE_TOPICS_RESPONSE_V1};

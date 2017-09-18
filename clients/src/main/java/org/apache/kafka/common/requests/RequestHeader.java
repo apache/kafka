@@ -18,7 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.types.FieldDef;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -39,17 +39,17 @@ public class RequestHeader extends AbstractRequestResponse {
     private static final String CORRELATION_ID_FIELD_NAME = "correlation_id";
 
     public static final Schema SCHEMA = new Schema(
-            new FieldDef(API_KEY_FIELD_NAME, INT16, "The id of the request type."),
-            new FieldDef(API_VERSION_FIELD_NAME, INT16, "The version of the API."),
-            new FieldDef(CORRELATION_ID_FIELD_NAME, INT32, "A user-supplied integer value that will be passed back with the response"),
-            new FieldDef(CLIENT_ID_FIELD_NAME, NULLABLE_STRING, "A user specified identifier for the client making the request.", ""));
+            new Field(API_KEY_FIELD_NAME, INT16, "The id of the request type."),
+            new Field(API_VERSION_FIELD_NAME, INT16, "The version of the API."),
+            new Field(CORRELATION_ID_FIELD_NAME, INT32, "A user-supplied integer value that will be passed back with the response"),
+            new Field(CLIENT_ID_FIELD_NAME, NULLABLE_STRING, "A user specified identifier for the client making the request.", ""));
 
     // Version 0 of the controlled shutdown API used a non-standard request header (the clientId is missing).
     // This can be removed once we drop support for that version.
     private static final Schema CONTROLLED_SHUTDOWN_V0_SCHEMA = new Schema(
-            new FieldDef(API_KEY_FIELD_NAME, INT16, "The id of the request type."),
-            new FieldDef(API_VERSION_FIELD_NAME, INT16, "The version of the API."),
-            new FieldDef(CORRELATION_ID_FIELD_NAME, INT32, "A user-supplied integer value that will be passed back with the response"));
+            new Field(API_KEY_FIELD_NAME, INT16, "The id of the request type."),
+            new Field(API_VERSION_FIELD_NAME, INT16, "The version of the API."),
+            new Field(CORRELATION_ID_FIELD_NAME, INT32, "A user-supplied integer value that will be passed back with the response"));
 
     private final ApiKeys apiKey;
     private final short apiVersion;

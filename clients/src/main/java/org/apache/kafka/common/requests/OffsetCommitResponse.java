@@ -20,7 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.FieldDef;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
@@ -66,10 +66,10 @@ public class OffsetCommitResponse extends AbstractResponse {
 
     private static final Schema OFFSET_COMMIT_RESPONSE_TOPIC_V0 = new Schema(
             TOPIC_NAME,
-            new FieldDef(PARTITIONS_KEY_NAME, new ArrayOf(OFFSET_COMMIT_RESPONSE_PARTITION_V0)));
+            new Field(PARTITIONS_KEY_NAME, new ArrayOf(OFFSET_COMMIT_RESPONSE_PARTITION_V0)));
 
     private static final Schema OFFSET_COMMIT_RESPONSE_V0 = new Schema(
-            new FieldDef(RESPONSES_KEY_NAME, new ArrayOf(OFFSET_COMMIT_RESPONSE_TOPIC_V0)));
+            new Field(RESPONSES_KEY_NAME, new ArrayOf(OFFSET_COMMIT_RESPONSE_TOPIC_V0)));
 
 
     /* The response types for V0, V1 and V2 of OFFSET_COMMIT_REQUEST are the same. */
@@ -78,7 +78,7 @@ public class OffsetCommitResponse extends AbstractResponse {
 
     private static final Schema OFFSET_COMMIT_RESPONSE_V3 = new Schema(
             THROTTLE_TIME_MS,
-            new FieldDef(RESPONSES_KEY_NAME, new ArrayOf(OFFSET_COMMIT_RESPONSE_TOPIC_V0)));
+            new Field(RESPONSES_KEY_NAME, new ArrayOf(OFFSET_COMMIT_RESPONSE_TOPIC_V0)));
 
     public static Schema[] schemaVersions() {
         return new Schema[] {OFFSET_COMMIT_RESPONSE_V0, OFFSET_COMMIT_RESPONSE_V1, OFFSET_COMMIT_RESPONSE_V2,

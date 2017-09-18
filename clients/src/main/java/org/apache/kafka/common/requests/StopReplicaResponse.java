@@ -20,7 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.FieldDef;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -43,7 +43,7 @@ public class StopReplicaResponse extends AbstractResponse {
             ERROR_CODE);
     private static final Schema STOP_REPLICA_RESPONSE_V0 = new Schema(
             ERROR_CODE,
-            new FieldDef(PARTITIONS_KEY_NAME, new ArrayOf(STOP_REPLICA_RESPONSE_PARTITION_V0)));
+            new Field(PARTITIONS_KEY_NAME, new ArrayOf(STOP_REPLICA_RESPONSE_PARTITION_V0)));
 
     public static Schema[] schemaVersions() {
         return new Schema[] {STOP_REPLICA_RESPONSE_V0};

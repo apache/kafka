@@ -18,7 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.FieldDef;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.RecordBatch;
@@ -44,9 +44,9 @@ public class InitProducerIdResponse extends AbstractResponse {
     private static final Schema INIT_PRODUCER_ID_RESPONSE_V0 = new Schema(
             THROTTLE_TIME_MS,
             ERROR_CODE,
-            new FieldDef(PRODUCER_ID_KEY_NAME, INT64, "The producer id for the input transactional id. If the input " +
+            new Field(PRODUCER_ID_KEY_NAME, INT64, "The producer id for the input transactional id. If the input " +
                     "id was empty, then this is used only for ensuring idempotence of messages."),
-            new FieldDef(EPOCH_KEY_NAME, INT16, "The epoch for the producer id. Will always be 0 if no transactional " +
+            new Field(EPOCH_KEY_NAME, INT16, "The epoch for the producer id. Will always be 0 if no transactional " +
                     "id was specified in the request."));
 
     public static Schema[] schemaVersions() {

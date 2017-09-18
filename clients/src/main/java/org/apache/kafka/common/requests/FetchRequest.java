@@ -20,7 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.FieldDef;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -57,30 +57,30 @@ public class FetchRequest extends AbstractRequest {
 
     private static final Schema FETCH_REQUEST_PARTITION_V0 = new Schema(
             PARTITION_ID,
-            new FieldDef(FETCH_OFFSET_KEY_NAME, INT64, "Message offset."),
-            new FieldDef(MAX_BYTES_KEY_NAME, INT32, "Maximum bytes to fetch."));
+            new Field(FETCH_OFFSET_KEY_NAME, INT64, "Message offset."),
+            new Field(MAX_BYTES_KEY_NAME, INT32, "Maximum bytes to fetch."));
 
     // FETCH_REQUEST_PARTITION_V1 added log_start_offset field - the earliest available offset of partition data that can be consumed.
     private static final Schema FETCH_REQUEST_PARTITION_V5 = new Schema(
             PARTITION_ID,
-            new FieldDef(FETCH_OFFSET_KEY_NAME, INT64, "Message offset."),
-            new FieldDef(LOG_START_OFFSET_KEY_NAME, INT64, "Earliest available offset of the follower replica. " +
+            new Field(FETCH_OFFSET_KEY_NAME, INT64, "Message offset."),
+            new Field(LOG_START_OFFSET_KEY_NAME, INT64, "Earliest available offset of the follower replica. " +
                             "The field is only used when request is sent by follower. "),
-            new FieldDef(MAX_BYTES_KEY_NAME, INT32, "Maximum bytes to fetch."));
+            new Field(MAX_BYTES_KEY_NAME, INT32, "Maximum bytes to fetch."));
 
     private static final Schema FETCH_REQUEST_TOPIC_V0 = new Schema(
             TOPIC_NAME,
-            new FieldDef(PARTITIONS_KEY_NAME, new ArrayOf(FETCH_REQUEST_PARTITION_V0), "Partitions to fetch."));
+            new Field(PARTITIONS_KEY_NAME, new ArrayOf(FETCH_REQUEST_PARTITION_V0), "Partitions to fetch."));
 
     private static final Schema FETCH_REQUEST_TOPIC_V5 = new Schema(
             TOPIC_NAME,
-            new FieldDef(PARTITIONS_KEY_NAME, new ArrayOf(FETCH_REQUEST_PARTITION_V5), "Partitions to fetch."));
+            new Field(PARTITIONS_KEY_NAME, new ArrayOf(FETCH_REQUEST_PARTITION_V5), "Partitions to fetch."));
 
     private static final Schema FETCH_REQUEST_V0 = new Schema(
-            new FieldDef(REPLICA_ID_KEY_NAME, INT32, "Broker id of the follower. For normal consumers, use -1."),
-            new FieldDef(MAX_WAIT_KEY_NAME, INT32, "Maximum time in ms to wait for the response."),
-            new FieldDef(MIN_BYTES_KEY_NAME, INT32, "Minimum bytes to accumulate in the response."),
-            new FieldDef(TOPICS_KEY_NAME, new ArrayOf(FETCH_REQUEST_TOPIC_V0), "Topics to fetch."));
+            new Field(REPLICA_ID_KEY_NAME, INT32, "Broker id of the follower. For normal consumers, use -1."),
+            new Field(MAX_WAIT_KEY_NAME, INT32, "Maximum time in ms to wait for the response."),
+            new Field(MIN_BYTES_KEY_NAME, INT32, "Minimum bytes to accumulate in the response."),
+            new Field(TOPICS_KEY_NAME, new ArrayOf(FETCH_REQUEST_TOPIC_V0), "Topics to fetch."));
 
     // The V1 Fetch Request body is the same as V0.
     // Only the version number is incremented to indicate a newer client
@@ -92,45 +92,45 @@ public class FetchRequest extends AbstractRequest {
     // Fetch Request V3 added top level max_bytes field - the total size of partition data to accumulate in response.
     // The partition ordering is now relevant - partitions will be processed in order they appear in request.
     private static final Schema FETCH_REQUEST_V3 = new Schema(
-            new FieldDef(REPLICA_ID_KEY_NAME, INT32, "Broker id of the follower. For normal consumers, use -1."),
-            new FieldDef(MAX_WAIT_KEY_NAME, INT32, "Maximum time in ms to wait for the response."),
-            new FieldDef(MIN_BYTES_KEY_NAME, INT32, "Minimum bytes to accumulate in the response."),
-            new FieldDef(MAX_BYTES_KEY_NAME, INT32, "Maximum bytes to accumulate in the response. Note that this is not an absolute maximum, " +
+            new Field(REPLICA_ID_KEY_NAME, INT32, "Broker id of the follower. For normal consumers, use -1."),
+            new Field(MAX_WAIT_KEY_NAME, INT32, "Maximum time in ms to wait for the response."),
+            new Field(MIN_BYTES_KEY_NAME, INT32, "Minimum bytes to accumulate in the response."),
+            new Field(MAX_BYTES_KEY_NAME, INT32, "Maximum bytes to accumulate in the response. Note that this is not an absolute maximum, " +
                     "if the first message in the first non-empty partition of the fetch is larger than this " +
                     "value, the message will still be returned to ensure that progress can be made."),
-            new FieldDef(TOPICS_KEY_NAME, new ArrayOf(FETCH_REQUEST_TOPIC_V0), "Topics to fetch in the order provided."));
+            new Field(TOPICS_KEY_NAME, new ArrayOf(FETCH_REQUEST_TOPIC_V0), "Topics to fetch in the order provided."));
 
     // The V4 Fetch Request adds the fetch isolation level and exposes magic v2 (via the response).
     private static final Schema FETCH_REQUEST_V4 = new Schema(
-            new FieldDef(REPLICA_ID_KEY_NAME, INT32, "Broker id of the follower. For normal consumers, use -1."),
-            new FieldDef(MAX_WAIT_KEY_NAME, INT32, "Maximum time in ms to wait for the response."),
-            new FieldDef(MIN_BYTES_KEY_NAME, INT32, "Minimum bytes to accumulate in the response."),
-            new FieldDef(MAX_BYTES_KEY_NAME, INT32, "Maximum bytes to accumulate in the response. Note that this is not an absolute maximum, " +
+            new Field(REPLICA_ID_KEY_NAME, INT32, "Broker id of the follower. For normal consumers, use -1."),
+            new Field(MAX_WAIT_KEY_NAME, INT32, "Maximum time in ms to wait for the response."),
+            new Field(MIN_BYTES_KEY_NAME, INT32, "Minimum bytes to accumulate in the response."),
+            new Field(MAX_BYTES_KEY_NAME, INT32, "Maximum bytes to accumulate in the response. Note that this is not an absolute maximum, " +
                     "if the first message in the first non-empty partition of the fetch is larger than this " +
                     "value, the message will still be returned to ensure that progress can be made."),
-            new FieldDef(ISOLATION_LEVEL_KEY_NAME, INT8, "This setting controls the visibility of transactional records. Using READ_UNCOMMITTED " +
+            new Field(ISOLATION_LEVEL_KEY_NAME, INT8, "This setting controls the visibility of transactional records. Using READ_UNCOMMITTED " +
                     "(isolation_level = 0) makes all records visible. With READ_COMMITTED (isolation_level = 1), " +
                     "non-transactional and COMMITTED transactional records are visible. To be more concrete, " +
                     "READ_COMMITTED returns all data from offsets smaller than the current LSO (last stable offset), " +
                     "and enables the inclusion of the list of aborted transactions in the result, which allows " +
                     "consumers to discard ABORTED transactional records"),
-            new FieldDef(TOPICS_KEY_NAME, new ArrayOf(FETCH_REQUEST_TOPIC_V0), "Topics to fetch in the order provided."));
+            new Field(TOPICS_KEY_NAME, new ArrayOf(FETCH_REQUEST_TOPIC_V0), "Topics to fetch in the order provided."));
 
     // FETCH_REQUEST_V5 added a per-partition log_start_offset field - the earliest available offset of partition data that can be consumed.
     private static final Schema FETCH_REQUEST_V5 = new Schema(
-            new FieldDef(REPLICA_ID_KEY_NAME, INT32, "Broker id of the follower. For normal consumers, use -1."),
-            new FieldDef(MAX_WAIT_KEY_NAME, INT32, "Maximum time in ms to wait for the response."),
-            new FieldDef(MIN_BYTES_KEY_NAME, INT32, "Minimum bytes to accumulate in the response."),
-            new FieldDef(MAX_BYTES_KEY_NAME, INT32, "Maximum bytes to accumulate in the response. Note that this is not an absolute maximum, " +
+            new Field(REPLICA_ID_KEY_NAME, INT32, "Broker id of the follower. For normal consumers, use -1."),
+            new Field(MAX_WAIT_KEY_NAME, INT32, "Maximum time in ms to wait for the response."),
+            new Field(MIN_BYTES_KEY_NAME, INT32, "Minimum bytes to accumulate in the response."),
+            new Field(MAX_BYTES_KEY_NAME, INT32, "Maximum bytes to accumulate in the response. Note that this is not an absolute maximum, " +
                     "if the first message in the first non-empty partition of the fetch is larger than this " +
                     "value, the message will still be returned to ensure that progress can be made."),
-            new FieldDef(ISOLATION_LEVEL_KEY_NAME, INT8, "This setting controls the visibility of transactional records. Using READ_UNCOMMITTED " +
+            new Field(ISOLATION_LEVEL_KEY_NAME, INT8, "This setting controls the visibility of transactional records. Using READ_UNCOMMITTED " +
                     "(isolation_level = 0) makes all records visible. With READ_COMMITTED (isolation_level = 1), " +
                     "non-transactional and COMMITTED transactional records are visible. To be more concrete, " +
                     "READ_COMMITTED returns all data from offsets smaller than the current LSO (last stable offset), " +
                     "and enables the inclusion of the list of aborted transactions in the result, which allows " +
                     "consumers to discard ABORTED transactional records"),
-            new FieldDef(TOPICS_KEY_NAME, new ArrayOf(FETCH_REQUEST_TOPIC_V5), "Topics to fetch in the order provided."));
+            new Field(TOPICS_KEY_NAME, new ArrayOf(FETCH_REQUEST_TOPIC_V5), "Topics to fetch in the order provided."));
 
     /**
      * The body of FETCH_REQUEST_V6 is the same as FETCH_REQUEST_V5.

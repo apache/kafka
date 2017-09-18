@@ -19,7 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.FieldDef;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -40,20 +40,20 @@ public class FindCoordinatorResponse extends AbstractResponse {
     private static final String PORT_KEY_NAME = "port";
 
     private static final Schema FIND_COORDINATOR_BROKER_V0 = new Schema(
-            new FieldDef(NODE_ID_KEY_NAME, INT32, "The broker id."),
-            new FieldDef(HOST_KEY_NAME, STRING, "The hostname of the broker."),
-            new FieldDef(PORT_KEY_NAME, INT32, "The port on which the broker accepts requests."));
+            new Field(NODE_ID_KEY_NAME, INT32, "The broker id."),
+            new Field(HOST_KEY_NAME, STRING, "The hostname of the broker."),
+            new Field(PORT_KEY_NAME, INT32, "The port on which the broker accepts requests."));
 
     private static final Schema FIND_COORDINATOR_RESPONSE_V0 = new Schema(
             ERROR_CODE,
-            new FieldDef(COORDINATOR_KEY_NAME, FIND_COORDINATOR_BROKER_V0, "Host and port information for the coordinator " +
+            new Field(COORDINATOR_KEY_NAME, FIND_COORDINATOR_BROKER_V0, "Host and port information for the coordinator " +
                     "for a consumer group."));
 
     private static final Schema FIND_COORDINATOR_RESPONSE_V1 = new Schema(
             THROTTLE_TIME_MS,
             ERROR_CODE,
             ERROR_MESSAGE,
-            new FieldDef(COORDINATOR_KEY_NAME, FIND_COORDINATOR_BROKER_V0, "Host and port information for the coordinator"));
+            new Field(COORDINATOR_KEY_NAME, FIND_COORDINATOR_BROKER_V0, "Host and port information for the coordinator"));
 
     public static Schema[] schemaVersions() {
         return new Schema[] {FIND_COORDINATOR_RESPONSE_V0, FIND_COORDINATOR_RESPONSE_V1};

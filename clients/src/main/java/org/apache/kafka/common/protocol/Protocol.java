@@ -17,7 +17,7 @@
 package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.BoundField;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.common.requests.RequestHeader;
@@ -42,7 +42,7 @@ public class Protocol {
         final Map<String, Type> subTypes = new LinkedHashMap<>();
 
         // Top level fields
-        for (Field field: schema.fields()) {
+        for (BoundField field: schema.fields()) {
             if (field.def.type instanceof ArrayOf) {
                 b.append("[");
                 b.append(field.def.name);
@@ -78,8 +78,8 @@ public class Protocol {
         }
     }
 
-    private static void populateSchemaFields(Schema schema, Set<Field> fields) {
-        for (Field field: schema.fields()) {
+    private static void populateSchemaFields(Schema schema, Set<BoundField> fields) {
+        for (BoundField field: schema.fields()) {
             fields.add(field);
             if (field.def.type instanceof ArrayOf) {
                 Type innerType = ((ArrayOf) field.def.type).type();
@@ -91,7 +91,7 @@ public class Protocol {
     }
 
     private static void schemaToFieldTableHtml(Schema schema, StringBuilder b) {
-        Set<Field> fields = new LinkedHashSet<>();
+        Set<BoundField> fields = new LinkedHashSet<>();
         populateSchemaFields(schema, fields);
 
         b.append("<table class=\"data-table\"><tbody>\n");
@@ -99,7 +99,7 @@ public class Protocol {
         b.append("<th>Field</th>\n");
         b.append("<th>Description</th>\n");
         b.append("</tr>");
-        for (Field field : fields) {
+        for (BoundField field : fields) {
             b.append("<tr>\n");
             b.append("<td>");
             b.append(field.def.name);

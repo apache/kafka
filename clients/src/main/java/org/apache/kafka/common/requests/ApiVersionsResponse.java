@@ -19,7 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.FieldDef;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.RecordBatch;
@@ -42,16 +42,16 @@ public class ApiVersionsResponse extends AbstractResponse {
     private static final String MAX_VERSION_KEY_NAME = "max_version";
 
     private static final Schema API_VERSIONS_V0 = new Schema(
-            new FieldDef(API_KEY_NAME, INT16, "API key."),
-            new FieldDef(MIN_VERSION_KEY_NAME, INT16, "Minimum supported version."),
-            new FieldDef(MAX_VERSION_KEY_NAME, INT16, "Maximum supported version."));
+            new Field(API_KEY_NAME, INT16, "API key."),
+            new Field(MIN_VERSION_KEY_NAME, INT16, "Minimum supported version."),
+            new Field(MAX_VERSION_KEY_NAME, INT16, "Maximum supported version."));
 
     private static final Schema API_VERSIONS_RESPONSE_V0 = new Schema(
             ERROR_CODE,
-            new FieldDef(API_VERSIONS_KEY_NAME, new ArrayOf(API_VERSIONS_V0), "API versions supported by the broker."));
+            new Field(API_VERSIONS_KEY_NAME, new ArrayOf(API_VERSIONS_V0), "API versions supported by the broker."));
     private static final Schema API_VERSIONS_RESPONSE_V1 = new Schema(
             ERROR_CODE,
-            new FieldDef(API_VERSIONS_KEY_NAME, new ArrayOf(API_VERSIONS_V0), "API versions supported by the broker."),
+            new Field(API_VERSIONS_KEY_NAME, new ArrayOf(API_VERSIONS_V0), "API versions supported by the broker."),
             THROTTLE_TIME_MS);
 
     // initialized lazily to avoid circular initialization dependence with ApiKeys

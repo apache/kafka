@@ -18,7 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.FieldDef;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -39,7 +39,7 @@ public class SaslAuthenticateResponse extends AbstractResponse {
     private static final Schema SASL_AUTHENTICATE_RESPONSE_V0 = new Schema(
             ERROR_CODE,
             ERROR_MESSAGE,
-            new FieldDef(SASL_AUTH_BYTES_KEY_NAME, BYTES, "SASL authentication bytes from server as defined by the SASL mechanism."));
+            new Field(SASL_AUTH_BYTES_KEY_NAME, BYTES, "SASL authentication bytes from server as defined by the SASL mechanism."));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{SASL_AUTHENTICATE_RESPONSE_V0};

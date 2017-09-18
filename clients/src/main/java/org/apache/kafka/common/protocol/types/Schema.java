@@ -25,22 +25,22 @@ import java.util.Map;
  */
 public class Schema extends Type {
 
-    private final Field[] fields;
-    private final Map<String, Field> fieldsByName;
+    private final BoundField[] fields;
+    private final Map<String, BoundField> fieldsByName;
 
     /**
      * Construct the schema with a given list of its field values
      *
      * @throws SchemaException If the given list have duplicate fields
      */
-    public Schema(FieldDef... fs) {
-        this.fields = new Field[fs.length];
+    public Schema(Field... fs) {
+        this.fields = new BoundField[fs.length];
         this.fieldsByName = new HashMap<>();
         for (int i = 0; i < this.fields.length; i++) {
-            FieldDef def = fs[i];
+            Field def = fs[i];
             if (fieldsByName.containsKey(def.name))
                 throw new SchemaException("Schema contains a duplicate field: " + def.name);
-            this.fields[i] = new Field(def, this, i);
+            this.fields[i] = new BoundField(def, this, i);
             this.fieldsByName.put(def.name, this.fields[i]);
         }
     }
@@ -51,7 +51,7 @@ public class Schema extends Type {
     @Override
     public void write(ByteBuffer buffer, Object o) {
         Struct r = (Struct) o;
-        for (Field field : fields) {
+        for (BoundField field : fields) {
             try {
                 Object value = field.def.type.validate(r.get(field));
                 field.def.type.write(buffer, value);
@@ -86,7 +86,7 @@ public class Schema extends Type {
     public int sizeOf(Object o) {
         int size = 0;
         Struct r = (Struct) o;
-        for (Field field : fields) {
+        for (BoundField field : fields) {
             try {
                 size += field.def.type.sizeOf(r.get(field));
             } catch (Exception e) {
@@ -110,7 +110,7 @@ public class Schema extends Type {
      * @param slot The slot at which this field sits
      * @return The field
      */
-    public Field get(int slot) {
+    public BoundField get(int slot) {
         return this.fields[slot];
     }
 
@@ -120,14 +120,14 @@ public class Schema extends Type {
      * @param name The name of the field
      * @return The field
      */
-    public Field get(String name) {
+    public BoundField get(String name) {
         return this.fieldsByName.get(name);
     }
 
     /**
      * Get all the fields in this schema
      */
-    public Field[] fields() {
+    public BoundField[] fields() {
         return this.fields;
     }
 
@@ -151,7 +151,7 @@ public class Schema extends Type {
     public Struct validate(Object item) {
         try {
             Struct struct = (Struct) item;
-            for (Field field : fields) {
+            for (BoundField field : fields) {
                 try {
                     field.def.type.validate(struct.get(field));
                 } catch (SchemaException e) {

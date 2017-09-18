@@ -21,7 +21,7 @@ import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.FieldDef;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.Resource;
@@ -50,7 +50,7 @@ public class DescribeAclsResponse extends AbstractResponse {
     private static final Schema DESCRIBE_ACLS_RESOURCE = new Schema(
             RESOURCE_TYPE,
             RESOURCE_NAME,
-            new FieldDef(ACLS_KEY_NAME, new ArrayOf(new Schema(
+            new Field(ACLS_KEY_NAME, new ArrayOf(new Schema(
                     PRINCIPAL,
                     HOST,
                     OPERATION,
@@ -60,7 +60,7 @@ public class DescribeAclsResponse extends AbstractResponse {
             THROTTLE_TIME_MS,
             ERROR_CODE,
             ERROR_MESSAGE,
-            new FieldDef(RESOURCES_KEY_NAME, new ArrayOf(DESCRIBE_ACLS_RESOURCE), "The resources and their associated ACLs."));
+            new Field(RESOURCES_KEY_NAME, new ArrayOf(DESCRIBE_ACLS_RESOURCE), "The resources and their associated ACLs."));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{DESCRIBE_ACLS_RESPONSE_V0};

@@ -20,7 +20,7 @@ import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.FieldDef;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.Resource;
@@ -60,11 +60,11 @@ public class DeleteAclsResponse extends AbstractResponse {
 
     private static final Schema DELETE_ACLS_RESPONSE_V0 = new Schema(
             THROTTLE_TIME_MS,
-            new FieldDef(FILTER_RESPONSES_KEY_NAME,
+            new Field(FILTER_RESPONSES_KEY_NAME,
                     new ArrayOf(new Schema(
                             ERROR_CODE,
                             ERROR_MESSAGE,
-                            new FieldDef(MATCHING_ACLS_KEY_NAME, new ArrayOf(MATCHING_ACL), "The matching ACLs")))));
+                            new Field(MATCHING_ACLS_KEY_NAME, new ArrayOf(MATCHING_ACL), "The matching ACLs")))));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{DELETE_ACLS_RESPONSE_V0};

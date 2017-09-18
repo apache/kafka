@@ -20,7 +20,7 @@ import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.FieldDef;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.ResourceFilter;
@@ -43,7 +43,7 @@ public class DeleteAclsRequest extends AbstractRequest {
     private final static String FILTERS = "filters";
 
     private static final Schema DELETE_ACLS_REQUEST_V0 = new Schema(
-            new FieldDef(FILTERS, new ArrayOf(new Schema(
+            new Field(FILTERS, new ArrayOf(new Schema(
                     RESOURCE_TYPE,
                     RESOURCE_NAME_FILTER,
                     PRINCIPAL_FILTER,

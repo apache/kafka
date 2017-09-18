@@ -19,7 +19,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.FieldDef;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -44,12 +44,12 @@ public class AlterConfigsResponse extends AbstractResponse {
     private static final Schema ALTER_CONFIGS_RESPONSE_ENTITY_V0 = new Schema(
             ERROR_CODE,
             ERROR_MESSAGE,
-            new FieldDef(RESOURCE_TYPE_KEY_NAME, INT8),
-            new FieldDef(RESOURCE_NAME_KEY_NAME, STRING));
+            new Field(RESOURCE_TYPE_KEY_NAME, INT8),
+            new Field(RESOURCE_NAME_KEY_NAME, STRING));
 
     private static final Schema ALTER_CONFIGS_RESPONSE_V0 = new Schema(
             THROTTLE_TIME_MS,
-            new FieldDef(RESOURCES_KEY_NAME, new ArrayOf(ALTER_CONFIGS_RESPONSE_ENTITY_V0)));
+            new Field(RESOURCES_KEY_NAME, new ArrayOf(ALTER_CONFIGS_RESPONSE_ENTITY_V0)));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{ALTER_CONFIGS_RESPONSE_V0};

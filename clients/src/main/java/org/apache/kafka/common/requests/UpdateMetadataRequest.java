@@ -23,7 +23,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.FieldDef;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.Utils;
@@ -73,56 +73,56 @@ public class UpdateMetadataRequest extends AbstractRequest {
     private static final Schema UPDATE_METADATA_REQUEST_PARTITION_STATE_V0 = new Schema(
                     TOPIC_NAME,
                     PARTITION_ID,
-                    new FieldDef(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
-                    new FieldDef(LEADER_KEY_NAME, INT32, "The broker id for the leader."),
-                    new FieldDef(LEADER_EPOCH_KEY_NAME, INT32, "The leader epoch."),
-                    new FieldDef(ISR_KEY_NAME, new ArrayOf(INT32), "The in sync replica ids."),
-                    new FieldDef(ZK_VERSION_KEY_NAME, INT32, "The ZK version."),
-                    new FieldDef(REPLICAS_KEY_NAME, new ArrayOf(INT32), "The replica ids."));
+                    new Field(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
+                    new Field(LEADER_KEY_NAME, INT32, "The broker id for the leader."),
+                    new Field(LEADER_EPOCH_KEY_NAME, INT32, "The leader epoch."),
+                    new Field(ISR_KEY_NAME, new ArrayOf(INT32), "The in sync replica ids."),
+                    new Field(ZK_VERSION_KEY_NAME, INT32, "The ZK version."),
+                    new Field(REPLICAS_KEY_NAME, new ArrayOf(INT32), "The replica ids."));
 
     private static final Schema UPDATE_METADATA_REQUEST_BROKER_V0 = new Schema(
-            new FieldDef(BROKER_ID_KEY_NAME, INT32, "The broker id."),
-            new FieldDef(HOST_KEY_NAME, STRING, "The hostname of the broker."),
-            new FieldDef(PORT_KEY_NAME, INT32, "The port on which the broker accepts requests."));
+            new Field(BROKER_ID_KEY_NAME, INT32, "The broker id."),
+            new Field(HOST_KEY_NAME, STRING, "The hostname of the broker."),
+            new Field(PORT_KEY_NAME, INT32, "The port on which the broker accepts requests."));
 
     private static final Schema UPDATE_METADATA_REQUEST_V0 = new Schema(
-            new FieldDef(CONTROLLER_ID_KEY_NAME, INT32, "The controller id."),
-            new FieldDef(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
-            new FieldDef(PARTITION_STATES_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_PARTITION_STATE_V0)),
-            new FieldDef(LIVE_BROKERS_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_BROKER_V0)));
+            new Field(CONTROLLER_ID_KEY_NAME, INT32, "The controller id."),
+            new Field(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
+            new Field(PARTITION_STATES_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_PARTITION_STATE_V0)),
+            new Field(LIVE_BROKERS_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_BROKER_V0)));
 
     private static final Schema UPDATE_METADATA_REQUEST_PARTITION_STATE_V1 = UPDATE_METADATA_REQUEST_PARTITION_STATE_V0;
 
     // for some reason, V1 sends `port` before `host` while V0 sends `host` before `port
     private static final Schema UPDATE_METADATA_REQUEST_END_POINT_V1 = new Schema(
-            new FieldDef(PORT_KEY_NAME, INT32, "The port on which the broker accepts requests."),
-            new FieldDef(HOST_KEY_NAME, STRING, "The hostname of the broker."),
-            new FieldDef(SECURITY_PROTOCOL_TYPE_KEY_NAME, INT16, "The security protocol type."));
+            new Field(PORT_KEY_NAME, INT32, "The port on which the broker accepts requests."),
+            new Field(HOST_KEY_NAME, STRING, "The hostname of the broker."),
+            new Field(SECURITY_PROTOCOL_TYPE_KEY_NAME, INT16, "The security protocol type."));
 
     private static final Schema UPDATE_METADATA_REQUEST_BROKER_V1 = new Schema(
-            new FieldDef(BROKER_ID_KEY_NAME, INT32, "The broker id."),
-            new FieldDef(ENDPOINTS_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_END_POINT_V1)));
+            new Field(BROKER_ID_KEY_NAME, INT32, "The broker id."),
+            new Field(ENDPOINTS_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_END_POINT_V1)));
 
     private static final Schema UPDATE_METADATA_REQUEST_V1 = new Schema(
-            new FieldDef(CONTROLLER_ID_KEY_NAME, INT32, "The controller id."),
-            new FieldDef(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
-            new FieldDef(PARTITION_STATES_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_PARTITION_STATE_V1)),
-            new FieldDef(LIVE_BROKERS_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_BROKER_V1)));
+            new Field(CONTROLLER_ID_KEY_NAME, INT32, "The controller id."),
+            new Field(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
+            new Field(PARTITION_STATES_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_PARTITION_STATE_V1)),
+            new Field(LIVE_BROKERS_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_BROKER_V1)));
 
     private static final Schema UPDATE_METADATA_REQUEST_PARTITION_STATE_V2 = UPDATE_METADATA_REQUEST_PARTITION_STATE_V1;
 
     private static final Schema UPDATE_METADATA_REQUEST_END_POINT_V2 = UPDATE_METADATA_REQUEST_END_POINT_V1;
 
     private static final Schema UPDATE_METADATA_REQUEST_BROKER_V2 = new Schema(
-            new FieldDef(BROKER_ID_KEY_NAME, INT32, "The broker id."),
-            new FieldDef(ENDPOINTS_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_END_POINT_V2)),
-            new FieldDef(RACK_KEY_NAME, NULLABLE_STRING, "The rack"));
+            new Field(BROKER_ID_KEY_NAME, INT32, "The broker id."),
+            new Field(ENDPOINTS_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_END_POINT_V2)),
+            new Field(RACK_KEY_NAME, NULLABLE_STRING, "The rack"));
 
     private static final Schema UPDATE_METADATA_REQUEST_V2 = new Schema(
-            new FieldDef(CONTROLLER_ID_KEY_NAME, INT32, "The controller id."),
-            new FieldDef(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
-            new FieldDef(PARTITION_STATES_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_PARTITION_STATE_V2)),
-            new FieldDef(LIVE_BROKERS_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_BROKER_V2)));
+            new Field(CONTROLLER_ID_KEY_NAME, INT32, "The controller id."),
+            new Field(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
+            new Field(PARTITION_STATES_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_PARTITION_STATE_V2)),
+            new Field(LIVE_BROKERS_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_BROKER_V2)));
 
     private static final Schema UPDATE_METADATA_REQUEST_PARTITION_STATE_V3 = UPDATE_METADATA_REQUEST_PARTITION_STATE_V2;
 
@@ -130,37 +130,37 @@ public class UpdateMetadataRequest extends AbstractRequest {
     private static final Schema UPDATE_METADATA_REQUEST_PARTITION_STATE_V4 = new Schema(
             TOPIC_NAME,
             PARTITION_ID,
-            new FieldDef(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
-            new FieldDef(LEADER_KEY_NAME, INT32, "The broker id for the leader."),
-            new FieldDef(LEADER_EPOCH_KEY_NAME, INT32, "The leader epoch."),
-            new FieldDef(ISR_KEY_NAME, new ArrayOf(INT32), "The in sync replica ids."),
-            new FieldDef(ZK_VERSION_KEY_NAME, INT32, "The ZK version."),
-            new FieldDef(REPLICAS_KEY_NAME, new ArrayOf(INT32), "The replica ids."),
-            new FieldDef(OFFLINE_REPLICAS_KEY_NAME, new ArrayOf(INT32), "The offline replica ids"));
+            new Field(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
+            new Field(LEADER_KEY_NAME, INT32, "The broker id for the leader."),
+            new Field(LEADER_EPOCH_KEY_NAME, INT32, "The leader epoch."),
+            new Field(ISR_KEY_NAME, new ArrayOf(INT32), "The in sync replica ids."),
+            new Field(ZK_VERSION_KEY_NAME, INT32, "The ZK version."),
+            new Field(REPLICAS_KEY_NAME, new ArrayOf(INT32), "The replica ids."),
+            new Field(OFFLINE_REPLICAS_KEY_NAME, new ArrayOf(INT32), "The offline replica ids"));
 
     private static final Schema UPDATE_METADATA_REQUEST_END_POINT_V3 = new Schema(
-            new FieldDef(PORT_KEY_NAME, INT32, "The port on which the broker accepts requests."),
-            new FieldDef(HOST_KEY_NAME, STRING, "The hostname of the broker."),
-            new FieldDef(LISTENER_NAME_KEY_NAME, STRING, "The listener name."),
-            new FieldDef(SECURITY_PROTOCOL_TYPE_KEY_NAME, INT16, "The security protocol type."));
+            new Field(PORT_KEY_NAME, INT32, "The port on which the broker accepts requests."),
+            new Field(HOST_KEY_NAME, STRING, "The hostname of the broker."),
+            new Field(LISTENER_NAME_KEY_NAME, STRING, "The listener name."),
+            new Field(SECURITY_PROTOCOL_TYPE_KEY_NAME, INT16, "The security protocol type."));
 
     private static final Schema UPDATE_METADATA_REQUEST_BROKER_V3 = new Schema(
-            new FieldDef(BROKER_ID_KEY_NAME, INT32, "The broker id."),
-            new FieldDef(ENDPOINTS_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_END_POINT_V3)),
-            new FieldDef(RACK_KEY_NAME, NULLABLE_STRING, "The rack"));
+            new Field(BROKER_ID_KEY_NAME, INT32, "The broker id."),
+            new Field(ENDPOINTS_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_END_POINT_V3)),
+            new Field(RACK_KEY_NAME, NULLABLE_STRING, "The rack"));
 
     private static final Schema UPDATE_METADATA_REQUEST_V3 = new Schema(
-            new FieldDef(CONTROLLER_ID_KEY_NAME, INT32, "The controller id."),
-            new FieldDef(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
-            new FieldDef(PARTITION_STATES_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_PARTITION_STATE_V3)),
-            new FieldDef(LIVE_BROKERS_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_BROKER_V3)));
+            new Field(CONTROLLER_ID_KEY_NAME, INT32, "The controller id."),
+            new Field(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
+            new Field(PARTITION_STATES_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_PARTITION_STATE_V3)),
+            new Field(LIVE_BROKERS_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_BROKER_V3)));
 
     // UPDATE_METADATA_REQUEST_V4 added a per-partition offline_replicas field. This field specifies the list of replicas that are offline.
     private static final Schema UPDATE_METADATA_REQUEST_V4 = new Schema(
-            new FieldDef(CONTROLLER_ID_KEY_NAME, INT32, "The controller id."),
-            new FieldDef(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
-            new FieldDef(PARTITION_STATES_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_PARTITION_STATE_V4)),
-            new FieldDef(LIVE_BROKERS_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_BROKER_V3)));
+            new Field(CONTROLLER_ID_KEY_NAME, INT32, "The controller id."),
+            new Field(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
+            new Field(PARTITION_STATES_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_PARTITION_STATE_V4)),
+            new Field(LIVE_BROKERS_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_BROKER_V3)));
 
     public static Schema[] schemaVersions() {
         return new Schema[] {UPDATE_METADATA_REQUEST_V0, UPDATE_METADATA_REQUEST_V1, UPDATE_METADATA_REQUEST_V2,

@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.protocol.types.BoundField;
 import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -30,8 +30,8 @@ import static org.apache.kafka.common.protocol.types.Type.INT32;
  */
 public class ResponseHeader extends AbstractRequestResponse {
     public static final Schema SCHEMA = new Schema(
-            new FieldDef("correlation_id", INT32, "The user-supplied value passed in with the request"));
-    private static final Field CORRELATION_KEY_FIELD = SCHEMA.get("correlation_id");
+            new Field("correlation_id", INT32, "The user-supplied value passed in with the request"));
+    private static final BoundField CORRELATION_KEY_FIELD = SCHEMA.get("correlation_id");
 
     private final int correlationId;
 

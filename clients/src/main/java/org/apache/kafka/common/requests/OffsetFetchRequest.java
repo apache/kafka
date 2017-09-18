@@ -21,7 +21,7 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.FieldDef;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
@@ -60,17 +60,17 @@ public class OffsetFetchRequest extends AbstractRequest {
 
     private static final Schema OFFSET_FETCH_REQUEST_TOPIC_V0 = new Schema(
             TOPIC_NAME,
-            new FieldDef(PARTITIONS_KEY_NAME, new ArrayOf(OFFSET_FETCH_REQUEST_PARTITION_V0), "Partitions to fetch offsets."));
+            new Field(PARTITIONS_KEY_NAME, new ArrayOf(OFFSET_FETCH_REQUEST_PARTITION_V0), "Partitions to fetch offsets."));
 
     private static final Schema OFFSET_FETCH_REQUEST_V0 = new Schema(
-            new FieldDef(GROUP_ID_KEY_NAME, STRING, "The consumer group id."),
-            new FieldDef(TOPICS_KEY_NAME, new ArrayOf(OFFSET_FETCH_REQUEST_TOPIC_V0), "Topics to fetch offsets."));
+            new Field(GROUP_ID_KEY_NAME, STRING, "The consumer group id."),
+            new Field(TOPICS_KEY_NAME, new ArrayOf(OFFSET_FETCH_REQUEST_TOPIC_V0), "Topics to fetch offsets."));
 
     private static final Schema OFFSET_FETCH_REQUEST_V1 = OFFSET_FETCH_REQUEST_V0;
 
     private static final Schema OFFSET_FETCH_REQUEST_V2 = new Schema(
-            new FieldDef(GROUP_ID_KEY_NAME, STRING, "The consumer group id."),
-            new FieldDef(TOPICS_KEY_NAME, ArrayOf.nullable(OFFSET_FETCH_REQUEST_TOPIC_V0), "Topics to fetch offsets. If the " +
+            new Field(GROUP_ID_KEY_NAME, STRING, "The consumer group id."),
+            new Field(TOPICS_KEY_NAME, ArrayOf.nullable(OFFSET_FETCH_REQUEST_TOPIC_V0), "Topics to fetch offsets. If the " +
                     "topic array is null fetch offsets for all topics."));
 
     /* v3 request is the same as v2. Throttle time has been added to v3 response */

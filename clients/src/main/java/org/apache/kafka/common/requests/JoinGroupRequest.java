@@ -19,7 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.FieldDef;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.Utils;
@@ -45,27 +45,27 @@ public class JoinGroupRequest extends AbstractRequest {
 
     /* Join group api */
     private static final Schema JOIN_GROUP_REQUEST_PROTOCOL_V0 = new Schema(
-            new FieldDef(PROTOCOL_NAME_KEY_NAME, STRING),
-            new FieldDef(PROTOCOL_METADATA_KEY_NAME, BYTES));
+            new Field(PROTOCOL_NAME_KEY_NAME, STRING),
+            new Field(PROTOCOL_METADATA_KEY_NAME, BYTES));
 
     private static final Schema JOIN_GROUP_REQUEST_V0 = new Schema(
-            new FieldDef(GROUP_ID_KEY_NAME, STRING, "The group id."),
-            new FieldDef(SESSION_TIMEOUT_KEY_NAME, INT32, "The coordinator considers the consumer dead if it receives " +
+            new Field(GROUP_ID_KEY_NAME, STRING, "The group id."),
+            new Field(SESSION_TIMEOUT_KEY_NAME, INT32, "The coordinator considers the consumer dead if it receives " +
                     "no heartbeat after this timeout in ms."),
-            new FieldDef(MEMBER_ID_KEY_NAME, STRING, "The assigned consumer id or an empty string for a new consumer."),
-            new FieldDef(PROTOCOL_TYPE_KEY_NAME, STRING, "Unique name for class of protocols implemented by group"),
-            new FieldDef(GROUP_PROTOCOLS_KEY_NAME, new ArrayOf(JOIN_GROUP_REQUEST_PROTOCOL_V0), "List of protocols " +
+            new Field(MEMBER_ID_KEY_NAME, STRING, "The assigned consumer id or an empty string for a new consumer."),
+            new Field(PROTOCOL_TYPE_KEY_NAME, STRING, "Unique name for class of protocols implemented by group"),
+            new Field(GROUP_PROTOCOLS_KEY_NAME, new ArrayOf(JOIN_GROUP_REQUEST_PROTOCOL_V0), "List of protocols " +
                     "that the member supports"));
 
     private static final Schema JOIN_GROUP_REQUEST_V1 = new Schema(
-            new FieldDef(GROUP_ID_KEY_NAME, STRING, "The group id."),
-            new FieldDef(SESSION_TIMEOUT_KEY_NAME, INT32, "The coordinator considers the consumer dead if it receives no " +
+            new Field(GROUP_ID_KEY_NAME, STRING, "The group id."),
+            new Field(SESSION_TIMEOUT_KEY_NAME, INT32, "The coordinator considers the consumer dead if it receives no " +
                     "heartbeat after this timeout in ms."),
-            new FieldDef(REBALANCE_TIMEOUT_KEY_NAME, INT32, "The maximum time that the coordinator will wait for each " +
+            new Field(REBALANCE_TIMEOUT_KEY_NAME, INT32, "The maximum time that the coordinator will wait for each " +
                     "member to rejoin when rebalancing the group"),
-            new FieldDef(MEMBER_ID_KEY_NAME, STRING, "The assigned consumer id or an empty string for a new consumer."),
-            new FieldDef(PROTOCOL_TYPE_KEY_NAME, STRING, "Unique name for class of protocols implemented by group"),
-            new FieldDef(GROUP_PROTOCOLS_KEY_NAME, new ArrayOf(JOIN_GROUP_REQUEST_PROTOCOL_V0), "List of protocols " +
+            new Field(MEMBER_ID_KEY_NAME, STRING, "The assigned consumer id or an empty string for a new consumer."),
+            new Field(PROTOCOL_TYPE_KEY_NAME, STRING, "Unique name for class of protocols implemented by group"),
+            new Field(GROUP_PROTOCOLS_KEY_NAME, new ArrayOf(JOIN_GROUP_REQUEST_PROTOCOL_V0), "List of protocols " +
                     "that the member supports"));
 
     /* v2 request is the same as v1. Throttle time has been added to response */

@@ -18,7 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.FieldDef;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -35,7 +35,7 @@ public class CreateAclsResponse extends AbstractResponse {
 
     private static final Schema CREATE_ACLS_RESPONSE_V0 = new Schema(
             THROTTLE_TIME_MS,
-            new FieldDef(CREATION_RESPONSES_KEY_NAME, new ArrayOf(new Schema(
+            new Field(CREATION_RESPONSES_KEY_NAME, new ArrayOf(new Schema(
                     ERROR_CODE,
                     ERROR_MESSAGE))));
 

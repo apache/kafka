@@ -20,7 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.FieldDef;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
@@ -65,30 +65,30 @@ public class ListOffsetResponse extends AbstractResponse {
     private static final Schema LIST_OFFSET_RESPONSE_PARTITION_V0 = new Schema(
             PARTITION_ID,
             ERROR_CODE,
-            new FieldDef(OFFSETS_KEY_NAME, new ArrayOf(INT64), "A list of offsets."));
+            new Field(OFFSETS_KEY_NAME, new ArrayOf(INT64), "A list of offsets."));
 
     private static final Schema LIST_OFFSET_RESPONSE_PARTITION_V1 = new Schema(
             PARTITION_ID,
             ERROR_CODE,
-            new FieldDef(TIMESTAMP_KEY_NAME, INT64, "The timestamp associated with the returned offset"),
-            new FieldDef(OFFSET_KEY_NAME, INT64, "offset found"));
+            new Field(TIMESTAMP_KEY_NAME, INT64, "The timestamp associated with the returned offset"),
+            new Field(OFFSET_KEY_NAME, INT64, "offset found"));
 
     private static final Schema LIST_OFFSET_RESPONSE_TOPIC_V0 = new Schema(
             TOPIC_NAME,
-            new FieldDef(PARTITIONS_KEY_NAME, new ArrayOf(LIST_OFFSET_RESPONSE_PARTITION_V0)));
+            new Field(PARTITIONS_KEY_NAME, new ArrayOf(LIST_OFFSET_RESPONSE_PARTITION_V0)));
 
     private static final Schema LIST_OFFSET_RESPONSE_TOPIC_V1 = new Schema(
             TOPIC_NAME,
-            new FieldDef(PARTITIONS_KEY_NAME, new ArrayOf(LIST_OFFSET_RESPONSE_PARTITION_V1)));
+            new Field(PARTITIONS_KEY_NAME, new ArrayOf(LIST_OFFSET_RESPONSE_PARTITION_V1)));
 
     private static final Schema LIST_OFFSET_RESPONSE_V0 = new Schema(
-            new FieldDef(RESPONSES_KEY_NAME, new ArrayOf(LIST_OFFSET_RESPONSE_TOPIC_V0)));
+            new Field(RESPONSES_KEY_NAME, new ArrayOf(LIST_OFFSET_RESPONSE_TOPIC_V0)));
 
     private static final Schema LIST_OFFSET_RESPONSE_V1 = new Schema(
-            new FieldDef(RESPONSES_KEY_NAME, new ArrayOf(LIST_OFFSET_RESPONSE_TOPIC_V1)));
+            new Field(RESPONSES_KEY_NAME, new ArrayOf(LIST_OFFSET_RESPONSE_TOPIC_V1)));
     private static final Schema LIST_OFFSET_RESPONSE_V2 = new Schema(
             THROTTLE_TIME_MS,
-            new FieldDef(RESPONSES_KEY_NAME, new ArrayOf(LIST_OFFSET_RESPONSE_TOPIC_V1)));
+            new Field(RESPONSES_KEY_NAME, new ArrayOf(LIST_OFFSET_RESPONSE_TOPIC_V1)));
 
     public static Schema[] schemaVersions() {
         return new Schema[] {LIST_OFFSET_RESPONSE_V0, LIST_OFFSET_RESPONSE_V1, LIST_OFFSET_RESPONSE_V2};

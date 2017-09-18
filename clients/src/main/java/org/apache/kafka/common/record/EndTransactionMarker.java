@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.record;
 
-import org.apache.kafka.common.protocol.types.FieldDef;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
@@ -35,8 +35,8 @@ public class EndTransactionMarker {
 
     private static final short CURRENT_END_TXN_MARKER_VERSION = 0;
     private static final Schema END_TXN_MARKER_SCHEMA_VERSION_V0 = new Schema(
-            new FieldDef("version", Type.INT16),
-            new FieldDef("coordinator_epoch", Type.INT32));
+            new Field("version", Type.INT16),
+            new Field("coordinator_epoch", Type.INT32));
     static final int CURRENT_END_TXN_MARKER_VALUE_SIZE = 6;
     static final int CURRENT_END_TXN_SCHEMA_RECORD_SIZE = DefaultRecord.sizeInBytes(0, 0L,
             ControlRecordType.CURRENT_CONTROL_RECORD_KEY_SIZE,

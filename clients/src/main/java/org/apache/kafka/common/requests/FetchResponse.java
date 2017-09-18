@@ -23,7 +23,7 @@ import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.FieldDef;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.Records;
@@ -67,21 +67,21 @@ public class FetchResponse extends AbstractResponse {
     private static final Schema FETCH_RESPONSE_PARTITION_HEADER_V0 = new Schema(
             PARTITION_ID,
             ERROR_CODE,
-            new FieldDef(HIGH_WATERMARK_KEY_NAME, INT64, "Last committed offset."));
+            new Field(HIGH_WATERMARK_KEY_NAME, INT64, "Last committed offset."));
     private static final Schema FETCH_RESPONSE_PARTITION_V0 = new Schema(
-            new FieldDef(PARTITION_HEADER_KEY_NAME, FETCH_RESPONSE_PARTITION_HEADER_V0),
-            new FieldDef(RECORD_SET_KEY_NAME, RECORDS));
+            new Field(PARTITION_HEADER_KEY_NAME, FETCH_RESPONSE_PARTITION_HEADER_V0),
+            new Field(RECORD_SET_KEY_NAME, RECORDS));
 
     private static final Schema FETCH_RESPONSE_TOPIC_V0 = new Schema(
             TOPIC_NAME,
-            new FieldDef(PARTITIONS_KEY_NAME, new ArrayOf(FETCH_RESPONSE_PARTITION_V0)));
+            new Field(PARTITIONS_KEY_NAME, new ArrayOf(FETCH_RESPONSE_PARTITION_V0)));
 
     private static final Schema FETCH_RESPONSE_V0 = new Schema(
-            new FieldDef(RESPONSES_KEY_NAME, new ArrayOf(FETCH_RESPONSE_TOPIC_V0)));
+            new Field(RESPONSES_KEY_NAME, new ArrayOf(FETCH_RESPONSE_TOPIC_V0)));
 
     private static final Schema FETCH_RESPONSE_V1 = new Schema(
             THROTTLE_TIME_MS,
-            new FieldDef(RESPONSES_KEY_NAME, new ArrayOf(FETCH_RESPONSE_TOPIC_V0)));
+            new Field(RESPONSES_KEY_NAME, new ArrayOf(FETCH_RESPONSE_TOPIC_V0)));
     // Even though fetch response v2 has the same protocol as v1, the record set in the response is different. In v1,
     // record set only includes messages of v0 (magic byte 0). In v2, record set can include messages of v0 and v1
     // (magic byte 0 and 1). For details, see ByteBufferMessageSet.
@@ -91,52 +91,52 @@ public class FetchResponse extends AbstractResponse {
     // The v4 Fetch Response adds features for transactional consumption (the aborted transaction list and the
     // last stable offset). It also exposes messages with magic v2 (along with older formats).
     private static final Schema FETCH_RESPONSE_ABORTED_TRANSACTION_V4 = new Schema(
-            new FieldDef(PRODUCER_ID_KEY_NAME, INT64, "The producer id associated with the aborted transactions"),
-            new FieldDef(FIRST_OFFSET_KEY_NAME, INT64, "The first offset in the aborted transaction"));
+            new Field(PRODUCER_ID_KEY_NAME, INT64, "The producer id associated with the aborted transactions"),
+            new Field(FIRST_OFFSET_KEY_NAME, INT64, "The first offset in the aborted transaction"));
 
     private static final Schema FETCH_RESPONSE_ABORTED_TRANSACTION_V5 = FETCH_RESPONSE_ABORTED_TRANSACTION_V4;
 
     private static final Schema FETCH_RESPONSE_PARTITION_HEADER_V4 = new Schema(
             PARTITION_ID,
             ERROR_CODE,
-            new FieldDef(HIGH_WATERMARK_KEY_NAME, INT64, "Last committed offset."),
-            new FieldDef(LAST_STABLE_OFFSET_KEY_NAME, INT64, "The last stable offset (or LSO) of the partition. This is the last offset such that the state " +
+            new Field(HIGH_WATERMARK_KEY_NAME, INT64, "Last committed offset."),
+            new Field(LAST_STABLE_OFFSET_KEY_NAME, INT64, "The last stable offset (or LSO) of the partition. This is the last offset such that the state " +
                     "of all transactional records prior to this offset have been decided (ABORTED or COMMITTED)"),
-            new FieldDef(ABORTED_TRANSACTIONS_KEY_NAME, ArrayOf.nullable(FETCH_RESPONSE_ABORTED_TRANSACTION_V4)));
+            new Field(ABORTED_TRANSACTIONS_KEY_NAME, ArrayOf.nullable(FETCH_RESPONSE_ABORTED_TRANSACTION_V4)));
 
     // FETCH_RESPONSE_PARTITION_HEADER_V5 added log_start_offset field - the earliest available offset of partition data that can be consumed.
     private static final Schema FETCH_RESPONSE_PARTITION_HEADER_V5 = new Schema(
             PARTITION_ID,
             ERROR_CODE,
-            new FieldDef(HIGH_WATERMARK_KEY_NAME, INT64, "Last committed offset."),
-            new FieldDef(LAST_STABLE_OFFSET_KEY_NAME, INT64, "The last stable offset (or LSO) of the partition. This is the last offset such that the state " +
+            new Field(HIGH_WATERMARK_KEY_NAME, INT64, "Last committed offset."),
+            new Field(LAST_STABLE_OFFSET_KEY_NAME, INT64, "The last stable offset (or LSO) of the partition. This is the last offset such that the state " +
                     "of all transactional records prior to this offset have been decided (ABORTED or COMMITTED)"),
-            new FieldDef(LOG_START_OFFSET_KEY_NAME, INT64, "Earliest available offset."),
-            new FieldDef(ABORTED_TRANSACTIONS_KEY_NAME, ArrayOf.nullable(FETCH_RESPONSE_ABORTED_TRANSACTION_V5)));
+            new Field(LOG_START_OFFSET_KEY_NAME, INT64, "Earliest available offset."),
+            new Field(ABORTED_TRANSACTIONS_KEY_NAME, ArrayOf.nullable(FETCH_RESPONSE_ABORTED_TRANSACTION_V5)));
 
     private static final Schema FETCH_RESPONSE_PARTITION_V4 = new Schema(
-            new FieldDef(PARTITION_HEADER_KEY_NAME, FETCH_RESPONSE_PARTITION_HEADER_V4),
-            new FieldDef(RECORD_SET_KEY_NAME, RECORDS));
+            new Field(PARTITION_HEADER_KEY_NAME, FETCH_RESPONSE_PARTITION_HEADER_V4),
+            new Field(RECORD_SET_KEY_NAME, RECORDS));
 
     private static final Schema FETCH_RESPONSE_PARTITION_V5 = new Schema(
-            new FieldDef(PARTITION_HEADER_KEY_NAME, FETCH_RESPONSE_PARTITION_HEADER_V5),
-            new FieldDef(RECORD_SET_KEY_NAME, RECORDS));
+            new Field(PARTITION_HEADER_KEY_NAME, FETCH_RESPONSE_PARTITION_HEADER_V5),
+            new Field(RECORD_SET_KEY_NAME, RECORDS));
 
     private static final Schema FETCH_RESPONSE_TOPIC_V4 = new Schema(
             TOPIC_NAME,
-            new FieldDef(PARTITIONS_KEY_NAME, new ArrayOf(FETCH_RESPONSE_PARTITION_V4)));
+            new Field(PARTITIONS_KEY_NAME, new ArrayOf(FETCH_RESPONSE_PARTITION_V4)));
 
     private static final Schema FETCH_RESPONSE_TOPIC_V5 = new Schema(
             TOPIC_NAME,
-            new FieldDef(PARTITIONS_KEY_NAME, new ArrayOf(FETCH_RESPONSE_PARTITION_V5)));
+            new Field(PARTITIONS_KEY_NAME, new ArrayOf(FETCH_RESPONSE_PARTITION_V5)));
 
     private static final Schema FETCH_RESPONSE_V4 = new Schema(
             THROTTLE_TIME_MS,
-            new FieldDef(RESPONSES_KEY_NAME, new ArrayOf(FETCH_RESPONSE_TOPIC_V4)));
+            new Field(RESPONSES_KEY_NAME, new ArrayOf(FETCH_RESPONSE_TOPIC_V4)));
 
     private static final Schema FETCH_RESPONSE_V5 = new Schema(
             THROTTLE_TIME_MS,
-            new FieldDef(RESPONSES_KEY_NAME, new ArrayOf(FETCH_RESPONSE_TOPIC_V5)));
+            new Field(RESPONSES_KEY_NAME, new ArrayOf(FETCH_RESPONSE_TOPIC_V5)));
 
     /**
      * The body of FETCH_RESPONSE_V6 is the same as FETCH_RESPONSE_V5.

@@ -20,7 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.FieldDef;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
@@ -48,17 +48,17 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
 
     private static final Schema TXN_OFFSET_COMMIT_PARTITION_OFFSET_METADATA_REQUEST_V0 = new Schema(
             PARTITION_ID,
-            new FieldDef(OFFSET_KEY_NAME, INT64),
-            new FieldDef(METADATA_KEY_NAME, NULLABLE_STRING));
+            new Field(OFFSET_KEY_NAME, INT64),
+            new Field(METADATA_KEY_NAME, NULLABLE_STRING));
 
     private static final Schema TXN_OFFSET_COMMIT_REQUEST_V0 = new Schema(
-            new FieldDef(TRANSACTIONAL_ID_KEY_NAME, STRING, "The transactional id corresponding to the transaction."),
-            new FieldDef(CONSUMER_GROUP_ID_KEY_NAME, STRING, "Id of the associated consumer group to commit offsets for."),
-            new FieldDef(PRODUCER_ID_KEY_NAME, INT64, "Current producer id in use by the transactional id."),
-            new FieldDef(PRODUCER_EPOCH_KEY_NAME, INT16, "Current epoch associated with the producer id."),
-            new FieldDef(TOPICS_KEY_NAME, new ArrayOf(new Schema(
+            new Field(TRANSACTIONAL_ID_KEY_NAME, STRING, "The transactional id corresponding to the transaction."),
+            new Field(CONSUMER_GROUP_ID_KEY_NAME, STRING, "Id of the associated consumer group to commit offsets for."),
+            new Field(PRODUCER_ID_KEY_NAME, INT64, "Current producer id in use by the transactional id."),
+            new Field(PRODUCER_EPOCH_KEY_NAME, INT16, "Current epoch associated with the producer id."),
+            new Field(TOPICS_KEY_NAME, new ArrayOf(new Schema(
                     TOPIC_NAME,
-                    new FieldDef(PARTITIONS_KEY_NAME, new ArrayOf(TXN_OFFSET_COMMIT_PARTITION_OFFSET_METADATA_REQUEST_V0)))),
+                    new Field(PARTITIONS_KEY_NAME, new ArrayOf(TXN_OFFSET_COMMIT_PARTITION_OFFSET_METADATA_REQUEST_V0)))),
                     "The partitions to write markers for."));
 
     public static Schema[] schemaVersions() {

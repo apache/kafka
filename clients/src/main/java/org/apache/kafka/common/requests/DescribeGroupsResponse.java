@@ -19,7 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.FieldDef;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -52,30 +52,30 @@ public class DescribeGroupsResponse extends AbstractResponse {
     private static final String MEMBER_ASSIGNMENT_KEY_NAME = "member_assignment";
 
     private static final Schema DESCRIBE_GROUPS_RESPONSE_MEMBER_V0 = new Schema(
-            new FieldDef(MEMBER_ID_KEY_NAME, STRING, "The memberId assigned by the coordinator"),
-            new FieldDef(CLIENT_ID_KEY_NAME, STRING, "The client id used in the member's latest join group request"),
-            new FieldDef(CLIENT_HOST_KEY_NAME, STRING, "The client host used in the request session corresponding to the " +
+            new Field(MEMBER_ID_KEY_NAME, STRING, "The memberId assigned by the coordinator"),
+            new Field(CLIENT_ID_KEY_NAME, STRING, "The client id used in the member's latest join group request"),
+            new Field(CLIENT_HOST_KEY_NAME, STRING, "The client host used in the request session corresponding to the " +
                     "member's join group."),
-            new FieldDef(MEMBER_METADATA_KEY_NAME, BYTES, "The metadata corresponding to the current group protocol in " +
+            new Field(MEMBER_METADATA_KEY_NAME, BYTES, "The metadata corresponding to the current group protocol in " +
                     "use (will only be present if the group is stable)."),
-            new FieldDef(MEMBER_ASSIGNMENT_KEY_NAME, BYTES, "The current assignment provided by the group leader " +
+            new Field(MEMBER_ASSIGNMENT_KEY_NAME, BYTES, "The current assignment provided by the group leader " +
                     "(will only be present if the group is stable)."));
 
     private static final Schema DESCRIBE_GROUPS_RESPONSE_GROUP_METADATA_V0 = new Schema(
             ERROR_CODE,
-            new FieldDef(GROUP_ID_KEY_NAME, STRING),
-            new FieldDef(GROUP_STATE_KEY_NAME, STRING, "The current state of the group (one of: Dead, Stable, AwaitingSync, " +
+            new Field(GROUP_ID_KEY_NAME, STRING),
+            new Field(GROUP_STATE_KEY_NAME, STRING, "The current state of the group (one of: Dead, Stable, AwaitingSync, " +
                     "PreparingRebalance, or empty if there is no active group)"),
-            new FieldDef(PROTOCOL_TYPE_KEY_NAME, STRING, "The current group protocol type (will be empty if there is no active group)"),
-            new FieldDef(PROTOCOL_KEY_NAME, STRING, "The current group protocol (only provided if the group is Stable)"),
-            new FieldDef(MEMBERS_KEY_NAME, new ArrayOf(DESCRIBE_GROUPS_RESPONSE_MEMBER_V0), "Current group members " +
+            new Field(PROTOCOL_TYPE_KEY_NAME, STRING, "The current group protocol type (will be empty if there is no active group)"),
+            new Field(PROTOCOL_KEY_NAME, STRING, "The current group protocol (only provided if the group is Stable)"),
+            new Field(MEMBERS_KEY_NAME, new ArrayOf(DESCRIBE_GROUPS_RESPONSE_MEMBER_V0), "Current group members " +
                     "(only provided if the group is not Dead)"));
 
     private static final Schema DESCRIBE_GROUPS_RESPONSE_V0 = new Schema(
-            new FieldDef(GROUPS_KEY_NAME, new ArrayOf(DESCRIBE_GROUPS_RESPONSE_GROUP_METADATA_V0)));
+            new Field(GROUPS_KEY_NAME, new ArrayOf(DESCRIBE_GROUPS_RESPONSE_GROUP_METADATA_V0)));
     private static final Schema DESCRIBE_GROUPS_RESPONSE_V1 = new Schema(
             THROTTLE_TIME_MS,
-            new FieldDef(GROUPS_KEY_NAME, new ArrayOf(DESCRIBE_GROUPS_RESPONSE_GROUP_METADATA_V0)));
+            new Field(GROUPS_KEY_NAME, new ArrayOf(DESCRIBE_GROUPS_RESPONSE_GROUP_METADATA_V0)));
 
     public static Schema[] schemaVersions() {
         return new Schema[] {DESCRIBE_GROUPS_RESPONSE_V0, DESCRIBE_GROUPS_RESPONSE_V1};

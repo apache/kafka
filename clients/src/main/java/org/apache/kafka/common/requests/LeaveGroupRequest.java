@@ -18,7 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.FieldDef;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -31,8 +31,8 @@ public class LeaveGroupRequest extends AbstractRequest {
     private static final String MEMBER_ID_KEY_NAME = "member_id";
 
     private static final Schema LEAVE_GROUP_REQUEST_V0 = new Schema(
-            new FieldDef(GROUP_ID_KEY_NAME, STRING, "The group id."),
-            new FieldDef(MEMBER_ID_KEY_NAME, STRING, "The member id assigned by the group coordinator."));
+            new Field(GROUP_ID_KEY_NAME, STRING, "The group id."),
+            new Field(MEMBER_ID_KEY_NAME, STRING, "The member id assigned by the group coordinator."));
 
     /* v1 request is the same as v0. Throttle time has been added to response */
     private static final Schema LEAVE_GROUP_REQUEST_V1 = LEAVE_GROUP_REQUEST_V0;

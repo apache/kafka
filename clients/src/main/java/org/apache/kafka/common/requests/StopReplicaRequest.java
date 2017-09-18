@@ -20,7 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.FieldDef;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.Utils;
@@ -48,10 +48,10 @@ public class StopReplicaRequest extends AbstractRequest {
             TOPIC_NAME,
             PARTITION_ID);
     private static final Schema STOP_REPLICA_REQUEST_V0 = new Schema(
-            new FieldDef(CONTROLLER_ID_KEY_NAME, INT32, "The controller id."),
-            new FieldDef(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
-            new FieldDef(DELETE_PARTITIONS_KEY_NAME, BOOLEAN, "Boolean which indicates if replica's partitions must be deleted."),
-            new FieldDef(PARTITIONS_KEY_NAME, new ArrayOf(STOP_REPLICA_REQUEST_PARTITION_V0)));
+            new Field(CONTROLLER_ID_KEY_NAME, INT32, "The controller id."),
+            new Field(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
+            new Field(DELETE_PARTITIONS_KEY_NAME, BOOLEAN, "Boolean which indicates if replica's partitions must be deleted."),
+            new Field(PARTITIONS_KEY_NAME, new ArrayOf(STOP_REPLICA_REQUEST_PARTITION_V0)));
 
     public static Schema[] schemaVersions() {
         return new Schema[] {STOP_REPLICA_REQUEST_V0};
