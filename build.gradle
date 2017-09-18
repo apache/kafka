@@ -193,20 +193,6 @@ subprojects {
   def testShowStandardStreams = false
   def testExceptionFormat = 'full'
 
-  // Exclude PowerMock tests when running with Java 9 until a version of PowerMock that supports Java 9 is released
-  // The relevant issue is https://github.com/powermock/powermock/issues/783
-  String[] testsToExclude = []
-  if (JavaVersion.current().isJava9Compatible()) {
-    testsToExclude = [
-      "**/KafkaProducerTest.*", "**/BufferPoolTest.*",
-      "**/SourceTaskOffsetCommitterTest.*", "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*",
-      "**/WorkerSourceTaskTest.*", "**/WorkerTest.*", "**/DistributedHerderTest.*", "**/WorkerCoordinatorTest.*",
-      "**/RestServerTest.*", "**/ConnectorPluginsResourceTest.*", "**/ConnectorsResourceTest.*",
-      "**/StandaloneHerderTest.*", "**/FileOffsetBakingStoreTest.*", "**/KafkaConfigBackingStoreTest.*",
-      "**/KafkaOffsetBackingStoreTest.*", "**/OffsetStorageWriterTest.*", "**/KafkaBasedLogTest.*"
-    ]
-  }
-
   test {
     maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
 
@@ -220,7 +206,6 @@ subprojects {
       exceptionFormat = testExceptionFormat
     }
 
-    exclude(testsToExclude)
   }
 
   task integrationTest(type: Test, dependsOn: compileJava) {
@@ -240,8 +225,6 @@ subprojects {
       includeCategories 'org.apache.kafka.test.IntegrationTest'
     }
 
-    exclude(testsToExclude)
-
   }
 
   task unitTest(type: Test, dependsOn: compileJava) {
@@ -260,8 +243,7 @@ subprojects {
     useJUnit {
       excludeCategories 'org.apache.kafka.test.IntegrationTest'
     }
-
-    exclude(testsToExclude)
+    
   }
 
   jar {
@@ -788,7 +770,7 @@ project(':clients') {
     testCompile libs.bcpkix
     testCompile libs.junit
     testCompile libs.easymock
-    testCompile libs.powermock
+    testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
 
     testRuntime libs.slf4jlog4j
@@ -1076,7 +1058,7 @@ project(':connect:transforms') {
 
     testCompile libs.easymock
     testCompile libs.junit
-    testCompile libs.powermock
+    testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
 
     testRuntime libs.slf4jlog4j
@@ -1114,7 +1096,7 @@ project(':connect:json') {
 
     testCompile libs.easymock
     testCompile libs.junit
-    testCompile libs.powermock
+    testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
 
     testRuntime libs.slf4jlog4j
@@ -1163,7 +1145,7 @@ project(':connect:runtime') {
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.easymock
     testCompile libs.junit
-    testCompile libs.powermock
+    testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
 
     testCompile project(":connect:json")
@@ -1216,7 +1198,7 @@ project(':connect:file') {
 
     testCompile libs.easymock
     testCompile libs.junit
-    testCompile libs.powermock
+    testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
 
     testRuntime libs.slf4jlog4j
