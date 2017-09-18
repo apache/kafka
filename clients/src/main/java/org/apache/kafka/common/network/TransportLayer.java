@@ -31,6 +31,7 @@ import java.nio.channels.GatheringByteChannel;
 
 import java.security.Principal;
 
+import org.apache.kafka.common.errors.AuthenticationException;
 
 public interface TransportLayer extends ScatteringByteChannel, GatheringByteChannel {
 
@@ -61,11 +62,14 @@ public interface TransportLayer extends ScatteringByteChannel, GatheringByteChan
 
 
     /**
-     * Performs SSL handshake hence is a no-op for the non-secure
-     * implementation
-     * @throws IOException
+     * This a no-op for the non-secure PLAINTEXT implementation. For SSL, this performs
+     * SSL handshake. The SSL handshake includes client authentication if configured using
+     * {@link org.apache.kafka.common.config.SslConfigsSslConfigs#SSL_CLIENT_AUTH_CONFIG}.
+     * @throws AuthenticationException if handshake fails due to an
+     *         {@link javax.net.ssl.SSLExceptionSSLException}.
+     * @throws IOException if read or write fails with an I/O error.
     */
-    void handshake() throws IOException;
+    void handshake() throws AuthenticationException, IOException;
 
     /**
      * Returns true if there are any pending writes

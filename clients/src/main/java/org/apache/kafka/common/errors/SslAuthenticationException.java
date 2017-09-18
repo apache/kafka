@@ -16,19 +16,28 @@
  */
 package org.apache.kafka.common.errors;
 
+import javax.net.ssl.SSLException;
+
 /**
- * This exception indicates that the SASL mechanism requested by the client
- * is not enabled on the broker or the configured mechanism is not supported.
+ * This exception indicates that SSL handshake has failed. See {@link #getCause()}
+ * for the {@link SSLException} that caused this failure.
+ * <p>
+ * SSL handshake failures in clients may indicate client authentication
+ * failure due to untrusted certificates if server is configured to request
+ * client certificates. Handshake failures could also indicate misconfigured
+ * security including protocol/cipher suite mismatch, server certificate
+ * authentication failure or server host name verification failure.
+ * </p>
  */
-public class UnsupportedSaslMechanismException extends AuthenticationException {
+public class SslAuthenticationException extends AuthenticationException {
 
     private static final long serialVersionUID = 1L;
 
-    public UnsupportedSaslMechanismException(String message) {
+    public SslAuthenticationException(String message) {
         super(message);
     }
 
-    public UnsupportedSaslMechanismException(String message, Throwable cause) {
+    public SslAuthenticationException(String message, Throwable cause) {
         super(message, cause);
     }
 

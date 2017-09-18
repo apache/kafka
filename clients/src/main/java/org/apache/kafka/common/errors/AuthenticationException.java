@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.errors;
 
+import javax.net.ssl.SSLException;
+
 /**
  * This exception indicates that SASL authentication has failed.
  * On authentication failure, clients abort the operation requested and raise one
@@ -27,6 +29,7 @@ package org.apache.kafka.common.errors;
  *   is not supported on the broker.</li>
  *   <li>{@link IllegalSaslStateException} if an unexpected request is received on during SASL
  *   handshake. This could be due to misconfigured security protocol.</li>
+ *   <li>{@link SslAuthenticationException} if SSL handshake failed due to any {@link SSLException}.
  * </ul>
  */
 public class AuthenticationException extends ApiException {
