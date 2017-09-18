@@ -963,7 +963,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                 streamsMetrics.commitTimeSensor.record(computeLatency() / (double) committed, timerStartedMs);
             }
             if (log.isDebugEnabled()) {
-                log.info("Committed all active tasks {} and standby tasks {} in {}ms",
+                log.debug("Committed all active tasks {} and standby tasks {} in {}ms",
                         taskManager.activeTaskIds(), taskManager.standbyTaskIds(), timerStartedMs - now);
             }
 
