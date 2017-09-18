@@ -502,7 +502,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
             states.put(entry.getKey(), entry.getValue().state);
         }
 
-        log.debug("Assigning tasks {} to clients {} with number of replicas {}",
+        log.debug("{} Assigning tasks {} to clients {} with number of replicas {}",
                 logPrefix, partitionsForTask.keySet(), states, numStandbyReplicas);
 
         final StickyTaskAssignor<UUID> taskAssignor = new StickyTaskAssignor<>(states, partitionsForTask.keySet());
