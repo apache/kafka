@@ -19,7 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Subscription;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
@@ -60,9 +60,9 @@ public class ConsumerProtocolTest {
         short version = 100;
 
         Schema subscriptionSchemaV100 = new Schema(
-                new Field(ConsumerProtocol.TOPICS_KEY_NAME, new ArrayOf(Type.STRING)),
-                new Field(ConsumerProtocol.USER_DATA_KEY_NAME, Type.BYTES),
-                new Field("foo", Type.STRING));
+                new FieldDef(ConsumerProtocol.TOPICS_KEY_NAME, new ArrayOf(Type.STRING)),
+                new FieldDef(ConsumerProtocol.USER_DATA_KEY_NAME, Type.BYTES),
+                new FieldDef("foo", Type.STRING));
 
         Struct subscriptionV100 = new Struct(subscriptionSchemaV100);
         subscriptionV100.set(ConsumerProtocol.TOPICS_KEY_NAME, new Object[]{"topic"});
@@ -105,9 +105,9 @@ public class ConsumerProtocolTest {
         short version = 100;
 
         Schema assignmentSchemaV100 = new Schema(
-                new Field(ConsumerProtocol.TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(ConsumerProtocol.TOPIC_ASSIGNMENT_V0)),
-                new Field(ConsumerProtocol.USER_DATA_KEY_NAME, Type.BYTES),
-                new Field("foo", Type.STRING));
+                new FieldDef(ConsumerProtocol.TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(ConsumerProtocol.TOPIC_ASSIGNMENT_V0)),
+                new FieldDef(ConsumerProtocol.USER_DATA_KEY_NAME, Type.BYTES),
+                new FieldDef("foo", Type.STRING));
 
         Struct assignmentV100 = new Struct(assignmentSchemaV100);
         assignmentV100.set(ConsumerProtocol.TOPIC_PARTITIONS_KEY_NAME,

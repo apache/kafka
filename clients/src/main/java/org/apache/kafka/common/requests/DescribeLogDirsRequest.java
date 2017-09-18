@@ -20,7 +20,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo;
@@ -45,9 +45,9 @@ public class DescribeLogDirsRequest extends AbstractRequest {
     private static final String PARTITIONS_KEY_NAME = "partitions";
 
     private static final Schema DESCRIBE_LOG_DIRS_REQUEST_V0 = new Schema(
-            new Field("topics", ArrayOf.nullable(new Schema(
-                    new Field(TOPIC_NAME),
-                    new Field("partitions", new ArrayOf(INT32), "List of partition ids of the topic.")))));
+            new FieldDef("topics", ArrayOf.nullable(new Schema(
+                    TOPIC_NAME,
+                    new FieldDef("partitions", new ArrayOf(INT32), "List of partition ids of the topic.")))));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{DESCRIBE_LOG_DIRS_REQUEST_V0};

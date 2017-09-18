@@ -18,7 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -41,7 +41,7 @@ public class SaslHandshakeRequest extends AbstractRequest {
     private static final String MECHANISM_KEY_NAME = "mechanism";
 
     private static final Schema SASL_HANDSHAKE_REQUEST_V0 = new Schema(
-            new Field("mechanism", STRING, "SASL Mechanism chosen by the client."));
+            new FieldDef("mechanism", STRING, "SASL Mechanism chosen by the client."));
 
     // SASL_HANDSHAKE_REQUEST_V1 added to support SASL_AUTHENTICATE request to improve diagnostics
     private static final Schema SASL_HANDSHAKE_REQUEST_V1 = SASL_HANDSHAKE_REQUEST_V0;

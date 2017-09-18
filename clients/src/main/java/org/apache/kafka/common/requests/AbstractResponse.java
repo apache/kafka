@@ -65,9 +65,9 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
                 return new SyncGroupResponse(struct);
             case STOP_REPLICA:
                 return new StopReplicaResponse(struct);
-            case CONTROLLED_SHUTDOWN_KEY:
+            case CONTROLLED_SHUTDOWN:
                 return new ControlledShutdownResponse(struct);
-            case UPDATE_METADATA_KEY:
+            case UPDATE_METADATA:
                 return new UpdateMetadataResponse(struct);
             case LEADER_AND_ISR:
                 return new LeaderAndIsrResponse(struct);

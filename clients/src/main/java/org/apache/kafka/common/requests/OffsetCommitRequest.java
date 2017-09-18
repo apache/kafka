@@ -21,7 +21,7 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
@@ -61,49 +61,49 @@ public class OffsetCommitRequest extends AbstractRequest {
 
     /* Offset commit api */
     private static final Schema OFFSET_COMMIT_REQUEST_PARTITION_V0 = new Schema(
-            new Field(PARTITION_ID),
-            new Field(COMMIT_OFFSET_KEY_NAME, INT64, "Message offset to be committed."),
-            new Field(METADATA_KEY_NAME, NULLABLE_STRING, "Any associated metadata the client wants to keep."));
+            PARTITION_ID,
+            new FieldDef(COMMIT_OFFSET_KEY_NAME, INT64, "Message offset to be committed."),
+            new FieldDef(METADATA_KEY_NAME, NULLABLE_STRING, "Any associated metadata the client wants to keep."));
 
     private static final Schema OFFSET_COMMIT_REQUEST_PARTITION_V1 = new Schema(
-            new Field(PARTITION_ID),
-            new Field(COMMIT_OFFSET_KEY_NAME, INT64, "Message offset to be committed."),
-            new Field(TIMESTAMP_KEY_NAME, INT64, "Timestamp of the commit"),
-            new Field(METADATA_KEY_NAME, NULLABLE_STRING, "Any associated metadata the client wants to keep."));
+            PARTITION_ID,
+            new FieldDef(COMMIT_OFFSET_KEY_NAME, INT64, "Message offset to be committed."),
+            new FieldDef(TIMESTAMP_KEY_NAME, INT64, "Timestamp of the commit"),
+            new FieldDef(METADATA_KEY_NAME, NULLABLE_STRING, "Any associated metadata the client wants to keep."));
 
     private static final Schema OFFSET_COMMIT_REQUEST_PARTITION_V2 = new Schema(
-            new Field(PARTITION_ID),
-            new Field(COMMIT_OFFSET_KEY_NAME, INT64, "Message offset to be committed."),
-            new Field(METADATA_KEY_NAME, NULLABLE_STRING, "Any associated metadata the client wants to keep."));
+            PARTITION_ID,
+            new FieldDef(COMMIT_OFFSET_KEY_NAME, INT64, "Message offset to be committed."),
+            new FieldDef(METADATA_KEY_NAME, NULLABLE_STRING, "Any associated metadata the client wants to keep."));
 
     private static final Schema OFFSET_COMMIT_REQUEST_TOPIC_V0 = new Schema(
-            new Field(TOPIC_NAME),
-            new Field(PARTITIONS_KEY_NAME, new ArrayOf(OFFSET_COMMIT_REQUEST_PARTITION_V0), "Partitions to commit offsets."));
+            TOPIC_NAME,
+            new FieldDef(PARTITIONS_KEY_NAME, new ArrayOf(OFFSET_COMMIT_REQUEST_PARTITION_V0), "Partitions to commit offsets."));
 
     private static final Schema OFFSET_COMMIT_REQUEST_TOPIC_V1 = new Schema(
-            new Field(TOPIC_NAME),
-            new Field(PARTITIONS_KEY_NAME, new ArrayOf(OFFSET_COMMIT_REQUEST_PARTITION_V1), "Partitions to commit offsets."));
+            TOPIC_NAME,
+            new FieldDef(PARTITIONS_KEY_NAME, new ArrayOf(OFFSET_COMMIT_REQUEST_PARTITION_V1), "Partitions to commit offsets."));
 
     private static final Schema OFFSET_COMMIT_REQUEST_TOPIC_V2 = new Schema(
-            new Field(TOPIC_NAME),
-            new Field(PARTITIONS_KEY_NAME, new ArrayOf(OFFSET_COMMIT_REQUEST_PARTITION_V2), "Partitions to commit offsets."));
+            TOPIC_NAME,
+            new FieldDef(PARTITIONS_KEY_NAME, new ArrayOf(OFFSET_COMMIT_REQUEST_PARTITION_V2), "Partitions to commit offsets."));
 
     private static final Schema OFFSET_COMMIT_REQUEST_V0 = new Schema(
-            new Field(GROUP_ID_KEY_NAME, STRING, "The group id."),
-            new Field(TOPICS_KEY_NAME, new ArrayOf(OFFSET_COMMIT_REQUEST_TOPIC_V0), "Topics to commit offsets."));
+            new FieldDef(GROUP_ID_KEY_NAME, STRING, "The group id."),
+            new FieldDef(TOPICS_KEY_NAME, new ArrayOf(OFFSET_COMMIT_REQUEST_TOPIC_V0), "Topics to commit offsets."));
 
     private static final Schema OFFSET_COMMIT_REQUEST_V1 = new Schema(
-            new Field(GROUP_ID_KEY_NAME, STRING, "The group id."),
-            new Field(GENERATION_ID_KEY_NAME, INT32, "The generation of the group."),
-            new Field(MEMBER_ID_KEY_NAME, STRING, "The member id assigned by the group coordinator."),
-            new Field(TOPICS_KEY_NAME, new ArrayOf(OFFSET_COMMIT_REQUEST_TOPIC_V1), "Topics to commit offsets."));
+            new FieldDef(GROUP_ID_KEY_NAME, STRING, "The group id."),
+            new FieldDef(GENERATION_ID_KEY_NAME, INT32, "The generation of the group."),
+            new FieldDef(MEMBER_ID_KEY_NAME, STRING, "The member id assigned by the group coordinator."),
+            new FieldDef(TOPICS_KEY_NAME, new ArrayOf(OFFSET_COMMIT_REQUEST_TOPIC_V1), "Topics to commit offsets."));
 
     private static final Schema OFFSET_COMMIT_REQUEST_V2 = new Schema(
-            new Field(GROUP_ID_KEY_NAME, STRING, "The group id."),
-            new Field(GENERATION_ID_KEY_NAME, INT32, "The generation of the consumer group."),
-            new Field(MEMBER_ID_KEY_NAME, STRING, "The consumer id assigned by the group coordinator."),
-            new Field(RETENTION_TIME_KEY_NAME, INT64, "Time period in ms to retain the offset."),
-            new Field(TOPICS_KEY_NAME, new ArrayOf(OFFSET_COMMIT_REQUEST_TOPIC_V2), "Topics to commit offsets."));
+            new FieldDef(GROUP_ID_KEY_NAME, STRING, "The group id."),
+            new FieldDef(GENERATION_ID_KEY_NAME, INT32, "The generation of the consumer group."),
+            new FieldDef(MEMBER_ID_KEY_NAME, STRING, "The consumer id assigned by the group coordinator."),
+            new FieldDef(RETENTION_TIME_KEY_NAME, INT64, "Time period in ms to retain the offset."),
+            new FieldDef(TOPICS_KEY_NAME, new ArrayOf(OFFSET_COMMIT_REQUEST_TOPIC_V2), "Topics to commit offsets."));
 
     /* v3 request is same as v2. Throttle time has been added to response */
     private static final Schema OFFSET_COMMIT_REQUEST_V3 = OFFSET_COMMIT_REQUEST_V2;

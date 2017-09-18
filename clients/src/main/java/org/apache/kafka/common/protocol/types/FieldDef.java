@@ -23,45 +23,60 @@ public class FieldDef {
     public final boolean hasDefaultValue;
     public final Object defaultValue;
 
-    private FieldDef(String name, String docString, Type type, boolean hasDefaultValue, Object defaultValue) {
+    public FieldDef(String name, Type type, String docString, boolean hasDefaultValue, Object defaultValue) {
         this.name = name;
         this.docString = docString;
         this.type = type;
         this.hasDefaultValue = hasDefaultValue;
         this.defaultValue = defaultValue;
+
+        if (hasDefaultValue)
+            type.validate(defaultValue);
+    }
+
+    public FieldDef(String name, Type type, String docString) {
+        this(name, type, docString, false, null);
+    }
+
+    public FieldDef(String name, Type type, String docString, Object defaultValue) {
+        this(name, type, docString, true, defaultValue);
+    }
+
+    public FieldDef(String name, Type type) {
+        this(name, type, null, false, null);
     }
 
     public static class Int8 extends FieldDef {
         public Int8(String name, String docString) {
-            super(name, docString, Type.INT8, false, null);
+            super(name, Type.INT8, docString, false, null);
         }
     }
 
     public static class Int32 extends FieldDef {
         public Int32(String name, String docString) {
-            super(name, docString, Type.INT32, false, null);
+            super(name, Type.INT32, docString, false, null);
         }
 
         public Int32(String name, String docString, int defaultValue) {
-            super(name, docString, Type.INT32, true, defaultValue);
+            super(name, Type.INT32, docString, true, defaultValue);
         }
     }
 
     public static class Int16 extends FieldDef {
         public Int16(String name, String docString) {
-            super(name, docString, Type.INT16, false, null);
+            super(name, Type.INT16, docString, false, null);
         }
     }
 
     public static class Str extends FieldDef {
         public Str(String name, String docString) {
-            super(name, docString, Type.STRING, false, null);
+            super(name, Type.STRING, docString, false, null);
         }
     }
 
     public static class NullableStr extends FieldDef {
         public NullableStr(String name, String docString) {
-            super(name, docString, Type.NULLABLE_STRING, false, null);
+            super(name, Type.NULLABLE_STRING, docString, false, null);
         }
     }
 }

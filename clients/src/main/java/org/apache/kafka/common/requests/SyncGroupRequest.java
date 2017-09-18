@@ -19,7 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.Utils;
@@ -42,13 +42,13 @@ public class SyncGroupRequest extends AbstractRequest {
     private static final String GROUP_ASSIGNMENT_KEY_NAME = "group_assignment";
 
     private static final Schema SYNC_GROUP_REQUEST_MEMBER_V0 = new Schema(
-            new Field(MEMBER_ID_KEY_NAME, STRING),
-            new Field(MEMBER_ASSIGNMENT_KEY_NAME, BYTES));
+            new FieldDef(MEMBER_ID_KEY_NAME, STRING),
+            new FieldDef(MEMBER_ASSIGNMENT_KEY_NAME, BYTES));
     private static final Schema SYNC_GROUP_REQUEST_V0 = new Schema(
-            new Field(GROUP_ID_KEY_NAME, STRING),
-            new Field(GENERATION_ID_KEY_NAME, INT32),
-            new Field(MEMBER_ID_KEY_NAME, STRING),
-            new Field(GROUP_ASSIGNMENT_KEY_NAME, new ArrayOf(SYNC_GROUP_REQUEST_MEMBER_V0)));
+            new FieldDef(GROUP_ID_KEY_NAME, STRING),
+            new FieldDef(GENERATION_ID_KEY_NAME, INT32),
+            new FieldDef(MEMBER_ID_KEY_NAME, STRING),
+            new FieldDef(GROUP_ASSIGNMENT_KEY_NAME, new ArrayOf(SYNC_GROUP_REQUEST_MEMBER_V0)));
 
     /* v1 request is the same as v0. Throttle time has been added to response */
     private static final Schema SYNC_GROUP_REQUEST_V1 = SYNC_GROUP_REQUEST_V0;

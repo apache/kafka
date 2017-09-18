@@ -21,7 +21,7 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
@@ -60,36 +60,36 @@ public class ListOffsetRequest extends AbstractRequest {
     private static final String MAX_NUM_OFFSETS_KEY_NAME = "max_num_offsets";
 
     private static final Schema LIST_OFFSET_REQUEST_PARTITION_V0 = new Schema(
-            new Field(PARTITION_ID),
-            new Field(TIMESTAMP_KEY_NAME, INT64, "Timestamp."),
-            new Field(MAX_NUM_OFFSETS_KEY_NAME, INT32, "Maximum offsets to return."));
+            PARTITION_ID,
+            new FieldDef(TIMESTAMP_KEY_NAME, INT64, "Timestamp."),
+            new FieldDef(MAX_NUM_OFFSETS_KEY_NAME, INT32, "Maximum offsets to return."));
     private static final Schema LIST_OFFSET_REQUEST_PARTITION_V1 = new Schema(
-            new Field(PARTITION_ID),
-            new Field(TIMESTAMP_KEY_NAME, INT64, "The target timestamp for the partition."));
+            PARTITION_ID,
+            new FieldDef(TIMESTAMP_KEY_NAME, INT64, "The target timestamp for the partition."));
 
     private static final Schema LIST_OFFSET_REQUEST_TOPIC_V0 = new Schema(
-            new Field(TOPIC_NAME),
-            new Field(PARTITIONS_KEY_NAME, new ArrayOf(LIST_OFFSET_REQUEST_PARTITION_V0), "Partitions to list offset."));
+            TOPIC_NAME,
+            new FieldDef(PARTITIONS_KEY_NAME, new ArrayOf(LIST_OFFSET_REQUEST_PARTITION_V0), "Partitions to list offset."));
     private static final Schema LIST_OFFSET_REQUEST_TOPIC_V1 = new Schema(
-            new Field(TOPIC_NAME),
-            new Field(PARTITIONS_KEY_NAME, new ArrayOf(LIST_OFFSET_REQUEST_PARTITION_V1), "Partitions to list offset."));
+            TOPIC_NAME,
+            new FieldDef(PARTITIONS_KEY_NAME, new ArrayOf(LIST_OFFSET_REQUEST_PARTITION_V1), "Partitions to list offset."));
 
     private static final Schema LIST_OFFSET_REQUEST_V0 = new Schema(
-            new Field(REPLICA_ID_KEY_NAME, INT32, "Broker id of the follower. For normal consumers, use -1."),
-            new Field(TOPICS_KEY_NAME, new ArrayOf(LIST_OFFSET_REQUEST_TOPIC_V0), "Topics to list offsets."));
+            new FieldDef(REPLICA_ID_KEY_NAME, INT32, "Broker id of the follower. For normal consumers, use -1."),
+            new FieldDef(TOPICS_KEY_NAME, new ArrayOf(LIST_OFFSET_REQUEST_TOPIC_V0), "Topics to list offsets."));
     private static final Schema LIST_OFFSET_REQUEST_V1 = new Schema(
-            new Field(REPLICA_ID_KEY_NAME, INT32, "Broker id of the follower. For normal consumers, use -1."),
-            new Field(TOPICS_KEY_NAME, new ArrayOf(LIST_OFFSET_REQUEST_TOPIC_V1), "Topics to list offsets."));
+            new FieldDef(REPLICA_ID_KEY_NAME, INT32, "Broker id of the follower. For normal consumers, use -1."),
+            new FieldDef(TOPICS_KEY_NAME, new ArrayOf(LIST_OFFSET_REQUEST_TOPIC_V1), "Topics to list offsets."));
 
     private static final Schema LIST_OFFSET_REQUEST_V2 = new Schema(
-            new Field(REPLICA_ID_KEY_NAME, INT32, "Broker id of the follower. For normal consumers, use -1."),
-            new Field(ISOLATION_LEVEL_KEY_NAME, INT8, "This setting controls the visibility of transactional records. " +
+            new FieldDef(REPLICA_ID_KEY_NAME, INT32, "Broker id of the follower. For normal consumers, use -1."),
+            new FieldDef(ISOLATION_LEVEL_KEY_NAME, INT8, "This setting controls the visibility of transactional records. " +
                     "Using READ_UNCOMMITTED (isolation_level = 0) makes all records visible. With READ_COMMITTED " +
                     "(isolation_level = 1), non-transactional and COMMITTED transactional records are visible. " +
                     "To be more concrete, READ_COMMITTED returns all data from offsets smaller than the current " +
                     "LSO (last stable offset), and enables the inclusion of the list of aborted transactions in the " +
                     "result, which allows consumers to discard ABORTED transactional records"),
-            new Field(TOPICS_KEY_NAME, new ArrayOf(LIST_OFFSET_REQUEST_TOPIC_V1), "Topics to list offsets."));;
+            new FieldDef(TOPICS_KEY_NAME, new ArrayOf(LIST_OFFSET_REQUEST_TOPIC_V1), "Topics to list offsets."));;
 
 
     public static Schema[] schemaVersions() {

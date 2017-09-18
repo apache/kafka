@@ -20,7 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -39,12 +39,12 @@ public class ControlledShutdownResponse extends AbstractResponse {
     private static final String PARTITIONS_REMAINING_KEY_NAME = "partitions_remaining";
 
     private static final Schema CONTROLLED_SHUTDOWN_PARTITION_V0 = new Schema(
-            new Field(TOPIC_NAME),
-            new Field(PARTITION_ID));
+            TOPIC_NAME,
+            PARTITION_ID);
 
     private static final Schema CONTROLLED_SHUTDOWN_RESPONSE_V0 = new Schema(
-            new Field(ERROR_CODE),
-            new Field("partitions_remaining", new ArrayOf(CONTROLLED_SHUTDOWN_PARTITION_V0), "The partitions " +
+            ERROR_CODE,
+            new FieldDef("partitions_remaining", new ArrayOf(CONTROLLED_SHUTDOWN_PARTITION_V0), "The partitions " +
                     "that the broker still leads."));
 
     private static final Schema CONTROLLED_SHUTDOWN_RESPONSE_V1 = CONTROLLED_SHUTDOWN_RESPONSE_V0;
@@ -90,12 +90,12 @@ public class ControlledShutdownResponse extends AbstractResponse {
     }
 
     public static ControlledShutdownResponse parse(ByteBuffer buffer, short version) {
-        return new ControlledShutdownResponse(ApiKeys.CONTROLLED_SHUTDOWN_KEY.parseResponse(version, buffer));
+        return new ControlledShutdownResponse(ApiKeys.CONTROLLED_SHUTDOWN.parseResponse(version, buffer));
     }
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.CONTROLLED_SHUTDOWN_KEY.responseSchema(version));
+        Struct struct = new Struct(ApiKeys.CONTROLLED_SHUTDOWN.responseSchema(version));
         struct.set(ERROR_CODE, error.code());
 
         List<Struct> partitionsRemainingList = new ArrayList<>(partitionsRemaining.size());

@@ -18,7 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -36,10 +36,10 @@ public class EndTxnRequest extends AbstractRequest {
     private static final String TRANSACTION_RESULT_KEY_NAME = "transaction_result";
 
     private static final Schema END_TXN_REQUEST_V0 = new Schema(
-            new Field(TRANSACTIONAL_ID_KEY_NAME, STRING, "The transactional id corresponding to the transaction."),
-            new Field(PRODUCER_ID_KEY_NAME, INT64, "Current producer id in use by the transactional id."),
-            new Field(PRODUCER_EPOCH_KEY_NAME, INT16, "Current epoch associated with the producer id."),
-            new Field(TRANSACTION_RESULT_KEY_NAME, BOOLEAN, "The result of the transaction (0 = ABORT, 1 = COMMIT)"));
+            new FieldDef(TRANSACTIONAL_ID_KEY_NAME, STRING, "The transactional id corresponding to the transaction."),
+            new FieldDef(PRODUCER_ID_KEY_NAME, INT64, "Current producer id in use by the transactional id."),
+            new FieldDef(PRODUCER_EPOCH_KEY_NAME, INT16, "Current epoch associated with the producer id."),
+            new FieldDef(TRANSACTION_RESULT_KEY_NAME, BOOLEAN, "The result of the transaction (0 = ABORT, 1 = COMMIT)"));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{END_TXN_REQUEST_V0};

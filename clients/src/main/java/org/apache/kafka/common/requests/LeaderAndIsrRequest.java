@@ -21,7 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.Utils;
@@ -60,45 +60,45 @@ public class LeaderAndIsrRequest extends AbstractRequest {
     private static final String PORT_KEY_NAME = "port";
 
     private static final Schema LEADER_AND_ISR_REQUEST_PARTITION_STATE_V0 = new Schema(
-            new Field(TOPIC_NAME),
-            new Field(PARTITION_ID),
-            new Field(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
-            new Field(LEADER_KEY_NAME, INT32, "The broker id for the leader."),
-            new Field(LEADER_EPOCH_KEY_NAME, INT32, "The leader epoch."),
-            new Field(ISR_KEY_NAME, new ArrayOf(INT32), "The in sync replica ids."),
-            new Field(ZK_VERSION_KEY_NAME, INT32, "The ZK version."),
-            new Field(REPLICAS_KEY_NAME, new ArrayOf(INT32), "The replica ids."));
+            TOPIC_NAME,
+            PARTITION_ID,
+            new FieldDef(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
+            new FieldDef(LEADER_KEY_NAME, INT32, "The broker id for the leader."),
+            new FieldDef(LEADER_EPOCH_KEY_NAME, INT32, "The leader epoch."),
+            new FieldDef(ISR_KEY_NAME, new ArrayOf(INT32), "The in sync replica ids."),
+            new FieldDef(ZK_VERSION_KEY_NAME, INT32, "The ZK version."),
+            new FieldDef(REPLICAS_KEY_NAME, new ArrayOf(INT32), "The replica ids."));
 
-    // LEADER_AND_ISR_REQUEST_PARTITION_STATE_V1 added a per-partition is_new field.
+    // LEADER_AND_ISR_REQUEST_PARTITION_STATE_V1 added a per-partition is_new FieldDef.
     // This field specifies whether the replica should have existed on the broker or not.
     private static final Schema LEADER_AND_ISR_REQUEST_PARTITION_STATE_V1 = new Schema(
-            new Field(TOPIC_NAME),
-            new Field(PARTITION_ID),
-            new Field(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
-            new Field(LEADER_KEY_NAME, INT32, "The broker id for the leader."),
-            new Field(LEADER_EPOCH_KEY_NAME, INT32, "The leader epoch."),
-            new Field(ISR_KEY_NAME, new ArrayOf(INT32), "The in sync replica ids."),
-            new Field(ZK_VERSION_KEY_NAME, INT32, "The ZK version."),
-            new Field(REPLICAS_KEY_NAME, new ArrayOf(INT32), "The replica ids."),
-            new Field(IS_NEW_KEY_NAME, BOOLEAN, "Whether the replica should have existed on the broker or not"));
+            TOPIC_NAME,
+            PARTITION_ID,
+            new FieldDef(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
+            new FieldDef(LEADER_KEY_NAME, INT32, "The broker id for the leader."),
+            new FieldDef(LEADER_EPOCH_KEY_NAME, INT32, "The leader epoch."),
+            new FieldDef(ISR_KEY_NAME, new ArrayOf(INT32), "The in sync replica ids."),
+            new FieldDef(ZK_VERSION_KEY_NAME, INT32, "The ZK version."),
+            new FieldDef(REPLICAS_KEY_NAME, new ArrayOf(INT32), "The replica ids."),
+            new FieldDef(IS_NEW_KEY_NAME, BOOLEAN, "Whether the replica should have existed on the broker or not"));
 
     private static final Schema LEADER_AND_ISR_REQUEST_LIVE_LEADER_V0 = new Schema(
-            new Field(END_POINT_ID_KEY_NAME, INT32, "The broker id."),
-            new Field(HOST_KEY_NAME, STRING, "The hostname of the broker."),
-            new Field(PORT_KEY_NAME, INT32, "The port on which the broker accepts requests."));
+            new FieldDef(END_POINT_ID_KEY_NAME, INT32, "The broker id."),
+            new FieldDef(HOST_KEY_NAME, STRING, "The hostname of the broker."),
+            new FieldDef(PORT_KEY_NAME, INT32, "The port on which the broker accepts requests."));
 
     private static final Schema LEADER_AND_ISR_REQUEST_V0 = new Schema(
-            new Field(CONTROLLER_ID_KEY_NAME, INT32, "The controller id."),
-            new Field(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
-            new Field(PARTITION_STATES_KEY_NAME, new ArrayOf(LEADER_AND_ISR_REQUEST_PARTITION_STATE_V0)),
-            new Field(LIVE_LEADERS_KEY_NAME, new ArrayOf(LEADER_AND_ISR_REQUEST_LIVE_LEADER_V0)));
+            new FieldDef(CONTROLLER_ID_KEY_NAME, INT32, "The controller id."),
+            new FieldDef(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
+            new FieldDef(PARTITION_STATES_KEY_NAME, new ArrayOf(LEADER_AND_ISR_REQUEST_PARTITION_STATE_V0)),
+            new FieldDef(LIVE_LEADERS_KEY_NAME, new ArrayOf(LEADER_AND_ISR_REQUEST_LIVE_LEADER_V0)));
 
-    // LEADER_AND_ISR_REQUEST_V1 added a per-partition is_new field. This field specifies whether the replica should have existed on the broker or not.
+    // LEADER_AND_ISR_REQUEST_V1 added a per-partition is_new FieldDef. This field specifies whether the replica should have existed on the broker or not.
     private static final Schema LEADER_AND_ISR_REQUEST_V1 = new Schema(
-            new Field(CONTROLLER_ID_KEY_NAME, INT32, "The controller id."),
-            new Field(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
-            new Field(PARTITION_STATES_KEY_NAME, new ArrayOf(LEADER_AND_ISR_REQUEST_PARTITION_STATE_V1)),
-            new Field(LIVE_LEADERS_KEY_NAME, new ArrayOf(LEADER_AND_ISR_REQUEST_LIVE_LEADER_V0)));
+            new FieldDef(CONTROLLER_ID_KEY_NAME, INT32, "The controller id."),
+            new FieldDef(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
+            new FieldDef(PARTITION_STATES_KEY_NAME, new ArrayOf(LEADER_AND_ISR_REQUEST_PARTITION_STATE_V1)),
+            new FieldDef(LIVE_LEADERS_KEY_NAME, new ArrayOf(LEADER_AND_ISR_REQUEST_LIVE_LEADER_V0)));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{LEADER_AND_ISR_REQUEST_V0, LEADER_AND_ISR_REQUEST_V1};

@@ -21,7 +21,7 @@ import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.Resource;
@@ -48,19 +48,19 @@ public class DescribeAclsResponse extends AbstractResponse {
     private final static String ACLS_KEY_NAME = "acls";
 
     private static final Schema DESCRIBE_ACLS_RESOURCE = new Schema(
-            new Field(RESOURCE_TYPE),
-            new Field(RESOURCE_NAME),
-            new Field(ACLS_KEY_NAME, new ArrayOf(new Schema(
-                    new Field(PRINCIPAL),
-                    new Field(HOST),
-                    new Field(OPERATION),
-                    new Field(PERMISSION_TYPE)))));
+            RESOURCE_TYPE,
+            RESOURCE_NAME,
+            new FieldDef(ACLS_KEY_NAME, new ArrayOf(new Schema(
+                    PRINCIPAL,
+                    HOST,
+                    OPERATION,
+                    PERMISSION_TYPE))));
 
     private static final Schema DESCRIBE_ACLS_RESPONSE_V0 = new Schema(
-            new Field(THROTTLE_TIME_MS),
-            new Field(ERROR_CODE),
-            new Field(ERROR_MESSAGE),
-            new Field(RESOURCES_KEY_NAME, new ArrayOf(DESCRIBE_ACLS_RESOURCE), "The resources and their associated ACLs."));
+            THROTTLE_TIME_MS,
+            ERROR_CODE,
+            ERROR_MESSAGE,
+            new FieldDef(RESOURCES_KEY_NAME, new ArrayOf(DESCRIBE_ACLS_RESOURCE), "The resources and their associated ACLs."));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{DESCRIBE_ACLS_RESPONSE_V0};

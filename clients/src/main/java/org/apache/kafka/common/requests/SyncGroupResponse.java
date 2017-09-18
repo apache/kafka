@@ -18,7 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -32,12 +32,12 @@ public class SyncGroupResponse extends AbstractResponse {
     private static final String MEMBER_ASSIGNMENT_KEY_NAME = "member_assignment";
 
     private static final Schema SYNC_GROUP_RESPONSE_V0 = new Schema(
-            new Field(ERROR_CODE),
-            new Field(MEMBER_ASSIGNMENT_KEY_NAME, BYTES));
+            ERROR_CODE,
+            new FieldDef(MEMBER_ASSIGNMENT_KEY_NAME, BYTES));
     private static final Schema SYNC_GROUP_RESPONSE_V1 = new Schema(
-            new Field(THROTTLE_TIME_MS),
-            new Field(ERROR_CODE),
-            new Field(MEMBER_ASSIGNMENT_KEY_NAME, BYTES));
+            THROTTLE_TIME_MS,
+            ERROR_CODE,
+            new FieldDef(MEMBER_ASSIGNMENT_KEY_NAME, BYTES));
 
     public static Schema[] schemaVersions() {
         return new Schema[] {SYNC_GROUP_RESPONSE_V0, SYNC_GROUP_RESPONSE_V1};

@@ -33,15 +33,15 @@ public class Schema extends Type {
      *
      * @throws SchemaException If the given list have duplicate fields
      */
-    public Schema(Field... fs) {
+    public Schema(FieldDef... fs) {
         this.fields = new Field[fs.length];
         this.fieldsByName = new HashMap<>();
         for (int i = 0; i < this.fields.length; i++) {
-            Field field = fs[i];
-            if (fieldsByName.containsKey(field.name))
-                throw new SchemaException("Schema contains a duplicate field: " + field.name);
-            this.fields[i] = new Field(i, field.name, field.type, field.doc, field.defaultValue, this);
-            this.fieldsByName.put(fs[i].name, this.fields[i]);
+            FieldDef def = fs[i];
+            if (fieldsByName.containsKey(def.name))
+                throw new SchemaException("Schema contains a duplicate field: " + def.name);
+            this.fields[i] = new Field(def, this, i);
+            this.fieldsByName.put(def.name, this.fields[i]);
         }
     }
 
@@ -53,10 +53,10 @@ public class Schema extends Type {
         Struct r = (Struct) o;
         for (Field field : fields) {
             try {
-                Object value = field.type().validate(r.get(field));
-                field.type.write(buffer, value);
+                Object value = field.def.type.validate(r.get(field));
+                field.def.type.write(buffer, value);
             } catch (Exception e) {
-                throw new SchemaException("Error writing field '" + field.name + "': " +
+                throw new SchemaException("Error writing field '" + field.def.name + "': " +
                                           (e.getMessage() == null ? e.getClass().getName() : e.getMessage()));
             }
         }
@@ -70,9 +70,9 @@ public class Schema extends Type {
         Object[] objects = new Object[fields.length];
         for (int i = 0; i < fields.length; i++) {
             try {
-                objects[i] = fields[i].type.read(buffer);
+                objects[i] = fields[i].def.type.read(buffer);
             } catch (Exception e) {
-                throw new SchemaException("Error reading field '" + fields[i].name + "': " +
+                throw new SchemaException("Error reading field '" + fields[i].def.name + "': " +
                                           (e.getMessage() == null ? e.getClass().getName() : e.getMessage()));
             }
         }
@@ -88,9 +88,9 @@ public class Schema extends Type {
         Struct r = (Struct) o;
         for (Field field : fields) {
             try {
-                size += field.type.sizeOf(r.get(field));
+                size += field.def.type.sizeOf(r.get(field));
             } catch (Exception e) {
-                throw new SchemaException("Error computing size for field '" + field.name + "': " +
+                throw new SchemaException("Error computing size for field '" + field.def.name + "': " +
                         (e.getMessage() == null ? e.getClass().getName() : e.getMessage()));
             }
         }
@@ -153,9 +153,9 @@ public class Schema extends Type {
             Struct struct = (Struct) item;
             for (Field field : fields) {
                 try {
-                    field.type.validate(struct.get(field));
+                    field.def.type.validate(struct.get(field));
                 } catch (SchemaException e) {
-                    throw new SchemaException("Invalid value for field '" + field.name + "': " + e.getMessage());
+                    throw new SchemaException("Invalid value for field '" + field.def.name + "': " + e.getMessage());
                 }
             }
             return struct;

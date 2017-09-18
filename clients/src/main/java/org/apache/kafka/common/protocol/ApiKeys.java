@@ -113,9 +113,9 @@ public enum ApiKeys {
     METADATA(3, "Metadata", MetadataRequest.schemaVersions(), MetadataResponse.schemaVersions()),
     LEADER_AND_ISR(4, "LeaderAndIsr", true, LeaderAndIsrRequest.schemaVersions(), LeaderAndIsrResponse.schemaVersions()),
     STOP_REPLICA(5, "StopReplica", true, StopReplicaRequest.schemaVersions(), StopReplicaResponse.schemaVersions()),
-    UPDATE_METADATA_KEY(6, "UpdateMetadata", true, UpdateMetadataRequest.schemaVersions(),
+    UPDATE_METADATA(6, "UpdateMetadata", true, UpdateMetadataRequest.schemaVersions(),
             UpdateMetadataResponse.schemaVersions()),
-    CONTROLLED_SHUTDOWN_KEY(7, "ControlledShutdown", true, ControlledShutdownRequest.schemaVersions(),
+    CONTROLLED_SHUTDOWN(7, "ControlledShutdown", true, ControlledShutdownRequest.schemaVersions(),
             ControlledShutdownResponse.schemaVersions()),
     OFFSET_COMMIT(8, "OffsetCommit", OffsetCommitRequest.schemaVersions(), OffsetCommitResponse.schemaVersions()),
     OFFSET_FETCH(9, "OffsetFetch", OffsetFetchRequest.schemaVersions(), OffsetFetchResponse.schemaVersions()),
@@ -290,10 +290,8 @@ public enum ApiKeys {
     }
 
     private Schema schemaFor(Schema[] versions, short version) {
-        if (version < 0 || version > latestVersion())
+        if (!isVersionSupported(version))
             throw new IllegalArgumentException("Invalid version for API key " + this + ": " + version);
-        if (versions[version] == null)
-            throw new IllegalArgumentException("Unsupported version for API key " + this + ": " + version);
         return versions[version];
     }
 
@@ -327,9 +325,6 @@ public enum ApiKeys {
     }
 
     private static boolean retainsBufferReference(Schema schema) {
-        if (schema == null) {
-            return false;
-        }
         final AtomicReference<Boolean> foundBufferReference = new AtomicReference<>(Boolean.FALSE);
         SchemaVisitor detector = new SchemaVisitorAdapter() {
             @Override

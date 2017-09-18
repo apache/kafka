@@ -34,7 +34,7 @@ public class ProtoUtils {
             Schema schema = (Schema) node;
             visitor.visit(schema);
             for (Field f : schema.fields()) {
-                handleNode(f.type, visitor);
+                handleNode(f.def.type, visitor);
             }
         } else if (node instanceof ArrayOf) {
             ArrayOf array = (ArrayOf) node;

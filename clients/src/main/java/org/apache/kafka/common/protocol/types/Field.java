@@ -20,63 +20,18 @@ package org.apache.kafka.common.protocol.types;
  * A field in a schema
  */
 public class Field {
-
-    public static final Object NO_DEFAULT = new Object();
-
+    public final FieldDef def;
     final int index;
-    public final String name;
-    public final Type type;
-    public final Object defaultValue;
-    public final String doc;
     final Schema schema;
 
-    /**
-     * Create the field.
-     *
-     * @throws SchemaException If the default value is not primitive and the validation fails
-     */
-    public Field(int index, String name, Type type, String doc, Object defaultValue, Schema schema) {
-        this.index = index;
-        this.name = name;
-        this.type = type;
-        this.doc = doc;
-        this.defaultValue = defaultValue;
+    public Field(FieldDef def, Schema schema, int index) {
+        this.def = def;
         this.schema = schema;
-        if (defaultValue != NO_DEFAULT)
-            type.validate(defaultValue);
+        this.index = index;
     }
-
-    public Field(int index, String name, Type type, String doc, Object defaultValue) {
-        this(index, name, type, doc, defaultValue, null);
-    }
-
-    public Field(String name, Type type, String doc, Object defaultValue) {
-        this(-1, name, type, doc, defaultValue);
-    }
-
-    public Field(String name, Type type, String doc) {
-        this(name, type, doc, NO_DEFAULT);
-    }
-
-    public Field(FieldDef def) {
-        this(def.name, def.type, def.docString, def.hasDefaultValue ? def.defaultValue : NO_DEFAULT);
-    }
-
-    public Field(String name, Type type) {
-        this(name, type, "");
-    }
-
-    public Type type() {
-        return type;
-    }
-
-    public Schema schema() {
-        return schema;
-    }
-
 
     @Override
     public String toString() {
-        return name + ":" + type;
+        return def.name + ":" + def.type;
     }
 }

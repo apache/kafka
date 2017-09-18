@@ -19,21 +19,19 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
+import static org.apache.kafka.common.protocol.CommonFields.ERROR_MESSAGE;
 import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 import static org.apache.kafka.common.protocol.types.Type.INT32;
-import static org.apache.kafka.common.protocol.types.Type.NULLABLE_STRING;
 import static org.apache.kafka.common.protocol.types.Type.STRING;
 
 public class FindCoordinatorResponse extends AbstractResponse {
-
-    private static final String ERROR_MESSAGE_KEY_NAME = "error_message";
     private static final String COORDINATOR_KEY_NAME = "coordinator";
 
     // coordinator level field names
@@ -42,20 +40,20 @@ public class FindCoordinatorResponse extends AbstractResponse {
     private static final String PORT_KEY_NAME = "port";
 
     private static final Schema FIND_COORDINATOR_BROKER_V0 = new Schema(
-            new Field(NODE_ID_KEY_NAME, INT32, "The broker id."),
-            new Field(HOST_KEY_NAME, STRING, "The hostname of the broker."),
-            new Field(PORT_KEY_NAME, INT32, "The port on which the broker accepts requests."));
+            new FieldDef(NODE_ID_KEY_NAME, INT32, "The broker id."),
+            new FieldDef(HOST_KEY_NAME, STRING, "The hostname of the broker."),
+            new FieldDef(PORT_KEY_NAME, INT32, "The port on which the broker accepts requests."));
 
     private static final Schema FIND_COORDINATOR_RESPONSE_V0 = new Schema(
-            new Field(ERROR_CODE),
-            new Field(COORDINATOR_KEY_NAME, FIND_COORDINATOR_BROKER_V0, "Host and port information for the coordinator " +
+            ERROR_CODE,
+            new FieldDef(COORDINATOR_KEY_NAME, FIND_COORDINATOR_BROKER_V0, "Host and port information for the coordinator " +
                     "for a consumer group."));
 
     private static final Schema FIND_COORDINATOR_RESPONSE_V1 = new Schema(
-            new Field(THROTTLE_TIME_MS),
-            new Field(ERROR_CODE),
-            new Field(ERROR_MESSAGE_KEY_NAME, NULLABLE_STRING),
-            new Field(COORDINATOR_KEY_NAME, FIND_COORDINATOR_BROKER_V0, "Host and port information for the coordinator"));
+            THROTTLE_TIME_MS,
+            ERROR_CODE,
+            ERROR_MESSAGE,
+            new FieldDef(COORDINATOR_KEY_NAME, FIND_COORDINATOR_BROKER_V0, "Host and port information for the coordinator"));
 
     public static Schema[] schemaVersions() {
         return new Schema[] {FIND_COORDINATOR_RESPONSE_V0, FIND_COORDINATOR_RESPONSE_V1};
@@ -89,10 +87,7 @@ public class FindCoordinatorResponse extends AbstractResponse {
     public FindCoordinatorResponse(Struct struct) {
         this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
         error = Errors.forCode(struct.get(ERROR_CODE));
-        if (struct.hasField(ERROR_MESSAGE_KEY_NAME))
-            errorMessage = struct.getString(ERROR_MESSAGE_KEY_NAME);
-        else
-            errorMessage = null;
+        errorMessage = struct.getOrElse(ERROR_MESSAGE, null);
 
         Struct broker = (Struct) struct.get(COORDINATOR_KEY_NAME);
         int nodeId = broker.getInt(NODE_ID_KEY_NAME);
@@ -118,8 +113,7 @@ public class FindCoordinatorResponse extends AbstractResponse {
         Struct struct = new Struct(ApiKeys.FIND_COORDINATOR.responseSchema(version));
         struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
         struct.set(ERROR_CODE, error.code());
-        if (struct.hasField(ERROR_MESSAGE_KEY_NAME))
-            struct.set(ERROR_MESSAGE_KEY_NAME, errorMessage);
+        struct.setIfExists(ERROR_MESSAGE, errorMessage);
 
         Struct coordinator = struct.instance(COORDINATOR_KEY_NAME);
         coordinator.set(NODE_ID_KEY_NAME, node.id());

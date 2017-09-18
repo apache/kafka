@@ -19,7 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.Utils;
@@ -35,7 +35,7 @@ public class DescribeGroupsRequest extends AbstractRequest {
 
     /* Describe group api */
     private static final Schema DESCRIBE_GROUPS_REQUEST_V0 = new Schema(
-            new Field(GROUP_IDS_KEY_NAME, new ArrayOf(STRING), "List of groupIds to request metadata for (an " +
+            new FieldDef(GROUP_IDS_KEY_NAME, new ArrayOf(STRING), "List of groupIds to request metadata for (an " +
                     "empty groupId array will return empty group metadata)."));
 
     /* v1 request is the same as v0. Throttle time has been added to response */

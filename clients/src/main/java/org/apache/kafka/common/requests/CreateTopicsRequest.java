@@ -19,7 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -55,37 +55,37 @@ public class CreateTopicsRequest extends AbstractRequest {
     private static final String CONFIG_ENTRIES_KEY_NAME = "config_entries";
 
     private static final Schema CONFIG_ENTRY = new Schema(
-            new Field(CONFIG_NAME_KEY_NAME, STRING, "Configuration name"),
-            new Field(CONFIG_VALUE_KEY_NAME, NULLABLE_STRING, "Configuration value"));
+            new FieldDef(CONFIG_NAME_KEY_NAME, STRING, "Configuration name"),
+            new FieldDef(CONFIG_VALUE_KEY_NAME, NULLABLE_STRING, "Configuration value"));
 
     private static final Schema PARTITION_REPLICA_ASSIGNMENT_ENTRY = new Schema(
-            new Field(PARTITION_ID),
-            new Field(REPLICA_ASSIGNMENT_REPLICAS_KEY_NAME, new ArrayOf(INT32), "The set of all nodes that should " +
+            PARTITION_ID,
+            new FieldDef(REPLICA_ASSIGNMENT_REPLICAS_KEY_NAME, new ArrayOf(INT32), "The set of all nodes that should " +
                     "host this partition. The first replica in the list is the preferred leader."));
 
     private static final Schema SINGLE_CREATE_TOPIC_REQUEST_V0 = new Schema(
-            new Field(TOPIC_NAME),
-            new Field(NUM_PARTITIONS_KEY_NAME, INT32, "Number of partitions to be created. -1 indicates unset."),
-            new Field(REPLICATION_FACTOR_KEY_NAME, INT16, "Replication factor for the topic. -1 indicates unset."),
-            new Field(REPLICA_ASSIGNMENT_KEY_NAME, new ArrayOf(PARTITION_REPLICA_ASSIGNMENT_ENTRY),
+            TOPIC_NAME,
+            new FieldDef(NUM_PARTITIONS_KEY_NAME, INT32, "Number of partitions to be created. -1 indicates unset."),
+            new FieldDef(REPLICATION_FACTOR_KEY_NAME, INT16, "Replication factor for the topic. -1 indicates unset."),
+            new FieldDef(REPLICA_ASSIGNMENT_KEY_NAME, new ArrayOf(PARTITION_REPLICA_ASSIGNMENT_ENTRY),
                     "Replica assignment among kafka brokers for this topic partitions. If this is set num_partitions " +
                             "and replication_factor must be unset."),
-            new Field(CONFIG_ENTRIES_KEY_NAME, new ArrayOf(CONFIG_ENTRY), "Topic level configuration for topic to be set."));
+            new FieldDef(CONFIG_ENTRIES_KEY_NAME, new ArrayOf(CONFIG_ENTRY), "Topic level configuration for topic to be set."));
 
     private static final Schema SINGLE_CREATE_TOPIC_REQUEST_V1 = SINGLE_CREATE_TOPIC_REQUEST_V0;
 
     private static final Schema CREATE_TOPICS_REQUEST_V0 = new Schema(
-            new Field(REQUESTS_KEY_NAME, new ArrayOf(SINGLE_CREATE_TOPIC_REQUEST_V0),
+            new FieldDef(REQUESTS_KEY_NAME, new ArrayOf(SINGLE_CREATE_TOPIC_REQUEST_V0),
                     "An array of single topic creation requests. Can not have multiple entries for the same topic."),
-            new Field(TIMEOUT_KEY_NAME, INT32, "The time in ms to wait for a topic to be completely created on the " +
+            new FieldDef(TIMEOUT_KEY_NAME, INT32, "The time in ms to wait for a topic to be completely created on the " +
                     "controller node. Values <= 0 will trigger topic creation and return immediately"));
 
     private static final Schema CREATE_TOPICS_REQUEST_V1 = new Schema(
-            new Field(REQUESTS_KEY_NAME, new ArrayOf(SINGLE_CREATE_TOPIC_REQUEST_V1), "An array of single " +
+            new FieldDef(REQUESTS_KEY_NAME, new ArrayOf(SINGLE_CREATE_TOPIC_REQUEST_V1), "An array of single " +
                     "topic creation requests. Can not have multiple entries for the same topic."),
-            new Field(TIMEOUT_KEY_NAME, INT32, "The time in ms to wait for a topic to be completely created on the " +
+            new FieldDef(TIMEOUT_KEY_NAME, INT32, "The time in ms to wait for a topic to be completely created on the " +
                     "controller node. Values <= 0 will trigger topic creation and return immediately"),
-            new Field(VALIDATE_ONLY_KEY_NAME, BOOLEAN, "If this is true, the request will be validated, but the " +
+            new FieldDef(VALIDATE_ONLY_KEY_NAME, BOOLEAN, "If this is true, the request will be validated, but the " +
                     "topic won't be created."));
 
     /* v2 request is the same as v1. Throttle time has been added to the response */

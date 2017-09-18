@@ -16,17 +16,17 @@
  */
 package org.apache.kafka.common.protocol.types;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.fail;
+import org.junit.Before;
+import org.junit.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
-import org.junit.Before;
-import org.junit.Test;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.fail;
 
 public class ProtocolSerializationTest {
 
@@ -35,20 +35,20 @@ public class ProtocolSerializationTest {
 
     @Before
     public void setup() {
-        this.schema = new Schema(new Field("boolean", Type.BOOLEAN),
-                                 new Field("int8", Type.INT8),
-                                 new Field("int16", Type.INT16),
-                                 new Field("int32", Type.INT32),
-                                 new Field("int64", Type.INT64),
-                                 new Field("varint", Type.VARINT),
-                                 new Field("varlong", Type.VARLONG),
-                                 new Field("string", Type.STRING),
-                                 new Field("nullable_string", Type.NULLABLE_STRING),
-                                 new Field("bytes", Type.BYTES),
-                                 new Field("nullable_bytes", Type.NULLABLE_BYTES),
-                                 new Field("array", new ArrayOf(Type.INT32)),
-                                 new Field("null_array", ArrayOf.nullable(Type.INT32)),
-                                 new Field("struct", new Schema(new Field("field", new ArrayOf(Type.INT32)))));
+        this.schema = new Schema(new FieldDef("boolean", Type.BOOLEAN),
+                                 new FieldDef("int8", Type.INT8),
+                                 new FieldDef("int16", Type.INT16),
+                                 new FieldDef("int32", Type.INT32),
+                                 new FieldDef("int64", Type.INT64),
+                                 new FieldDef("varint", Type.VARINT),
+                                 new FieldDef("varlong", Type.VARLONG),
+                                 new FieldDef("string", Type.STRING),
+                                 new FieldDef("nullable_string", Type.NULLABLE_STRING),
+                                 new FieldDef("bytes", Type.BYTES),
+                                 new FieldDef("nullable_bytes", Type.NULLABLE_BYTES),
+                                 new FieldDef("array", new ArrayOf(Type.INT32)),
+                                 new FieldDef("null_array", ArrayOf.nullable(Type.INT32)),
+                                 new FieldDef("struct", new Schema(new FieldDef("field", new ArrayOf(Type.INT32)))));
         this.struct = new Struct(this.schema).set("boolean", true)
                                              .set("int8", (byte) 1)
                                              .set("int16", (short) 1)
@@ -101,10 +101,10 @@ public class ProtocolSerializationTest {
             try {
                 this.struct.set(f, null);
                 this.struct.validate();
-                if (!f.type.isNullable())
+                if (!f.def.type.isNullable())
                     fail("Should not allow serialization of null value.");
             } catch (SchemaException e) {
-                assertFalse(f.type.isNullable());
+                assertFalse(f.def.type.isNullable());
             } finally {
                 this.struct.set(f, o);
             }
@@ -113,7 +113,7 @@ public class ProtocolSerializationTest {
 
     @Test
     public void testDefault() {
-        Schema schema = new Schema(new Field("field", Type.INT32, "doc", 42));
+        Schema schema = new Schema(new FieldDef("field", Type.INT32, "doc", 42));
         Struct struct = new Struct(schema);
         assertEquals("Should get the default value", 42, struct.get("field"));
         struct.validate(); // should be valid even with missing value
@@ -127,7 +127,7 @@ public class ProtocolSerializationTest {
 
     private void checkNullableDefault(Type type, Object defaultValue) {
         // Should use default even if the field allows null values
-        Schema schema = new Schema(new Field("field", type, "doc", defaultValue));
+        Schema schema = new Schema(new FieldDef("field", type, "doc", defaultValue));
         Struct struct = new Struct(schema);
         assertEquals("Should get the default value", defaultValue, struct.get("field"));
         struct.validate(); // should be valid even with missing value
@@ -269,7 +269,7 @@ public class ProtocolSerializationTest {
 
     @Test
     public void testStructEquals() {
-        Schema schema = new Schema(new Field("field1", Type.NULLABLE_STRING), new Field("field2", Type.NULLABLE_STRING));
+        Schema schema = new Schema(new FieldDef("field1", Type.NULLABLE_STRING), new FieldDef("field2", Type.NULLABLE_STRING));
         Struct emptyStruct1 = new Struct(schema);
         Struct emptyStruct2 = new Struct(schema);
         assertEquals(emptyStruct1, emptyStruct2);

@@ -20,7 +20,7 @@ import kafka.common.{KafkaException, MessageFormatter}
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.types.Type._
-import org.apache.kafka.common.protocol.types.{ArrayOf, Field, Schema, Struct}
+import org.apache.kafka.common.protocol.types._
 import java.io.PrintStream
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
@@ -59,7 +59,7 @@ object TransactionLog {
   private object KeySchema {
     private val TXN_ID_KEY = "transactional_id"
 
-    private val V0 = new Schema(new Field(TXN_ID_KEY, STRING))
+    private val V0 = new Schema(new FieldDef(TXN_ID_KEY, STRING))
     private val SCHEMAS = Map(0 -> V0)
 
     val CURRENT_VERSION = 0.toShort
@@ -81,18 +81,18 @@ object TransactionLog {
 
     private val PartitionIdsKey = "partition_ids"
     private val TopicKey = "topic"
-    private val PartitionsSchema = new Schema(new Field(TopicKey, STRING),
-      new Field(PartitionIdsKey, new ArrayOf(INT32)))
+    private val PartitionsSchema = new Schema(new FieldDef(TopicKey, STRING),
+      new FieldDef(PartitionIdsKey, new ArrayOf(INT32)))
 
-    private val V0 = new Schema(new Field(ProducerIdKey, INT64, "Producer id in use by the transactional id."),
-      new Field(ProducerEpochKey, INT16, "Epoch associated with the producer id"),
-      new Field(TxnTimeoutKey, INT32, "Transaction timeout in milliseconds"),
-      new Field(TxnStatusKey, INT8,
+    private val V0 = new Schema(new FieldDef(ProducerIdKey, INT64, "Producer id in use by the transactional id."),
+      new FieldDef(ProducerEpochKey, INT16, "Epoch associated with the producer id"),
+      new FieldDef(TxnTimeoutKey, INT32, "Transaction timeout in milliseconds"),
+      new FieldDef(TxnStatusKey, INT8,
         "TransactionState the transaction is in"),
-      new Field(TxnPartitionsKey, ArrayOf.nullable(PartitionsSchema),
+      new FieldDef(TxnPartitionsKey, ArrayOf.nullable(PartitionsSchema),
         "Set of partitions involved in the transaction"),
-      new Field(TxnEntryTimestampKey, INT64, "Time the transaction was last updated"),
-      new Field(TxnStartTimestampKey, INT64, "Time the transaction was started"))
+      new FieldDef(TxnEntryTimestampKey, INT64, "Time the transaction was last updated"),
+      new FieldDef(TxnStartTimestampKey, INT64, "Time the transaction was started"))
 
     private val Schemas = Map(0 -> V0)
 

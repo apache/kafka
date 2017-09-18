@@ -18,7 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -64,19 +64,19 @@ public class ConsumerProtocol {
 
     public static final short CONSUMER_PROTOCOL_V0 = 0;
     public static final Schema CONSUMER_PROTOCOL_HEADER_SCHEMA = new Schema(
-            new Field(VERSION_KEY_NAME, Type.INT16));
+            new FieldDef(VERSION_KEY_NAME, Type.INT16));
     private static final Struct CONSUMER_PROTOCOL_HEADER_V0 = new Struct(CONSUMER_PROTOCOL_HEADER_SCHEMA)
             .set(VERSION_KEY_NAME, CONSUMER_PROTOCOL_V0);
 
     public static final Schema SUBSCRIPTION_V0 = new Schema(
-            new Field(TOPICS_KEY_NAME, new ArrayOf(Type.STRING)),
-            new Field(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES));
+            new FieldDef(TOPICS_KEY_NAME, new ArrayOf(Type.STRING)),
+            new FieldDef(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES));
     public static final Schema TOPIC_ASSIGNMENT_V0 = new Schema(
-            new Field(TOPIC_KEY_NAME, Type.STRING),
-            new Field(PARTITIONS_KEY_NAME, new ArrayOf(Type.INT32)));
+            new FieldDef(TOPIC_KEY_NAME, Type.STRING),
+            new FieldDef(PARTITIONS_KEY_NAME, new ArrayOf(Type.INT32)));
     public static final Schema ASSIGNMENT_V0 = new Schema(
-            new Field(TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT_V0)),
-            new Field(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES));
+            new FieldDef(TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT_V0)),
+            new FieldDef(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES));
 
     public static ByteBuffer serializeSubscription(PartitionAssignor.Subscription subscription) {
         Struct struct = new Struct(SUBSCRIPTION_V0);

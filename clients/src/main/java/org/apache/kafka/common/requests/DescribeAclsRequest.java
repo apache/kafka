@@ -20,7 +20,6 @@ import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.ResourceFilter;
@@ -37,12 +36,12 @@ import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_TYPE;
 
 public class DescribeAclsRequest extends AbstractRequest {
     private static final Schema DESCRIBE_ACLS_REQUEST_V0 = new Schema(
-            new Field(RESOURCE_TYPE),
-            new Field(RESOURCE_NAME_FILTER),
-            new Field(PRINCIPAL_FILTER),
-            new Field(HOST_FILTER),
-            new Field(OPERATION),
-            new Field(PERMISSION_TYPE));
+            RESOURCE_TYPE,
+            RESOURCE_NAME_FILTER,
+            PRINCIPAL_FILTER,
+            HOST_FILTER,
+            OPERATION,
+            PERMISSION_TYPE);
 
     public static Schema[] schemaVersions() {
         return new Schema[]{DESCRIBE_ACLS_REQUEST_V0};

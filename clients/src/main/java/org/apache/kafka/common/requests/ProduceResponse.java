@@ -20,7 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.RecordBatch;
@@ -73,21 +73,21 @@ public class ProduceResponse extends AbstractResponse {
     private static final String LOG_APPEND_TIME_KEY_NAME = "log_append_time";
 
     private static final Schema PRODUCE_RESPONSE_V0 = new Schema(
-            new Field(RESPONSES_KEY_NAME, new ArrayOf(new Schema(
-                    new Field(TOPIC_NAME),
-                    new Field(PARTITION_RESPONSES_KEY_NAME, new ArrayOf(new Schema(
-                            new Field(PARTITION_ID),
-                            new Field(ERROR_CODE),
-                            new Field(BASE_OFFSET_KEY_NAME, INT64))))))));
+            new FieldDef(RESPONSES_KEY_NAME, new ArrayOf(new Schema(
+                    TOPIC_NAME,
+                    new FieldDef(PARTITION_RESPONSES_KEY_NAME, new ArrayOf(new Schema(
+                            PARTITION_ID,
+                            ERROR_CODE,
+                            new FieldDef(BASE_OFFSET_KEY_NAME, INT64))))))));
 
     private static final Schema PRODUCE_RESPONSE_V1 = new Schema(
-            new Field(RESPONSES_KEY_NAME, new ArrayOf(new Schema(
-                    new Field(TOPIC_NAME),
-                    new Field(PARTITION_RESPONSES_KEY_NAME, new ArrayOf(new Schema(
-                            new Field(PARTITION_ID),
-                            new Field(ERROR_CODE),
-                            new Field(BASE_OFFSET_KEY_NAME, INT64))))))),
-            new Field(THROTTLE_TIME_MS));
+            new FieldDef(RESPONSES_KEY_NAME, new ArrayOf(new Schema(
+                    TOPIC_NAME,
+                    new FieldDef(PARTITION_RESPONSES_KEY_NAME, new ArrayOf(new Schema(
+                            PARTITION_ID,
+                            ERROR_CODE,
+                            new FieldDef(BASE_OFFSET_KEY_NAME, INT64))))))),
+            THROTTLE_TIME_MS);
 
     /**
      * PRODUCE_RESPONSE_V2 added a timestamp field in the per partition response status.
@@ -95,17 +95,17 @@ public class ProduceResponse extends AbstractResponse {
      * time is used for the topic.
      */
     private static final Schema PRODUCE_RESPONSE_V2 = new Schema(
-            new Field(RESPONSES_KEY_NAME, new ArrayOf(new Schema(
-                    new Field(TOPIC_NAME),
-                    new Field(PARTITION_RESPONSES_KEY_NAME, new ArrayOf(new Schema(
-                            new Field(PARTITION_ID),
-                            new Field(ERROR_CODE),
-                            new Field(BASE_OFFSET_KEY_NAME, INT64),
-                            new Field(LOG_APPEND_TIME_KEY_NAME, INT64, "The timestamp returned by broker after appending " +
+            new FieldDef(RESPONSES_KEY_NAME, new ArrayOf(new Schema(
+                    TOPIC_NAME,
+                    new FieldDef(PARTITION_RESPONSES_KEY_NAME, new ArrayOf(new Schema(
+                            PARTITION_ID,
+                            ERROR_CODE,
+                            new FieldDef(BASE_OFFSET_KEY_NAME, INT64),
+                            new FieldDef(LOG_APPEND_TIME_KEY_NAME, INT64, "The timestamp returned by broker after appending " +
                                     "the messages. If CreateTime is used for the topic, the timestamp will be -1. " +
                                     "If LogAppendTime is used for the topic, the timestamp will be " +
                                     "the broker local time when the messages are appended."))))))),
-            new Field(THROTTLE_TIME_MS));
+            THROTTLE_TIME_MS);
 
     private static final Schema PRODUCE_RESPONSE_V3 = PRODUCE_RESPONSE_V2;
 

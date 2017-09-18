@@ -484,7 +484,7 @@ public class RequestResponseTest {
     @Test
     public void testControlledShutdownResponse() {
         ControlledShutdownResponse response = createControlledShutdownResponse();
-        short version = ApiKeys.CONTROLLED_SHUTDOWN_KEY.latestVersion();
+        short version = ApiKeys.CONTROLLED_SHUTDOWN.latestVersion();
         Struct struct = response.toStruct(version);
         ByteBuffer buffer = toBuffer(struct);
         ControlledShutdownResponse deserialized = ControlledShutdownResponse.parse(buffer, version);

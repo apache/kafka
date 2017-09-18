@@ -20,9 +20,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.CommonFields;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.InvalidRecordException;
@@ -61,17 +60,17 @@ public class ProduceRequest extends AbstractRequest {
 
 
     private static final Schema TOPIC_PRODUCE_DATA_V0 = new Schema(
-            new Field(TOPIC_NAME),
-            new Field(PARTITION_DATA_KEY_NAME, new ArrayOf(new Schema(
-                    new Field(CommonFields.PARTITION_ID),
-                    new Field(RECORD_SET_KEY_NAME, RECORDS)))));
+            TOPIC_NAME,
+            new FieldDef(PARTITION_DATA_KEY_NAME, new ArrayOf(new Schema(
+                    PARTITION_ID,
+                    new FieldDef(RECORD_SET_KEY_NAME, RECORDS)))));
 
     private static final Schema PRODUCE_REQUEST_V0 = new Schema(
-            new Field(ACKS_KEY_NAME, INT16, "The number of acknowledgments the producer requires the leader to have " +
+            new FieldDef(ACKS_KEY_NAME, INT16, "The number of acknowledgments the producer requires the leader to have " +
                     "received before considering a request complete. Allowed values: 0 for no acknowledgments, 1 for " +
                     "only the leader and -1 for the full ISR."),
-            new Field(TIMEOUT_KEY_NAME, INT32, "The time to await a response in ms."),
-            new Field(TOPIC_DATA_KEY_NAME, new ArrayOf(TOPIC_PRODUCE_DATA_V0)));
+            new FieldDef(TIMEOUT_KEY_NAME, INT32, "The time to await a response in ms."),
+            new FieldDef(TOPIC_DATA_KEY_NAME, new ArrayOf(TOPIC_PRODUCE_DATA_V0)));
 
     /**
      * The body of PRODUCE_REQUEST_V1 is the same as PRODUCE_REQUEST_V0.
@@ -88,13 +87,13 @@ public class ProduceRequest extends AbstractRequest {
     // Produce request V3 adds the transactional id which is used for authorization when attempting to write
     // transactional data. This version also adds support for message format V2.
     private static final Schema PRODUCE_REQUEST_V3 = new Schema(
-            new Field(TRANSACTIONAL_ID_KEY_NAME, NULLABLE_STRING, "The transactional ID of the producer. This is used to " +
+            new FieldDef(TRANSACTIONAL_ID_KEY_NAME, NULLABLE_STRING, "The transactional ID of the producer. This is used to " +
                     "authorize transaction produce requests. This can be null for non-transactional producers."),
-            new Field(ACKS_KEY_NAME, INT16, "The number of acknowledgments the producer requires the leader to have " +
+            new FieldDef(ACKS_KEY_NAME, INT16, "The number of acknowledgments the producer requires the leader to have " +
                     "received before considering a request complete. Allowed values: 0 for no acknowledgments, 1 " +
                     "for only the leader and -1 for the full ISR."),
-            new Field(TIMEOUT_KEY_NAME, INT32, "The time to await a response in ms."),
-            new Field(TOPIC_DATA_KEY_NAME, new ArrayOf(TOPIC_PRODUCE_DATA_V0)));
+            new FieldDef(TIMEOUT_KEY_NAME, INT32, "The time to await a response in ms."),
+            new FieldDef(TOPIC_DATA_KEY_NAME, new ArrayOf(TOPIC_PRODUCE_DATA_V0)));
 
     /**
      * The body of PRODUCE_REQUEST_V4 is the same as PRODUCE_REQUEST_V3.

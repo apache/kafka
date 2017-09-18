@@ -21,7 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
@@ -61,19 +61,19 @@ public class DescribeLogDirsResponse extends AbstractResponse {
     private static final String IS_FUTURE_KEY_NAME = "is_future";
 
     private static final Schema DESCRIBE_LOG_DIRS_RESPONSE_V0 = new Schema(
-            new Field(THROTTLE_TIME_MS),
-            new Field("log_dirs", new ArrayOf(new Schema(
-                    new Field(ERROR_CODE),
-                    new Field("log_dir", STRING, "The absolute log directory path."),
-                    new Field("topics", new ArrayOf(new Schema(
-                            new Field(TOPIC_NAME),
-                            new Field("partitions", new ArrayOf(new Schema(
-                                    new Field(PARTITION_ID),
-                                    new Field("size", INT64, "The size of the log segments of the partition in bytes."),
-                                    new Field("offset_lag", INT64, "The lag of the log's LEO w.r.t. partition's HW " +
+            THROTTLE_TIME_MS,
+            new FieldDef("log_dirs", new ArrayOf(new Schema(
+                    ERROR_CODE,
+                    new FieldDef("log_dir", STRING, "The absolute log directory path."),
+                    new FieldDef("topics", new ArrayOf(new Schema(
+                            TOPIC_NAME,
+                            new FieldDef("partitions", new ArrayOf(new Schema(
+                                    PARTITION_ID,
+                                    new FieldDef("size", INT64, "The size of the log segments of the partition in bytes."),
+                                    new FieldDef("offset_lag", INT64, "The lag of the log's LEO w.r.t. partition's HW " +
                                             "(if it is the current log for the partition) or current replica's LEO " +
                                             "(if it is the future log for the partition)"),
-                                    new Field("is_future", BOOLEAN, "True if this log is created by " +
+                                    new FieldDef("is_future", BOOLEAN, "True if this log is created by " +
                                             "AlterReplicaDirRequest and will replace the current log of the replica " +
                                             "in the future.")))))))))));
 

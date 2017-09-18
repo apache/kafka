@@ -19,7 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
@@ -40,8 +40,8 @@ public class SaslHandshakeResponse extends AbstractResponse {
     private static final String ENABLED_MECHANISMS_KEY_NAME = "enabled_mechanisms";
 
     private static final Schema SASL_HANDSHAKE_RESPONSE_V0 = new Schema(
-            new Field(ERROR_CODE),
-            new Field(ENABLED_MECHANISMS_KEY_NAME, new ArrayOf(Type.STRING), "Array of mechanisms enabled in the server."));
+            ERROR_CODE,
+            new FieldDef(ENABLED_MECHANISMS_KEY_NAME, new ArrayOf(Type.STRING), "Array of mechanisms enabled in the server."));
 
     private static final Schema SASL_HANDSHAKE_RESPONSE_V1 = SASL_HANDSHAKE_RESPONSE_V0;
 

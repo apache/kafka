@@ -17,7 +17,7 @@
 package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -49,26 +49,26 @@ public class ConnectProtocol {
 
     public static final short CONNECT_PROTOCOL_V0 = 0;
     public static final Schema CONNECT_PROTOCOL_HEADER_SCHEMA = new Schema(
-            new Field(VERSION_KEY_NAME, Type.INT16));
+            new FieldDef(VERSION_KEY_NAME, Type.INT16));
     private static final Struct CONNECT_PROTOCOL_HEADER_V0 = new Struct(CONNECT_PROTOCOL_HEADER_SCHEMA)
             .set(VERSION_KEY_NAME, CONNECT_PROTOCOL_V0);
 
     public static final Schema CONFIG_STATE_V0 = new Schema(
-            new Field(URL_KEY_NAME, Type.STRING),
-            new Field(CONFIG_OFFSET_KEY_NAME, Type.INT64));
+            new FieldDef(URL_KEY_NAME, Type.STRING),
+            new FieldDef(CONFIG_OFFSET_KEY_NAME, Type.INT64));
 
     // Assignments for each worker are a set of connectors and tasks. These are categorized by connector ID. A sentinel
     // task ID (CONNECTOR_TASK) is used to indicate the connector itself (i.e. that the assignment includes
     // responsibility for running the Connector instance in addition to any tasks it generates).
     public static final Schema CONNECTOR_ASSIGNMENT_V0 = new Schema(
-            new Field(CONNECTOR_KEY_NAME, Type.STRING),
-            new Field(TASKS_KEY_NAME, new ArrayOf(Type.INT32)));
+            new FieldDef(CONNECTOR_KEY_NAME, Type.STRING),
+            new FieldDef(TASKS_KEY_NAME, new ArrayOf(Type.INT32)));
     public static final Schema ASSIGNMENT_V0 = new Schema(
-            new Field(ERROR_KEY_NAME, Type.INT16),
-            new Field(LEADER_KEY_NAME, Type.STRING),
-            new Field(LEADER_URL_KEY_NAME, Type.STRING),
-            new Field(CONFIG_OFFSET_KEY_NAME, Type.INT64),
-            new Field(ASSIGNMENT_KEY_NAME, new ArrayOf(CONNECTOR_ASSIGNMENT_V0)));
+            new FieldDef(ERROR_KEY_NAME, Type.INT16),
+            new FieldDef(LEADER_KEY_NAME, Type.STRING),
+            new FieldDef(LEADER_URL_KEY_NAME, Type.STRING),
+            new FieldDef(CONFIG_OFFSET_KEY_NAME, Type.INT64),
+            new FieldDef(ASSIGNMENT_KEY_NAME, new ArrayOf(CONNECTOR_ASSIGNMENT_V0)));
 
     public static ByteBuffer serializeMetadata(WorkerState workerState) {
         Struct struct = new Struct(CONFIG_STATE_V0);

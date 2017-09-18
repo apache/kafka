@@ -36,7 +36,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.types.Type._
-import org.apache.kafka.common.protocol.types.{ArrayOf, Field, Schema, Struct}
+import org.apache.kafka.common.protocol.types._
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{IsolationLevel, OffsetFetchResponse}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
@@ -849,30 +849,30 @@ object GroupMetadataManager {
   private val CURRENT_OFFSET_KEY_SCHEMA_VERSION = 1.toShort
   private val CURRENT_GROUP_KEY_SCHEMA_VERSION = 2.toShort
 
-  private val OFFSET_COMMIT_KEY_SCHEMA = new Schema(new Field("group", STRING),
-    new Field("topic", STRING),
-    new Field("partition", INT32))
+  private val OFFSET_COMMIT_KEY_SCHEMA = new Schema(new FieldDef("group", STRING),
+    new FieldDef("topic", STRING),
+    new FieldDef("partition", INT32))
   private val OFFSET_KEY_GROUP_FIELD = OFFSET_COMMIT_KEY_SCHEMA.get("group")
   private val OFFSET_KEY_TOPIC_FIELD = OFFSET_COMMIT_KEY_SCHEMA.get("topic")
   private val OFFSET_KEY_PARTITION_FIELD = OFFSET_COMMIT_KEY_SCHEMA.get("partition")
 
-  private val OFFSET_COMMIT_VALUE_SCHEMA_V0 = new Schema(new Field("offset", INT64),
-    new Field("metadata", STRING, "Associated metadata.", ""),
-    new Field("timestamp", INT64))
+  private val OFFSET_COMMIT_VALUE_SCHEMA_V0 = new Schema(new FieldDef("offset", INT64),
+    new FieldDef("metadata", STRING, "Associated metadata.", ""),
+    new FieldDef("timestamp", INT64))
   private val OFFSET_VALUE_OFFSET_FIELD_V0 = OFFSET_COMMIT_VALUE_SCHEMA_V0.get("offset")
   private val OFFSET_VALUE_METADATA_FIELD_V0 = OFFSET_COMMIT_VALUE_SCHEMA_V0.get("metadata")
   private val OFFSET_VALUE_TIMESTAMP_FIELD_V0 = OFFSET_COMMIT_VALUE_SCHEMA_V0.get("timestamp")
 
-  private val OFFSET_COMMIT_VALUE_SCHEMA_V1 = new Schema(new Field("offset", INT64),
-    new Field("metadata", STRING, "Associated metadata.", ""),
-    new Field("commit_timestamp", INT64),
-    new Field("expire_timestamp", INT64))
+  private val OFFSET_COMMIT_VALUE_SCHEMA_V1 = new Schema(new FieldDef("offset", INT64),
+    new FieldDef("metadata", STRING, "Associated metadata.", ""),
+    new FieldDef("commit_timestamp", INT64),
+    new FieldDef("expire_timestamp", INT64))
   private val OFFSET_VALUE_OFFSET_FIELD_V1 = OFFSET_COMMIT_VALUE_SCHEMA_V1.get("offset")
   private val OFFSET_VALUE_METADATA_FIELD_V1 = OFFSET_COMMIT_VALUE_SCHEMA_V1.get("metadata")
   private val OFFSET_VALUE_COMMIT_TIMESTAMP_FIELD_V1 = OFFSET_COMMIT_VALUE_SCHEMA_V1.get("commit_timestamp")
   private val OFFSET_VALUE_EXPIRE_TIMESTAMP_FIELD_V1 = OFFSET_COMMIT_VALUE_SCHEMA_V1.get("expire_timestamp")
 
-  private val GROUP_METADATA_KEY_SCHEMA = new Schema(new Field("group", STRING))
+  private val GROUP_METADATA_KEY_SCHEMA = new Schema(new FieldDef("group", STRING))
   private val GROUP_KEY_GROUP_FIELD = GROUP_METADATA_KEY_SCHEMA.get("group")
 
   private val MEMBER_ID_KEY = "member_id"
@@ -884,21 +884,21 @@ object GroupMetadataManager {
   private val ASSIGNMENT_KEY = "assignment"
 
   private val MEMBER_METADATA_V0 = new Schema(
-    new Field(MEMBER_ID_KEY, STRING),
-    new Field(CLIENT_ID_KEY, STRING),
-    new Field(CLIENT_HOST_KEY, STRING),
-    new Field(SESSION_TIMEOUT_KEY, INT32),
-    new Field(SUBSCRIPTION_KEY, BYTES),
-    new Field(ASSIGNMENT_KEY, BYTES))
+    new FieldDef(MEMBER_ID_KEY, STRING),
+    new FieldDef(CLIENT_ID_KEY, STRING),
+    new FieldDef(CLIENT_HOST_KEY, STRING),
+    new FieldDef(SESSION_TIMEOUT_KEY, INT32),
+    new FieldDef(SUBSCRIPTION_KEY, BYTES),
+    new FieldDef(ASSIGNMENT_KEY, BYTES))
 
   private val MEMBER_METADATA_V1 = new Schema(
-    new Field(MEMBER_ID_KEY, STRING),
-    new Field(CLIENT_ID_KEY, STRING),
-    new Field(CLIENT_HOST_KEY, STRING),
-    new Field(REBALANCE_TIMEOUT_KEY, INT32),
-    new Field(SESSION_TIMEOUT_KEY, INT32),
-    new Field(SUBSCRIPTION_KEY, BYTES),
-    new Field(ASSIGNMENT_KEY, BYTES))
+    new FieldDef(MEMBER_ID_KEY, STRING),
+    new FieldDef(CLIENT_ID_KEY, STRING),
+    new FieldDef(CLIENT_HOST_KEY, STRING),
+    new FieldDef(REBALANCE_TIMEOUT_KEY, INT32),
+    new FieldDef(SESSION_TIMEOUT_KEY, INT32),
+    new FieldDef(SUBSCRIPTION_KEY, BYTES),
+    new FieldDef(ASSIGNMENT_KEY, BYTES))
 
   private val PROTOCOL_TYPE_KEY = "protocol_type"
   private val GENERATION_KEY = "generation"
@@ -907,18 +907,18 @@ object GroupMetadataManager {
   private val MEMBERS_KEY = "members"
 
   private val GROUP_METADATA_VALUE_SCHEMA_V0 = new Schema(
-    new Field(PROTOCOL_TYPE_KEY, STRING),
-    new Field(GENERATION_KEY, INT32),
-    new Field(PROTOCOL_KEY, NULLABLE_STRING),
-    new Field(LEADER_KEY, NULLABLE_STRING),
-    new Field(MEMBERS_KEY, new ArrayOf(MEMBER_METADATA_V0)))
+    new FieldDef(PROTOCOL_TYPE_KEY, STRING),
+    new FieldDef(GENERATION_KEY, INT32),
+    new FieldDef(PROTOCOL_KEY, NULLABLE_STRING),
+    new FieldDef(LEADER_KEY, NULLABLE_STRING),
+    new FieldDef(MEMBERS_KEY, new ArrayOf(MEMBER_METADATA_V0)))
 
   private val GROUP_METADATA_VALUE_SCHEMA_V1 = new Schema(
-    new Field(PROTOCOL_TYPE_KEY, STRING),
-    new Field(GENERATION_KEY, INT32),
-    new Field(PROTOCOL_KEY, NULLABLE_STRING),
-    new Field(LEADER_KEY, NULLABLE_STRING),
-    new Field(MEMBERS_KEY, new ArrayOf(MEMBER_METADATA_V1)))
+    new FieldDef(PROTOCOL_TYPE_KEY, STRING),
+    new FieldDef(GENERATION_KEY, INT32),
+    new FieldDef(PROTOCOL_KEY, NULLABLE_STRING),
+    new FieldDef(LEADER_KEY, NULLABLE_STRING),
+    new FieldDef(MEMBERS_KEY, new ArrayOf(MEMBER_METADATA_V1)))
 
 
   // map of versions to key schemas as data types

@@ -21,7 +21,7 @@ import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.Resource;
@@ -42,13 +42,13 @@ public class CreateAclsRequest extends AbstractRequest {
     private final static String CREATIONS_KEY_NAME = "creations";
 
     private static final Schema CREATE_ACLS_REQUEST_V0 = new Schema(
-            new Field(CREATIONS_KEY_NAME, new ArrayOf(new Schema(
-                    new Field(RESOURCE_TYPE),
-                    new Field(RESOURCE_NAME),
-                    new Field(PRINCIPAL),
-                    new Field(HOST),
-                    new Field(OPERATION),
-                    new Field(PERMISSION_TYPE)))));
+            new FieldDef(CREATIONS_KEY_NAME, new ArrayOf(new Schema(
+                    RESOURCE_TYPE,
+                    RESOURCE_NAME,
+                    PRINCIPAL,
+                    HOST,
+                    OPERATION,
+                    PERMISSION_TYPE))));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{CREATE_ACLS_REQUEST_V0};

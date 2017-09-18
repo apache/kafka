@@ -17,7 +17,7 @@
 package kafka.log
 
 import java.io._
-import java.nio.{BufferUnderflowException, ByteBuffer}
+import java.nio.ByteBuffer
 import java.nio.file.Files
 
 import kafka.common.KafkaException
@@ -299,18 +299,18 @@ object ProducerStateManager {
   private val ProducerEntriesOffset = CrcOffset + 4
 
   val ProducerSnapshotEntrySchema = new Schema(
-    new Field(ProducerIdField, Type.INT64, "The producer ID"),
-    new Field(ProducerEpochField, Type.INT16, "Current epoch of the producer"),
-    new Field(LastSequenceField, Type.INT32, "Last written sequence of the producer"),
-    new Field(LastOffsetField, Type.INT64, "Last written offset of the producer"),
-    new Field(OffsetDeltaField, Type.INT32, "The difference of the last sequence and first sequence in the last written batch"),
-    new Field(TimestampField, Type.INT64, "Max timestamp from the last written entry"),
-    new Field(CoordinatorEpochField, Type.INT32, "The epoch of the last transaction coordinator to send an end transaction marker"),
-    new Field(CurrentTxnFirstOffsetField, Type.INT64, "The first offset of the on-going transaction (-1 if there is none)"))
+    new FieldDef(ProducerIdField, Type.INT64, "The producer ID"),
+    new FieldDef(ProducerEpochField, Type.INT16, "Current epoch of the producer"),
+    new FieldDef(LastSequenceField, Type.INT32, "Last written sequence of the producer"),
+    new FieldDef(LastOffsetField, Type.INT64, "Last written offset of the producer"),
+    new FieldDef(OffsetDeltaField, Type.INT32, "The difference of the last sequence and first sequence in the last written batch"),
+    new FieldDef(TimestampField, Type.INT64, "Max timestamp from the last written entry"),
+    new FieldDef(CoordinatorEpochField, Type.INT32, "The epoch of the last transaction coordinator to send an end transaction marker"),
+    new FieldDef(CurrentTxnFirstOffsetField, Type.INT64, "The first offset of the on-going transaction (-1 if there is none)"))
   val PidSnapshotMapSchema = new Schema(
-    new Field(VersionField, Type.INT16, "Version of the snapshot file"),
-    new Field(CrcField, Type.UNSIGNED_INT32, "CRC of the snapshot data"),
-    new Field(ProducerEntriesField, new ArrayOf(ProducerSnapshotEntrySchema), "The entries in the producer table"))
+    new FieldDef(VersionField, Type.INT16, "Version of the snapshot file"),
+    new FieldDef(CrcField, Type.UNSIGNED_INT32, "CRC of the snapshot data"),
+    new FieldDef(ProducerEntriesField, new ArrayOf(ProducerSnapshotEntrySchema), "The entries in the producer table"))
 
   def readSnapshot(file: File): Iterable[ProducerIdEntry] = {
     try {

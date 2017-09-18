@@ -23,7 +23,7 @@ import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.Utils;
@@ -85,84 +85,84 @@ public class MetadataResponse extends AbstractResponse {
     private static final String ISR_KEY_NAME = "isr";
     private static final String OFFLINE_REPLICAS_KEY_NAME = "offline_replicas";
 
-    public static final Schema METADATA_BROKER_V0 = new Schema(
-            new Field(NODE_ID_KEY_NAME, INT32, "The broker id."),
-            new Field(HOST_KEY_NAME, STRING, "The hostname of the broker."),
-            new Field(PORT_KEY_NAME, INT32, "The port on which the broker accepts requests."));
+    private static final Schema METADATA_BROKER_V0 = new Schema(
+            new FieldDef(NODE_ID_KEY_NAME, INT32, "The broker id."),
+            new FieldDef(HOST_KEY_NAME, STRING, "The hostname of the broker."),
+            new FieldDef(PORT_KEY_NAME, INT32, "The port on which the broker accepts requests."));
 
-    public static final Schema PARTITION_METADATA_V0 = new Schema(
-            new Field(ERROR_CODE),
-            new Field(PARTITION_ID),
-            new Field(LEADER_KEY_NAME, INT32, "The id of the broker acting as leader for this partition."),
-            new Field(REPLICAS_KEY_NAME, new ArrayOf(INT32), "The set of all nodes that host this partition."),
-            new Field(ISR_KEY_NAME, new ArrayOf(INT32), "The set of nodes that are in sync with the leader for this partition."));
+    private static final Schema PARTITION_METADATA_V0 = new Schema(
+            ERROR_CODE,
+            PARTITION_ID,
+            new FieldDef(LEADER_KEY_NAME, INT32, "The id of the broker acting as leader for this partition."),
+            new FieldDef(REPLICAS_KEY_NAME, new ArrayOf(INT32), "The set of all nodes that host this partition."),
+            new FieldDef(ISR_KEY_NAME, new ArrayOf(INT32), "The set of nodes that are in sync with the leader for this partition."));
 
-    public static final Schema TOPIC_METADATA_V0 = new Schema(
-            new Field(ERROR_CODE),
-            new Field(TOPIC_NAME),
-            new Field(PARTITION_METADATA_KEY_NAME, new ArrayOf(PARTITION_METADATA_V0), "Metadata for each partition of the topic."));
+    private static final Schema TOPIC_METADATA_V0 = new Schema(
+            ERROR_CODE,
+            TOPIC_NAME,
+            new FieldDef(PARTITION_METADATA_KEY_NAME, new ArrayOf(PARTITION_METADATA_V0), "Metadata for each partition of the topic."));
 
-    public static final Schema METADATA_RESPONSE_V0 = new Schema(
-            new Field(BROKERS_KEY_NAME, new ArrayOf(METADATA_BROKER_V0), "Host and port information for all brokers."),
-            new Field(TOPIC_METADATA_KEY_NAME, new ArrayOf(TOPIC_METADATA_V0)));
+    private static final Schema METADATA_RESPONSE_V0 = new Schema(
+            new FieldDef(BROKERS_KEY_NAME, new ArrayOf(METADATA_BROKER_V0), "Host and port information for all brokers."),
+            new FieldDef(TOPIC_METADATA_KEY_NAME, new ArrayOf(TOPIC_METADATA_V0)));
 
-    public static final Schema METADATA_BROKER_V1 = new Schema(
-            new Field(NODE_ID_KEY_NAME, INT32, "The broker id."),
-            new Field(HOST_KEY_NAME, STRING, "The hostname of the broker."),
-            new Field(PORT_KEY_NAME, INT32, "The port on which the broker accepts requests."),
-            new Field(RACK_KEY_NAME, NULLABLE_STRING, "The rack of the broker."));
+    private static final Schema METADATA_BROKER_V1 = new Schema(
+            new FieldDef(NODE_ID_KEY_NAME, INT32, "The broker id."),
+            new FieldDef(HOST_KEY_NAME, STRING, "The hostname of the broker."),
+            new FieldDef(PORT_KEY_NAME, INT32, "The port on which the broker accepts requests."),
+            new FieldDef(RACK_KEY_NAME, NULLABLE_STRING, "The rack of the broker."));
 
-    public static final Schema PARTITION_METADATA_V1 = PARTITION_METADATA_V0;
+    private static final Schema PARTITION_METADATA_V1 = PARTITION_METADATA_V0;
 
     // PARTITION_METADATA_V2 added a per-partition offline_replicas field. This field specifies the list of replicas that are offline.
-    public static final Schema PARTITION_METADATA_V2 = new Schema(
-            new Field(ERROR_CODE),
-            new Field(PARTITION_ID),
-            new Field(LEADER_KEY_NAME, INT32, "The id of the broker acting as leader for this partition."),
-            new Field(REPLICAS_KEY_NAME, new ArrayOf(INT32), "The set of all nodes that host this partition."),
-            new Field(ISR_KEY_NAME, new ArrayOf(INT32), "The set of nodes that are in sync with the leader for this partition."),
-            new Field(OFFLINE_REPLICAS_KEY_NAME, new ArrayOf(INT32), "The set of offline replicas of this partition."));
+    private static final Schema PARTITION_METADATA_V2 = new Schema(
+            ERROR_CODE,
+            PARTITION_ID,
+            new FieldDef(LEADER_KEY_NAME, INT32, "The id of the broker acting as leader for this partition."),
+            new FieldDef(REPLICAS_KEY_NAME, new ArrayOf(INT32), "The set of all nodes that host this partition."),
+            new FieldDef(ISR_KEY_NAME, new ArrayOf(INT32), "The set of nodes that are in sync with the leader for this partition."),
+            new FieldDef(OFFLINE_REPLICAS_KEY_NAME, new ArrayOf(INT32), "The set of offline replicas of this partition."));
 
-    public static final Schema TOPIC_METADATA_V1 = new Schema(
-            new Field(ERROR_CODE),
-            new Field(TOPIC_NAME),
-            new Field(IS_INTERNAL_KEY_NAME, BOOLEAN, "Indicates if the topic is considered a Kafka internal topic"),
-            new Field(PARTITION_METADATA_KEY_NAME, new ArrayOf(PARTITION_METADATA_V1), "Metadata for each partition of the topic."));
+    private static final Schema TOPIC_METADATA_V1 = new Schema(
+            ERROR_CODE,
+            TOPIC_NAME,
+            new FieldDef(IS_INTERNAL_KEY_NAME, BOOLEAN, "Indicates if the topic is considered a Kafka internal topic"),
+            new FieldDef(PARTITION_METADATA_KEY_NAME, new ArrayOf(PARTITION_METADATA_V1), "Metadata for each partition of the topic."));
 
     // TOPIC_METADATA_V2 added a per-partition offline_replicas field. This field specifies the list of replicas that are offline.
-    public static final Schema TOPIC_METADATA_V2 = new Schema(
-            new Field(ERROR_CODE),
-            new Field(TOPIC_NAME),
-            new Field(IS_INTERNAL_KEY_NAME, BOOLEAN, "Indicates if the topic is considered a Kafka internal topic"),
-            new Field(PARTITION_METADATA_KEY_NAME, new ArrayOf(PARTITION_METADATA_V2), "Metadata for each partition of the topic."));
+    private static final Schema TOPIC_METADATA_V2 = new Schema(
+            ERROR_CODE,
+            TOPIC_NAME,
+            new FieldDef(IS_INTERNAL_KEY_NAME, BOOLEAN, "Indicates if the topic is considered a Kafka internal topic"),
+            new FieldDef(PARTITION_METADATA_KEY_NAME, new ArrayOf(PARTITION_METADATA_V2), "Metadata for each partition of the topic."));
 
-    public static final Schema METADATA_RESPONSE_V1 = new Schema(
-            new Field(BROKERS_KEY_NAME, new ArrayOf(METADATA_BROKER_V1), "Host and port information for all brokers."),
-            new Field(CONTROLLER_ID_KEY_NAME, INT32, "The broker id of the controller broker."),
-            new Field(TOPIC_METADATA_KEY_NAME, new ArrayOf(TOPIC_METADATA_V1)));
+    private static final Schema METADATA_RESPONSE_V1 = new Schema(
+            new FieldDef(BROKERS_KEY_NAME, new ArrayOf(METADATA_BROKER_V1), "Host and port information for all brokers."),
+            new FieldDef(CONTROLLER_ID_KEY_NAME, INT32, "The broker id of the controller broker."),
+            new FieldDef(TOPIC_METADATA_KEY_NAME, new ArrayOf(TOPIC_METADATA_V1)));
 
-    public static final Schema METADATA_RESPONSE_V2 = new Schema(
-            new Field(BROKERS_KEY_NAME, new ArrayOf(METADATA_BROKER_V1), "Host and port information for all brokers."),
-            new Field(CLUSTER_ID_KEY_NAME, NULLABLE_STRING, "The cluster id that this broker belongs to."),
-            new Field(CONTROLLER_ID_KEY_NAME, INT32, "The broker id of the controller broker."),
-            new Field(TOPIC_METADATA_KEY_NAME, new ArrayOf(TOPIC_METADATA_V1)));
+    private static final Schema METADATA_RESPONSE_V2 = new Schema(
+            new FieldDef(BROKERS_KEY_NAME, new ArrayOf(METADATA_BROKER_V1), "Host and port information for all brokers."),
+            new FieldDef(CLUSTER_ID_KEY_NAME, NULLABLE_STRING, "The cluster id that this broker belongs to."),
+            new FieldDef(CONTROLLER_ID_KEY_NAME, INT32, "The broker id of the controller broker."),
+            new FieldDef(TOPIC_METADATA_KEY_NAME, new ArrayOf(TOPIC_METADATA_V1)));
 
-    public static final Schema METADATA_RESPONSE_V3 = new Schema(
-            new Field(THROTTLE_TIME_MS),
-            new Field(BROKERS_KEY_NAME, new ArrayOf(METADATA_BROKER_V1), "Host and port information for all brokers."),
-            new Field(CLUSTER_ID_KEY_NAME, NULLABLE_STRING, "The cluster id that this broker belongs to."),
-            new Field(CONTROLLER_ID_KEY_NAME, INT32, "The broker id of the controller broker."),
-            new Field(TOPIC_METADATA_KEY_NAME, new ArrayOf(TOPIC_METADATA_V1)));
+    private static final Schema METADATA_RESPONSE_V3 = new Schema(
+            THROTTLE_TIME_MS,
+            new FieldDef(BROKERS_KEY_NAME, new ArrayOf(METADATA_BROKER_V1), "Host and port information for all brokers."),
+            new FieldDef(CLUSTER_ID_KEY_NAME, NULLABLE_STRING, "The cluster id that this broker belongs to."),
+            new FieldDef(CONTROLLER_ID_KEY_NAME, INT32, "The broker id of the controller broker."),
+            new FieldDef(TOPIC_METADATA_KEY_NAME, new ArrayOf(TOPIC_METADATA_V1)));
 
-    public static final Schema METADATA_RESPONSE_V4 = METADATA_RESPONSE_V3;
+    private static final Schema METADATA_RESPONSE_V4 = METADATA_RESPONSE_V3;
 
     // METADATA_RESPONSE_V5 added a per-partition offline_replicas field. This field specifies the list of replicas that are offline.
-    public static final Schema METADATA_RESPONSE_V5 = new Schema(
-            new Field(THROTTLE_TIME_MS),
-            new Field(BROKERS_KEY_NAME, new ArrayOf(METADATA_BROKER_V1), "Host and port information for all brokers."),
-            new Field(CLUSTER_ID_KEY_NAME, NULLABLE_STRING, "The cluster id that this broker belongs to."),
-            new Field(CONTROLLER_ID_KEY_NAME, INT32, "The broker id of the controller broker."),
-            new Field(TOPIC_METADATA_KEY_NAME, new ArrayOf(TOPIC_METADATA_V2)));
+    private static final Schema METADATA_RESPONSE_V5 = new Schema(
+            THROTTLE_TIME_MS,
+            new FieldDef(BROKERS_KEY_NAME, new ArrayOf(METADATA_BROKER_V1), "Host and port information for all brokers."),
+            new FieldDef(CLUSTER_ID_KEY_NAME, NULLABLE_STRING, "The cluster id that this broker belongs to."),
+            new FieldDef(CONTROLLER_ID_KEY_NAME, INT32, "The broker id of the controller broker."),
+            new FieldDef(TOPIC_METADATA_KEY_NAME, new ArrayOf(TOPIC_METADATA_V2)));
 
     public static Schema[] schemaVersions() {
         return new Schema[] {METADATA_RESPONSE_V0, METADATA_RESPONSE_V1, METADATA_RESPONSE_V2, METADATA_RESPONSE_V3,

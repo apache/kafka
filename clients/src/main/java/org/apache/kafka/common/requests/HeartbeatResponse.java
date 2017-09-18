@@ -18,7 +18,6 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -30,10 +29,10 @@ import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 public class HeartbeatResponse extends AbstractResponse {
 
     private static final Schema HEARTBEAT_RESPONSE_V0 = new Schema(
-            new Field(ERROR_CODE));
+            ERROR_CODE);
     private static final Schema HEARTBEAT_RESPONSE_V1 = new Schema(
-            new Field(THROTTLE_TIME_MS),
-            new Field(ERROR_CODE));
+            THROTTLE_TIME_MS,
+            ERROR_CODE);
 
     public static Schema[] schemaVersions() {
         return new Schema[] {HEARTBEAT_RESPONSE_V0, HEARTBEAT_RESPONSE_V1};

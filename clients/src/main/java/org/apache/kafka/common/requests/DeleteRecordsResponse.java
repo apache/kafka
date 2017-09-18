@@ -21,7 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
@@ -52,17 +52,17 @@ public class DeleteRecordsResponse extends AbstractResponse {
     private static final String LOW_WATERMARK_KEY_NAME = "low_watermark";
 
     private static final Schema DELETE_RECORDS_RESPONSE_PARTITION_V0 = new Schema(
-            new Field(PARTITION_ID),
-            new Field(LOW_WATERMARK_KEY_NAME, INT64, "Smallest available offset of all live replicas"),
-            new Field(ERROR_CODE));
+            PARTITION_ID,
+            new FieldDef(LOW_WATERMARK_KEY_NAME, INT64, "Smallest available offset of all live replicas"),
+            ERROR_CODE);
 
     private static final Schema DELETE_RECORDS_RESPONSE_TOPIC_V0 = new Schema(
-            new Field(TOPIC_NAME),
-            new Field(PARTITIONS_KEY_NAME, new ArrayOf(DELETE_RECORDS_RESPONSE_PARTITION_V0)));
+            TOPIC_NAME,
+            new FieldDef(PARTITIONS_KEY_NAME, new ArrayOf(DELETE_RECORDS_RESPONSE_PARTITION_V0)));
 
     private static final Schema DELETE_RECORDS_RESPONSE_V0 = new Schema(
-            new Field(THROTTLE_TIME_MS),
-            new Field("topics", new ArrayOf(DELETE_RECORDS_RESPONSE_TOPIC_V0)));
+            THROTTLE_TIME_MS,
+            new FieldDef("topics", new ArrayOf(DELETE_RECORDS_RESPONSE_TOPIC_V0)));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{DELETE_RECORDS_RESPONSE_V0};

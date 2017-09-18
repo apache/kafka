@@ -18,7 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -38,18 +38,18 @@ public class RequestHeader extends AbstractRequestResponse {
     private static final String CLIENT_ID_FIELD_NAME = "client_id";
     private static final String CORRELATION_ID_FIELD_NAME = "correlation_id";
 
-    public static final Schema REQUEST_HEADER = new Schema(
-            new Field(API_KEY_FIELD_NAME, INT16, "The id of the request type."),
-            new Field(API_VERSION_FIELD_NAME, INT16, "The version of the API."),
-            new Field(CORRELATION_ID_FIELD_NAME, INT32, "A user-supplied integer value that will be passed back with the response"),
-            new Field(CLIENT_ID_FIELD_NAME, NULLABLE_STRING, "A user specified identifier for the client making the request.", ""));
+    public static final Schema SCHEMA = new Schema(
+            new FieldDef(API_KEY_FIELD_NAME, INT16, "The id of the request type."),
+            new FieldDef(API_VERSION_FIELD_NAME, INT16, "The version of the API."),
+            new FieldDef(CORRELATION_ID_FIELD_NAME, INT32, "A user-supplied integer value that will be passed back with the response"),
+            new FieldDef(CLIENT_ID_FIELD_NAME, NULLABLE_STRING, "A user specified identifier for the client making the request.", ""));
 
     // Version 0 of the controlled shutdown API used a non-standard request header (the clientId is missing).
     // This can be removed once we drop support for that version.
-    public static final Schema CONTROLLED_SHUTDOWN_REQUEST_V0_HEADER = new Schema(
-            new Field(API_KEY_FIELD_NAME, INT16, "The id of the request type."),
-            new Field(API_VERSION_FIELD_NAME, INT16, "The version of the API."),
-            new Field(CORRELATION_ID_FIELD_NAME, INT32, "A user-supplied integer value that will be passed back with the response"));
+    private static final Schema CONTROLLED_SHUTDOWN_V0_SCHEMA = new Schema(
+            new FieldDef(API_KEY_FIELD_NAME, INT16, "The id of the request type."),
+            new FieldDef(API_VERSION_FIELD_NAME, INT16, "The version of the API."),
+            new FieldDef(CORRELATION_ID_FIELD_NAME, INT32, "A user-supplied integer value that will be passed back with the response"));
 
     private final ApiKeys apiKey;
     private final short apiVersion;
@@ -80,7 +80,7 @@ public class RequestHeader extends AbstractRequestResponse {
     }
 
     public Struct toStruct() {
-        Schema schema = requestHeaderSchema(apiKey.id, apiVersion);
+        Schema schema = schema(apiKey.id, apiVersion);
         Struct struct = new Struct(schema);
         struct.set(API_KEY_FIELD_NAME, apiKey.id);
         struct.set(API_VERSION_FIELD_NAME, apiVersion);
@@ -116,7 +116,7 @@ public class RequestHeader extends AbstractRequestResponse {
         try {
             short apiKey = buffer.getShort();
             short apiVersion = buffer.getShort();
-            Schema schema = requestHeaderSchema(apiKey, apiVersion);
+            Schema schema = schema(apiKey, apiVersion);
             buffer.rewind();
             return new RequestHeader(schema.read(buffer));
         } catch (InvalidRequestException e) {
@@ -158,11 +158,11 @@ public class RequestHeader extends AbstractRequestResponse {
     }
 
 
-    public static Schema requestHeaderSchema(short apiKey, short version) {
-        if (apiKey == ApiKeys.CONTROLLED_SHUTDOWN_KEY.id && version == 0)
+    private static Schema schema(short apiKey, short version) {
+        if (apiKey == ApiKeys.CONTROLLED_SHUTDOWN.id && version == 0)
             // This will be removed once we remove support for v0 of ControlledShutdownRequest, which
             // depends on a non-standard request header (it does not have a clientId)
-            return CONTROLLED_SHUTDOWN_REQUEST_V0_HEADER;
-        return REQUEST_HEADER;
+            return CONTROLLED_SHUTDOWN_V0_SCHEMA;
+        return SCHEMA;
     }
 }

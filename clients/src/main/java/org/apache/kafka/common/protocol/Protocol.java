@@ -43,18 +43,18 @@ public class Protocol {
 
         // Top level fields
         for (Field field: schema.fields()) {
-            if (field.type instanceof ArrayOf) {
+            if (field.def.type instanceof ArrayOf) {
                 b.append("[");
-                b.append(field.name);
+                b.append(field.def.name);
                 b.append("] ");
-                Type innerType = ((ArrayOf) field.type).type();
-                if (!subTypes.containsKey(field.name))
-                    subTypes.put(field.name, innerType);
+                Type innerType = ((ArrayOf) field.def.type).type();
+                if (!subTypes.containsKey(field.def.name))
+                    subTypes.put(field.def.name, innerType);
             } else {
-                b.append(field.name);
+                b.append(field.def.name);
                 b.append(" ");
-                if (!subTypes.containsKey(field.name))
-                    subTypes.put(field.name, field.type);
+                if (!subTypes.containsKey(field.def.name))
+                    subTypes.put(field.def.name, field.def.type);
             }
         }
         b.append("\n");
@@ -81,12 +81,12 @@ public class Protocol {
     private static void populateSchemaFields(Schema schema, Set<Field> fields) {
         for (Field field: schema.fields()) {
             fields.add(field);
-            if (field.type instanceof ArrayOf) {
-                Type innerType = ((ArrayOf) field.type).type();
+            if (field.def.type instanceof ArrayOf) {
+                Type innerType = ((ArrayOf) field.def.type).type();
                 if (innerType instanceof Schema)
                     populateSchemaFields((Schema) innerType, fields);
-            } else if (field.type instanceof Schema)
-                populateSchemaFields((Schema) field.type, fields);
+            } else if (field.def.type instanceof Schema)
+                populateSchemaFields((Schema) field.def.type, fields);
         }
     }
 
@@ -102,10 +102,10 @@ public class Protocol {
         for (Field field : fields) {
             b.append("<tr>\n");
             b.append("<td>");
-            b.append(field.name);
+            b.append(field.def.name);
             b.append("</td>");
             b.append("<td>");
-            b.append(field.doc);
+            b.append(field.def.docString);
             b.append("</td>");
             b.append("</tr>\n");
         }
@@ -118,15 +118,15 @@ public class Protocol {
 
         b.append("<pre>");
         b.append("Request Header => ");
-        schemaToBnfHtml(RequestHeader.REQUEST_HEADER, b, 2);
+        schemaToBnfHtml(RequestHeader.SCHEMA, b, 2);
         b.append("</pre>\n");
-        schemaToFieldTableHtml(RequestHeader.REQUEST_HEADER, b);
+        schemaToFieldTableHtml(RequestHeader.SCHEMA, b);
 
         b.append("<pre>");
         b.append("Response Header => ");
-        schemaToBnfHtml(ResponseHeader.RESPONSE_HEADER, b, 2);
+        schemaToBnfHtml(ResponseHeader.SCHEMA, b, 2);
         b.append("</pre>\n");
-        schemaToFieldTableHtml(ResponseHeader.RESPONSE_HEADER, b);
+        schemaToFieldTableHtml(ResponseHeader.SCHEMA, b);
 
         for (ApiKeys key : ApiKeys.values()) {
             // Key

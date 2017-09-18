@@ -20,7 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
@@ -49,18 +49,18 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
     private static final String PARTITIONS_KEY_NAME = "partitions";
 
     private static final Schema WRITE_TXN_MARKERS_ENTRY_V0 = new Schema(
-            new Field(PRODUCER_ID_KEY_NAME, INT64, "Current producer id in use by the transactional id."),
-            new Field(PRODUCER_EPOCH_KEY_NAME, INT16, "Current epoch associated with the producer id."),
-            new Field(TRANSACTION_RESULT_KEY_NAME, BOOLEAN, "The result of the transaction to write to the " +
+            new FieldDef(PRODUCER_ID_KEY_NAME, INT64, "Current producer id in use by the transactional id."),
+            new FieldDef(PRODUCER_EPOCH_KEY_NAME, INT16, "Current epoch associated with the producer id."),
+            new FieldDef(TRANSACTION_RESULT_KEY_NAME, BOOLEAN, "The result of the transaction to write to the " +
                     "partitions (false = ABORT, true = COMMIT)."),
-            new Field(TOPICS_KEY_NAME, new ArrayOf(new Schema(
-                    new Field(TOPIC_NAME),
-                    new Field(PARTITIONS_KEY_NAME, new ArrayOf(INT32)))), "The partitions to write markers for."),
-            new Field(COORDINATOR_EPOCH_KEY_NAME, INT32, "Epoch associated with the transaction state partition " +
+            new FieldDef(TOPICS_KEY_NAME, new ArrayOf(new Schema(
+                    TOPIC_NAME,
+                    new FieldDef(PARTITIONS_KEY_NAME, new ArrayOf(INT32)))), "The partitions to write markers for."),
+            new FieldDef(COORDINATOR_EPOCH_KEY_NAME, INT32, "Epoch associated with the transaction state partition " +
                     "hosted by this transaction coordinator"));
 
     private static final Schema WRITE_TXN_MARKERS_REQUEST_V0 = new Schema(
-            new Field(TXN_MARKER_ENTRY_KEY_NAME, new ArrayOf(WRITE_TXN_MARKERS_ENTRY_V0), "The transaction markers to be written."));
+            new FieldDef(TXN_MARKER_ENTRY_KEY_NAME, new ArrayOf(WRITE_TXN_MARKERS_ENTRY_V0), "The transaction markers to be written."));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{WRITE_TXN_MARKERS_REQUEST_V0};

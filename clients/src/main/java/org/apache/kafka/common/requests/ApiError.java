@@ -57,9 +57,7 @@ public class ApiError {
 
     public void write(Struct struct) {
         struct.set(ERROR_CODE, error.code());
-        // In some cases, the error message field was introduced in a newer protocol API version
-        if (struct.hasField(ERROR_MESSAGE) && message != null && error != Errors.NONE)
-            struct.set(ERROR_MESSAGE, message);
+        struct.setIfExists(ERROR_MESSAGE, message);
     }
 
     public boolean is(Errors error) {

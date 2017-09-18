@@ -18,7 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -34,8 +34,8 @@ public class InitProducerIdRequest extends AbstractRequest {
     private static final String TRANSACTION_TIMEOUT_KEY_NAME = "transaction_timeout_ms";
 
     private static final Schema INIT_PRODUCER_ID_REQUEST_V0 = new Schema(
-            new Field("transactional_id", NULLABLE_STRING, "The transactional id whose producer id we want to retrieve or generate."),
-            new Field("transaction_timeout_ms", INT32, "The time in ms to wait for before aborting idle transactions sent by this producer."));
+            new FieldDef(TRANSACTIONAL_ID_KEY_NAME, NULLABLE_STRING, "The transactional id whose producer id we want to retrieve or generate."),
+            new FieldDef(TRANSACTION_TIMEOUT_KEY_NAME, INT32, "The time in ms to wait for before aborting idle transactions sent by this producer."));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{INIT_PRODUCER_ID_REQUEST_V0};

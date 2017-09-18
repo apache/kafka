@@ -19,7 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -38,15 +38,15 @@ public class ListGroupsResponse extends AbstractResponse {
     private static final String PROTOCOL_TYPE_KEY_NAME = "protocol_type";
 
     private static final Schema LIST_GROUPS_RESPONSE_GROUP_V0 = new Schema(
-            new Field("group_id", STRING),
-            new Field("protocol_type", STRING));
+            new FieldDef("group_id", STRING),
+            new FieldDef("protocol_type", STRING));
     private static final Schema LIST_GROUPS_RESPONSE_V0 = new Schema(
-            new Field(ERROR_CODE),
-            new Field("groups", new ArrayOf(LIST_GROUPS_RESPONSE_GROUP_V0)));
+            ERROR_CODE,
+            new FieldDef("groups", new ArrayOf(LIST_GROUPS_RESPONSE_GROUP_V0)));
     private static final Schema LIST_GROUPS_RESPONSE_V1 = new Schema(
-            new Field(THROTTLE_TIME_MS),
-            new Field(ERROR_CODE),
-            new Field("groups", new ArrayOf(LIST_GROUPS_RESPONSE_GROUP_V0)));
+            THROTTLE_TIME_MS,
+            ERROR_CODE,
+            new FieldDef("groups", new ArrayOf(LIST_GROUPS_RESPONSE_GROUP_V0)));
 
     public static Schema[] schemaVersions() {
         return new Schema[] {LIST_GROUPS_RESPONSE_V0, LIST_GROUPS_RESPONSE_V1};

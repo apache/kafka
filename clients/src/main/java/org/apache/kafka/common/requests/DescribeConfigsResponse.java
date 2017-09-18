@@ -19,7 +19,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -54,20 +54,20 @@ public class DescribeConfigsResponse extends AbstractResponse {
     private static final String READ_ONLY_KEY_NAME = "read_only";
 
     private static final Schema DESCRIBE_CONFIGS_RESPONSE_ENTITY_V0 = new Schema(
-            new Field(ERROR_CODE),
-            new Field(ERROR_MESSAGE),
-            new Field(RESOURCE_TYPE_KEY_NAME, INT8),
-            new Field(RESOURCE_NAME_KEY_NAME, STRING),
-            new Field(CONFIG_ENTRIES_KEY_NAME, new ArrayOf(new Schema(
-                    new Field(CONFIG_NAME_KEY_NAME, STRING),
-                    new Field(CONFIG_VALUE_KEY_NAME, NULLABLE_STRING),
-                    new Field(READ_ONLY_KEY_NAME, BOOLEAN),
-                    new Field(IS_DEFAULT_KEY_NAME, BOOLEAN),
-                    new Field(IS_SENSITIVE_KEY_NAME, BOOLEAN)))));
+            ERROR_CODE,
+            ERROR_MESSAGE,
+            new FieldDef(RESOURCE_TYPE_KEY_NAME, INT8),
+            new FieldDef(RESOURCE_NAME_KEY_NAME, STRING),
+            new FieldDef(CONFIG_ENTRIES_KEY_NAME, new ArrayOf(new Schema(
+                    new FieldDef(CONFIG_NAME_KEY_NAME, STRING),
+                    new FieldDef(CONFIG_VALUE_KEY_NAME, NULLABLE_STRING),
+                    new FieldDef(READ_ONLY_KEY_NAME, BOOLEAN),
+                    new FieldDef(IS_DEFAULT_KEY_NAME, BOOLEAN),
+                    new FieldDef(IS_SENSITIVE_KEY_NAME, BOOLEAN)))));
 
     private static final Schema DESCRIBE_CONFIGS_RESPONSE_V0 = new Schema(
-            new Field(THROTTLE_TIME_MS),
-            new Field(RESOURCES_KEY_NAME, new ArrayOf(DESCRIBE_CONFIGS_RESPONSE_ENTITY_V0)));
+            THROTTLE_TIME_MS,
+            new FieldDef(RESOURCES_KEY_NAME, new ArrayOf(DESCRIBE_CONFIGS_RESPONSE_ENTITY_V0)));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{DESCRIBE_CONFIGS_RESPONSE_V0};

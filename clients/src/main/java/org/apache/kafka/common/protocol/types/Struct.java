@@ -55,12 +55,12 @@ public class Struct {
         Object value = this.values[field.index];
         if (value != null)
             return value;
-        else if (field.defaultValue != Field.NO_DEFAULT)
-            return field.defaultValue;
-        else if (field.type.isNullable())
+        else if (field.def.hasDefaultValue)
+            return field.def.defaultValue;
+        else if (field.def.type.isNullable())
             return null;
         else
-            throw new SchemaException("Missing value for field '" + field.name + "' which has no default value.");
+            throw new SchemaException("Missing value for field '" + field.def.name + "' which has no default value.");
     }
 
     /**
@@ -286,13 +286,13 @@ public class Struct {
      */
     public Struct instance(Field field) {
         validateField(field);
-        if (field.type() instanceof Schema) {
-            return new Struct((Schema) field.type());
-        } else if (field.type() instanceof ArrayOf) {
-            ArrayOf array = (ArrayOf) field.type();
+        if (field.def.type instanceof Schema) {
+            return new Struct((Schema) field.def.type);
+        } else if (field.def.type instanceof ArrayOf) {
+            ArrayOf array = (ArrayOf) field.def.type;
             return new Struct((Schema) array.type());
         } else {
-            throw new SchemaException("Field '" + field.name + "' is not a container type, it is of type " + field.type());
+            throw new SchemaException("Field '" + field.def.name + "' is not a container type, it is of type " + field.def.type);
         }
     }
 
@@ -335,7 +335,7 @@ public class Struct {
      */
     private void validateField(Field field) {
         if (this.schema != field.schema)
-            throw new SchemaException("Attempt to access field '" + field.name + "' from a different schema instance.");
+            throw new SchemaException("Attempt to access field '" + field.def.name + "' from a different schema instance.");
         if (field.index > values.length)
             throw new SchemaException("Invalid field index: " + field.index);
     }
@@ -355,9 +355,9 @@ public class Struct {
         b.append('{');
         for (int i = 0; i < this.values.length; i++) {
             Field f = this.schema.get(i);
-            b.append(f.name);
+            b.append(f.def.name);
             b.append('=');
-            if (f.type() instanceof ArrayOf && this.values[i] != null) {
+            if (f.def.type instanceof ArrayOf && this.values[i] != null) {
                 Object[] arrayValue = (Object[]) this.values[i];
                 b.append('[');
                 for (int j = 0; j < arrayValue.length; j++) {
@@ -381,7 +381,7 @@ public class Struct {
         int result = 1;
         for (int i = 0; i < this.values.length; i++) {
             Field f = this.schema.get(i);
-            if (f.type() instanceof ArrayOf) {
+            if (f.def.type instanceof ArrayOf) {
                 if (this.get(f) != null) {
                     Object[] arrayObject = (Object[]) this.get(f);
                     for (Object arrayItem: arrayObject)
@@ -411,7 +411,7 @@ public class Struct {
         for (int i = 0; i < this.values.length; i++) {
             Field f = this.schema.get(i);
             boolean result;
-            if (f.type() instanceof ArrayOf) {
+            if (f.def.type instanceof ArrayOf) {
                 result = Arrays.equals((Object[]) this.get(f), (Object[]) other.get(f));
             } else {
                 Object thisField = this.get(f);

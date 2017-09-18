@@ -19,7 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -46,27 +46,27 @@ public class JoinGroupResponse extends AbstractResponse {
     private static final String MEMBER_METADATA_KEY_NAME = "member_metadata";
 
     private static final Schema JOIN_GROUP_RESPONSE_MEMBER_V0 = new Schema(
-            new Field(MEMBER_ID_KEY_NAME, STRING),
-            new Field(MEMBER_METADATA_KEY_NAME, BYTES));
+            new FieldDef(MEMBER_ID_KEY_NAME, STRING),
+            new FieldDef(MEMBER_METADATA_KEY_NAME, BYTES));
 
     private static final Schema JOIN_GROUP_RESPONSE_V0 = new Schema(
-            new Field(ERROR_CODE),
-            new Field(GENERATION_ID_KEY_NAME, INT32, "The generation of the consumer group."),
-            new Field(GROUP_PROTOCOL_KEY_NAME, STRING, "The group protocol selected by the coordinator"),
-            new Field(LEADER_ID_KEY_NAME, STRING, "The leader of the group"),
-            new Field(MEMBER_ID_KEY_NAME, STRING, "The consumer id assigned by the group coordinator."),
-            new Field(MEMBERS_KEY_NAME, new ArrayOf(JOIN_GROUP_RESPONSE_MEMBER_V0)));
+            ERROR_CODE,
+            new FieldDef(GENERATION_ID_KEY_NAME, INT32, "The generation of the consumer group."),
+            new FieldDef(GROUP_PROTOCOL_KEY_NAME, STRING, "The group protocol selected by the coordinator"),
+            new FieldDef(LEADER_ID_KEY_NAME, STRING, "The leader of the group"),
+            new FieldDef(MEMBER_ID_KEY_NAME, STRING, "The consumer id assigned by the group coordinator."),
+            new FieldDef(MEMBERS_KEY_NAME, new ArrayOf(JOIN_GROUP_RESPONSE_MEMBER_V0)));
 
     private static final Schema JOIN_GROUP_RESPONSE_V1 = JOIN_GROUP_RESPONSE_V0;
 
     private static final Schema JOIN_GROUP_RESPONSE_V2 = new Schema(
-            new Field(THROTTLE_TIME_MS),
-            new Field(ERROR_CODE),
-            new Field(GENERATION_ID_KEY_NAME, INT32, "The generation of the consumer group."),
-            new Field(GROUP_PROTOCOL_KEY_NAME, STRING, "The group protocol selected by the coordinator"),
-            new Field(LEADER_ID_KEY_NAME, STRING, "The leader of the group"),
-            new Field(MEMBER_ID_KEY_NAME, STRING, "The consumer id assigned by the group coordinator."),
-            new Field(MEMBERS_KEY_NAME, new ArrayOf(JOIN_GROUP_RESPONSE_MEMBER_V0)));
+            THROTTLE_TIME_MS,
+            ERROR_CODE,
+            new FieldDef(GENERATION_ID_KEY_NAME, INT32, "The generation of the consumer group."),
+            new FieldDef(GROUP_PROTOCOL_KEY_NAME, STRING, "The group protocol selected by the coordinator"),
+            new FieldDef(LEADER_ID_KEY_NAME, STRING, "The leader of the group"),
+            new FieldDef(MEMBER_ID_KEY_NAME, STRING, "The consumer id assigned by the group coordinator."),
+            new FieldDef(MEMBERS_KEY_NAME, new ArrayOf(JOIN_GROUP_RESPONSE_MEMBER_V0)));
 
 
     public static Schema[] schemaVersions() {

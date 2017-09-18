@@ -20,7 +20,7 @@ import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.Resource;
@@ -49,22 +49,22 @@ public class DeleteAclsResponse extends AbstractResponse {
     private final static String MATCHING_ACLS_KEY_NAME = "matching_acls";
 
     private static final Schema MATCHING_ACL = new Schema(
-            new Field(ERROR_CODE),
-            new Field(ERROR_MESSAGE),
-            new Field(RESOURCE_TYPE),
-            new Field(RESOURCE_NAME),
-            new Field(PRINCIPAL),
-            new Field(HOST),
-            new Field(OPERATION),
-            new Field(PERMISSION_TYPE));
+            ERROR_CODE,
+            ERROR_MESSAGE,
+            RESOURCE_TYPE,
+            RESOURCE_NAME,
+            PRINCIPAL,
+            HOST,
+            OPERATION,
+            PERMISSION_TYPE);
 
     private static final Schema DELETE_ACLS_RESPONSE_V0 = new Schema(
-            new Field(THROTTLE_TIME_MS),
-            new Field(FILTER_RESPONSES_KEY_NAME,
+            THROTTLE_TIME_MS,
+            new FieldDef(FILTER_RESPONSES_KEY_NAME,
                     new ArrayOf(new Schema(
-                            new Field(ERROR_CODE),
-                            new Field(ERROR_MESSAGE),
-                            new Field(MATCHING_ACLS_KEY_NAME, new ArrayOf(MATCHING_ACL), "The matching ACLs")))));
+                            ERROR_CODE,
+                            ERROR_MESSAGE,
+                            new FieldDef(MATCHING_ACLS_KEY_NAME, new ArrayOf(MATCHING_ACL), "The matching ACLs")))));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{DELETE_ACLS_RESPONSE_V0};

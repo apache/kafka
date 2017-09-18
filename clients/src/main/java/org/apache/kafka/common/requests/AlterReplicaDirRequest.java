@@ -21,10 +21,11 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
+
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -47,13 +48,12 @@ public class AlterReplicaDirRequest extends AbstractRequest {
     // topic level key names
     private static final String PARTITIONS_KEY_NAME = "partitions";
 
-
     private static final Schema ALTER_REPLICA_DIR_REQUEST_V0 = new Schema(
-            new Field("log_dirs", new ArrayOf(new Schema(
-                    new Field("log_dir", STRING, "The absolute log directory path."),
-                    new Field("topics", new ArrayOf(new Schema(
-                            new Field(TOPIC_NAME),
-                            new Field("partitions", new ArrayOf(INT32), "List of partition ids of the topic."))))))));
+            new FieldDef("log_dirs", new ArrayOf(new Schema(
+                    new FieldDef("log_dir", STRING, "The absolute log directory path."),
+                    new FieldDef("topics", new ArrayOf(new Schema(
+                            TOPIC_NAME,
+                            new FieldDef("partitions", new ArrayOf(INT32), "List of partition ids of the topic."))))))));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{ALTER_REPLICA_DIR_REQUEST_V0};

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.record;
 
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.FieldDef;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
@@ -51,8 +51,8 @@ public enum ControlRecordType {
     static final short CURRENT_CONTROL_RECORD_KEY_VERSION = 0;
     static final int CURRENT_CONTROL_RECORD_KEY_SIZE = 4;
     private static final Schema CONTROL_RECORD_KEY_SCHEMA_VERSION_V0 = new Schema(
-            new Field("version", Type.INT16),
-            new Field("type", Type.INT16));
+            new FieldDef("version", Type.INT16),
+            new FieldDef("type", Type.INT16));
 
     final short type;
 
