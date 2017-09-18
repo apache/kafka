@@ -47,7 +47,7 @@ class ReplicaVerificationTool(KafkaPathResolverMixin, BackgroundThreadService):
         for line in node.account.ssh_capture(cmd):
             self.logger.debug("Parsing line:{}".format(line))
 
-            parsed = re.search('.*max lag is (.+?) for partition \[(.+?)\] at', line)
+            parsed = re.search('.*max lag is (.+?) for partition ([a-zA-Z0-9._-]+-[0-9]+) at', line)
             if parsed:
                 lag = int(parsed.group(1))
                 topic_partition = parsed.group(2)
@@ -62,9 +62,9 @@ class ReplicaVerificationTool(KafkaPathResolverMixin, BackgroundThreadService):
             topic:          a topic
             partition:      a partition of the topic
         """
-        topic_partition = topic + ',' + str(partition)
+        topic_partition = topic + '-' + str(partition)
         lag = self.partition_lag.get(topic_partition, -1)
-        self.logger.debug("Retuning lag for {} as {}".format(topic_partition, lag))
+        self.logger.debug("Returning lag for {} as {}".format(topic_partition, lag))
 
         return lag
 
