@@ -63,7 +63,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
                                final String name,
                                final Serde<K> keySerde,
                                final Serde<V> valSerde,
-                               final GroupedStreamAggregateBuilder aggregateBuilder) {
+                               final GroupedStreamAggregateBuilder<K, V> aggregateBuilder) {
         super(builder, name, sourceNodes);
         this.windows = windows;
         this.keySerde = keySerde;
@@ -73,7 +73,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
 
     @Override
     public KTable<Windowed<K>, Long> count() {
-        return aggregate(aggregateBuilder.countInitializer,
+        return doAggregate(aggregateBuilder.countInitializer,
                          aggregateBuilder.countAggregator,
                          countMerger,
                          Serdes.Long());
@@ -88,23 +88,14 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
                          materialized);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
                                                 final Aggregator<? super K, ? super V, T> aggregator,
-                                                final Merger<? super K, T> sessionMerger,
-                                                final Serde<T> aggValueSerde) {
+                                                final Merger<? super K, T> sessionMerger) {
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(aggregator, "aggregator can't be null");
         Objects.requireNonNull(sessionMerger, "sessionMerger can't be null");
-        final String storeName = builder.newName(AGGREGATE_NAME);
-
-        return (KTable<Windowed<K>, T>) aggregateBuilder.build(
-                new KStreamSessionWindowAggregate<>(windows, storeName, initializer, aggregator, sessionMerger),
-                AGGREGATE_NAME,
-                storeBuilder(storeName, aggValueSerde),
-                false);
-
+        return doAggregate(initializer, aggregator, sessionMerger, null);
     }
 
     @SuppressWarnings("unchecked")
@@ -128,7 +119,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
     @Override
     public KTable<Windowed<K>, V> reduce(final Reducer<V> reducer) {
         Objects.requireNonNull(reducer, "reducer can't be null");
-        return aggregate(reduceInitializer, reducer(reducer), aggregator(reducer(reducer)), valSerde);
+        return doAggregate(reduceInitializer, reducer(reducer), aggregator(reducer(reducer)), valSerde);
     }
 
     @Override
@@ -191,5 +182,18 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
                         windows.maintainMs()),
                 keySerde,
                 aggValueSerde).withCachingEnabled();
+    }
+
+
+    @SuppressWarnings("unchecked")
+    private <VR> KTable<Windowed<K>, VR> doAggregate(final Initializer<VR> initializer,
+                                                     final Aggregator<? super K, ? super V, VR> aggregator,
+                                                     final Merger<? super K, VR> merger,
+                                                     final Serde<VR> serde) {
+        final String storeName = builder.newStoreName(AGGREGATE_NAME);
+        return (KTable<Windowed<K>, VR>) aggregateBuilder.build(new KStreamSessionWindowAggregate<>(windows, storeName, initializer, aggregator, merger),
+                                                                AGGREGATE_NAME,
+                                                                storeBuilder(storeName, serde),
+                                                                false);
     }
 }

@@ -112,8 +112,7 @@ public class SessionWindowedKStreamImplTest {
         final Map<Windowed<String>, String> results = new HashMap<>();
         stream.aggregate(MockInitializer.STRING_INIT,
                          MockAggregator.TOSTRING_ADDER,
-                         sessionMerger,
-                         Serdes.String())
+                         sessionMerger)
                 .toStream()
                 .foreach(new ForeachAction<Windowed<String>, String>() {
                     @Override
@@ -182,17 +181,17 @@ public class SessionWindowedKStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnAggregateIfInitializerIsNull() {
-        stream.aggregate(null, MockAggregator.TOSTRING_ADDER, sessionMerger, Serdes.String());
+        stream.aggregate(null, MockAggregator.TOSTRING_ADDER, sessionMerger);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnAggregateIfAggregatorIsNull() {
-        stream.aggregate(MockInitializer.STRING_INIT, null, sessionMerger, Serdes.String());
+        stream.aggregate(MockInitializer.STRING_INIT, null, sessionMerger);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnAggregateIfMergerIsNull() {
-        stream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, null, Serdes.String());
+        stream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -251,7 +250,7 @@ public class SessionWindowedKStreamImplTest {
     }
 
     private void processData() {
-        driver.setUp(builder, TestUtils.tempDirectory());
+        driver.setUp(builder, TestUtils.tempDirectory(), Serdes.String(), Serdes.String(), 0);
         driver.setTime(10);
         driver.process(TOPIC, "1", "1");
         driver.setTime(15);

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -34,6 +33,10 @@ import org.apache.kafka.streams.state.SessionStore;
  * new (partitioned) windows resulting in a windowed {@link KTable}
  * (a <emph>windowed</emph> {@code KTable} is a {@link KTable} with key type {@link Windowed Windowed<K>}.
  * <p>
+ * SessionWindows are retained until their retention time expires (c.f. {@link SessionWindows#until(long)}).
+ * Furthermore, updates are sent downstream into a windowed {@link KTable} changelog stream, where
+ * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
+ * <p>
  * A {@code SessionWindowedKStream} must be obtained from a {@link KGroupedStream} via {@link KGroupedStream#windowedBy(SessionWindows)} .
  *
  * @param <K> Type of keys
@@ -47,11 +50,7 @@ public interface SessionWindowedKStream<K, V> {
     /**
      * Count the number of records in this stream by the grouped key into {@link SessionWindows}.
      * Records with {@code null} key or value are ignored.
-     * <p>
-     * SessionWindows are retained until their retention time expires (c.f. {@link SessionWindows#until(long)}).
-     * Furthermore, updates are sent downstream into a windowed {@link KTable} changelog stream, where
-     * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
-     * <p>
+     * <P></P>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same window and key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
@@ -69,9 +68,6 @@ public interface SessionWindowedKStream<K, V> {
      * Records with {@code null} key or value are ignored.
      * The result is written into a local {@link SessionStore} (which is basically an ever-updating
      * materialized view) that can be queried using the name provided with {@link Materialized}.
-     * SessionWindows are retained until their retention time expires (c.f. {@link SessionWindows#until(long)}).
-     * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
-     * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
      * <p>
      * Not all updates might get sent downstream, as an internal cache will be used to deduplicate consecutive updates to
      * the same window and key if caching is enabled on the {@link Materialized} instance.
@@ -103,9 +99,6 @@ public interface SessionWindowedKStream<K, V> {
      * Records with {@code null} key or value are ignored.
      * Aggregating is a generalization of {@link #reduce(Reducer) combining via
      * reduce(...)} as it, for example, allows the result to have a different type than the input values.
-     * SessionWindows are retained until their retention time expires (c.f. {@link SessionWindows#until(long)}).
-     * Furthermore, updates are sent downstream into a windowed {@link KTable} changelog stream, where
-     * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
      * <p>
      * The specified {@link Initializer} is applied once per session directly before the first input record is
      * processed to provide an initial intermediate aggregation result that is used to process the first record.
@@ -143,9 +136,6 @@ public interface SessionWindowedKStream<K, V> {
      * materialized view) that can be queried using the name provided with {@link Materialized}.
      * Aggregating is a generalization of {@link #reduce(Reducer) combining via
      * reduce(...)} as it, for example, allows the result to have a different type than the input values.
-     * SessionWindows are retained until their retention time expires (c.f. {@link SessionWindows#until(long)}).
-     * Furthermore, updates are sent downstream into a windowed {@link KTable} changelog stream, where
-     * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
      * <p>
      * The specified {@link Initializer} is applied once per session directly before the first input record is
      * processed to provide an initial intermediate aggregation result that is used to process the first record.
@@ -187,12 +177,9 @@ public interface SessionWindowedKStream<K, V> {
      * Combine values of this stream by the grouped key into {@link SessionWindows}.
      * Records with {@code null} key or value are ignored.
      * Combining implies that the type of the aggregate result is the same as the type of the input value
-     * (c.f. {@link #aggregate(Initializer, Aggregator, Merger, Serde)}).
+     * (c.f. {@link #aggregate(Initializer, Aggregator, Merger)}).
      * The result is written into a local {@link SessionStore} (which is basically an ever-updating
      * materialized view).
-     * SessionWindows are retained until their retention time expires (c.f. {@link SessionWindows#until(long)}).
-     * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
-     * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
      * <p>
      * The specified {@link Reducer} is applied for each input record and computes a new aggregate using the current
      * aggregate and the record's value.
@@ -218,12 +205,9 @@ public interface SessionWindowedKStream<K, V> {
      * Combine values of this stream by the grouped key into {@link SessionWindows}.
      * Records with {@code null} key or value are ignored.
      * Combining implies that the type of the aggregate result is the same as the type of the input value
-     * (c.f. {@link #aggregate(Initializer, Aggregator, Merger, Serde)}).
+     * (c.f. {@link #aggregate(Initializer, Aggregator, Merger)}).
      * The result is written into a local {@link SessionStore} (which is basically an ever-updating materialized view)
      * provided by the given {@link Materialized} instance.
-     * SessionWindows are retained until their retention time expires (c.f. {@link SessionWindows#until(long)}).
-     * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
-     * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
      * <p>
      * The specified {@link Reducer} is applied for each input record and computes a new aggregate using the current
      * aggregate (first argument) and the record's value (second argument):

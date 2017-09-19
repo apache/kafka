@@ -319,7 +319,9 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
         return windowedBy(sessionWindows).aggregate(initializer,
                                                     aggregator,
                                                     sessionMerger,
-                                                    aggValueSerde);
+                                                    Materialized.<K, T, SessionStore<Bytes, byte[]>>as(builder.newStoreName(AGGREGATE_NAME))
+                                                            .withKeySerde(keySerde)
+                                                            .withValueSerde(aggValueSerde));
     }
 
     @SuppressWarnings("unchecked")
