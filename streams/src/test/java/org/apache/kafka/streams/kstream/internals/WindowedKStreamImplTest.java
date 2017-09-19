@@ -18,24 +18,31 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.WindowedKStream;
+import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockReducer;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -76,7 +83,6 @@ public class WindowedKStreamImplTest {
     }
 
 
-
     @Test
     public void shouldReduceWindowed() {
         final Map<Windowed<String>, String> results = new HashMap<>();
@@ -99,8 +105,8 @@ public class WindowedKStreamImplTest {
     public void shouldAggregateWindowed() {
         final Map<Windowed<String>, String> results = new HashMap<>();
         windowedStream.aggregate(MockInitializer.STRING_INIT,
-                                 MockAggregator.TOSTRING_ADDER,
-                                 Serdes.String())
+                                 MockAggregator.TOSTRING_ADDER
+        )
                 .toStream()
                 .foreach(new ForeachAction<Windowed<String>, String>() {
                     @Override
@@ -114,14 +120,66 @@ public class WindowedKStreamImplTest {
         assertThat(results.get(new Windowed<>("1", new TimeWindow(500, 1000))), equalTo("0+3"));
     }
 
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldMaterializeCount() {
+        windowedStream.count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("count-store")
+                                     .withKeySerde(Serdes.String())
+                                     .withValueSerde(Serdes.Long()));
+
+        processData();
+        final WindowStore<String, Long> windowStore = (WindowStore<String, Long>) driver.allStateStores().get("count-store");
+        final List<KeyValue<Windowed<String>, Long>> data = StreamsTestUtils.toList(windowStore.fetch("1", "2", 0, 1000));
+        assertThat(data, equalTo(Arrays.asList(
+                KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), 2L),
+                KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), 1L),
+                KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), 1L))));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldMaterializeReduced() {
+        windowedStream.reduce(MockReducer.STRING_ADDER,
+                              Materialized.<String, String, WindowStore<Bytes, byte[]>>as("reduced")
+                                      .withKeySerde(Serdes.String())
+                                      .withValueSerde(Serdes.String()));
+
+        processData();
+        final WindowStore<String, String> windowStore = (WindowStore<String, String>) driver.allStateStores().get("reduced");
+        final List<KeyValue<Windowed<String>, String>> data = StreamsTestUtils.toList(windowStore.fetch("1", "2", 0, 1000));
+
+        assertThat(data, equalTo(Arrays.asList(
+                KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), "1+2"),
+                KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), "3"),
+                KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), "1"))));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldMaterializeAggregated() {
+        windowedStream.aggregate(MockInitializer.STRING_INIT,
+                                 MockAggregator.TOSTRING_ADDER,
+                                 Materialized.<String, String, WindowStore<Bytes, byte[]>>as("aggregated")
+                                         .withKeySerde(Serdes.String())
+                                         .withValueSerde(Serdes.String()));
+
+        processData();
+        final WindowStore<String, String> windowStore = (WindowStore<String, String>) driver.allStateStores().get("aggregated");
+        final List<KeyValue<Windowed<String>, String>> data = StreamsTestUtils.toList(windowStore.fetch("1", "2", 0, 1000));
+        assertThat(data, equalTo(Arrays.asList(
+                KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), "0+1+2"),
+                KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), "0+3"),
+                KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), "0+1"))));
+    }
+
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnAggregateIfInitializerIsNull() {
-        windowedStream.aggregate(null, MockAggregator.TOSTRING_ADDER, Serdes.String());
+        windowedStream.aggregate(null, MockAggregator.TOSTRING_ADDER);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnAggregateIfAggregatorIsNull() {
-        windowedStream.aggregate(MockInitializer.STRING_INIT, null, Serdes.String());
+        windowedStream.aggregate(MockInitializer.STRING_INIT, null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -129,8 +187,47 @@ public class WindowedKStreamImplTest {
         windowedStream.reduce(null);
     }
 
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerOnMaterializedAggregateIfInitializerIsNull() {
+        windowedStream.aggregate(null,
+                                 MockAggregator.TOSTRING_ADDER,
+                                 Materialized.<String, String, WindowStore<Bytes, byte[]>>as("store"));
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerOnMaterializedAggregateIfAggregatorIsNull() {
+        windowedStream.aggregate(MockInitializer.STRING_INIT,
+                                 null,
+                                 Materialized.<String, String, WindowStore<Bytes, byte[]>>as("store"));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerOnMaterializedAggregateIfMaterializedIsNull() {
+        windowedStream.aggregate(MockInitializer.STRING_INIT,
+                                 MockAggregator.TOSTRING_ADDER,
+                                 (Materialized) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerOnMaterializedReduceIfReducerIsNull() {
+        windowedStream.reduce(null,
+                              Materialized.<String, String, WindowStore<Bytes, byte[]>>as("store"));
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerOnMaterializedReduceIfMaterializedIsNull() {
+        windowedStream.reduce(MockReducer.STRING_ADDER,
+                              null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerOnCountIfMaterializedIsNull() {
+        windowedStream.count(null);
+    }
+
     private void processData() {
-        driver.setUp(builder, TestUtils.tempDirectory());
+        driver.setUp(builder, TestUtils.tempDirectory(), Serdes.String(), Serdes.String(), 0);
         driver.setTime(10);
         driver.process(TOPIC, "1", "1");
         driver.setTime(15);
