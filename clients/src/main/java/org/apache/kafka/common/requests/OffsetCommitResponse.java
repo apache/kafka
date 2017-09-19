@@ -85,7 +85,6 @@ public class OffsetCommitResponse extends AbstractResponse {
             OFFSET_COMMIT_RESPONSE_V3};
     }
 
-
     private final Map<TopicPartition, Errors> responseData;
     private final int throttleTimeMs;
 

@@ -126,7 +126,8 @@ public class UpdateMetadataRequest extends AbstractRequest {
 
     private static final Schema UPDATE_METADATA_REQUEST_PARTITION_STATE_V3 = UPDATE_METADATA_REQUEST_PARTITION_STATE_V2;
 
-    // UPDATE_METADATA_REQUEST_PARTITION_STATE_V4 added a per-partition offline_replicas field. This field specifies the list of replicas that are offline.
+    // UPDATE_METADATA_REQUEST_PARTITION_STATE_V4 added a per-partition offline_replicas field. This field specifies
+    // the list of replicas that are offline.
     private static final Schema UPDATE_METADATA_REQUEST_PARTITION_STATE_V4 = new Schema(
             TOPIC_NAME,
             PARTITION_ID,
