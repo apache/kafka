@@ -17,7 +17,8 @@
 package kafka.api
 
 import java.util
-import java.util.{Collections, Properties, Arrays}
+import java.util.{Collections, Properties}
+import java.util.Arrays.asList
 import java.util.concurrent.{ExecutionException, TimeUnit}
 import java.io.File
 
@@ -364,7 +365,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     client = AdminClient.create(createConfig)
 
     // Create topics
-    val topic1 = "alter-topics-topic-1"
+    val topic1 = "create-partitions-topic-1"
     TestUtils.createTopic(zkUtils, topic1, 1, 1, servers, new Properties)
 
     // assert that the topic has 1 partition
@@ -386,7 +387,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     assertEquals(2, actualPartitions.size)
 
     // now try creating a new partition (with assignments), to bring the total to 3 partitions
-    alterResult = client.createPartitions(Map(topic1 -> NewPartitions.increaseTo(new Integer(3), Arrays.asList(Arrays.asList(new Integer(0))))).asJava)
+    alterResult = client.createPartitions(Map(topic1 -> NewPartitions.increaseTo(new Integer(3), asList(asList(new Integer(0))))).asJava)
     altered = alterResult.values.get(topic1).get
     // assert that the topics now has 3 partitions
     actualPartitions = client.describeTopics(Set(topic1).asJavaCollection).values.get(topic1).get.partitions
@@ -439,7 +440,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     }
 
     // try assignments where the number of brokers != replication factor
-    alterResult = client.createPartitions(Map(topic1 -> NewPartitions.increaseTo(new Integer(4), Arrays.asList(Arrays.asList(new Integer(1), new Integer(2))))).asJava, validateOnly)
+    alterResult = client.createPartitions(Map(topic1 -> NewPartitions.increaseTo(new Integer(4), asList(asList(new Integer(1), new Integer(2))))).asJava, validateOnly)
     try {
       altered = alterResult.values.get(topic1).get
       fail("Expect InvalidPartitionsException when #brokers != replication factor")
@@ -450,7 +451,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     }
 
     // try #assignments incompatible with the increase
-    alterResult = client.createPartitions(Map(topic1 -> NewPartitions.increaseTo(new Integer(4), Arrays.asList(Arrays.asList(new Integer(1)), Arrays.asList(new Integer(2))))).asJava, validateOnly)
+    alterResult = client.createPartitions(Map(topic1 -> NewPartitions.increaseTo(new Integer(4), asList(asList(new Integer(1)), asList(new Integer(2))))).asJava, validateOnly)
     try {
       altered = alterResult.values.get(topic1).get
       fail("Expect InvalidRequestException when #assignments != newCount - oldCount")
@@ -458,6 +459,41 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
       case e: ExecutionException =>
         assertTrue(e.getCause.isInstanceOf[InvalidRequestException])
         assertEquals("Increasing the number of partitions by 1 but 2 assignments provided.", e.getCause.getMessage)
+    }
+
+    // try with duplicate brokers in assignments
+    alterResult = client.createPartitions(Map(topic1 -> NewPartitions.increaseTo(new Integer(4), asList(asList(new Integer(1), new Integer(1))))).asJava, validateOnly)
+    try {
+      altered = alterResult.values.get(topic1).get
+      fail("Expect InvalidReplicaAssignmentException when assignments has duplicate brokers")
+    } catch {
+      case e: ExecutionException =>
+        assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException])
+        assertEquals("Duplicate brokers in replica assignment: 1, 1.", e.getCause.getMessage)
+    }
+
+    // try assignments with differently sized inner lists
+    alterResult = client.createPartitions(Map(topic1 -> NewPartitions.increaseTo(new Integer(5), asList(asList(new Integer(1)), asList(new Integer(1), new Integer(0))))).asJava, validateOnly)
+    try {
+      altered = alterResult.values.get(topic1).get
+      fail("Expect InvalidReplicaAssignmentException when assignments have differently sized inner lists")
+    } catch {
+      case e: ExecutionException =>
+        e.printStackTrace()
+        assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException])
+        assertEquals("Partition 4 has different replication factor: 1, 0.", e.getCause.getMessage)
+    }
+
+    // try assignments with unknown brokers
+    alterResult = client.createPartitions(Map(topic1 -> NewPartitions.increaseTo(new Integer(4), asList(asList(new Integer(12))))).asJava, validateOnly)
+    try {
+      altered = alterResult.values.get(topic1).get
+      fail("Expect InvalidReplicaAssignmentException when assignments contains an unknown broker")
+    } catch {
+      case e: ExecutionException =>
+        e.printStackTrace()
+        assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException])
+        assertEquals("Unknown broker(s) in replica assignment: 12.", e.getCause.getMessage)
     }
 
     // try with empty assignments
@@ -472,7 +508,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     }
 
     // finally, try to add partitions to a topic queued for deletion
-    val deleteResult = client.deleteTopics(Arrays.asList(topic1))
+    val deleteResult = client.deleteTopics(asList(topic1))
     deleteResult.values.get(topic1).get
     alterResult = client.createPartitions(Map(topic1 -> NewPartitions.increaseTo(new Integer(4))).asJava, validateOnly)
     try {

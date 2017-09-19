@@ -39,9 +39,9 @@ public class CreatePartitionsResponse extends AbstractResponse {
 
     private static final String TOPIC_ERRORS_KEY_NAME = "topic_partition_count_error";
 
-    public static final Schema CREATE_PARTITIONS_RESPONSE_V0 = new Schema(
+    private static final Schema CREATE_PARTITIONS_RESPONSE_V0 = new Schema(
             THROTTLE_TIME_MS,
-            new Field("topic_partition_count_error", new ArrayOf(
+            new Field(TOPIC_ERRORS_KEY_NAME, new ArrayOf(
                     new Schema(
                             TOPIC_NAME,
                             ERROR_CODE,

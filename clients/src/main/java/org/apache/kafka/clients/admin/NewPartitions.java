@@ -43,7 +43,7 @@ public class NewPartitions {
      * Increase the partition count for a topic to the given {@code totalCount}.
      * The assignment of new replicas to brokers will be decided by the broker.
      *
-     * @param totalCount       The new total partition count (not the number of new partitions).
+     * @param totalCount The total partitions count after the operation succeeds.
      */
     public static NewPartitions increaseTo(int totalCount) {
         return new NewPartitions(totalCount, null);
@@ -59,14 +59,19 @@ public class NewPartitions {
      * The first broker id in each inner list is the "preferred replica".</p>
      *
      * <p>For example, suppose a topic currently has a replication factor of 2, and
-     * has 3 partitions. The number of partitions can be increased to 4
-     * (with broker 1 being the preferred replica for the new partition) using a
+     * has 3 partitions. The number of partitions can be increased to 6 using a
      * {@code NewPartition} constructed like this:</p>
      *
-     * <pre><code>NewPartitions.increaseTo(4, Arrays.asList(Arrays.asList(1, 2))</code></pre>
+     * <pre><code>
+     * NewPartitions.increaseTo(6, asList(asList(1, 2),
+     *                                    asList(2, 3),
+     *                                    asList(3, 1)))
+     * </code></pre>
+     * <p>In this example partition 3's preferred leader will be broker 1, partition 4's preferred leader will be
+     * broker 2 and partition 5's preferred leader will be broker 3.</p>
      *
-     * @param totalCount       The new total partition count (not the number of new partitions).
-     * @param newAssignments   The replica assignments for the new partitions.
+     * @param totalCount The total partitions count after the operation succeeds.
+     * @param newAssignments The replica assignments for the new partitions.
      */
     public static NewPartitions increaseTo(int totalCount, List<List<Integer>> newAssignments) {
         return new NewPartitions(totalCount, newAssignments);
@@ -89,11 +94,7 @@ public class NewPartitions {
 
     @Override
     public String toString() {
-        StringBuilder bld = new StringBuilder();
-        bld.append("(totalCount=").append(totalCount()).
-        append(", newAssignments=").append(assignments()).
-        append(")");
-        return bld.toString();
+        return "(totalCount=" + totalCount() + ", newAssignments=" + assignments() + ")";
     }
 
 }

@@ -381,7 +381,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testAlterPartitionCounts() throws Exception {
+    public void testCreatePartitions() throws Exception {
         try (MockKafkaAdminClientEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());

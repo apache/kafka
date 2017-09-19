@@ -323,16 +323,16 @@ object AdminUtils extends Logging with AdminUtilities {
     var partitionId = startPartitionId
     partitionList = partitionList.takeRight(partitionList.size - partitionId)
     for (i <- partitionList.indices) {
-      val brokerList = partitionList(i).split(":").map(s => s.trim().toInt)
+      val brokerList = partitionList(i).split(":").map(s => s.trim().toInt).toList
       if (brokerList.isEmpty)
         throw new InvalidReplicaAssignmentException("Replication factor must be larger than 0.")
       if (brokerList.size != brokerList.toSet.size)
-        throw new InvalidReplicaAssignmentException(s"Duplicate brokers in replica assignment: $brokerList.")
+        throw new InvalidReplicaAssignmentException(s"Duplicate brokers in replica assignment: ${brokerList.mkString(", ")}.")
       if (checkBrokerAvailable && !brokerList.toSet.subsetOf(availableBrokerList))
-        throw new AdminOperationException(s"Some specified brokers not available. Specified brokers: $brokerList, available brokers: $availableBrokerList.")
-      ret.put(partitionId, brokerList.toList)
-      if (ret(partitionId).size != ret(startPartitionId).size)
-        throw new AdminOperationException(s"Partition $i has different replication factor: $brokerList.")
+        throw new AdminOperationException(s"Some specified brokers not available. Specified brokers: ${brokerList.mkString(", ")}, available brokers: ${availableBrokerList.mkString(", ")}.")
+      ret.put(partitionId, brokerList)
+      if (brokerList.size != ret(startPartitionId).size)
+        throw new InvalidReplicaAssignmentException(s"Partition ${i+startPartitionId} has different replication factor: ${brokerList.mkString(", ")}.")
       partitionId = partitionId + 1
     }
     ret.toMap

@@ -223,7 +223,7 @@ class AdminManager(val config: KafkaConfig,
           // check each broker exists
           val unknownBrokers = assignments.flatten.toSet -- zkUtils.getAllBrokersInCluster.map(broker => broker.id)
           if (unknownBrokers.nonEmpty) {
-            throw new InvalidPartitionsException(s"Unknown broker(s): $unknownBrokers.")
+            throw new InvalidReplicaAssignmentException(s"Unknown broker(s) in replica assignment: ${unknownBrokers.mkString(", ")}.")
           }
           if (assignments.size != numPartitionsIncrement) {
             throw new InvalidRequestException(s"Increasing the number of partitions by $numPartitionsIncrement but ${assignments.size} assignments provided.")

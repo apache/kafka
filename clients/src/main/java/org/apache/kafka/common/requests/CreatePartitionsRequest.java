@@ -46,17 +46,17 @@ public class CreatePartitionsRequest extends AbstractRequest {
     private static final String TIMEOUT_KEY_NAME = "timeout";
     private static final String VALIDATE_ONLY_KEY_NAME = "validate_only";
 
-    public static final Schema CREATE_PARTITIONS_REQUEST_V0 = new Schema(
-            new Field("topic_partition_count", new ArrayOf(
+    private static final Schema CREATE_PARTITIONS_REQUEST_V0 = new Schema(
+            new Field(TOPIC_PARTITION_COUNT_KEY_NAME, new ArrayOf(
                     new Schema(
                             TOPIC_NAME,
-                            new Field("new_partitions", new Schema(
-                                    new Field("count", INT32, "The new partition count."),
-                                    new Field("assignment", ArrayOf.nullable(new ArrayOf(INT32)), "The assigned brokers")
+                            new Field(NEW_PARTITIONS_KEY_NAME, new Schema(
+                                    new Field(COUNT_KEY_NAME, INT32, "The new partition count."),
+                                    new Field(ASSIGNMENT_KEY_NAME, ArrayOf.nullable(new ArrayOf(INT32)), "The assigned brokers")
                             )))),
                     "List of topic and the corresponding partition count"),
-            new Field("timeout", INT32, "The time in ms to wait for a topic to be altered."),
-            new Field("validate_only", BOOLEAN, "If true then validate the request, but don't actually increase the partition count."));
+            new Field(TIMEOUT_KEY_NAME, INT32, "The time in ms to wait for a topic to be altered."),
+            new Field(VALIDATE_ONLY_KEY_NAME, BOOLEAN, "If true then validate the request, but don't actually increase the partition count."));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{CREATE_PARTITIONS_REQUEST_V0};
@@ -66,8 +66,6 @@ public class CreatePartitionsRequest extends AbstractRequest {
     private final Map<String, NewPartitions> newPartitions;
     private final int timeout;
     private final boolean validateOnly;
-
-
 
     public static class Builder extends AbstractRequest.Builder<CreatePartitionsRequest> {
 
