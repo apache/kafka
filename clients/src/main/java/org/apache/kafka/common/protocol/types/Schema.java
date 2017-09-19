@@ -19,6 +19,7 @@ package org.apache.kafka.common.protocol.types;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * The schema for a compound record definition
@@ -161,6 +162,26 @@ public class Schema extends Type {
             return struct;
         } catch (ClassCastException e) {
             throw new SchemaException("Not a Struct.");
+        }
+    }
+
+    public void walk(SchemaVisitor visitor) {
+        Objects.requireNonNull(visitor, "visitor must be non-null");
+        handleNode(this, visitor);
+    }
+
+    private static void handleNode(Type node, SchemaVisitor visitor) {
+        if (node instanceof Schema) {
+            Schema schema = (Schema) node;
+            visitor.visit(schema);
+            for (BoundField f : schema.fields())
+                handleNode(f.def.type, visitor);
+        } else if (node instanceof ArrayOf) {
+            ArrayOf array = (ArrayOf) node;
+            visitor.visit(array);
+            handleNode(array.type(), visitor);
+        } else {
+            visitor.visit(node);
         }
     }
 

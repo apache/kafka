@@ -14,25 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.protocol;
+package org.apache.kafka.common.protocol.types;
 
-import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Schema;
-import org.apache.kafka.common.protocol.types.Type;
-
-public abstract class SchemaVisitorAdapter implements SchemaVisitor {
-    @Override
-    public void visit(Schema schema) {
-        //nop
-    }
-
-    @Override
-    public void visit(ArrayOf array) {
-        //nop
-    }
-
-    @Override
-    public void visit(Type field) {
-        //nop
-    }
+/**
+ * Override one or more of the visit methods with the desired logic.
+ */
+public abstract class SchemaVisitor {
+    public void visit(Schema schema) {}
+    public void visit(ArrayOf array) {}
+    public void visit(Type field) {}
 }
