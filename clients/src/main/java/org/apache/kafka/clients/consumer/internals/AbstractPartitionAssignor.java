@@ -17,11 +17,13 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -37,12 +39,12 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
 
     /**
      * Perform the group assignment given the partition counts and member subscriptions
-     * @param partitionsPerTopic The number of partitions for each subscribed topic. Topics not in metadata will be excluded
+     * @param partitionsPerTopic The partitionInfo list for each subscribed topic. Topics not in metadata will be excluded
      *                           from this map.
      * @param subscriptions Map from the memberId to their respective topic subscription
      * @return Map from each member to the list of partitions assigned to them.
      */
-    public abstract Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
+    public abstract Map<String, List<TopicPartition>> assign(Map<String, List<PartitionInfo>> partitionsPerTopic,
                                                              Map<String, Subscription> subscriptions);
 
     @Override
@@ -56,13 +58,14 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
         for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet())
             allSubscribedTopics.addAll(subscriptionEntry.getValue().topics());
 
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
         for (String topic : allSubscribedTopics) {
-            Integer numPartitions = metadata.partitionCountForTopic(topic);
-            if (numPartitions != null && numPartitions > 0)
-                partitionsPerTopic.put(topic, numPartitions);
-            else
+            List<PartitionInfo> partitionsForThisTopic = new ArrayList<>(metadata.partitionsForTopic(topic));
+            if (partitionsForThisTopic.isEmpty()) {
                 log.debug("Skipping assignment for topic {} since no metadata is available", topic);
+            } else {
+                partitionsPerTopic.put(topic, partitionsForThisTopic);
+            }
         }
 
         Map<String, List<TopicPartition>> rawAssignments = assign(partitionsPerTopic, subscriptions);
@@ -87,11 +90,15 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
         }
         list.add(value);
     }
-
-    protected static List<TopicPartition> partitions(String topic, int numPartitions) {
-        List<TopicPartition> partitions = new ArrayList<>(numPartitions);
-        for (int i = 0; i < numPartitions; i++)
-            partitions.add(new TopicPartition(topic, i));
+    
+    protected static List<TopicPartition> partitions(List<PartitionInfo> partitionInfos) {
+        if (partitionInfos == null || partitionInfos.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<TopicPartition> partitions = new ArrayList<>(partitionInfos.size());
+        for (PartitionInfo partitionInfo: partitionInfos) {
+            partitions.add(new TopicPartition(partitionInfo.topic(), partitionInfo.partition()));
+        }
         return partitions;
     }
 }

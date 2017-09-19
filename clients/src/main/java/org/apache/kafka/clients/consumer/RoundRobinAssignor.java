@@ -17,11 +17,13 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.CircularIterator;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -56,7 +58,7 @@ import java.util.TreeSet;
 public class RoundRobinAssignor extends AbstractPartitionAssignor {
 
     @Override
-    public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
+    public Map<String, List<TopicPartition>> assign(Map<String, List<PartitionInfo>> partitionsPerTopic,
                                                     Map<String, Subscription> subscriptions) {
         Map<String, List<TopicPartition>> assignment = new HashMap<>();
         for (String memberId : subscriptions.keySet())
@@ -73,7 +75,7 @@ public class RoundRobinAssignor extends AbstractPartitionAssignor {
     }
 
 
-    public List<TopicPartition> allPartitionsSorted(Map<String, Integer> partitionsPerTopic,
+    public List<TopicPartition> allPartitionsSorted(Map<String, List<PartitionInfo>> partitionsPerTopic,
                                                     Map<String, Subscription> subscriptions) {
         SortedSet<String> topics = new TreeSet<>();
         for (Subscription subscription : subscriptions.values())
@@ -81,9 +83,11 @@ public class RoundRobinAssignor extends AbstractPartitionAssignor {
 
         List<TopicPartition> allPartitions = new ArrayList<>();
         for (String topic : topics) {
-            Integer numPartitionsForTopic = partitionsPerTopic.get(topic);
-            if (numPartitionsForTopic != null)
-                allPartitions.addAll(AbstractPartitionAssignor.partitions(topic, numPartitionsForTopic));
+            List<PartitionInfo> partitionInfos = partitionsPerTopic.get(topic);
+            if (partitionInfos != null && !partitionInfos.isEmpty()) {
+                Collections.sort(partitionInfos);
+                allPartitions.addAll(AbstractPartitionAssignor.partitions(partitionInfos));
+            }
         }
         return allPartitions;
     }
