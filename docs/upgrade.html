@@ -52,7 +52,7 @@
         to retain the previous behavior should set the broker config <code>delete.topic.enable</code> to <code>false</code>. Keep in mind that topic deletion removes data and the operation is not reversible (i.e. there is no "undelete" operation)</li>
     <li>For topics that support timestamp search if no offset can be found for a partition, that partition is now included in the search result with a null offset value. Previously, the partition was not included in the map.
         This change was made to make the search behavior consistent with the case of topics not supporting timestamp search.
-    <li>If the <code>inter.broker.protocol.version</code> is 0.11.1 or later, a broker will now stay online to serve replicas
+    <li>If the <code>inter.broker.protocol.version</code> is 1.0 or later, a broker will now stay online to serve replicas
         on live log directories even if there are offline log directories. A log directory may become offline due to IOException
         caused by hardware failure. Users need to monitor the per-broker metric <code>offlineLogDirectoryCount</code> to check
         whether there is offline log directory. </li>
