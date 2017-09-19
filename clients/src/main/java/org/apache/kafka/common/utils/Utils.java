@@ -20,12 +20,14 @@ import org.apache.kafka.common.KafkaException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedWriter;
 import java.io.Closeable;
 import java.io.DataOutput;
 import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
@@ -567,6 +569,16 @@ public class Utils {
 
     public static String readFileAsString(String path) throws IOException {
         return Utils.readFileAsString(path, Charset.defaultCharset());
+    }
+
+    public static void writeToFile(String path, String text) throws IOException {
+        BufferedWriter writer = new BufferedWriter(new FileWriter(path));
+        try {
+            writer.write(text);
+        } finally {
+            writer.flush();
+            writer.close();
+        }
     }
 
     /**

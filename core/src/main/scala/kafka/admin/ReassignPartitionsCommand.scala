@@ -16,6 +16,7 @@
  */
 package kafka.admin
 
+import java.io.File
 import java.util.Properties
 import java.util.concurrent.ExecutionException
 
@@ -187,10 +188,10 @@ object ReassignPartitionsCommand extends Logging {
     val reassignmentJsonString = Utils.readFileAsString(reassignmentJsonFile)
     val throttle = opts.options.valueOf(opts.throttleOpt)
     val timeoutMs = opts.options.valueOf(opts.timeoutOpt)
-    executeAssignment(zkUtils, adminClientOpt, reassignmentJsonString, Throttle(throttle), timeoutMs)
+    executeAssignment(zkUtils, adminClientOpt, reassignmentJsonString, reassignmentJsonFile, Throttle(throttle), timeoutMs)
   }
 
-  def executeAssignment(zkUtils: ZkUtils, adminClientOpt: Option[JAdminClient], reassignmentJsonString: String, throttle: Throttle, timeoutMs: Long = 10000L) {
+  def executeAssignment(zkUtils: ZkUtils, adminClientOpt: Option[JAdminClient], reassignmentJsonString: String, reassignmentJsonFile: String, throttle: Throttle, timeoutMs: Long = 10000L) {
     val (partitionAssignment, replicaAssignment) = parseAndValidate(zkUtils, reassignmentJsonString)
     val reassignPartitionsCommand = new ReassignPartitionsCommand(zkUtils, adminClientOpt, partitionAssignment.toMap, replicaAssignment)
 
@@ -199,7 +200,7 @@ object ReassignPartitionsCommand extends Logging {
       println("There is an existing assignment running.")
       reassignPartitionsCommand.maybeLimit(throttle)
     } else {
-      printCurrentAssignment(zkUtils, partitionAssignment.map(_._1.topic))
+      printCurrentAssignment(zkUtils, reassignmentJsonFile, partitionAssignment.map(_._1.topic))
       if (throttle.value >= 0)
         println(String.format("Warning: You must run Verify periodically, until the reassignment completes, to ensure the throttle is removed. You can also alter the throttle by rerunning the Execute command passing a new value."))
       if (reassignPartitionsCommand.reassignPartitions(throttle, timeoutMs)) {
@@ -209,11 +210,23 @@ object ReassignPartitionsCommand extends Logging {
     }
   }
 
-  def printCurrentAssignment(zkUtils: ZkUtils, topics: Seq[String]): Unit = {
+  def printCurrentAssignment(zkUtils: ZkUtils, reassignmentJsonFile: String, topics: Seq[String]): Unit = {
     // before starting assignment, output the current replica assignment to facilitate rollback
     val currentPartitionReplicaAssignment = zkUtils.getReplicaAssignmentForTopics(topics)
-    println("Current partition replica assignment\n\n%s\n\nSave this to use as the --reassignment-json-file option during rollback"
-      .format(formatAsReassignmentJson(currentPartitionReplicaAssignment, Map.empty)))
+    println("Current partition replica assignment\n\n%s\n\n".format(formatAsReassignmentJson(currentPartitionReplicaAssignment, Map.empty)))
+    reassignmentJsonFile.isEmpty match {
+      case true =>
+        println("You can save this manually to use as the --reassignment-json-file option during rollback")
+      case false =>
+        val rollbackAssignmentJsonFile = new File(s"$reassignmentJsonFile.rollback")
+        rollbackAssignmentJsonFile.exists() match {
+          case true =>
+            println(s"File ${rollbackAssignmentJsonFile.getName} exists, you can save this manually to use as the --reassignment-json-file option during rollback")
+          case false =>
+            Utils.writeToFile(rollbackAssignmentJsonFile.getPath, ZkUtils.formatAsReassignmentJson(currentPartitionReplicaAssignment))
+            println(s"Saved this to ${rollbackAssignmentJsonFile.getName}, you can use it as the --reassignment-json-file option during rollback")
+        }
+    }
   }
 
   def formatAsReassignmentJson(partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]],
