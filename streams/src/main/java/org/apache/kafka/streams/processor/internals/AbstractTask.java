@@ -226,6 +226,7 @@ public abstract class AbstractTask implements Task {
      * @throws ProcessorStateException if there is an error while closing the state manager
      * @param writeCheckpoint boolean indicating if a checkpoint file should be written
      */
+    // visible for testing
     void closeStateManager(final boolean writeCheckpoint) throws ProcessorStateException {
         ProcessorStateException exception = null;
         log.trace("Closing state manager");
