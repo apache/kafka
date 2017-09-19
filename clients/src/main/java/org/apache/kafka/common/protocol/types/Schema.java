@@ -165,12 +165,12 @@ public class Schema extends Type {
         }
     }
 
-    public void walk(SchemaVisitor visitor) {
+    public void walk(Visitor visitor) {
         Objects.requireNonNull(visitor, "visitor must be non-null");
         handleNode(this, visitor);
     }
 
-    private static void handleNode(Type node, SchemaVisitor visitor) {
+    private static void handleNode(Type node, Visitor visitor) {
         if (node instanceof Schema) {
             Schema schema = (Schema) node;
             visitor.visit(schema);
@@ -184,5 +184,15 @@ public class Schema extends Type {
             visitor.visit(node);
         }
     }
+
+    /**
+     * Override one or more of the visit methods with the desired logic.
+     */
+    public static abstract class Visitor {
+        public void visit(Schema schema) {}
+        public void visit(ArrayOf array) {}
+        public void visit(Type field) {}
+    }
+
 
 }

@@ -18,7 +18,6 @@ package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.SchemaException;
-import org.apache.kafka.common.protocol.types.SchemaVisitor;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.common.record.RecordBatch;
@@ -327,7 +326,7 @@ public enum ApiKeys {
 
     private static boolean retainsBufferReference(Schema schema) {
         final AtomicBoolean hasBuffer = new AtomicBoolean(false);
-        SchemaVisitor detector = new SchemaVisitor() {
+        Schema.Visitor detector = new Schema.Visitor() {
             @Override
             public void visit(Type field) {
                 if (field == BYTES || field == NULLABLE_BYTES || field == RECORDS)
