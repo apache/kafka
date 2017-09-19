@@ -102,9 +102,17 @@ public class ProduceRequest extends AbstractRequest {
      */
     private static final Schema PRODUCE_REQUEST_V4 = PRODUCE_REQUEST_V3;
 
+    /**
+     * The body of the PRODUCE_REQUEST_V5 is the same as PRODUCE_REQUEST_V4.
+     * The version number is bumped since the PRODUCE_RESPONSE_V5 includes an additional partition level
+     * field: the log_start_offset.
+     */
+    private static final Schema PRODUCE_REQUEST_V5 = PRODUCE_REQUEST_V4;
+
+
     public static Schema[] schemaVersions() {
         return new Schema[] {PRODUCE_REQUEST_V0, PRODUCE_REQUEST_V1, PRODUCE_REQUEST_V2, PRODUCE_REQUEST_V3,
-            PRODUCE_REQUEST_V4};
+            PRODUCE_REQUEST_V4, PRODUCE_REQUEST_V5};
     }
 
     public static class Builder extends AbstractRequest.Builder<ProduceRequest> {
