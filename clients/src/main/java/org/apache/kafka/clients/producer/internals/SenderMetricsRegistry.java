@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -32,6 +32,8 @@ public class SenderMetricsRegistry {
 
     final static String METRIC_GROUP_NAME = "producer-metrics";
     final static String TOPIC_METRIC_GROUP_NAME = "producer-topic-metrics";
+
+    private final List<MetricNameTemplate> allTemplates;
 
     private MetricNameTemplate batchSizeAvg;
     private MetricNameTemplate batchSizeMax;
@@ -72,46 +74,47 @@ public class SenderMetricsRegistry {
     public SenderMetricsRegistry(Metrics metrics) {
         this.metrics = metrics;
         this.tags = this.metrics.config().tags().keySet();
-
+        this.allTemplates = new ArrayList<MetricNameTemplate>();
+        
         /* ***** Client level *****/
         
-        this.batchSizeAvg = new MetricNameTemplate("batch-size-avg", METRIC_GROUP_NAME, "The average number of bytes sent per partition per-request.", tags);
-        this.batchSizeMax = new MetricNameTemplate("batch-size-max", METRIC_GROUP_NAME, "The max number of bytes sent per partition per-request.", tags);
-        this.compressionRateAvg = new MetricNameTemplate("compression-rate-avg", METRIC_GROUP_NAME, "The average compression rate of record batches.", tags);
-        this.recordQueueTimeAvg = new MetricNameTemplate("record-queue-time-avg", METRIC_GROUP_NAME, "The average time in ms record batches spent in the send buffer.", tags);
-        this.recordQueueTimeMax = new MetricNameTemplate("record-queue-time-max", METRIC_GROUP_NAME, "The maximum time in ms record batches spent in the send buffer.", tags);
-        this.requestLatencyAvg = new MetricNameTemplate("request-latency-avg", METRIC_GROUP_NAME, "The average request latency in ms", tags);
-        this.requestLatencyMax = new MetricNameTemplate("request-latency-max", METRIC_GROUP_NAME, "The maximum request latency in ms", tags);
-        this.recordSendRate = new MetricNameTemplate("record-send-rate", METRIC_GROUP_NAME, "The average number of records sent per second.", tags);
-        this.recordSendTotal = new MetricNameTemplate("record-send-total", METRIC_GROUP_NAME, "The total number of records sent.", tags);
-        this.recordsPerRequestAvg = new MetricNameTemplate("records-per-request-avg", METRIC_GROUP_NAME, "The average number of records per request.", tags);
-        this.recordRetryRate = new MetricNameTemplate("record-retry-rate", METRIC_GROUP_NAME, "The average per-second number of retried record sends", tags);
-        this.recordRetryTotal = new MetricNameTemplate("record-retry-total", METRIC_GROUP_NAME, "The total number of retried record sends", tags);
-        this.recordErrorRate = new MetricNameTemplate("record-error-rate", METRIC_GROUP_NAME, "The average per-second number of record sends that resulted in errors", tags);
-        this.recordErrorTotal = new MetricNameTemplate("record-error-total", METRIC_GROUP_NAME, "The total number of record sends that resulted in errors", tags);
-        this.recordSizeMax = new MetricNameTemplate("record-size-max", METRIC_GROUP_NAME, "The maximum record size", tags);
-        this.recordSizeAvg = new MetricNameTemplate("record-size-avg", METRIC_GROUP_NAME, "The average record size", tags);
-        this.requestsInFlight = new MetricNameTemplate("requests-in-flight", METRIC_GROUP_NAME, "The current number of in-flight requests awaiting a response.", tags);
-        this.metadataAge = new MetricNameTemplate("metadata-age", METRIC_GROUP_NAME, "The age in seconds of the current producer metadata being used.", tags);
-        this.batchSplitRate = new MetricNameTemplate("batch-split-rate", METRIC_GROUP_NAME, "The average number of batch splits per second", tags);
-        this.batchSplitTotal = new MetricNameTemplate("batch-split-total", METRIC_GROUP_NAME, "The total number of batch splits", tags);
+        this.batchSizeAvg = createTemplate("batch-size-avg", METRIC_GROUP_NAME, "The average number of bytes sent per partition per-request.", tags);
+        this.batchSizeMax = createTemplate("batch-size-max", METRIC_GROUP_NAME, "The max number of bytes sent per partition per-request.", tags);
+        this.compressionRateAvg = createTemplate("compression-rate-avg", METRIC_GROUP_NAME, "The average compression rate of record batches.", tags);
+        this.recordQueueTimeAvg = createTemplate("record-queue-time-avg", METRIC_GROUP_NAME, "The average time in ms record batches spent in the send buffer.", tags);
+        this.recordQueueTimeMax = createTemplate("record-queue-time-max", METRIC_GROUP_NAME, "The maximum time in ms record batches spent in the send buffer.", tags);
+        this.requestLatencyAvg = createTemplate("request-latency-avg", METRIC_GROUP_NAME, "The average request latency in ms", tags);
+        this.requestLatencyMax = createTemplate("request-latency-max", METRIC_GROUP_NAME, "The maximum request latency in ms", tags);
+        this.recordSendRate = createTemplate("record-send-rate", METRIC_GROUP_NAME, "The average number of records sent per second.", tags);
+        this.recordSendTotal = createTemplate("record-send-total", METRIC_GROUP_NAME, "The total number of records sent.", tags);
+        this.recordsPerRequestAvg = createTemplate("records-per-request-avg", METRIC_GROUP_NAME, "The average number of records per request.", tags);
+        this.recordRetryRate = createTemplate("record-retry-rate", METRIC_GROUP_NAME, "The average per-second number of retried record sends", tags);
+        this.recordRetryTotal = createTemplate("record-retry-total", METRIC_GROUP_NAME, "The total number of retried record sends", tags);
+        this.recordErrorRate = createTemplate("record-error-rate", METRIC_GROUP_NAME, "The average per-second number of record sends that resulted in errors", tags);
+        this.recordErrorTotal = createTemplate("record-error-total", METRIC_GROUP_NAME, "The total number of record sends that resulted in errors", tags);
+        this.recordSizeMax = createTemplate("record-size-max", METRIC_GROUP_NAME, "The maximum record size", tags);
+        this.recordSizeAvg = createTemplate("record-size-avg", METRIC_GROUP_NAME, "The average record size", tags);
+        this.requestsInFlight = createTemplate("requests-in-flight", METRIC_GROUP_NAME, "The current number of in-flight requests awaiting a response.", tags);
+        this.metadataAge = createTemplate("metadata-age", METRIC_GROUP_NAME, "The age in seconds of the current producer metadata being used.", tags);
+        this.batchSplitRate = createTemplate("batch-split-rate", METRIC_GROUP_NAME, "The average number of batch splits per second", tags);
+        this.batchSplitTotal = createTemplate("batch-split-total", METRIC_GROUP_NAME, "The total number of batch splits", tags);
 
-        this.produceThrottleTimeAvg = new MetricNameTemplate("produce-throttle-time-avg", METRIC_GROUP_NAME, "The average time in ms a request was throttled by a broker", tags);
-        this.produceThrottleTimeMax = new MetricNameTemplate("produce-throttle-time-max", METRIC_GROUP_NAME, "The maximum time in ms a request was throttled by a broker", tags);
+        this.produceThrottleTimeAvg = createTemplate("produce-throttle-time-avg", METRIC_GROUP_NAME, "The average time in ms a request was throttled by a broker", tags);
+        this.produceThrottleTimeMax = createTemplate("produce-throttle-time-max", METRIC_GROUP_NAME, "The maximum time in ms a request was throttled by a broker", tags);
 
         /* ***** Topic level *****/
         this.topicTags = new HashSet<String>(tags);
         this.topicTags.add("topic");
 
-        this.topicRecordSendRate = new MetricNameTemplate("record-send-rate", TOPIC_METRIC_GROUP_NAME, "The average number of records sent per second for a topic.", topicTags);
-        this.topicRecordSendTotal = new MetricNameTemplate("record-send-total", TOPIC_METRIC_GROUP_NAME, "The total number of records sent for a topic.", topicTags);
-        this.topicByteRate = new MetricNameTemplate("byte-rate", TOPIC_METRIC_GROUP_NAME, "The average number of bytes sent per second for a topic.", topicTags);
-        this.topicByteTotal = new MetricNameTemplate("byte-total", TOPIC_METRIC_GROUP_NAME, "The total number of bytes sent for a topic.", topicTags);
-        this.topicCompressionRate = new MetricNameTemplate("compression-rate", TOPIC_METRIC_GROUP_NAME, "The average compression rate of record batches for a topic.", topicTags);
-        this.topicRecordRetryRate = new MetricNameTemplate("record-retry-rate", TOPIC_METRIC_GROUP_NAME, "The average per-second number of retried record sends for a topic", topicTags);
-        this.topicRecordRetryTotal = new MetricNameTemplate("record-retry-total", TOPIC_METRIC_GROUP_NAME, "The total number of retried record sends for a topic", topicTags);
-        this.topicRecordErrorRate = new MetricNameTemplate("record-error-rate", TOPIC_METRIC_GROUP_NAME, "The average per-second number of record sends that resulted in errors for a topic", topicTags);
-        this.topicRecordErrorTotal = new MetricNameTemplate("record-error-total", TOPIC_METRIC_GROUP_NAME, "The total number of record sends that resulted in errors for a topic", topicTags);
+        this.topicRecordSendRate = createTemplate("record-send-rate", TOPIC_METRIC_GROUP_NAME, "The average number of records sent per second for a topic.", topicTags);
+        this.topicRecordSendTotal = createTemplate("record-send-total", TOPIC_METRIC_GROUP_NAME, "The total number of records sent for a topic.", topicTags);
+        this.topicByteRate = createTemplate("byte-rate", TOPIC_METRIC_GROUP_NAME, "The average number of bytes sent per second for a topic.", topicTags);
+        this.topicByteTotal = createTemplate("byte-total", TOPIC_METRIC_GROUP_NAME, "The total number of bytes sent for a topic.", topicTags);
+        this.topicCompressionRate = createTemplate("compression-rate", TOPIC_METRIC_GROUP_NAME, "The average compression rate of record batches for a topic.", topicTags);
+        this.topicRecordRetryRate = createTemplate("record-retry-rate", TOPIC_METRIC_GROUP_NAME, "The average per-second number of retried record sends for a topic", topicTags);
+        this.topicRecordRetryTotal = createTemplate("record-retry-total", TOPIC_METRIC_GROUP_NAME, "The total number of retried record sends for a topic", topicTags);
+        this.topicRecordErrorRate = createTemplate("record-error-rate", TOPIC_METRIC_GROUP_NAME, "The average per-second number of record sends that resulted in errors for a topic", topicTags);
+        this.topicRecordErrorTotal = createTemplate("record-error-total", TOPIC_METRIC_GROUP_NAME, "The total number of record sends that resulted in errors for a topic", topicTags);
 
     }
 
@@ -240,46 +243,9 @@ public class SenderMetricsRegistry {
         return this.metrics.metricInstance(this.topicRecordErrorTotal, metricTags);
     }
 
-    
-    
     public List<MetricNameTemplate> getAllTemplates() {
-        return Arrays.asList(this.batchSizeAvg,
-                this.batchSizeMax,
-                this.compressionRateAvg,
-                this.recordQueueTimeAvg,
-                this.recordQueueTimeMax,
-                this.requestLatencyAvg,
-                this.requestLatencyMax,
-                this.recordSendRate,
-                this.recordSendTotal,
-                this.recordsPerRequestAvg,
-                this.recordRetryRate,
-                this.recordRetryTotal,
-                this.recordErrorRate,
-                this.recordErrorTotal,
-                this.recordSizeMax,
-                this.recordSizeAvg,
-                this.requestsInFlight,
-                this.metadataAge,
-                this.batchSplitRate,
-                this.batchSplitTotal,
-                
-                this.produceThrottleTimeAvg,
-                this.produceThrottleTimeMax,
-
-                // per-topic metrics
-                this.topicRecordSendRate,
-                this.topicRecordSendTotal,
-                this.topicByteRate,
-                this.topicByteTotal,
-                this.topicCompressionRate,
-                this.topicRecordRetryRate,
-                this.topicRecordRetryTotal,
-                this.topicRecordErrorRate,
-                this.topicRecordErrorTotal
-                );
+        return allTemplates;
     }
-
 
     public Sensor sensor(String name) {
         return this.metrics.sensor(name);
@@ -291,6 +257,12 @@ public class SenderMetricsRegistry {
 
     public Sensor getSensor(String name) {
         return this.metrics.getSensor(name);
+    }
+
+    private MetricNameTemplate createTemplate(String name, String group, String description, Set<String> tags) {
+        MetricNameTemplate template = new MetricNameTemplate(name, group, description, tags);
+        this.allTemplates.add(template);
+        return template;
     }
 
 }
