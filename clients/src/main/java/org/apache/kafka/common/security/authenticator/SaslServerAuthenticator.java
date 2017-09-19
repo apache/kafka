@@ -35,7 +35,6 @@ import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.SecurityProtocol;
-import org.apache.kafka.common.protocol.Protocol;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
@@ -372,7 +371,7 @@ public class SaslServerAuthenticator implements Authenticator {
                 sendKafkaResponse(requestContext, requestAndSize.request.getErrorResponse(e));
                 throw e;
             }
-            if (!Protocol.apiVersionSupported(apiKey.id, version)) {
+            if (!apiKey.isVersionSupported(version)) {
                 this.error = Errors.UNSUPPORTED_VERSION;
                 // We cannot create an error response if the request version of SaslAuthenticate is not supported
                 // This should not normally occur since clients typically check supported versions using ApiVersionsRequest
@@ -471,7 +470,7 @@ public class SaslServerAuthenticator implements Authenticator {
 
     // Visible to override for testing
     protected ApiVersionsResponse apiVersionsResponse() {
-        return ApiVersionsResponse.API_VERSIONS_RESPONSE;
+        return ApiVersionsResponse.defaultApiVersionsResponse();
     }
 
     // Visible to override for testing

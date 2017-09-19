@@ -16,12 +16,15 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.nio.ByteBuffer;
-
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
+import java.nio.ByteBuffer;
+
+import static org.apache.kafka.common.protocol.types.Type.BYTES;
 
 /**
  * Request from SASL client containing client SASL authentication token as defined by the
@@ -32,8 +35,14 @@ import org.apache.kafka.common.protocol.types.Struct;
  * brokers will send SaslHandshake request v0 followed by SASL tokens without the Kafka request headers.
  */
 public class SaslAuthenticateRequest extends AbstractRequest {
-
     private static final String SASL_AUTH_BYTES_KEY_NAME = "sasl_auth_bytes";
+
+    private static final Schema SASL_AUTHENTICATE_REQUEST_V0 = new Schema(
+            new Field(SASL_AUTH_BYTES_KEY_NAME, BYTES, "SASL authentication bytes from client as defined by the SASL mechanism."));
+
+    public static Schema[] schemaVersions() {
+        return new Schema[]{SASL_AUTHENTICATE_REQUEST_V0};
+    }
 
     private final ByteBuffer saslAuthBytes;
 

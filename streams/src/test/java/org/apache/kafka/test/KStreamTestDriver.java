@@ -20,6 +20,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsBuilderTest;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
@@ -48,6 +49,7 @@ public class KStreamTestDriver extends ExternalResource {
     private ProcessorTopology topology;
     private MockProcessorContext context;
     private ProcessorTopology globalTopology;
+    private final LogContext logContext = new LogContext("testCache ");
 
     @Deprecated
     public void setUp(final KStreamBuilder builder) {
@@ -81,7 +83,7 @@ public class KStreamTestDriver extends ExternalResource {
         builder.setApplicationId("TestDriver");
         topology = builder.build(null);
         globalTopology = builder.buildGlobalStateTopology();
-        final ThreadCache cache = new ThreadCache("testCache", cacheSize, new MockStreamsMetrics(new Metrics()));
+        final ThreadCache cache = new ThreadCache(logContext, cacheSize, new MockStreamsMetrics(new Metrics()));
         context = new MockProcessorContext(stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
         context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "topic"));
         // init global topology first as it will add stores to the
@@ -122,7 +124,7 @@ public class KStreamTestDriver extends ExternalResource {
         topology = internalTopologyBuilder.build(null);
         globalTopology = internalTopologyBuilder.buildGlobalStateTopology();
 
-        final ThreadCache cache = new ThreadCache("testCache", cacheSize, new MockStreamsMetrics(new Metrics()));
+        final ThreadCache cache = new ThreadCache(logContext, cacheSize, new MockStreamsMetrics(new Metrics()));
         context = new MockProcessorContext(stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
         context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "topic"));
 
@@ -273,7 +275,7 @@ public class KStreamTestDriver extends ExternalResource {
 
     private class MockRecordCollector extends RecordCollectorImpl {
         MockRecordCollector() {
-            super(null, "KStreamTestDriver");
+            super(null, "KStreamTestDriver", new LogContext("KStreamTestDriver "));
         }
 
         @Override

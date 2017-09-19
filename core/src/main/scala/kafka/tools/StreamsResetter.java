@@ -123,7 +123,8 @@ public class StreamsResetter {
 
         } catch (final Throwable e) {
             exitCode = EXIT_CODE_ERROR;
-            System.err.println("ERROR: " + e.getMessage());
+            System.err.println("ERROR: " + e);
+            e.printStackTrace(System.err);
         } finally {
             if (adminClient != null) {
                 adminClient.close();

@@ -19,6 +19,9 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.utils.Utils;
@@ -30,10 +33,42 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
+import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
+import static org.apache.kafka.common.protocol.CommonFields.ERROR_MESSAGE;
+import static org.apache.kafka.common.protocol.CommonFields.HOST;
+import static org.apache.kafka.common.protocol.CommonFields.OPERATION;
+import static org.apache.kafka.common.protocol.CommonFields.PERMISSION_TYPE;
+import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL;
+import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME;
+import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_TYPE;
+import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
+
 public class DeleteAclsResponse extends AbstractResponse {
     public static final Logger log = LoggerFactory.getLogger(DeleteAclsResponse.class);
-    private final static String FILTER_RESPONSES = "filter_responses";
-    private final static String MATCHING_ACLS = "matching_acls";
+    private final static String FILTER_RESPONSES_KEY_NAME = "filter_responses";
+    private final static String MATCHING_ACLS_KEY_NAME = "matching_acls";
+
+    private static final Schema MATCHING_ACL = new Schema(
+            ERROR_CODE,
+            ERROR_MESSAGE,
+            RESOURCE_TYPE,
+            RESOURCE_NAME,
+            PRINCIPAL,
+            HOST,
+            OPERATION,
+            PERMISSION_TYPE);
+
+    private static final Schema DELETE_ACLS_RESPONSE_V0 = new Schema(
+            THROTTLE_TIME_MS,
+            new Field(FILTER_RESPONSES_KEY_NAME,
+                    new ArrayOf(new Schema(
+                            ERROR_CODE,
+                            ERROR_MESSAGE,
+                            new Field(MATCHING_ACLS_KEY_NAME, new ArrayOf(MATCHING_ACL), "The matching ACLs")))));
+
+    public static Schema[] schemaVersions() {
+        return new Schema[]{DELETE_ACLS_RESPONSE_V0};
+    }
 
     public static class AclDeletionResult {
         private final ApiError error;
@@ -99,13 +134,13 @@ public class DeleteAclsResponse extends AbstractResponse {
     }
 
     public DeleteAclsResponse(Struct struct) {
-        this.throttleTimeMs = struct.getInt(THROTTLE_TIME_KEY_NAME);
+        this.throttleTimeMs = struct.get(THROTTLE_TIME_MS);
         this.responses = new ArrayList<>();
-        for (Object responseStructObj : struct.getArray(FILTER_RESPONSES)) {
+        for (Object responseStructObj : struct.getArray(FILTER_RESPONSES_KEY_NAME)) {
             Struct responseStruct = (Struct) responseStructObj;
             ApiError error = new ApiError(responseStruct);
             List<AclDeletionResult> deletions = new ArrayList<>();
-            for (Object matchingAclStructObj : responseStruct.getArray(MATCHING_ACLS)) {
+            for (Object matchingAclStructObj : responseStruct.getArray(MATCHING_ACLS_KEY_NAME)) {
                 Struct matchingAclStruct = (Struct) matchingAclStructObj;
                 ApiError matchError = new ApiError(matchingAclStruct);
                 AccessControlEntry entry = RequestUtils.aceFromStructFields(matchingAclStruct);
@@ -119,23 +154,23 @@ public class DeleteAclsResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.DELETE_ACLS.responseSchema(version));
-        struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
+        struct.set(THROTTLE_TIME_MS, throttleTimeMs);
         List<Struct> responseStructs = new ArrayList<>();
         for (AclFilterResponse response : responses) {
-            Struct responseStruct = struct.instance(FILTER_RESPONSES);
+            Struct responseStruct = struct.instance(FILTER_RESPONSES_KEY_NAME);
             response.error.write(responseStruct);
             List<Struct> deletionStructs = new ArrayList<>();
             for (AclDeletionResult deletion : response.deletions()) {
-                Struct deletionStruct = responseStruct.instance(MATCHING_ACLS);
+                Struct deletionStruct = responseStruct.instance(MATCHING_ACLS_KEY_NAME);
                 deletion.error.write(deletionStruct);
                 RequestUtils.resourceSetStructFields(deletion.acl().resource(), deletionStruct);
                 RequestUtils.aceSetStructFields(deletion.acl().entry(), deletionStruct);
                 deletionStructs.add(deletionStruct);
             }
-            responseStruct.set(MATCHING_ACLS, deletionStructs.toArray(new Struct[0]));
+            responseStruct.set(MATCHING_ACLS_KEY_NAME, deletionStructs.toArray(new Struct[0]));
             responseStructs.add(responseStruct);
         }
-        struct.set(FILTER_RESPONSES, responseStructs.toArray());
+        struct.set(FILTER_RESPONSES_KEY_NAME, responseStructs.toArray());
         return struct;
     }
 

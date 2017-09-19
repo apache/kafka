@@ -18,6 +18,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -26,9 +29,53 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
+import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
+import static org.apache.kafka.common.protocol.types.Type.BYTES;
+import static org.apache.kafka.common.protocol.types.Type.INT32;
+import static org.apache.kafka.common.protocol.types.Type.STRING;
+
 public class JoinGroupResponse extends AbstractResponse {
 
-    private static final String ERROR_CODE_KEY_NAME = "error_code";
+    private static final String GENERATION_ID_KEY_NAME = "generation_id";
+    private static final String GROUP_PROTOCOL_KEY_NAME = "group_protocol";
+    private static final String LEADER_ID_KEY_NAME = "leader_id";
+    private static final String MEMBER_ID_KEY_NAME = "member_id";
+    private static final String MEMBERS_KEY_NAME = "members";
+
+    private static final String MEMBER_METADATA_KEY_NAME = "member_metadata";
+
+    private static final Schema JOIN_GROUP_RESPONSE_MEMBER_V0 = new Schema(
+            new Field(MEMBER_ID_KEY_NAME, STRING),
+            new Field(MEMBER_METADATA_KEY_NAME, BYTES));
+
+    private static final Schema JOIN_GROUP_RESPONSE_V0 = new Schema(
+            ERROR_CODE,
+            new Field(GENERATION_ID_KEY_NAME, INT32, "The generation of the consumer group."),
+            new Field(GROUP_PROTOCOL_KEY_NAME, STRING, "The group protocol selected by the coordinator"),
+            new Field(LEADER_ID_KEY_NAME, STRING, "The leader of the group"),
+            new Field(MEMBER_ID_KEY_NAME, STRING, "The consumer id assigned by the group coordinator."),
+            new Field(MEMBERS_KEY_NAME, new ArrayOf(JOIN_GROUP_RESPONSE_MEMBER_V0)));
+
+    private static final Schema JOIN_GROUP_RESPONSE_V1 = JOIN_GROUP_RESPONSE_V0;
+
+    private static final Schema JOIN_GROUP_RESPONSE_V2 = new Schema(
+            THROTTLE_TIME_MS,
+            ERROR_CODE,
+            new Field(GENERATION_ID_KEY_NAME, INT32, "The generation of the consumer group."),
+            new Field(GROUP_PROTOCOL_KEY_NAME, STRING, "The group protocol selected by the coordinator"),
+            new Field(LEADER_ID_KEY_NAME, STRING, "The leader of the group"),
+            new Field(MEMBER_ID_KEY_NAME, STRING, "The consumer id assigned by the group coordinator."),
+            new Field(MEMBERS_KEY_NAME, new ArrayOf(JOIN_GROUP_RESPONSE_MEMBER_V0)));
+
+
+    public static Schema[] schemaVersions() {
+        return new Schema[] {JOIN_GROUP_RESPONSE_V0, JOIN_GROUP_RESPONSE_V1, JOIN_GROUP_RESPONSE_V2};
+    }
+
+    public static final String UNKNOWN_PROTOCOL = "";
+    public static final int UNKNOWN_GENERATION_ID = -1;
+    public static final String UNKNOWN_MEMBER_ID = "";
 
     /**
      * Possible error codes:
@@ -41,18 +88,6 @@ public class JoinGroupResponse extends AbstractResponse {
      * INVALID_SESSION_TIMEOUT (26)
      * GROUP_AUTHORIZATION_FAILED (30)
      */
-
-    private static final String GENERATION_ID_KEY_NAME = "generation_id";
-    private static final String GROUP_PROTOCOL_KEY_NAME = "group_protocol";
-    private static final String LEADER_ID_KEY_NAME = "leader_id";
-    private static final String MEMBER_ID_KEY_NAME = "member_id";
-    private static final String MEMBERS_KEY_NAME = "members";
-
-    private static final String MEMBER_METADATA_KEY_NAME = "member_metadata";
-
-    public static final String UNKNOWN_PROTOCOL = "";
-    public static final int UNKNOWN_GENERATION_ID = -1;
-    public static final String UNKNOWN_MEMBER_ID = "";
 
     private final int throttleTimeMs;
     private final Errors error;
@@ -88,7 +123,7 @@ public class JoinGroupResponse extends AbstractResponse {
     }
 
     public JoinGroupResponse(Struct struct) {
-        this.throttleTimeMs = struct.hasField(THROTTLE_TIME_KEY_NAME) ? struct.getInt(THROTTLE_TIME_KEY_NAME) : DEFAULT_THROTTLE_TIME;
+        this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
         members = new HashMap<>();
 
         for (Object memberDataObj : struct.getArray(MEMBERS_KEY_NAME)) {
@@ -97,7 +132,7 @@ public class JoinGroupResponse extends AbstractResponse {
             ByteBuffer memberMetadata = memberData.getBytes(MEMBER_METADATA_KEY_NAME);
             members.put(memberId, memberMetadata);
         }
-        error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
+        error = Errors.forCode(struct.get(ERROR_CODE));
         generationId = struct.getInt(GENERATION_ID_KEY_NAME);
         groupProtocol = struct.getString(GROUP_PROTOCOL_KEY_NAME);
         memberId = struct.getString(MEMBER_ID_KEY_NAME);
@@ -143,10 +178,9 @@ public class JoinGroupResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.JOIN_GROUP.responseSchema(version));
-        if (struct.hasField(THROTTLE_TIME_KEY_NAME))
-            struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
+        struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
 
-        struct.set(ERROR_CODE_KEY_NAME, error.code());
+        struct.set(ERROR_CODE, error.code());
         struct.set(GENERATION_ID_KEY_NAME, generationId);
         struct.set(GROUP_PROTOCOL_KEY_NAME, groupProtocol);
         struct.set(MEMBER_ID_KEY_NAME, memberId);

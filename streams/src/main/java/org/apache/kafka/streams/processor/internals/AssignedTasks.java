@@ -20,10 +20,10 @@ import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -38,8 +38,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 class AssignedTasks {
-    private static final Logger log = LoggerFactory.getLogger(AssignedTasks.class);
-    private final String logPrefix;
+    private final Logger log;
     private final String taskTypeName;
     private final TaskAction maybeCommitAction;
     private final TaskAction commitAction;
@@ -54,10 +53,11 @@ class AssignedTasks {
     private int committed = 0;
 
 
-    AssignedTasks(final String logPrefix,
+    AssignedTasks(final LogContext logContext,
                   final String taskTypeName) {
-        this.logPrefix = logPrefix;
         this.taskTypeName = taskTypeName;
+
+        this.log = logContext.logger(getClass());
 
         maybeCommitAction = new TaskAction() {
             @Override
@@ -71,8 +71,7 @@ class AssignedTasks {
                     committed++;
                     task.commit();
                     if (log.isDebugEnabled()) {
-                        log.debug("{} Committed active task {} per user request in",
-                                  logPrefix, task.id());
+                        log.debug("Committed active task {} per user request in", task.id());
                     }
                 }
             }
@@ -110,13 +109,13 @@ class AssignedTasks {
 
     void initializeNewTasks() {
         if (!created.isEmpty()) {
-            log.trace("{} Initializing {}s {}", logPrefix, taskTypeName, created.keySet());
+            log.trace("Initializing {}s {}", taskTypeName, created.keySet());
         }
         for (final Iterator<Map.Entry<TaskId, Task>> it = created.entrySet().iterator(); it.hasNext(); ) {
             final Map.Entry<TaskId, Task> entry = it.next();
             try {
                 if (!entry.getValue().initialize()) {
-                    log.debug("{} transitioning {} {} to restoring", logPrefix, taskTypeName, entry.getKey());
+                    log.debug("transitioning {} {} to restoring", taskTypeName, entry.getKey());
                     restoring.put(entry.getKey(), entry.getValue());
                 } else {
                     transitionToRunning(entry.getValue());
@@ -124,7 +123,7 @@ class AssignedTasks {
                 it.remove();
             } catch (final LockException e) {
                 // made this trace as it will spam the logs in the poll loop.
-                log.trace("{} Could not create {} {} due to {}; will retry in the next run loop", logPrefix, taskTypeName, entry.getKey(), e.getMessage());
+                log.trace("Could not create {} {} due to {}; will retry", taskTypeName, entry.getKey(), e.getMessage());
             }
         }
     }
@@ -133,7 +132,7 @@ class AssignedTasks {
         if (restored.isEmpty()) {
             return Collections.emptySet();
         }
-        log.trace("{} {} partitions restored for {}", logPrefix, taskTypeName, restored);
+        log.trace("{} partitions restored for {}", taskTypeName, restored);
         final Set<TopicPartition> resume = new HashSet<>();
         restoredPartitions.addAll(restored);
         for (final Iterator<Map.Entry<TaskId, Task>> it = restoring.entrySet().iterator(); it.hasNext(); ) {
@@ -147,8 +146,7 @@ class AssignedTasks {
                 if (log.isTraceEnabled()) {
                     final HashSet<TopicPartition> outstandingPartitions = new HashSet<>(task.changelogPartitions());
                     outstandingPartitions.removeAll(restoredPartitions);
-                    log.trace("{} partition restoration not complete for {} {} partitions: {}",
-                              logPrefix,
+                    log.trace("partition restoration not complete for {} {} partitions: {}",
                               taskTypeName,
                               task.id(),
                               task.changelogPartitions());
@@ -173,11 +171,11 @@ class AssignedTasks {
 
     RuntimeException suspend() {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
-        log.trace("{} Suspending running {} {}", logPrefix, taskTypeName, runningTaskIds());
+        log.trace("Suspending running {} {}", taskTypeName, runningTaskIds());
         firstException.compareAndSet(null, suspendTasks(running.values()));
-        log.trace("{} Close restoring {} {}", logPrefix, taskTypeName, restoring.keySet());
+        log.trace("Close restoring {} {}", taskTypeName, restoring.keySet());
         firstException.compareAndSet(null, closeNonRunningTasks(restoring.values()));
-        log.trace("{} Close created {} {}", logPrefix, taskTypeName, created.keySet());
+        log.trace("Close created {} {}", taskTypeName, created.keySet());
         firstException.compareAndSet(null, closeNonRunningTasks(created.values()));
         previousActiveTasks.clear();
         previousActiveTasks.addAll(running.keySet());
@@ -194,7 +192,7 @@ class AssignedTasks {
             try {
                 task.close(false, false);
             } catch (final RuntimeException e) {
-                log.error("{} Failed to close {}, {}", logPrefix, taskTypeName, task.id(), e);
+                log.error("Failed to close {}, {}", taskTypeName, task.id(), e);
                 if (exception == null) {
                     exception = e;
                 }
@@ -213,16 +211,16 @@ class AssignedTasks {
             } catch (final CommitFailedException e) {
                 suspended.put(task.id(), task);
                 // commit failed during suspension. Just log it.
-                log.warn("{} Failed to commit {} {} state when suspending due to CommitFailedException", logPrefix, taskTypeName, task.id());
+                log.warn("Failed to commit {} {} state when suspending due to CommitFailedException", taskTypeName, task.id());
             } catch (final ProducerFencedException e) {
                 closeZombieTask(task);
                 it.remove();
             } catch (final RuntimeException e) {
-                log.error("{} Suspending {} {} failed due to the following error:", logPrefix, taskTypeName, task.id(), e);
+                log.error("Suspending {} {} failed due to the following error:", taskTypeName, task.id(), e);
                 try {
                     task.close(false, false);
                 } catch (final Exception f) {
-                    log.error("{} After suspending failed, closing the same {} {} failed again due to the following error:", logPrefix, taskTypeName, task.id(), f);
+                    log.error("After suspending failed, closing the same {} {} failed again due to the following error:", taskTypeName, task.id(), f);
                 }
                 if (exception == null) {
                     exception = e;
@@ -233,11 +231,11 @@ class AssignedTasks {
     }
 
     private void closeZombieTask(final Task task) {
-        log.warn("{} Producer of task {} fenced; closing zombie task", logPrefix, task.id());
+        log.warn("Producer of task {} fenced; closing zombie task", task.id());
         try {
             task.close(false, true);
         } catch (final Exception e) {
-            log.warn("{} Failed to close zombie {} due to {}, ignore and proceed", taskTypeName, logPrefix, e);
+            log.warn("{} Failed to close zombie due to {}, ignore and proceed", taskTypeName, e);
         }
     }
 
@@ -248,22 +246,22 @@ class AssignedTasks {
     boolean maybeResumeSuspendedTask(final TaskId taskId, final Set<TopicPartition> partitions) {
         if (suspended.containsKey(taskId)) {
             final Task task = suspended.get(taskId);
-            log.trace("{} found suspended {} {}", logPrefix, taskTypeName, taskId);
+            log.trace("found suspended {} {}", taskTypeName, taskId);
             if (task.partitions().equals(partitions)) {
                 suspended.remove(taskId);
                 task.resume();
                 transitionToRunning(task);
-                log.trace("{} resuming suspended {} {}", logPrefix, taskTypeName, task.id());
+                log.trace("resuming suspended {} {}", taskTypeName, task.id());
                 return true;
             } else {
-                log.trace("{} couldn't resume task {} assigned partitions {}, task partitions", logPrefix, taskId, partitions, task.partitions());
+                log.trace("couldn't resume task {} assigned partitions {}, task partitions {}", taskId, partitions, task.partitions());
             }
         }
         return false;
     }
 
     private void transitionToRunning(final Task task) {
-        log.debug("{} transitioning {} {} to running", logPrefix, taskTypeName, task.id());
+        log.debug("transitioning {} {} to running", taskTypeName, task.id());
         running.put(task.id(), task);
         for (TopicPartition topicPartition : task.partitions()) {
             runningByPartition.put(topicPartition, task);
@@ -357,7 +355,7 @@ class AssignedTasks {
                     processed++;
                 }
             } catch (RuntimeException e) {
-                log.error("{} Failed to process {} {} due to the following error:", logPrefix, taskTypeName, task.id(), e);
+                log.error("Failed to process {} {} due to the following error:", taskTypeName, task.id(), e);
                 throw e;
             }
         }
@@ -375,7 +373,7 @@ class AssignedTasks {
                     punctuated++;
                 }
             } catch (KafkaException e) {
-                log.error("{} Failed to punctuate {} {} due to the following error:", logPrefix, taskTypeName, task.id(), e);
+                log.error("Failed to punctuate {} {} due to the following error:", taskTypeName, task.id(), e);
                 throw e;
             }
         }
@@ -391,13 +389,12 @@ class AssignedTasks {
                 action.apply(task);
             } catch (final CommitFailedException e) {
                 // commit failed. This is already logged inside the task as WARN and we can just log it again here.
-                log.warn("{} Failed to commit {} {} during {} state due to CommitFailedException; this task may be no longer owned by the thread", logPrefix, taskTypeName, task.id(), action.name());
+                log.warn("Failed to commit {} {} during {} state due to CommitFailedException; this task may be no longer owned by the thread", taskTypeName, task.id(), action.name());
             } catch (final ProducerFencedException e) {
                 closeZombieTask(task);
                 it.remove();
             } catch (final RuntimeException t) {
-                log.error("{} Failed to {} {} {} due to the following error:",
-                          logPrefix,
+                log.error("Failed to {} {} {} due to the following error:",
                           action.name(),
                           taskTypeName,
                           task.id(),
@@ -418,11 +415,11 @@ class AssignedTasks {
         while (standByTaskIterator.hasNext()) {
             final Task suspendedTask = standByTaskIterator.next();
             if (!newAssignment.containsKey(suspendedTask.id()) || !suspendedTask.partitions().equals(newAssignment.get(suspendedTask.id()))) {
-                log.debug("{} Closing suspended and not re-assigned {} {}", logPrefix, taskTypeName, suspendedTask.id());
+                log.debug("Closing suspended and not re-assigned {} {}", taskTypeName, suspendedTask.id());
                 try {
                     suspendedTask.closeSuspended(true, false, null);
                 } catch (final Exception e) {
-                    log.error("{} Failed to remove suspended {} {} due to the following error:", logPrefix, taskTypeName, suspendedTask.id(), e);
+                    log.error("Failed to remove suspended {} {} due to the following error:", taskTypeName, suspendedTask.id(), e);
                 } finally {
                     standByTaskIterator.remove();
                 }
@@ -441,8 +438,7 @@ class AssignedTasks {
             try {
                 task.close(clean, false);
             } catch (final Throwable t) {
-                log.error("{} Failed while closing {} {} due to the following error:",
-                          logPrefix,
+                log.error("Failed while closing {} {} due to the following error:",
                           task.getClass().getSimpleName(),
                           task.id(),
                           t);

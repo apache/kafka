@@ -20,6 +20,9 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.Resource;
 
@@ -30,9 +33,38 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
+import static org.apache.kafka.common.protocol.CommonFields.ERROR_MESSAGE;
+import static org.apache.kafka.common.protocol.CommonFields.HOST;
+import static org.apache.kafka.common.protocol.CommonFields.OPERATION;
+import static org.apache.kafka.common.protocol.CommonFields.PERMISSION_TYPE;
+import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL;
+import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME;
+import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_TYPE;
+import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
+
 public class DescribeAclsResponse extends AbstractResponse {
-    private final static String RESOURCES = "resources";
-    private final static String ACLS = "acls";
+    private final static String RESOURCES_KEY_NAME = "resources";
+    private final static String ACLS_KEY_NAME = "acls";
+
+    private static final Schema DESCRIBE_ACLS_RESOURCE = new Schema(
+            RESOURCE_TYPE,
+            RESOURCE_NAME,
+            new Field(ACLS_KEY_NAME, new ArrayOf(new Schema(
+                    PRINCIPAL,
+                    HOST,
+                    OPERATION,
+                    PERMISSION_TYPE))));
+
+    private static final Schema DESCRIBE_ACLS_RESPONSE_V0 = new Schema(
+            THROTTLE_TIME_MS,
+            ERROR_CODE,
+            ERROR_MESSAGE,
+            new Field(RESOURCES_KEY_NAME, new ArrayOf(DESCRIBE_ACLS_RESOURCE), "The resources and their associated ACLs."));
+
+    public static Schema[] schemaVersions() {
+        return new Schema[]{DESCRIBE_ACLS_RESPONSE_V0};
+    }
 
     private final int throttleTimeMs;
     private final ApiError error;
@@ -45,13 +77,13 @@ public class DescribeAclsResponse extends AbstractResponse {
     }
 
     public DescribeAclsResponse(Struct struct) {
-        this.throttleTimeMs = struct.getInt(THROTTLE_TIME_KEY_NAME);
+        this.throttleTimeMs = struct.get(THROTTLE_TIME_MS);
         this.error = new ApiError(struct);
         this.acls = new ArrayList<>();
-        for (Object resourceStructObj : struct.getArray(RESOURCES)) {
+        for (Object resourceStructObj : struct.getArray(RESOURCES_KEY_NAME)) {
             Struct resourceStruct = (Struct) resourceStructObj;
             Resource resource = RequestUtils.resourceFromStructFields(resourceStruct);
-            for (Object aclDataStructObj : resourceStruct.getArray(ACLS)) {
+            for (Object aclDataStructObj : resourceStruct.getArray(ACLS_KEY_NAME)) {
                 Struct aclDataStruct = (Struct) aclDataStructObj;
                 AccessControlEntry entry = RequestUtils.aceFromStructFields(aclDataStruct);
                 this.acls.add(new AclBinding(resource, entry));
@@ -62,7 +94,7 @@ public class DescribeAclsResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.DESCRIBE_ACLS.responseSchema(version));
-        struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
+        struct.set(THROTTLE_TIME_MS, throttleTimeMs);
         error.write(struct);
 
         Map<Resource, List<AccessControlEntry>> resourceToData = new HashMap<>();
@@ -78,18 +110,18 @@ public class DescribeAclsResponse extends AbstractResponse {
         List<Struct> resourceStructs = new ArrayList<>();
         for (Map.Entry<Resource, List<AccessControlEntry>> tuple : resourceToData.entrySet()) {
             Resource resource = tuple.getKey();
-            Struct resourceStruct = struct.instance(RESOURCES);
+            Struct resourceStruct = struct.instance(RESOURCES_KEY_NAME);
             RequestUtils.resourceSetStructFields(resource, resourceStruct);
             List<Struct> dataStructs = new ArrayList<>();
             for (AccessControlEntry entry : tuple.getValue()) {
-                Struct dataStruct = resourceStruct.instance(ACLS);
+                Struct dataStruct = resourceStruct.instance(ACLS_KEY_NAME);
                 RequestUtils.aceSetStructFields(entry, dataStruct);
                 dataStructs.add(dataStruct);
             }
-            resourceStruct.set(ACLS, dataStructs.toArray());
+            resourceStruct.set(ACLS_KEY_NAME, dataStructs.toArray());
             resourceStructs.add(resourceStruct);
         }
-        struct.set(RESOURCES, resourceStructs.toArray());
+        struct.set(RESOURCES_KEY_NAME, resourceStructs.toArray());
         return struct;
     }
 

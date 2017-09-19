@@ -18,10 +18,10 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -36,7 +36,7 @@ class TaskManager {
     // initialize the task list
     // activeTasks needs to be concurrent as it can be accessed
     // by QueryableState
-    private static final Logger log = LoggerFactory.getLogger(TaskManager.class);
+    private final Logger log;
     private final AssignedTasks active;
     private final AssignedTasks standby;
     private final ChangelogReader changelogReader;
@@ -61,14 +61,18 @@ class TaskManager {
         this.standbyTaskCreator = standbyTaskCreator;
         this.active = active;
         this.standby = standby;
+
+        final LogContext logContext = new LogContext(logPrefix);
+
+        this.log = logContext.logger(getClass());
     }
 
     void createTasks(final Collection<TopicPartition> assignment) {
         if (threadMetadataProvider == null) {
-            throw new IllegalStateException(logPrefix + " taskIdProvider has not been initialized while adding stream tasks. This should not happen.");
+            throw new IllegalStateException(logPrefix + "taskIdProvider has not been initialized while adding stream tasks. This should not happen.");
         }
         if (consumer == null) {
-            throw new IllegalStateException(logPrefix + " consumer has not been initialized while adding stream tasks. This should not happen.");
+            throw new IllegalStateException(logPrefix + "consumer has not been initialized while adding stream tasks. This should not happen.");
         }
 
         changelogReader.reset();
@@ -80,7 +84,7 @@ class TaskManager {
         addStreamTasks(assignment);
         addStandbyTasks();
         final Set<TopicPartition> partitions = active.uninitializedPartitions();
-        log.trace("{} pausing partitions: {}", logPrefix, partitions);
+        log.trace("pausing partitions: {}", partitions);
         consumer.pause(partitions);
     }
 
@@ -95,7 +99,7 @@ class TaskManager {
         }
         final Map<TaskId, Set<TopicPartition>> newTasks = new HashMap<>();
         // collect newly assigned tasks and reopen re-assigned tasks
-        log.debug("{} Adding assigned tasks as active: {}", logPrefix, assignedTasks);
+        log.debug("Adding assigned tasks as active: {}", assignedTasks);
         for (final Map.Entry<TaskId, Set<TopicPartition>> entry : assignedTasks.entrySet()) {
             final TaskId taskId = entry.getKey();
             final Set<TopicPartition> partitions = entry.getValue();
@@ -106,11 +110,11 @@ class TaskManager {
                         newTasks.put(taskId, partitions);
                     }
                 } catch (final StreamsException e) {
-                    log.error("{} Failed to create an active task {} due to the following error:", logPrefix, taskId, e);
+                    log.error("Failed to create an active task {} due to the following error:", taskId, e);
                     throw e;
                 }
             } else {
-                log.warn("{} Task {} owned partitions {} are not contained in the assignment {}", logPrefix, taskId, partitions, assignment);
+                log.warn("Task {} owned partitions {} are not contained in the assignment {}", taskId, partitions, assignment);
             }
         }
 
@@ -120,7 +124,7 @@ class TaskManager {
 
         // create all newly assigned tasks (guard against race condition with other thread via backoff and retry)
         // -> other thread will call removeSuspendedTasks(); eventually
-        log.trace("{} New active tasks to be created: {}", logPrefix, newTasks);
+        log.trace("New active tasks to be created: {}", newTasks);
 
         for (final Task task : taskCreator.createTasks(consumer, newTasks)) {
             active.addNewTask(task);
@@ -132,7 +136,7 @@ class TaskManager {
         if (assignedStandbyTasks.isEmpty()) {
             return;
         }
-        log.debug("{} Adding assigned standby tasks {}", logPrefix, assignedStandbyTasks);
+        log.debug("Adding assigned standby tasks {}", assignedStandbyTasks);
         final Map<TaskId, Set<TopicPartition>> newStandbyTasks = new HashMap<>();
         // collect newly assigned standby tasks and reopen re-assigned standby tasks
         for (final Map.Entry<TaskId, Set<TopicPartition>> entry : assignedStandbyTasks.entrySet()) {
@@ -150,7 +154,7 @@ class TaskManager {
 
         // create all newly assigned standby tasks (guard against race condition with other thread via backoff and retry)
         // -> other thread will call removeSuspendedStandbyTasks(); eventually
-        log.trace("{} New standby tasks to be created: {}", logPrefix, newStandbyTasks);
+        log.trace("New standby tasks to be created: {}", newStandbyTasks);
 
         for (final Task task : standbyTaskCreator.createTasks(consumer, newStandbyTasks)) {
             standby.addNewTask(task);
@@ -174,8 +178,7 @@ class TaskManager {
      * soon the tasks will be assigned again
      */
     void suspendTasksAndState()  {
-        log.debug("{} Suspending all active tasks {} and standby tasks {}",
-                  logPrefix, active.runningTaskIds(), standby.runningTaskIds());
+        log.debug("Suspending all active tasks {} and standby tasks {}", active.runningTaskIds(), standby.runningTaskIds());
 
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
 
@@ -185,7 +188,7 @@ class TaskManager {
         firstException.compareAndSet(null, unAssignChangeLogPartitions());
 
         if (firstException.get() != null) {
-            throw new StreamsException(logPrefix + " failed to suspend stream tasks", firstException.get());
+            throw new StreamsException(logPrefix + "failed to suspend stream tasks", firstException.get());
         }
     }
 
@@ -194,15 +197,14 @@ class TaskManager {
             // un-assign the change log partitions
             restoreConsumer.assign(Collections.<TopicPartition>emptyList());
         } catch (final RuntimeException e) {
-            log.error("{} Failed to un-assign change log partitions due to the following error:", logPrefix, e);
+            log.error("Failed to un-assign change log partitions due to the following error:", e);
             return e;
         }
         return null;
     }
 
     void shutdown(final boolean clean) {
-        log.debug("{} Shutting down all active tasks {}, standby tasks {}, suspended tasks {}, and suspended standby tasks {}",
-                  logPrefix, active.runningTaskIds(), standby.runningTaskIds(),
+        log.debug("Shutting down all active tasks {}, standby tasks {}, suspended tasks {}, and suspended standby tasks {}", active.runningTaskIds(), standby.runningTaskIds(),
                   active.previousTaskIds(), standby.previousTaskIds());
 
         active.close(clean);
@@ -210,7 +212,7 @@ class TaskManager {
         try {
             threadMetadataProvider.close();
         } catch (final Throwable e) {
-            log.error("{} Failed to close KafkaStreamClient due to the following error:", logPrefix, e);
+            log.error("Failed to close KafkaStreamClient due to the following error:", e);
         }
         // remove the changelog partitions from restore consumer
         unAssignChangeLogPartitions();
@@ -256,7 +258,7 @@ class TaskManager {
         final Set<TopicPartition> resumed = active.updateRestored(restored);
 
         if (!resumed.isEmpty()) {
-            log.trace("{} resuming partitions {}", logPrefix, resumed);
+            log.trace("resuming partitions {}", resumed);
             consumer.resume(resumed);
         }
         if (active.allTasksRunning()) {

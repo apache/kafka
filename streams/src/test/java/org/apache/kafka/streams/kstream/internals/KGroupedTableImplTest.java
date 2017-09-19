@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.ForeachAction;
@@ -60,7 +61,7 @@ public class KGroupedTableImplTest {
 
     @Before
     public void before() {
-        groupedTable = builder.table(Serdes.String(), Serdes.String(), "blah", "blah")
+        groupedTable = builder.table("blah", Consumed.with(Serdes.String(), Serdes.String()))
                 .groupBy(MockKeyValueMapper.<String, String>SelectValueKeyValueMapper());
     }
 
@@ -157,7 +158,11 @@ public class KGroupedTableImplTest {
                 }
             };
 
-        final KTable<String, Integer> reduced = builder.table(Serdes.String(), Serdes.Double(), topic, "store")
+        final KTable<String, Integer> reduced = builder.table(topic,
+                                                              Consumed.with(Serdes.String(), Serdes.Double()),
+                                                              Materialized.<String, Double, KeyValueStore<Bytes, byte[]>>as("store")
+                                                                      .withKeySerde(Serdes.String())
+                                                                      .withValueSerde(Serdes.Double()))
             .groupBy(intProjection)
             .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR, "reduced");
 
@@ -175,7 +180,11 @@ public class KGroupedTableImplTest {
                 }
             };
 
-        final KTable<String, Integer> reduced = builder.table(Serdes.String(), Serdes.Double(), topic, "store")
+        final KTable<String, Integer> reduced = builder.table(topic,
+                                                              Consumed.with(Serdes.String(), Serdes.Double()),
+                                                              Materialized.<String, Double, KeyValueStore<Bytes, byte[]>>as("store")
+                                                                      .withKeySerde(Serdes.String())
+                                                                      .withValueSerde(Serdes.Double()))
             .groupBy(intProjection)
             .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR);
 
@@ -194,7 +203,7 @@ public class KGroupedTableImplTest {
                 }
             };
 
-        final KTable<String, Integer> reduced = builder.table(Serdes.String(), Serdes.Double(), topic, "store")
+        final KTable<String, Integer> reduced = builder.table(topic, Consumed.with(Serdes.String(), Serdes.Double()))
                 .groupBy(intProjection)
                 .reduce(MockReducer.INTEGER_ADDER,
                         MockReducer.INTEGER_SUBTRACTOR,
@@ -211,10 +220,10 @@ public class KGroupedTableImplTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldCountAndMaterializeResults() {
-        final KTable<String, String> table = builder.table(Serdes.String(), Serdes.String(), topic, "store");
+        final KTable<String, String> table = builder.table(topic, Consumed.with(Serdes.String(), Serdes.String()));
         table.groupBy(MockKeyValueMapper.<String, String>SelectValueKeyValueMapper(),
-                         Serialized.with(Serdes.String(),
-                                         Serdes.String()))
+                      Serialized.with(Serdes.String(),
+                                      Serdes.String()))
                 .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count")
                                .withKeySerde(Serdes.String())
                                .withValueSerde(Serdes.Long()));
@@ -228,7 +237,7 @@ public class KGroupedTableImplTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldAggregateAndMaterializeResults() {
-        final KTable<String, String> table = builder.table(Serdes.String(), Serdes.String(), topic, "store");
+        final KTable<String, String> table = builder.table(topic, Consumed.with(Serdes.String(), Serdes.String()));
         table.groupBy(MockKeyValueMapper.<String, String>SelectValueKeyValueMapper(),
                       Serialized.with(Serdes.String(),
                                       Serdes.String()))

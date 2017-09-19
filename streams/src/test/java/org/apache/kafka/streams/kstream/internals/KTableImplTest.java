@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.KTable;
@@ -54,6 +55,7 @@ import static org.junit.Assert.assertTrue;
 public class KTableImplTest {
 
     final private Serde<String> stringSerde = Serdes.String();
+    private final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
     @Rule
     public final KStreamTestDriver driver = new KStreamTestDriver();
     private File stateDir = null;
@@ -64,7 +66,7 @@ public class KTableImplTest {
     public void setUp() {
         stateDir = TestUtils.tempDirectory("kafka-test");
         builder = new StreamsBuilder();
-        table = builder.table("test", "test");
+        table = builder.table("test");
     }
 
     @Test
@@ -73,10 +75,9 @@ public class KTableImplTest {
 
         String topic1 = "topic1";
         String topic2 = "topic2";
-        String storeName1 = "storeName1";
         String storeName2 = "storeName2";
 
-        KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1, storeName1);
+        KTable<String, String> table1 = builder.table(topic1, consumed);
 
         MockProcessorSupplier<String, String> proc1 = new MockProcessorSupplier<>();
         table1.toStream().process(proc1);
@@ -130,11 +131,10 @@ public class KTableImplTest {
 
         String topic1 = "topic1";
         String topic2 = "topic2";
-        String storeName1 = "storeName1";
         String storeName2 = "storeName2";
 
         KTableImpl<String, String, String> table1 =
-                (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1, storeName1);
+                (KTableImpl<String, String, String>) builder.table(topic1, consumed);
         KTableImpl<String, String, Integer> table2 = (KTableImpl<String, String, Integer>) table1.mapValues(
                 new ValueMapper<String, Integer>() {
                     @Override
@@ -256,14 +256,12 @@ public class KTableImplTest {
     public void testStateStoreLazyEval() {
         String topic1 = "topic1";
         String topic2 = "topic2";
-        String storeName1 = "storeName1";
-        String storeName2 = "storeName2";
 
         final StreamsBuilder builder = new StreamsBuilder();
 
         KTableImpl<String, String, String> table1 =
-                (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1, storeName1);
-        builder.table(stringSerde, stringSerde, topic2, storeName2);
+                (KTableImpl<String, String, String>) builder.table(topic1, consumed);
+        builder.table(topic2, consumed);
 
         KTableImpl<String, String, Integer> table1Mapped = (KTableImpl<String, String, Integer>) table1.mapValues(
                 new ValueMapper<String, Integer>() {
@@ -291,15 +289,13 @@ public class KTableImplTest {
     public void testStateStore() {
         String topic1 = "topic1";
         String topic2 = "topic2";
-        String storeName1 = "storeName1";
-        String storeName2 = "storeName2";
 
         final StreamsBuilder builder = new StreamsBuilder();
 
         KTableImpl<String, String, String> table1 =
-                (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1, storeName1);
+                (KTableImpl<String, String, String>) builder.table(topic1, consumed);
         KTableImpl<String, String, String> table2 =
-                (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic2, storeName2);
+                (KTableImpl<String, String, String>) builder.table(topic2, consumed);
 
         KTableImpl<String, String, Integer> table1Mapped = (KTableImpl<String, String, Integer>) table1.mapValues(
                 new ValueMapper<String, Integer>() {
@@ -338,7 +334,12 @@ public class KTableImplTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         KTableImpl<String, String, String> table1 =
-                (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1, storeName1);
+                (KTableImpl<String, String, String>) builder.table(topic1,
+                                                                   consumed,
+                                                                   Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(storeName1)
+                                                                           .withKeySerde(stringSerde)
+                                                                           .withValueSerde(stringSerde)
+                );
 
         table1.groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper())
             .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, "mock-result1");

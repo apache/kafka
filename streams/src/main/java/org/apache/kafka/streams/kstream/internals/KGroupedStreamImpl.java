@@ -18,10 +18,12 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.SessionWindows;
@@ -32,6 +34,7 @@ import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.WindowStore;
 
 import java.util.Collections;
@@ -46,6 +49,19 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     private final Serde<K> keySerde;
     private final Serde<V> valSerde;
     private final boolean repartitionRequired;
+    private final Initializer<Long> countInitializer = new Initializer<Long>() {
+        @Override
+        public Long apply() {
+            return 0L;
+        }
+    };
+    private final Aggregator<K, V, Long> countAggregator = new Aggregator<K, V, Long>() {
+        @Override
+        public Long apply(K aggKey, V value, Long aggregate) {
+            return aggregate + 1;
+        }
+    };
+    private final GroupedStreamAggregateBuilder<K, V> aggregateBuilder;
     private boolean isQueryable = true;
 
     KGroupedStreamImpl(final InternalStreamsBuilder builder,
@@ -55,6 +71,12 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                        final Serde<V> valSerde,
                        final boolean repartitionRequired) {
         super(builder, name, sourceNodes);
+        this.aggregateBuilder = new GroupedStreamAggregateBuilder<>(builder,
+                                                                    keySerde,
+                                                                    valSerde,
+                                                                    repartitionRequired,
+                                                                    sourceNodes,
+                                                                    name);
         this.keySerde = keySerde;
         this.valSerde = valSerde;
         this.repartitionRequired = repartitionRequired;
@@ -89,6 +111,19 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                 new KStreamReduce<K, V>(storeSupplier.name(), reducer),
                 REDUCE_NAME,
                 storeSupplier);
+    }
+
+    @Override
+    public KTable<K, V> reduce(final Reducer<V> reducer,
+                               final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+        Objects.requireNonNull(reducer, "reducer can't be null");
+        Objects.requireNonNull(materialized, "materialized can't be null");
+        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal
+                = new MaterializedInternal<>(materialized);
+        return doAggregate(
+                new KStreamReduce<K, V>(materializedInternal.storeName(), reducer),
+                REDUCE_NAME,
+                materializedInternal);
     }
 
 
@@ -128,6 +163,41 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                                       final String queryableStoreName) {
         determineIsQueryable(queryableStoreName);
         return aggregate(initializer, aggregator, keyValueStore(keySerde, aggValueSerde, getOrCreateName(queryableStoreName, AGGREGATE_NAME)));
+    }
+
+    @Override
+    public <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
+                                        final Aggregator<? super K, ? super V, VR> aggregator,
+                                        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        Objects.requireNonNull(initializer, "initializer can't be null");
+        Objects.requireNonNull(aggregator, "aggregator can't be null");
+        Objects.requireNonNull(materialized, "materialized can't be null");
+        return aggregateMaterialized(initializer, aggregator, materialized);
+    }
+
+    private <VR> KTable<K, VR> aggregateMaterialized(final Initializer<VR> initializer,
+                                                     final Aggregator<? super K, ? super V, VR> aggregator,
+                                                     final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal
+                = new MaterializedInternal<>(materialized);
+        return doAggregate(
+                new KStreamAggregate<>(materializedInternal.storeName(), initializer, aggregator),
+                AGGREGATE_NAME,
+                materializedInternal);
+    }
+
+    @Override
+    public <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer, final Aggregator<? super K, ? super V, VR> aggregator) {
+        Objects.requireNonNull(initializer, "initializer can't be null");
+        Objects.requireNonNull(aggregator, "aggregator can't be null");
+        final String storeName = builder.newStoreName(AGGREGATE_NAME);
+
+        MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal =
+                new MaterializedInternal<>(Materialized.<K, VR, KeyValueStore<Bytes, byte[]>>as(storeName), false);
+        return doAggregate(new KStreamAggregate<>(materializedInternal.storeName(), initializer, aggregator),
+                           AGGREGATE_NAME,
+                           materializedInternal);
+
     }
 
     @Override
@@ -198,17 +268,12 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
 
     @Override
     public KTable<K, Long> count(final StateStoreSupplier<KeyValueStore> storeSupplier) {
-        return aggregate(new Initializer<Long>() {
-            @Override
-            public Long apply() {
-                return 0L;
-            }
-        }, new Aggregator<K, V, Long>() {
-            @Override
-            public Long apply(K aggKey, V value, Long aggregate) {
-                return aggregate + 1;
-            }
-        }, storeSupplier);
+        return aggregate(countInitializer, countAggregator, storeSupplier);
+    }
+
+    @Override
+    public KTable<K, Long> count(final Materialized<K, Long, KeyValueStore<Bytes, byte[]>> materialized) {
+        return aggregate(countInitializer, countAggregator, materialized);
     }
 
     @Override
@@ -227,17 +292,8 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     public <W extends Window> KTable<Windowed<K>, Long> count(final Windows<W> windows,
                                                               final StateStoreSupplier<WindowStore> storeSupplier) {
         return aggregate(
-                new Initializer<Long>() {
-                    @Override
-                    public Long apply() {
-                        return 0L;
-                    }
-                }, new Aggregator<K, V, Long>() {
-                    @Override
-                    public Long apply(K aggKey, V value, Long aggregate) {
-                        return aggregate + 1;
-                    }
-                },
+                countInitializer,
+                countAggregator,
                 windows,
                 storeSupplier);
     }
@@ -320,18 +376,6 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                                            final StateStoreSupplier<SessionStore> storeSupplier) {
         Objects.requireNonNull(sessionWindows, "sessionWindows can't be null");
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
-        final Initializer<Long> initializer = new Initializer<Long>() {
-            @Override
-            public Long apply() {
-                return 0L;
-            }
-        };
-        final Aggregator<K, V, Long> aggregator = new Aggregator<K, V, Long>() {
-            @Override
-            public Long apply(final K aggKey, final V value, final Long aggregate) {
-                return aggregate + 1;
-            }
-        };
         final Merger<K, Long> sessionMerger = new Merger<K, Long>() {
             @Override
             public Long apply(final K aggKey, final Long aggOne, final Long aggTwo) {
@@ -339,7 +383,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
             }
         };
 
-        return aggregate(initializer, aggregator, sessionMerger, sessionWindows, Serdes.Long(), storeSupplier);
+        return aggregate(countInitializer, countAggregator, sessionMerger, sessionWindows, Serdes.Long(), storeSupplier);
     }
 
 
@@ -397,6 +441,17 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
         return aggregate(initializer, aggregator, sessionMerger, sessionWindows, valSerde, storeSupplier);
     }
 
+
+    private <T> KTable<K, T> doAggregate(final KStreamAggProcessorSupplier<K, ?, V, T> aggregateSupplier,
+                                         final String functionName,
+                                         final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materializedInternal) {
+
+        final StoreBuilder<KeyValueStore<K, T>> storeBuilder = new KeyValueStoreMaterializer<>(materializedInternal)
+                .materialize();
+        return aggregateBuilder.build(aggregateSupplier, functionName, storeBuilder, materializedInternal.isQueryable());
+
+    }
+
     private <T> KTable<K, T> doAggregate(
             final KStreamAggProcessorSupplier<K, ?, V, T> aggregateSupplier,
             final String functionName,
@@ -426,6 +481,6 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
         if (!repartitionRequired) {
             return this.name;
         }
-        return KStreamImpl.createReparitionedSource(this, keySerde, valSerde, queryableStoreName);
+        return KStreamImpl.createReparitionedSource(builder, keySerde, valSerde, queryableStoreName, name);
     }
 }
