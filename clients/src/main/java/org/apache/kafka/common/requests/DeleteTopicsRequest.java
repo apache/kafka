@@ -30,18 +30,16 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.common.protocol.types.Type.INT32;
+import static org.apache.kafka.common.protocol.CommonFields.TIMEOUT;
 import static org.apache.kafka.common.protocol.types.Type.STRING;
 
 public class DeleteTopicsRequest extends AbstractRequest {
     private static final String TOPICS_KEY_NAME = "topics";
-    private static final String TIMEOUT_KEY_NAME = "timeout";
 
     /* DeleteTopic api */
     private static final Schema DELETE_TOPICS_REQUEST_V0 = new Schema(
             new Field(TOPICS_KEY_NAME, new ArrayOf(STRING), "An array of topics to be deleted."),
-            new Field(TIMEOUT_KEY_NAME, INT32, "The time in ms to wait for a topic to be completely deleted on the " +
-                    "controller node. Values <= 0 will trigger topic deletion and return immediately"));
+            TIMEOUT);
 
     /* v1 request is the same as v0. Throttle time has been added to the response */
     private static final Schema DELETE_TOPICS_REQUEST_V1 = DELETE_TOPICS_REQUEST_V0;
@@ -93,14 +91,14 @@ public class DeleteTopicsRequest extends AbstractRequest {
             topics.add((String) topic);
 
         this.topics = topics;
-        this.timeout = struct.getInt(TIMEOUT_KEY_NAME);
+        this.timeout = struct.get(TIMEOUT);
     }
 
     @Override
     protected Struct toStruct() {
         Struct struct = new Struct(ApiKeys.DELETE_TOPICS.requestSchema(version()));
         struct.set(TOPICS_KEY_NAME, topics.toArray());
-        struct.set(TIMEOUT_KEY_NAME, timeout);
+        struct.set(TIMEOUT, timeout);
         return struct;
     }
 

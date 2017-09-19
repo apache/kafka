@@ -43,13 +43,12 @@ import java.util.Map;
 import static org.apache.kafka.common.protocol.CommonFields.NULLABLE_TRANSACTIONAL_ID;
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
+import static org.apache.kafka.common.protocol.CommonFields.TIMEOUT;
 import static org.apache.kafka.common.protocol.types.Type.INT16;
-import static org.apache.kafka.common.protocol.types.Type.INT32;
 import static org.apache.kafka.common.protocol.types.Type.RECORDS;
 
 public class ProduceRequest extends AbstractRequest {
     private static final String ACKS_KEY_NAME = "acks";
-    private static final String TIMEOUT_KEY_NAME = "timeout";
     private static final String TOPIC_DATA_KEY_NAME = "topic_data";
 
     // topic level field names
@@ -69,7 +68,7 @@ public class ProduceRequest extends AbstractRequest {
             new Field(ACKS_KEY_NAME, INT16, "The number of acknowledgments the producer requires the leader to have " +
                     "received before considering a request complete. Allowed values: 0 for no acknowledgments, 1 for " +
                     "only the leader and -1 for the full ISR."),
-            new Field(TIMEOUT_KEY_NAME, INT32, "The time to await a response in ms."),
+            TIMEOUT,
             new Field(TOPIC_DATA_KEY_NAME, new ArrayOf(TOPIC_PRODUCE_DATA_V0)));
 
     /**
@@ -91,7 +90,7 @@ public class ProduceRequest extends AbstractRequest {
             new Field(ACKS_KEY_NAME, INT16, "The number of acknowledgments the producer requires the leader to have " +
                     "received before considering a request complete. Allowed values: 0 for no acknowledgments, 1 " +
                     "for only the leader and -1 for the full ISR."),
-            new Field(TIMEOUT_KEY_NAME, INT32, "The time to await a response in ms."),
+            TIMEOUT,
             new Field(TOPIC_DATA_KEY_NAME, new ArrayOf(TOPIC_PRODUCE_DATA_V0)));
 
     /**
@@ -227,7 +226,7 @@ public class ProduceRequest extends AbstractRequest {
         }
         partitionSizes = createPartitionSizes(partitionRecords);
         acks = struct.getShort(ACKS_KEY_NAME);
-        timeout = struct.getInt(TIMEOUT_KEY_NAME);
+        timeout = struct.get(TIMEOUT);
         transactionalId = struct.getOrElse(NULLABLE_TRANSACTIONAL_ID, null);
     }
 
@@ -266,7 +265,7 @@ public class ProduceRequest extends AbstractRequest {
         Struct struct = new Struct(ApiKeys.PRODUCE.requestSchema(version));
         Map<String, Map<Integer, MemoryRecords>> recordsByTopic = CollectionUtils.groupDataByTopic(partitionRecords);
         struct.set(ACKS_KEY_NAME, acks);
-        struct.set(TIMEOUT_KEY_NAME, timeout);
+        struct.set(TIMEOUT, timeout);
         struct.setIfExists(NULLABLE_TRANSACTIONAL_ID, transactionalId);
 
         List<Struct> topicDatas = new ArrayList<>(recordsByTopic.size());

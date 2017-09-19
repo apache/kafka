@@ -99,6 +99,10 @@ public class Struct {
         return getString(field.name);
     }
 
+    public Boolean get(Field.Boolean field) {
+        return getBoolean(field.name);
+    }
+
     public Long getOrElse(Field.Int64 field, long alternative) {
         if (hasField(field.name))
             return getLong(field.name);
@@ -285,6 +289,10 @@ public class Struct {
     }
 
     public Struct set(Field.Int16 def, short value) {
+        return set(def.name, value);
+    }
+
+    public Struct set(Field.Boolean def, Boolean value) {
         return set(def.name, value);
     }
 
