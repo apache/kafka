@@ -121,6 +121,25 @@
         Detailed metrics sensor can be found in the <a href="#kafka_streams_monitoring">Streams Monitoring</a> section.
     </p>
 
+    <p>
+        New methods in <code>KafkaStreams</code>:
+    </p>
+    <ul>
+        <li> retrieve the current runtime information about the local threads via <code>#localThreadsMetadata()</code> </li>
+    </ul>
+    <p>
+        Deprecated methods in <code>KafkaStreams</code>:
+    </p>
+    <ul>
+        <li><code>toString()</code></li>
+        <li><code>toString(final String indent)</code></li>
+    </ul>
+    <p>
+        Previously the above methods were used to return static and runtime information.
+        They have been deprecated in favor of using the new classes/methods <code>#localThreadsMetadata()</code> / <code>ThreadMetadata</code> (returning runtime information) and
+        <code>TopologyDescription</code> / <code>Topology#describe()</code> (returning static information).
+    </p>
+
     <h3><a id="streams_api_changes_0110" href="#streams_api_changes_0110">Streams API changes in 0.11.0.0</a></h3>
 
     <p> Updates in <code>StreamsConfig</code>: </p>
