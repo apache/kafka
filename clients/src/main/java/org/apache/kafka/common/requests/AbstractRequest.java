@@ -133,9 +133,9 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 return new SyncGroupRequest(struct, apiVersion);
             case STOP_REPLICA:
                 return new StopReplicaRequest(struct, apiVersion);
-            case CONTROLLED_SHUTDOWN_KEY:
+            case CONTROLLED_SHUTDOWN:
                 return new ControlledShutdownRequest(struct, apiVersion);
-            case UPDATE_METADATA_KEY:
+            case UPDATE_METADATA:
                 return new UpdateMetadataRequest(struct, apiVersion);
             case LEADER_AND_ISR:
                 return new LeaderAndIsrRequest(struct, apiVersion);

@@ -19,6 +19,9 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
 
@@ -28,27 +31,44 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
+import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
+import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
+import static org.apache.kafka.common.protocol.types.Type.INT64;
+
 public class OffsetsForLeaderEpochResponse extends AbstractResponse {
-    public static final String TOPICS = "topics";
-    public static final String TOPIC = "topic";
-    public static final String PARTITIONS = "partitions";
-    public static final String ERROR_CODE = "error_code";
-    public static final String PARTITION_ID = "partition_id";
-    public static final String END_OFFSET = "end_offset";
+    private static final String TOPICS_KEY_NAME = "topics";
+    private static final String PARTITIONS_KEY_NAME = "partitions";
+    private static final String END_OFFSET_KEY_NAME = "end_offset";
+
+    private static final Schema OFFSET_FOR_LEADER_EPOCH_RESPONSE_PARTITION_V0 = new Schema(
+            ERROR_CODE,
+            PARTITION_ID,
+            new Field(END_OFFSET_KEY_NAME, INT64, "The end offset"));
+    private static final Schema OFFSET_FOR_LEADER_EPOCH_RESPONSE_TOPIC_V0 = new Schema(
+            TOPIC_NAME,
+            new Field(PARTITIONS_KEY_NAME, new ArrayOf(OFFSET_FOR_LEADER_EPOCH_RESPONSE_PARTITION_V0)));
+    private static final Schema OFFSET_FOR_LEADER_EPOCH_RESPONSE_V0 = new Schema(
+            new Field(TOPICS_KEY_NAME, new ArrayOf(OFFSET_FOR_LEADER_EPOCH_RESPONSE_TOPIC_V0),
+                    "An array of topics for which we have leader offsets for some requested Partition Leader Epoch"));
+
+    public static Schema[] schemaVersions() {
+        return new Schema[]{OFFSET_FOR_LEADER_EPOCH_RESPONSE_V0};
+    }
 
     private Map<TopicPartition, EpochEndOffset> epochEndOffsetsByPartition;
 
     public OffsetsForLeaderEpochResponse(Struct struct) {
         epochEndOffsetsByPartition = new HashMap<>();
-        for (Object topicAndEpocsObj : struct.getArray(TOPICS)) {
+        for (Object topicAndEpocsObj : struct.getArray(TOPICS_KEY_NAME)) {
             Struct topicAndEpochs = (Struct) topicAndEpocsObj;
-            String topic = topicAndEpochs.getString(TOPIC);
-            for (Object partitionAndEpochObj : topicAndEpochs.getArray(PARTITIONS)) {
+            String topic = topicAndEpochs.get(TOPIC_NAME);
+            for (Object partitionAndEpochObj : topicAndEpochs.getArray(PARTITIONS_KEY_NAME)) {
                 Struct partitionAndEpoch = (Struct) partitionAndEpochObj;
-                Errors error = Errors.forCode(partitionAndEpoch.getShort(ERROR_CODE));
-                int partitionId = partitionAndEpoch.getInt(PARTITION_ID);
+                Errors error = Errors.forCode(partitionAndEpoch.get(ERROR_CODE));
+                int partitionId = partitionAndEpoch.get(PARTITION_ID);
                 TopicPartition tp = new TopicPartition(topic, partitionId);
-                long endOffset = partitionAndEpoch.getLong(END_OFFSET);
+                long endOffset = partitionAndEpoch.getLong(END_OFFSET_KEY_NAME);
                 epochEndOffsetsByPartition.put(tp, new EpochEndOffset(error, endOffset));
             }
         }
@@ -74,21 +94,21 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
 
         List<Struct> topics = new ArrayList<>(endOffsetsByTopic.size());
         for (Map.Entry<String, Map<Integer, EpochEndOffset>> topicToPartitionEpochs : endOffsetsByTopic.entrySet()) {
-            Struct topicStruct = responseStruct.instance(TOPICS);
-            topicStruct.set(TOPIC, topicToPartitionEpochs.getKey());
+            Struct topicStruct = responseStruct.instance(TOPICS_KEY_NAME);
+            topicStruct.set(TOPIC_NAME, topicToPartitionEpochs.getKey());
             Map<Integer, EpochEndOffset> partitionEpochs = topicToPartitionEpochs.getValue();
             List<Struct> partitions = new ArrayList<>();
             for (Map.Entry<Integer, EpochEndOffset> partitionEndOffset : partitionEpochs.entrySet()) {
-                Struct partitionStruct = topicStruct.instance(PARTITIONS);
+                Struct partitionStruct = topicStruct.instance(PARTITIONS_KEY_NAME);
                 partitionStruct.set(ERROR_CODE, partitionEndOffset.getValue().error().code());
                 partitionStruct.set(PARTITION_ID, partitionEndOffset.getKey());
-                partitionStruct.set(END_OFFSET, partitionEndOffset.getValue().endOffset());
+                partitionStruct.set(END_OFFSET_KEY_NAME, partitionEndOffset.getValue().endOffset());
                 partitions.add(partitionStruct);
             }
-            topicStruct.set(PARTITIONS, partitions.toArray());
+            topicStruct.set(PARTITIONS_KEY_NAME, partitions.toArray());
             topics.add(topicStruct);
         }
-        responseStruct.set(TOPICS, topics.toArray());
+        responseStruct.set(TOPICS_KEY_NAME, topics.toArray());
         return responseStruct;
     }
 }

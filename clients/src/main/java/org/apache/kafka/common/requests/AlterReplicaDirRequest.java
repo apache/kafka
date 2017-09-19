@@ -20,14 +20,21 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
+
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
+import static org.apache.kafka.common.protocol.types.Type.INT32;
+import static org.apache.kafka.common.protocol.types.Type.STRING;
 
 public class AlterReplicaDirRequest extends AbstractRequest {
 
@@ -39,8 +46,18 @@ public class AlterReplicaDirRequest extends AbstractRequest {
     private static final String TOPICS_KEY_NAME = "topics";
 
     // topic level key names
-    private static final String TOPIC_KEY_NAME = "topic";
     private static final String PARTITIONS_KEY_NAME = "partitions";
+
+    private static final Schema ALTER_REPLICA_DIR_REQUEST_V0 = new Schema(
+            new Field("log_dirs", new ArrayOf(new Schema(
+                    new Field("log_dir", STRING, "The absolute log directory path."),
+                    new Field("topics", new ArrayOf(new Schema(
+                            TOPIC_NAME,
+                            new Field("partitions", new ArrayOf(INT32), "List of partition ids of the topic."))))))));
+
+    public static Schema[] schemaVersions() {
+        return new Schema[]{ALTER_REPLICA_DIR_REQUEST_V0};
+    }
 
     private final Map<TopicPartition, String> partitionDirs;
 
@@ -76,7 +93,7 @@ public class AlterReplicaDirRequest extends AbstractRequest {
             String logDir = logDirStruct.getString(LOG_DIR_KEY_NAME);
             for (Object topicStructObj : logDirStruct.getArray(TOPICS_KEY_NAME)) {
                 Struct topicStruct = (Struct) topicStructObj;
-                String topic = topicStruct.getString(TOPIC_KEY_NAME);
+                String topic = topicStruct.get(TOPIC_NAME);
                 for (Object partitionObj : topicStruct.getArray(PARTITIONS_KEY_NAME)) {
                     int partition = (Integer) partitionObj;
                     partitionDirs.put(new TopicPartition(topic, partition), logDir);
@@ -108,7 +125,7 @@ public class AlterReplicaDirRequest extends AbstractRequest {
             List<Struct> topicStructArray = new ArrayList<>();
             for (Map.Entry<String, List<Integer>> topicEntry: CollectionUtils.groupDataByTopic(logDirEntry.getValue()).entrySet()) {
                 Struct topicStruct = logDirStruct.instance(TOPICS_KEY_NAME);
-                topicStruct.set(TOPIC_KEY_NAME, topicEntry.getKey());
+                topicStruct.set(TOPIC_NAME, topicEntry.getKey());
                 topicStruct.set(PARTITIONS_KEY_NAME, topicEntry.getValue().toArray());
                 topicStructArray.add(topicStruct);
             }

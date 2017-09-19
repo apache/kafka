@@ -17,7 +17,7 @@
 package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.BoundField;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Type;
 
@@ -33,8 +33,8 @@ public class ProtoUtils {
         if (node instanceof Schema) {
             Schema schema = (Schema) node;
             visitor.visit(schema);
-            for (Field f : schema.fields()) {
-                handleNode(f.type, visitor);
+            for (BoundField f : schema.fields()) {
+                handleNode(f.def.type, visitor);
             }
         } else if (node instanceof ArrayOf) {
             ArrayOf array = (ArrayOf) node;

@@ -60,6 +60,8 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import javax.security.auth.Subject;
+import javax.security.auth.login.Configuration;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -73,9 +75,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-
-import javax.security.auth.Subject;
-import javax.security.auth.login.Configuration;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -953,7 +952,7 @@ public class SaslAuthenticatorTest {
 
                     @Override
                     protected ApiVersionsResponse apiVersionsResponse() {
-                        List<ApiVersion> apiVersions = new ArrayList<>(ApiVersionsResponse.API_VERSIONS_RESPONSE.apiVersions());
+                        List<ApiVersion> apiVersions = new ArrayList<>(ApiVersionsResponse.defaultApiVersionsResponse().apiVersions());
                         for (Iterator<ApiVersion> it = apiVersions.iterator(); it.hasNext(); ) {
                             ApiVersion apiVersion = it.next();
                             if (apiVersion.apiKey == ApiKeys.SASL_AUTHENTICATE.id) {

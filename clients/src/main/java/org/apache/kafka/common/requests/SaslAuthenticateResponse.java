@@ -16,11 +16,17 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.nio.ByteBuffer;
-
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
+
+import java.nio.ByteBuffer;
+
+import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
+import static org.apache.kafka.common.protocol.CommonFields.ERROR_MESSAGE;
+import static org.apache.kafka.common.protocol.types.Type.BYTES;
 
 
 /**
@@ -28,10 +34,16 @@ import org.apache.kafka.common.protocol.types.Struct;
  * for the mechanism configured for the client.
  */
 public class SaslAuthenticateResponse extends AbstractResponse {
-
-    private static final String ERROR_CODE_KEY_NAME = "error_code";
-    private static final String ERROR_MESSAGE_KEY_NAME = "error_message";
     private static final String SASL_AUTH_BYTES_KEY_NAME = "sasl_auth_bytes";
+
+    private static final Schema SASL_AUTHENTICATE_RESPONSE_V0 = new Schema(
+            ERROR_CODE,
+            ERROR_MESSAGE,
+            new Field(SASL_AUTH_BYTES_KEY_NAME, BYTES, "SASL authentication bytes from server as defined by the SASL mechanism."));
+
+    public static Schema[] schemaVersions() {
+        return new Schema[]{SASL_AUTHENTICATE_RESPONSE_V0};
+    }
 
     private static final ByteBuffer EMPTY_BUFFER = ByteBuffer.allocate(0);
 
@@ -55,8 +67,8 @@ public class SaslAuthenticateResponse extends AbstractResponse {
     }
 
     public SaslAuthenticateResponse(Struct struct) {
-        error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
-        errorMessage = struct.getString(ERROR_MESSAGE_KEY_NAME);
+        error = Errors.forCode(struct.get(ERROR_CODE));
+        errorMessage = struct.get(ERROR_MESSAGE);
         saslAuthBytes = struct.getBytes(SASL_AUTH_BYTES_KEY_NAME);
     }
 
@@ -75,8 +87,8 @@ public class SaslAuthenticateResponse extends AbstractResponse {
     @Override
     public Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.SASL_AUTHENTICATE.responseSchema(version));
-        struct.set(ERROR_CODE_KEY_NAME, error.code());
-        struct.set(ERROR_MESSAGE_KEY_NAME, errorMessage);
+        struct.set(ERROR_CODE, error.code());
+        struct.set(ERROR_MESSAGE, errorMessage);
         struct.set(SASL_AUTH_BYTES_KEY_NAME, saslAuthBytes);
         return struct;
     }
