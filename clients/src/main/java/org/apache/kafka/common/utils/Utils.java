@@ -27,9 +27,10 @@ import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileWriter;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.reflect.Constructor;
@@ -572,7 +573,7 @@ public class Utils {
     }
 
     public static void writeToFile(String path, String text) throws IOException {
-        BufferedWriter writer = new BufferedWriter(new FileWriter(path));
+        BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(path), StandardCharsets.UTF_8));
         try {
             writer.write(text);
         } finally {
