@@ -49,18 +49,6 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     private final Serde<K> keySerde;
     private final Serde<V> valSerde;
     private final boolean repartitionRequired;
-    private final Initializer<Long> countInitializer = new Initializer<Long>() {
-        @Override
-        public Long apply() {
-            return 0L;
-        }
-    };
-    private final Aggregator<K, V, Long> countAggregator = new Aggregator<K, V, Long>() {
-        @Override
-        public Long apply(K aggKey, V value, Long aggregate) {
-            return aggregate + 1;
-        }
-    };
     private final GroupedStreamAggregateBuilder<K, V> aggregateBuilder;
     private boolean isQueryable = true;
 
@@ -235,7 +223,10 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                                                                   final Aggregator<? super K, ? super V, T> aggregator,
                                                                   final Windows<W> windows,
                                                                   final Serde<T> aggValueSerde) {
-        return windowedBy(windows).aggregate(initializer, aggregator, aggValueSerde);
+        return windowedBy(windows).aggregate(initializer, aggregator,
+                                             Materialized.<K, T, WindowStore<Bytes, byte[]>>as(builder.newStoreName(AGGREGATE_NAME))
+                                                     .withKeySerde(keySerde)
+                                                     .withValueSerde(aggValueSerde));
     }
 
     @SuppressWarnings("unchecked")
@@ -268,12 +259,12 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
 
     @Override
     public KTable<K, Long> count(final StateStoreSupplier<KeyValueStore> storeSupplier) {
-        return aggregate(countInitializer, countAggregator, storeSupplier);
+        return aggregate(aggregateBuilder.countInitializer, aggregateBuilder.countAggregator, storeSupplier);
     }
 
     @Override
     public KTable<K, Long> count(final Materialized<K, Long, KeyValueStore<Bytes, byte[]>> materialized) {
-        return aggregate(countInitializer, countAggregator, materialized);
+        return aggregate(aggregateBuilder.countInitializer, aggregateBuilder.countAggregator, materialized);
     }
 
     @Override
@@ -292,8 +283,8 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     public <W extends Window> KTable<Windowed<K>, Long> count(final Windows<W> windows,
                                                               final StateStoreSupplier<WindowStore> storeSupplier) {
         return aggregate(
-                countInitializer,
-                countAggregator,
+                aggregateBuilder.countInitializer,
+                aggregateBuilder.countAggregator,
                 windows,
                 storeSupplier);
     }
@@ -383,7 +374,12 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
             }
         };
 
-        return aggregate(countInitializer, countAggregator, sessionMerger, sessionWindows, Serdes.Long(), storeSupplier);
+        return aggregate(aggregateBuilder.countInitializer,
+                         aggregateBuilder.countAggregator,
+                         sessionMerger,
+                         sessionWindows,
+                         Serdes.Long(),
+                         storeSupplier);
     }
 
 

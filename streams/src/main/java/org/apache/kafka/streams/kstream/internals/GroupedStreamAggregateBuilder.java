@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.state.StoreBuilder;
 
@@ -30,6 +32,19 @@ class GroupedStreamAggregateBuilder<K, V> {
     private final boolean repartitionRequired;
     private final Set<String> sourceNodes;
     private final String name;
+
+    final Initializer<Long> countInitializer = new Initializer<Long>() {
+        @Override
+        public Long apply() {
+            return 0L;
+        }
+    };
+    final Aggregator<K, V, Long> countAggregator = new Aggregator<K, V, Long>() {
+        @Override
+        public Long apply(K aggKey, V value, Long aggregate) {
+            return aggregate + 1;
+        }
+    };
 
     GroupedStreamAggregateBuilder(final InternalStreamsBuilder builder,
                                   final Serde<K> keySerde,
