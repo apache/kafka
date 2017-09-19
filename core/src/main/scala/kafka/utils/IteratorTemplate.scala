@@ -76,8 +76,8 @@ abstract class IteratorTemplate[T] extends Iterator[T] with java.util.Iterator[T
     state = DONE
     null.asInstanceOf[T]
   }
-  
-  def remove = 
+
+  override def remove =
     throw new UnsupportedOperationException("Removal not supported")
 
   protected def resetState() {
