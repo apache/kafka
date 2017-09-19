@@ -31,7 +31,7 @@ import kafka.utils.{JaasTestUtils, TestUtils, ZkUtils}
 class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with SaslSetup {
   private val kafkaClientSaslMechanism = "SCRAM-SHA-256"
   private val kafkaServerSaslMechanisms = List(kafkaClientSaslMechanism)
-  override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
+  override protected val securityProtocol = SecurityProtocol.SASL_PLAINTEXT
   override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
   override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
   val consumerCount = 1

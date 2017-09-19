@@ -68,7 +68,7 @@ public class ClientAuthenticationFailureTest {
     @After
     public void teardown() throws Exception {
         if (server != null)
-            this.server.close();
+            server.close();
     }
 
     @Test

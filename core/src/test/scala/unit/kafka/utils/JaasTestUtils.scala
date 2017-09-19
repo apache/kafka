@@ -118,7 +118,7 @@ object JaasTestUtils {
   private val KafkaClientPrincipal = KafkaClientPrincipalUnqualifiedName + "@EXAMPLE.COM"
   val KafkaClientPrincipalUnqualifiedName2 = "client2"
   private val KafkaClientPrincipal2 = KafkaClientPrincipalUnqualifiedName2 + "@EXAMPLE.COM"
-
+  
   val KafkaPlainUser = "plain-user"
   private val KafkaPlainPassword = "plain-user-secret"
   val KafkaPlainUser2 = "plain-user2"
@@ -195,9 +195,9 @@ object JaasTestUtils {
   }
 
   // consider refactoring if more mechanisms are added
-  private def kafkaClientModule(mechanism: String,
+  private def kafkaClientModule(mechanism: String, 
       keytabLocation: Option[File], clientPrincipal: String,
-      plainUser: String, plainPassword: String,
+      plainUser: String, plainPassword: String, 
       scramUser: String, scramPassword: String): JaasModule = {
     mechanism match {
       case "GSSAPI" =>

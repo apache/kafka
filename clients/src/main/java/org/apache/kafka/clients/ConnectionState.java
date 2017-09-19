@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.clients;
 
-import java.util.EnumSet;
-
 /**
  * The states of a node connection
  *
@@ -30,7 +28,7 @@ import java.util.EnumSet;
 public enum ConnectionState {
     DISCONNECTED, CONNECTING, CHECKING_API_VERSIONS, READY, AUTHENTICATION_FAILED;
 
-    public static EnumSet<ConnectionState> disconnectedStates() {
-        return EnumSet.of(DISCONNECTED, AUTHENTICATION_FAILED);
+    public boolean isDisconnected() {
+        return this.equals(AUTHENTICATION_FAILED) || this.equals(DISCONNECTED);
     }
 }

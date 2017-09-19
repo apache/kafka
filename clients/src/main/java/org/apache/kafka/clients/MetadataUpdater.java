@@ -17,7 +17,7 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 
@@ -67,7 +67,7 @@ interface MetadataUpdater {
      *
      * @param exception authentication exception from broker
      */
-    void handleAuthenticationFailure(ApiException exception);
+    void handleAuthenticationFailure(AuthenticationException exception);
 
     /**
      * If `request` is a metadata request, handles it and returns `true`. Otherwise, returns `false`.

@@ -1053,6 +1053,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
      *             this function is called
+     * @throws org.apache.kafka.common.errors.AuthenticationFailedException if caller's authentication fails
      * @throws org.apache.kafka.common.errors.AuthorizationException if caller lacks Read access to any of the subscribed
      *             topics or to the configured groupId
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. invalid groupId or

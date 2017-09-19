@@ -22,7 +22,7 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -135,7 +135,7 @@ public class ConsumerNetworkClient implements Closeable {
         int version = this.metadata.requestUpdate();
         do {
             poll(timeout);
-            this.metadata.handleNonRetriableExceptions();
+            this.metadata.maybeHandleNonRetriableAuthenticationExceptions();
         } while (this.metadata.version() == version && time.milliseconds() - startMs < timeout);
         return this.metadata.version() > version;
     }
@@ -369,7 +369,7 @@ public class ConsumerNetworkClient implements Closeable {
                 Collection<ClientRequest> requests = unsent.remove(node);
                 for (ClientRequest request : requests) {
                     RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) request.callback();
-                    ApiException authenticationException = client.authenticationException(node);
+                    AuthenticationException authenticationException = client.authenticationException(node);
                     if (authenticationException !=  null)
                         handler.onFailure(authenticationException);
                     else

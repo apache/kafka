@@ -18,7 +18,7 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelState;
@@ -318,10 +318,10 @@ public class NetworkClient implements KafkaClient {
      * propagated without any retries.
      *
      * @param node the node to check
-     * @return an ApiException iff authentication has failed, null otherwise
+     * @return an AuthenticationException iff authentication has failed, null otherwise
      */
     @Override
-    public ApiException authenticationException(Node node) {
+    public AuthenticationException authenticationException(Node node) {
         return connectionStates.authenticationException(node.idString());
     }
 
@@ -624,7 +624,7 @@ public class NetworkClient implements KafkaClient {
             else
                 responses.add(request.disconnected(now));
         }
-        ApiException authenticationException = connectionStates.authenticationException(nodeId);
+        AuthenticationException authenticationException = connectionStates.authenticationException(nodeId);
         if (authenticationException != null)
             metadataUpdater.handleAuthenticationFailure(authenticationException);
     }
@@ -865,7 +865,7 @@ public class NetworkClient implements KafkaClient {
         }
 
         @Override
-        public void handleAuthenticationFailure(ApiException exception) {
+        public void handleAuthenticationFailure(AuthenticationException exception) {
             metadataFetchInProgress = false;
             if (metadata.updateRequested())
                 metadata.failedUpdate(time.milliseconds(), exception);

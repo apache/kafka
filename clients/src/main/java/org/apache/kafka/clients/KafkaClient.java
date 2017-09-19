@@ -17,7 +17,7 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.requests.AbstractRequest;
 
 import java.io.Closeable;
@@ -73,9 +73,9 @@ public interface KafkaClient extends Closeable {
      * propagated without any retries.
      *
      * @param node the node to check
-     * @return an ApiException iff authentication has failed, null otherwise
+     * @return an AuthenticationException iff authentication has failed, null otherwise
      */
-    ApiException authenticationException(Node node);
+    AuthenticationException authenticationException(Node node);
 
     /**
      * Queue up the given request for sending. Requests can only be sent on ready connections.

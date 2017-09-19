@@ -18,7 +18,7 @@ package org.apache.kafka.clients;
 
 import java.util.concurrent.ThreadLocalRandom;
 
-import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.AuthenticationException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -53,7 +53,7 @@ final class ClusterConnectionStates {
         if (state == null)
             return true;
         else
-            return ConnectionState.disconnectedStates().contains(state.state) &&
+            return state.state.isDisconnected() &&
                    now - state.lastConnectAttemptMs >= state.reconnectBackoffMs;
     }
 
@@ -67,7 +67,7 @@ final class ClusterConnectionStates {
         if (state == null)
             return false;
         else
-            return ConnectionState.disconnectedStates().contains(state.state) &&
+            return state.state.isDisconnected() &&
                    now - state.lastConnectAttemptMs < state.reconnectBackoffMs;
     }
 
@@ -82,7 +82,7 @@ final class ClusterConnectionStates {
         NodeConnectionState state = nodeState.get(id);
         if (state == null) return 0;
         long timeWaited = now - state.lastConnectAttemptMs;
-        if (ConnectionState.disconnectedStates().contains(state.state)) {
+        if (state.state.isDisconnected()) {
             return Math.max(state.reconnectBackoffMs - timeWaited, 0);
         } else {
             // When connecting or connected, we should be able to delay indefinitely since other events (connection or
@@ -146,7 +146,7 @@ final class ClusterConnectionStates {
      * @param now the current time
      * @param exception the authentication exception
      */
-    public void authenticationFailed(String id, long now, ApiException exception) {
+    public void authenticationFailed(String id, long now, AuthenticationException exception) {
         NodeConnectionState nodeState = nodeState(id);
         nodeState.authenticationException = exception;
         nodeState.state = ConnectionState.AUTHENTICATION_FAILED;
@@ -181,14 +181,14 @@ final class ClusterConnectionStates {
      */
     public boolean isDisconnected(String id) {
         NodeConnectionState state = nodeState.get(id);
-        return state != null && ConnectionState.disconnectedStates().contains(state.state);
+        return state != null && state.state.isDisconnected();
     }
 
     /**
      * Return authentication exception if an authentication error occurred
      * @param id The id of the node to check
      */
-    public ApiException authenticationException(String id) {
+    public AuthenticationException authenticationException(String id) {
         NodeConnectionState state = nodeState.get(id);
         return state != null ? state.authenticationException : null;
     }
@@ -260,7 +260,7 @@ final class ClusterConnectionStates {
     private static class NodeConnectionState {
 
         ConnectionState state;
-        ApiException authenticationException;
+        AuthenticationException authenticationException;
         long lastConnectAttemptMs;
         long failedAttempts;
         long reconnectBackoffMs;

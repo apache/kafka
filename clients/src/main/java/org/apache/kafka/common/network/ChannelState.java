@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.network;
 
-import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.AuthenticationException;
 
 /**
  * States for KafkaChannel:
@@ -73,11 +73,11 @@ public class ChannelState {
     public static final ChannelState LOCAL_CLOSE = new ChannelState(State.LOCAL_CLOSE);
 
     private final State state;
-    private final ApiException exception;
+    private final AuthenticationException exception;
     public ChannelState(State state) {
         this(state, null);
     }
-    public ChannelState(State state, ApiException exception) {
+    public ChannelState(State state, AuthenticationException exception) {
         this.state = state;
         this.exception = exception;
     }
@@ -86,7 +86,7 @@ public class ChannelState {
         return state;
     }
 
-    public ApiException exception() {
+    public AuthenticationException exception() {
         return exception;
     }
 }
