@@ -35,7 +35,7 @@ import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 import static org.apache.kafka.common.protocol.types.Type.INT64;
 
 public class WriteTxnMarkersResponse extends AbstractResponse {
-    private static final String TXN_MARKER_ENTRY_KEY_NAME = "transaction_markers";
+    private static final String TXN_MARKERS_KEY_NAME = "transaction_markers";
 
     private static final String PRODUCER_ID_KEY_NAME = "producer_id";
     private static final String TOPICS_KEY_NAME = "topics";
@@ -45,7 +45,7 @@ public class WriteTxnMarkersResponse extends AbstractResponse {
             PARTITION_ID,
             ERROR_CODE);
 
-    private static final Schema WRITE_TXN_MARKERS_ENTRY_RESPONSE_V0 = new Schema(
+    private static final Schema WRITE_TXN_MARKERS_ENTRY_V0 = new Schema(
             new Field(PRODUCER_ID_KEY_NAME, INT64, "Current producer id in use by the transactional id."),
             new Field(TOPICS_KEY_NAME, new ArrayOf(new Schema(
                     TOPIC_NAME,
@@ -53,7 +53,8 @@ public class WriteTxnMarkersResponse extends AbstractResponse {
                     "Errors per partition from writing markers."));
 
     private static final Schema WRITE_TXN_MARKERS_RESPONSE_V0 = new Schema(
-            new Field("transaction_markers", new ArrayOf(WRITE_TXN_MARKERS_ENTRY_RESPONSE_V0), "Errors per partition from writing markers."));
+            new Field(TXN_MARKERS_KEY_NAME, new ArrayOf(WRITE_TXN_MARKERS_ENTRY_V0), "Errors per partition from " +
+                    "writing markers."));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{WRITE_TXN_MARKERS_RESPONSE_V0};
@@ -82,7 +83,7 @@ public class WriteTxnMarkersResponse extends AbstractResponse {
     public WriteTxnMarkersResponse(Struct struct) {
         Map<Long, Map<TopicPartition, Errors>> errors = new HashMap<>();
 
-        Object[] responseArray = struct.getArray(TXN_MARKER_ENTRY_KEY_NAME);
+        Object[] responseArray = struct.getArray(TXN_MARKERS_KEY_NAME);
         for (Object responseObj : responseArray) {
             Struct responseStruct = (Struct) responseObj;
 
@@ -113,7 +114,7 @@ public class WriteTxnMarkersResponse extends AbstractResponse {
         Object[] responsesArray = new Object[errors.size()];
         int k = 0;
         for (Map.Entry<Long, Map<TopicPartition, Errors>> responseEntry : errors.entrySet()) {
-            Struct responseStruct = struct.instance(TXN_MARKER_ENTRY_KEY_NAME);
+            Struct responseStruct = struct.instance(TXN_MARKERS_KEY_NAME);
             responseStruct.set(PRODUCER_ID_KEY_NAME, responseEntry.getKey());
 
             Map<TopicPartition, Errors> partitionAndErrors = responseEntry.getValue();
@@ -141,7 +142,7 @@ public class WriteTxnMarkersResponse extends AbstractResponse {
             responsesArray[k++] = responseStruct;
         }
 
-        struct.set(TXN_MARKER_ENTRY_KEY_NAME, responsesArray);
+        struct.set(TXN_MARKERS_KEY_NAME, responsesArray);
         return struct;
     }
 
