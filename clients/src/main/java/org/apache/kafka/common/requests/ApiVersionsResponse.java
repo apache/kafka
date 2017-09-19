@@ -55,7 +55,7 @@ public class ApiVersionsResponse extends AbstractResponse {
             THROTTLE_TIME_MS);
 
     // initialized lazily to avoid circular initialization dependence with ApiKeys
-    private static ApiVersionsResponse defaultApiVersionsResponse;
+    private static volatile ApiVersionsResponse defaultApiVersionsResponse;
 
     public static Schema[] schemaVersions() {
         return new Schema[]{API_VERSIONS_RESPONSE_V0, API_VERSIONS_RESPONSE_V1};

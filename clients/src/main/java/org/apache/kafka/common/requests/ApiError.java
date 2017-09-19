@@ -57,7 +57,8 @@ public class ApiError {
 
     public void write(Struct struct) {
         struct.set(ERROR_CODE, error.code());
-        struct.setIfExists(ERROR_MESSAGE, message);
+        if (error != Errors.NONE)
+            struct.setIfExists(ERROR_MESSAGE, message);
     }
 
     public boolean is(Errors error) {
