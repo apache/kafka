@@ -109,7 +109,7 @@ class AssignedTasks {
 
     void initializeNewTasks() {
         if (!created.isEmpty()) {
-            log.trace("Initializing {}s {}", taskTypeName, created.keySet());
+            log.debug("Initializing {}s {}", taskTypeName, created.keySet());
         }
         for (final Iterator<Map.Entry<TaskId, Task>> it = created.entrySet().iterator(); it.hasNext(); ) {
             final Map.Entry<TaskId, Task> entry = it.next();
