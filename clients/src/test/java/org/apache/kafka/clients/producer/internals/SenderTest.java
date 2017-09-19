@@ -282,9 +282,9 @@ public class SenderTest {
         metrics.close();
         Map<String, String> clientTags = Collections.singletonMap("client-id", "clientA");
         metrics = new Metrics(new MetricConfig().tags(clientTags));
-        SenderMetricsRegistry metricsRegistry = new SenderMetricsRegistry(clientTags.keySet());
+        SenderMetricsRegistry metricsRegistry = new SenderMetricsRegistry(metrics);
         Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
-                1, metrics, metricsRegistry, time, REQUEST_TIMEOUT, 50, null, apiVersions);
+                1, metricsRegistry, time, REQUEST_TIMEOUT, 50, null, apiVersions);
 
         // Append a message so that topic metrics are created
         accumulator.append(tp0, 0L, "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT);
@@ -293,7 +293,7 @@ public class SenderTest {
         client.respond(produceResponse(tp0, 0, Errors.NONE, 0));
         sender.run(time.milliseconds());
         // Create throttle time metrics
-        Sender.throttleTimeSensor(metrics, metricsRegistry);
+        Sender.throttleTimeSensor(metricsRegistry);
 
         // Verify that all metrics except metrics-count have registered templates
         Set<MetricNameTemplate> allMetrics = new HashSet<>();
