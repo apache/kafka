@@ -19,12 +19,13 @@ package kafka.server
 
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
-import scala.collection.{Seq, Set, mutable}
+import scala.collection.{Seq, Set, mutable, Map}
 import scala.collection.JavaConverters._
 import kafka.cluster.{Broker, EndPoint}
 import kafka.api._
 import kafka.common.{BrokerEndPointNotAvailableException, TopicAndPartition}
 import kafka.controller.StateChangeLogger
+import kafka.log.LogConfig
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import org.apache.kafka.common.internals.Topic
@@ -37,9 +38,12 @@ import org.apache.kafka.common.requests.{MetadataResponse, UpdateMetadataRequest
  *  A cache for the state (e.g., current leader) of each partition. This cache is updated through
  *  UpdateMetadataRequest from the controller. Every broker maintains the same cache, asynchronously.
  */
-class MetadataCache(brokerId: Int) extends Logging {
+class MetadataCache(brokerId: Int, private val topicConfigs: Map[String, LogConfig]) extends Logging {
+
+  case class TopicInfo(messageFormatVersion: Byte, messageMaxBytes: Int)
 
   private val cache = mutable.Map[String, mutable.Map[Int, UpdateMetadataRequest.PartitionState]]()
+  private val topicCache = mutable.Map[String, TopicInfo]()
   private var controllerId: Option[Int] = None
   private val aliveBrokers = mutable.Map[Int, Broker]()
   private val aliveNodes = mutable.Map[Int, collection.Map[ListenerName, Node]]()
@@ -47,6 +51,12 @@ class MetadataCache(brokerId: Int) extends Logging {
 
   this.logIdent = s"[MetadataCache brokerId=$brokerId] "
   private val stateChangeLogger = new StateChangeLogger(brokerId, inControllerContext = false, None)
+
+  inWriteLock(partitionMetadataLock) {
+    topicConfigs.map { case (topic, config) =>
+      topicCache.put(topic, TopicInfo(config.messageFormatVersion.messageFormatVersion, config.maxMessageSize))
+    }
+  }
 
   // This method is the main hotspot when it comes to the performance of metadata requests,
   // we should be careful about adding additional logic here.
@@ -113,8 +123,9 @@ class MetadataCache(brokerId: Int) extends Logging {
   def getTopicMetadata(topics: Set[String], listenerName: ListenerName, errorUnavailableEndpoints: Boolean = false): Seq[MetadataResponse.TopicMetadata] = {
     inReadLock(partitionMetadataLock) {
       topics.toSeq.flatMap { topic =>
+        val topicInfo = topicCache.getOrElse(topic, TopicInfo(MetadataResponse.UNKNOWN_TOPIC_MESSAGE_FORMAT_VERSION, MetadataResponse.UNKNOWN_TOPIC_MESSAGE_MAX_BYTES))
         getPartitionMetadata(topic, listenerName, errorUnavailableEndpoints).map { partitionMetadata =>
-          new MetadataResponse.TopicMetadata(Errors.NONE, topic, Topic.isInternal(topic), partitionMetadata.toBuffer.asJava)
+          new MetadataResponse.TopicMetadata(Errors.NONE, topic, Topic.isInternal(topic), topicInfo.messageFormatVersion, topicInfo.messageMaxBytes, partitionMetadata.toBuffer.asJava)
         }
       }
     }
@@ -221,6 +232,12 @@ class MetadataCache(brokerId: Int) extends Logging {
     }
   }
 
+  def updateTopicMetadata(topic: String, topicConfig: LogConfig) = {
+    inWriteLock(partitionMetadataLock) {
+      topicCache.put(topic, TopicInfo(topicConfig.messageFormatVersion.messageFormatVersion, topicConfig.maxMessageSize))
+    }
+  }
+
   def contains(topic: String): Boolean = {
     inReadLock(partitionMetadataLock) {
       cache.contains(topic)
@@ -232,7 +249,10 @@ class MetadataCache(brokerId: Int) extends Logging {
   private def removePartitionInfo(topic: String, partitionId: Int): Boolean = {
     cache.get(topic).exists { infos =>
       infos.remove(partitionId)
-      if (infos.isEmpty) cache.remove(topic)
+      if (infos.isEmpty) {
+        cache.remove(topic)
+        topicCache.remove(topic)
+      }
       true
     }
   }

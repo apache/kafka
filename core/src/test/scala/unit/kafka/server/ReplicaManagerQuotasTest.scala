@@ -21,7 +21,7 @@ import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.cluster.Replica
-import kafka.log.Log
+import kafka.log.{Log, LogConfig}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
@@ -180,11 +180,12 @@ class ReplicaManagerQuotasTest {
     //Return the same log for each partition as it doesn't matter
     expect(logManager.getLog(anyObject())).andReturn(Some(log)).anyTimes()
     expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
+    expect(logManager.topicConfigs).andReturn(Map.empty[String, LogConfig]).anyTimes()
     replay(logManager)
 
     replicaManager = new ReplicaManager(configs.head, metrics, time, zkUtils, scheduler, logManager,
       new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time).follower,
-      new BrokerTopicStats, new MetadataCache(configs.head.brokerId), new LogDirFailureChannel(configs.head.logDirs.size))
+      new BrokerTopicStats, new MetadataCache(configs.head.brokerId, logManager.topicConfigs), new LogDirFailureChannel(configs.head.logDirs.size))
 
     //create the two replicas
     for ((p, _) <- fetchInfo) {

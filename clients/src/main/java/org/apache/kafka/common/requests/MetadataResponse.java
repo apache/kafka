@@ -43,6 +43,7 @@ import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 import static org.apache.kafka.common.protocol.types.Type.BOOLEAN;
 import static org.apache.kafka.common.protocol.types.Type.INT32;
+import static org.apache.kafka.common.protocol.types.Type.INT8;
 import static org.apache.kafka.common.protocol.types.Type.NULLABLE_STRING;
 import static org.apache.kafka.common.protocol.types.Type.STRING;
 
@@ -60,6 +61,14 @@ public class MetadataResponse extends AbstractResponse {
     public static final int NO_CONTROLLER_ID = -1;
 
     private static final String CLUSTER_ID_KEY_NAME = "cluster_id";
+
+    // topic level field names
+    private static final String TOPIC_ERROR_CODE_KEY_NAME = "topic_error_code";
+    private static final String TOPIC_MESSAGE_FORMAT_VERSION_KEY_NAME = "message_format_version";
+    private static final String TOPIC_MESSAGE_MAX_BYTES_KEY_NAME = "message_max_bytes";
+
+    public static final byte UNKNOWN_TOPIC_MESSAGE_FORMAT_VERSION = -1;
+    public static final int UNKNOWN_TOPIC_MESSAGE_MAX_BYTES = -1;
 
     /**
      * Possible error codes:
@@ -136,6 +145,19 @@ public class MetadataResponse extends AbstractResponse {
             new Field(IS_INTERNAL_KEY_NAME, BOOLEAN, "Indicates if the topic is considered a Kafka internal topic"),
             new Field(PARTITION_METADATA_KEY_NAME, new ArrayOf(PARTITION_METADATA_V2), "Metadata for each partition of the topic."));
 
+    // TOPIC_METADATA_V3 adds the message format version and message max bytes to the metadata response.
+    public static final Schema TOPIC_METADATA_V3 = new Schema(
+            ERROR_CODE,
+            TOPIC_NAME,
+            new Field("is_internal", BOOLEAN,
+                    "Indicates if the topic is considered a Kafka internal topic"),
+            new Field(TOPIC_MESSAGE_FORMAT_VERSION_KEY_NAME, INT8,
+                    "Indicates the message format version for records stored in the topic"),
+            new Field(TOPIC_MESSAGE_MAX_BYTES_KEY_NAME, INT32,
+                    "Indicates the maximum size of batches which can be written to the topic."),
+            new Field("partition_metadata", new ArrayOf(PARTITION_METADATA_V2),
+                    "Metadata for each partition of the topic."));
+
     private static final Schema METADATA_RESPONSE_V1 = new Schema(
             new Field(BROKERS_KEY_NAME, new ArrayOf(METADATA_BROKER_V1), "Host and port information for all brokers."),
             new Field(CONTROLLER_ID_KEY_NAME, INT32, "The broker id of the controller broker."),
@@ -164,9 +186,21 @@ public class MetadataResponse extends AbstractResponse {
             new Field(CONTROLLER_ID_KEY_NAME, INT32, "The broker id of the controller broker."),
             new Field(TOPIC_METADATA_KEY_NAME, new ArrayOf(TOPIC_METADATA_V2)));
 
+        // METADATA_RESPONSE_V6 adds the message format version and the max message bytes for the topics returned in the response.
+    public static final Schema METADATA_RESPONSE_V6 = new Schema(
+        THROTTLE_TIME_MS,
+        new Field("brokers", new ArrayOf(METADATA_BROKER_V1),
+            "Host and port information for all brokers."),
+        new Field("cluster_id", NULLABLE_STRING,
+            "The cluster id that this broker belongs to."),
+        new Field("controller_id", INT32,
+            "The broker id of the controller broker."),
+        new Field("topic_metadata", new ArrayOf(TOPIC_METADATA_V3)));
+
+
     public static Schema[] schemaVersions() {
         return new Schema[] {METADATA_RESPONSE_V0, METADATA_RESPONSE_V1, METADATA_RESPONSE_V2, METADATA_RESPONSE_V3,
-            METADATA_RESPONSE_V4, METADATA_RESPONSE_V5};
+            METADATA_RESPONSE_V4, METADATA_RESPONSE_V5, METADATA_RESPONSE_V6};
     }
 
     private final int throttleTimeMs;
@@ -228,6 +262,12 @@ public class MetadataResponse extends AbstractResponse {
             // When we can't know if a topic is internal or not in a v0 response we default to false
             boolean isInternal = topicInfo.hasField(IS_INTERNAL_KEY_NAME) ? topicInfo.getBoolean(IS_INTERNAL_KEY_NAME) : false;
 
+            byte messageFormatVersion = topicInfo.hasField(TOPIC_MESSAGE_FORMAT_VERSION_KEY_NAME)
+                    ? topicInfo.getByte(TOPIC_MESSAGE_FORMAT_VERSION_KEY_NAME) : UNKNOWN_TOPIC_MESSAGE_FORMAT_VERSION;
+
+            int messageMaxBytes = topicInfo.hasField(TOPIC_MESSAGE_MAX_BYTES_KEY_NAME)
+                    ? topicInfo.getInt(TOPIC_MESSAGE_MAX_BYTES_KEY_NAME) : UNKNOWN_TOPIC_MESSAGE_MAX_BYTES;
+
             List<PartitionMetadata> partitionMetadata = new ArrayList<>();
 
             Object[] partitionInfos = (Object[]) topicInfo.get(PARTITION_METADATA_KEY_NAME);
@@ -251,7 +291,7 @@ public class MetadataResponse extends AbstractResponse {
                 partitionMetadata.add(new PartitionMetadata(partitionError, partition, leaderNode, replicaNodes, isrNodes, offlineNodes));
             }
 
-            topicMetadata.add(new TopicMetadata(topicError, topic, isInternal, partitionMetadata));
+            topicMetadata.add(new TopicMetadata(topicError, topic, isInternal, messageFormatVersion, messageMaxBytes, partitionMetadata));
         }
 
         this.brokers = brokers.values();
@@ -395,15 +435,21 @@ public class MetadataResponse extends AbstractResponse {
         private final Errors error;
         private final String topic;
         private final boolean isInternal;
+        private final byte messageFormatVersion;
+        private final int messageMaxBytes;
         private final List<PartitionMetadata> partitionMetadata;
 
         public TopicMetadata(Errors error,
                              String topic,
                              boolean isInternal,
+                             byte messageFormatVersion,
+                             int messageMaxBytes,
                              List<PartitionMetadata> partitionMetadata) {
             this.error = error;
             this.topic = topic;
             this.isInternal = isInternal;
+            this.messageFormatVersion = messageFormatVersion;
+            this.messageMaxBytes = messageMaxBytes;
             this.partitionMetadata = partitionMetadata;
         }
 
@@ -417,6 +463,14 @@ public class MetadataResponse extends AbstractResponse {
 
         public boolean isInternal() {
             return isInternal;
+        }
+
+        public byte messageFormatVersion() {
+            return messageFormatVersion;
+        }
+
+        public int messageMaxBytes() {
+            return messageMaxBytes;
         }
 
         public List<PartitionMetadata> partitionMetadata() {
@@ -517,6 +571,14 @@ public class MetadataResponse extends AbstractResponse {
             // This field only exists in v1+
             if (topicData.hasField(IS_INTERNAL_KEY_NAME))
                 topicData.set(IS_INTERNAL_KEY_NAME, metadata.isInternal());
+
+            // This field only exists in V6+
+            if (topicData.hasField(TOPIC_MESSAGE_FORMAT_VERSION_KEY_NAME))
+                topicData.set(TOPIC_MESSAGE_FORMAT_VERSION_KEY_NAME, metadata.messageFormatVersion);
+
+            // This field only exists in V6+
+            if (topicData.hasField(TOPIC_MESSAGE_MAX_BYTES_KEY_NAME))
+                topicData.set(TOPIC_MESSAGE_MAX_BYTES_KEY_NAME, metadata.messageMaxBytes);
 
             List<Struct> partitionMetadataArray = new ArrayList<>(metadata.partitionMetadata.size());
             for (PartitionMetadata partitionMetadata : metadata.partitionMetadata()) {

@@ -587,7 +587,6 @@ class LogManager(logDirs: Array[File],
               config.originals.asScala.mkString(", ")))
           // Remove the preferred log dir since it has already been satisfied
           preferredLogDirs.remove(topicPartition)
-
           log
         } catch {
           case e: IOException =>

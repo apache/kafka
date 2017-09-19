@@ -45,22 +45,26 @@ trait ConfigHandler {
   * The TopicConfigHandler will process topic config changes in ZK.
   * The callback provides the topic name and the full properties set read from ZK
   */
-class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaConfig, val quotas: QuotaManagers) extends ConfigHandler with Logging  {
+class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaConfig, val quotas: QuotaManagers,
+                         val metadataCache: MetadataCache) extends ConfigHandler with Logging  {
 
   def processConfigChanges(topic: String, topicConfig: Properties) {
     // Validate the configurations.
     val configNamesToExclude = excludedConfigs(topic, topicConfig)
 
     val logs = logManager.logsByTopicPartition.filterKeys(_.topic == topic).values.toBuffer
+    val props = new Properties()
+    props ++= logManager.defaultConfig.originals.asScala
+    topicConfig.asScala.foreach { case (key, value) =>
+      if (!configNamesToExclude.contains(key)) props.put(key, value)
+    }
+    val logConfig = LogConfig(props)
+
+    metadataCache.updateTopicMetadata(topic, logConfig)
+
     if (logs.nonEmpty) {
       /* combine the default properties with the overrides in zk to create the new LogConfig */
-      val props = new Properties()
-      props ++= logManager.defaultConfig.originals.asScala
-      topicConfig.asScala.foreach { case (key, value) =>
-        if (!configNamesToExclude.contains(key)) props.put(key, value)
-      }
-      val logConfig = LogConfig(props)
-      if ((topicConfig.containsKey(LogConfig.RetentionMsProp) 
+     if ((topicConfig.containsKey(LogConfig.RetentionMsProp)
         || topicConfig.containsKey(LogConfig.MessageTimestampDifferenceMaxMsProp))
         && logConfig.retentionMs < logConfig.messageTimestampDifferenceMaxMs)
         warn(s"${LogConfig.RetentionMsProp} for topic $topic is set to ${logConfig.retentionMs}. It is smaller than " + 
