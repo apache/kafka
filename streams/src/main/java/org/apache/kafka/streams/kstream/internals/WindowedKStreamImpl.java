@@ -64,17 +64,8 @@ public class WindowedKStreamImpl<K, V, W extends Window> extends AbstractStream<
     @Override
     public KTable<Windowed<K>, Long> count() {
         return doAggregate(
-                new Initializer<Long>() {
-                    @Override
-                    public Long apply() {
-                        return 0L;
-                    }
-                }, new Aggregator<K, V, Long>() {
-                    @Override
-                    public Long apply(K aggKey, V value, Long aggregate) {
-                        return aggregate + 1;
-                    }
-                },
+                aggregateBuilder.countInitializer,
+                aggregateBuilder.countAggregator,
                 Serdes.Long());
     }
 

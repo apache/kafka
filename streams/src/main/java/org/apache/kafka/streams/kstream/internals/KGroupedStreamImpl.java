@@ -223,7 +223,10 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                                                                   final Aggregator<? super K, ? super V, T> aggregator,
                                                                   final Windows<W> windows,
                                                                   final Serde<T> aggValueSerde) {
-        return windowedBy(windows).aggregate(initializer, aggregator);
+        return windowedBy(windows).aggregate(initializer, aggregator,
+                                             Materialized.<K, T, WindowStore<Bytes, byte[]>>as(builder.newStoreName(AGGREGATE_NAME))
+                                                     .withKeySerde(keySerde)
+                                                     .withValueSerde(aggValueSerde));
     }
 
     @SuppressWarnings("unchecked")

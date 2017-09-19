@@ -33,6 +33,14 @@ import org.apache.kafka.streams.state.WindowStore;
  * new (partitioned) windows resulting in a windowed {@link KTable}
  * (a <emph>windowed</emph> {@code KTable} is a {@link KTable} with key type {@link Windowed Windowed<K>}.
  * <p>
+ * The specified {@code windows} define either hopping time windows that can be overlapping or tumbling (c.f.
+ * {@link TimeWindows}) or they define landmark windows (c.f. {@link UnlimitedWindows}).
+ * The result is written into a local windowed {@link KeyValueStore} (which is basically an ever-updating
+ * materialized view) that can be queried using the name provided in the {@link Materialized} instance.
+ * Windows are retained until their retention time expires (c.f. {@link Windows#until(long)}).
+ * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
+ * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
+
  * A {@code WindowedKStream} must be obtained from a {@link KGroupedStream} via {@link KGroupedStream#windowedBy(Windows)} .
  *
  * @param <K> Type of keys
@@ -45,13 +53,6 @@ public interface WindowedKStream<K, V> {
     /**
      * Count the number of records in this stream by the grouped key and the defined windows.
      * Records with {@code null} key or value are ignored.
-     * The specified {@code windows} define either hopping time windows that can be overlapping or tumbling (c.f.
-     * {@link TimeWindows}) or they define landmark windows (c.f. {@link UnlimitedWindows}).
-     * The result is written into a local windowed {@link KeyValueStore} (which is basically an ever-updating
-     * materialized view) that can be queried using the provided {@code queryableName}.
-     * Windows are retained until their retention time expires (c.f. {@link Windows#until(long)}).
-     * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
-     * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
      * <p>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same window and key.
@@ -75,13 +76,6 @@ public interface WindowedKStream<K, V> {
     /**
      * Count the number of records in this stream by the grouped key and the defined windows.
      * Records with {@code null} key or value are ignored.
-     * The specified {@code windows} define either hopping time windows that can be overlapping or tumbling (c.f.
-     * {@link TimeWindows}) or they define landmark windows (c.f. {@link UnlimitedWindows}).
-     * The result is written into a local windowed {@link KeyValueStore} (which is basically an ever-updating
-     * materialized view) that can be queried using the name provided in {@link Materialized}.
-     * Windows are retained until their retention time expires (c.f. {@link Windows#until(long)}).
-     * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
-     * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
      * <p>
      * Not all updates might get sent downstream, as an internal cache will be used to deduplicate consecutive updates to
      * the same window and key if caching is enabled on the {@link Materialized} instance.
