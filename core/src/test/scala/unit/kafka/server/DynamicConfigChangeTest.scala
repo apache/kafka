@@ -28,6 +28,9 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.utils._
 import kafka.admin.{AdminOperationException, AdminUtils}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.record.RecordBatch
 
 import scala.collection.Map
 
@@ -169,6 +172,53 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       fail("Should fail with AdminOperationException for topic doesn't exist")
     } catch {
       case _: AdminOperationException => // expected
+    }
+  }
+
+  @Test
+  def testTopicConfigChangeUpdatesMetadataCache() {
+    assertTrue("Should contain a ConfigHandler for topics",
+      this.servers.head.dynamicConfigHandlers.contains(ConfigType.Topic))
+    val oldMessageFormat = "0.10.0"
+    val newMessageFormat = "0.11.0"
+    val oldMessageMaxBytes = 1000
+    val newMessageMaxBytes = 1000000
+    val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
+    val tp = new TopicPartition("testMetadataCacheUpdateTopic", 0)
+    val logProps = new Properties()
+    logProps.put(MaxMessageBytesProp, oldMessageMaxBytes.toString)
+    logProps.put(MessageFormatVersionProp, oldMessageFormat)
+    AdminUtils.createTopic(zkUtils, tp.topic, 1, 1, logProps)
+    TestUtils.retry(10000) {
+      assertTrue(this.servers.head.logManager.getLog(tp).isDefined)
+      // The following assertions show that the topic config was indeed updated in zookeeper.
+      assertEquals(RecordBatch.MAGIC_VALUE_V1, this.servers.head.logManager.getLog(tp).get.config.messageFormatVersion.messageFormatVersion)
+      assertEquals(oldMessageMaxBytes, this.servers.head.logManager.getLog(tp).get.config.maxMessageSize)
+
+      val metadataCache = this.servers.head.metadataCache
+      assertNotNull(metadataCache)
+      val retrievedMetadata = metadataCache.getTopicMetadata(Set(tp.topic), listenerName)
+      assertEquals(1, retrievedMetadata.size)
+
+      // TODO(apurva): the following asserts fail because the TopicChangeHandler doesn't get invoked for topic
+      // creations, because the change notification path is not updated for creates.
+      //assertEquals(RecordBatch.MAGIC_VALUE_V1, retrievedMetadata.head.messageFormatVersion())
+      //assertEquals(oldMessageMaxBytes, retrievedMetadata.head.messageMaxBytes())
+    }
+
+    logProps.put(MaxMessageBytesProp, newMessageMaxBytes.toString)
+    logProps.put(MessageFormatVersionProp, newMessageFormat)
+    AdminUtils.changeTopicConfig(zkUtils, tp.topic, logProps)
+    TestUtils.retry(10000) {
+      assertTrue(this.servers.head.logManager.getLog(tp).isDefined)
+      val metadataCache = this.servers.head.metadataCache
+      assertNotNull(metadataCache)
+      val retrievedMetadata = metadataCache.getTopicMetadata(Set(tp.topic), listenerName)
+      assertEquals(1, retrievedMetadata.size)
+      assertEquals(RecordBatch.MAGIC_VALUE_V2, retrievedMetadata.head.messageFormatVersion())
+      assertEquals(newMessageMaxBytes, retrievedMetadata.head.messageMaxBytes())
+      assertEquals(newMessageMaxBytes, this.servers.head.logManager.getLog(tp).get.config.maxMessageSize)
+      assertEquals(RecordBatch.MAGIC_VALUE_V2, this.servers.head.logManager.getLog(tp).get.config.messageFormatVersion.messageFormatVersion)
     }
   }
 

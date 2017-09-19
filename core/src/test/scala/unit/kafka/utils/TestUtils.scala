@@ -837,8 +837,8 @@ object TestUtils extends Logging {
         return
       } catch {
         case e: AssertionError =>
-          val ellapsed = System.currentTimeMillis - startTime
-          if(ellapsed > maxWaitMs) {
+          val elapsed = System.currentTimeMillis - startTime
+          if(elapsed > maxWaitMs) {
             throw e
           } else {
             info("Attempt failed, sleeping for " + wait + ", and then retrying.")
