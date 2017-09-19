@@ -16,15 +16,15 @@
  */
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.common.protocol.types.BoundField;
+import org.apache.kafka.common.protocol.types.Schema;
+import org.junit.Test;
+
 import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
-
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
-import org.junit.Test;
 
 public class ApiKeysTest {
 
@@ -40,7 +40,7 @@ public class ApiKeysTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void schemaVersionOutOfRange() {
-        ApiKeys.PRODUCE.requestSchema((short) Protocol.REQUESTS[ApiKeys.PRODUCE.id].length);
+        ApiKeys.PRODUCE.requestSchema((short) ApiKeys.PRODUCE.requestSchemas.length);
     }
 
     /**
@@ -56,10 +56,9 @@ public class ApiKeysTest {
     @Test
     public void testResponseThrottleTime() {
         List<ApiKeys> authenticationKeys = Arrays.asList(ApiKeys.SASL_HANDSHAKE, ApiKeys.SASL_AUTHENTICATE);
-
         for (ApiKeys apiKey: ApiKeys.values()) {
             Schema responseSchema = apiKey.responseSchema(apiKey.latestVersion());
-            Field throttleTimeField = responseSchema.get("throttle_time_ms");
+            BoundField throttleTimeField = responseSchema.get(CommonFields.THROTTLE_TIME_MS.name);
             if (apiKey.clusterAction || authenticationKeys.contains(apiKey))
                 assertNull("Unexpected throttle time field: " + apiKey, throttleTimeField);
             else
