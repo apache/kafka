@@ -34,4 +34,31 @@ public class Stamped<V> implements Comparable {
         else if (timestamp > otherTimestamp) return 1;
         return 0;
     }
+
+    /*
+     * public classes implementing Comparable should always implement both compareTo() and equals().
+     * This is because an end-user can at some point add objects of that class to java.util.SortedSet.
+     * If the compareTo() and equals() implementations are not consistent, that would violate the contract of java.util.Set, which is defined in terms of equals().
+     */
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+
+        Stamped<?> stamped = (Stamped<?>) o;
+
+        if (timestamp != stamped.timestamp) {
+            return false;
+        }
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        return (int) (timestamp ^ (timestamp >>> 32));
+    }
 }
