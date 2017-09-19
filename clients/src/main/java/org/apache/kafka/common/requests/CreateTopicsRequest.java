@@ -246,10 +246,7 @@ public class CreateTopicsRequest extends AbstractRequest {
 
         this.topics = topics;
         this.timeout = struct.get(TIMEOUT);
-        if (struct.hasField(VALIDATE_ONLY))
-            this.validateOnly = struct.get(VALIDATE_ONLY);
-        else
-            this.validateOnly = false;
+        this.validateOnly = struct.getOrElse(VALIDATE_ONLY, false);
         this.duplicateTopics = duplicateTopics;
     }
 

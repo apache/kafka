@@ -127,6 +127,12 @@ public class Struct {
         return alternative;
     }
 
+    public Boolean getOrElse(Field.Boolean field, Boolean alternative) {
+        if (hasField(field.name))
+            return getBoolean(field.name);
+        return alternative;
+    }
+
     /**
      * Get the record value for the field with the given name by doing a hash table lookup (slower!)
      *
