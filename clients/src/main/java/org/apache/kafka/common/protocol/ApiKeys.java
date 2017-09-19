@@ -98,7 +98,7 @@ import org.apache.kafka.common.requests.WriteTxnMarkersRequest;
 import org.apache.kafka.common.requests.WriteTxnMarkersResponse;
 
 import java.nio.ByteBuffer;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.common.protocol.types.Type.BYTES;
 import static org.apache.kafka.common.protocol.types.Type.NULLABLE_BYTES;
@@ -326,17 +326,16 @@ public enum ApiKeys {
     }
 
     private static boolean retainsBufferReference(Schema schema) {
-        final AtomicReference<Boolean> foundBufferReference = new AtomicReference<>(Boolean.FALSE);
+        final AtomicBoolean hasBuffer = new AtomicBoolean(false);
         SchemaVisitor detector = new SchemaVisitor() {
             @Override
             public void visit(Type field) {
                 if (field == BYTES || field == NULLABLE_BYTES || field == RECORDS)
-                    foundBufferReference.set(Boolean.TRUE);
+                    hasBuffer.set(true);
             }
         };
-        foundBufferReference.set(Boolean.FALSE);
         schema.walk(detector);
-        return foundBufferReference.get();
+        return hasBuffer.get();
     }
 
 }
