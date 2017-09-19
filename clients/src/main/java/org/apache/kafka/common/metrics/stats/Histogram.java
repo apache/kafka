@@ -30,12 +30,16 @@ public class Histogram {
 
     public void record(double value) {
         this.hist[binScheme.toBin(value)] += 1.0f;
-        this.count += 1.0f;
+        this.count += 1.0d;
     }
 
     public double value(double quantile) {
         if (count == 0.0d)
             return Double.NaN;
+        if (quantile > 1.00d)
+            return Float.POSITIVE_INFINITY;
+        if (quantile < 0.00d)
+            return Float.NEGATIVE_INFINITY;
         float sum = 0.0f;
         float quant = (float) quantile;
         for (int i = 0; i < this.hist.length - 1; i++) {
@@ -43,7 +47,7 @@ public class Histogram {
             if (sum / count > quant)
                 return binScheme.fromBin(i);
         }
-        return Float.POSITIVE_INFINITY;
+        return binScheme.fromBin(this.hist.length - 1);
     }
 
     public float[] counts() {
@@ -67,7 +71,7 @@ public class Histogram {
         }
         b.append(Float.POSITIVE_INFINITY);
         b.append(':');
-        b.append(this.hist[this.hist.length - 1]);
+        b.append(String.format("%.0f", this.hist[this.hist.length - 1]));
         b.append('}');
         return b.toString();
     }
@@ -92,7 +96,7 @@ public class Histogram {
             this.min = min;
             this.max = max;
             this.bins = bins;
-            this.bucketWidth = (max - min) / (bins - 2);
+            this.bucketWidth = (max - min) / bins;
         }
 
         public int bins() {
@@ -100,21 +104,21 @@ public class Histogram {
         }
 
         public double fromBin(int b) {
-            if (b == 0)
+            if (b < 0)
                 return Double.NEGATIVE_INFINITY;
-            else if (b == bins - 1)
+            else if (b > bins - 1)
                 return Double.POSITIVE_INFINITY;
             else
-                return min + (b - 1) * bucketWidth;
+                return min + b * bucketWidth;
         }
 
         public int toBin(double x) {
-            if (x < min)
+            if (x <= min)
                 return 0;
-            else if (x > max)
+            else if (x >= max)
                 return bins - 1;
             else
-                return (int) ((x - min) / bucketWidth) + 1;
+                return (int) ((x - min) / bucketWidth);
         }
     }
 
@@ -124,9 +128,11 @@ public class Histogram {
         private final double scale;
 
         public LinearBinScheme(int numBins, double max) {
+            if (numBins < 2)
+                throw new IllegalArgumentException("Must have at least 2 bins.");
             this.bins = numBins;
             this.max = max;
-            int denom = numBins * (numBins - 1) / 2;
+            double denom = numBins * (numBins - 1.0) / 2.0;
             this.scale = max / denom;
         }
 
@@ -135,11 +141,12 @@ public class Histogram {
         }
 
         public double fromBin(int b) {
-            if (b == this.bins - 1) {
+            if (b > this.bins - 1) {
                 return Float.POSITIVE_INFINITY;
+            } else if (b < 0.0000d) {
+                return Float.NEGATIVE_INFINITY;
             } else {
-                double unscaled = (b * (b + 1.0)) / 2.0;
-                return unscaled * this.scale;
+                return this.scale * (b * (b + 1.0)) / 2.0;
             }
         }
 
@@ -149,10 +156,8 @@ public class Histogram {
             } else if (x > this.max) {
                 return this.bins - 1;
             } else {
-                double scaled = x / this.scale;
-                return (int) (-0.5 + Math.sqrt(2.0 * scaled + 0.25));
+                return (int) (-0.5 + 0.5 * Math.sqrt(1.0 + 8.0 * x / this.scale));
             }
         }
     }
-
 }
