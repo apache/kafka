@@ -27,10 +27,9 @@ import org.apache.kafka.common.requests.ApiError
 
 import scala.collection.{Map, Set, mutable}
 
-/**
- * A delayed elect preferred leader operation that can be created by the replica manager and watched
- * in the elect preferred leader purgatory
- */
+/** A delayed elect preferred leader operation that can be created by the replica manager and watched
+  * in the elect preferred leader purgatory
+  */
 class DelayedElectPreferredLeader(delayMs: Long,
                                   waiting: Set[TopicAndPartition],
                                   results: Map[TopicAndPartition, ApiError],
@@ -80,17 +79,16 @@ class DelayedElectPreferredLeader(delayMs: Long,
   }
 
   private def updateWaiting() = {
-    waitingPartitions.foreach(tp => {
-        val ps = replicaManager.metadataCache.getPartitionInfo(tp.topic, tp.partition)
-        ps match {
-          case Some(ps) =>
-            if (expectedLeaders(tp) == ps.basePartitionState.leader) {
-              waitingPartitions -= tp
-              fullResults += tp -> ApiError.NONE
-            }
-          case None =>
-        }
+    waitingPartitions.foreach{tp =>
+      val ps = replicaManager.metadataCache.getPartitionInfo(tp.topic, tp.partition)
+      ps match {
+        case Some(ps) =>
+          if (expectedLeaders(tp) == ps.basePartitionState.leader) {
+            waitingPartitions -= tp
+            fullResults += tp -> ApiError.NONE
+          }
+        case None =>
       }
-    )
+    }
   }
 }

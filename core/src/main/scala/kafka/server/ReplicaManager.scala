@@ -1451,15 +1451,15 @@ class ReplicaManager(val config: KafkaConfig,
                                   partitions: Set[TopicAndPartition],
                                   responseCallback: Map[TopicAndPartition, ApiError] => Unit,
                                   requestTimeout: Long): Unit = {
-    val partitionsFromZk = zkUtils.getPartitionsForTopics(partitions.map(_.topic).toSeq).flatMap { case (topic, partitions) =>
-      partitions.map(TopicAndPartition(topic, _))
+    val partitionsFromZk = zkUtils.getPartitionsForTopics(partitions.map(_.topic).toSeq).flatMap {
+      case (topic, partitions) => partitions.map(TopicAndPartition(topic, _))
     }.toSet
     val (validPartitions, invalidPartitions) = partitions.partition(partitionsFromZk.contains)
-    val invalidPartitionsResults = invalidPartitions.map(p => {
+    val invalidPartitionsResults = invalidPartitions.map { p =>
       val msg = s"Skipping preferred replica leader election for partition ${p} since it doesn't exist."
       logger.info(msg)
       p -> new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, msg)
-    }).toMap
+    }.toMap
 
     def electionCallback(waiting: Set[TopicAndPartition], results: Map[TopicAndPartition, ApiError]) = {
       if (waiting.nonEmpty) {

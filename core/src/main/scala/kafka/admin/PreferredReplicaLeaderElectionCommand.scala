@@ -136,7 +136,8 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
 
 trait PreferredReplicaLeaderElectionCommand {
   /**
-    * Move the given partitions to their preferred leader. If the given partitions are none then move all partitions.
+    * Elect the preferred leader for the given {@code partitionsFromUser}.
+    * If the given {@code partitionsFromUser} are None then elect the preferred leader for all partitions.
     */
   def moveLeaderToPreferredReplica(partitionsFromUser: Option[scala.collection.Set[TopicAndPartition]]) : Unit
   def close() : Unit

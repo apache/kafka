@@ -48,11 +48,11 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     super.tearDown()
   }
 
-  private def createTestTopicAndCluster(topicPartition: Map[TopicPartition, List[Int]], authorizer: Option[String] = None) {
+  private def createTestTopicAndCluster(topicPartition: Map[TopicPartition, List[Int]],
+                                        authorizer: Option[String] = None) {
 
     val brokerConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false)
-    brokerConfigs.foreach(p => p.setProperty("auto.leader.rebalance.enable", "false")
-    )
+    brokerConfigs.foreach(p => p.setProperty("auto.leader.rebalance.enable", "false"))
     authorizer match {
       case Some(className) =>
         brokerConfigs.foreach(p => p.setProperty("authorizer.class.name", className))
@@ -61,13 +61,15 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     createTestTopicAndCluster(topicPartition,brokerConfigs)
   }
 
-  private def createTestTopicAndCluster(partitionsAndAssignments: Map[TopicPartition, List[Int]], brokerConfigs: Seq[Properties]) {
+  private def createTestTopicAndCluster(partitionsAndAssignments: Map[TopicPartition, List[Int]],
+                                        brokerConfigs: Seq[Properties]) {
     // create brokers
     servers = brokerConfigs.map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
     // create the topic
-    partitionsAndAssignments.foreach(partitionAndAssignment =>
+    partitionsAndAssignments.foreach { partitionAndAssignment =>
       AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, partitionAndAssignment._1.topic(),
-        Map(partitionAndAssignment._1.partition -> partitionAndAssignment._2)))
+        Map(partitionAndAssignment._1.partition -> partitionAndAssignment._2))
+    }
     // wait until replica log is created on every broker
     TestUtils.waitUntilTrue(() => servers.forall(server => partitionsAndAssignments.forall(partitionAndAssignment => server.getLogManager().getLog(partitionAndAssignment._1).isDefined)),
       "Replicas for topic test not created")
