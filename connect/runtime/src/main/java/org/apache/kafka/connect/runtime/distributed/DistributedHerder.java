@@ -430,13 +430,21 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         if (!configState.contains(connName)) {
                             callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
                         } else {
-                            callback.onCompletion(null, new ConnectorInfo(connName, configState.connectorConfig(connName), configState.tasks(connName)));
+                            Map<String, String> config = configState.connectorConfig(connName);
+                            callback.onCompletion(null, new ConnectorInfo(connName, config,
+                                configState.tasks(connName),
+                                connectorTypeForClass(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG))));
                         }
                         return null;
                     }
                 },
                 forwardErrorCallback(callback)
         );
+    }
+
+    @Override
+    protected Map<String, String> config(String connName) {
+        return configState.connectorConfig(connName);
     }
 
     @Override
@@ -488,7 +496,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         if (connector instanceof SinkConnector) {
             ConfigValue validatedName = validatedConfig.get(ConnectorConfig.NAME_CONFIG);
             String name = (String) validatedName.value();
-
             if (workerGroupId.equals(SinkUtils.consumerGroupId(name))) {
                 validatedName.addErrorMessage("Consumer group for sink connector named " + name +
                         " conflicts with Connect worker group " + workerGroupId);
@@ -527,7 +534,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
                         // Note that we use the updated connector config despite the fact that we don't have an updated
                         // snapshot yet. The existing task info should still be accurate.
-                        ConnectorInfo info = new ConnectorInfo(connName, config, configState.tasks(connName));
+                        Map<String, String> map = configState.connectorConfig(connName);
+                        ConnectorInfo info = new ConnectorInfo(connName, config, configState.tasks(connName),
+                            map == null ? null : connectorTypeForClass(map.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)));
                         callback.onCompletion(null, new Created<>(!exists, info));
                         return null;
                     }
