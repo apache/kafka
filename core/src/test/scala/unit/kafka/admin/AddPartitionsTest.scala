@@ -46,6 +46,8 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
   val topic3Assignment = Map(0->Seq(2,3,0,1))
   val topic4 = "new-topic4"
   val topic4Assignment = Map(0->Seq(0,3))
+  val topic5 = "new-topic5"
+  val topic5Assignment = Map(1->Seq(0,1))
 
   @Before
   override def setUp() {
@@ -76,6 +78,17 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
       fail("Add partitions should fail")
     } catch {
       case _: InvalidReplicaAssignmentException => //this is good
+    }
+  }
+
+  @Test
+  def testMissingPartition0(): Unit = {
+    try {
+      AdminUtils.addPartitions(zkUtils, topic5, topic5Assignment, 2, Some(Map(1 -> Seq(0, 1), 2 -> Seq(0, 1, 2))))
+      fail("Add partitions should fail")
+    } catch {
+      case e: AdminOperationException => //this is good
+        assertTrue(e.getMessage.contains("Unexpected existing replica assignment for topic 'new-topic5', partition id 0 is missing"))
     }
   }
 
