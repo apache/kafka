@@ -169,10 +169,9 @@ public final class Metadata {
         long begin = System.currentTimeMillis();
         long remainingWaitMs = maxWaitMs;
         while (this.version <= lastVersion) {
-            if (remainingWaitMs != 0) {
+            maybeThrowAuthenticationException();
+            if (remainingWaitMs != 0)
                 wait(remainingWaitMs);
-                maybeThrowAuthenticationException();
-            }
             long elapsed = System.currentTimeMillis() - begin;
             if (elapsed >= maxWaitMs)
                 throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
