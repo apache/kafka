@@ -526,7 +526,7 @@ public enum Errors {
                 return new AuthenticationFailedException(message);
             }
     }),
-    UNKNOWN_PRODUCER(59, "The specified producerId does not exist on the broker. This indicates data loss on the broker " +
+    UNKNOWN_PRODUCER(59, "The specified producerId does not exist on the broker. This may indicate data loss on the broker " +
             "and should be investigated.",
         new ApiExceptionBuilder() {
             @Override

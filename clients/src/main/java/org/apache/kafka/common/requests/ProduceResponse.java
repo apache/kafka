@@ -73,6 +73,9 @@ public class ProduceResponse extends AbstractResponse {
     private static final String LOG_APPEND_TIME_KEY_NAME = "log_append_time";
     private static final String LOG_START_OFFSET_KEY_NAME = "log_start_offset";
 
+    private static final Field.Int64 LOG_START_OFFSET_FIELD = new Field.Int64(LOG_START_OFFSET_KEY_NAME,
+            "The start offset of the log at the time this produce response was created", INVALID_OFFSET);
+
     private static final Schema PRODUCE_RESPONSE_V0 = new Schema(
             new Field(RESPONSES_KEY_NAME, new ArrayOf(new Schema(
                     TOPIC_NAME,
@@ -133,8 +136,7 @@ public class ProduceResponse extends AbstractResponse {
                                     "the messages. If CreateTime is used for the topic, the timestamp will be -1. " +
                                     "If LogAppendTime is used for the topic, the timestamp will be the broker local " +
                                     "time when the messages are appended."),
-                            new Field(LOG_START_OFFSET_KEY_NAME, INT64, "The start offset of the log at the time this produce " +
-                                    "response was created"))))))),
+                            LOG_START_OFFSET_FIELD)))))),
             THROTTLE_TIME_MS);
 
 
@@ -178,9 +180,7 @@ public class ProduceResponse extends AbstractResponse {
                 Errors error = Errors.forCode(partRespStruct.get(ERROR_CODE));
                 long offset = partRespStruct.getLong(BASE_OFFSET_KEY_NAME);
                 long logAppendTime = partRespStruct.getLong(LOG_APPEND_TIME_KEY_NAME);
-                long logStartOffset = INVALID_OFFSET;
-                if (partRespStruct.hasField(LOG_START_OFFSET_KEY_NAME))
-                    logStartOffset = partRespStruct.getLong(LOG_START_OFFSET_KEY_NAME);
+                long logStartOffset = partRespStruct.getOrElse(LOG_START_OFFSET_FIELD, INVALID_OFFSET);
                 TopicPartition tp = new TopicPartition(topic, partition);
                 responses.put(tp, new PartitionResponse(error, offset, logAppendTime, logStartOffset));
             }
@@ -213,8 +213,7 @@ public class ProduceResponse extends AbstractResponse {
                         .set(BASE_OFFSET_KEY_NAME, part.baseOffset);
                 if (partStruct.hasField(LOG_APPEND_TIME_KEY_NAME))
                     partStruct.set(LOG_APPEND_TIME_KEY_NAME, part.logAppendTime);
-                if (partStruct.hasField(LOG_START_OFFSET_KEY_NAME))
-                    partStruct.set(LOG_START_OFFSET_KEY_NAME, part.logStartOffset);
+                partStruct.setIfExists(LOG_START_OFFSET_FIELD, part.logStartOffset);
                 partitionArray.add(partStruct);
             }
             topicData.set(PARTITION_RESPONSES_KEY_NAME, partitionArray.toArray());

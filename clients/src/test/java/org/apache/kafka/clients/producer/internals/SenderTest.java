@@ -33,7 +33,6 @@ import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.errors.UnknownProducerException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -1371,7 +1370,7 @@ public class SenderTest {
     }
 
     @Test
-    public void testShouldRaiseUnknownProducerToUserIfLogWasNotTruncated() throws Exception {
+    public void testShouldRaiseOutOfOrderSequenceExceptionToUserIfLogWasNotTruncated() throws Exception {
         final long producerId = 343434L;
         TransactionManager transactionManager = new TransactionManager();
         setupWithTransactionState(transactionManager);
@@ -1411,9 +1410,9 @@ public class SenderTest {
         assertTrue(request2.isDone());
         try {
             request2.get();
-            fail("Should have raised an UnknownProducerExceptioqn");
+            fail("Should have raised an OutOfOrderSequenceException");
         } catch (Exception e) {
-            assertTrue(e.getCause() instanceof UnknownProducerException);
+            assertTrue(e.getCause() instanceof OutOfOrderSequenceException);
         }
 
     }

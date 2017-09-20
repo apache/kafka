@@ -596,9 +596,9 @@ public class Sender implements Runnable {
             if ((exception instanceof OutOfOrderSequenceException || exception instanceof UnknownProducerException)
                     && !transactionManager.isTransactional()
                     && transactionManager.hasProducerId(batch.producerId())) {
-                log.error("The broker received an out of order sequence number for topic-partition " +
+                log.error("The broker returned {} for topic-partition " +
                                 "{} at offset {}. This indicates data loss on the broker, and should be investigated.",
-                        batch.topicPartition, baseOffset);
+                        exception, batch.topicPartition, baseOffset);
 
                 // Reset the transaction state since we have hit an irrecoverable exception and cannot make any guarantees
                 // about the previously committed message. Note that this will discard the producer id and sequence
@@ -615,9 +615,15 @@ public class Sender implements Runnable {
             transactionManager.removeInFlightBatch(batch);
             if (adjustSequenceNumbers)
                 transactionManager.adjustSequencesDueToFailedBatch(batch);
+            if (exception instanceof UnknownProducerException)
+                // We don't want to return the UnknownProducerException to the user because we already have the
+                // OutOfOrderSequenceException to indicate data loss, and there is no point having two of them
+                // indicating the same thing.
+                exception = Errors.OUT_OF_ORDER_SEQUENCE_NUMBER.exception();
         }
 
         this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
+
         batch.done(baseOffset, logAppendTime, exception);
         this.accumulator.deallocate(batch);
     }
