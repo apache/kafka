@@ -30,7 +30,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
-import org.apache.kafka.common.errors.RecordMetadataNotAvailableException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
@@ -1105,12 +1104,7 @@ public class SenderTest {
 
         RecordMetadata unknownMetadata = request1.get();
 
-        try {
-            unknownMetadata.offset();
-            fail("Should have raised RecordMetadataNotAvailableException");
-        } catch (Exception e) {
-            assertTrue(e instanceof RecordMetadataNotAvailableException);
-        }
+        assertFalse(unknownMetadata.hasOffset());
     }
 
     void sendIdempotentProducerResponse(final int expectedSequence, TopicPartition tp, Errors responseError, long responseOffset) {

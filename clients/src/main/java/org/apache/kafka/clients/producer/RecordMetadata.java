@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.RecordMetadataNotAvailableException;
 import org.apache.kafka.common.record.DefaultRecord;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.ProduceResponse;
@@ -67,25 +66,38 @@ public final class RecordMetadata {
                 serializedValueSize);
     }
 
+
+    /**
+     * Indicates whether the record metadata includes the offset.
+     * @return true if the offset is included in the metadata, false otherwise.
+     */
+    public boolean hasOffset() {
+        return this.offset != ProduceResponse.INVALID_OFFSET;
+    }
+
     /**
      * The offset of the record in the topic/partition.
-     * @throws RecordMetadataNotAvailableException if the offset for the record wasn't returned by the broker.
+     * @return the offset of the record, or -1 if {{@link #hasOffset()}} returns false.
      */
-    public long offset() throws RecordMetadataNotAvailableException {
-        if (this.offset == ProduceResponse.INVALID_OFFSET)
-            throw new RecordMetadataNotAvailableException("Could not retrieve the offset for the appended record.");
+    public long offset() {
         return this.offset;
+    }
+
+    /**
+     * Indicates whether the record metadata includes the timestamp.
+     * @return true if a valid timestamp exists, false otherwise.
+     */
+    public boolean hasTimestamp() {
+        return this.timestamp != RecordBatch.NO_TIMESTAMP;
     }
 
     /**
      * The timestamp of the record in the topic/partition.
      *
-     * @throws RecordMetadataNotAvailableException if the timestamp of the record wasn't returned by the broker.
+     * @return the timestamp of the record, or -1 if the {{@link #hasTimestamp()}} returns false.
      */
-    public long timestamp() throws RecordMetadataNotAvailableException {
-        if (this.timestamp == RecordBatch.NO_TIMESTAMP)
-            throw new RecordMetadataNotAvailableException("Could not retrieve the timestamp for the appended record.");
-        return timestamp;
+    public long timestamp() {
+        return this.timestamp;
     }
 
     /**
