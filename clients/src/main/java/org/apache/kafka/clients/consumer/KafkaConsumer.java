@@ -1064,9 +1064,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
      *             this function is called
-     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. @see AuthenticationException
+     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. {@link AuthenticationException}
      * @throws org.apache.kafka.common.errors.AuthorizationException if caller lacks Read access to any of the subscribed
-     *             topics or to the configured groupId. @see AuthorizationException
+     *             topics or to the configured groupId. {@link AuthorizationException}
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. invalid groupId or
      *             session timeout, errors deserializing key/value pairs, or any new error cases in future versions)
      * @throws java.lang.IllegalArgumentException if the timeout value is negative
@@ -1177,9 +1177,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
      *             this function is called
-     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. @see AuthenticationException
+     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. {@link AuthenticationException}
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
-     *             configured groupId. @see AuthorizationException
+     *             configured groupId. {@link AuthorizationException}
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. if offset metadata
      *             is too large or if the topic does not exist).
      */
@@ -1215,9 +1215,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
      *             this function is called
-     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. @see AuthenticationException
+     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. {@link AuthenticationException}
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
-     *             configured groupId. @see AuthorizationException
+     *             configured groupId. {@link AuthorizationException}
      * @throws java.lang.IllegalArgumentException if the committed offset is negative
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. if offset metadata
      *             is too large or if the topic does not exist).
@@ -1382,9 +1382,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
      *             this function is called
-     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. @see AuthenticationException
+     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. {@link AuthenticationException}
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
-     *             configured groupId. @see AuthorizationException
+     *             configured groupId. {@link AuthorizationException}
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
      */
     public long position(TopicPartition partition) {
@@ -1416,9 +1416,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
      *             this function is called
-     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. @see AuthenticationException
+     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. {@link AuthenticationException}
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
-     *             configured groupId. @see AuthorizationException
+     *             configured groupId. {@link AuthorizationException}
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
      */
     @Override
@@ -1450,9 +1450,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
      *             this function is called
-     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. @see AuthenticationException
+     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. {@link AuthenticationException}
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the specified topic.
-     *             @see AuthorizationException
+     *             {@link AuthorizationException}
      * @throws org.apache.kafka.common.errors.TimeoutException if the topic metadata could not be fetched before
      *             expiration of the configured request timeout
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
@@ -1567,7 +1567,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return a mapping from partition to the timestamp and offset of the first message with timestamp greater
      *         than or equal to the target timestamp. {@code null} will be returned for the partition if there is no
      *         such message.
-     * @throws AuthenticationException if authentication fails. @see AuthenticationException
+     * @throws AuthenticationException if authentication fails. {@link AuthenticationException}
      * @throws IllegalArgumentException if the target timestamp is negative.
      * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
      *         expiration of the configured request timeout
@@ -1601,7 +1601,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @param partitions the partitions to get the earliest offsets.
      * @return The earliest available offsets for the given partitions
-     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. @see AuthenticationException
+     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. {@link AuthenticationException}
      * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
      *         expiration of the configured request timeout
      */
@@ -1630,7 +1630,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @param partitions the partitions to get the end offsets.
      * @return The end offsets for the given partitions.
-     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. @see AuthenticationException
+     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. {@link AuthenticationException}
      * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
      *         expiration of the configured request timeout
      */
@@ -1651,7 +1651,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * timeout. See {@link #close(long, TimeUnit)} for details. Note that {@link #wakeup()}
      * cannot be used to interrupt close.
      *
-     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. @see AuthenticationException
+     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. {@link AuthenticationException}
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted
      *             before or while this function is called
      */
@@ -1671,7 +1671,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param timeout The maximum time to wait for consumer to close gracefully. The value must be
      *                non-negative. Specifying a timeout of zero means do not wait for pending requests to complete.
      * @param timeUnit The time unit for the {@code timeout}
-     * @throws AuthenticationException if authentication fails. @see AuthenticationException
+     * @throws AuthenticationException if authentication fails. {@link AuthenticationException}
      * @throws InterruptException If the thread is interrupted before or while this function is called
      * @throws IllegalArgumentException If the {@code timeout} is negative.
      */
@@ -1741,7 +1741,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * or reset it using the offset reset policy the user has configured.
      *
      * @param partitions The partitions that needs updating fetch positions
-     * @throws AuthenticationException if authentication fails. @see AuthenticationException
+     * @throws AuthenticationException if authentication fails. {@link AuthenticationException}
      * @throws NoOffsetForPartitionException If no offset is stored for a given partition and no offset reset policy is
      *             defined
      */

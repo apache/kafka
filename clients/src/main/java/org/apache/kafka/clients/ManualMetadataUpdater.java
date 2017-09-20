@@ -75,6 +75,8 @@ public class ManualMetadataUpdater implements MetadataUpdater {
 
     @Override
     public void handleAuthenticationFailure(AuthenticationException exception) {
+        // We don't fail the broker on authentication failures, but there is sufficient information in the broker logs
+        // to identify the failure.
         log.debug("An authentication error occurred in broker-to-broker communication.", exception);
     }
 
