@@ -208,7 +208,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
         Collections.sort(taskStates);
 
-        return new ConnectorStateInfo(connName, connectorState, taskStates, connectorType(connName));
+        return new ConnectorStateInfo(connName, connectorState, taskStates, connectorTypeForClass(connName));
     }
 
     @Override
@@ -345,8 +345,12 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         }
     }
 
-    public ConnectorType connectorType(String connType) {
-        return ConnectorType.from(getConnector(connType).getClass());
+    /*
+     * Retrieves ConnectorType for the corresponding connector class
+     * @param connClass class of the connector
+     */
+    public ConnectorType connectorTypeForClass(String connClass) {
+        return ConnectorType.from(getConnector(connClass).getClass());
     }
 
     /**
