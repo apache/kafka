@@ -75,7 +75,7 @@ public class ManualMetadataUpdater implements MetadataUpdater {
 
     @Override
     public void handleAuthenticationFailure(AuthenticationException exception) {
-        log.warn("An authentication error occurred in broker-to-broker communication!", exception);
+        log.debug("An authentication error occurred in broker-to-broker communication.", exception);
     }
 
     @Override
