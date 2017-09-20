@@ -37,7 +37,6 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * The Connect metrics with JMX reporter.
@@ -48,7 +47,6 @@ public class ConnectMetrics {
     public static final String WORKER_ID_TAG_NAME = "worker-id";
 
     private static final Logger LOG = LoggerFactory.getLogger(ConnectMetrics.class);
-    private static final AtomicInteger CONNECT_WORKER_ID_SEQUENCE = new AtomicInteger(1);
 
     private final Metrics metrics;
     private final Time time;
@@ -58,12 +56,12 @@ public class ConnectMetrics {
     /**
      * Create an instance.
      *
-     * @param workerId the worker identifier; may be null
+     * @param workerId the worker identifier; may not be null
      * @param config   the worker configuration; may not be null
      * @param time     the time; may not be null
      */
     public ConnectMetrics(String workerId, WorkerConfig config, Time time) {
-        this.workerId = workerId != null ? makeValidName(workerId) : "worker-" + CONNECT_WORKER_ID_SEQUENCE.getAndIncrement();
+        this.workerId = makeValidName(workerId);
         this.time = time;
 
         MetricConfig metricConfig = new MetricConfig().samples(config.getInt(CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG))
@@ -258,7 +256,7 @@ public class ConnectMetrics {
         Objects.requireNonNull(name);
         name = name.trim();
         if (!name.isEmpty()) {
-            name = name.replaceAll("[:/\\\\*?,;\\[\\]\\\\=]+", "-");
+            name = name.replaceAll("[.:/\\\\*?,;\\[\\]\\\\=]+", "-");
         }
         return name;
     }

@@ -32,7 +32,7 @@ public class MockConnectorMetrics extends ConnectMetrics {
     }
 
     public MockConnectorMetrics() {
-        super(null, new WorkerConfig(WorkerConfig.baseConfigDef(), DEFAULT_WORKER_CONFIG), new MockTime());
+        super("mock", new WorkerConfig(WorkerConfig.baseConfigDef(), DEFAULT_WORKER_CONFIG), new MockTime());
     }
 
     @Override
