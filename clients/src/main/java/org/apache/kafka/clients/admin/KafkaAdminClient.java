@@ -848,6 +848,40 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         /**
+         * If an authentication exception is encountered with connection to any broker,
+         * fail all pending requests. Returns true if an authentication exception was encountered.
+         */
+        private boolean handleAuthenticationException(long now, Map<Node, List<Call>> callsToSend) {
+            ApiException authenticationException = null;
+            try {
+                metadata.maybeThrowAuthenticationExceptions();
+            } catch (ApiException e) {
+                authenticationException = e;
+            }
+            if (authenticationException == null) {
+                for (Node node : callsToSend.keySet()) {
+                    authenticationException = client.authenticationException(node);
+                    if (authenticationException != null)
+                        break;
+                }
+            }
+            if (authenticationException != null) {
+                for (Call newCall : newCalls) {
+                    newCall.fail(now, authenticationException);
+                }
+                newCalls.clear();
+                for (List<Call> calls : callsToSend.values()) {
+                    for (Call call : calls) {
+                        call.handleFailure(authenticationException);
+                    }
+                }
+                callsToSend.clear();
+                return true;
+            } else
+                return false;
+        }
+
+        /**
          * Handle responses from the server.
          *
          * @param now                   The current time in milliseconds.
@@ -974,6 +1008,9 @@ public class KafkaAdminClient extends AdminClient {
 
                 // Update the current time and handle the latest responses.
                 now = time.milliseconds();
+                if (handleAuthenticationException(now, callsToSend) &&
+                        hardShutdownTimeMs.get() != INVALID_SHUTDOWN_TIME)
+                    break;
                 handleResponses(now, responses, callsInFlight, correlationIdToCalls);
             }
             int numTimedOut = 0;
