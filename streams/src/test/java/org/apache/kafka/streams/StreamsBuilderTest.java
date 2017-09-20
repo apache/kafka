@@ -94,15 +94,14 @@ public class StreamsBuilderTest {
         assertEquals(Utils.mkList("A:aa"), sourceProcessorSupplier.processed);
         assertEquals(Utils.mkList("A:aa"), throughProcessorSupplier.processed);
     }
-
-    @Test
+    
     public void testMerge() {
         final String topic1 = "topic-1";
         final String topic2 = "topic-2";
 
         final KStream<String, String> source1 = builder.stream(topic1);
         final KStream<String, String> source2 = builder.stream(topic2);
-        final KStream<String, String> merged = builder.merge(source1, source2);
+        final KStream<String, String> merged = source1.merge(source2);
 
         final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
         merged.process(processorSupplier);
@@ -160,7 +159,7 @@ public class StreamsBuilderTest {
         assertThat(store.get(1L), equalTo("value1"));
         assertThat(store.get(2L), equalTo("value2"));
     }
-
+    
     @Test(expected = TopologyException.class)
     public void shouldThrowExceptionWhenNoTopicPresent() throws Exception {
         builder.stream(Collections.<String>emptyList());

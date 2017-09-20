@@ -183,7 +183,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired);
     }
-
+    
     @Override
     public void print() {
         print(defaultKeyValueMapper, null, null, this.name);
@@ -346,24 +346,30 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         return branchChildren;
     }
 
-    public static <K, V> KStream<K, V> merge(final InternalStreamsBuilder builder,
-                                             final KStream<K, V>[] streams) {
-        if (streams == null || streams.length == 0) {
-            throw new IllegalArgumentException("Parameter <streams> must not be null or has length zero");
-        }
+    
+    @Override 
+    public KStream<K, V> merge(final KStream<K, V> stream) {
+        Objects.requireNonNull(stream);
+        return merge(builder, stream);
+    }
+    
+    private KStream<K, V> merge(final InternalStreamsBuilder builder,
+                                final KStream<K, V> stream) {
 
         String name = builder.newName(MERGE_NAME);
-        String[] parentNames = new String[streams.length];
+        String[] parentNames = new String[2];
         Set<String> allSourceNodes = new HashSet<>();
         boolean requireRepartitioning = false;
-
-        for (int i = 0; i < streams.length; i++) {
-            KStreamImpl<K, V> stream = (KStreamImpl<K, V>) streams[i];
-
-            parentNames[i] = stream.name;
-            requireRepartitioning |= stream.repartitionRequired;
-            allSourceNodes.addAll(stream.sourceNodes);
-        }
+        
+        parentNames[0] = this.name;
+        requireRepartitioning |= repartitionRequired;
+        allSourceNodes.addAll(sourceNodes);
+        
+        KStreamImpl<K, V> streamImpl = (KStreamImpl<K, V>) stream;
+        
+        parentNames[1] = streamImpl.name;
+        requireRepartitioning |= streamImpl.repartitionRequired;
+        allSourceNodes.addAll(streamImpl.sourceNodes);
 
         builder.internalTopologyBuilder.addProcessor(name, new KStreamPassThrough<>(), parentNames);
 
