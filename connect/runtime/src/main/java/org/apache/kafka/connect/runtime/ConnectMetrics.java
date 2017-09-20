@@ -25,16 +25,16 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.connect.runtime.distributed.WorkerGroupMember;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -45,6 +45,8 @@ public class ConnectMetrics {
 
     public static final String JMX_PREFIX = "kafka.connect";
     public static final String WORKER_ID_TAG_NAME = "worker-id";
+
+    private static final Logger LOG = LoggerFactory.getLogger(ConnectMetrics.class);
     private static final AtomicInteger CONNECT_WORKER_ID_SEQUENCE = new AtomicInteger(1);
 
     /**
@@ -63,31 +65,35 @@ public class ConnectMetrics {
         return name;
     }
 
-    private final Logger log;
     private final Metrics metrics;
     private final Time time;
     private final String workerId;
-    private final Map<String, MetricGroup> groupsByName = new HashMap<>();
+    private final ConcurrentMap<String, MetricGroup> groupsByName = new ConcurrentHashMap<>();
 
+    /**
+     * Create an instance.
+     *
+     * @param workerId the worker identifier; may be null
+     * @param config   the worker configuration; may not be null
+     * @param time     the time; may not be null
+     */
     public ConnectMetrics(String workerId, WorkerConfig config, Time time) {
-        this.log = LoggerFactory.getLogger(WorkerGroupMember.class);
         this.workerId = workerId != null ? makeValidName(workerId) : "worker-" + CONNECT_WORKER_ID_SEQUENCE.getAndIncrement();
         this.time = time;
 
-        Map<String, String> metricsTags = new LinkedHashMap<>(); // currently empty
         MetricConfig metricConfig = new MetricConfig().samples(config.getInt(CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG))
                                             .timeWindow(config.getLong(CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
-                                            .recordLevel(Sensor.RecordingLevel.forName(config.getString(CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG)))
-                                            .tags(metricsTags);
+                                            .recordLevel(Sensor.RecordingLevel.forName(config.getString(CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG)));
         List<MetricsReporter> reporters = config.getConfiguredInstances(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class);
         reporters.add(new JmxReporter(JMX_PREFIX));
         this.metrics = new Metrics(metricConfig, reporters, time);
-        log.debug("Registering Connect metrics with JMX for worker '{}'", workerId);
+        LOG.debug("Registering Connect metrics with JMX for worker '{}'", workerId);
         AppInfoParser.registerAppInfo(JMX_PREFIX, workerId);
     }
 
     /**
      * Get the worker identifier.
+     *
      * @return the worker ID; never null
      */
     public String workerId() {
@@ -138,7 +144,7 @@ public class ConnectMetrics {
         if (group == null) {
             Map<String, String> tags = tags(includeWorkerId ? workerId : null, tagKeyValues);
             group = new MetricGroup(groupName, tags);
-            groupsByName.put(groupName, group);
+            groupsByName.putIfAbsent(groupName, group);
         }
         return group;
     }
@@ -177,7 +183,7 @@ public class ConnectMetrics {
      */
     public void stop() {
         metrics.close();
-        log.debug("Unregistering Connect metrics with JMX for worker '{}'", workerId);
+        LOG.debug("Unregistering Connect metrics with JMX for worker '{}'", workerId);
         AppInfoParser.unregisterAppInfo(JMX_PREFIX, workerId);
     }
 

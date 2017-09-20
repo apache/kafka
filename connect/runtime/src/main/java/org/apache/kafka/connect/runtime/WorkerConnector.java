@@ -42,6 +42,7 @@ import java.util.Map;
  */
 public class WorkerConnector {
     private static final Logger log = LoggerFactory.getLogger(WorkerConnector.class);
+    private static double EPSILON = 0.000001d;
 
     private enum State {
         INIT,    // initial state before startup
@@ -293,7 +294,7 @@ public class WorkerConnector {
 
         private boolean asBoolean(MetricName metric) {
             double value = this.metricGroup.metrics().metric(metric).value();
-            return value > 0.00001d || value < -0.000001d;
+            return value > EPSILON || value < -EPSILON;
         }
     }
 }

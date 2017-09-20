@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.util.MockTime;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -43,8 +44,13 @@ public class ConnectMetricsTest {
     private ConnectMetrics metrics;
 
     @Before
-    public void beforeEach() {
+    public void setUp() {
         metrics = new ConnectMetrics(null, new WorkerConfig(WorkerConfig.baseConfigDef(), DEFAULT_WORKER_CONFIG), new MockTime());
+    }
+
+    @After
+    public void tearDown() {
+        if (metrics != null) metrics.stop();
     }
 
     @Test
