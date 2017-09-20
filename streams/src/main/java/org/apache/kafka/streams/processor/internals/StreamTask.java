@@ -152,7 +152,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     public boolean initialize() {
-        log.debug("Initializing");
+        log.trace("Initializing");
         initializeStateStores();
         initTopology();
         processorContext.initialized();
@@ -606,5 +606,4 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     RecordCollector createRecordCollector(final LogContext logContext) {
         return new RecordCollectorImpl(producer, id.toString(), logContext);
     }
-
 }
