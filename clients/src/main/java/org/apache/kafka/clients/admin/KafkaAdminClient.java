@@ -41,6 +41,7 @@ import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InvalidRequestException;
@@ -848,6 +849,42 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         /**
+         * If an authentication exception is encountered with connection to any broker,
+         * fail all pending requests. Returns true if an authentication exception was encountered.
+         */
+        private boolean handleAuthenticationException(long now, Map<Node, List<Call>> callsToSend) {
+            AuthenticationException authenticationException = null;
+            try {
+                metadata.maybeThrowAuthenticationException();
+            } catch (AuthenticationException e) {
+                authenticationException = e;
+            }
+            if (authenticationException == null) {
+                for (Node node : callsToSend.keySet()) {
+                    authenticationException = client.authenticationException(node);
+                    if (authenticationException != null)
+                        break;
+                }
+            }
+            if (authenticationException != null) {
+                synchronized (this) {
+                    for (Call newCall : newCalls) {
+                        newCall.fail(now, authenticationException);
+                    }
+                    newCalls.clear();
+                }
+                for (List<Call> calls : callsToSend.values()) {
+                    for (Call call : calls) {
+                        call.handleFailure(authenticationException);
+                    }
+                }
+                callsToSend.clear();
+                return true;
+            } else
+                return false;
+        }
+
+        /**
          * Handle responses from the server.
          *
          * @param now                   The current time in milliseconds.
@@ -974,6 +1011,9 @@ public class KafkaAdminClient extends AdminClient {
 
                 // Update the current time and handle the latest responses.
                 now = time.milliseconds();
+                if (handleAuthenticationException(now, callsToSend) &&
+                        hardShutdownTimeMs.get() != INVALID_SHUTDOWN_TIME)
+                    break;
                 handleResponses(now, responses, callsInFlight, correlationIdToCalls);
             }
             int numTimedOut = 0;

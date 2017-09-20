@@ -17,6 +17,8 @@
 package org.apache.kafka.common.security.authenticator;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -35,6 +37,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -100,6 +103,38 @@ public class ClientAuthenticationFailureTest {
             fail("Expected an authentication error!");
         } catch (Exception e) {
             assertTrue("Expected an exception of type AuthenticationFailedException", e.getCause() instanceof AuthenticationFailedException);
+        }
+    }
+
+    @Test
+    public void testAdminClientWithInvalidCredentials() {
+        Map<String, Object> props = new HashMap<>(saslClientConfigs);
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:" + server.port());
+        try (AdminClient client = AdminClient.create(props)) {
+            DescribeTopicsResult result = client.describeTopics(Collections.singleton("test"));
+            result.all().get();
+            fail("Expected an authentication error!");
+        } catch (Exception e) {
+            assertTrue("Expected AuthenticationFailedException, got " + e.getClass(), e.getCause() instanceof AuthenticationFailedException);
+        }
+    }
+
+    @Test
+    public void testTransactionalProducerWithInvalidCredentials() throws Exception {
+        Map<String, Object> props = new HashMap<>(saslClientConfigs);
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:" + server.port());
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer");
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer");
+        props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "txclient-1");
+        props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "5");
+        props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
+        props.put(ProducerConfig.BATCH_SIZE_CONFIG, "16384");
+
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
+            producer.initTransactions();
+            fail("Expected an authentication error!");
+        } catch (AuthenticationFailedException e) {
+            // expected exception
         }
     }
 

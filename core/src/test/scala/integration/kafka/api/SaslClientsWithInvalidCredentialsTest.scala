@@ -13,12 +13,14 @@
 package kafka.api
 
 import java.io.FileOutputStream
+import java.util.Collections
 import java.util.concurrent.{ExecutionException, Future, TimeUnit}
-import scala.collection.JavaConverters.seqAsJavaListConverter
+import scala.collection.JavaConverters._
 
+import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
 import org.apache.kafka.clients.consumer.{KafkaConsumer, ConsumerConfig}
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, RecordMetadata}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.AuthenticationFailedException
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
@@ -39,9 +41,13 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   val producerCount = 1
   val serverCount = 1
 
+  this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
+  this.serverConfig.setProperty(KafkaConfig.TransactionsTopicReplicationFactorProp, "1")
+  this.serverConfig.setProperty(KafkaConfig.TransactionsTopicMinISRProp, "1")
   this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
 
   val topic = "topic"
+  val numPartitions = 1
   val tp = new TopicPartition(topic, 0)
 
   override def configureSecurityBeforeServersStart() {
@@ -56,7 +62,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), Both,
       JaasTestUtils.KafkaServerContextName))
     super.setUp()
-    TestUtils.createTopic(this.zkUtils, topic, 1, serverCount, this.servers)
+    TestUtils.createTopic(this.zkUtils, topic, numPartitions, serverCount, this.servers)
   }
 
   @After
@@ -68,9 +74,24 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   @Test
   def testProducerWithAuthenticationFailure() {
     verifyAuthenticationException(() => sendOneRecord(10000))
+    verifyAuthenticationException(() => producers.head.partitionsFor(topic))
 
     createClientCredential()
     verifyWithRetry(() => sendOneRecord())
+  }
+
+  @Test
+  def testTransactionalProducerWithAuthenticationFailure() {
+    val txProducer = createTransactionalProducer()
+    verifyAuthenticationException(() => txProducer.initTransactions())
+
+    createClientCredential()
+    try {
+      txProducer.initTransactions()
+      fail("Transaction initialization should fail after authentication failure")
+    } catch {
+      case _: KafkaException => // expected exception
+    }
   }
 
   @Test
@@ -100,10 +121,39 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
 
   private def verifyConsumerWithAuthenticationFailure(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) {
     verifyAuthenticationException(() => consumer.poll(10000))
+    verifyAuthenticationException(() => consumer.partitionsFor(topic))
 
     createClientCredential()
     verifyWithRetry(() => sendOneRecord())
     verifyWithRetry(() => assertEquals(1, consumer.poll(1000).count))
+  }
+
+  @Test
+  def testKafkaAdminClientWithAuthenticationFailure() {
+    val props = TestUtils.adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
+    props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    val adminClient = AdminClient.create(props)
+
+    def describeTopic(): Unit = {
+      try {
+        val response = adminClient.describeTopics(Collections.singleton(topic)).all.get
+        assertEquals(1, response.size)
+        response.asScala.foreach { case (topic, description) =>
+          assertEquals(numPartitions, description.partitions.size)
+        }
+      } catch {
+        case e: ExecutionException => throw e.getCause
+      }
+    }
+
+    try {
+      verifyAuthenticationException(() => describeTopic())
+
+      createClientCredential()
+      verifyWithRetry(() => describeTopic())
+    } finally {
+      adminClient.close
+    }
   }
 
   @Test
@@ -172,5 +222,20 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
         case _: AuthenticationFailedException => false
       }
     }, s"Operation did not succeed within timeout after $attempts")
+  }
+
+  private def createTransactionalProducer(): KafkaProducer[Array[Byte], Array[Byte]] = {
+    producerConfig.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "txclient-1")
+    producerConfig.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "5")
+    producerConfig.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
+    producerConfig.put(ProducerConfig.BATCH_SIZE_CONFIG, "16384")
+    val txProducer = TestUtils.createNewProducer(brokerList,
+                                  securityProtocol = this.securityProtocol,
+                                  saslProperties = this.clientSaslProperties,
+                                  retries = 1000,
+                                  acks = -1,
+                                  props = Some(producerConfig))
+    producers += txProducer
+    txProducer
   }
 }
