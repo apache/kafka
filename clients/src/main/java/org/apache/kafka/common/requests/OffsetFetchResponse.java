@@ -16,33 +16,70 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
+import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.utils.CollectionUtils;
+
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.utils.CollectionUtils;
+import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
+import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
+import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
+import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
+import static org.apache.kafka.common.protocol.types.Type.INT64;
+import static org.apache.kafka.common.protocol.types.Type.NULLABLE_STRING;
 
 public class OffsetFetchResponse extends AbstractResponse {
 
     private static final String RESPONSES_KEY_NAME = "responses";
-    private static final String ERROR_CODE_KEY_NAME = "error_code";
 
     // topic level fields
-    private static final String TOPIC_KEY_NAME = "topic";
     private static final String PARTITIONS_KEY_NAME = "partition_responses";
 
     // partition level fields
-    private static final String PARTITION_KEY_NAME = "partition";
     private static final String COMMIT_OFFSET_KEY_NAME = "offset";
     private static final String METADATA_KEY_NAME = "metadata";
+
+    private static final Schema OFFSET_FETCH_RESPONSE_PARTITION_V0 = new Schema(
+            PARTITION_ID,
+            new Field(COMMIT_OFFSET_KEY_NAME, INT64, "Last committed message offset."),
+            new Field(METADATA_KEY_NAME, NULLABLE_STRING, "Any associated metadata the client wants to keep."),
+            ERROR_CODE);
+
+    private static final Schema OFFSET_FETCH_RESPONSE_TOPIC_V0 = new Schema(
+            TOPIC_NAME,
+            new Field(PARTITIONS_KEY_NAME, new ArrayOf(OFFSET_FETCH_RESPONSE_PARTITION_V0)));
+
+    private static final Schema OFFSET_FETCH_RESPONSE_V0 = new Schema(
+            new Field(RESPONSES_KEY_NAME, new ArrayOf(OFFSET_FETCH_RESPONSE_TOPIC_V0)));
+
+    private static final Schema OFFSET_FETCH_RESPONSE_V1 = OFFSET_FETCH_RESPONSE_V0;
+
+    private static final Schema OFFSET_FETCH_RESPONSE_V2 = new Schema(
+            new Field(RESPONSES_KEY_NAME, new ArrayOf(OFFSET_FETCH_RESPONSE_TOPIC_V0)),
+            ERROR_CODE);
+
+    /* v3 request is the same as v2. Throttle time has been added to v3 response */
+    private static final Schema OFFSET_FETCH_RESPONSE_V3 = new Schema(
+            THROTTLE_TIME_MS,
+            new Field(RESPONSES_KEY_NAME, new ArrayOf(OFFSET_FETCH_RESPONSE_TOPIC_V0)),
+            ERROR_CODE);
+
+    public static Schema[] schemaVersions() {
+        return new Schema[] {OFFSET_FETCH_RESPONSE_V0, OFFSET_FETCH_RESPONSE_V1, OFFSET_FETCH_RESPONSE_V2,
+            OFFSET_FETCH_RESPONSE_V3};
+    }
 
     public static final long INVALID_OFFSET = -1L;
     public static final String NO_METADATA = "";
@@ -62,8 +99,7 @@ public class OffsetFetchResponse extends AbstractResponse {
      *   - GROUP_AUTHORIZATION_FAILED (30)
      */
 
-    private static final List<Errors> PARTITION_ERRORS = Arrays.asList(
-            Errors.UNKNOWN_TOPIC_OR_PARTITION);
+    private static final List<Errors> PARTITION_ERRORS = Collections.singletonList(Errors.UNKNOWN_TOPIC_OR_PARTITION);
 
     private final Map<TopicPartition, PartitionData> responseData;
     private final Errors error;
@@ -107,18 +143,18 @@ public class OffsetFetchResponse extends AbstractResponse {
     }
 
     public OffsetFetchResponse(Struct struct) {
-        this.throttleTimeMs = struct.hasField(THROTTLE_TIME_KEY_NAME) ? struct.getInt(THROTTLE_TIME_KEY_NAME) : DEFAULT_THROTTLE_TIME;
+        this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
         Errors topLevelError = Errors.NONE;
         this.responseData = new HashMap<>();
         for (Object topicResponseObj : struct.getArray(RESPONSES_KEY_NAME)) {
             Struct topicResponse = (Struct) topicResponseObj;
-            String topic = topicResponse.getString(TOPIC_KEY_NAME);
+            String topic = topicResponse.get(TOPIC_NAME);
             for (Object partitionResponseObj : topicResponse.getArray(PARTITIONS_KEY_NAME)) {
                 Struct partitionResponse = (Struct) partitionResponseObj;
-                int partition = partitionResponse.getInt(PARTITION_KEY_NAME);
+                int partition = partitionResponse.get(PARTITION_ID);
                 long offset = partitionResponse.getLong(COMMIT_OFFSET_KEY_NAME);
                 String metadata = partitionResponse.getString(METADATA_KEY_NAME);
-                Errors error = Errors.forCode(partitionResponse.getShort(ERROR_CODE_KEY_NAME));
+                Errors error = Errors.forCode(partitionResponse.get(ERROR_CODE));
                 if (error != Errors.NONE && !PARTITION_ERRORS.contains(error))
                     topLevelError = error;
                 PartitionData partitionData = new PartitionData(offset, metadata, error);
@@ -130,7 +166,7 @@ public class OffsetFetchResponse extends AbstractResponse {
         // for older versions there is no top-level error in the response and all errors are partition errors,
         // so if there is a group or coordinator error at the partition level use that as the top-level error.
         // this way clients can depend on the top-level error regardless of the offset fetch version.
-        this.error = struct.hasField(ERROR_CODE_KEY_NAME) ? Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME)) : topLevelError;
+        this.error = struct.hasField(ERROR_CODE) ? Errors.forCode(struct.get(ERROR_CODE)) : topLevelError;
     }
 
     public void maybeThrowFirstPartitionError() {
@@ -164,22 +200,21 @@ public class OffsetFetchResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.OFFSET_FETCH.responseSchema(version));
-        if (struct.hasField(THROTTLE_TIME_KEY_NAME))
-            struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
+        struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
 
         Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupDataByTopic(responseData);
         List<Struct> topicArray = new ArrayList<>();
         for (Map.Entry<String, Map<Integer, PartitionData>> entries : topicsData.entrySet()) {
             Struct topicData = struct.instance(RESPONSES_KEY_NAME);
-            topicData.set(TOPIC_KEY_NAME, entries.getKey());
+            topicData.set(TOPIC_NAME, entries.getKey());
             List<Struct> partitionArray = new ArrayList<>();
             for (Map.Entry<Integer, PartitionData> partitionEntry : entries.getValue().entrySet()) {
                 PartitionData fetchPartitionData = partitionEntry.getValue();
                 Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
-                partitionData.set(PARTITION_KEY_NAME, partitionEntry.getKey());
+                partitionData.set(PARTITION_ID, partitionEntry.getKey());
                 partitionData.set(COMMIT_OFFSET_KEY_NAME, fetchPartitionData.offset);
                 partitionData.set(METADATA_KEY_NAME, fetchPartitionData.metadata);
-                partitionData.set(ERROR_CODE_KEY_NAME, fetchPartitionData.error.code());
+                partitionData.set(ERROR_CODE, fetchPartitionData.error.code());
                 partitionArray.add(partitionData);
             }
             topicData.set(PARTITIONS_KEY_NAME, partitionArray.toArray());
@@ -188,7 +223,7 @@ public class OffsetFetchResponse extends AbstractResponse {
         struct.set(RESPONSES_KEY_NAME, topicArray.toArray());
 
         if (version > 1)
-            struct.set(ERROR_CODE_KEY_NAME, this.error.code());
+            struct.set(ERROR_CODE, this.error.code());
 
         return struct;
     }

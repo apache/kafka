@@ -18,6 +18,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.Utils;
 
@@ -27,12 +30,32 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.common.protocol.types.Type.BYTES;
+import static org.apache.kafka.common.protocol.types.Type.INT32;
+import static org.apache.kafka.common.protocol.types.Type.STRING;
+
 public class SyncGroupRequest extends AbstractRequest {
-    public static final String GROUP_ID_KEY_NAME = "group_id";
-    public static final String GENERATION_ID_KEY_NAME = "generation_id";
-    public static final String MEMBER_ID_KEY_NAME = "member_id";
-    public static final String MEMBER_ASSIGNMENT_KEY_NAME = "member_assignment";
-    public static final String GROUP_ASSIGNMENT_KEY_NAME = "group_assignment";
+    private static final String GROUP_ID_KEY_NAME = "group_id";
+    private static final String GENERATION_ID_KEY_NAME = "generation_id";
+    private static final String MEMBER_ID_KEY_NAME = "member_id";
+    private static final String MEMBER_ASSIGNMENT_KEY_NAME = "member_assignment";
+    private static final String GROUP_ASSIGNMENT_KEY_NAME = "group_assignment";
+
+    private static final Schema SYNC_GROUP_REQUEST_MEMBER_V0 = new Schema(
+            new Field(MEMBER_ID_KEY_NAME, STRING),
+            new Field(MEMBER_ASSIGNMENT_KEY_NAME, BYTES));
+    private static final Schema SYNC_GROUP_REQUEST_V0 = new Schema(
+            new Field(GROUP_ID_KEY_NAME, STRING),
+            new Field(GENERATION_ID_KEY_NAME, INT32),
+            new Field(MEMBER_ID_KEY_NAME, STRING),
+            new Field(GROUP_ASSIGNMENT_KEY_NAME, new ArrayOf(SYNC_GROUP_REQUEST_MEMBER_V0)));
+
+    /* v1 request is the same as v0. Throttle time has been added to response */
+    private static final Schema SYNC_GROUP_REQUEST_V1 = SYNC_GROUP_REQUEST_V0;
+
+    public static Schema[] schemaVersions() {
+        return new Schema[] {SYNC_GROUP_REQUEST_V0, SYNC_GROUP_REQUEST_V1};
+    }
 
     public static class Builder extends AbstractRequest.Builder<SyncGroupRequest> {
         private final String groupId;

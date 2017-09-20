@@ -19,6 +19,9 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -27,13 +30,28 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
+import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
+import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
+
 public class ControlledShutdownResponse extends AbstractResponse {
 
-    private static final String ERROR_CODE_KEY_NAME = "error_code";
     private static final String PARTITIONS_REMAINING_KEY_NAME = "partitions_remaining";
 
-    private static final String TOPIC_KEY_NAME = "topic";
-    private static final String PARTITION_KEY_NAME = "partition";
+    private static final Schema CONTROLLED_SHUTDOWN_PARTITION_V0 = new Schema(
+            TOPIC_NAME,
+            PARTITION_ID);
+
+    private static final Schema CONTROLLED_SHUTDOWN_RESPONSE_V0 = new Schema(
+            ERROR_CODE,
+            new Field(PARTITIONS_REMAINING_KEY_NAME, new ArrayOf(CONTROLLED_SHUTDOWN_PARTITION_V0), "The partitions " +
+                    "that the broker still leads."));
+
+    private static final Schema CONTROLLED_SHUTDOWN_RESPONSE_V1 = CONTROLLED_SHUTDOWN_RESPONSE_V0;
+
+    public static Schema[] schemaVersions() {
+        return new Schema[]{CONTROLLED_SHUTDOWN_RESPONSE_V0, CONTROLLED_SHUTDOWN_RESPONSE_V1};
+    }
 
     /**
      * Possible error codes:
@@ -52,12 +70,12 @@ public class ControlledShutdownResponse extends AbstractResponse {
     }
 
     public ControlledShutdownResponse(Struct struct) {
-        error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
+        error = Errors.forCode(struct.get(ERROR_CODE));
         Set<TopicPartition> partitions = new HashSet<>();
         for (Object topicPartitionObj : struct.getArray(PARTITIONS_REMAINING_KEY_NAME)) {
             Struct topicPartition = (Struct) topicPartitionObj;
-            String topic = topicPartition.getString(TOPIC_KEY_NAME);
-            int partition = topicPartition.getInt(PARTITION_KEY_NAME);
+            String topic = topicPartition.get(TOPIC_NAME);
+            int partition = topicPartition.get(PARTITION_ID);
             partitions.add(new TopicPartition(topic, partition));
         }
         partitionsRemaining = partitions;
@@ -72,20 +90,19 @@ public class ControlledShutdownResponse extends AbstractResponse {
     }
 
     public static ControlledShutdownResponse parse(ByteBuffer buffer, short version) {
-        return new ControlledShutdownResponse(ApiKeys.CONTROLLED_SHUTDOWN_KEY.parseResponse(version, buffer));
+        return new ControlledShutdownResponse(ApiKeys.CONTROLLED_SHUTDOWN.parseResponse(version, buffer));
     }
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.CONTROLLED_SHUTDOWN_KEY.responseSchema(version));
-
-        struct.set(ERROR_CODE_KEY_NAME, error.code());
+        Struct struct = new Struct(ApiKeys.CONTROLLED_SHUTDOWN.responseSchema(version));
+        struct.set(ERROR_CODE, error.code());
 
         List<Struct> partitionsRemainingList = new ArrayList<>(partitionsRemaining.size());
         for (TopicPartition topicPartition : partitionsRemaining) {
             Struct topicPartitionStruct = struct.instance(PARTITIONS_REMAINING_KEY_NAME);
-            topicPartitionStruct.set(TOPIC_KEY_NAME, topicPartition.topic());
-            topicPartitionStruct.set(PARTITION_KEY_NAME, topicPartition.partition());
+            topicPartitionStruct.set(TOPIC_NAME, topicPartition.topic());
+            topicPartitionStruct.set(PARTITION_ID, topicPartition.partition());
             partitionsRemainingList.add(topicPartitionStruct);
         }
         struct.set(PARTITIONS_REMAINING_KEY_NAME, partitionsRemainingList.toArray());

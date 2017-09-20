@@ -22,10 +22,10 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -38,9 +38,8 @@ import java.util.Map;
 import java.util.Set;
 
 public class StoreChangelogReader implements ChangelogReader {
-    private static final Logger log = LoggerFactory.getLogger(StoreChangelogReader.class);
 
-    private final String logPrefix;
+    private final Logger log;
     private final Consumer<byte[], byte[]> consumer;
     private final StateRestoreListener stateRestoreListener;
     private final Map<TopicPartition, Long> endOffsets = new HashMap<>();
@@ -51,16 +50,17 @@ public class StoreChangelogReader implements ChangelogReader {
 
     public StoreChangelogReader(final String threadId,
                                 final Consumer<byte[], byte[]> consumer,
-                                final StateRestoreListener stateRestoreListener) {
+                                final StateRestoreListener stateRestoreListener,
+                                final LogContext logContext) {
         this.consumer = consumer;
-
-        this.logPrefix = String.format("stream-thread [%s]", threadId);
+        this.log = logContext.logger(getClass());
         this.stateRestoreListener = stateRestoreListener;
     }
 
     public StoreChangelogReader(final Consumer<byte[], byte[]> consumer,
-                                final StateRestoreListener stateRestoreListener) {
-        this("", consumer, stateRestoreListener);
+                                final StateRestoreListener stateRestoreListener,
+                                final LogContext logContext) {
+        this("", consumer, stateRestoreListener, logContext);
     }
 
     @Override
@@ -116,7 +116,7 @@ public class StoreChangelogReader implements ChangelogReader {
             endOffsets.putAll(consumer.endOffsets(initializable.keySet()));
         } catch (final TimeoutException e) {
             // if timeout exception gets thrown we just give up this time and retry in the next run loop
-            log.debug("{} Could not fetch end offset for {}; will fall back to partition by partition fetching", logPrefix, initializable);
+            log.debug("Could not fetch end offset for {}; will fall back to partition by partition fetching", initializable);
             return;
         }
 
@@ -140,7 +140,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 }
                 needsInitializing.remove(topicPartition);
             } else {
-                log.info("{} End offset cannot be found form the returned metadata; removing this partition from the current run loop", logPrefix);
+                log.info("End offset cannot be found form the returned metadata; removing this partition from the current run loop");
                 iter.remove();
             }
         }
@@ -152,7 +152,7 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     private void startRestoration(final Map<TopicPartition, StateRestorer> initialized) {
-        log.debug("{} Start restoring state stores from changelog topics {}", logPrefix, initialized.keySet());
+        log.debug("Start restoring state stores from changelog topics {}", initialized.keySet());
 
         final Set<TopicPartition> assignment = new HashSet<>(consumer.assignment());
         assignment.addAll(initialized.keySet());
@@ -185,9 +185,10 @@ public class StoreChangelogReader implements ChangelogReader {
         needsRestoring.putAll(initialized);
     }
 
-    private void logRestoreOffsets(final TopicPartition partition, final long startingOffset, final Long endOffset) {
-        log.debug("{} Restoring partition {} from offset {} to endOffset {}",
-                  logPrefix,
+    private void logRestoreOffsets(final TopicPartition partition,
+                                   final long startingOffset,
+                                   final Long endOffset) {
+        log.debug("Restoring partition {} from offset {} to endOffset {}",
                   partition,
                   startingOffset,
                   endOffset);
@@ -196,7 +197,7 @@ public class StoreChangelogReader implements ChangelogReader {
     private Collection<TopicPartition> completed() {
         final Set<TopicPartition> completed = new HashSet<>(stateRestorers.keySet());
         completed.removeAll(needsRestoring.keySet());
-        log.debug("{} completed partitions {}", logPrefix, completed);
+        log.debug("completed partitions {}", completed);
         return completed;
     }
 
@@ -204,7 +205,7 @@ public class StoreChangelogReader implements ChangelogReader {
         try {
             partitionInfo.putAll(consumer.listTopics());
         } catch (final TimeoutException e) {
-            log.debug("{} Could not fetch topic metadata within the timeout, will retry in the next run loop", logPrefix);
+            log.debug("Could not fetch topic metadata within the timeout, will retry in the next run loop");
         }
     }
 
@@ -230,7 +231,7 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     private void restorePartition(final ConsumerRecords<byte[], byte[]> allRecords,
-                                    final TopicPartition topicPartition) {
+                                  final TopicPartition topicPartition) {
         final StateRestorer restorer = stateRestorers.get(topicPartition);
         final Long endOffset = endOffsets.get(topicPartition);
         final long pos = processNext(allRecords.records(topicPartition), restorer, endOffset);
@@ -244,8 +245,7 @@ public class StoreChangelogReader implements ChangelogReader {
                                       pos));
             }
 
-            log.debug("{} Completed restoring state from changelog {} with {} records ranging from offset {} to {}",
-                      logPrefix,
+            log.debug("Completed restoring state from changelog {} with {} records ranging from offset {} to {}",
                       topicPartition,
                       restorer.restoredNumRecords(),
                       restorer.startingOffset(),
@@ -257,7 +257,8 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     private long processNext(final List<ConsumerRecord<byte[], byte[]>> records,
-                             final StateRestorer restorer, final Long endOffset) {
+                             final StateRestorer restorer,
+                             final Long endOffset) {
         final List<KeyValue<byte[], byte[]>> restoreRecords = new ArrayList<>();
         long nextPosition = -1;
 

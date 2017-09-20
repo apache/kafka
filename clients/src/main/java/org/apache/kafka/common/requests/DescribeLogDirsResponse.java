@@ -20,13 +20,25 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
+
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
+import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
+import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
+import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
+import static org.apache.kafka.common.protocol.types.Type.BOOLEAN;
+import static org.apache.kafka.common.protocol.types.Type.INT64;
+import static org.apache.kafka.common.protocol.types.Type.STRING;
 
 
 public class DescribeLogDirsResponse extends AbstractResponse {
@@ -37,40 +49,58 @@ public class DescribeLogDirsResponse extends AbstractResponse {
     private static final String LOG_DIRS_KEY_NAME = "log_dirs";
 
     // dir level key names
-    private static final String ERROR_CODE_KEY_NAME = "error_code";
     private static final String LOG_DIR_KEY_NAME = "log_dir";
     private static final String TOPICS_KEY_NAME = "topics";
 
     // topic level key names
-    private static final String TOPIC_KEY_NAME = "topic";
     private static final String PARTITIONS_KEY_NAME = "partitions";
 
     // partition level key names
-    private static final String PARTITION_KEY_NAME = "partition";
     private static final String SIZE_KEY_NAME = "size";
     private static final String OFFSET_LAG_KEY_NAME = "offset_lag";
     private static final String IS_FUTURE_KEY_NAME = "is_future";
+
+    private static final Schema DESCRIBE_LOG_DIRS_RESPONSE_V0 = new Schema(
+            THROTTLE_TIME_MS,
+            new Field(LOG_DIRS_KEY_NAME, new ArrayOf(new Schema(
+                    ERROR_CODE,
+                    new Field(LOG_DIR_KEY_NAME, STRING, "The absolute log directory path."),
+                    new Field(TOPICS_KEY_NAME, new ArrayOf(new Schema(
+                            TOPIC_NAME,
+                            new Field(PARTITIONS_KEY_NAME, new ArrayOf(new Schema(
+                                    PARTITION_ID,
+                                    new Field(SIZE_KEY_NAME, INT64, "The size of the log segments of the partition in bytes."),
+                                    new Field(OFFSET_LAG_KEY_NAME, INT64, "The lag of the log's LEO w.r.t. partition's HW " +
+                                            "(if it is the current log for the partition) or current replica's LEO " +
+                                            "(if it is the future log for the partition)"),
+                                    new Field(IS_FUTURE_KEY_NAME, BOOLEAN, "True if this log is created by " +
+                                            "AlterReplicaDirRequest and will replace the current log of the replica " +
+                                            "in the future.")))))))))));
+
+    public static Schema[] schemaVersions() {
+        return new Schema[]{DESCRIBE_LOG_DIRS_RESPONSE_V0};
+    }
 
     private final int throttleTimeMs;
     private final Map<String, LogDirInfo> logDirInfos;
 
     public DescribeLogDirsResponse(Struct struct) {
-        throttleTimeMs = struct.getInt(THROTTLE_TIME_KEY_NAME);
+        throttleTimeMs = struct.get(THROTTLE_TIME_MS);
         logDirInfos = new HashMap<>();
 
         for (Object logDirStructObj : struct.getArray(LOG_DIRS_KEY_NAME)) {
             Struct logDirStruct = (Struct) logDirStructObj;
-            Errors error = Errors.forCode(logDirStruct.getShort(ERROR_CODE_KEY_NAME));
+            Errors error = Errors.forCode(logDirStruct.get(ERROR_CODE));
             String logDir = logDirStruct.getString(LOG_DIR_KEY_NAME);
             Map<TopicPartition, ReplicaInfo> replicaInfos = new HashMap<>();
 
             for (Object topicStructObj : logDirStruct.getArray(TOPICS_KEY_NAME)) {
                 Struct topicStruct = (Struct) topicStructObj;
-                String topic = topicStruct.getString(TOPIC_KEY_NAME);
+                String topic = topicStruct.get(TOPIC_NAME);
 
                 for (Object partitionStructObj : topicStruct.getArray(PARTITIONS_KEY_NAME)) {
                     Struct partitionStruct = (Struct) partitionStructObj;
-                    int partition = partitionStruct.getInt(PARTITION_KEY_NAME);
+                    int partition = partitionStruct.get(PARTITION_ID);
                     long size = partitionStruct.getLong(SIZE_KEY_NAME);
                     long offsetLag = partitionStruct.getLong(OFFSET_LAG_KEY_NAME);
                     boolean isFuture = partitionStruct.getBoolean(IS_FUTURE_KEY_NAME);
@@ -94,25 +124,25 @@ public class DescribeLogDirsResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.DESCRIBE_LOG_DIRS.responseSchema(version));
-        struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
+        struct.set(THROTTLE_TIME_MS, throttleTimeMs);
         List<Struct> logDirStructArray = new ArrayList<>();
         for (Map.Entry<String, LogDirInfo> logDirInfosEntry : logDirInfos.entrySet()) {
             LogDirInfo logDirInfo = logDirInfosEntry.getValue();
             Struct logDirStruct = struct.instance(LOG_DIRS_KEY_NAME);
-            logDirStruct.set(ERROR_CODE_KEY_NAME, logDirInfo.error.code());
+            logDirStruct.set(ERROR_CODE, logDirInfo.error.code());
             logDirStruct.set(LOG_DIR_KEY_NAME, logDirInfosEntry.getKey());
 
             Map<String, Map<Integer, ReplicaInfo>> replicaInfosByTopic = CollectionUtils.groupDataByTopic(logDirInfo.replicaInfos);
             List<Struct> topicStructArray = new ArrayList<>();
             for (Map.Entry<String, Map<Integer, ReplicaInfo>> replicaInfosByTopicEntry : replicaInfosByTopic.entrySet()) {
                 Struct topicStruct = logDirStruct.instance(TOPICS_KEY_NAME);
-                topicStruct.set(TOPIC_KEY_NAME, replicaInfosByTopicEntry.getKey());
+                topicStruct.set(TOPIC_NAME, replicaInfosByTopicEntry.getKey());
                 List<Struct> partitionStructArray = new ArrayList<>();
 
                 for (Map.Entry<Integer, ReplicaInfo> replicaInfosByPartitionEntry : replicaInfosByTopicEntry.getValue().entrySet()) {
                     Struct partitionStruct = topicStruct.instance(PARTITIONS_KEY_NAME);
                     ReplicaInfo replicaInfo = replicaInfosByPartitionEntry.getValue();
-                    partitionStruct.set(PARTITION_KEY_NAME, replicaInfosByPartitionEntry.getKey());
+                    partitionStruct.set(PARTITION_ID, replicaInfosByPartitionEntry.getKey());
                     partitionStruct.set(SIZE_KEY_NAME, replicaInfo.size);
                     partitionStruct.set(OFFSET_LAG_KEY_NAME, replicaInfo.offsetLag);
                     partitionStruct.set(IS_FUTURE_KEY_NAME, replicaInfo.isFuture);

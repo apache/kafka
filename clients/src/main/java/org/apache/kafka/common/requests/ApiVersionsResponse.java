@@ -18,6 +18,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.RecordBatch;
 
@@ -28,15 +31,35 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class ApiVersionsResponse extends AbstractResponse {
+import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
+import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
+import static org.apache.kafka.common.protocol.types.Type.INT16;
 
-    public static final ApiVersionsResponse API_VERSIONS_RESPONSE = createApiVersionsResponse(DEFAULT_THROTTLE_TIME, RecordBatch.CURRENT_MAGIC_VALUE);
-    private static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
-    public static final String ERROR_CODE_KEY_NAME = "error_code";
-    public static final String API_VERSIONS_KEY_NAME = "api_versions";
-    public static final String API_KEY_NAME = "api_key";
-    public static final String MIN_VERSION_KEY_NAME = "min_version";
-    public static final String MAX_VERSION_KEY_NAME = "max_version";
+public class ApiVersionsResponse extends AbstractResponse {
+    private static final String API_VERSIONS_KEY_NAME = "api_versions";
+    private static final String API_KEY_NAME = "api_key";
+    private static final String MIN_VERSION_KEY_NAME = "min_version";
+    private static final String MAX_VERSION_KEY_NAME = "max_version";
+
+    private static final Schema API_VERSIONS_V0 = new Schema(
+            new Field(API_KEY_NAME, INT16, "API key."),
+            new Field(MIN_VERSION_KEY_NAME, INT16, "Minimum supported version."),
+            new Field(MAX_VERSION_KEY_NAME, INT16, "Maximum supported version."));
+
+    private static final Schema API_VERSIONS_RESPONSE_V0 = new Schema(
+            ERROR_CODE,
+            new Field(API_VERSIONS_KEY_NAME, new ArrayOf(API_VERSIONS_V0), "API versions supported by the broker."));
+    private static final Schema API_VERSIONS_RESPONSE_V1 = new Schema(
+            ERROR_CODE,
+            new Field(API_VERSIONS_KEY_NAME, new ArrayOf(API_VERSIONS_V0), "API versions supported by the broker."),
+            THROTTLE_TIME_MS);
+
+    // initialized lazily to avoid circular initialization dependence with ApiKeys
+    private static volatile ApiVersionsResponse defaultApiVersionsResponse;
+
+    public static Schema[] schemaVersions() {
+        return new Schema[]{API_VERSIONS_RESPONSE_V0, API_VERSIONS_RESPONSE_V1};
+    }
 
     /**
      * Possible error codes:
@@ -83,8 +106,8 @@ public class ApiVersionsResponse extends AbstractResponse {
     }
 
     public ApiVersionsResponse(Struct struct) {
-        this.throttleTimeMs = struct.hasField(THROTTLE_TIME_KEY_NAME) ? struct.getInt(THROTTLE_TIME_KEY_NAME) : DEFAULT_THROTTLE_TIME;
-        this.error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
+        this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
+        this.error = Errors.forCode(struct.get(ERROR_CODE));
         List<ApiVersion> tempApiVersions = new ArrayList<>();
         for (Object apiVersionsObj : struct.getArray(API_VERSIONS_KEY_NAME)) {
             Struct apiVersionStruct = (Struct) apiVersionsObj;
@@ -99,9 +122,8 @@ public class ApiVersionsResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.API_VERSIONS.responseSchema(version));
-        if (struct.hasField(THROTTLE_TIME_KEY_NAME))
-            struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
-        struct.set(ERROR_CODE_KEY_NAME, error.code());
+        struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
+        struct.set(ERROR_CODE, error.code());
         List<Struct> apiVersionList = new ArrayList<>();
         for (ApiVersion apiVersion : apiKeyToApiVersion.values()) {
             Struct apiVersionStruct = struct.instance(API_VERSIONS_KEY_NAME);
@@ -116,7 +138,7 @@ public class ApiVersionsResponse extends AbstractResponse {
 
     public static ApiVersionsResponse apiVersionsResponse(int throttleTimeMs, byte maxMagic) {
         if (maxMagic == RecordBatch.CURRENT_MAGIC_VALUE && throttleTimeMs == DEFAULT_THROTTLE_TIME) {
-            return API_VERSIONS_RESPONSE;
+            return defaultApiVersionsResponse();
         }
         return createApiVersionsResponse(throttleTimeMs, maxMagic);
     }
@@ -141,22 +163,28 @@ public class ApiVersionsResponse extends AbstractResponse {
         return new ApiVersionsResponse(ApiKeys.API_VERSIONS.parseResponse(version, buffer));
     }
 
+    private Map<Short, ApiVersion> buildApiKeyToApiVersion(List<ApiVersion> apiVersions) {
+        Map<Short, ApiVersion> tempApiIdToApiVersion = new HashMap<>();
+        for (ApiVersion apiVersion : apiVersions) {
+            tempApiIdToApiVersion.put(apiVersion.apiKey, apiVersion);
+        }
+        return tempApiIdToApiVersion;
+    }
+
     public static ApiVersionsResponse createApiVersionsResponse(int throttleTimeMs, final byte minMagic) {
-        List<ApiVersion> versionList = new ArrayList<>();
+        List<ApiVersionsResponse.ApiVersion> versionList = new ArrayList<>();
         for (ApiKeys apiKey : ApiKeys.values()) {
             if (apiKey.minRequiredInterBrokerMagic <= minMagic) {
-                versionList.add(new ApiVersion(apiKey));
+                versionList.add(new ApiVersionsResponse.ApiVersion(apiKey));
             }
         }
         return new ApiVersionsResponse(throttleTimeMs, Errors.NONE, versionList);
     }
 
-    private Map<Short, ApiVersion> buildApiKeyToApiVersion(List<ApiVersion> apiVersions) {
-        Map<Short, ApiVersion> tempApiIdToApiVersion = new HashMap<>();
-        for (ApiVersion apiVersion: apiVersions) {
-            tempApiIdToApiVersion.put(apiVersion.apiKey, apiVersion);
-        }
-        return tempApiIdToApiVersion;
+    public static ApiVersionsResponse defaultApiVersionsResponse() {
+        if (defaultApiVersionsResponse == null)
+            defaultApiVersionsResponse = createApiVersionsResponse(DEFAULT_THROTTLE_TIME, RecordBatch.CURRENT_MAGIC_VALUE);
+        return defaultApiVersionsResponse;
     }
 
 }

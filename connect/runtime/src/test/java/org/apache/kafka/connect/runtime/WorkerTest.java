@@ -43,11 +43,12 @@ import org.apache.kafka.connect.util.MockTime;
 import org.apache.kafka.connect.util.ThreadedTest;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
-import org.easymock.Mock;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
+import org.powermock.api.easymock.annotation.Mock;
+import org.powermock.api.easymock.annotation.MockStrict;
 import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
@@ -76,15 +77,17 @@ public class WorkerTest extends ThreadedTest {
     private Worker worker;
 
     @Mock
-    private Plugins plugins = PowerMock.createMock(Plugins.class);
+    private Plugins plugins;
     @Mock
-    private PluginClassLoader pluginLoader = PowerMock.createMock(PluginClassLoader.class);
+    private PluginClassLoader pluginLoader;
     @Mock
-    private DelegatingClassLoader delegatingLoader =
-            PowerMock.createMock(DelegatingClassLoader.class);
-    private OffsetBackingStore offsetBackingStore = PowerMock.createMock(OffsetBackingStore.class);
-    private TaskStatus.Listener taskStatusListener = PowerMock.createStrictMock(TaskStatus.Listener.class);
-    private ConnectorStatus.Listener connectorStatusListener = PowerMock.createStrictMock(ConnectorStatus.Listener.class);
+    private DelegatingClassLoader delegatingLoader;
+    @Mock
+    private OffsetBackingStore offsetBackingStore;
+    @MockStrict
+    private TaskStatus.Listener taskStatusListener;
+    @MockStrict
+    private ConnectorStatus.Listener connectorStatusListener;
 
     @Before
     public void setup() {

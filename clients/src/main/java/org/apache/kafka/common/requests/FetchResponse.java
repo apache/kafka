@@ -22,9 +22,10 @@ import org.apache.kafka.common.network.MultiSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.common.record.Records;
 
 import java.nio.ByteBuffer;
@@ -32,6 +33,14 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
+import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
+import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
+import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
+import static org.apache.kafka.common.protocol.types.Type.INT64;
+import static org.apache.kafka.common.protocol.types.Type.RECORDS;
+import static org.apache.kafka.common.protocol.types.Type.STRING;
 
 /**
  * This wrapper supports all versions of the Fetch API
@@ -41,13 +50,10 @@ public class FetchResponse extends AbstractResponse {
     private static final String RESPONSES_KEY_NAME = "responses";
 
     // topic level field names
-    private static final String TOPIC_KEY_NAME = "topic";
     private static final String PARTITIONS_KEY_NAME = "partition_responses";
 
     // partition level field names
     private static final String PARTITION_HEADER_KEY_NAME = "partition_header";
-    private static final String PARTITION_KEY_NAME = "partition";
-    private static final String ERROR_CODE_KEY_NAME = "error_code";
     private static final String HIGH_WATERMARK_KEY_NAME = "high_watermark";
     private static final String LAST_STABLE_OFFSET_KEY_NAME = "last_stable_offset";
     private static final String LOG_START_OFFSET_KEY_NAME = "log_start_offset";
@@ -58,7 +64,95 @@ public class FetchResponse extends AbstractResponse {
     private static final String PRODUCER_ID_KEY_NAME = "producer_id";
     private static final String FIRST_OFFSET_KEY_NAME = "first_offset";
 
-    private static final int DEFAULT_THROTTLE_TIME = 0;
+    private static final Schema FETCH_RESPONSE_PARTITION_HEADER_V0 = new Schema(
+            PARTITION_ID,
+            ERROR_CODE,
+            new Field(HIGH_WATERMARK_KEY_NAME, INT64, "Last committed offset."));
+    private static final Schema FETCH_RESPONSE_PARTITION_V0 = new Schema(
+            new Field(PARTITION_HEADER_KEY_NAME, FETCH_RESPONSE_PARTITION_HEADER_V0),
+            new Field(RECORD_SET_KEY_NAME, RECORDS));
+
+    private static final Schema FETCH_RESPONSE_TOPIC_V0 = new Schema(
+            TOPIC_NAME,
+            new Field(PARTITIONS_KEY_NAME, new ArrayOf(FETCH_RESPONSE_PARTITION_V0)));
+
+    private static final Schema FETCH_RESPONSE_V0 = new Schema(
+            new Field(RESPONSES_KEY_NAME, new ArrayOf(FETCH_RESPONSE_TOPIC_V0)));
+
+    private static final Schema FETCH_RESPONSE_V1 = new Schema(
+            THROTTLE_TIME_MS,
+            new Field(RESPONSES_KEY_NAME, new ArrayOf(FETCH_RESPONSE_TOPIC_V0)));
+    // Even though fetch response v2 has the same protocol as v1, the record set in the response is different. In v1,
+    // record set only includes messages of v0 (magic byte 0). In v2, record set can include messages of v0 and v1
+    // (magic byte 0 and 1). For details, see Records, RecordBatch and Record.
+    private static final Schema FETCH_RESPONSE_V2 = FETCH_RESPONSE_V1;
+
+    // The partition ordering is now relevant - partitions will be processed in order they appear in request.
+    private static final Schema FETCH_RESPONSE_V3 = FETCH_RESPONSE_V2;
+
+    // The v4 Fetch Response adds features for transactional consumption (the aborted transaction list and the
+    // last stable offset). It also exposes messages with magic v2 (along with older formats).
+    private static final Schema FETCH_RESPONSE_ABORTED_TRANSACTION_V4 = new Schema(
+            new Field(PRODUCER_ID_KEY_NAME, INT64, "The producer id associated with the aborted transactions"),
+            new Field(FIRST_OFFSET_KEY_NAME, INT64, "The first offset in the aborted transaction"));
+
+    private static final Schema FETCH_RESPONSE_ABORTED_TRANSACTION_V5 = FETCH_RESPONSE_ABORTED_TRANSACTION_V4;
+
+    private static final Schema FETCH_RESPONSE_PARTITION_HEADER_V4 = new Schema(
+            PARTITION_ID,
+            ERROR_CODE,
+            new Field(HIGH_WATERMARK_KEY_NAME, INT64, "Last committed offset."),
+            new Field(LAST_STABLE_OFFSET_KEY_NAME, INT64, "The last stable offset (or LSO) of the partition. This is the last offset such that the state " +
+                    "of all transactional records prior to this offset have been decided (ABORTED or COMMITTED)"),
+            new Field(ABORTED_TRANSACTIONS_KEY_NAME, ArrayOf.nullable(FETCH_RESPONSE_ABORTED_TRANSACTION_V4)));
+
+    // FETCH_RESPONSE_PARTITION_HEADER_V5 added log_start_offset field - the earliest available offset of partition data that can be consumed.
+    private static final Schema FETCH_RESPONSE_PARTITION_HEADER_V5 = new Schema(
+            PARTITION_ID,
+            ERROR_CODE,
+            new Field(HIGH_WATERMARK_KEY_NAME, INT64, "Last committed offset."),
+            new Field(LAST_STABLE_OFFSET_KEY_NAME, INT64, "The last stable offset (or LSO) of the partition. This is the last offset such that the state " +
+                    "of all transactional records prior to this offset have been decided (ABORTED or COMMITTED)"),
+            new Field(LOG_START_OFFSET_KEY_NAME, INT64, "Earliest available offset."),
+            new Field(ABORTED_TRANSACTIONS_KEY_NAME, ArrayOf.nullable(FETCH_RESPONSE_ABORTED_TRANSACTION_V5)));
+
+    private static final Schema FETCH_RESPONSE_PARTITION_V4 = new Schema(
+            new Field(PARTITION_HEADER_KEY_NAME, FETCH_RESPONSE_PARTITION_HEADER_V4),
+            new Field(RECORD_SET_KEY_NAME, RECORDS));
+
+    private static final Schema FETCH_RESPONSE_PARTITION_V5 = new Schema(
+            new Field(PARTITION_HEADER_KEY_NAME, FETCH_RESPONSE_PARTITION_HEADER_V5),
+            new Field(RECORD_SET_KEY_NAME, RECORDS));
+
+    private static final Schema FETCH_RESPONSE_TOPIC_V4 = new Schema(
+            TOPIC_NAME,
+            new Field(PARTITIONS_KEY_NAME, new ArrayOf(FETCH_RESPONSE_PARTITION_V4)));
+
+    private static final Schema FETCH_RESPONSE_TOPIC_V5 = new Schema(
+            TOPIC_NAME,
+            new Field(PARTITIONS_KEY_NAME, new ArrayOf(FETCH_RESPONSE_PARTITION_V5)));
+
+    private static final Schema FETCH_RESPONSE_V4 = new Schema(
+            THROTTLE_TIME_MS,
+            new Field(RESPONSES_KEY_NAME, new ArrayOf(FETCH_RESPONSE_TOPIC_V4)));
+
+    private static final Schema FETCH_RESPONSE_V5 = new Schema(
+            THROTTLE_TIME_MS,
+            new Field(RESPONSES_KEY_NAME, new ArrayOf(FETCH_RESPONSE_TOPIC_V5)));
+
+    /**
+     * The body of FETCH_RESPONSE_V6 is the same as FETCH_RESPONSE_V5.
+     * The version number is bumped up to indicate that the client supports KafkaStorageException.
+     * The KafkaStorageException will be translated to NotLeaderForPartitionException in the response if version <= 5
+     */
+    private static final Schema FETCH_RESPONSE_V6 = FETCH_RESPONSE_V5;
+
+    public static Schema[] schemaVersions() {
+        return new Schema[] {FETCH_RESPONSE_V0, FETCH_RESPONSE_V1, FETCH_RESPONSE_V2,
+            FETCH_RESPONSE_V3, FETCH_RESPONSE_V4, FETCH_RESPONSE_V5, FETCH_RESPONSE_V6};
+    }
+
+
     public static final long INVALID_HIGHWATERMARK = -1L;
     public static final long INVALID_LAST_STABLE_OFFSET = -1L;
     public static final long INVALID_LOG_START_OFFSET = -1L;
@@ -190,12 +284,12 @@ public class FetchResponse extends AbstractResponse {
         LinkedHashMap<TopicPartition, PartitionData> responseData = new LinkedHashMap<>();
         for (Object topicResponseObj : struct.getArray(RESPONSES_KEY_NAME)) {
             Struct topicResponse = (Struct) topicResponseObj;
-            String topic = topicResponse.getString(TOPIC_KEY_NAME);
+            String topic = topicResponse.get(TOPIC_NAME);
             for (Object partitionResponseObj : topicResponse.getArray(PARTITIONS_KEY_NAME)) {
                 Struct partitionResponse = (Struct) partitionResponseObj;
                 Struct partitionResponseHeader = partitionResponse.getStruct(PARTITION_HEADER_KEY_NAME);
-                int partition = partitionResponseHeader.getInt(PARTITION_KEY_NAME);
-                Errors error = Errors.forCode(partitionResponseHeader.getShort(ERROR_CODE_KEY_NAME));
+                int partition = partitionResponseHeader.get(PARTITION_ID);
+                Errors error = Errors.forCode(partitionResponseHeader.get(ERROR_CODE));
                 long highWatermark = partitionResponseHeader.getLong(HIGH_WATERMARK_KEY_NAME);
                 long lastStableOffset = INVALID_LAST_STABLE_OFFSET;
                 if (partitionResponseHeader.hasField(LAST_STABLE_OFFSET_KEY_NAME))
@@ -226,7 +320,7 @@ public class FetchResponse extends AbstractResponse {
             }
         }
         this.responseData = responseData;
-        this.throttleTimeMs = struct.hasField(THROTTLE_TIME_KEY_NAME) ? struct.getInt(THROTTLE_TIME_KEY_NAME) : DEFAULT_THROTTLE_TIME;
+        this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
     }
 
     @Override
@@ -266,7 +360,7 @@ public class FetchResponse extends AbstractResponse {
     private static void addResponseData(Struct struct, int throttleTimeMs, String dest, List<Send> sends) {
         Object[] allTopicData = struct.getArray(RESPONSES_KEY_NAME);
 
-        if (struct.hasField(THROTTLE_TIME_KEY_NAME)) {
+        if (struct.hasField(THROTTLE_TIME_MS)) {
             ByteBuffer buffer = ByteBuffer.allocate(8);
             buffer.putInt(throttleTimeMs);
             buffer.putInt(allTopicData.length);
@@ -284,12 +378,12 @@ public class FetchResponse extends AbstractResponse {
     }
 
     private static void addTopicData(String dest, List<Send> sends, Struct topicData) {
-        String topic = topicData.getString(TOPIC_KEY_NAME);
+        String topic = topicData.get(TOPIC_NAME);
         Object[] allPartitionData = topicData.getArray(PARTITIONS_KEY_NAME);
 
         // include the topic header and the count for the number of partitions
-        ByteBuffer buffer = ByteBuffer.allocate(Type.STRING.sizeOf(topic) + 4);
-        Type.STRING.write(buffer, topic);
+        ByteBuffer buffer = ByteBuffer.allocate(STRING.sizeOf(topic) + 4);
+        STRING.write(buffer, topic);
         buffer.putInt(allPartitionData.length);
         buffer.rewind();
         sends.add(new ByteBufferSend(dest, buffer));
@@ -313,13 +407,13 @@ public class FetchResponse extends AbstractResponse {
         sends.add(new RecordsSend(dest, records));
     }
 
-    private static Struct toStruct(short version, LinkedHashMap<TopicPartition, PartitionData> responseData, int throttleTime) {
+    private static Struct toStruct(short version, LinkedHashMap<TopicPartition, PartitionData> responseData, int throttleTimeMs) {
         Struct struct = new Struct(ApiKeys.FETCH.responseSchema(version));
         List<FetchRequest.TopicAndPartitionData<PartitionData>> topicsData = FetchRequest.TopicAndPartitionData.batchByTopic(responseData);
         List<Struct> topicArray = new ArrayList<>();
         for (FetchRequest.TopicAndPartitionData<PartitionData> topicEntry: topicsData) {
             Struct topicData = struct.instance(RESPONSES_KEY_NAME);
-            topicData.set(TOPIC_KEY_NAME, topicEntry.topic);
+            topicData.set(TOPIC_NAME, topicEntry.topic);
             List<Struct> partitionArray = new ArrayList<>();
             for (Map.Entry<Integer, PartitionData> partitionEntry : topicEntry.partitions.entrySet()) {
                 PartitionData fetchPartitionData = partitionEntry.getValue();
@@ -332,8 +426,8 @@ public class FetchResponse extends AbstractResponse {
                     errorCode = Errors.NOT_LEADER_FOR_PARTITION.code();
                 Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
                 Struct partitionDataHeader = partitionData.instance(PARTITION_HEADER_KEY_NAME);
-                partitionDataHeader.set(PARTITION_KEY_NAME, partitionEntry.getKey());
-                partitionDataHeader.set(ERROR_CODE_KEY_NAME, errorCode);
+                partitionDataHeader.set(PARTITION_ID, partitionEntry.getKey());
+                partitionDataHeader.set(ERROR_CODE, errorCode);
                 partitionDataHeader.set(HIGH_WATERMARK_KEY_NAME, fetchPartitionData.highWatermark);
 
                 if (partitionDataHeader.hasField(LAST_STABLE_OFFSET_KEY_NAME)) {
@@ -363,9 +457,7 @@ public class FetchResponse extends AbstractResponse {
             topicArray.add(topicData);
         }
         struct.set(RESPONSES_KEY_NAME, topicArray.toArray());
-
-        if (struct.hasField(THROTTLE_TIME_KEY_NAME))
-            struct.set(THROTTLE_TIME_KEY_NAME, throttleTime);
+        struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
 
         return struct;
     }

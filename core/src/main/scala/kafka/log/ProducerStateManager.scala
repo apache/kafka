@@ -17,7 +17,7 @@
 package kafka.log
 
 import java.io._
-import java.nio.{BufferUnderflowException, ByteBuffer}
+import java.nio.ByteBuffer
 import java.nio.file.Files
 
 import kafka.common.KafkaException

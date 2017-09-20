@@ -22,6 +22,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -30,7 +31,6 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -40,7 +40,6 @@ import java.util.Map;
 import java.util.Set;
 
 public abstract class AbstractTask implements Task {
-    private static final Logger log = LoggerFactory.getLogger(AbstractTask.class);
 
     final TaskId id;
     final String applicationId;
@@ -50,6 +49,8 @@ public abstract class AbstractTask implements Task {
     final Consumer consumer;
     final String logPrefix;
     final boolean eosEnabled;
+    final Logger log;
+    final LogContext logContext;
     boolean taskInitialized;
     private final StateDirectory stateDirectory;
 
@@ -75,7 +76,9 @@ public abstract class AbstractTask implements Task {
         this.eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
         this.stateDirectory = stateDirectory;
 
-        logPrefix = String.format("%s [%s]", isStandby ? "standby-task" : "task", id());
+        this.logPrefix = String.format("%s [%s] ", isStandby ? "standby-task" : "task", id());
+        this.logContext = new LogContext(logPrefix);
+        this.log = logContext.logger(getClass());
 
         // create the processor state manager
         try {
@@ -86,9 +89,10 @@ public abstract class AbstractTask implements Task {
                 stateDirectory,
                 topology.storeToChangelogTopic(),
                 changelogReader,
-                eosEnabled);
+                eosEnabled,
+                    logContext);
         } catch (final IOException e) {
-            throw new ProcessorStateException(String.format("%s Error while creating the state manager", logPrefix), e);
+            throw new ProcessorStateException(String.format("%sError while creating the state manager", logPrefix), e);
         }
     }
 
@@ -173,7 +177,7 @@ public abstract class AbstractTask implements Task {
                 stateMgr.putOffsetLimit(partition, offset);
 
                 if (log.isTraceEnabled()) {
-                    log.trace("{} Updating store offset limits {} for changelog {}", logPrefix, offset, partition);
+                    log.trace("Updating store offset limits {} for changelog {}", offset, partition);
                 }
             } catch (final AuthorizationException e) {
                 throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s", id, partition), e);
@@ -199,21 +203,20 @@ public abstract class AbstractTask implements Task {
 
         try {
             if (!stateDirectory.lock(id, 5)) {
-                throw new LockException(String.format("%s Failed to lock the state directory for task %s",
+                throw new LockException(String.format("%sFailed to lock the state directory for task %s",
                                                       logPrefix, id));
             }
         } catch (IOException e) {
-            throw new StreamsException(String.format("%s fatal error while trying to lock the state directory for task %s",
-                                                     logPrefix,
-                                                     id));
+            throw new StreamsException(String.format("%sFatal error while trying to lock the state directory for task %s",
+                                                     logPrefix, id));
         }
-        log.trace("{} Initializing state stores", logPrefix);
+        log.trace("Initializing state stores");
 
         // set initial offset limits
         updateOffsetLimits();
 
         for (final StateStore store : topology.stateStores()) {
-            log.trace("{} Initializing store {}", logPrefix, store.name());
+            log.trace("Initializing store {}", store.name());
             store.init(processorContext, store);
         }
     }
@@ -223,9 +226,10 @@ public abstract class AbstractTask implements Task {
      * @throws ProcessorStateException if there is an error while closing the state manager
      * @param writeCheckpoint boolean indicating if a checkpoint file should be written
      */
+    // visible for testing
     void closeStateManager(final boolean writeCheckpoint) throws ProcessorStateException {
         ProcessorStateException exception = null;
-        log.trace("{} Closing state manager", logPrefix);
+        log.trace("Closing state manager");
         try {
             stateMgr.close(writeCheckpoint ? recordCollectorOffsets() : null);
         } catch (final ProcessorStateException e) {
@@ -235,7 +239,7 @@ public abstract class AbstractTask implements Task {
                 stateDirectory.unlock(id);
             } catch (IOException e) {
                 if (exception == null) {
-                    exception = new ProcessorStateException(String.format("%s Failed to release state dir lock", logPrefix), e);
+                    exception = new ProcessorStateException(String.format("%sFailed to release state dir lock", logPrefix), e);
                 }
             }
         }

@@ -286,8 +286,7 @@ public class YahooBenchmark {
         final KStream<String, ProjectedEvent> kEvents = builder.stream(eventsTopic,
                                                                        Consumed.with(Serdes.String(),
                                                                                      Serdes.serdeFrom(projectedEventSerializer, projectedEventDeserializer)));
-        final KTable<String, String> kCampaigns = builder.table(Serdes.String(), Serdes.String(),
-            campaignsTopic, "campaign-state");
+        final KTable<String, String> kCampaigns = builder.table(campaignsTopic, Consumed.with(Serdes.String(), Serdes.String()));
 
 
         KStream<String, ProjectedEvent> filteredEvents = kEvents

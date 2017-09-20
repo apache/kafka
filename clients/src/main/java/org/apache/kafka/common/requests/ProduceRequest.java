@@ -20,11 +20,14 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.InvalidRecordException;
+import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.Utils;
 
@@ -36,6 +39,13 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
+import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
+import static org.apache.kafka.common.protocol.types.Type.INT16;
+import static org.apache.kafka.common.protocol.types.Type.INT32;
+import static org.apache.kafka.common.protocol.types.Type.NULLABLE_STRING;
+import static org.apache.kafka.common.protocol.types.Type.RECORDS;
+
 public class ProduceRequest extends AbstractRequest {
     private static final String TRANSACTIONAL_ID_KEY_NAME = "transactional_id";
     private static final String ACKS_KEY_NAME = "acks";
@@ -43,12 +53,59 @@ public class ProduceRequest extends AbstractRequest {
     private static final String TOPIC_DATA_KEY_NAME = "topic_data";
 
     // topic level field names
-    private static final String TOPIC_KEY_NAME = "topic";
     private static final String PARTITION_DATA_KEY_NAME = "data";
 
     // partition level field names
-    private static final String PARTITION_KEY_NAME = "partition";
     private static final String RECORD_SET_KEY_NAME = "record_set";
+
+
+    private static final Schema TOPIC_PRODUCE_DATA_V0 = new Schema(
+            TOPIC_NAME,
+            new Field(PARTITION_DATA_KEY_NAME, new ArrayOf(new Schema(
+                    PARTITION_ID,
+                    new Field(RECORD_SET_KEY_NAME, RECORDS)))));
+
+    private static final Schema PRODUCE_REQUEST_V0 = new Schema(
+            new Field(ACKS_KEY_NAME, INT16, "The number of acknowledgments the producer requires the leader to have " +
+                    "received before considering a request complete. Allowed values: 0 for no acknowledgments, 1 for " +
+                    "only the leader and -1 for the full ISR."),
+            new Field(TIMEOUT_KEY_NAME, INT32, "The time to await a response in ms."),
+            new Field(TOPIC_DATA_KEY_NAME, new ArrayOf(TOPIC_PRODUCE_DATA_V0)));
+
+    /**
+     * The body of PRODUCE_REQUEST_V1 is the same as PRODUCE_REQUEST_V0.
+     * The version number is bumped up to indicate that the client supports quota throttle time field in the response.
+     */
+    private static final Schema PRODUCE_REQUEST_V1 = PRODUCE_REQUEST_V0;
+    /**
+     * The body of PRODUCE_REQUEST_V2 is the same as PRODUCE_REQUEST_V1.
+     * The version number is bumped up to indicate that message format V1 is used which has relative offset and
+     * timestamp.
+     */
+    private static final Schema PRODUCE_REQUEST_V2 = PRODUCE_REQUEST_V1;
+
+    // Produce request V3 adds the transactional id which is used for authorization when attempting to write
+    // transactional data. This version also adds support for message format V2.
+    private static final Schema PRODUCE_REQUEST_V3 = new Schema(
+            new Field(TRANSACTIONAL_ID_KEY_NAME, NULLABLE_STRING, "The transactional ID of the producer. This is used to " +
+                    "authorize transaction produce requests. This can be null for non-transactional producers."),
+            new Field(ACKS_KEY_NAME, INT16, "The number of acknowledgments the producer requires the leader to have " +
+                    "received before considering a request complete. Allowed values: 0 for no acknowledgments, 1 " +
+                    "for only the leader and -1 for the full ISR."),
+            new Field(TIMEOUT_KEY_NAME, INT32, "The time to await a response in ms."),
+            new Field(TOPIC_DATA_KEY_NAME, new ArrayOf(TOPIC_PRODUCE_DATA_V0)));
+
+    /**
+     * The body of PRODUCE_REQUEST_V4 is the same as PRODUCE_REQUEST_V3.
+     * The version number is bumped up to indicate that the client supports KafkaStorageException.
+     * The KafkaStorageException will be translated to NotLeaderForPartitionException in the response if version <= 3
+     */
+    private static final Schema PRODUCE_REQUEST_V4 = PRODUCE_REQUEST_V3;
+
+    public static Schema[] schemaVersions() {
+        return new Schema[] {PRODUCE_REQUEST_V0, PRODUCE_REQUEST_V1, PRODUCE_REQUEST_V2, PRODUCE_REQUEST_V3,
+            PRODUCE_REQUEST_V4};
+    }
 
     public static class Builder extends AbstractRequest.Builder<ProduceRequest> {
         private final byte magic;
@@ -137,10 +194,10 @@ public class ProduceRequest extends AbstractRequest {
         partitionRecords = new HashMap<>();
         for (Object topicDataObj : struct.getArray(TOPIC_DATA_KEY_NAME)) {
             Struct topicData = (Struct) topicDataObj;
-            String topic = topicData.getString(TOPIC_KEY_NAME);
+            String topic = topicData.get(TOPIC_NAME);
             for (Object partitionResponseObj : topicData.getArray(PARTITION_DATA_KEY_NAME)) {
                 Struct partitionResponse = (Struct) partitionResponseObj;
-                int partition = partitionResponse.getInt(PARTITION_KEY_NAME);
+                int partition = partitionResponse.get(PARTITION_ID);
                 MemoryRecords records = (MemoryRecords) partitionResponse.getRecords(RECORD_SET_KEY_NAME);
                 validateRecords(version, records);
                 partitionRecords.put(new TopicPartition(topic, partition), records);
@@ -195,12 +252,12 @@ public class ProduceRequest extends AbstractRequest {
         List<Struct> topicDatas = new ArrayList<>(recordsByTopic.size());
         for (Map.Entry<String, Map<Integer, MemoryRecords>> topicEntry : recordsByTopic.entrySet()) {
             Struct topicData = struct.instance(TOPIC_DATA_KEY_NAME);
-            topicData.set(TOPIC_KEY_NAME, topicEntry.getKey());
+            topicData.set(TOPIC_NAME, topicEntry.getKey());
             List<Struct> partitionArray = new ArrayList<>();
             for (Map.Entry<Integer, MemoryRecords> partitionEntry : topicEntry.getValue().entrySet()) {
                 MemoryRecords records = partitionEntry.getValue();
                 Struct part = topicData.instance(PARTITION_DATA_KEY_NAME)
-                        .set(PARTITION_KEY_NAME, partitionEntry.getKey())
+                        .set(PARTITION_ID, partitionEntry.getKey())
                         .set(RECORD_SET_KEY_NAME, records);
                 partitionArray.add(part);
             }

@@ -28,7 +28,7 @@ import kafka.server.QuotaId
 import kafka.utils.{Logging, NotNothing}
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.network.Send
-import org.apache.kafka.common.protocol.{ApiKeys, Protocol}
+import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Time
@@ -71,7 +71,7 @@ object RequestChannel extends Logging {
     //most request types are parsed entirely into objects at this point. for those we can release the underlying buffer.
     //some (like produce, or any time the schema contains fields of types BYTES or NULLABLE_BYTES) retain a reference
     //to the buffer. for those requests we cannot release the buffer early, but only when request processing is done.
-    if (!Protocol.requiresDelayedDeallocation(header.apiKey.id)) {
+    if (!header.apiKey.requiresDelayedAllocation) {
       releaseBuffer()
     }
 

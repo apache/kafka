@@ -14,25 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.protocol;
+package org.apache.kafka.common.protocol.types;
 
-import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Schema;
-import org.apache.kafka.common.protocol.types.Type;
+/**
+ * A field definition bound to a particular schema.
+ */
+public class BoundField {
+    public final Field def;
+    final int index;
+    final Schema schema;
 
-public abstract class SchemaVisitorAdapter implements SchemaVisitor {
-    @Override
-    public void visit(Schema schema) {
-        //nop
+    public BoundField(Field def, Schema schema, int index) {
+        this.def = def;
+        this.schema = schema;
+        this.index = index;
     }
 
     @Override
-    public void visit(ArrayOf array) {
-        //nop
-    }
-
-    @Override
-    public void visit(Type field) {
-        //nop
+    public String toString() {
+        return def.name + ":" + def.type;
     }
 }

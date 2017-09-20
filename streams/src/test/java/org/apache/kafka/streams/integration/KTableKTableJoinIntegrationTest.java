@@ -343,9 +343,9 @@ public class KTableKTableJoinIntegrationTest {
     private KafkaStreams prepareTopology(final JoinType joinType1, final JoinType joinType2, final String queryableName) {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KTable<String, String> table1 = builder.table(TABLE_1, TABLE_1);
-        final KTable<String, String> table2 = builder.table(TABLE_2, TABLE_2);
-        final KTable<String, String> table3 = builder.table(TABLE_3, TABLE_3);
+        final KTable<String, String> table1 = builder.table(TABLE_1);
+        final KTable<String, String> table2 = builder.table(TABLE_2);
+        final KTable<String, String> table3 = builder.table(TABLE_3);
 
         Materialized<String, String, KeyValueStore<Bytes, byte[]>> materialized = null;
         if (queryableName != null) {

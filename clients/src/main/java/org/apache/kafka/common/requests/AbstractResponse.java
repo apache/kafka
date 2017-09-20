@@ -24,7 +24,6 @@ import org.apache.kafka.common.protocol.types.Struct;
 import java.nio.ByteBuffer;
 
 public abstract class AbstractResponse extends AbstractRequestResponse {
-    public static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     public static final int DEFAULT_THROTTLE_TIME = 0;
 
     protected Send toSend(String destination, ResponseHeader header, short apiVersion) {
@@ -66,9 +65,9 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
                 return new SyncGroupResponse(struct);
             case STOP_REPLICA:
                 return new StopReplicaResponse(struct);
-            case CONTROLLED_SHUTDOWN_KEY:
+            case CONTROLLED_SHUTDOWN:
                 return new ControlledShutdownResponse(struct);
-            case UPDATE_METADATA_KEY:
+            case UPDATE_METADATA:
                 return new UpdateMetadataResponse(struct);
             case LEADER_AND_ISR:
                 return new LeaderAndIsrResponse(struct);
