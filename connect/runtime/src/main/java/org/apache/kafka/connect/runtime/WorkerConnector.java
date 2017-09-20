@@ -300,5 +300,9 @@ public class WorkerConnector {
         boolean isFailed() {
             return state == AbstractStatus.State.FAILED;
         }
+
+        protected MetricGroup metricGroup() {
+            return metricGroup;
+        }
     }
 }

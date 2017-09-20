@@ -436,9 +436,8 @@ abstract class WorkerTask implements Runnable {
             return taskStateTimer.currentState();
         }
 
-        double currentMetricValue(String name) {
-            MetricName metricName = metricGroup.metricName(name, "desc");
-            return metricGroup.metrics().metric(metricName).value();
+        protected MetricGroup metricGroup() {
+            return metricGroup;
         }
     }
 }
