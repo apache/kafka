@@ -37,7 +37,7 @@ release.py stage-docs [kafka-site-path]
 
   Builds the documentation and stages it into an instance of the Kafka website repository.
 
-  This is meant to automate the integration between the main Kafka website repository (git://git.apache.org/kafka-site.git)
+  This is meant to automate the integration between the main Kafka website repository (https://github.com/apache/kafka-site)
   and the versioned documentation maintained in the main Kafka repository. This is useful both for local testing and
   development of docs (follow the instructions here: https://cwiki.apache.org/confluence/display/KAFKA/Setup+Kafka+Website+on+Local+Apache+Server)
   as well as for committers to deploy docs (run this script, then validate, commit, and push to kafka-site).
@@ -204,10 +204,24 @@ def docs_version(version):
     from gradle.properties and converts it to 0102
     """
     version_parts = version.strip().split('.')
-    # 1.0+will only have 3 version components as opposed to pre-1.0 that had 4
+    # 1.0+ will only have 3 version components as opposed to pre-1.0 that had 4
     major_minor = version_parts[0:3] if version_parts[0] == '0' else version_parts[0:2]
     return ''.join(major_minor)
 
+def docs_release_version(version):
+    """
+    Detects the version from gradle.properties and converts it to a release version number that should be valid for the
+    current release branch. For example, 0.10.2.0-SNAPSHOT would remain 0.10.2.0-SNAPSHOT (because no release has been
+    made on that branch yet); 0.10.2.1-SNAPSHOT would be converted to 0.10.2.0 because 0.10.2.1 is still in development
+    but 0.10.2.0 should have already been released. Regular version numbers (e.g. as encountered on a release branch)
+    will remain the same.
+    """
+    version_parts = version.strip().split('.')
+    if '-SNAPSHOT' in version_parts[-1]:
+        bugfix = int(version_parts[-1].split('-')[0])
+        if bugfix > 0:
+            version_parts[-1] = str(bugfix - 1)
+    return '.'.join(version_parts)
 
 def command_stage_docs():
     kafka_site_repo_path = sys.argv[2] if len(sys.argv) > 2 else os.path.join(REPO_HOME, '..', 'kafka-site')
@@ -219,14 +233,22 @@ def command_stage_docs():
     save_prefs(prefs)
 
     version = get_version()
+    # We explicitly override the version of the project that we normally get from gradle.properties since we want to be
+    # able to run this from a release branch where we made some updates, but the build would show an incorrect SNAPSHOT
+    # version due to already having bumped the bugfix version number.
+    gradle_version_override = docs_release_version(version)
 
-    cmd("Building docs", "./gradlew clean releaseTarGzAll aggregatedJavadoc", cwd=REPO_HOME, env=jdk8_env)
+    cmd("Building docs", "./gradlew -Pversion=%s clean releaseTarGzAll aggregatedJavadoc" % gradle_version_override, cwd=REPO_HOME, env=jdk8_env)
 
-    docs_tar = os.path.join(REPO_HOME, 'core', 'build', 'distributions', 'kafka_2.11-%s-site-docs.tgz' % version)
+    docs_tar = os.path.join(REPO_HOME, 'core', 'build', 'distributions', 'kafka_2.11-%s-site-docs.tgz' % gradle_version_override)
+
+    versioned_docs_path = os.path.join(kafka_site_repo_path, docs_version(version))
+    if not os.path.exists(versioned_docs_path):
+        os.mkdir(versioned_docs_path, 0755)
 
     # The contents of the docs jar are site-docs/<docs dir>. We need to get rid of the site-docs prefix and dump everything
     # inside it into the docs version subdirectory in the kafka-site repo
-    cmd('Extracting ', 'tar xf %s --strip-components 1' % docs_tar, cwd=os.path.join(kafka_site_repo_path, docs_version(version)))
+    cmd('Extracting ', 'tar xf %s --strip-components 1' % docs_tar, cwd=versioned_docs_path)
 
     sys.exit(0)
 
@@ -314,7 +336,7 @@ except ValueError:
 rc = raw_input("Release candidate number: ")
 
 dev_branch = '.'.join(release_version_parts[:2])
-docs_version = ''.join(release_version_parts[:2])
+docs_release_version = docs_version(release_version[:2])
 
 # Validate that the release doesn't already exist and that the
 cmd("Fetching tags from upstream", 'git fetch --tags %s' % PUSH_REMOTE_NAME)
@@ -480,7 +502,7 @@ release_notification_props = { 'release_version': release_version,
                                'rc_tag': rc_tag,
                                'rc_githash': rc_githash,
                                'dev_branch': dev_branch,
-                               'docs_version': docs_version,
+                               'docs_version': docs_release_version,
                                'apache_id': apache_id,
                                }
 
