@@ -122,7 +122,7 @@ public class ConnectMetrics {
      * @param tagKeyValues    pairs of tag name and values
      * @return the {@link MetricGroup} that can be used to create metrics; never null
      */
-    public synchronized MetricGroup group(String groupName, boolean includeWorkerId, String... tagKeyValues) {
+    public MetricGroup group(String groupName, boolean includeWorkerId, String... tagKeyValues) {
         MetricGroup group = groupsByName.get(groupName);
         if (group == null) {
             Map<String, String> tags = tags(includeWorkerId ? workerId : null, tagKeyValues);
