@@ -17,7 +17,7 @@
 package kafka.admin
 
 import java.util.Properties
-import java.util.concurrent.{ExecutionException, TimeUnit}
+import java.util.concurrent.{ExecutionException}
 
 import joptsimple.OptionParser
 import kafka.utils._
@@ -47,7 +47,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
     }
   }
   /** Basically the same as main, but throws rather than calling System.exit */
-  def run(args: Array[String]): Unit = {
+  def run(args: Array[String], timeout: Option[Int] = None): Unit = {
     val parser = new OptionParser(false)
     val jsonFileOpt = parser.accepts("path-to-json-file", "The JSON file with the list of partitions " +
       "for which preferred replica leader election should be done, in the following format - \n" +
@@ -57,12 +57,12 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       .describedAs("list of partitions for which preferred replica leader election needs to be triggered")
       .ofType(classOf[String])
     val zkConnectOpt = parser.accepts("zookeeper", "DEPRECATED. The connection string for the zookeeper connection in the " +
-      "form host:port. Multiple URLS can be given to allow fail-over. REQUIRED unless --bootstrap-server is given.")
+      "form host:port. Multiple comma-separated URLS can be given to allow fail-over. REQUIRED unless --bootstrap-server is given.")
       .withRequiredArg
       .describedAs("urls")
       .ofType(classOf[String])
     val bootstrapServerOpt = parser.accepts("bootstrap-server", "A hostname and port for the broker to connect to, " +
-      "in the form host:port. Multiple URLs can be given. REQUIRED unless --zookeeper is given.")
+      "in the form host:port. Multiple comma-separated URLs can be given. REQUIRED unless --zookeeper is given.")
       .withRequiredArg
       .describedAs("host:port")
       .ofType(classOf[String])
@@ -90,11 +90,11 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       Console.err.println(zkConnectOpt + " is deprecated and will be removed in a future version of Kafka.")
       Console.err.println("Use " + bootstrapServerOpt + " instead to specify a broker to connect to.")
       new ZkPreferredReplicaLeaderElectionCommand(ZkUtils(options.valueOf(zkConnectOpt),
-        30000,
-        30000,
+        timeout.getOrElse(30000),
+        timeout.getOrElse(30000),
         JaasUtils.isZkSecurityEnabled()))
     } else {
-      new AdminClientPreferredReplicaLeaderElectionCommand(options.valueOf(bootstrapServerOpt))
+      new AdminClientPreferredReplicaLeaderElectionCommand(options.valueOf(bootstrapServerOpt), timeout)
     }
 
     try {
@@ -143,9 +143,15 @@ trait PreferredReplicaLeaderElectionCommand {
   def close() : Unit
 }
 
-class AdminClientPreferredReplicaLeaderElectionCommand(bootstrapServers: String) extends PreferredReplicaLeaderElectionCommand with Logging {
+class AdminClientPreferredReplicaLeaderElectionCommand(bootstrapServers: String, timeout: Option[Int]) extends PreferredReplicaLeaderElectionCommand with Logging {
   val props = new Properties()
   props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
+  timeout match {
+    case Some(timeout) =>
+      props.setProperty(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, timeout.toString)
+    case None =>
+  }
+
   val adminClient: org.apache.kafka.clients.admin.AdminClient = org.apache.kafka.clients.admin.AdminClient.create(props)
 
   /**
@@ -173,10 +179,14 @@ class AdminClientPreferredReplicaLeaderElectionCommand(bootstrapServers: String)
     val attemptedPartitions = try {
       result.partitions().get.asScala
     } catch {
-      case e: TimeoutException =>
-        // We timed out, or don't even know the attempted partitions
-        println("Timeout waiting for election results")
-        return
+      case e: ExecutionException =>
+        val cause = e.getCause
+        if (cause.isInstanceOf[TimeoutException]) {
+          // We timed out, or don't even know the attempted partitions
+          println("Timeout waiting for election results")
+          return
+        }
+        throw cause
       case e: Throwable =>
         // We don't even know the attempted partitions
         println("Error while making request")

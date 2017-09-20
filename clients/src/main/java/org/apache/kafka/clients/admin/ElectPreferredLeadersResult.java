@@ -52,7 +52,7 @@ public class ElectPreferredLeadersResult {
     }
 
     /** Return a new future that has completed exceptionally */
-    private static <T> KafkaFuture<T> exceptionalFuture(Exception e) {
+    private static <T> KafkaFuture<T> exceptionalFuture(Throwable e) {
         KafkaFutureImpl<T> future = new KafkaFutureImpl<>();
         future.completeExceptionally(e);
         return future;
@@ -93,8 +93,10 @@ public class ElectPreferredLeadersResult {
         final Map<TopicPartition, ? extends KafkaFuture<Void>> map;
         try {
             map = futures.get();
-        } catch (InterruptedException | ExecutionException e) {
+        } catch (InterruptedException e) {
             return exceptionalFuture(e);
+        } catch (ExecutionException e) {
+            return exceptionalFuture(e.getCause());
         }
         KafkaFutureImpl<Collection<TopicPartition>> result = new KafkaFutureImpl<>();
         result.complete(map.keySet());

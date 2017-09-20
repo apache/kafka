@@ -95,16 +95,43 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     servers(0).metadataCache.getPartitionInfo(topicPartition.topic(), topicPartition.partition()).get.basePartitionState.leader
   }
 
-  private def bootstrapServer: String = {
-    val port = servers(0).socketServer.boundPort(ListenerName.normalised("PLAINTEXT"))
+  private def bootstrapServer(broker: Int = 0): String = {
+    val port = servers(broker).socketServer.boundPort(ListenerName.normalised("PLAINTEXT"))
     info("Server bound to port "+port)
-    "localhost:" + port
+    s"localhost:$port"
   }
 
   val testPartition = new TopicPartition("test", 0)
   val testPartitionAssignment = List(1, 2, 0)
   val testPartitionPreferredLeader = testPartitionAssignment.head
   val testPartitionAndAssignment = Map(testPartition -> testPartitionAssignment)
+
+  /** Test the case multiple values are given for --bootstrap-broker */
+  @Test
+  def testMultipleBrokersGiven() {
+    createTestTopicAndCluster(testPartitionAndAssignment)
+    bounceServer(testPartitionPreferredLeader, testPartition)
+    // Check the leader for the partition is not the preferred one
+    assertNotEquals(testPartitionPreferredLeader, getLeader(testPartition))
+    PreferredReplicaLeaderElectionCommand.run(Array(
+      "--bootstrap-server", s"${bootstrapServer(1)},${bootstrapServer(0)}"))
+    // Check the leader for the partition IS the preferred one
+    assertEquals(testPartitionPreferredLeader, getLeader(testPartition))
+  }
+
+  /** Test the case when an invalid broker is given for --bootstrap-broker */
+  @Test
+  def testInvalidBrokerGiven() {
+    createTestTopicAndCluster(testPartitionAndAssignment)
+    bounceServer(testPartitionPreferredLeader, testPartition)
+    // Check the leader for the partition is not the preferred one
+    assertNotEquals(testPartitionPreferredLeader, getLeader(testPartition))
+    PreferredReplicaLeaderElectionCommand.run(Array(
+      "--bootstrap-server", "example.com:1234"),
+      timeout = Some(10000))
+    // Check the leader for the partition is STILL not the preferred one
+    assertNotEquals(testPartitionPreferredLeader, getLeader(testPartition))
+  }
 
   /** Test the case where no partitions are given (=> elect all partitions) */
   @Test
@@ -114,7 +141,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     // Check the leader for the partition is not the preferred one
     assertNotEquals(testPartitionPreferredLeader, getLeader(testPartition))
     PreferredReplicaLeaderElectionCommand.run(Array(
-      "--bootstrap-server", bootstrapServer))
+      "--bootstrap-server", bootstrapServer()))
     // Check the leader for the partition IS the preferred one
     assertEquals(testPartitionPreferredLeader, getLeader(testPartition))
   }
@@ -138,7 +165,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     val jsonFile = toJsonFile(testPartitionAndAssignment.keySet)
     try {
       PreferredReplicaLeaderElectionCommand.run(Array(
-        "--bootstrap-server", bootstrapServer,
+        "--bootstrap-server", bootstrapServer(),
         "--path-to-json-file", jsonFile.getAbsolutePath))
     } finally {
       jsonFile.delete()
@@ -158,7 +185,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     val jsonFile = toJsonFile(nonExistentPartitionAndAssignment.keySet)
     try {
       PreferredReplicaLeaderElectionCommand.run(Array(
-        "--bootstrap-server", bootstrapServer,
+        "--bootstrap-server", bootstrapServer(),
         "--path-to-json-file", jsonFile.getAbsolutePath))
     } catch {
       case e: AdminCommandFailedException =>
@@ -187,7 +214,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     val jsonFile = toJsonFile(testPartitionAndAssignment.keySet)
     try {
       PreferredReplicaLeaderElectionCommand.run(Array(
-        "--bootstrap-server", bootstrapServer,
+        "--bootstrap-server", bootstrapServer(),
         "--path-to-json-file", jsonFile.getAbsolutePath))
     } finally {
       jsonFile.delete()
@@ -207,7 +234,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     try {
       // Now do the election, even though the preferred replica is *already* the leader
       PreferredReplicaLeaderElectionCommand.run(Array(
-        "--bootstrap-server", bootstrapServer,
+        "--bootstrap-server", bootstrapServer(),
         "--path-to-json-file", jsonFile.getAbsolutePath))
       // Check the leader for the partition still is the preferred one
       assertEquals(testPartitionPreferredLeader, getLeader(testPartition))
@@ -231,7 +258,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     val jsonFile = toJsonFile(testPartitionAndAssignment.keySet)
     try {
       PreferredReplicaLeaderElectionCommand.run(Array(
-        "--bootstrap-server", bootstrapServer,
+        "--bootstrap-server", bootstrapServer(),
         "--path-to-json-file", jsonFile.getAbsolutePath))
       fail();
     } catch {
@@ -260,8 +287,9 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     val jsonFile = toJsonFile(testPartitionAndAssignment.keySet)
     try {
       PreferredReplicaLeaderElectionCommand.run(Array(
-        "--bootstrap-server", bootstrapServer,
-        "--path-to-json-file", jsonFile.getAbsolutePath))
+        "--bootstrap-server", bootstrapServer(),
+        "--path-to-json-file", jsonFile.getAbsolutePath),
+        timeout = Some(10000))
       fail();
     } catch {
       case e: AdminCommandFailedException =>
@@ -287,7 +315,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     val jsonFile = toJsonFile(testPartitionAndAssignment.keySet)
     try {
       PreferredReplicaLeaderElectionCommand.run(Array(
-        "--bootstrap-server", bootstrapServer,
+        "--bootstrap-server", bootstrapServer(),
         "--path-to-json-file", jsonFile.getAbsolutePath))
       fail();
     } catch {
