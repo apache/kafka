@@ -215,9 +215,9 @@ public class KafkaAdminClient extends AdminClient {
      * @param exc       The exception
      * @param <T>       The KafkaFutureImpl result type.
      */
-    private static <T> void completeAllExceptionally(Collection<KafkaFutureImpl<T>> futures, Throwable exc) {
-        for (KafkaFutureImpl<?> future : futures) {
-            future.completeExceptionally(exc);
+    private static <T> void completeAllExceptionally(Collection<KafkaFuture<T>> futures, Throwable exc) {
+        for (KafkaFuture<?> future : futures) {
+            ((KafkaFutureImpl) future).completeExceptionally(exc);
         }
     }
 
@@ -1043,7 +1043,7 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public CreateTopicsResult createTopics(final Collection<NewTopic> newTopics,
                                            final CreateTopicsOptions options) {
-        final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(newTopics.size());
+        final Map<String, KafkaFuture<Void>> topicFutures = new HashMap<>(newTopics.size());
         final Map<String, CreateTopicsRequest.TopicDetails> topicsMap = new HashMap<>(newTopics.size());
         for (NewTopic newTopic : newTopics) {
             if (topicFutures.get(newTopic.name()) == null) {
@@ -1065,7 +1065,7 @@ public class KafkaAdminClient extends AdminClient {
                 CreateTopicsResponse response = (CreateTopicsResponse) abstractResponse;
                 // Handle server responses for particular topics.
                 for (Map.Entry<String, ApiError> entry : response.errors().entrySet()) {
-                    KafkaFutureImpl<Void> future = topicFutures.get(entry.getKey());
+                    KafkaFutureImpl<Void> future = (KafkaFutureImpl) topicFutures.get(entry.getKey());
                     if (future == null) {
                         log.warn("Server response mentioned unknown topic {}", entry.getKey());
                     } else {
@@ -1078,8 +1078,8 @@ public class KafkaAdminClient extends AdminClient {
                     }
                 }
                 // The server should send back a response for every topic. But do a sanity check anyway.
-                for (Map.Entry<String, KafkaFutureImpl<Void>> entry : topicFutures.entrySet()) {
-                    KafkaFutureImpl<Void> future = entry.getValue();
+                for (Map.Entry<String, KafkaFuture<Void>> entry : topicFutures.entrySet()) {
+                    KafkaFutureImpl<Void> future = (KafkaFutureImpl) entry.getValue();
                     if (!future.isDone()) {
                         future.completeExceptionally(new ApiException("The server response did not " +
                             "contain a reference to node " + entry.getKey()));
@@ -1098,7 +1098,7 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public DeleteTopicsResult deleteTopics(final Collection<String> topicNames,
                                            DeleteTopicsOptions options) {
-        final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(topicNames.size());
+        final Map<String, KafkaFuture<Void>> topicFutures = new HashMap<>(topicNames.size());
         for (String topicName : topicNames) {
             if (topicFutures.get(topicName) == null) {
                 topicFutures.put(topicName, new KafkaFutureImpl<Void>());
@@ -1118,7 +1118,7 @@ public class KafkaAdminClient extends AdminClient {
                 DeleteTopicsResponse response = (DeleteTopicsResponse) abstractResponse;
                 // Handle server responses for particular topics.
                 for (Map.Entry<String, Errors> entry : response.errors().entrySet()) {
-                    KafkaFutureImpl<Void> future = topicFutures.get(entry.getKey());
+                    KafkaFutureImpl<Void> future = (KafkaFutureImpl) topicFutures.get(entry.getKey());
                     if (future == null) {
                         log.warn("Server response mentioned unknown topic {}", entry.getKey());
                     } else {
@@ -1131,8 +1131,8 @@ public class KafkaAdminClient extends AdminClient {
                     }
                 }
                 // The server should send back a response for every topic. But do a sanity check anyway.
-                for (Map.Entry<String, KafkaFutureImpl<Void>> entry : topicFutures.entrySet()) {
-                    KafkaFutureImpl<Void> future = entry.getValue();
+                for (Map.Entry<String, KafkaFuture<Void>> entry : topicFutures.entrySet()) {
+                    KafkaFutureImpl<Void> future = (KafkaFutureImpl) entry.getValue();
                     if (!future.isDone()) {
                         future.completeExceptionally(new ApiException("The server response did not " +
                             "contain a reference to node " + entry.getKey()));
@@ -1183,7 +1183,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DescribeTopicsResult describeTopics(final Collection<String> topicNames, DescribeTopicsOptions options) {
-        final Map<String, KafkaFutureImpl<TopicDescription>> topicFutures = new HashMap<>(topicNames.size());
+        final Map<String, KafkaFuture<TopicDescription>> topicFutures = new HashMap<>(topicNames.size());
         final ArrayList<String> topicNamesList = new ArrayList<>();
         for (String topicName : topicNames) {
             if (!topicFutures.containsKey(topicName)) {
@@ -1209,9 +1209,9 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse abstractResponse) {
                 MetadataResponse response = (MetadataResponse) abstractResponse;
                 // Handle server responses for particular topics.
-                for (Map.Entry<String, KafkaFutureImpl<TopicDescription>> entry : topicFutures.entrySet()) {
+                for (Map.Entry<String, KafkaFuture<TopicDescription>> entry : topicFutures.entrySet()) {
                     String topicName = entry.getKey();
-                    KafkaFutureImpl<TopicDescription> future = entry.getValue();
+                    KafkaFutureImpl<TopicDescription> future = (KafkaFutureImpl<TopicDescription>) entry.getValue();
                     Errors topicError = response.errors().get(topicName);
                     if (topicError != null) {
                         future.completeExceptionally(topicError.exception());
@@ -1339,7 +1339,7 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public CreateAclsResult createAcls(Collection<AclBinding> acls, CreateAclsOptions options) {
         final long now = time.milliseconds();
-        final Map<AclBinding, KafkaFutureImpl<Void>> futures = new HashMap<>();
+        final Map<AclBinding, KafkaFuture<Void>> futures = new HashMap<>();
         final List<AclCreation> aclCreations = new ArrayList<>();
         for (AclBinding acl : acls) {
             if (futures.get(acl) == null) {
@@ -1368,7 +1368,7 @@ public class KafkaAdminClient extends AdminClient {
                 List<AclCreationResponse> responses = response.aclCreationResponses();
                 Iterator<AclCreationResponse> iter = responses.iterator();
                 for (AclCreation aclCreation : aclCreations) {
-                    KafkaFutureImpl<Void> future = futures.get(aclCreation.acl());
+                    KafkaFutureImpl<Void> future = (KafkaFutureImpl<Void>) futures.get(aclCreation.acl());
                     if (!iter.hasNext()) {
                         future.completeExceptionally(new UnknownServerException(
                             "The broker reported no creation result for the given ACL."));
@@ -1394,7 +1394,7 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public DeleteAclsResult deleteAcls(Collection<AclBindingFilter> filters, DeleteAclsOptions options) {
         final long now = time.milliseconds();
-        final Map<AclBindingFilter, KafkaFutureImpl<FilterResults>> futures = new HashMap<>();
+        final Map<AclBindingFilter, KafkaFuture<FilterResults>> futures = new HashMap<>();
         final List<AclBindingFilter> filterList = new ArrayList<>();
         for (AclBindingFilter filter : filters) {
             if (futures.get(filter) == null) {
@@ -1416,7 +1416,7 @@ public class KafkaAdminClient extends AdminClient {
                 List<AclFilterResponse> responses = response.responses();
                 Iterator<AclFilterResponse> iter = responses.iterator();
                 for (AclBindingFilter filter : filterList) {
-                    KafkaFutureImpl<FilterResults> future = futures.get(filter);
+                    KafkaFutureImpl<FilterResults> future = (KafkaFutureImpl<FilterResults>) futures.get(filter);
                     if (!iter.hasNext()) {
                         future.completeExceptionally(new UnknownServerException(
                             "The broker reported no deletion result for the given filter."));
@@ -1445,7 +1445,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DescribeConfigsResult describeConfigs(Collection<ConfigResource> configResources, final DescribeConfigsOptions options) {
-        final Map<ConfigResource, KafkaFutureImpl<Config>> unifiedRequestFutures = new HashMap<>();
+        final Map<ConfigResource, KafkaFuture<Config>> unifiedRequestFutures = new HashMap<>();
         final Map<ConfigResource, KafkaFutureImpl<Config>> brokerFutures = new HashMap<>(configResources.size());
 
         // The BROKER resources which we want to describe.  We must make a separate DescribeConfigs
@@ -1479,9 +1479,9 @@ public class KafkaAdminClient extends AdminClient {
                 @Override
                 void handleResponse(AbstractResponse abstractResponse) {
                     DescribeConfigsResponse response = (DescribeConfigsResponse) abstractResponse;
-                    for (Map.Entry<ConfigResource, KafkaFutureImpl<Config>> entry : unifiedRequestFutures.entrySet()) {
+                    for (Map.Entry<ConfigResource, KafkaFuture<Config>> entry : unifiedRequestFutures.entrySet()) {
                         ConfigResource configResource = entry.getKey();
-                        KafkaFutureImpl<Config> future = entry.getValue();
+                        KafkaFutureImpl<Config> future = (KafkaFutureImpl<Config>) entry.getValue();
                         DescribeConfigsResponse.Config config = response.config(configResourceToResource(configResource));
                         if (config == null) {
                             future.completeExceptionally(new UnknownServerException(
@@ -1571,7 +1571,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, final AlterConfigsOptions options) {
-        final Map<ConfigResource, KafkaFutureImpl<Void>> futures = new HashMap<>(configs.size());
+        final Map<ConfigResource, KafkaFuture<Void>> futures = new HashMap<>(configs.size());
         for (ConfigResource configResource : configs.keySet()) {
             futures.put(configResource, new KafkaFutureImpl<Void>());
         }
@@ -1596,8 +1596,8 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             public void handleResponse(AbstractResponse abstractResponse) {
                 AlterConfigsResponse response = (AlterConfigsResponse) abstractResponse;
-                for (Map.Entry<ConfigResource, KafkaFutureImpl<Void>> entry : futures.entrySet()) {
-                    KafkaFutureImpl<Void> future = entry.getValue();
+                for (Map.Entry<ConfigResource, KafkaFuture<Void>> entry : futures.entrySet()) {
+                    KafkaFutureImpl<Void> future = (KafkaFutureImpl<Void>) entry.getValue();
                     ApiException exception = response.errors().get(configResourceToResource(entry.getKey())).exception();
                     if (exception != null) {
                         future.completeExceptionally(exception);
@@ -1617,7 +1617,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public AlterReplicaDirResult alterReplicaDir(Map<TopicPartitionReplica, String> replicaAssignment, final AlterReplicaDirOptions options) {
-        final Map<TopicPartitionReplica, KafkaFutureImpl<Void>> futures = new HashMap<>(replicaAssignment.size());
+        final Map<TopicPartitionReplica, KafkaFuture<Void>> futures = new HashMap<>(replicaAssignment.size());
 
         for (TopicPartitionReplica replica : replicaAssignment.keySet()) {
             futures.put(replica, new KafkaFutureImpl<Void>());
@@ -1655,7 +1655,7 @@ public class KafkaAdminClient extends AdminClient {
                         TopicPartition tp = responseEntry.getKey();
                         Errors error = responseEntry.getValue();
                         TopicPartitionReplica replica = new TopicPartitionReplica(tp.topic(), tp.partition(), brokerId);
-                        KafkaFutureImpl<Void> future = futures.get(replica);
+                        KafkaFutureImpl<Void> future = (KafkaFutureImpl<Void>) futures.get(replica);
                         if (future == null) {
                             handleFailure(new IllegalArgumentException(
                                 "The partition " + tp + " in the response from broker " + brokerId + " is not in the request"));
@@ -1678,7 +1678,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DescribeLogDirsResult describeLogDirs(Collection<Integer> brokers, DescribeLogDirsOptions options) {
-        final Map<Integer, KafkaFutureImpl<Map<String, DescribeLogDirsResponse.LogDirInfo>>> futures = new HashMap<>(brokers.size());
+        final Map<Integer, KafkaFuture<Map<String, DescribeLogDirsResponse.LogDirInfo>>> futures = new HashMap<>(brokers.size());
 
         for (Integer brokerId: brokers) {
             futures.put(brokerId, new KafkaFutureImpl<Map<String, DescribeLogDirsResponse.LogDirInfo>>());
@@ -1698,7 +1698,8 @@ public class KafkaAdminClient extends AdminClient {
                 @Override
                 public void handleResponse(AbstractResponse abstractResponse) {
                     DescribeLogDirsResponse response = (DescribeLogDirsResponse) abstractResponse;
-                    KafkaFutureImpl<Map<String, DescribeLogDirsResponse.LogDirInfo>> future = futures.get(brokerId);
+                    KafkaFutureImpl<Map<String, DescribeLogDirsResponse.LogDirInfo>> future =
+                        (KafkaFutureImpl<Map<String, DescribeLogDirsResponse.LogDirInfo>>) futures.get(brokerId);
                     if (response.logDirInfos().size() > 0) {
                         future.complete(response.logDirInfos());
                     } else {
@@ -1718,7 +1719,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DescribeReplicaLogDirResult describeReplicaLogDir(Collection<TopicPartitionReplica> replicas, DescribeReplicaLogDirOptions options) {
-        final Map<TopicPartitionReplica, KafkaFutureImpl<DescribeReplicaLogDirResult.ReplicaLogDirInfo>> futures = new HashMap<>(replicas.size());
+        final Map<TopicPartitionReplica, KafkaFuture<DescribeReplicaLogDirResult.ReplicaLogDirInfo>> futures = new HashMap<>(replicas.size());
 
         for (TopicPartitionReplica replica : replicas) {
             futures.put(replica, new KafkaFutureImpl<DescribeReplicaLogDirResult.ReplicaLogDirInfo>());
@@ -1786,7 +1787,8 @@ public class KafkaAdminClient extends AdminClient {
 
                     for (Map.Entry<TopicPartition, ReplicaLogDirInfo> entry: replicaDirInfoByPartition.entrySet()) {
                         TopicPartition tp = entry.getKey();
-                        KafkaFutureImpl<ReplicaLogDirInfo> future = futures.get(new TopicPartitionReplica(tp.topic(), tp.partition(), brokerId));
+                        KafkaFutureImpl<ReplicaLogDirInfo> future = (KafkaFutureImpl<DescribeReplicaLogDirResult.ReplicaLogDirInfo>)
+                            futures.get(new TopicPartitionReplica(tp.topic(), tp.partition(), brokerId));
                         future.complete(entry.getValue());
                     }
                 }
@@ -1797,6 +1799,6 @@ public class KafkaAdminClient extends AdminClient {
             }, now);
         }
 
-        return new DescribeReplicaLogDirResult(new HashMap<TopicPartitionReplica, KafkaFuture<ReplicaLogDirInfo>>(futures));
+        return new DescribeReplicaLogDirResult(futures);
     }
 }
