@@ -18,6 +18,7 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelState;
@@ -313,6 +314,18 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
+     * Check if authentication to this node has failed, based on the connection state. Authentication failures are
+     * propagated without any retries.
+     *
+     * @param node the node to check
+     * @return an AuthenticationException iff authentication has failed, null otherwise
+     */
+    @Override
+    public AuthenticationException authenticationException(Node node) {
+        return connectionStates.authenticationException(node.idString());
+    }
+
+    /**
      * Check if the node with the given id is ready to send more requests.
      *
      * @param node The node
@@ -589,6 +602,7 @@ public class NetworkClient implements KafkaClient {
         nodesNeedingApiVersionsFetch.remove(nodeId);
         switch (disconnectState.state()) {
             case AUTHENTICATION_FAILED:
+                connectionStates.authenticationFailed(nodeId, now, disconnectState.exception());
                 log.error("Connection to node {} failed authentication due to: {}", nodeId, disconnectState.exception().getMessage());
                 break;
             case AUTHENTICATE:
@@ -610,6 +624,9 @@ public class NetworkClient implements KafkaClient {
             else
                 responses.add(request.disconnected(now));
         }
+        AuthenticationException authenticationException = connectionStates.authenticationException(nodeId);
+        if (authenticationException != null)
+            metadataUpdater.handleAuthenticationFailure(authenticationException);
     }
 
     /**
@@ -848,6 +865,13 @@ public class NetworkClient implements KafkaClient {
         }
 
         @Override
+        public void handleAuthenticationFailure(AuthenticationException exception) {
+            metadataFetchInProgress = false;
+            if (metadata.updateRequested())
+                metadata.failedUpdate(time.milliseconds(), exception);
+        }
+
+        @Override
         public void handleCompletedMetadataResponse(RequestHeader requestHeader, long now, MetadataResponse response) {
             this.metadataFetchInProgress = false;
             Cluster cluster = response.cluster();
@@ -862,7 +886,7 @@ public class NetworkClient implements KafkaClient {
                 this.metadata.update(cluster, response.unavailableTopics(), now);
             } else {
                 log.trace("Ignoring empty metadata response with correlation id {}.", requestHeader.correlationId());
-                this.metadata.failedUpdate(now);
+                this.metadata.failedUpdate(now, null);
             }
         }
 
@@ -979,7 +1003,7 @@ public class NetworkClient implements KafkaClient {
         public ClientResponse disconnected(long timeMs) {
             return new ClientResponse(header, callback, destination, createdTimeMs, timeMs, true, null, null);
         }
-        
+
         @Override
         public String toString() {
             return "InFlightRequest(header=" + header +

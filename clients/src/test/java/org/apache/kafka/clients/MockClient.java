@@ -18,6 +18,7 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
@@ -132,6 +133,11 @@ public class MockClient implements KafkaClient {
     @Override
     public boolean connectionFailed(Node node) {
         return isBlackedOut(node);
+    }
+
+    @Override
+    public AuthenticationException authenticationException(Node node) {
+        return null;
     }
 
     @Override

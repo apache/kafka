@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
@@ -982,6 +983,12 @@ public abstract class AbstractCoordinator implements Closeable {
                         }
                     }
                 }
+            } catch (AuthenticationException e) {
+                log.error("An authentication error occurred in the heartbeat thread", e);
+                this.failed.set(e);
+            } catch (GroupAuthorizationException e) {
+                log.error("A group authorization error occurred in the heartbeat thread for group {}", groupId, e);
+                this.failed.set(e);
             } catch (InterruptedException | InterruptException e) {
                 Thread.interrupted();
                 log.error("Unexpected interrupt received in heartbeat thread for group {}", groupId, e);
