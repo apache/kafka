@@ -1568,17 +1568,17 @@ public interface KGroupedStream<K, V> {
                                          final StateStoreSupplier<SessionStore> storeSupplier);
 
     /**
-     * Create a new {@link WindowedKStream} instance that can be used to perform windowed aggregations.
+     * Create a new {@link TimeWindowedKStream} instance that can be used to perform windowed aggregations.
      * @param windows the specification of the aggregation {@link Windows}
      * @param <W>     the window type
-     * @return an instance of {@link WindowedKStream}
+     * @return an instance of {@link TimeWindowedKStream}
      */
-    <W extends Window> WindowedKStream<K, V> windowedBy(final Windows<W> windows);
+    <W extends Window> TimeWindowedKStream<K, V> windowedBy(final Windows<W> windows);
 
     /**
      * Create a new {@link SessionWindowedKStream} instance that can be used to perform session windowed aggregations.
      * @param windows the specification of the aggregation {@link SessionWindows}
-     * @return an instance of {@link WindowedKStream}
+     * @return an instance of {@link TimeWindowedKStream}
      */
     SessionWindowedKStream<K, V> windowedBy(final SessionWindows windows);
 

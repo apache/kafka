@@ -119,7 +119,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
     @Override
     public KTable<Windowed<K>, V> reduce(final Reducer<V> reducer) {
         Objects.requireNonNull(reducer, "reducer can't be null");
-        return doAggregate(reduceInitializer, reducer(reducer), aggregator(reducer(reducer)), valSerde);
+        return doAggregate(reduceInitializer, aggregatorForReducer(reducer), mergerForAggregator(aggregatorForReducer(reducer)), valSerde);
     }
 
     @Override
@@ -127,8 +127,8 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
                                          final Materialized<K, V, SessionStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(reducer, "reducer can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final Aggregator<K, V, V> reduceAggregator = reducer(reducer);
-        return aggregate(reduceInitializer, reduceAggregator, aggregator(reduceAggregator), materialized);
+        final Aggregator<K, V, V> reduceAggregator = aggregatorForReducer(reducer);
+        return aggregate(reduceInitializer, reduceAggregator, mergerForAggregator(reduceAggregator), materialized);
     }
 
 
@@ -154,7 +154,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
         return builder;
     }
 
-    private Merger<K, V> aggregator(final Aggregator<K, V, V> aggregator) {
+    private Merger<K, V> mergerForAggregator(final Aggregator<K, V, V> aggregator) {
         return new Merger<K, V>() {
             @Override
             public V apply(final K aggKey, final V aggOne, final V aggTwo) {
@@ -163,7 +163,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
         };
     }
 
-    private Aggregator<K, V, V> reducer(final Reducer<V> reducer) {
+    private Aggregator<K, V, V> aggregatorForReducer(final Reducer<V> reducer) {
         return new Aggregator<K, V, V>() {
             @Override
             public V apply(final K aggKey, final V value, final V aggregate) {
