@@ -20,14 +20,31 @@
 """
 Utility for creating release candidates and promoting release candidates to a final relase.
 
-Usage: release.py
+Usage: release.py [subcommand]
 
-The utility is interactive; you will be prompted for basic release information and guided through the process.
+release.py stage
 
-This utility assumes you already have local a kafka git folder and that you
-have added remotes corresponding to both:
-(i) the github apache kafka mirror and
-(ii) the apache kafka git repo.
+  Builds and stages an RC for a release.
+
+  The utility is interactive; you will be prompted for basic release information and guided through the process.
+
+  This utility assumes you already have local a kafka git folder and that you
+  have added remotes corresponding to both:
+  (i) the github apache kafka mirror and
+  (ii) the apache kafka git repo.
+
+release.py stage-docs [kafka-site-path]
+
+  Builds the documentation and stages it into an instance of the Kafka website repository.
+
+  This is meant to automate the integration between the main Kafka website repository (git://git.apache.org/kafka-site.git)
+  and the versioned documentation maintained in the main Kafka repository. This is useful both for local testing and
+  development of docs (follow the instructions here: https://cwiki.apache.org/confluence/display/KAFKA/Setup+Kafka+Website+on+Local+Apache+Server)
+  as well as for committers to deploy docs (run this script, then validate, commit, and push to kafka-site).
+
+  With no arguments this script assumes you have the Kafka repository and kafka-site repository checked out side-by-side, but
+  you can specify a full path to the kafka-site repository if this is not the case.
+
 """
 
 from __future__ import print_function
@@ -145,11 +162,87 @@ def get_pref(prefs, name, request_fn):
         prefs[name] = val
     return val
 
-# Load saved preferences
-prefs = {}
-if os.path.exists(PREFS_FILE):
-    with open(PREFS_FILE, 'r') as prefs_fp:
-        prefs = json.load(prefs_fp)
+def load_prefs():
+    """Load saved preferences"""
+    prefs = {}
+    if os.path.exists(PREFS_FILE):
+        with open(PREFS_FILE, 'r') as prefs_fp:
+            prefs = json.load(prefs_fp)
+    return prefs
+
+def save_prefs(prefs):
+    """Save preferences"""
+    print("Saving preferences to %s" % PREFS_FILE)
+    with open(PREFS_FILE, 'w') as prefs_fp:
+        prefs = json.dump(prefs, prefs_fp)
+
+def get_jdk(prefs, version):
+    """
+    Get settings for the specified JDK version.
+    """
+    jdk_java_home = get_pref(prefs, 'jdk%d' % version, lambda: raw_input("Enter the path for JAVA_HOME for a JDK%d compiler (blank to use default JAVA_HOME): " % version))
+    jdk_env = dict(os.environ) if jdk_java_home.strip() else None
+    if jdk_env is not None: jdk_env['JAVA_HOME'] = jdk_java_home
+    if "1.%d.0" % version not in cmd_output("java -version", env=jdk_env):
+        fail("JDK %s is required" % version)
+    return jdk_env
+
+def get_version(repo=REPO_HOME):
+    """
+    Extracts the full version information as a str from gradle.properties
+    """
+    with open(os.path.join(repo, 'gradle.properties')) as fp:
+        for line in fp:
+            parts = line.split('=')
+            if parts[0].strip() != 'version': continue
+            return parts[1].strip()
+    fail("Couldn't extract version from gradle.properties")
+
+def docs_version(version):
+    """
+    Detects the major/minor version and converts it to the format used for docs on the website, e.g. gets 0.10.2.0-SNAPSHOT
+    from gradle.properties and converts it to 0102
+    """
+    version_parts = version.strip().split('.')
+    # 1.0+will only have 3 version components as opposed to pre-1.0 that had 4
+    major_minor = version_parts[0:3] if version_parts[0] == '0' else version_parts[0:2]
+    return ''.join(major_minor)
+
+
+def command_stage_docs():
+    kafka_site_repo_path = sys.argv[2] if len(sys.argv) > 2 else os.path.join(REPO_HOME, '..', 'kafka-site')
+    if not os.path.exists(kafka_site_repo_path) or not os.path.exists(os.path.join(kafka_site_repo_path, 'powered-by.html')):
+        sys.exit("%s doesn't exist or does not appear to be the kafka-site repository" % kafka_site_repo_path)
+
+    prefs = load_prefs()
+    jdk8_env = get_jdk(prefs, 8)
+    save_prefs(prefs)
+
+    version = get_version()
+
+    cmd("Building docs", "./gradlew clean releaseTarGzAll aggregatedJavadoc", cwd=REPO_HOME, env=jdk8_env)
+
+    docs_tar = os.path.join(REPO_HOME, 'core', 'build', 'distributions', 'kafka_2.11-%s-site-docs.tgz' % version)
+
+    # The contents of the docs jar are site-docs/<docs dir>. We need to get rid of the site-docs prefix and dump everything
+    # inside it into the docs version subdirectory in the kafka-site repo
+    cmd('Extracting ', 'tar xf %s --strip-components 1' % docs_tar, cwd=os.path.join(kafka_site_repo_path, docs_version(version)))
+
+    sys.exit(0)
+
+
+# Dispatch to subcommand
+subcommand = sys.argv[1] if len(sys.argv) > 1 else None
+if subcommand == 'stage-docs':
+    command_stage_docs()
+elif not (subcommand is None or subcommand == 'stage'):
+    fail("Unknown subcommand: %s" % subcommand)
+# else -> default subcommand stage
+
+
+## Default 'stage' subcommand implementation isn't isolated to its own function yet for historical reasons
+
+prefs = load_prefs()
 
 if not user_ok("""Requirements:
 1. Updated docs to reference the new release version where appropriate.
@@ -244,18 +337,8 @@ if not rc:
 # Prereq checks
 apache_id = get_pref(prefs, 'apache_id', lambda: raw_input("Enter your apache username: "))
 
-
-jdk7_java_home = get_pref(prefs, 'jdk7', lambda: raw_input("Enter the path for JAVA_HOME for a JDK7 compiler (blank to use default JAVA_HOME): "))
-jdk7_env = dict(os.environ) if jdk7_java_home.strip() else None
-if jdk7_env is not None: jdk7_env['JAVA_HOME'] = jdk7_java_home
-if "1.7.0" not in cmd_output("java -version", env=jdk7_env):
-    fail("You must be able to build artifacts with JDK7 for Scala 2.10 and 2.11 artifacts")
-
-jdk8_java_home = get_pref(prefs, 'jdk8', lambda: raw_input("Enter the path for JAVA_HOME for a JDK8 compiler (blank to use default JAVA_HOME): "))
-jdk8_env = dict(os.environ) if jdk8_java_home.strip() else None
-if jdk8_env is not None: jdk8_env['JAVA_HOME'] = jdk8_java_home
-if "1.8.0" not in cmd_output("java -version", env=jdk8_env):
-    fail("You must be able to build artifacts with JDK8 for Scala 2.12 artifacts")
+jdk7_env = get_jdk(prefs, 7)
+jdk8_env = get_jdk(prefs, 8)
 
 
 def select_gpg_key():
@@ -275,10 +358,7 @@ with tempfile.NamedTemporaryFile() as gpg_test_tempfile:
     gpg_test_tempfile.write("abcdefg")
     cmd("Testing GPG key & passphrase", ["gpg", "--batch", "--pinentry-mode", "loopback", "--passphrase-fd", "0", "-u", key_name, "--armor", "--output", gpg_test_tempfile.name + ".asc", "--detach-sig", gpg_test_tempfile.name], stdin=gpg_passphrase)
 
-# Save preferences
-print("Saving preferences to %s" % PREFS_FILE)
-with open(PREFS_FILE, 'w') as prefs_fp:
-    prefs = json.dump(prefs, prefs_fp)
+save_prefs(prefs)
 
 # Generate RC
 try:
