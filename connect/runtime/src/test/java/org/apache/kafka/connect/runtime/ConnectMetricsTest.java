@@ -55,8 +55,8 @@ public class ConnectMetricsTest {
 
     @Test
     public void testValidatingNameWithAllValidCharacters() {
-        String name = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-";
-        assertSame(name, ConnectMetrics.makeValidName(name));
+        String name = "abcdefghijklmnopqrstuvwxyz_ABCDEFGHIJKLMNOPQRSTUVWXYZ-0123456789";
+        assertEquals(name, ConnectMetrics.makeValidName(name));
     }
 
     @Test
@@ -72,7 +72,7 @@ public class ConnectMetricsTest {
 
     @Test
     public void testValidatingNameWithInvalidCharacters() {
-        assertEquals("a-b-c-d-e-f-g-h-i-j-k", ConnectMetrics.makeValidName("a:b;c/d\\e,f*g?h[i]j=k"));
+        assertEquals("a-b-c-d-e-f-g-h-i-j-k", ConnectMetrics.makeValidName("a:b;c/d\\e,f*.--..;;g?h[i]j=k"));
         assertEquals("-a-b-c-d-e-f-g-h-", ConnectMetrics.makeValidName(":a:b;c/d\\e,f*g?[]=h:"));
         assertEquals("a-f-h", ConnectMetrics.makeValidName("a:;/\\,f*?h"));
     }

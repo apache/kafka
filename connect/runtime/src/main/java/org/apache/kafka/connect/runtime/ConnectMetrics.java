@@ -96,8 +96,10 @@ public class ConnectMetrics {
     /**
      * Get or create a {@link MetricGroup} with the specified group name.
      *
-     * @param groupName the name of the metric group; may not be null
+     * @param groupName the name of the metric group; may not be null and must be a
+     *                  {@link #checkNameIsValid(String) valid name}
      * @return the {@link MetricGroup} that can be used to create metrics; never null
+     * @throws IllegalArgumentException if the group name is not valid
      */
     public MetricGroup group(String groupName) {
         return group(groupName, false);
@@ -106,9 +108,11 @@ public class ConnectMetrics {
     /**
      * Get or create a {@link MetricGroup} with the specified group name and the given tags.
      *
-     * @param groupName    the name of the metric group; may not be null
+     * @param groupName    the name of the metric group; may not be null and must be a
+     *                     {@link #checkNameIsValid(String) valid name}
      * @param tagKeyValues pairs of tag name and values
      * @return the {@link MetricGroup} that can be used to create metrics; never null
+     * @throws IllegalArgumentException if the group name is not valid
      */
     public MetricGroup group(String groupName, String... tagKeyValues) {
         return group(groupName, false, tagKeyValues);
@@ -117,10 +121,12 @@ public class ConnectMetrics {
     /**
      * Get or create a {@link MetricGroup} with the specified group name and the given tags.
      *
-     * @param groupName       the name of the metric group; may not be null
+     * @param groupName       the name of the metric group; may not be null and must be a
+     *                        {@link #checkNameIsValid(String) valid name}
      * @param includeWorkerId true if the tags should include the worker ID
      * @param tagKeyValues    pairs of tag name and values
      * @return the {@link MetricGroup} that can be used to create metrics; never null
+     * @throws IllegalArgumentException if the group name is not valid
      */
     public MetricGroup group(String groupName, boolean includeWorkerId, String... tagKeyValues) {
         MetricGroup group = groupsByName.get(groupName);
@@ -158,7 +164,15 @@ public class ConnectMetrics {
         private final String groupName;
         private final Map<String, String> tags;
 
+        /**
+         * Create a group of Connect metrics.
+         *
+         * @param groupName the name of the group; may not be null and must be valid
+         * @param tags      the tags; may not be null but may be empty
+         * @throws IllegalArgumentException if the name is not valid
+         */
         protected MetricGroup(String groupName, Map<String, String> tags) {
+            checkNameIsValid(groupName);
             this.groupName = groupName;
             this.tags = Collections.unmodifiableMap(new HashMap<>(tags));
         }
@@ -166,11 +180,13 @@ public class ConnectMetrics {
         /**
          * Create the name of a metric that belongs to this group and has the group's tags.
          *
-         * @param name the name of the metric/attribute; may not be null
+         * @param name the name of the metric/attribute; may not be null and must be valid
          * @param desc the description for the metric/attribute; may not be null
          * @return the metric name; never null
+         * @throws IllegalArgumentException if the name is not valid
          */
         public MetricName metricName(String name, String desc) {
+            checkNameIsValid(name);
             return metrics.metricName(name, groupName, desc, tags);
         }
 
@@ -195,9 +211,11 @@ public class ConnectMetrics {
         /**
          * Add to this group an indicator metric with a function that will be used to obtain the indicator state.
          *
-         * @param name the name of the metric; may not be null
+         * @param name        the name of the metric; may not be null and must be a
+         *                    {@link #checkNameIsValid(String) valid name}
          * @param description the description of the metric; may not be null
-         * @param predicate the predicate function used to determine the indicator state; may not be null
+         * @param predicate   the predicate function used to determine the indicator state; may not be null
+         * @throws IllegalArgumentException if the name is not valid
          */
         public void addIndicatorMetric(String name, String description, final IndicatorPredicate predicate) {
             MetricName metricName = metricName(name, description);
@@ -226,7 +244,8 @@ public class ConnectMetrics {
     }
 
     /**
-     * Create a set of tags using the supplied key and value pairs.
+     * Create a set of tags using the supplied key and value pairs. Every tag name and value will be
+     * {@link #makeValidName(String) made valid} before it is used.
      *
      * @param workerId the worker ID that should be included first in the tags; may be null if not to be included
      * @param keyValue the key and value pairs for the tags; must be an even number
@@ -237,17 +256,17 @@ public class ConnectMetrics {
             throw new IllegalArgumentException("keyValue needs to be specified in pairs");
         Map<String, String> tags = new HashMap<>();
         if (workerId != null && !workerId.trim().isEmpty()) {
-            tags.put(WORKER_ID_TAG_NAME, workerId);
+            tags.put(WORKER_ID_TAG_NAME, makeValidName(workerId));
         }
         for (int i = 0; i < keyValue.length; i += 2) {
-            tags.put(keyValue[i], keyValue[i + 1]);
+            tags.put(makeValidName(keyValue[i]), makeValidName(keyValue[i + 1]));
         }
         return tags;
     }
 
     /**
-     * Utility to ensure the supplied name contains valid characters, replacing sequences of 1 or more
-     * ':', '/', '\', '*', '?', '[', ']', '=', or comma characters with a single '-'.
+     * Utility to ensure the supplied name contains valid characters, replacing with a single '-' sequences of
+     * 1 or more characters <em>other than</em> word characters (e.g., "[a-zA-Z_0-9]").
      *
      * @param name the name; may not be null
      * @return the validated name; never null
@@ -256,8 +275,22 @@ public class ConnectMetrics {
         Objects.requireNonNull(name);
         name = name.trim();
         if (!name.isEmpty()) {
-            name = name.replaceAll("[.:/\\\\*?,;\\[\\]\\\\=]+", "-");
+            name = name.replaceAll("[^\\w]+", "-");
         }
         return name;
+    }
+
+    /**
+     * Utility method that determines whether the supplied name contains only "[a-zA-Z0-9_-]" characters and thus
+     * would be unchanged by {@link #makeValidName(String)}.
+     *
+     * @param name the name; may not be null
+     * @return true if the name is valid, or false otherwise
+     * @throws IllegalArgumentException if the name is not valid
+     */
+    static void checkNameIsValid(String name) {
+        if (!name.equals(makeValidName(name))) {
+            throw new IllegalArgumentException("The name '" + name + "' contains at least one invalid character");
+        }
     }
 }
