@@ -19,7 +19,7 @@ package kafka.server
 import java.util.{Collections, Properties}
 
 import kafka.admin.{AdminOperationException, AdminUtils}
-import kafka.common.{TopicAlreadyMarkedForDeletionException, TopicAndPartition}
+import kafka.common.{TopicAlreadyMarkedForDeletionException}
 import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
@@ -202,10 +202,9 @@ class AdminManager(val config: KafkaConfig,
                        validateOnly: Boolean,
                        listenerName: ListenerName,
                        callback: Map[String, ApiError] => Unit): Unit = {
-    var waiting = Map.empty[String, NewPartitions]
-    var done = Map.empty[String, ApiError]
 
-    newPartitions.foreach{ case (topic, newPartition) =>
+    // 1. map over topics creating assignment and calling AdminUtils
+    val metadata = newPartitions.map{ case (topic, newPartition) =>
       try {
         val oldNumPartitions = zkUtils.getTopicPartitionCount(topic).getOrElse(throw new InvalidTopicException())
         val newNumPartitions = newPartition.totalCount
@@ -241,27 +240,33 @@ class AdminManager(val config: KafkaConfig,
           }.toMap)
         }
 
-        AdminUtils.addPartitions(zkUtils, topic, existingAssignment, newPartition.totalCount, reassignment, validateOnly = validateOnly)
-        if (validateOnly) {
-          done += topic -> ApiError.NONE
-        } else {
-          waiting += topic -> newPartition
-        }
+        val added = AdminUtils.addPartitions(zkUtils, topic, existingAssignment, newPartition.totalCount, reassignment, validateOnly = validateOnly)
+        CreatePartitionMetadata(topic, added.keySet, ApiError.NONE)
       } catch {
         case e: AdminOperationException =>
-          done += topic -> ApiError.fromThrowable(e)
+          CreatePartitionMetadata(topic, null, ApiError.fromThrowable(e))
         case e: ApiException =>
-          done += topic -> ApiError.fromThrowable(e)
+          CreatePartitionMetadata(topic, null, ApiError.fromThrowable(e))
       }
     }
 
-    if (waiting.nonEmpty) {
-      // wait for the updates to hit the metadata cache
-      val delayedCreateKeys = waiting.keySet.map(new TopicKey(_)).toSeq
-      val delayedCreate = new DelayedCreatePartitions(timeout, done, waiting, this, listenerName, callback)
-      topicPurgatory.tryCompleteElseWatch(delayedCreate, delayedCreateKeys)
+    // 2. if timeout <= 0, validateOnly or no topics can proceed return immediately
+    if (timeout <= 0 || validateOnly || !metadata.exists(_.error.is(Errors.NONE))) {
+      val results = metadata.map { createPartitionMetadata =>
+        // ignore topics that already have errors
+        if (createPartitionMetadata.error.isSuccess() && !validateOnly) {
+          (createPartitionMetadata.topic, new ApiError(Errors.REQUEST_TIMED_OUT, null))
+        } else {
+          (createPartitionMetadata.topic, createPartitionMetadata.error)
+        }
+      }.toMap
+      callback(results)
     } else {
-      callback(done)
+      // 3. else pass the assignments and errors to the delayed operation and set the keys
+      val delayedCreate = new DelayedCreatePartitions(timeout, metadata.toSeq, this, callback)
+      val delayedCreateKeys = newPartitions.keySet.map(new TopicKey(_)).toSeq
+      // try to complete the request immediately, otherwise put it into the purgatory
+      topicPurgatory.tryCompleteElseWatch(delayedCreate, delayedCreateKeys)
     }
   }
 

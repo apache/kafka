@@ -274,7 +274,7 @@ object AdminUtils extends Logging with AdminUtilities {
                     replicaAssignment: Option[Map[Int, Seq[Int]]] = None,
                     checkBrokerAvailable: Boolean = true,
                     rackAwareMode: RackAwareMode = RackAwareMode.Enforced,
-                    validateOnly: Boolean = false) {
+                    validateOnly: Boolean = false): Map[Int, Seq[Int]] = {
     if (zkUtils.pathExists(ZkUtils.ReassignPartitionsPath)) {
       // We prevent addition partitions while a reassignment is in progress, since
       // during reassignment there is no meaningful notion of replication factor
@@ -311,6 +311,7 @@ object AdminUtils extends Logging with AdminUtilities {
       // add the combined new list
       AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, partitionReplicaList ++ newPartitionReplicaList, update = true)
     }
+    newPartitionReplicaList
   }
 
   /**

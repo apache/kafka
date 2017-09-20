@@ -17,72 +17,79 @@
 
 package kafka.server
 
-import kafka.common.TopicAndPartition
+import kafka.api.LeaderAndIsr
 import org.apache.kafka.clients.admin.NewPartitions
-import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ApiError
 
-import scala.collection.{Map, Seq, mutable}
+import scala.collection.{Map, Seq, Set}
+import scala.collection.JavaConverters._
+
+case class CreatePartitionMetadata(topic: String, addedPartitions: Set[Int], error: ApiError)
 
 /**
   * A delayed create partitions operation that can be created by the admin manager and watched
   * in the topic purgatory
   */
 class DelayedCreatePartitions(delayMs: Long,
-                              done: Map[String, ApiError],
-                              waiting: Map[String, NewPartitions],
+                              createMetadata: Seq[CreatePartitionMetadata],
                               adminManager: AdminManager,
-                              listenerName: ListenerName,
                               responseCallback: Map[String, ApiError] => Unit)
   extends DelayedOperation(delayMs) {
 
-  // the results of topics we were waiting for
-  val waitedResults = mutable.Map.empty[String, ApiError]
-
-  // the topics we're still waiting for
-  val waitingFor = mutable.Map.empty[String, NewPartitions] ++= waiting
-
   /**
-    * Call-back to execute when a delayed operation gets expired and hence forced to complete.
+    * The operation can be completed if all of the topics that do not have an error exist and every partition has a leader in the controller.
+    * See KafkaController.onNewTopicCreation
     */
-  override def onExpiration(): Unit = {
-    (waitingFor.keySet--waitedResults.keySet).foreach{
-      case topic => waitedResults += topic -> new ApiError(Errors.REQUEST_TIMED_OUT, Errors.REQUEST_TIMED_OUT.message())
+  override def tryComplete() : Boolean = {
+    trace(s"Trying to complete operation for $createMetadata")
+
+    val leaderlessPartitionCount = createMetadata.filter(_.error.isSuccess)
+      .foldLeft(0) { case (topicCounter, metadata) =>
+        topicCounter + missingLeaderCount(metadata.topic, metadata.addedPartitions)
+      }
+
+    if (leaderlessPartitionCount == 0) {
+      trace("All partitions have a leader, completing the delayed operation")
+      forceComplete()
+    } else {
+      trace(s"$leaderlessPartitionCount partitions do not have a leader, not completing the delayed operation")
+      false
     }
-    onComplete()
   }
 
   /**
-    * Process for completing an operation; This function needs to be defined
-    * in subclasses and will be called exactly once in forceComplete()
+    * Check for partitions that are still missing a leader, update their error code and call the responseCallback
     */
-  override def onComplete(): Unit = {
-    responseCallback(waitedResults ++ done)
+  override def onComplete() {
+    trace(s"Completing operation for $createMetadata")
+    val results = createMetadata.map { metadata =>
+      // ignore topics that already have errors
+      if (metadata.error.isSuccess && missingLeaderCount(metadata.topic, metadata.addedPartitions) > 0)
+        (metadata.topic, new ApiError(Errors.REQUEST_TIMED_OUT, null))
+      else
+        (metadata.topic, metadata.error)
+    }.toMap
+    responseCallback(results)
   }
 
-  /**
-    * Try to complete the delayed operation by first checking if the operation
-    * can be completed by now. If yes execute the completion logic by calling
-    * forceComplete() and return true iff forceComplete returns true; otherwise return false
-    *
-    * This function needs to be defined in subclasses
-    */
-  override def tryComplete(): Boolean = {
-    for (topicMeta <- adminManager.metadataCache.getTopicMetadata(waitingFor.keySet, listenerName)) {
-      if (isTraceEnabled)
-        trace(s"DelayedCreatePartitions.tryComplete(): topicMeta: $topicMeta")
-      val requiredCount = waitingFor(topicMeta.topic).totalCount()
-      val currentCount = topicMeta.partitionMetadata.size()
-      if (isTraceEnabled)
-        trace(s"DelayedCreatePartitions.tryComplete(): topic: ${topicMeta.topic}, currentCount: $currentCount, requiredCount: $requiredCount")
-      if (currentCount == requiredCount) {
-        waitedResults += topicMeta.topic -> ApiError.NONE
-        waitingFor -= topicMeta.topic
+  override def onExpiration(): Unit = { }
+
+  private def missingLeaderCount(topic: String, partitions: Set[Int]): Int = {
+    partitions.foldLeft(0) { case (counter, partition) =>
+      if (isMissingLeader(topic, partition)) {
+        trace(s"topic $topic, partition $partition is missing its leader")
+        counter + 1
+      } else {
+        trace(s"topic $topic, partition $partition has its leader")
+        counter
       }
     }
-    if (isTraceEnabled)
-      trace(s"DelayedCreatePartitions.tryComplete(): waitedResults: $waitedResults, waitingFor: $waitingFor")
-    waitingFor.isEmpty && forceComplete()
+  }
+
+  private def isMissingLeader(topic: String, partition: Int): Boolean = {
+    val partitionInfo = adminManager.metadataCache.getPartitionInfo(topic, partition)
+    trace(s"PartitionState topic $topic, partition $partition: $partitionInfo")
+    partitionInfo.isEmpty || partitionInfo.get.basePartitionState.leader == LeaderAndIsr.NoLeader
   }
 }
