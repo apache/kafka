@@ -42,7 +42,7 @@ import java.util.Map;
  */
 public class WorkerConnector {
     private static final Logger log = LoggerFactory.getLogger(WorkerConnector.class);
-    private static double EPSILON = 0.000001d;
+    private static final double EPSILON = 0.000001d;
 
     private enum State {
         INIT,    // initial state before startup
