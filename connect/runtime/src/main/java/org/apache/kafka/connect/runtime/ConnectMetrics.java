@@ -49,22 +49,6 @@ public class ConnectMetrics {
     private static final Logger LOG = LoggerFactory.getLogger(ConnectMetrics.class);
     private static final AtomicInteger CONNECT_WORKER_ID_SEQUENCE = new AtomicInteger(1);
 
-    /**
-     * Utility to ensure the supplied name contains valid characters, replacing sequences of 1 or more
-     * ':', '/', '\', '*', '?', '[', ']', '=', or comma characters with a single '-'.
-     *
-     * @param name the name; may not be null
-     * @return the validated name; never null
-     */
-    static String makeValidName(String name) {
-        Objects.requireNonNull(name);
-        name = name.trim();
-        if (!name.isEmpty()) {
-            name = name.replaceAll("[:/\\\\*?,;\\[\\]\\\\=]+", "-");
-        }
-        return name;
-    }
-
     private final Metrics metrics;
     private final Time time;
     private final String workerId;
@@ -150,26 +134,6 @@ public class ConnectMetrics {
     }
 
     /**
-     * Create a set of tags using the supplied key and value pairs.
-     *
-     * @param workerId the worker ID that should be included first in the tags; may be null if not to be included
-     * @param keyValue the key and value pairs for the tags; must be an even number
-     * @return the map of tags that can be supplied to the {@link Metrics} methods; never null
-     */
-    static Map<String, String> tags(String workerId, String... keyValue) {
-        if ((keyValue.length % 2) != 0)
-            throw new IllegalArgumentException("keyValue needs to be specified in pairs");
-        Map<String, String> tags = new HashMap<>();
-        if (workerId != null && !workerId.trim().isEmpty()) {
-            tags.put(WORKER_ID_TAG_NAME, workerId);
-        }
-        for (int i = 0; i < keyValue.length; i += 2) {
-            tags.put(keyValue[i], keyValue[i + 1]);
-        }
-        return tags;
-    }
-
-    /**
      * Get the time.
      *
      * @return the time; never null
@@ -222,5 +186,41 @@ public class ConnectMetrics {
         Map<String, String> tags() {
             return Collections.unmodifiableMap(tags);
         }
+    }
+
+    /**
+     * Create a set of tags using the supplied key and value pairs.
+     *
+     * @param workerId the worker ID that should be included first in the tags; may be null if not to be included
+     * @param keyValue the key and value pairs for the tags; must be an even number
+     * @return the map of tags that can be supplied to the {@link Metrics} methods; never null
+     */
+    static Map<String, String> tags(String workerId, String... keyValue) {
+        if ((keyValue.length % 2) != 0)
+            throw new IllegalArgumentException("keyValue needs to be specified in pairs");
+        Map<String, String> tags = new HashMap<>();
+        if (workerId != null && !workerId.trim().isEmpty()) {
+            tags.put(WORKER_ID_TAG_NAME, workerId);
+        }
+        for (int i = 0; i < keyValue.length; i += 2) {
+            tags.put(keyValue[i], keyValue[i + 1]);
+        }
+        return tags;
+    }
+
+    /**
+     * Utility to ensure the supplied name contains valid characters, replacing sequences of 1 or more
+     * ':', '/', '\', '*', '?', '[', ']', '=', or comma characters with a single '-'.
+     *
+     * @param name the name; may not be null
+     * @return the validated name; never null
+     */
+    static String makeValidName(String name) {
+        Objects.requireNonNull(name);
+        name = name.trim();
+        if (!name.isEmpty()) {
+            name = name.replaceAll("[:/\\\\*?,;\\[\\]\\\\=]+", "-");
+        }
+        return name;
     }
 }
