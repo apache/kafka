@@ -1051,7 +1051,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     try {
                         this.ioThread.join(timeUnit.toMillis(timeout));
                     } catch (InterruptedException t) {
-                        firstException.compareAndSet(null, new InterruptException(t));
+                        firstException.compareAndSet(null, t);
                         log.error("Interrupted while joining ioThread", t);
                     }
                 }
@@ -1081,8 +1081,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         log.debug("Kafka producer has been closed");
         Throwable exception = firstException.get();
         if (exception != null && !swallowException) {
-            if (exception instanceof InterruptException) {
-                throw (InterruptException) exception;
+            if (exception instanceof InterruptedException) {
+                throw new InterruptException((InterruptedException) exception);
             }
             throw new KafkaException("Failed to close kafka producer", exception);
         }
