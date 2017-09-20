@@ -65,17 +65,20 @@ public class StateDirectory {
     /**
      * Ensures that the state base directory as well as the application's sub-directory are created.
      *
-     * @throws ProcessorStateException if the base state directory or application state directory does not exist and could not be created
+     * @throws ProcessorStateException if the base state directory or application state directory does not exist
+     *                                 and could not be created
      */
     public StateDirectory(final String applicationId, final String stateDirConfig, final Time time) {
         this.time = time;
         final File baseDir = new File(stateDirConfig);
         if (!baseDir.exists() && !baseDir.mkdirs()) {
-            throw new ProcessorStateException(String.format("state directory [%s] doesn't exist and couldn't be created", stateDirConfig));
+            throw new ProcessorStateException(
+                String.format("state directory [%s] doesn't exist and couldn't be created", stateDirConfig));
         }
         stateDir = new File(baseDir, applicationId);
         if (!stateDir.exists() && !stateDir.mkdir()) {
-            throw new ProcessorStateException(String.format("state directory [%s] doesn't exist and couldn't be created", stateDir.getPath()));
+            throw new ProcessorStateException(
+                String.format("state directory [%s] doesn't exist and couldn't be created", stateDir.getPath()));
         }
     }
 
@@ -101,8 +104,8 @@ public class StateDirectory {
     File globalStateDir() {
         final File dir = new File(stateDir, "global");
         if (!dir.exists() && !dir.mkdir()) {
-            throw new ProcessorStateException(String.format("global state directory [%s] doesn't exist and couldn't be created",
-                                                            dir.getPath()));
+            throw new ProcessorStateException(
+                String.format("global state directory [%s] doesn't exist and couldn't be created", dir.getPath()));
         }
         return dir;
     }

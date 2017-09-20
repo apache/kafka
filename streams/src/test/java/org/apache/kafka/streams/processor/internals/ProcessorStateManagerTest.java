@@ -42,6 +42,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -79,9 +80,6 @@ public class ProcessorStateManagerTest {
     private File checkpointFile;
     private OffsetCheckpoint checkpoint;
     private StateDirectory stateDirectory;
-    private static boolean flushedStore;
-    private static boolean closedStore;
-
 
     @Before
     public void setup() {
@@ -559,6 +557,8 @@ public class ProcessorStateManagerTest {
             false,
             logContext);
 
+        final AtomicBoolean flushedStore = new AtomicBoolean(false);
+
         final MockStateStoreSupplier.MockStateStore stateStore1 = new MockStateStoreSupplier.MockStateStore(storeName, true) {
             @Override
             public void flush() {
@@ -568,17 +568,16 @@ public class ProcessorStateManagerTest {
         final MockStateStoreSupplier.MockStateStore stateStore2 = new MockStateStoreSupplier.MockStateStore(storeName + "2", true) {
             @Override
             public void flush() {
-                flushedStore = true;
+                flushedStore.set(true);
             }
         };
         stateManager.register(stateStore1, false, stateStore1.stateRestoreCallback);
         stateManager.register(stateStore2, false, stateStore2.stateRestoreCallback);
 
-        flushedStore = false;
         try {
             stateManager.flush();
         } catch (final ProcessorStateException expected) { /* ignode */ }
-        Assert.assertTrue(flushedStore);
+        Assert.assertTrue(flushedStore.get());
     }
 
     @Test
@@ -593,6 +592,8 @@ public class ProcessorStateManagerTest {
             false,
             logContext);
 
+        final AtomicBoolean closedStore = new AtomicBoolean(false);
+
         final MockStateStoreSupplier.MockStateStore stateStore1 = new MockStateStoreSupplier.MockStateStore(storeName, true) {
             @Override
             public void close() {
@@ -602,17 +603,16 @@ public class ProcessorStateManagerTest {
         final MockStateStoreSupplier.MockStateStore stateStore2 = new MockStateStoreSupplier.MockStateStore(storeName + "2", true) {
             @Override
             public void close() {
-                closedStore = true;
+                closedStore.set(true);
             }
         };
         stateManager.register(stateStore1, false, stateStore1.stateRestoreCallback);
         stateManager.register(stateStore2, false, stateStore2.stateRestoreCallback);
 
-        closedStore = false;
         try {
             stateManager.close(Collections.<TopicPartition, Long>emptyMap());
         } catch (final ProcessorStateException expected) { /* ignode */ }
-        Assert.assertTrue(closedStore);
+        Assert.assertTrue(closedStore.get());
     }
 
     @Test
