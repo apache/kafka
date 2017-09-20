@@ -162,6 +162,32 @@ if not user_ok("""Requirements:
       signing.keyId=your-gpgkeyId
       signing.password=your-gpg-passphrase
       signing.secretKeyRingFile=/Users/your-id/.gnupg/secring.gpg (if you are using GPG 2.1 and beyond, then this file will no longer exist anymore, and you have to manually create it from the new private key directory with "gpg --export-secret-keys -o ~/.gnupg/secring.gpg")
+8. ~/.m2/settings.xml configured for pgp signing and uploading to apache release maven, i.e., 
+       <server>
+          <id>apache.releases.https</id>
+          <username>your-apache-id</username>
+          <password>your-apache-passwd</password>
+        </server>
+	<server>
+            <id>your-gpgkeyId</id>
+            <passphrase>your-gpg-passphase</passphrase>
+        </server>
+        <profile>
+            <id>gpg-signing</id>
+            <properties>
+                <gpg.keyname>your-gpgkeyId</gpg.keyname>
+        	<gpg.passphraseServerId>your-gpgkeyId</gpg.passphraseServerId>
+            </properties>
+        </profile>
+9. You may also need to update some gnupgp configs:
+	~/.gnupg/gpg-agent.conf
+	allow-loopback-pinentry
+
+	~/.gnupg/gpg.conf
+	use-agent
+	pinentry-mode loopback
+
+	echo RELOADAGENT | gpg-connect-agent
 
 If any of these are missing, see https://cwiki.apache.org/confluence/display/KAFKA/Release+Process for instructions on setting them up.
 
@@ -262,6 +288,12 @@ cmd("Checking out current development branch", "git checkout -b %s %s" % (releas
 print("Updating version numbers")
 replace("gradle.properties", "version", "version=%s" % release_version)
 replace("tests/kafkatest/__init__.py", "__version__", "__version__ = '%s'" % release_version)
+cmd("update streams quickstart pom", ["sed", "-i", ".orig"," s/-SNAPSHOT//", "streams/quickstart/pom.xml"])
+cmd("update streams quickstart java pom", ["sed", "-i", ".orig", "s/-SNAPSHOT//", "streams/quickstart/java/pom.xml"])
+cmd("update streams quickstart java pom", ["sed", "-i", ".orig", "s/-SNAPSHOT//", "streams/quickstart/java/src/main/resources/archetype-resources/pom.xml"])
+cmd("remove backup pom.xml", "rm streams/quickstart/pom.xml.orig")
+cmd("remove backup java pom.xml", "rm streams/quickstart/java/pom.xml.orig")
+cmd("remove backup java pom.xml", "rm streams/quickstart/java/src/main/resources/archetype-resources/pom.xml.orig")
 # Command in explicit list due to messages with spaces
 cmd("Commiting version number updates", ["git", "commit", "-a", "-m", "Bump version to %s" % release_version])
 # Command in explicit list due to messages with spaces
@@ -277,6 +309,8 @@ if os.path.exists(work_dir):
 os.makedirs(work_dir)
 print("Temporary build working director:", work_dir)
 kafka_dir = os.path.join(work_dir, 'kafka')
+streams_quickstart_dir = os.path.join(kafka_dir, 'streams/quickstart')
+print("Streams quickstart dir", streams_quickstart_dir)
 cmd("Creating staging area for release artifacts", "mkdir kafka-" + rc_tag, cwd=work_dir)
 artifacts_dir = os.path.join(work_dir, "kafka-" + rc_tag)
 cmd("Cloning clean copy of repo", "git clone %s kafka" % REPO_HOME, cwd=work_dir)
@@ -355,6 +389,7 @@ if not user_ok("Going to build and upload mvn artifacts based on these settings:
     fail("Retry again later")
 cmd("Building and uploading archives", "./gradlew uploadArchivesAll", cwd=kafka_dir, env=jdk7_env)
 cmd("Building and uploading archives", "./gradlew uploadCoreArchives_2_12 -PscalaVersion=2.12", cwd=kafka_dir, env=jdk8_env)
+cmd("Building and uploading archives", "mvn deploy", cwd=streams_quickstart_dir, env=jdk7_env)
 
 release_notification_props = { 'release_version': release_version,
                                'rc': rc,
