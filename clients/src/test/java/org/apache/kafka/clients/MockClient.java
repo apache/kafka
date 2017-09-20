@@ -137,7 +137,6 @@ public class MockClient implements KafkaClient {
 
     @Override
     public AuthenticationException authenticationException(Node node) {
-        //TODO
         return null;
     }
 

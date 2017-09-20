@@ -135,7 +135,7 @@ public class ConsumerNetworkClient implements Closeable {
         int version = this.metadata.requestUpdate();
         do {
             poll(timeout);
-            this.metadata.maybeThrowAuthenticationExceptions();
+            this.metadata.maybeThrowAuthenticationException();
         } while (this.metadata.version() == version && time.milliseconds() - startMs < timeout);
         return this.metadata.version() > version;
     }

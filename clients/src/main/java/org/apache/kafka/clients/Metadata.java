@@ -151,7 +151,7 @@ public final class Metadata {
      * If any non-retriable authentication exceptions were encountered during
      * metadata update, clear and throw the exception.
      */
-    public synchronized void maybeThrowAuthenticationExceptions() {
+    public synchronized void maybeThrowAuthenticationException() {
         if (authenticationException != null) {
             AuthenticationException exception = authenticationException;
             this.needUpdate = false;
@@ -172,7 +172,7 @@ public final class Metadata {
         while (this.version <= lastVersion) {
             if (remainingWaitMs != 0) {
                 wait(remainingWaitMs);
-                maybeThrowAuthenticationExceptions();
+                maybeThrowAuthenticationException();
             }
             long elapsed = System.currentTimeMillis() - begin;
             if (elapsed >= maxWaitMs)

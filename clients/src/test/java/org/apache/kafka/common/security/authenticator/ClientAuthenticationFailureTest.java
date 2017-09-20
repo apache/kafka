@@ -80,11 +80,11 @@ public class ClientAuthenticationFailureTest {
         try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(saslClientConfigs)) {
             consumer.subscribe(Arrays.asList(topic));
             consumer.poll(100);
-            fail("Expeceted an authentication error!");
+            fail("Expected an authentication error!");
         } catch (AuthenticationFailedException e) {
             // OK
         } catch (Exception e) {
-            fail("Expecetd only an authentication error, but another error occurred: " + e.getMessage());
+            fail("Expected only an authentication error, but another error occurred: " + e.getMessage());
         }
     }
 
