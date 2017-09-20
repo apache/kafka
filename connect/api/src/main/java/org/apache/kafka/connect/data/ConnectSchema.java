@@ -22,6 +22,7 @@ import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,7 +32,7 @@ public class ConnectSchema implements Schema {
     /**
      * Maps Schema.Types to a list of Java classes that can be used to represent them.
      */
-    private static final Map<Type, List<Class>> SCHEMA_TYPE_CLASSES = new HashMap<>();
+    private static final Map<Type, List<Class>> SCHEMA_TYPE_CLASSES = new EnumMap<>(Type.class);
     /**
      * Maps known logical types to a list of Java classes that can be used to represent them.
      */
