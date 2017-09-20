@@ -100,7 +100,7 @@ public class ConnectMetrics {
      * @param groupName the name of the metric group; may not be null
      * @return the {@link MetricGroup} that can be used to create metrics; never null
      */
-    public synchronized MetricGroup group(String groupName) {
+    public MetricGroup group(String groupName) {
         return group(groupName, false);
     }
 
@@ -111,7 +111,7 @@ public class ConnectMetrics {
      * @param tagKeyValues pairs of tag name and values
      * @return the {@link MetricGroup} that can be used to create metrics; never null
      */
-    public synchronized MetricGroup group(String groupName, String... tagKeyValues) {
+    public MetricGroup group(String groupName, String... tagKeyValues) {
         return group(groupName, false, tagKeyValues);
     }
 
@@ -128,7 +128,8 @@ public class ConnectMetrics {
         if (group == null) {
             Map<String, String> tags = tags(includeWorkerId ? workerId : null, tagKeyValues);
             group = new MetricGroup(groupName, tags);
-            groupsByName.putIfAbsent(groupName, group);
+            MetricGroup previous = groupsByName.putIfAbsent(groupName, group);
+            if (previous != null) group = previous;
         }
         return group;
     }
