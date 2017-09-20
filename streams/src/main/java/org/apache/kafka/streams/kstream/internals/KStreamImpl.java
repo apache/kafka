@@ -183,7 +183,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired);
     }
-
+    
+    
+    
     @Override
     public void print() {
         print(defaultKeyValueMapper, null, null, this.name);
@@ -346,8 +348,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         return branchChildren;
     }
 
+    
+    @Override 
+    public KStream<K, V> merge(KStream<K, V> stream) {
+        return this.merge(this.builder, (KStream<K, V>) this, stream);
+    }
+    
     public static <K, V> KStream<K, V> merge(final InternalStreamsBuilder builder,
-                                             final KStream<K, V>[] streams) {
+                                             final KStream<K, V> ... streams) {
         if (streams == null || streams.length == 0) {
             throw new IllegalArgumentException("Parameter <streams> must not be null or has length zero");
         }

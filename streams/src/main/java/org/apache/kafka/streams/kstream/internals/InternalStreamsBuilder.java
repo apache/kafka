@@ -159,11 +159,14 @@ public class InternalStreamsBuilder {
         return new GlobalKTableImpl<>(new KTableSourceValueGetterSupplier<K, V>(storeBuilder.name()));
     }
 
+<<<<<<< trunk
+=======
 
     public <K, V> KStream<K, V> merge(final KStream<K, V>... streams) {
         return KStreamImpl.merge(this, streams);
     }
 
+>>>>>>> trunk
     String newName(final String prefix) {
         return prefix + String.format("%010d", index.getAndIncrement());
     }

@@ -446,6 +446,13 @@ public interface KStream<K, V> {
      * @param printed options for printing
      */
     void print(final Printed<K, V> printed);
+    
+    /**
+     * Merges the given streams into one larger stream. 
+     * @param a stream which is  to be merged.
+     * No guarantee of order
+     */
+    KStream<K, V> merge(KStream<K, V> stream);
 
     /**
      * Write the records of this stream to a file at the given path.

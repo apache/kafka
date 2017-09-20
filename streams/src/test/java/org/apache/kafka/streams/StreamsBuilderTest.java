@@ -85,29 +85,6 @@ public class StreamsBuilderTest {
         assertEquals(Utils.mkList("A:aa"), throughProcessorSupplier.processed);
     }
 
-    @Test
-    public void testMerge() {
-        final String topic1 = "topic-1";
-        final String topic2 = "topic-2";
-
-        final KStream<String, String> source1 = builder.stream(topic1);
-        final KStream<String, String> source2 = builder.stream(topic2);
-        final KStream<String, String> merged = builder.merge(source1, source2);
-
-        final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
-        merged.process(processorSupplier);
-
-        driver.setUp(builder);
-        driver.setTime(0L);
-
-        driver.process(topic1, "A", "aa");
-        driver.process(topic2, "B", "bb");
-        driver.process(topic2, "C", "cc");
-        driver.process(topic1, "D", "dd");
-
-        assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd"), processorSupplier.processed);
-    }
-
     @Test(expected = TopologyException.class)
     public void shouldThrowExceptionWhenNoTopicPresent() throws Exception {
         builder.stream(Collections.<String>emptyList());
