@@ -70,6 +70,7 @@ public class AbstractHerderTest extends EasyMockSupport {
                 .createMock();
 
         EasyMock.expect(herder.generation()).andStubReturn(generation);
+        EasyMock.expect(herder.config(connector)).andReturn(null);
 
         EasyMock.expect(statusStore.get(connector))
                 .andReturn(new ConnectorStatus(connector, AbstractStatus.State.RUNNING, workerId, generation));
@@ -78,8 +79,6 @@ public class AbstractHerderTest extends EasyMockSupport {
                 .andReturn(Collections.singletonList(
                         new TaskStatus(taskId, AbstractStatus.State.UNASSIGNED, workerId, generation)));
         EasyMock.expect(worker.getPlugins()).andStubReturn(plugins);
-        final Connector conn = new TestSourceConnector();
-        EasyMock.expect(plugins.newConnector(connector)).andReturn(conn);
 
         replayAll();
 

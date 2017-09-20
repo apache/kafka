@@ -189,12 +189,17 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return worker.getPlugins();
     }
 
+    /*
+     * Retrieves config map by connector name
+     */
+    protected abstract Map<String, String> config(String connName);
+
     @Override
     public ConnectorStateInfo connectorStatus(String connName) {
         ConnectorStatus connector = statusBackingStore.get(connName);
         if (connector == null)
             throw new NotFoundException("No status found for connector " + connName);
-
+        
         Collection<TaskStatus> tasks = statusBackingStore.getAll(connName);
 
         ConnectorStateInfo.ConnectorState connectorState = new ConnectorStateInfo.ConnectorState(
@@ -208,7 +213,9 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
         Collections.sort(taskStates);
 
-        return new ConnectorStateInfo(connName, connectorState, taskStates, connectorTypeForClass(connName));
+        Map<String, String> conf = config(connName);
+        return new ConnectorStateInfo(connName, connectorState, taskStates,
+            conf == null ? ConnectorType.UNKNOWN : connectorTypeForClass(conf.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)));
     }
 
     @Override
