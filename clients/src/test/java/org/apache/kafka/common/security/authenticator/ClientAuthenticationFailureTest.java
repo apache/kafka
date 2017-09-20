@@ -17,6 +17,8 @@
 package org.apache.kafka.common.security.authenticator;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -35,6 +37,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -97,6 +100,18 @@ public class ClientAuthenticationFailureTest {
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "message");
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(saslClientConfigs)) {
             producer.send(record).get();
+            fail("Expected an authentication error!");
+        } catch (Exception e) {
+            assertTrue("Expected an exception of type AuthenticationFailedException", e.getCause() instanceof AuthenticationFailedException);
+        }
+    }
+
+    @Test
+    public void testAdminClientWithInvalidCredentials() {
+        saslClientConfigs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:" + server.port());
+        try (AdminClient client = AdminClient.create(saslClientConfigs)) {
+            DescribeTopicsResult result = client.describeTopics(Collections.singleton("test"));
+            result.all().get();
             fail("Expected an authentication error!");
         } catch (Exception e) {
             assertTrue("Expected an exception of type AuthenticationFailedException", e.getCause() instanceof AuthenticationFailedException);

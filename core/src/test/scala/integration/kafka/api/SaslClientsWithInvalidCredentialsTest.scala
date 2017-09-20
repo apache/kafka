@@ -13,9 +13,11 @@
 package kafka.api
 
 import java.io.FileOutputStream
+import java.util.Collections
 import java.util.concurrent.{ExecutionException, Future, TimeUnit}
-import scala.collection.JavaConverters.seqAsJavaListConverter
+import scala.collection.JavaConverters._
 
+import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
 import org.apache.kafka.clients.consumer.{KafkaConsumer, ConsumerConfig}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.TopicPartition
@@ -41,6 +43,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
 
   val topic = "topic"
+  val numPartitions = 1
   val tp = new TopicPartition(topic, 0)
 
   override def configureSecurityBeforeServersStart() {
@@ -55,7 +58,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), Both,
       JaasTestUtils.KafkaServerContextName))
     super.setUp()
-    TestUtils.createTopic(this.zkUtils, topic, 1, serverCount, this.servers)
+    TestUtils.createTopic(this.zkUtils, topic, numPartitions, serverCount, this.servers)
   }
 
   @After
@@ -92,6 +95,34 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     createClientCredential()
     verifyWithRetry(() => sendOneRecord())
     verifyWithRetry(() => assertEquals(1, consumer.poll(1000).count))
+  }
+
+  @Test
+  def testKafkaAdminClientWithAuthenticationFailure() {
+    val props = TestUtils.adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
+    props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    val adminClient = AdminClient.create(props)
+
+    def describeTopic(): Unit = {
+      try {
+        val response = adminClient.describeTopics(Collections.singleton(topic)).all.get
+        assertEquals(1, response.size)
+        response.asScala.foreach { case (topic, description) =>
+          assertEquals(numPartitions, description.partitions)
+        }
+      } catch {
+        case e: ExecutionException => throw e.getCause
+      }
+    }
+
+    try {
+      verifyAuthenticationException(() => describeTopic())
+
+      createClientCredential()
+      verifyWithRetry(() => describeTopic())
+    } finally {
+      adminClient.close
+    }
   }
 
   @Test
