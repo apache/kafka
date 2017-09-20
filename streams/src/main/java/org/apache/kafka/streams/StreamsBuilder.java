@@ -967,20 +967,6 @@ public class StreamsBuilder {
     }
 
     /**
-     * Create a new instance of {@link KStream} by merging the given {@link KStream}s.
-     * <p>
-     * There is no ordering guarantee for records from different {@link KStream}s.
-     *
-     * @param streams the {@link KStream}s to be merged
-     * @return a {@link KStream} containing all records of the given streams
-     * @deprecated use {@link KStream#merge(KStream stream)} instead
-     */
-    @Deprecated
-    public synchronized <K, V> KStream<K, V> merge(final KStream<K, V>... streams) {
-        return internalStreamsBuilder.merge(streams);
-    }
-
-    /**
      * Returns the {@link Topology} that represents the specified processing logic.
      *
      * @return the {@link Topology} that represents the specified processing logic
