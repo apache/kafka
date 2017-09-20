@@ -131,7 +131,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         // initialize the topology with its own context
         processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, metrics, cache);
 
-        final TimestampExtractor defaultTimestampExtractor  = config.defaultTimestampExtractor();
+        final TimestampExtractor defaultTimestampExtractor = config.defaultTimestampExtractor();
         final DeserializationExceptionHandler defaultDeserializationExceptionHandler = config.defaultDeserializationExceptionHandler();
         for (final TopicPartition partition : partitions) {
             final SourceNode source = topology.source(partition.topic());
@@ -150,6 +150,16 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             transactionInFlight = true;
         }
     }
+
+    public boolean initialize() {
+        log.debug("Initializing");
+        initializeStateStores();
+        initTopology();
+        processorContext.initialized();
+        taskInitialized = true;
+        return topology.stateStores().isEmpty();
+    }
+
 
     /**
      * <pre>
@@ -595,15 +605,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     // visible for testing only
     RecordCollector createRecordCollector(final LogContext logContext) {
         return new RecordCollectorImpl(producer, id.toString(), logContext);
-    }
-
-    public boolean initialize() {
-        log.debug("Initializing");
-        initializeStateStores();
-        initTopology();
-        processorContext.initialized();
-        taskInitialized = true;
-        return topology.stateStores().isEmpty();
     }
 
 }

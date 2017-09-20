@@ -165,7 +165,7 @@ public class ApiVersionsResponse extends AbstractResponse {
 
     private Map<Short, ApiVersion> buildApiKeyToApiVersion(List<ApiVersion> apiVersions) {
         Map<Short, ApiVersion> tempApiIdToApiVersion = new HashMap<>();
-        for (ApiVersion apiVersion: apiVersions) {
+        for (ApiVersion apiVersion : apiVersions) {
             tempApiIdToApiVersion.put(apiVersion.apiKey, apiVersion);
         }
         return tempApiIdToApiVersion;

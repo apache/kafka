@@ -43,7 +43,7 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
     /* Offsets for Leader Epoch api */
     private static final Schema OFFSET_FOR_LEADER_EPOCH_REQUEST_PARTITION_V0 = new Schema(
             PARTITION_ID,
-            new Field("leader_epoch", INT32, "The epoch"));
+            new Field(LEADER_EPOCH, INT32, "The epoch"));
     private static final Schema OFFSET_FOR_LEADER_EPOCH_REQUEST_TOPIC_V0 = new Schema(
             TOPIC_NAME,
             new Field(PARTITIONS_KEY_NAME, new ArrayOf(OFFSET_FOR_LEADER_EPOCH_REQUEST_PARTITION_V0)));

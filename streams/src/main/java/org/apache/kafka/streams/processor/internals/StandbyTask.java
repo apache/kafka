@@ -63,6 +63,15 @@ public class StandbyTask extends AbstractTask {
         processorContext = new StandbyContextImpl(id, applicationId, config, stateMgr, metrics);
     }
 
+    @Override
+    public boolean initialize() {
+        initializeStateStores();
+        checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointed());
+        processorContext.initialized();
+        taskInitialized = true;
+        return true;
+    }
+
     /**
      * <pre>
      * - update offset limits
@@ -139,16 +148,6 @@ public class StandbyTask extends AbstractTask {
     }
 
     @Override
-    public boolean maybePunctuateStreamTime() {
-        throw new UnsupportedOperationException("maybePunctuateStreamTime not supported by StandbyTask");
-    }
-
-    @Override
-    public boolean maybePunctuateSystemTime() {
-        throw new UnsupportedOperationException("maybePunctuateSystemTime not supported by StandbyTask");
-    }
-
-    @Override
     public boolean commitNeeded() {
         return false;
     }
@@ -174,16 +173,18 @@ public class StandbyTask extends AbstractTask {
     }
 
     @Override
-    public boolean process() {
-        throw new UnsupportedOperationException("process not supported by StandbyTasks");
+    public boolean maybePunctuateStreamTime() {
+        throw new UnsupportedOperationException("maybePunctuateStreamTime not supported by StandbyTask");
     }
 
-    public boolean initialize() {
-        initializeStateStores();
-        checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointed());
-        processorContext.initialized();
-        taskInitialized = true;
-        return true;
+    @Override
+    public boolean maybePunctuateSystemTime() {
+        throw new UnsupportedOperationException("maybePunctuateSystemTime not supported by StandbyTask");
+    }
+
+    @Override
+    public boolean process() {
+        throw new UnsupportedOperationException("process not supported by StandbyTasks");
     }
 
 }

@@ -110,7 +110,7 @@ class TaskManager {
                         newTasks.put(taskId, partitions);
                     }
                 } catch (final StreamsException e) {
-                    log.error("Failed to create an active task {} due to the following error:", taskId, e);
+                    log.error("Failed to resume an active task {} due to the following error:", taskId, e);
                     throw e;
                 }
             } else {
@@ -122,6 +122,7 @@ class TaskManager {
             return;
         }
 
+        // CANNOT FIND RETRY AND BACKOFF LOGIC
         // create all newly assigned tasks (guard against race condition with other thread via backoff and retry)
         // -> other thread will call removeSuspendedTasks(); eventually
         log.trace("New active tasks to be created: {}", newTasks);
@@ -185,22 +186,11 @@ class TaskManager {
         firstException.compareAndSet(null, active.suspend());
         firstException.compareAndSet(null, standby.suspend());
         // remove the changelog partitions from restore consumer
-        firstException.compareAndSet(null, unAssignChangeLogPartitions());
+        restoreConsumer.assign(Collections.<TopicPartition>emptyList());
 
         if (firstException.get() != null) {
             throw new StreamsException(logPrefix + "failed to suspend stream tasks", firstException.get());
         }
-    }
-
-    private RuntimeException unAssignChangeLogPartitions() {
-        try {
-            // un-assign the change log partitions
-            restoreConsumer.assign(Collections.<TopicPartition>emptyList());
-        } catch (final RuntimeException e) {
-            log.error("Failed to un-assign change log partitions due to the following error:", e);
-            return e;
-        }
-        return null;
     }
 
     void shutdown(final boolean clean) {
@@ -215,9 +205,9 @@ class TaskManager {
             log.error("Failed to close KafkaStreamClient due to the following error:", e);
         }
         // remove the changelog partitions from restore consumer
-        unAssignChangeLogPartitions();
+        restoreConsumer.assign(Collections.<TopicPartition>emptyList());
         taskCreator.close();
-
+        standbyTaskCreator.close();
     }
 
     Set<TaskId> suspendedActiveTaskIds() {

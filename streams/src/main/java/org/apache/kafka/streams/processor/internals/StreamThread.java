@@ -421,7 +421,6 @@ public class StreamThread extends Thread implements ThreadDataProvider {
             }
 
             return threadProducer;
-
         }
 
         @Override
@@ -456,20 +455,29 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         }
 
         @Override
-        StandbyTask createTask(final Consumer<byte[], byte[]> consumer, final TaskId taskId, final Set<TopicPartition> partitions) {
+        StandbyTask createTask(final Consumer<byte[], byte[]> consumer,
+                               final TaskId taskId,
+                               final Set<TopicPartition> partitions) {
             taskCreatedSensor.record();
 
             final ProcessorTopology topology = builder.build(taskId.topicGroupId);
 
             if (!topology.stateStores().isEmpty()) {
-                return new StandbyTask(taskId, applicationId, partitions, topology, consumer, storeChangelogReader, config, streamsMetrics, stateDirectory);
+                return new StandbyTask(taskId,
+                                       applicationId,
+                                       partitions,
+                                       topology,
+                                       consumer,
+                                       storeChangelogReader,
+                                       config,
+                                       streamsMetrics,
+                                       stateDirectory);
             } else {
-                log.trace("Skipped standby task {} with assigned partitions {} since it does not have any state stores to materialize", taskId, partitions);
-
+                log.trace("Skipped standby task {} with assigned partitions {} " +
+                    "since it does not have any state stores to materialize", taskId, partitions);
                 return null;
             }
         }
-
     }
 
     /**
@@ -781,8 +789,10 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                 final long processLatency = computeLatency();
                 streamsMetrics.processTimeSensor.record(processLatency / (double) totalProcessed,
                                                         timerStartedMs);
-                processedBeforeCommit = adjustRecordsProcessedBeforeCommit(recordsProcessedBeforeCommit, totalProcessed,
-                                                                                  processLatency, commitTimeMs);
+                processedBeforeCommit = adjustRecordsProcessedBeforeCommit(recordsProcessedBeforeCommit,
+                                                                           totalProcessed,
+                                                                           processLatency,
+                                                                           commitTimeMs);
             }
         }
 
