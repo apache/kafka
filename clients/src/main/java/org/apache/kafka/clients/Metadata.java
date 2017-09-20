@@ -60,7 +60,7 @@ public final class Metadata {
     private int version;
     private long lastRefreshMs;
     private long lastSuccessfulRefreshMs;
-    private AuthenticationException nonRetriableAuthenticationException;
+    private AuthenticationException authenticationException;
     private Cluster cluster;
     private boolean needUpdate;
     /* Topics with expiry time */
@@ -151,11 +151,11 @@ public final class Metadata {
      * If any non-retriable authentication exceptions were encountered during
      * metadata update, clear and throw the exception.
      */
-    public synchronized void maybeHandleNonRetriableAuthenticationExceptions() {
-        if (nonRetriableAuthenticationException != null) {
-            AuthenticationException exception = nonRetriableAuthenticationException;
+    public synchronized void maybeThrowAuthenticationExceptions() {
+        if (authenticationException != null) {
+            AuthenticationException exception = authenticationException;
             this.needUpdate = false;
-            nonRetriableAuthenticationException = null;
+            authenticationException = null;
             throw exception;
         }
     }
@@ -172,7 +172,7 @@ public final class Metadata {
         while (this.version <= lastVersion) {
             if (remainingWaitMs != 0) {
                 wait(remainingWaitMs);
-                maybeHandleNonRetriableAuthenticationExceptions();
+                maybeThrowAuthenticationExceptions();
             }
             long elapsed = System.currentTimeMillis() - begin;
             if (elapsed >= maxWaitMs)
@@ -273,10 +273,10 @@ public final class Metadata {
      * Record an attempt to update the metadata that failed. We need to keep track of this
      * to avoid retrying immediately.
      */
-    public synchronized void failedUpdate(long now, AuthenticationException nonRetriableAuthenticationException) {
+    public synchronized void failedUpdate(long now, AuthenticationException authenticationException) {
         this.lastRefreshMs = now;
-        this.nonRetriableAuthenticationException = nonRetriableAuthenticationException;
-        if (nonRetriableAuthenticationException != null)
+        this.authenticationException = authenticationException;
+        if (authenticationException != null)
             this.notifyAll();
     }
 

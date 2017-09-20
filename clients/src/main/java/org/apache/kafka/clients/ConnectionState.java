@@ -29,6 +29,6 @@ public enum ConnectionState {
     DISCONNECTED, CONNECTING, CHECKING_API_VERSIONS, READY, AUTHENTICATION_FAILED;
 
     public boolean isDisconnected() {
-        return this.equals(AUTHENTICATION_FAILED) || this.equals(DISCONNECTED);
+        return this == AUTHENTICATION_FAILED || this == DISCONNECTED;
     }
 }

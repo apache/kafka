@@ -135,7 +135,7 @@ public class ConsumerNetworkClient implements Closeable {
         int version = this.metadata.requestUpdate();
         do {
             poll(timeout);
-            this.metadata.maybeHandleNonRetriableAuthenticationExceptions();
+            this.metadata.maybeThrowAuthenticationExceptions();
         } while (this.metadata.version() == version && time.milliseconds() - startMs < timeout);
         return this.metadata.version() > version;
     }
@@ -370,7 +370,7 @@ public class ConsumerNetworkClient implements Closeable {
                 for (ClientRequest request : requests) {
                     RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) request.callback();
                     AuthenticationException authenticationException = client.authenticationException(node);
-                    if (authenticationException !=  null)
+                    if (authenticationException != null)
                         handler.onFailure(authenticationException);
                     else
                         handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().desiredOrLatestVersion()),
