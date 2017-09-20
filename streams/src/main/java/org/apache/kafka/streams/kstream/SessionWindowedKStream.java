@@ -26,14 +26,16 @@ import org.apache.kafka.streams.state.SessionStore;
 
 /**
  * {@code SessionWindowedKStream} is an abstraction of a <i>windowed</i> record stream of {@link KeyValue} pairs.
- * It is an intermediate representation of a {@link KStream} in order to apply a windowed aggregation operation on the original
- * {@link KStream} records.
- * <p>
  * It is an intermediate representation after a grouping and windowing of a {@link KStream} before an aggregation is applied to the
  * new (partitioned) windows resulting in a windowed {@link KTable}
  * (a <emph>windowed</emph> {@code KTable} is a {@link KTable} with key type {@link Windowed Windowed<K>}.
  * <p>
- * SessionWindows are retained until their retention time expires (c.f. {@link SessionWindows#until(long)}).
+ * {@link SessionWindows} are dynamic data driven windows.
+ * They have no fixed time boundaries, rather the size of the window is determined by the records.
+ * Please see {@link SessionWindows} for more details.
+ * <p>
+ * {@link SessionWindows} are retained until their retention time expires (c.f. {@link SessionWindows#until(long)}).
+ *
  * Furthermore, updates are sent downstream into a windowed {@link KTable} changelog stream, where
  * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
  * <p>
@@ -50,7 +52,7 @@ public interface SessionWindowedKStream<K, V> {
     /**
      * Count the number of records in this stream by the grouped key into {@link SessionWindows}.
      * Records with {@code null} key or value are ignored.
-     * <P></P>
+     * <p>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same window and key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
@@ -105,6 +107,8 @@ public interface SessionWindowedKStream<K, V> {
      * The specified {@link Aggregator} is applied for each input record and computes a new aggregate using the current
      * aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value.
+     * The specified {@link Merger} is used to merge 2 existing sessions into one, i.e., when the windows overlap,
+     * they are merged into a single session and the old sessions are discarded.
      * Thus, {@code aggregate(Initializer, Aggregator, Merger)} can be used to compute
      * aggregate functions like count (c.f. {@link #count()})
      * <p>
@@ -142,7 +146,9 @@ public interface SessionWindowedKStream<K, V> {
      * The specified {@link Aggregator} is applied for each input record and computes a new aggregate using the current
      * aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value.
-     * Thus, {@code aggregate(Initializer, Aggregator, Merger, Serde)} can be used to compute
+     * * The specified {@link Merger} is used to merge 2 existing sessions into one, i.e., when the windows overlap,
+     * they are merged into a single session and the old sessions are discarded.
+     * Thus, {@code aggregate(Initializer, Aggregator, Merger)} can be used to compute
      * aggregate functions like count (c.f. {@link #count()})
      * <p>
      * Not all updates might get sent downstream, as an internal cache will be used to deduplicate consecutive updates to

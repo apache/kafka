@@ -74,9 +74,9 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
     @Override
     public KTable<Windowed<K>, Long> count() {
         return doAggregate(aggregateBuilder.countInitializer,
-                         aggregateBuilder.countAggregator,
-                         countMerger,
-                         Serdes.Long());
+                           aggregateBuilder.countAggregator,
+                           countMerger,
+                           Serdes.Long());
     }
 
     @Override
