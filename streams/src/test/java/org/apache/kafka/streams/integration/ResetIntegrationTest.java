@@ -16,19 +16,14 @@
  */
 package org.apache.kafka.streams.integration;
 
-import kafka.admin.AdminClient;
-import kafka.server.KafkaConfig$;
-import kafka.tools.StreamsResetter;
-import kafka.utils.MockTime;
-import kafka.utils.ZkUtils;
+import org.apache.kafka.clients.admin.KafkaAdminClient;
+import org.apache.kafka.clients.admin.ListTopicsOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -56,6 +51,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
+
+import kafka.admin.AdminClient;
+import kafka.server.KafkaConfig$;
+import kafka.tools.StreamsResetter;
+import kafka.utils.MockTime;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -94,6 +95,7 @@ public class ResetIntegrationTest {
 
     private static int testNo = 0;
     private static AdminClient adminClient = null;
+    private static KafkaAdminClient kafkaAdminClient = null;
 
     private final MockTime mockTime = CLUSTER.time;
     private final WaitUntilConsumerGroupGotClosed consumerGroupInactive = new WaitUntilConsumerGroupGotClosed();
@@ -104,6 +106,11 @@ public class ResetIntegrationTest {
             adminClient.close();
             adminClient = null;
         }
+
+        if (kafkaAdminClient != null) {
+            kafkaAdminClient.close();
+            kafkaAdminClient = null;
+        }
     }
 
     @Before
@@ -112,6 +119,12 @@ public class ResetIntegrationTest {
 
         if (adminClient == null) {
             adminClient = AdminClient.createSimplePlaintext(CLUSTER.bootstrapServers());
+        }
+
+        if (kafkaAdminClient == null) {
+            Properties props = new Properties();
+            props.put("bootstrap.servers", CLUSTER.bootstrapServers());
+            kafkaAdminClient =  (KafkaAdminClient) org.apache.kafka.clients.admin.AdminClient.create(props);
         }
 
         // busy wait until cluster (ie, ConsumerGroupCoordinator) is available
@@ -343,7 +356,6 @@ public class ResetIntegrationTest {
             parameters = new String[]{
                 "--application-id", APP_ID + testNo,
                 "--bootstrap-servers", CLUSTER.bootstrapServers(),
-                "--zookeeper", CLUSTER.zKConnectString(),
                 "--input-topics", INPUT_TOPIC,
                 "--intermediate-topics", INTERMEDIATE_USER_TOPIC
             };
@@ -351,7 +363,6 @@ public class ResetIntegrationTest {
             parameters = new String[]{
                 "--application-id", APP_ID + testNo,
                 "--bootstrap-servers", CLUSTER.bootstrapServers(),
-                "--zookeeper", CLUSTER.zKConnectString(),
                 "--input-topics", INPUT_TOPIC
             };
         }
@@ -374,25 +385,15 @@ public class ResetIntegrationTest {
         expectedRemainingTopicsAfterCleanup.add(OUTPUT_TOPIC_2_RERUN);
         expectedRemainingTopicsAfterCleanup.add("__consumer_offsets");
 
-        Set<String> allTopics;
-        ZkUtils zkUtils = null;
+        Set<String> allTopics = new HashSet<>();
         try {
-            zkUtils = ZkUtils.apply(CLUSTER.zKConnectString(),
-                30000,
-                30000,
-                JaasUtils.isZkSecurityEnabled());
-
-            do {
-                Utils.sleep(100);
-                allTopics = new HashSet<>();
-                allTopics.addAll(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics()));
-            } while (allTopics.size() != expectedRemainingTopicsAfterCleanup.size());
-        } finally {
-            if (zkUtils != null) {
-                zkUtils.close();
-            }
+            ListTopicsOptions listTopicsOptions = new ListTopicsOptions();
+            listTopicsOptions.listInternal(true);
+            allTopics.addAll(kafkaAdminClient.listTopics(listTopicsOptions).names().get(30000, TimeUnit.MILLISECONDS));
+            assertThat(allTopics, equalTo(expectedRemainingTopicsAfterCleanup));
+        } catch (Exception e) {
+            Assert.fail("An Exception was thrown checking internal topics deleted " + e);
         }
-        assertThat(allTopics, equalTo(expectedRemainingTopicsAfterCleanup));
     }
 
     private class WaitUntilConsumerGroupGotClosed implements TestCondition {
