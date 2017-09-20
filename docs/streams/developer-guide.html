@@ -2905,6 +2905,16 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
     </pre>
 
     <p>
+        To retrieve information about the local running threads, you can use the <code>localThreadsMetadata()</code> method after you start the application.
+    </p>
+
+    <pre class="brush: java;">
+    // For instance, use this method to print/monitor the partitions assigned to each local tasks.
+    Set&lt;ThreadMetadata&gt; threads = streams.localThreadsMetadata();
+    ...
+    </pre>
+
+    <p>
         To stop the application instance call the <code>close()</code> method:
     </p>
 

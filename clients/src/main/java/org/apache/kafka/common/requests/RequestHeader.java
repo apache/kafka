@@ -157,7 +157,6 @@ public class RequestHeader extends AbstractRequestResponse {
         return result;
     }
 
-
     private static Schema schema(short apiKey, short version) {
         if (apiKey == ApiKeys.CONTROLLED_SHUTDOWN.id && version == 0)
             // This will be removed once we remove support for v0 of ControlledShutdownRequest, which

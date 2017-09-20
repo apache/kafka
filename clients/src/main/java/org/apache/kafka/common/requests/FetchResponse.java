@@ -84,8 +84,10 @@ public class FetchResponse extends AbstractResponse {
             new Field(RESPONSES_KEY_NAME, new ArrayOf(FETCH_RESPONSE_TOPIC_V0)));
     // Even though fetch response v2 has the same protocol as v1, the record set in the response is different. In v1,
     // record set only includes messages of v0 (magic byte 0). In v2, record set can include messages of v0 and v1
-    // (magic byte 0 and 1). For details, see ByteBufferMessageSet.
+    // (magic byte 0 and 1). For details, see Records, RecordBatch and Record.
     private static final Schema FETCH_RESPONSE_V2 = FETCH_RESPONSE_V1;
+
+    // The partition ordering is now relevant - partitions will be processed in order they appear in request.
     private static final Schema FETCH_RESPONSE_V3 = FETCH_RESPONSE_V2;
 
     // The v4 Fetch Response adds features for transactional consumption (the aborted transaction list and the

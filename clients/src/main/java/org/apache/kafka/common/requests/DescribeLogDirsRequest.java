@@ -45,9 +45,9 @@ public class DescribeLogDirsRequest extends AbstractRequest {
     private static final String PARTITIONS_KEY_NAME = "partitions";
 
     private static final Schema DESCRIBE_LOG_DIRS_REQUEST_V0 = new Schema(
-            new Field("topics", ArrayOf.nullable(new Schema(
+            new Field(TOPICS_KEY_NAME, ArrayOf.nullable(new Schema(
                     TOPIC_NAME,
-                    new Field("partitions", new ArrayOf(INT32), "List of partition ids of the topic.")))));
+                    new Field(PARTITIONS_KEY_NAME, new ArrayOf(INT32), "List of partition ids of the topic.")))));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{DESCRIBE_LOG_DIRS_REQUEST_V0};
