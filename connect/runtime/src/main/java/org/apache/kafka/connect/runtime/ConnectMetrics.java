@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
@@ -161,7 +162,7 @@ public class ConnectMetrics {
 
         protected MetricGroup(String groupName, Map<String, String> tags) {
             this.groupName = groupName;
-            this.tags = tags;
+            this.tags = Collections.unmodifiableMap(new HashMap<>(tags));
         }
 
         /**
@@ -184,9 +185,46 @@ public class ConnectMetrics {
             return metrics;
         }
 
+        /**
+         * The tags of this group.
+         *
+         * @return the unmodifiable tags; never null but may be empty
+         */
         Map<String, String> tags() {
-            return Collections.unmodifiableMap(tags);
+            return tags;
         }
+
+        /**
+         * Add to this group an indicator metric with a function that will be used to obtain the indicator state.
+         *
+         * @param name the name of the metric; may not be null
+         * @param description the description of the metric; may not be null
+         * @param predicate the predicate function used to determine the indicator state; may not be null
+         */
+        public void addIndicatorMetric(String name, String description, final IndicatorPredicate predicate) {
+            MetricName metricName = metricName(name, description);
+            if (metrics().metric(metricName) == null) {
+                metrics().addMetric(metricName, new Measurable() {
+                    @Override
+                    public double measure(MetricConfig config, long now) {
+                        return predicate.matches() ? 1.0d : 0.0d;
+                    }
+                });
+            }
+        }
+    }
+
+    /**
+     * A simple functional interface that determines whether an indicator metric is true.
+     */
+    public interface IndicatorPredicate {
+
+        /**
+         * Return whether the indicator metric is true.
+         *
+         * @return true if the indicator metric is satisfied, or false otherwise
+         */
+        boolean matches();
     }
 
     /**

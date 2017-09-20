@@ -16,11 +16,10 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
+import org.apache.kafka.connect.runtime.AbstractStatus.State;
+import org.apache.kafka.connect.runtime.ConnectMetrics.IndicatorPredicate;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.slf4j.Logger;
@@ -42,7 +41,6 @@ import java.util.Map;
  */
 public class WorkerConnector {
     private static final Logger log = LoggerFactory.getLogger(WorkerConnector.class);
-    private static final double EPSILON = 0.000001d;
 
     private enum State {
         INIT,    // initial state before startup
@@ -68,9 +66,9 @@ public class WorkerConnector {
         this.connName = connName;
         this.ctx = ctx;
         this.connector = connector;
-        this.statusListener = statusListener;
         this.state = State.INIT;
-        this.metrics = new ConnectorMetricsGroup(metrics);
+        this.metrics = new ConnectorMetricsGroup(metrics, AbstractStatus.State.UNASSIGNED, statusListener);
+        this.statusListener = this.metrics;
     }
 
     public void initialize(ConnectorConfig connectorConfig) {
@@ -101,14 +99,12 @@ public class WorkerConnector {
         try {
             switch (state) {
                 case STARTED:
-                    metrics.recordRunning();
                     return false;
 
                 case INIT:
                 case STOPPED:
                     connector.start(config);
                     this.state = State.STARTED;
-                    metrics.recordRunning();
                     return true;
 
                 default:
@@ -124,7 +120,6 @@ public class WorkerConnector {
     private void onFailure(Throwable t) {
         statusListener.onFailure(connName, t);
         this.state = State.FAILED;
-        metrics.recordFailed();
     }
 
     private void resume() {
@@ -149,13 +144,11 @@ public class WorkerConnector {
 
                 case STARTED:
                     connector.stop();
-                    metrics.recordPaused();
                     // fall through
 
                 case INIT:
                     statusListener.onPause(connName);
                     this.state = State.STOPPED;
-                    metrics.recordPaused();
                     break;
 
                 default:
@@ -173,13 +166,11 @@ public class WorkerConnector {
             if (state == State.STARTED)
                 connector.stop();
             this.state = State.STOPPED;
-            metrics.recordStopped();
+            statusListener.onShutdown(connName);
         } catch (Throwable t) {
             log.error("{} Error while shutting down connector", this, t);
             this.state = State.FAILED;
-            metrics.recordFailed();
-        } finally {
-            statusListener.onShutdown(connName);
+            statusListener.onFailure(connName, t);
         }
     }
 
@@ -217,84 +208,92 @@ public class WorkerConnector {
     @Override
     public String toString() {
         return "WorkerConnector{" +
-                "id=" + connName +
-                '}';
+                       "id=" + connName +
+                       '}';
     }
 
-    class ConnectorMetricsGroup {
+    class ConnectorMetricsGroup implements ConnectorStatus.Listener {
+        /**
+         * Use {@link AbstractStatus.State} since it has all of the states we want,
+         * unlike {@link WorkerConnector.State}.
+         */
+        private volatile AbstractStatus.State state;
         private final MetricGroup metricGroup;
-        private final MetricName statusRunningName;
-        private final MetricName statusPausedName;
-        private final MetricName statusFailedName;
-        private final Sensor statusRunning;
-        private final Sensor statusPaused;
-        private final Sensor statusFailed;
+        private final ConnectorStatus.Listener delegate;
 
-        public ConnectorMetricsGroup(ConnectMetrics connectMetrics) {
+        public ConnectorMetricsGroup(ConnectMetrics connectMetrics, AbstractStatus.State initialState, ConnectorStatus.Listener delegate) {
+            this.delegate = delegate;
+            this.state = initialState;
             this.metricGroup = connectMetrics.group("connector-metrics",
                     "connector", connName);
 
-            this.statusRunningName = metricGroup.metricName("status-running",
-                    "Signals whether the connector is in the running state.");
-            this.statusRunning = metricGroup.metrics().sensor("status-running");
-            this.statusRunning.add(statusRunningName, new Value());
-
-            this.statusPausedName = metricGroup.metricName("status-paused",
-                    "Signals whether the connector is in the paused state.");
-            this.statusPaused = metricGroup.metrics().sensor("status-paused");
-            this.statusPaused.add(statusPausedName, new Value());
-
-            this.statusFailedName = metricGroup.metricName("status-failed",
-                    "Signals whether the connector is in the failed state.");
-            this.statusFailed = metricGroup.metrics().sensor("status-failed");
-            this.statusFailed.add(statusFailedName, new Value());
-
-            recordInitialized();
+            addStateMetric(AbstractStatus.State.RUNNING, "status-running",
+                    "Signals whether the connector task is in the running state.");
+            addStateMetric(AbstractStatus.State.PAUSED, "status-paused",
+                    "Signals whether the connector task is in the paused state.");
+            addStateMetric(AbstractStatus.State.FAILED, "status-failed",
+                    "Signals whether the connector task is in the failed state.");
         }
 
-        public void recordInitialized() {
-            this.statusRunning.record(0);
-            this.statusPaused.record(0);
-            this.statusFailed.record(0);
+        private void addStateMetric(final AbstractStatus.State matchingState, String name, String description) {
+            metricGroup.addIndicatorMetric(name, description, new IndicatorPredicate() {
+                @Override
+                public boolean matches() {
+                    return state == matchingState;
+                }
+            });
         }
 
-        public void recordStopped() {
-            this.statusRunning.record(0);
-            this.statusPaused.record(0);
-            this.statusFailed.record(0);
+        @Override
+        public void onStartup(String connector) {
+            state = AbstractStatus.State.RUNNING;
+            delegate.onStartup(connector);
         }
 
-        public void recordRunning() {
-            this.statusRunning.record(1);
-            this.statusPaused.record(0);
-            this.statusFailed.record(0);
+        @Override
+        public void onShutdown(String connector) {
+            state = AbstractStatus.State.UNASSIGNED;
+            delegate.onShutdown(connector);
         }
 
-        public void recordPaused() {
-            this.statusRunning.record(0);
-            this.statusPaused.record(1);
-            this.statusFailed.record(0);
-        }
-        public void recordFailed() {
-            this.statusRunning.record(0);
-            this.statusPaused.record(0);
-            this.statusFailed.record(1);
-        }
-        public boolean isRunning() {
-            return asBoolean(statusRunningName);
+        @Override
+        public void onPause(String connector) {
+            state = AbstractStatus.State.PAUSED;
+            delegate.onPause(connector);
         }
 
-        public boolean isPaused() {
-            return asBoolean(statusPausedName);
+        @Override
+        public void onResume(String connector) {
+            state = AbstractStatus.State.RUNNING;
+            delegate.onResume(connector);
         }
 
-        public boolean isFailed() {
-            return asBoolean(statusFailedName);
+        @Override
+        public void onFailure(String connector, Throwable cause) {
+            state = AbstractStatus.State.FAILED;
+            delegate.onFailure(connector, cause);
         }
 
-        private boolean asBoolean(MetricName metric) {
-            double value = this.metricGroup.metrics().metric(metric).value();
-            return value > EPSILON || value < -EPSILON;
+        @Override
+        public void onDeletion(String connector) {
+            state = AbstractStatus.State.DESTROYED;
+            delegate.onDeletion(connector);
+        }
+
+        boolean isUnassigned() {
+            return state == AbstractStatus.State.UNASSIGNED;
+        }
+
+        boolean isRunning() {
+            return state == AbstractStatus.State.RUNNING;
+        }
+
+        boolean isPaused() {
+            return state == AbstractStatus.State.PAUSED;
+        }
+
+        boolean isFailed() {
+            return state == AbstractStatus.State.FAILED;
         }
     }
 }

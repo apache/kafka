@@ -23,6 +23,7 @@ import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.easymock.EasyMockSupport;
 import org.easymock.Mock;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -55,6 +56,11 @@ public class WorkerConnectorTest extends EasyMockSupport {
     public void setup() {
         connectorConfig = new ConnectorConfig(plugins, CONFIG);
         metrics = new MockConnectorMetrics();
+    }
+
+    @After
+    public void tearDown() {
+        if (metrics != null) metrics.stop();
     }
 
     @Test
@@ -101,7 +107,6 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener);
 
-        assertStoppedMetric(workerConnector);
         workerConnector.initialize(connectorConfig);
         assertFailedMetric(workerConnector);
         workerConnector.transitionTo(TargetState.STARTED);
@@ -133,7 +138,6 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener);
 
-        assertStoppedMetric(workerConnector);
         workerConnector.initialize(connectorConfig);
         assertInitializedMetric(workerConnector);
         workerConnector.transitionTo(TargetState.STARTED);
@@ -168,7 +172,6 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener);
 
-        assertStoppedMetric(workerConnector);
         workerConnector.initialize(connectorConfig);
         assertInitializedMetric(workerConnector);
         workerConnector.transitionTo(TargetState.STARTED);
@@ -205,7 +208,6 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener);
 
-        assertStoppedMetric(workerConnector);
         workerConnector.initialize(connectorConfig);
         assertInitializedMetric(workerConnector);
         workerConnector.transitionTo(TargetState.PAUSED);
@@ -235,7 +237,6 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener);
 
-        assertStoppedMetric(workerConnector);
         workerConnector.initialize(connectorConfig);
         assertInitializedMetric(workerConnector);
         workerConnector.transitionTo(TargetState.PAUSED);
@@ -266,7 +267,6 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener);
 
-        assertStoppedMetric(workerConnector);
         workerConnector.initialize(connectorConfig);
         assertInitializedMetric(workerConnector);
         workerConnector.transitionTo(TargetState.STARTED);
@@ -293,14 +293,13 @@ public class WorkerConnectorTest extends EasyMockSupport {
         connector.stop();
         expectLastCall().andThrow(exception);
 
-        listener.onShutdown(CONNECTOR);
+        listener.onFailure(CONNECTOR, exception);
         expectLastCall();
 
         replayAll();
 
         WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener);
 
-        assertStoppedMetric(workerConnector);
         workerConnector.initialize(connectorConfig);
         assertInitializedMetric(workerConnector);
         workerConnector.transitionTo(TargetState.STARTED);
@@ -333,7 +332,6 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener);
 
-        assertStoppedMetric(workerConnector);
         workerConnector.initialize(connectorConfig);
         assertInitializedMetric(workerConnector);
         workerConnector.transitionTo(TargetState.STARTED);
@@ -370,7 +368,6 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener);
 
-        assertStoppedMetric(workerConnector);
         workerConnector.initialize(connectorConfig);
         assertInitializedMetric(workerConnector);
         workerConnector.transitionTo(TargetState.STARTED);
@@ -386,30 +383,35 @@ public class WorkerConnectorTest extends EasyMockSupport {
     }
 
     protected void assertFailedMetric(WorkerConnector workerConnector) {
+        assertFalse(workerConnector.metrics().isUnassigned());
         assertTrue(workerConnector.metrics().isFailed());
         assertFalse(workerConnector.metrics().isPaused());
         assertFalse(workerConnector.metrics().isRunning());
     }
 
     protected void assertPausedMetric(WorkerConnector workerConnector) {
+        assertFalse(workerConnector.metrics().isUnassigned());
         assertFalse(workerConnector.metrics().isFailed());
         assertTrue(workerConnector.metrics().isPaused());
         assertFalse(workerConnector.metrics().isRunning());
     }
 
     protected void assertRunningMetric(WorkerConnector workerConnector) {
+        assertFalse(workerConnector.metrics().isUnassigned());
         assertFalse(workerConnector.metrics().isFailed());
         assertFalse(workerConnector.metrics().isPaused());
         assertTrue(workerConnector.metrics().isRunning());
     }
 
     protected void assertStoppedMetric(WorkerConnector workerConnector) {
+        assertTrue(workerConnector.metrics().isUnassigned());
         assertFalse(workerConnector.metrics().isFailed());
         assertFalse(workerConnector.metrics().isPaused());
         assertFalse(workerConnector.metrics().isRunning());
     }
 
     protected void assertInitializedMetric(WorkerConnector workerConnector) {
+        assertTrue(workerConnector.metrics().isUnassigned());
         assertFalse(workerConnector.metrics().isFailed());
         assertFalse(workerConnector.metrics().isPaused());
         assertFalse(workerConnector.metrics().isRunning());
