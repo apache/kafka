@@ -21,6 +21,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, RecordM
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.AuthenticationFailedException
 import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
 
@@ -83,6 +84,17 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   def testManualAssignmentConsumerWithAuthenticationFailure() {
     val consumer = this.consumers.head
     consumer.assign(List(tp).asJava)
+    verifyConsumerWithAuthenticationFailure(consumer)
+  }
+
+  @Test
+  def testManualAssignmentConsumerWithAutoCommitDisabledWithAuthenticationFailure() {
+    this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false.toString)
+    val consumer = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumers += consumer
+    consumer.assign(List(tp).asJava)
+    consumer.seek(tp, 0)
+
     verifyConsumerWithAuthenticationFailure(consumer)
   }
 

@@ -154,6 +154,10 @@ public final class Metadata {
     public synchronized void maybeThrowAuthenticationException() {
         if (authenticationException != null) {
             AuthenticationException exception = authenticationException;
+            // We turn off this flag to avoid unnecessary connections made to update metadata, e.g. from Sender thread
+            // (which will continue to retry if needUpdate is set). The flag will be set again if the application performs
+            // another operation (e.g. when producer does another send, or consumer does a poll), but we are avoiding
+            // automatic retry.
             this.needUpdate = false;
             authenticationException = null;
             throw exception;
