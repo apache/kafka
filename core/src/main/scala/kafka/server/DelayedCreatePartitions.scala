@@ -83,11 +83,6 @@ class DelayedCreatePartitions(delayMs: Long,
     }
     if (isTraceEnabled)
       trace(s"DelayedCreatePartitions.tryComplete(): waitedResults: $waitedResults, waitingFor: $waitingFor")
-    if (waitingFor.isEmpty) {
-      return forceComplete()
-    } else {
-      false
-    }
-
+    waitingFor.isEmpty && forceComplete()
   }
 }

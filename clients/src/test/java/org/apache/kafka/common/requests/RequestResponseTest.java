@@ -71,7 +71,6 @@ import java.util.Set;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
-import static java.util.Collections.singletonMap;
 import static org.apache.kafka.test.TestUtils.toBuffer;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -1085,19 +1084,24 @@ public class RequestResponseTest {
     }
 
     private CreatePartitionsRequest createCreatePartitionsRequest() {
-        Map<String, NewPartitions> assignments = singletonMap("my_topic", NewPartitions.increaseTo(3));
+        Map<String, NewPartitions> assignments = new HashMap<>();
+        assignments.put("my_topic", NewPartitions.increaseTo(3));
+        assignments.put("my_other_topic", NewPartitions.increaseTo(3));
         return new CreatePartitionsRequest(assignments, 0, false, (short) 0);
     }
 
     private CreatePartitionsRequest createCreatePartitionsRequestWithAssignments() {
-        Map<String, NewPartitions> assignments = singletonMap("my_topic", NewPartitions.increaseTo(3, asList(asList(2))));
+        Map<String, NewPartitions> assignments = new HashMap<>();
+        assignments.put("my_topic", NewPartitions.increaseTo(3, asList(asList(2))));
+        assignments.put("my_other_topic", NewPartitions.increaseTo(3, asList(asList(2, 3), asList(3, 1))));
         return new CreatePartitionsRequest(assignments, 0, false, (short) 0);
     }
 
     private CreatePartitionsResponse createCreatePartitionsErrorResponse() {
-        Map<String, ApiError> results = singletonMap(
-                "my_topic", ApiError.fromThrowable(new InvalidReplicaAssignmentException("The assigned brokers included an unknown broker"))
-        );
+        Map<String, ApiError> results = new HashMap<>();
+        results.put("my_topic", ApiError.fromThrowable(
+                new InvalidReplicaAssignmentException("The assigned brokers included an unknown broker")));
+        results.put("my_topic", ApiError.NONE);
         return new CreatePartitionsResponse(42, results);
     }
 

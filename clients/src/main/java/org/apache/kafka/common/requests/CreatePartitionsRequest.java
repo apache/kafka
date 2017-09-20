@@ -39,7 +39,7 @@ import static org.apache.kafka.common.protocol.types.Type.INT32;
 
 public class CreatePartitionsRequest extends AbstractRequest {
 
-    private static final String TOPIC_PARTITION_COUNT_KEY_NAME = "topic_partition_count";
+    private static final String TOPIC_PARTITION_COUNT_KEY_NAME = "topic_partitions";
     private static final String NEW_PARTITIONS_KEY_NAME = "new_partitions";
     private static final String COUNT_KEY_NAME = "count";
     private static final String ASSIGNMENT_KEY_NAME = "assignment";
@@ -52,16 +52,19 @@ public class CreatePartitionsRequest extends AbstractRequest {
                             TOPIC_NAME,
                             new Field(NEW_PARTITIONS_KEY_NAME, new Schema(
                                     new Field(COUNT_KEY_NAME, INT32, "The new partition count."),
-                                    new Field(ASSIGNMENT_KEY_NAME, ArrayOf.nullable(new ArrayOf(INT32)), "The assigned brokers")
+                                    new Field(ASSIGNMENT_KEY_NAME, ArrayOf.nullable(new ArrayOf(INT32)), "The assigned brokers.")
                             )))),
-                    "List of topic and the corresponding partition count"),
-            new Field(TIMEOUT_KEY_NAME, INT32, "The time in ms to wait for a topic to be altered."),
-            new Field(VALIDATE_ONLY_KEY_NAME, BOOLEAN, "If true then validate the request, but don't actually increase the partition count."));
+                    "List of topic and the corresponding new partitions."),
+            new Field(TIMEOUT_KEY_NAME, INT32, "The time in ms to wait for the partitions to be created."),
+            new Field(VALIDATE_ONLY_KEY_NAME, BOOLEAN,
+                    "If true then validate the request, but don't actually increase the partition count."));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{CREATE_PARTITIONS_REQUEST_V0};
     }
 
+    // It is an error for duplicate topics to be present in the request,
+    // so track duplicates here to allow detailed KafkaApis to report per-topic errors.
     private final Set<String> duplicates;
     private final Map<String, NewPartitions> newPartitions;
     private final int timeout;
@@ -109,22 +112,22 @@ public class CreatePartitionsRequest extends AbstractRequest {
         super(apiVersion);
         Object[] topicCountArray = struct.getArray(TOPIC_PARTITION_COUNT_KEY_NAME);
         Map<String, NewPartitions> counts = new HashMap<>(topicCountArray.length);
-        Set<String> dupes = Collections.emptySet();
+        Set<String> dupes = new HashSet<>();
         for (Object topicPartitionCountObj : topicCountArray) {
             Struct topicPartitionCountStruct = (Struct) topicPartitionCountObj;
             String topic = topicPartitionCountStruct.get(TOPIC_NAME);
             Struct partitionCountStruct = topicPartitionCountStruct.getStruct(NEW_PARTITIONS_KEY_NAME);
             int count = partitionCountStruct.getInt(COUNT_KEY_NAME);
-            Object[] outerArray = partitionCountStruct.getArray(ASSIGNMENT_KEY_NAME);
+            Object[] assignmentsArray = partitionCountStruct.getArray(ASSIGNMENT_KEY_NAME);
             NewPartitions newPartition;
-            if (outerArray != null) {
-                List<List<Integer>> assignments = new ArrayList(outerArray.length);
-                for (Object inner : outerArray) {
-                    Object[] innerArray = (Object[]) inner;
-                    List<Integer> innerList = new ArrayList<>(innerArray.length);
-                    assignments.add(innerList);
-                    for (Object broker : innerArray) {
-                        innerList.add((Integer) broker);
+            if (assignmentsArray != null) {
+                List<List<Integer>> assignments = new ArrayList(assignmentsArray.length);
+                for (Object replicas : assignmentsArray) {
+                    Object[] replicasArray = (Object[]) replicas;
+                    List<Integer> replicasList = new ArrayList<>(replicasArray.length);
+                    assignments.add(replicasList);
+                    for (Object broker : replicasArray) {
+                        replicasList.add((Integer) broker);
                     }
                 }
                 newPartition = NewPartitions.increaseTo(count, assignments);
@@ -133,9 +136,6 @@ public class CreatePartitionsRequest extends AbstractRequest {
             }
             NewPartitions dupe = counts.put(topic, newPartition);
             if (dupe != null) {
-                if (dupes.isEmpty()) {
-                    dupes = new HashSet<>();
-                }
                 dupes.add(topic);
             }
         }
@@ -171,22 +171,20 @@ public class CreatePartitionsRequest extends AbstractRequest {
             NewPartitions count = topicPartitionCount.getValue();
             Struct partitionCountStruct = topicPartitionCountStruct.instance(NEW_PARTITIONS_KEY_NAME);
             partitionCountStruct.set(COUNT_KEY_NAME, count.totalCount());
-            Object[][] x;
+            Object[][] assignments = null;
             if (count.assignments() != null) {
-                x = new Object[count.assignments().size()][];
+                assignments = new Object[count.assignments().size()][];
                 int i = 0;
                 for (List<Integer> partitionAssignment : count.assignments()) {
-                    x[i] = partitionAssignment.toArray(new Object[partitionAssignment.size()]);
+                    assignments[i] = partitionAssignment.toArray(new Object[0]);
                     i++;
                 }
-            } else {
-                x = null;
             }
-            partitionCountStruct.set(ASSIGNMENT_KEY_NAME, x);
+            partitionCountStruct.set(ASSIGNMENT_KEY_NAME, assignments);
             topicPartitionCountStruct.set(NEW_PARTITIONS_KEY_NAME, partitionCountStruct);
             topicPartitionsList.add(topicPartitionCountStruct);
         }
-        struct.set(TOPIC_PARTITION_COUNT_KEY_NAME, topicPartitionsList.toArray(new Object[topicPartitionsList.size()]));
+        struct.set(TOPIC_PARTITION_COUNT_KEY_NAME, topicPartitionsList.toArray(new Object[0]));
         struct.set(TIMEOUT_KEY_NAME, this.timeout);
         struct.set(VALIDATE_ONLY_KEY_NAME, this.validateOnly);
         return struct;

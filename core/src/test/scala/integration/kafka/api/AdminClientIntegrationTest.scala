@@ -368,57 +368,68 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     val topic1 = "create-partitions-topic-1"
     TestUtils.createTopic(zkUtils, topic1, 1, 1, servers, new Properties)
 
-    // assert that the topic has 1 partition
-    assertEquals(1, client.describeTopics(Set(topic1).asJavaCollection).values.get(topic1).get.partitions.size)
+    val topic2 = "create-partitions-topic-2"
+    TestUtils.createTopic(zkUtils, topic2, 1, 2, servers, new Properties)
+
+    // assert that both the topics have 1 partition
+    assertEquals(1, client.describeTopics(Set(topic1).asJava).values.get(topic1).get.partitions.size)
+    assertEquals(1, client.describeTopics(Set(topic2).asJava).values.get(topic2).get.partitions.size)
 
     val validateOnly = new CreatePartitionsOptions().validateOnly(true)
 
     // assert that a validateOnly request doesn't increase the number of partitions
-    var alterResult = client.createPartitions(Map(topic1 -> NewPartitions.increaseTo(new Integer(2))).asJava, validateOnly)
+    var alterResult = client.createPartitions(Map(topic1 ->
+      NewPartitions.increaseTo(2)).asJava, validateOnly)
     var altered = alterResult.values.get(topic1).get
     // assert that the topics still has 1 partition
     assertEquals(1, client.describeTopics(Set(topic1).asJavaCollection).values.get(topic1).get.partitions.size)
 
-    // try creating a new partition (no assignments), to bring the total to 2 partitions
-    alterResult = client.createPartitions(Map(topic1 -> NewPartitions.increaseTo(new Integer(2))).asJava)
+    // try creating a new partition (no assignments), to bring the total to 3 partitions
+    alterResult = client.createPartitions(Map(topic1 ->
+      NewPartitions.increaseTo(3)).asJava)
     altered = alterResult.values.get(topic1).get
     // assert that the topics now has 2 partitions
     var actualPartitions = client.describeTopics(Set(topic1).asJavaCollection).values.get(topic1).get.partitions
-    assertEquals(2, actualPartitions.size)
+    assertEquals(3, actualPartitions.size)
 
     // now try creating a new partition (with assignments), to bring the total to 3 partitions
-    alterResult = client.createPartitions(Map(topic1 -> NewPartitions.increaseTo(new Integer(3), asList(asList(new Integer(0))))).asJava)
-    altered = alterResult.values.get(topic1).get
+    alterResult = client.createPartitions(Map(topic2 ->
+      NewPartitions.increaseTo(3, asList(asList(0, 1), asList(1, 2)))).asJava)
+    altered = alterResult.values.get(topic2).get
     // assert that the topics now has 3 partitions
-    actualPartitions = client.describeTopics(Set(topic1).asJavaCollection).values.get(topic1).get.partitions
+    actualPartitions = client.describeTopics(Set(topic2).asJavaCollection).values.get(topic2).get.partitions
     assertEquals(3, actualPartitions.size)
-    assertEquals(List(new Integer(0)), actualPartitions.get(2).replicas.asScala.map(_.id).toList)
+    assertEquals(List[Integer](0, 1), actualPartitions.get(1).replicas.asScala.map(_.id).toList)
+    assertEquals(List[Integer](1, 2), actualPartitions.get(2).replicas.asScala.map(_.id).toList)
 
     // try a newCount which would be a decrease
-    alterResult = client.createPartitions(Map(topic1 -> NewPartitions.increaseTo(new Integer(1))).asJava, validateOnly)
+    alterResult = client.createPartitions(Map(topic1 ->
+      NewPartitions.increaseTo(1)).asJava, validateOnly)
     try {
       alterResult.values.get(topic1).get
       fail("Expect InvalidPartitionsException when newCount is a decrease")
     } catch {
       case e: ExecutionException =>
         assertTrue(e.getCause.isInstanceOf[InvalidPartitionsException])
-        assertEquals("Topic currently has 3 partitions: Cannot create -2 partitions.", e.getCause.getMessage)
+        assertEquals("Topic currently has 3 partitions, which is higher than the requested 1.", e.getCause.getMessage)
     }
 
     // try a newCount which would be a noop
-    alterResult = client.createPartitions(Map(topic1 -> NewPartitions.increaseTo(new Integer(3))).asJava, validateOnly)
+    alterResult = client.createPartitions(Map(topic1 ->
+      NewPartitions.increaseTo(3)).asJava, validateOnly)
     try {
       alterResult.values.get(topic1).get
       fail("Expect InvalidPartitionsException when newCount == oldCount")
     } catch {
       case e: ExecutionException =>
         assertTrue(e.getCause.isInstanceOf[InvalidPartitionsException])
-        assertEquals("Topic currently has 3 partitions: Cannot create 0 partitions.", e.getCause.getMessage)
+        assertEquals("Topic already has 3 partitions.", e.getCause.getMessage)
     }
 
     // try a bad topic name
     val unknownTopic = "an-unknown-topic"
-    alterResult = client.createPartitions(Map(unknownTopic -> NewPartitions.increaseTo(new Integer(2))).asJava, validateOnly)
+    alterResult = client.createPartitions(Map(unknownTopic ->
+      NewPartitions.increaseTo(2)).asJava, validateOnly)
     try {
       alterResult.values.get(unknownTopic).get
       fail("Expect InvalidTopicException when using an unknown topic")
@@ -429,29 +440,33 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     }
 
     // try an invalid newCount
-    alterResult = client.createPartitions(Map(topic1 -> NewPartitions.increaseTo(new Integer(-22))).asJava, validateOnly)
+    alterResult = client.createPartitions(Map(topic1 ->
+      NewPartitions.increaseTo(-22)).asJava, validateOnly)
     try {
       altered = alterResult.values.get(topic1).get
       fail("Expect InvalidPartitionsException when newCount is invalid")
     } catch {
       case e: ExecutionException =>
         assertTrue(e.getCause.isInstanceOf[InvalidPartitionsException])
-        assertEquals("Topic currently has 3 partitions: Cannot create -25 partitions.", e.getCause.getMessage)
+        assertEquals("Topic currently has 3 partitions, which is higher than the requested -22.", e.getCause.getMessage)
     }
 
     // try assignments where the number of brokers != replication factor
-    alterResult = client.createPartitions(Map(topic1 -> NewPartitions.increaseTo(new Integer(4), asList(asList(new Integer(1), new Integer(2))))).asJava, validateOnly)
+    alterResult = client.createPartitions(Map(topic1 ->
+      NewPartitions.increaseTo(4, asList(asList(1, 2)))).asJava, validateOnly)
     try {
       altered = alterResult.values.get(topic1).get
       fail("Expect InvalidPartitionsException when #brokers != replication factor")
     } catch {
       case e: ExecutionException =>
-        assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException])//TODO KIP doesn't say this
-        assertEquals("Existing topic replication factor of 1, but manual replication assignment would imply replication factor(s) of 2.", e.getCause.getMessage)
+        assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException])
+        assertEquals("Existing topic replication factor of 1, but manual replication assignment would imply replication factor(s) of 2.",
+          e.getCause.getMessage)
     }
 
     // try #assignments incompatible with the increase
-    alterResult = client.createPartitions(Map(topic1 -> NewPartitions.increaseTo(new Integer(4), asList(asList(new Integer(1)), asList(new Integer(2))))).asJava, validateOnly)
+    alterResult = client.createPartitions(Map(topic1 ->
+      NewPartitions.increaseTo(4, asList(asList(1), asList(2)))).asJava, validateOnly)
     try {
       altered = alterResult.values.get(topic1).get
       fail("Expect InvalidRequestException when #assignments != newCount - oldCount")
@@ -462,7 +477,8 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     }
 
     // try with duplicate brokers in assignments
-    alterResult = client.createPartitions(Map(topic1 -> NewPartitions.increaseTo(new Integer(4), asList(asList(new Integer(1), new Integer(1))))).asJava, validateOnly)
+    alterResult = client.createPartitions(Map(topic1 ->
+      NewPartitions.increaseTo(4, asList(asList(1, 1)))).asJava, validateOnly)
     try {
       altered = alterResult.values.get(topic1).get
       fail("Expect InvalidReplicaAssignmentException when assignments has duplicate brokers")
@@ -473,7 +489,8 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     }
 
     // try assignments with differently sized inner lists
-    alterResult = client.createPartitions(Map(topic1 -> NewPartitions.increaseTo(new Integer(5), asList(asList(new Integer(1)), asList(new Integer(1), new Integer(0))))).asJava, validateOnly)
+    alterResult = client.createPartitions(Map(topic1 ->
+      NewPartitions.increaseTo(5, asList(asList(1), asList(1, 0)))).asJava, validateOnly)
     try {
       altered = alterResult.values.get(topic1).get
       fail("Expect InvalidReplicaAssignmentException when assignments have differently sized inner lists")
@@ -485,7 +502,8 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     }
 
     // try assignments with unknown brokers
-    alterResult = client.createPartitions(Map(topic1 -> NewPartitions.increaseTo(new Integer(4), asList(asList(new Integer(12))))).asJava, validateOnly)
+    alterResult = client.createPartitions(Map(topic1 ->
+      NewPartitions.increaseTo(4, asList(asList(12)))).asJava, validateOnly)
     try {
       altered = alterResult.values.get(topic1).get
       fail("Expect InvalidReplicaAssignmentException when assignments contains an unknown broker")
@@ -497,7 +515,8 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     }
 
     // try with empty assignments
-    alterResult = client.createPartitions(Map(topic1 -> NewPartitions.increaseTo(new Integer(4), Collections.emptyList())).asJava, validateOnly)
+    alterResult = client.createPartitions(Map(topic1 ->
+      NewPartitions.increaseTo(4, Collections.emptyList())).asJava, validateOnly)
     try {
       altered = alterResult.values.get(topic1).get
       fail("Expect InvalidRequestException when assignments is empty")
@@ -510,7 +529,8 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     // finally, try to add partitions to a topic queued for deletion
     val deleteResult = client.deleteTopics(asList(topic1))
     deleteResult.values.get(topic1).get
-    alterResult = client.createPartitions(Map(topic1 -> NewPartitions.increaseTo(new Integer(4))).asJava, validateOnly)
+    alterResult = client.createPartitions(Map(topic1 ->
+      NewPartitions.increaseTo(4)).asJava, validateOnly)
     try {
       altered = alterResult.values.get(topic1).get
       fail("Expect InvalidTopicException when the topic is queued for deletion")

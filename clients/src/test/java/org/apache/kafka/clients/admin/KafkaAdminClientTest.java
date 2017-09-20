@@ -401,7 +401,7 @@ public class KafkaAdminClientTest {
             CreatePartitionsResult results = env.adminClient().createPartitions(counts);
             Map<String, KafkaFuture<Void>> values = results.values();
             KafkaFuture<Void> myTopicResult = values.get("my_topic");
-            assertEquals(null, myTopicResult.get());
+            myTopicResult.get();
             KafkaFuture<Void> otherTopicResult = values.get("other_topic");
             try {
                 otherTopicResult.get();

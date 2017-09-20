@@ -1337,13 +1337,12 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleCreatePartitionsRequest(request: RequestChannel.Request): Unit = {
     val alterPartitionCountsRequest = request.body[CreatePartitionsRequest]
-    var valid: Map[String, NewPartitions] = null
-    var errors: Map[String, ApiError] = null
+    val (valid, errors) =
     if (!controller.isActive) {
-      valid = Map[String, NewPartitions]()
-      errors = alterPartitionCountsRequest.newPartitions.asScala.map { case (topic, _) =>
+      (Map.empty[String, NewPartitions],
+      alterPartitionCountsRequest.newPartitions.asScala.map { case (topic, _) =>
         (topic, new ApiError(Errors.NOT_CONTROLLER, null))
-      }
+      })
     } else {
       // Special handling to add duplicate topics to the response
       val dupes = alterPartitionCountsRequest.duplicates.asScala
@@ -1352,10 +1351,13 @@ class KafkaApis(val requestChannel: RequestChannel,
         authorize(request.session, Alter, new Resource(Topic, topic))
       }
       val (queuedForDeletion, live) = authorized.partition{ case (topic, _) => controller.topicDeletionManager.isTopicQueuedUpForDeletion(topic) }
-      valid = live
-      errors = dupes.map(_ -> new ApiError(Errors.INVALID_REQUEST, "Duplicate topic in request")).toMap ++
-        unauthorized.map(_._1 -> new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, Errors.TOPIC_AUTHORIZATION_FAILED.message())) ++
-        queuedForDeletion.map(_._1 -> new ApiError(Errors.INVALID_TOPIC_EXCEPTION, "The topic is queued for deletion."))
+      (live,
+      dupes.map(_ -> new ApiError(Errors.INVALID_REQUEST, "Duplicate topic in request")).toMap ++
+        unauthorized.map{ case (topic, np) =>
+          topic -> new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, Errors.TOPIC_AUTHORIZATION_FAILED.message())
+        } ++ queuedForDeletion.map{ case (topic, np) =>
+          topic -> new ApiError(Errors.INVALID_TOPIC_EXCEPTION, "The topic is queued for deletion.")
+        })
     }
 
     def sendResponseCallback(results: Map[String, ApiError]): Unit = {

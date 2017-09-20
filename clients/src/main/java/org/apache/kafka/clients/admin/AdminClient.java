@@ -424,7 +424,8 @@ public abstract class AdminClient implements AutoCloseable {
      * Increase the number of partitions of the topics given as the keys of {@code newPartitions}
      * according to the corresponding values.
      *
-     * This is a convenience method for {@link #createPartitions(Map, CreatePartitionsOptions)} with default options. See the overload for more details.
+     * This is a convenience method for {@link #createPartitions(Map, CreatePartitionsOptions)} with default options.
+     * See the overload for more details.
      *
      * @param newPartitions The topics which should have new partitions created, and corresponding parameters
      *                      for the created partitions.

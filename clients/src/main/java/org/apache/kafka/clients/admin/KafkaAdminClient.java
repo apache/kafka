@@ -1804,7 +1804,7 @@ public class KafkaAdminClient extends AdminClient {
 
     public CreatePartitionsResult createPartitions(Map<String, NewPartitions> newPartitions, final CreatePartitionsOptions options) {
         final Map<String, KafkaFutureImpl<Void>> futures = new HashMap<>(newPartitions.size());
-        for (String topic: newPartitions.keySet()) {
+        for (String topic : newPartitions.keySet()) {
             futures.put(topic, new KafkaFutureImpl<Void>());
         }
         final Map<String, NewPartitions> requestMap = new HashMap<>(newPartitions);
@@ -1836,7 +1836,7 @@ public class KafkaAdminClient extends AdminClient {
                 completeAllExceptionally(futures.values(), throwable);
             }
         }, now);
-        return new CreatePartitionsResult(new HashMap<String, KafkaFuture<Void>>(futures));
+        return new CreatePartitionsResult((Map) futures);
     }
 
 }

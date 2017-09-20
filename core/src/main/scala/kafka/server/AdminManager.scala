@@ -25,13 +25,13 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
 import org.apache.kafka.clients.admin.NewPartitions
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource}
-import org.apache.kafka.common.errors._
+import org.apache.kafka.common.errors.{ApiException, InvalidRequestException, PolicyViolationException, InvalidTopicException, InvalidReplicaAssignmentException, InvalidPartitionsException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.CreateTopicsRequest._
-import org.apache.kafka.common.requests._
+import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError, DescribeConfigsResponse, Resource, ResourceType}
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
 
@@ -205,16 +205,15 @@ class AdminManager(val config: KafkaConfig,
     var waiting = Map.empty[String, NewPartitions]
     var done = Map.empty[String, ApiError]
 
-    newPartitions.foreach{case (topic, newPartition: NewPartitions) =>
+    newPartitions.foreach{ case (topic, newPartition) =>
       try {
-        val oldNumPartitions = zkUtils.getTopicPartitionCount(topic) match {
-          case Some(count) => count
-          case None => throw new InvalidTopicException()
-        }
+        val oldNumPartitions = zkUtils.getTopicPartitionCount(topic).getOrElse(throw new InvalidTopicException())
         val newNumPartitions = newPartition.totalCount
         val numPartitionsIncrement = newNumPartitions - oldNumPartitions
-        if (numPartitionsIncrement <= 0) {
-          throw new InvalidPartitionsException(s"Topic currently has $oldNumPartitions partitions: Cannot create $numPartitionsIncrement partitions.")
+        if (numPartitionsIncrement < 0) {
+          throw new InvalidPartitionsException(s"Topic currently has $oldNumPartitions partitions, which is higher than the requested $newNumPartitions.")
+        } else if (numPartitionsIncrement == 0) {
+          throw new InvalidPartitionsException(s"Topic already has $oldNumPartitions partitions.")
         }
         val reassignmentStr = if (newPartition.assignments == null) {
           ""
@@ -231,7 +230,7 @@ class AdminManager(val config: KafkaConfig,
           "," * (oldNumPartitions) + assignments.map(_.mkString(":")).mkString(",")
         }
 
-        AdminUtils.addPartitions(zkUtils, topic, newPartition.totalCount, reassignmentStr, validateOnly=validateOnly)
+        AdminUtils.addPartitions(zkUtils, topic, newPartition.totalCount, reassignmentStr, validateOnly = validateOnly)
         if (validateOnly) {
           done += topic -> ApiError.NONE
         } else {
