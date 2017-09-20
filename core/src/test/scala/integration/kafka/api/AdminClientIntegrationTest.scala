@@ -448,7 +448,8 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     } catch {
       case e: ExecutionException =>
         assertTrue(e.getCause.isInstanceOf[InvalidPartitionsException])
-        assertEquals("Topic currently has 3 partitions, which is higher than the requested -22.", e.getCause.getMessage)
+        assertEquals("Topic currently has 3 partitions, which is higher than the requested -22.",
+          e.getCause.getMessage)
     }
 
     // try assignments where the number of brokers != replication factor
@@ -460,7 +461,8 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     } catch {
       case e: ExecutionException =>
         assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException])
-        assertEquals("Existing topic replication factor of 1, but manual replication assignment would imply replication factor(s) of 2.",
+        assertEquals("Inconsistent replication factor between partitions, partition 0 has 1 " +
+          "while partitions [3] have replication factors [2], respectively",
           e.getCause.getMessage)
     }
 
@@ -485,7 +487,8 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     } catch {
       case e: ExecutionException =>
         assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException])
-        assertEquals("Duplicate brokers in replica assignment: 1, 1.", e.getCause.getMessage)
+        assertEquals("Duplicate brokers not allowed in replica assignment: 1, 1 for partition id 3.",
+          e.getCause.getMessage)
     }
 
     // try assignments with differently sized inner lists
@@ -498,7 +501,8 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
       case e: ExecutionException =>
         e.printStackTrace()
         assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException])
-        assertEquals("Partition 4 has different replication factor: 1, 0.", e.getCause.getMessage)
+        assertEquals("Inconsistent replication factor between partitions, partition 0 has 1 " +
+          "while partitions [4] have replication factors [2], respectively", e.getCause.getMessage)
     }
 
     // try assignments with unknown brokers

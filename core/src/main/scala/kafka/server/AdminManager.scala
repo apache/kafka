@@ -19,13 +19,13 @@ package kafka.server
 import java.util.{Collections, Properties}
 
 import kafka.admin.{AdminOperationException, AdminUtils}
-import kafka.common.TopicAlreadyMarkedForDeletionException
+import kafka.common.{TopicAlreadyMarkedForDeletionException, TopicAndPartition}
 import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
 import org.apache.kafka.clients.admin.NewPartitions
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource}
-import org.apache.kafka.common.errors.{ApiException, InvalidRequestException, PolicyViolationException, InvalidTopicException, InvalidReplicaAssignmentException, InvalidPartitionsException}
+import org.apache.kafka.common.errors.{ApiException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, InvalidTopicException, PolicyViolationException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -211,26 +211,37 @@ class AdminManager(val config: KafkaConfig,
         val newNumPartitions = newPartition.totalCount
         val numPartitionsIncrement = newNumPartitions - oldNumPartitions
         if (numPartitionsIncrement < 0) {
-          throw new InvalidPartitionsException(s"Topic currently has $oldNumPartitions partitions, which is higher than the requested $newNumPartitions.")
+          throw new InvalidPartitionsException(
+            s"Topic currently has $oldNumPartitions partitions, which is higher than the requested $newNumPartitions.")
         } else if (numPartitionsIncrement == 0) {
           throw new InvalidPartitionsException(s"Topic already has $oldNumPartitions partitions.")
         }
-        val reassignmentStr = if (newPartition.assignments == null) {
-          ""
+        val existingAssignment = zkUtils.getReplicaAssignmentForTopics(List(topic)).map {
+          case (topicPartition, replicas) => topicPartition.partition -> replicas
+        }
+        if (existingAssignment.isEmpty)
+          throw new InvalidTopicException(s"The topic $topic does not exist")
+        val reassignment = if (newPartition.assignments == null) {
+          None
         } else {
           val assignments = newPartition.assignments.asScala.map(inner => inner.asScala.toList)
           // check each broker exists
           val unknownBrokers = assignments.flatten.toSet -- zkUtils.getAllBrokersInCluster.map(broker => broker.id)
           if (unknownBrokers.nonEmpty) {
-            throw new InvalidReplicaAssignmentException(s"Unknown broker(s) in replica assignment: ${unknownBrokers.mkString(", ")}.")
+            throw new InvalidReplicaAssignmentException(
+              s"Unknown broker(s) in replica assignment: ${unknownBrokers.mkString(", ")}.")
           }
           if (assignments.size != numPartitionsIncrement) {
-            throw new InvalidRequestException(s"Increasing the number of partitions by $numPartitionsIncrement but ${assignments.size} assignments provided.")
+            throw new InvalidRequestException(
+              s"Increasing the number of partitions by $numPartitionsIncrement " +
+                s"but ${assignments.size} assignments provided.")
           }
-          "," * (oldNumPartitions) + assignments.map(_.mkString(":")).mkString(",")
+          Some(newPartition.assignments.asScala.toList.zipWithIndex.map{ case (replicas, index) =>
+            existingAssignment.size + index -> replicas.asScala.map(_.toInt)
+          }.toMap)
         }
 
-        AdminUtils.addPartitions(zkUtils, topic, newPartition.totalCount, reassignmentStr, validateOnly = validateOnly)
+        AdminUtils.addPartitions(zkUtils, topic, existingAssignment, newPartition.totalCount, reassignment, validateOnly = validateOnly)
         if (validateOnly) {
           done += topic -> ApiError.NONE
         } else {
