@@ -773,7 +773,8 @@ public interface KTable<K, V> {
      * @param queryableStoreName the state store name used for the result {@code KTable}; valid characters are ASCII
      *                  alphanumerics, '.', '_' and '-'. If {@code null} this is the equivalent of {@link KTable#through(String)()}
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
-     * @deprecated use {@link #toStream()}
+     * @deprecated use {@link #toStream()} followed by {@link KStream#to(String)}
+     * and {@link StreamsBuilder#table(String)} to read back as a {@code KTable}
      */
     @Deprecated
     KTable<K, V> through(final String topic,
@@ -795,7 +796,8 @@ public interface KTable<K, V> {
      * @param topic     the topic name
      * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
-     * @deprecated use {@link #toStream()}
+     * @deprecated use {@link #toStream()} followed by {@link KStream#to(String)}
+     * and {@link StreamsBuilder#table(String)} to read back as a {@code KTable}
      */
     @Deprecated
     KTable<K, V> through(final String topic,
@@ -815,7 +817,8 @@ public interface KTable<K, V> {
      *
      * @param topic     the topic name
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
-     * @deprecated use {@link #toStream()}
+     * @deprecated use {@link #toStream()} followed by {@link KStream#to(String)}
+     * and {@link StreamsBuilder#table(String)} to read back as a {@code KTable}
      */
     @Deprecated
     KTable<K, V> through(final String topic);
@@ -837,7 +840,8 @@ public interface KTable<K, V> {
      *                    if not specified producer's {@link DefaultPartitioner} will be used
      * @param topic       the topic name
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
-     * @deprecated use {@link #toStream()}
+     * @deprecated use {@link #toStream()} followed by {@link KStream#to(String, Produced)}
+     * and {@link StreamsBuilder#table(String)} to read back as a {@code KTable}
      */
     @Deprecated
     KTable<K, V> through(final StreamPartitioner<? super K, ? super V> partitioner,
@@ -862,7 +866,8 @@ public interface KTable<K, V> {
      * @param queryableStoreName   the state store name used for the result {@code KTable}.
      *                             If {@code null} this is the equivalent of {@link KTable#through(StreamPartitioner, String)}
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
-     * @deprecated use {@link #toStream()}
+     * @deprecated use {@link #toStream()} followed by {@link KStream#to(String, Produced)}
+     * and {@link StreamsBuilder#table(String)} to read back as a {@code KTable}
      */
     @Deprecated
     KTable<K, V> through(final StreamPartitioner<? super K, ? super V> partitioner,
@@ -887,7 +892,8 @@ public interface KTable<K, V> {
      * @param topic       the topic name
      * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
-     * @deprecated use {@link #toStream()}
+     * @deprecated use {@link #toStream()} followed by {@link KStream#to(String, Produced)}
+     * and {@link StreamsBuilder#table(String)} to read back as a {@code KTable}
      */
     @Deprecated
     KTable<K, V> through(final StreamPartitioner<? super K, ? super V> partitioner,
@@ -916,7 +922,8 @@ public interface KTable<K, V> {
      * @param queryableStoreName the state store name used for the result {@code KTable}.
      *                           If {@code null} this is the equivalent of {@link KTable#through(Serde, Serde, String)()}
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
-     * @deprecated use {@link #toStream()}
+     * @deprecated use {@link #toStream()} followed by {@link KStream#to(String, Produced)}
+     * and {@link StreamsBuilder#table(String)} to read back as a {@code KTable}
      */
     @Deprecated
     KTable<K, V> through(final Serde<K> keySerde, Serde<V> valSerde,
@@ -944,7 +951,8 @@ public interface KTable<K, V> {
      * @param topic     the topic name
      * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
-     * @deprecated  use {@link #toStream()}
+     * @deprecated use {@link #toStream()} followed by {@link KStream#to(String, Produced)}
+     * and {@link StreamsBuilder#table(String)} to read back as a {@code KTable}
      */
     @Deprecated
     KTable<K, V> through(final Serde<K> keySerde, Serde<V> valSerde,
@@ -971,7 +979,8 @@ public interface KTable<K, V> {
      *                  if not specified the default value serde defined in the configuration will be used
      * @param topic     the topic name
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
-     * @deprecated use {@link #toStream()}
+     * @deprecated use {@link #toStream()} followed by {@link KStream#to(String, Produced)}
+     * and {@link StreamsBuilder#table(String)} to read back as a {@code KTable}
      */
     @Deprecated
     KTable<K, V> through(final Serde<K> keySerde, Serde<V> valSerde,
@@ -1002,7 +1011,8 @@ public interface KTable<K, V> {
      * @param queryableStoreName  the state store name used for the result {@code KTable}.
      *                            If {@code null} this is the equivalent of {@link KTable#through(Serde, Serde, StreamPartitioner, String)()}
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
-     * @deprecated use {@link #toStream()}
+     * @deprecated use {@link #toStream()} followed by {@link KStream#to(String, Produced)}
+     * and {@link StreamsBuilder#table(String)} to read back as a {@code KTable}
      */
     @Deprecated
     KTable<K, V> through(final Serde<K> keySerde,
@@ -1035,7 +1045,8 @@ public interface KTable<K, V> {
      * @param topic      the topic name
      * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
-     * @deprecated use {@link #toStream()}
+     * @deprecated use {@link #toStream()} followed by {@link KStream#to(String, Produced)}
+     * and {@link StreamsBuilder#table(String)} to read back as a {@code KTable}
      */
     @Deprecated
     KTable<K, V> through(final Serde<K> keySerde,
@@ -1067,7 +1078,8 @@ public interface KTable<K, V> {
      *                    be used
      * @param topic      the topic name
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
-     * @deprecated use {@link #toStream()}
+     * @deprecated use {@link #toStream()} followed by {@link KStream#to(String, Produced)}
+     * and {@link StreamsBuilder#table(String)} to read back as a {@code KTable}
      */
     @Deprecated
     KTable<K, V> through(final Serde<K> keySerde,
@@ -1082,7 +1094,7 @@ public interface KTable<K, V> {
      * started).
      *
      * @param topic the topic name
-     * @deprecated use {@link #toStream()}
+     * @deprecated use {@link #toStream()} followed by {@link KStream#to(String)}
      */
     @Deprecated
     void to(final String topic);
@@ -1096,7 +1108,7 @@ public interface KTable<K, V> {
      * @param partitioner the function used to determine how records are distributed among partitions of the topic,
      *                    if not specified producer's {@link DefaultPartitioner} will be used
      * @param topic       the topic name
-     * @deprecated use {@link #toStream()}
+     * @deprecated use {@link #toStream()} followed by {@link KStream#to(String, Produced)}
      */
     @Deprecated
     void to(final StreamPartitioner<? super K, ? super V> partitioner,
@@ -1115,7 +1127,7 @@ public interface KTable<K, V> {
      * @param valSerde value serde used to send key-value pairs,
      *                 if not specified the default value serde defined in the configuration will be used
      * @param topic    the topic name
-     * @deprecated use {@link #toStream()}
+     * @deprecated use {@link #toStream()} followed by {@link KStream#to(String, Produced)}
      */
     @Deprecated
     void to(final Serde<K> keySerde,
@@ -1137,7 +1149,7 @@ public interface KTable<K, V> {
      *                    {@link WindowedStreamPartitioner} will be used&mdash;otherwise {@link DefaultPartitioner} will
      *                    be used
      * @param topic      the topic name
-     * @deprecated use {@link #toStream()}
+     * @deprecated use {@link #toStream()} followed by {@link KStream#to(String, Produced)}
      */
     @Deprecated
     void to(final Serde<K> keySerde,
