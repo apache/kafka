@@ -83,7 +83,8 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   }
 
   /**
-   * With ack == 0 the future metadata will have no exceptions with offset -1
+   * With ack == 0 we should get a valid record metadata object, but the offset() method should raise
+   * a RecordMetadataNotAvailableException
    */
   @Test
   def testTooLargeRecordWithAckZero() {
@@ -92,7 +93,10 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
 
     // send a too-large record
     val record = new ProducerRecord(topic1, null, "key".getBytes, new Array[Byte](serverMessageMaxBytes + 1))
-    assertEquals("Returned metadata should have offset -1", producer1.send(record).get.offset, -1L)
+
+    val recordMetadata = producer1.send(record).get()
+    assertNotNull(recordMetadata)
+    assertFalse(recordMetadata.hasOffset)
   }
 
   /**
