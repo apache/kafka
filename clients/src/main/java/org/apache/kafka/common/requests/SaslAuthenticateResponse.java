@@ -51,7 +51,7 @@ public class SaslAuthenticateResponse extends AbstractResponse {
 
     /**
      * Possible error codes:
-     *   AUTHENTICATION_FAILED(57) : Authentication failed
+     *   SASL_AUTHENTICATION_FAILED(57) : Authentication failed
      */
     private final Errors error;
     private final String errorMessage;

@@ -26,7 +26,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
-import org.apache.kafka.common.errors.AuthenticationFailedException;
+import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.NetworkTestUtils;
 import org.apache.kafka.common.network.NioEchoServer;
@@ -84,7 +84,7 @@ public class ClientAuthenticationFailureTest {
             consumer.subscribe(Arrays.asList(topic));
             consumer.poll(100);
             fail("Expected an authentication error!");
-        } catch (AuthenticationFailedException e) {
+        } catch (SaslAuthenticationException e) {
             // OK
         } catch (Exception e) {
             fail("Expected only an authentication error, but another error occurred: " + e.getMessage());
@@ -102,7 +102,8 @@ public class ClientAuthenticationFailureTest {
             producer.send(record).get();
             fail("Expected an authentication error!");
         } catch (Exception e) {
-            assertTrue("Expected an exception of type AuthenticationFailedException", e.getCause() instanceof AuthenticationFailedException);
+            assertTrue("Expected SaslAuthenticationException, got " + e.getCause().getClass(),
+                    e.getCause() instanceof SaslAuthenticationException);
         }
     }
 
@@ -115,7 +116,8 @@ public class ClientAuthenticationFailureTest {
             result.all().get();
             fail("Expected an authentication error!");
         } catch (Exception e) {
-            assertTrue("Expected AuthenticationFailedException, got " + e.getClass(), e.getCause() instanceof AuthenticationFailedException);
+            assertTrue("Expected SaslAuthenticationException, got " + e.getCause().getClass(),
+                    e.getCause() instanceof SaslAuthenticationException);
         }
     }
 
@@ -126,14 +128,12 @@ public class ClientAuthenticationFailureTest {
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer");
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer");
         props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "txclient-1");
-        props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "5");
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
-        props.put(ProducerConfig.BATCH_SIZE_CONFIG, "16384");
 
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
             producer.initTransactions();
             fail("Expected an authentication error!");
-        } catch (AuthenticationFailedException e) {
+        } catch (SaslAuthenticationException e) {
             // expected exception
         }
     }

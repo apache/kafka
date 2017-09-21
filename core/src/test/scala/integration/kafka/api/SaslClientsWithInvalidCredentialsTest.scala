@@ -21,7 +21,7 @@ import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
 import org.apache.kafka.clients.consumer.{KafkaConsumer, ConsumerConfig}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.errors.AuthenticationFailedException
+import org.apache.kafka.common.errors.SaslAuthenticationException
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.junit.{After, Before, Test}
@@ -203,7 +203,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
       f()
       fail("Expected an authentication exception")
     } catch {
-      case e: AuthenticationFailedException =>
+      case e: SaslAuthenticationException =>
         // expected exception
         val elapsedMs = System.currentTimeMillis - startMs
         assertTrue(s"Poll took too long, elapsed=$elapsedMs", elapsedMs <= 5000)
@@ -219,16 +219,14 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
         f()
         true
       } catch {
-        case _: AuthenticationFailedException => false
+        case _: SaslAuthenticationException => false
       }
     }, s"Operation did not succeed within timeout after $attempts")
   }
 
   private def createTransactionalProducer(): KafkaProducer[Array[Byte], Array[Byte]] = {
     producerConfig.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "txclient-1")
-    producerConfig.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "5")
     producerConfig.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
-    producerConfig.put(ProducerConfig.BATCH_SIZE_CONFIG, "16384")
     val txProducer = TestUtils.createNewProducer(brokerList,
                                   securityProtocol = this.securityProtocol,
                                   saslProperties = this.clientSaslProperties,

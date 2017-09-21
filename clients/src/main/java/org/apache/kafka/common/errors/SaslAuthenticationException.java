@@ -17,27 +17,23 @@
 package org.apache.kafka.common.errors;
 
 /**
- * This exception indicates that SSL handshake or SASL authentication has
- * failed.
+ * This exception indicates that SASL authentication has failed. The error message
+ * in the exception indicates the actual cause of failure.
  * <p>
- * SSL handshake failures in clients may indicate client authentication
- * failure due to untrusted certificates if server is configured to request
- * client certificates. Handshake failures could also indicate misconfigured
- * security including protocol/cipher suite mismatch, server certificate
- * authentication failure or server host name verification failure.
- * </p><p>
- * SASL authentication failures typically indicate invalid credentials.
- * <p>
+ * SASL authentication failures typically indicate invalid credentials, but
+ * could also include other failures specific to the SASL mechanism used
+ * for authentication.
+ * </p>
  */
-public class AuthenticationFailedException extends AuthenticationException {
+public class SaslAuthenticationException extends AuthenticationException {
 
     private static final long serialVersionUID = 1L;
 
-    public AuthenticationFailedException(String message) {
+    public SaslAuthenticationException(String message) {
         super(message);
     }
 
-    public AuthenticationFailedException(String message, Throwable cause) {
+    public SaslAuthenticationException(String message, Throwable cause) {
         super(message, cause);
     }
 
