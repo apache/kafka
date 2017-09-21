@@ -14,18 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
 
-public class AuthenticationFailedException extends AuthenticationException {
+/**
+ * Thrown if a request cannot be completed because a partition reassignment is in progress.
+ */
+public class ReassignmentInProgressException extends ApiException {
 
-    private static final long serialVersionUID = 1L;
-
-    public AuthenticationFailedException(String message) {
-        super(message);
+    public ReassignmentInProgressException(String msg) {
+        super(msg);
     }
 
-    public AuthenticationFailedException(String message, Throwable cause) {
-        super(message, cause);
+    public ReassignmentInProgressException(String msg, Throwable cause) {
+        super(msg, cause);
     }
-
 }

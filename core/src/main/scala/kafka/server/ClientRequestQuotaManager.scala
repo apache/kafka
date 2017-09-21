@@ -64,11 +64,11 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
     math.min(super.throttleTime(clientMetric, config), maxThrottleTimeMs)
   }
 
-  override protected def clientRateMetricName(sanitizedUser: String, clientId: String): MetricName = {
+  override protected def clientRateMetricName(sanitizedUser: String, sanitizedClientId: String): MetricName = {
     metrics.metricName("request-time", QuotaType.Request.toString,
                    "Tracking request-time per user/client-id",
                    "user", sanitizedUser,
-                   "client-id", clientId)
+                   "client-id", sanitizedClientId)
   }
 
   private def exemptMetricName: MetricName = {

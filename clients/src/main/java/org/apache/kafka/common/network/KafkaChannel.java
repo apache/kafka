@@ -79,7 +79,7 @@ public class KafkaChannel {
                 authenticator.authenticate();
             } catch (AuthenticationException e) {
                 switch (authenticator.error()) {
-                    case AUTHENTICATION_FAILED:
+                    case SASL_AUTHENTICATION_FAILED:
                     case ILLEGAL_SASL_STATE:
                     case UNSUPPORTED_SASL_MECHANISM:
                         state = new ChannelState(ChannelState.State.AUTHENTICATION_FAILED, e);

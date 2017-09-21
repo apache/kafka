@@ -574,7 +574,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * or an unrecoverable error is encountered.
      * @param offsets The offsets to be committed
      * @throws org.apache.kafka.common.errors.AuthorizationException if the consumer is not authorized to the group
-     *             or to any of the specified partitions
+     *             or to any of the specified partitions. See the exception for more details
      * @throws CommitFailedException if an unrecoverable error occurs before the commit can be completed
      * @return If the offset commit was successfully sent and a successful response was received from
      *         the coordinator

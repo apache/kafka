@@ -31,7 +31,7 @@ import kafka.metrics.KafkaMetricsReporter
 import kafka.utils._
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord}
-import org.apache.kafka.common.errors.WakeupException
+import org.apache.kafka.common.errors.{AuthenticationException, WakeupException}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.serialization.Deserializer
 import org.apache.kafka.common.utils.Utils
@@ -53,6 +53,9 @@ object ConsoleConsumer extends Logging {
     try {
       run(conf)
     } catch {
+      case e: AuthenticationException =>
+        error("Authentication failed: terminating consumer process", e)
+        Exit.exit(1)
       case e: Throwable =>
         error("Unknown error when running consumer: ", e)
         Exit.exit(1)

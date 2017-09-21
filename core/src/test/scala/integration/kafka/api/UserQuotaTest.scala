@@ -22,6 +22,7 @@ import kafka.server.{ConfigEntityName, KafkaConfig, QuotaId}
 import kafka.utils.JaasTestUtils
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.{After, Before}
+import org.apache.kafka.common.metrics.Sanitizer
 
 class UserQuotaTest extends BaseQuotaTest with SaslSetup {
 
@@ -66,6 +67,6 @@ class UserQuotaTest extends BaseQuotaTest with SaslSetup {
   }
 
   private def updateQuotaOverride(properties: Properties) {
-    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, QuotaId.sanitize(userPrincipal), properties)
+    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, Sanitizer.sanitize(userPrincipal), properties)
   }
 }

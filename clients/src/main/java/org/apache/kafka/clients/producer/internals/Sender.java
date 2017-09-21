@@ -28,6 +28,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
@@ -200,32 +201,38 @@ public class Sender implements Runnable {
      */
     void run(long now) {
         if (transactionManager != null) {
-            if (transactionManager.shouldResetProducerStateAfterResolvingSequences())
-                // Check if the previous run expired batches which requires a reset of the producer state.
-                transactionManager.resetProducerId();
+            try {
+                if (transactionManager.shouldResetProducerStateAfterResolvingSequences())
+                    // Check if the previous run expired batches which requires a reset of the producer state.
+                    transactionManager.resetProducerId();
 
-            if (!transactionManager.isTransactional()) {
-                // this is an idempotent producer, so make sure we have a producer id
-                maybeWaitForProducerId();
-            } else if (transactionManager.hasUnresolvedSequences() && !transactionManager.hasFatalError()) {
-                transactionManager.transitionToFatalError(new KafkaException("The client hasn't received acknowledgment for " +
-                        "some previously sent messages and can no longer retry them. It isn't safe to continue."));
-            } else if (transactionManager.hasInFlightTransactionalRequest() || maybeSendTransactionalRequest(now)) {
-                // as long as there are outstanding transactional requests, we simply wait for them to return
-                client.poll(retryBackoffMs, now);
-                return;
-            }
+                if (!transactionManager.isTransactional()) {
+                    // this is an idempotent producer, so make sure we have a producer id
+                    maybeWaitForProducerId();
+                } else if (transactionManager.hasUnresolvedSequences() && !transactionManager.hasFatalError()) {
+                    transactionManager.transitionToFatalError(new KafkaException("The client hasn't received acknowledgment for " +
+                            "some previously sent messages and can no longer retry them. It isn't safe to continue."));
+                } else if (transactionManager.hasInFlightTransactionalRequest() || maybeSendTransactionalRequest(now)) {
+                    // as long as there are outstanding transactional requests, we simply wait for them to return
+                    client.poll(retryBackoffMs, now);
+                    return;
+                }
 
-            // do not continue sending if the transaction manager is in a failed state or if there
-            // is no producer id (for the idempotent case).
-            if (transactionManager.hasFatalError() || !transactionManager.hasProducerId()) {
-                RuntimeException lastError = transactionManager.lastError();
-                if (lastError != null)
-                    maybeAbortBatches(lastError);
-                client.poll(retryBackoffMs, now);
-                return;
-            } else if (transactionManager.hasAbortableError()) {
-                accumulator.abortUndrainedBatches(transactionManager.lastError());
+                // do not continue sending if the transaction manager is in a failed state or if there
+                // is no producer id (for the idempotent case).
+                if (transactionManager.hasFatalError() || !transactionManager.hasProducerId()) {
+                    RuntimeException lastError = transactionManager.lastError();
+                    if (lastError != null)
+                        maybeAbortBatches(lastError);
+                    client.poll(retryBackoffMs, now);
+                    return;
+                } else if (transactionManager.hasAbortableError()) {
+                    accumulator.abortUndrainedBatches(transactionManager.lastError());
+                }
+            } catch (AuthenticationException e) {
+                // This is already logged as error, but propagated here to perform any clean ups.
+                log.trace("Authentication exception while processing transactional request: {}", e);
+                transactionManager.authenticationFailed(e);
             }
         }
 
@@ -406,7 +413,7 @@ public class Sender implements Runnable {
 
     private Node awaitLeastLoadedNodeReady(long remainingTimeMs) throws IOException {
         Node node = client.leastLoadedNode(time.milliseconds());
-        if (NetworkClientUtils.awaitReady(client, node, time, remainingTimeMs)) {
+        if (node != null && NetworkClientUtils.awaitReady(client, node, time, remainingTimeMs)) {
             return node;
         }
         return null;
@@ -511,7 +518,7 @@ public class Sender implements Runnable {
             this.accumulator.deallocate(batch);
             this.sensors.recordBatchSplit();
         } else if (error != Errors.NONE) {
-            if (canRetry(batch, error)) {
+            if (canRetry(batch, response)) {
                 log.warn("Got error produce response with correlation id {} on topic-partition {}, retrying ({} attempts left). Error: {}",
                         correlationId,
                         batch.topicPartition,
@@ -578,6 +585,7 @@ public class Sender implements Runnable {
                 log.debug("ProducerId: {}; Set last ack'd sequence number for topic-partition {} to {}", batch.producerId(), batch.topicPartition,
                         transactionManager.lastAckedSequence(batch.topicPartition));
             }
+            transactionManager.updateLastAckedOffset(response, batch);
             transactionManager.removeInFlightBatch(batch);
         }
 
@@ -594,9 +602,9 @@ public class Sender implements Runnable {
             if (exception instanceof OutOfOrderSequenceException
                     && !transactionManager.isTransactional()
                     && transactionManager.hasProducerId(batch.producerId())) {
-                log.error("The broker received an out of order sequence number for topic-partition " +
+                log.error("The broker returned {} for topic-partition " +
                                 "{} at offset {}. This indicates data loss on the broker, and should be investigated.",
-                        batch.topicPartition, baseOffset);
+                        exception, batch.topicPartition, baseOffset);
 
                 // Reset the transaction state since we have hit an irrecoverable exception and cannot make any guarantees
                 // about the previously committed message. Note that this will discard the producer id and sequence
@@ -616,6 +624,7 @@ public class Sender implements Runnable {
         }
 
         this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
+
         batch.done(baseOffset, logAppendTime, exception);
         this.accumulator.deallocate(batch);
     }
@@ -625,11 +634,9 @@ public class Sender implements Runnable {
      * We can also retry OutOfOrderSequence exceptions for future batches, since if the first batch has failed, the future
      * batches are certain to fail with an OutOfOrderSequence exception.
      */
-    private boolean canRetry(ProducerBatch batch, Errors error) {
+    private boolean canRetry(ProducerBatch batch, ProduceResponse.PartitionResponse response) {
         return batch.attempts() < this.retries &&
-                ((error.exception() instanceof RetriableException) ||
-                        (error.exception() instanceof OutOfOrderSequenceException
-                                && transactionManager.canRetryOutOfOrderSequenceException(batch)));
+                ((response.error.exception() instanceof RetriableException) || transactionManager.canRetry(response, batch));
     }
 
     /**

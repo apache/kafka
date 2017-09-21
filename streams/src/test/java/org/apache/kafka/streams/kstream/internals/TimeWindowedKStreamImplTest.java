@@ -28,7 +28,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.WindowedKStream;
+import org.apache.kafka.streams.kstream.TimeWindowedKStream;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockAggregator;
@@ -48,14 +48,14 @@ import java.util.Map;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 
-public class WindowedKStreamImplTest {
+public class TimeWindowedKStreamImplTest {
 
     private static final String TOPIC = "input";
     private final StreamsBuilder builder = new StreamsBuilder();
 
     @Rule
     public final KStreamTestDriver driver = new KStreamTestDriver();
-    private WindowedKStream<String, String> windowedStream;
+    private TimeWindowedKStream<String, String> windowedStream;
 
     @Before
     public void before() {

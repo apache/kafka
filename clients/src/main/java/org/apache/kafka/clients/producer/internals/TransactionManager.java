@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.protocol.Errors;
@@ -37,6 +38,7 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.InitProducerIdRequest;
 import org.apache.kafka.common.requests.InitProducerIdResponse;
+import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest.CommittedOffset;
@@ -85,6 +87,10 @@ public class TransactionManager {
     // leader failover. We add a batch to the queue when it is drained, and remove it when the batch completes
     // (either successfully or through a fatal failure).
     private final Map<TopicPartition, PriorityQueue<ProducerBatch>> inflightBatchesBySequence;
+
+    // We keep track of the last acknowledged offset on a per partition basis in order to disambiguate UnknownProducer
+    // responses which are due to the retention period elapsing, and those which are due to actual lost data.
+    private final Map<TopicPartition, Long> lastAckedOffset;
 
     private final PriorityQueue<TxnRequestHandler> pendingRequests;
     private final Set<TopicPartition> newPartitionsInTransaction;
@@ -182,6 +188,7 @@ public class TransactionManager {
 
         this.partitionsWithUnresolvedSequences = new HashSet<>();
         this.inflightBatchesBySequence = new HashMap<>();
+        this.lastAckedOffset = new HashMap<>();
 
         this.retryBackoffMs = retryBackoffMs;
     }
@@ -390,6 +397,7 @@ public class TransactionManager {
         this.lastAckedSequence.clear();
         this.inflightBatchesBySequence.clear();
         this.partitionsWithUnresolvedSequences.clear();
+        this.lastAckedOffset.clear();
     }
 
     /**
@@ -454,6 +462,24 @@ public class TransactionManager {
         return currentLastAckedSequence;
     }
 
+    synchronized long lastAckedOffset(TopicPartition topicPartition) {
+        Long offset = lastAckedOffset.get(topicPartition);
+        if (offset == null)
+            return ProduceResponse.INVALID_OFFSET;
+        return offset;
+    }
+
+    synchronized void updateLastAckedOffset(ProduceResponse.PartitionResponse response, ProducerBatch batch) {
+        if (response.baseOffset == ProduceResponse.INVALID_OFFSET)
+            return;
+        long lastOffset = response.baseOffset + batch.recordCount - 1;
+        if (lastOffset > lastAckedOffset(batch.topicPartition)) {
+            lastAckedOffset.put(batch.topicPartition, lastOffset);
+        } else {
+            log.trace("Partition {} keeps lastOffset at {}", batch.topicPartition, lastOffset);
+        }
+    }
+
     // If a batch is failed fatally, the sequence numbers for future batches bound for the partition must be adjusted
     // so that they don't fail with the OutOfOrderSequenceException.
     //
@@ -484,6 +510,20 @@ public class TransactionManager {
             log.info("Resetting sequence number of batch with current sequence {} for partition {} to {}", inFlightBatch.baseSequence(), batch.topicPartition, newSequence);
             inFlightBatch.resetProducerState(new ProducerIdAndEpoch(inFlightBatch.producerId(), inFlightBatch.producerEpoch()), newSequence, inFlightBatch.isTransactional());
         }
+    }
+
+    private synchronized void startSequencesAtBeginning(TopicPartition topicPartition) {
+        int sequence = 0;
+        for (ProducerBatch inFlightBatch : inflightBatchesBySequence.get(topicPartition)) {
+            log.info("Resetting sequence number of batch with current sequence {} for partition {} to {}",
+                    inFlightBatch.baseSequence(), inFlightBatch.topicPartition, sequence);
+            inFlightBatch.resetProducerState(new ProducerIdAndEpoch(inFlightBatch.producerId(),
+                    inFlightBatch.producerEpoch()), sequence, inFlightBatch.isTransactional());
+
+            sequence += inFlightBatch.recordCount;
+        }
+        setNextSequence(topicPartition, sequence);
+        lastAckedSequence.remove(topicPartition);
     }
 
     synchronized boolean hasInflightBatches(TopicPartition topicPartition) {
@@ -579,6 +619,11 @@ public class TransactionManager {
         enqueueRequest(request);
     }
 
+    synchronized void authenticationFailed(AuthenticationException e) {
+        for (TxnRequestHandler request : pendingRequests)
+            request.fatalError(e);
+    }
+
     Node coordinator(FindCoordinatorRequest.CoordinatorType type) {
         switch (type) {
             case GROUP:
@@ -632,9 +677,48 @@ public class TransactionManager {
         return currentState == State.IN_TRANSACTION || isCompleting() || hasAbortableError();
     }
 
-    synchronized boolean canRetryOutOfOrderSequenceException(ProducerBatch batch) {
-        return hasProducerId(batch.producerId()) && !hasUnresolvedSequence(batch.topicPartition) &&
-                (batch.sequenceHasBeenReset() || !isNextSequence(batch.topicPartition, batch.baseSequence()));
+    synchronized boolean canRetry(ProduceResponse.PartitionResponse response, ProducerBatch batch) {
+        if (!hasProducerId(batch.producerId()))
+            return false;
+
+        Errors error = response.error;
+        if (error == Errors.OUT_OF_ORDER_SEQUENCE_NUMBER && !hasUnresolvedSequence(batch.topicPartition) &&
+                (batch.sequenceHasBeenReset() || !isNextSequence(batch.topicPartition, batch.baseSequence())))
+            // We should retry the OutOfOrderSequenceException if the batch is _not_ the next batch, ie. its base
+            // sequence isn't the lastAckedSequence + 1. However, if the first in flight batch fails fatally, we will
+            // adjust the sequences of the other inflight batches to account for the 'loss' of the sequence range in
+            // the batch which failed. In this case, an inflight batch will have a base sequence which is
+            // the lastAckedSequence + 1 after adjustment. When this batch fails with an OutOfOrderSequence, we want to retry it.
+            // To account for the latter case, we check whether the sequence has been reset since the last drain.
+            // If it has, we will retry it anyway.
+            return true;
+
+        if (error == Errors.UNKNOWN_PRODUCER_ID) {
+            if (response.logStartOffset == -1)
+                // We don't know the log start offset with this response. We should just retry the request until we get it.
+                // The UNKNOWN_PRODUCER_ID error code was added along with the new ProduceResponse which includes the
+                // logStartOffset. So the '-1' sentinel is not for backward compatibility. Instead, it is possible for
+                // a broker to not know the logStartOffset at when it is returning the response because the partition
+                // may have moved away from the broker from the time the error was initially raised to the time the
+                // response was being constructed. In these cases, we should just retry the request: we are guaranteed
+                // to eventually get a logStartOffset once things settle down.
+                return true;
+
+            if (batch.sequenceHasBeenReset()) {
+                // When the first inflight batch fails due to the truncation case, then the sequences of all the other
+                // in flight batches would have been restarted from the beginning. However, when those responses
+                // come back from the broker, they would also come with an UNKNOWN_PRODUCER_ID error. In this case, we should not
+                // reset the sequence numbers to the beginning.
+                return true;
+            } else if (lastAckedOffset(batch.topicPartition) < response.logStartOffset) {
+                // The head of the log has been removed, probably due to the retention time elapsing. In this case,
+                // we expect to lose the producer state. Reset the sequences of all inflight batches to be from the beginning
+                // and retry them.
+                startSequencesAtBeginning(batch.topicPartition);
+                return true;
+            }
+        }
+        return false;
     }
 
     // visible for testing

@@ -347,14 +347,16 @@ public final class RecordAccumulator {
         return numSplitBatches;
     }
 
-    // The deque for the partition may have to be reordered in situations where leadership changes in between
-    // batch drains. Since the requests are on different connections, we no longer have any guarantees about ordering
-    // of the responses. Hence we will have to check if there is anything out of order and ensure the batch is queued
-    // in the correct sequence order.
+    // We will have to do extra work to ensure the queue is in order when requests are being retried and there are
+    // multiple requests in flight to that partition. If the first inflight request fails to append, then all the subsequent
+    // in flight requests will also fail because the sequence numbers will not be accepted.
+    //
+    // Further, once batches are being retried, we are reduced to a single in flight request for that partition. So when
+    // the subsequent batches come back in sequence order, they will have to be placed further back in the queue.
     //
     // Note that this assumes that all the batches in the queue which have an assigned sequence also have the current
-    // producer id. We will not attempt to reorder messages if the producer id has changed.
-
+    // producer id. We will not attempt to reorder messages if the producer id has changed, we will throw an
+    // IllegalStateException instead.
     private void insertInSequenceOrder(Deque<ProducerBatch> deque, ProducerBatch batch) {
         // When we are requeing and have enabled idempotence, the reenqueued batch must always have a sequence.
         if (batch.baseSequence() == RecordBatch.NO_SEQUENCE)
@@ -365,19 +367,16 @@ public final class RecordAccumulator {
             throw new IllegalStateException("We are reenqueueing a batch which is not tracked as part of the in flight " +
                     "requests. batch.topicPartition: " + batch.topicPartition + "; batch.baseSequence: " + batch.baseSequence());
 
-        // If there are no inflight batches being tracked by the transaction manager, it means that the producer
-        // id must have changed and the batches being re enqueued are from the old producer id. In this case
-        // we don't try to ensure ordering amongst them. They will eventually fail with an OutOfOrderSequence,
-        // or they will succeed.
-        if (batch.baseSequence() != transactionManager.nextBatchBySequence(batch.topicPartition).baseSequence()) {
+        ProducerBatch firstBatchInQueue = deque.peekFirst();
+        if (firstBatchInQueue != null && firstBatchInQueue.hasSequence() && firstBatchInQueue.baseSequence() < batch.baseSequence()) {
             // The incoming batch can't be inserted at the front of the queue without violating the sequence ordering.
             // This means that the incoming batch should be placed somewhere further back.
             // We need to find the right place for the incoming batch and insert it there.
-            // We will only enter this branch if we have multiple inflights sent to different brokers, perhaps
-            // because a leadership change occurred in between the drains. In this scenario, responses can come
-            // back out of order, requiring us to re order the batches ourselves rather than relying on the
-            // implicit ordering guarantees of the network client which are only on a per connection basis.
-
+            // We will only enter this branch if we have multiple inflights sent to different brokers and we need to retry
+            // the inflight batches.
+            //
+            // Since we reenqueue exactly one batch a time and ensure that the queue is ordered by sequence always, it
+            // is a simple linear scan of a subset of the in flight batches to find the right place in the queue each time.
             List<ProducerBatch> orderedBatches = new ArrayList<>();
             while (deque.peekFirst() != null && deque.peekFirst().hasSequence() && deque.peekFirst().baseSequence() < batch.baseSequence())
                 orderedBatches.add(deque.pollFirst());

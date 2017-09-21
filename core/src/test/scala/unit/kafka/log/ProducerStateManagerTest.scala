@@ -305,7 +305,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     append(recoveredMapping, producerId, epoch, 2, 2L)
   }
 
-  @Test(expected = classOf[OutOfOrderSequenceException])
+  @Test(expected = classOf[UnknownProducerIdException])
   def testRemoveExpiredPidsOnReload(): Unit = {
     val epoch = 0.toShort
     append(stateManager, producerId, epoch, 0, 0L, 0)
@@ -482,14 +482,14 @@ class ProducerStateManagerTest extends JUnitSuite {
     append(stateManager, producerId, epoch, 2, 3L, 4L)
     stateManager.takeSnapshot()
 
-    intercept[OutOfOrderSequenceException] {
+    intercept[UnknownProducerIdException] {
       val recoveredMapping = new ProducerStateManager(partition, logDir, maxPidExpirationMs)
       recoveredMapping.truncateAndReload(0L, 1L, time.milliseconds)
       append(recoveredMapping, pid2, epoch, 1, 4L, 5L)
     }
   }
 
-  @Test(expected = classOf[OutOfOrderSequenceException])
+  @Test(expected = classOf[UnknownProducerIdException])
   def testPidExpirationTimeout() {
     val epoch = 5.toShort
     val sequence = 37

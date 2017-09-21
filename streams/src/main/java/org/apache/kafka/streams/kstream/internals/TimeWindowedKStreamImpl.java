@@ -26,7 +26,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.WindowedKStream;
+import org.apache.kafka.streams.kstream.TimeWindowedKStream;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -39,20 +39,20 @@ import java.util.Set;
 import static org.apache.kafka.streams.kstream.internals.KGroupedStreamImpl.AGGREGATE_NAME;
 import static org.apache.kafka.streams.kstream.internals.KGroupedStreamImpl.REDUCE_NAME;
 
-public class WindowedKStreamImpl<K, V, W extends Window> extends AbstractStream<K> implements WindowedKStream<K, V> {
+public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStream<K> implements TimeWindowedKStream<K, V> {
 
     private final Windows<W> windows;
     private final Serde<K> keySerde;
     private final Serde<V> valSerde;
     private final GroupedStreamAggregateBuilder<K, V> aggregateBuilder;
 
-    WindowedKStreamImpl(final Windows<W> windows,
-                        final InternalStreamsBuilder builder,
-                        final Set<String> sourceNodes,
-                        final String name,
-                        final Serde<K> keySerde,
-                        final Serde<V> valSerde,
-                        final boolean repartitionRequired) {
+    TimeWindowedKStreamImpl(final Windows<W> windows,
+                            final InternalStreamsBuilder builder,
+                            final Set<String> sourceNodes,
+                            final String name,
+                            final Serde<K> keySerde,
+                            final Serde<V> valSerde,
+                            final boolean repartitionRequired) {
         super(builder, name, sourceNodes);
         Objects.requireNonNull(windows, "windows can't be null");
         this.valSerde = valSerde;
