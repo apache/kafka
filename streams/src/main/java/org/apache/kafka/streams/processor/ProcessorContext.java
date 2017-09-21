@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.errors.StreamsException;
 
 import java.io.File;
 import java.util.Map;
@@ -75,8 +76,10 @@ public interface ProcessorContext {
      * Registers and possibly restores the specified storage engine.
      *
      * @param store the storage engine
+     * @throws IllegalStateException If store get's registered after initialized is already finished
+     * @throws StreamsException if the store's change log does not contain the partition
      */
-    void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback);
+    void register(StateStore store, StateRestoreCallback stateRestoreCallback);
 
     /**
      * Get the state store given the store name.

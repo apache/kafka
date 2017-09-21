@@ -161,7 +161,7 @@ public class GlobalStateManagerImplTest {
         stateManager.initialize(context);
 
         try {
-            stateManager.register(new NoOpReadOnlyStore<>("not-in-topology"), false, new TheStateRestoreCallback());
+            stateManager.register(new NoOpReadOnlyStore<>("not-in-topology"), new TheStateRestoreCallback());
             fail("should have raised an illegal argument exception as store is not in the topology");
         } catch (final IllegalArgumentException e) {
             // pass
@@ -172,9 +172,9 @@ public class GlobalStateManagerImplTest {
     public void shouldThrowIllegalArgumentExceptionIfAttemptingToRegisterStoreTwice() {
         stateManager.initialize(context);
         initializeConsumer(2, 1, t1);
-        stateManager.register(store1, false, new TheStateRestoreCallback());
+        stateManager.register(store1, new TheStateRestoreCallback());
         try {
-            stateManager.register(store1, false, new TheStateRestoreCallback());
+            stateManager.register(store1, new TheStateRestoreCallback());
             fail("should have raised an illegal argument exception as store has already been registered");
         } catch (final IllegalArgumentException e) {
             // pass
@@ -185,7 +185,7 @@ public class GlobalStateManagerImplTest {
     public void shouldThrowStreamsExceptionIfNoPartitionsFoundForStore() {
         stateManager.initialize(context);
         try {
-            stateManager.register(store1, false, new TheStateRestoreCallback());
+            stateManager.register(store1, new TheStateRestoreCallback());
             fail("Should have raised a StreamsException as there are no partition for the store");
         } catch (final StreamsException e) {
             // pass
@@ -199,7 +199,7 @@ public class GlobalStateManagerImplTest {
         stateManager.initialize(context);
 
         final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
-        stateManager.register(store1, false, stateRestoreCallback);
+        stateManager.register(store1, stateRestoreCallback);
         assertEquals(2, stateRestoreCallback.restored.size());
     }
 
@@ -213,7 +213,7 @@ public class GlobalStateManagerImplTest {
 
         stateManager.initialize(context);
         final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
-        stateManager.register(store1, false, stateRestoreCallback);
+        stateManager.register(store1,  stateRestoreCallback);
         assertEquals(5, stateRestoreCallback.restored.size());
     }
 
@@ -224,9 +224,9 @@ public class GlobalStateManagerImplTest {
         final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
         // register the stores
         initializeConsumer(1, 1, t1);
-        stateManager.register(store1, false, stateRestoreCallback);
+        stateManager.register(store1, stateRestoreCallback);
         initializeConsumer(1, 1, t2);
-        stateManager.register(store2, false, stateRestoreCallback);
+        stateManager.register(store2, stateRestoreCallback);
 
         stateManager.flush();
         assertTrue(store1.flushed);
@@ -244,7 +244,7 @@ public class GlobalStateManagerImplTest {
             public void flush() {
                 throw new RuntimeException("KABOOM!");
             }
-        }, false, stateRestoreCallback);
+        }, stateRestoreCallback);
 
         stateManager.flush();
     }
@@ -255,9 +255,9 @@ public class GlobalStateManagerImplTest {
         final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
         // register the stores
         initializeConsumer(1, 1, t1);
-        stateManager.register(store1, false, stateRestoreCallback);
+        stateManager.register(store1, stateRestoreCallback);
         initializeConsumer(1, 1, t2);
-        stateManager.register(store2, false, stateRestoreCallback);
+        stateManager.register(store2, stateRestoreCallback);
 
         stateManager.close(Collections.<TopicPartition, Long>emptyMap());
         assertFalse(store1.isOpen());
@@ -269,7 +269,7 @@ public class GlobalStateManagerImplTest {
         stateManager.initialize(context);
         final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
         initializeConsumer(1, 1, t1);
-        stateManager.register(store1, false, stateRestoreCallback);
+        stateManager.register(store1, stateRestoreCallback);
         final Map<TopicPartition, Long> expected = Collections.singletonMap(t1, 25L);
         stateManager.close(expected);
         final Map<TopicPartition, Long> result = readOffsetsCheckpoint();
@@ -285,7 +285,7 @@ public class GlobalStateManagerImplTest {
             public void close() {
                 throw new RuntimeException("KABOOM!");
             }
-        }, false, stateRestoreCallback);
+        }, stateRestoreCallback);
 
         stateManager.close(Collections.<TopicPartition, Long>emptyMap());
     }
@@ -294,7 +294,7 @@ public class GlobalStateManagerImplTest {
     public void shouldThrowIllegalArgumentExceptionIfCallbackIsNull() {
         stateManager.initialize(context);
         try {
-            stateManager.register(store1, false, null);
+            stateManager.register(store1, null);
             fail("should have thrown due to null callback");
         } catch (IllegalArgumentException e) {
             //pass
@@ -326,7 +326,7 @@ public class GlobalStateManagerImplTest {
                 }
                 super.close();
             }
-        }, false, stateRestoreCallback);
+        }, stateRestoreCallback);
         stateManager.close(Collections.<TopicPartition, Long>emptyMap());
 
 
@@ -345,9 +345,9 @@ public class GlobalStateManagerImplTest {
                 throw new RuntimeException("KABOOM!");
             }
         };
-        stateManager.register(store, false, stateRestoreCallback);
+        stateManager.register(store, stateRestoreCallback);
 
-        stateManager.register(store2, false, stateRestoreCallback);
+        stateManager.register(store2, stateRestoreCallback);
 
         try {
             stateManager.close(Collections.<TopicPartition, Long>emptyMap());
@@ -392,9 +392,9 @@ public class GlobalStateManagerImplTest {
         stateManager.initialize(context);
         final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
         initializeConsumer(10, 1, t1);
-        stateManager.register(store1, false, stateRestoreCallback);
+        stateManager.register(store1, stateRestoreCallback);
         initializeConsumer(20, 1, t2);
-        stateManager.register(store2, false, stateRestoreCallback);
+        stateManager.register(store2, stateRestoreCallback);
 
         final Map<TopicPartition, Long> initialCheckpoint = stateManager.checkpointed();
         stateManager.checkpoint(Collections.singletonMap(t1, 101L));
@@ -421,7 +421,7 @@ public class GlobalStateManagerImplTest {
 
         stateManager.initialize(context);
         final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
-        stateManager.register(store1, false, stateRestoreCallback);
+        stateManager.register(store1, stateRestoreCallback);
         final KeyValue<byte[], byte[]> restoredKv = stateRestoreCallback.restored.get(0);
         assertThat(stateRestoreCallback.restored, equalTo(Collections.singletonList(KeyValue.pair(restoredKv.key, restoredKv.value))));
     }
@@ -431,7 +431,7 @@ public class GlobalStateManagerImplTest {
         stateManager.initialize(context);
         final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
         initializeConsumer(10, 1, t1);
-        stateManager.register(store1, false, stateRestoreCallback);
+        stateManager.register(store1, stateRestoreCallback);
         stateManager.close(Collections.<TopicPartition, Long>emptyMap());
 
         final Map<TopicPartition, Long> checkpointMap = stateManager.checkpointed();

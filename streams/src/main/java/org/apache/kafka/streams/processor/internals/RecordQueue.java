@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.slf4j.Logger;
@@ -41,7 +42,7 @@ public class RecordQueue {
     private final TopicPartition partition;
     private final ArrayDeque<StampedRecord> fifoQueue;
     private final TimestampTracker<ConsumerRecord<Object, Object>> timeTracker;
-    private final SourceNodeRecordDeserializer recordDeserializer;
+    private final RecordDeserializer recordDeserializer;
     private final ProcessorContext processorContext;
 
     private long partitionTime = TimestampTracker.NOT_KNOWN;
@@ -56,7 +57,7 @@ public class RecordQueue {
         this.timestampExtractor = timestampExtractor;
         this.fifoQueue = new ArrayDeque<>();
         this.timeTracker = new MinTimestampTracker<>();
-        this.recordDeserializer = new SourceNodeRecordDeserializer(source, deserializationExceptionHandler);
+        this.recordDeserializer = new RecordDeserializer(source, deserializationExceptionHandler);
         this.processorContext = processorContext;
     }
 
@@ -92,7 +93,14 @@ public class RecordQueue {
                 continue;
             }
 
-            final long timestamp = timestampExtractor.extract(record, timeTracker.get());
+            final long timestamp;
+            try {
+                timestamp = timestampExtractor.extract(record, timeTracker.get());
+            } catch (final StreamsException internalFatalExtractorException) {
+                throw internalFatalExtractorException;
+            } catch (final Exception fatalUserException) {
+                throw new StreamsException("Fatal user code error in TimestampExtractor callback.", fatalUserException);
+            }
             log.trace("Source node {} extracted timestamp {} for record {}", source.name(), timestamp, record);
 
             // drop message if TS is invalid, i.e., negative

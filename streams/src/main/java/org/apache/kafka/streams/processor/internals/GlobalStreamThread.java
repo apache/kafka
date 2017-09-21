@@ -216,6 +216,10 @@ public class GlobalStreamThread extends Thread {
             this.flushInterval = flushInterval;
         }
 
+        /**
+         * @throws IllegalStateException If store get's registered after initialized is already finished
+         * @throws StreamsException if the store's change log does not contain the partition
+         */
         void initialize() {
             final Map<TopicPartition, Long> partitionOffsets = stateMaintainer.initialize();
             consumer.assign(partitionOffsets.keySet());

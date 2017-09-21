@@ -57,11 +57,7 @@ public class MockStateStoreSupplier implements StateStoreSupplier {
         if (stateStore != null) {
             return stateStore;
         }
-        if (loggingEnabled) {
-            return new MockStateStore(name, persistent).enableLogging();
-        } else {
-            return new MockStateStore(name, persistent);
-        }
+        return new MockStateStore(name, persistent);
     }
 
     @Override
@@ -101,7 +97,7 @@ public class MockStateStoreSupplier implements StateStoreSupplier {
 
         @Override
         public void init(ProcessorContext context, StateStore root) {
-            context.register(root, loggingEnabled, stateRestoreCallback);
+            context.register(root, stateRestoreCallback);
             initialized = true;
             closed = false;
         }
