@@ -27,6 +27,7 @@ import kafka.network.RequestChannel.{ShutdownRequest, BaseRequest}
 import kafka.server.QuotaId
 import kafka.utils.{Logging, NotNothing}
 import org.apache.kafka.common.memory.MemoryPool
+import org.apache.kafka.common.metrics.Sanitizer
 import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests._
@@ -45,7 +46,7 @@ object RequestChannel extends Logging {
   case object ShutdownRequest extends BaseRequest
 
   case class Session(principal: KafkaPrincipal, clientAddress: InetAddress) {
-    val sanitizedUser = QuotaId.sanitize(principal.getName)
+    val sanitizedUser = Sanitizer.sanitize(principal.getName)
   }
 
   class Request(val processor: Int,

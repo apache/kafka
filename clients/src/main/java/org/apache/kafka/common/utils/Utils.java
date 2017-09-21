@@ -322,12 +322,12 @@ public class Utils {
         Class<?>[] argTypes = new Class<?>[params.length / 2];
         Object[] args = new Object[params.length / 2];
         try {
-            Class c = Class.forName(className, true, Utils.getContextOrKafkaClassLoader());
+            Class<?> c = Class.forName(className, true, Utils.getContextOrKafkaClassLoader());
             for (int i = 0; i < params.length / 2; i++) {
                 argTypes[i] = (Class<?>) params[2 * i];
                 args[i] = params[(2 * i) + 1];
             }
-            Constructor<T> constructor = c.getConstructor(argTypes);
+            Constructor<T> constructor = (Constructor<T>) c.getConstructor(argTypes);
             return constructor.newInstance(args);
         } catch (NoSuchMethodException e) {
             throw new ClassNotFoundException(String.format("Failed to find " +
