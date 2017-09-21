@@ -55,6 +55,7 @@ import org.apache.kafka.common.requests.{SaslAuthenticateResponse, SaslHandshake
 import org.apache.kafka.common.resource.{Resource => AdminResource}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding}
 import DescribeLogDirsResponse.LogDirInfo
+import org.apache.kafka.clients.admin.NewPartitions
 
 import scala.collection.{mutable, _}
 import scala.collection.JavaConverters._
@@ -133,6 +134,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.ALTER_REPLICA_DIR => handleAlterReplicaDirRequest(request)
         case ApiKeys.DESCRIBE_LOG_DIRS => handleDescribeLogDirsRequest(request)
         case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
+        case ApiKeys.CREATE_PARTITIONS => handleCreatePartitionsRequest(request)
       }
     } catch {
       case e: FatalExitError => throw e
@@ -219,7 +221,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       if (adminManager.hasDelayedTopicOperations) {
         updateMetadataRequest.partitionStates.keySet.asScala.map(_.topic).foreach { topic =>
-        adminManager.tryCompleteDelayedTopicOperations(topic)
+          adminManager.tryCompleteDelayedTopicOperations(topic)
         }
       }
       sendResponseExemptThrottle(request, new UpdateMetadataResponse(Errors.NONE))
@@ -1331,6 +1333,42 @@ class KafkaApis(val requestChannel: RequestChannel,
         sendResponseWithDuplicatesCallback
       )
     }
+  }
+
+  def handleCreatePartitionsRequest(request: RequestChannel.Request): Unit = {
+    val alterPartitionCountsRequest = request.body[CreatePartitionsRequest]
+    val (valid, errors) =
+    if (!controller.isActive) {
+      (Map.empty[String, NewPartitions],
+      alterPartitionCountsRequest.newPartitions.asScala.map { case (topic, _) =>
+        (topic, new ApiError(Errors.NOT_CONTROLLER, null))
+      })
+    } else {
+      // Special handling to add duplicate topics to the response
+      val dupes = alterPartitionCountsRequest.duplicates.asScala
+      val notDuped = alterPartitionCountsRequest.newPartitions.asScala.retain((topic, count) => !dupes.contains(topic))
+      val (authorized, unauthorized) = notDuped.partition { case (topic, _) =>
+        authorize(request.session, Alter, new Resource(Topic, topic))
+      }
+      val (queuedForDeletion, live) = authorized.partition{ case (topic, _) => controller.topicDeletionManager.isTopicQueuedUpForDeletion(topic) }
+      (live,
+      dupes.map(_ -> new ApiError(Errors.INVALID_REQUEST, "Duplicate topic in request")).toMap ++
+        unauthorized.map{ case (topic, np) =>
+          topic -> new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, Errors.TOPIC_AUTHORIZATION_FAILED.message())
+        } ++ queuedForDeletion.map{ case (topic, np) =>
+          topic -> new ApiError(Errors.INVALID_TOPIC_EXCEPTION, "The topic is queued for deletion.")
+        })
+    }
+
+    def sendResponseCallback(results: Map[String, ApiError]): Unit = {
+      def createResponse(requestThrottleMs: Int): AbstractResponse = {
+        val responseBody = new CreatePartitionsResponse(requestThrottleMs, (results ++ errors).asJava)
+        trace(s"Sending alter partition counts response $responseBody for correlation id ${request.header.correlationId} to client ${request.header.clientId}.")
+        responseBody
+      }
+      sendResponseMaybeThrottle(request, createResponse)
+    }
+    adminManager.createPartitions(alterPartitionCountsRequest.timeout(), valid, alterPartitionCountsRequest.validateOnly, request.context.listenerName, sendResponseCallback)
   }
 
   def handleDeleteTopicsRequest(request: RequestChannel.Request) {

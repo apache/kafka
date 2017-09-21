@@ -60,6 +60,7 @@ import org.apache.kafka.common.errors.OperationNotAttemptedException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.ReassignmentInProgressException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
@@ -535,6 +536,13 @@ public enum Errors {
             @Override
             public ApiException build(String message) {
                 return new UnknownProducerIdException(message);
+            }
+    }),
+    REASSIGNMENT_IN_PROGRESS(59, "A partition reassignment is in progress",
+        new ApiExceptionBuilder() {
+            @Override
+            public ApiException build(String message) {
+                return new ReassignmentInProgressException(message);
             }
     });
 

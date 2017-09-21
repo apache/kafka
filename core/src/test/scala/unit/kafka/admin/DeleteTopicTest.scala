@@ -33,6 +33,8 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
 
   var servers: Seq[KafkaServer] = Seq()
 
+  val expectedReplicaAssignment = Map(0 -> List(0, 1, 2))
+
   @After
   override def tearDown() {
     TestUtils.shutdownServers(servers)
@@ -154,7 +156,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     val newPartition = new TopicPartition(topic, 1)
     follower.shutdown()
     // add partitions to topic
-    AdminUtils.addPartitions(zkUtils, topic, 2, "0:1:2,0:1:2", false)
+    AdminUtils.addPartitions(zkUtils, topic, expectedReplicaAssignment, 2, Some(Map(1 -> Seq(0, 1, 2), 2 -> Seq(0, 1, 2))), false)
     // start topic deletion
     AdminUtils.deleteTopic(zkUtils, topic)
     follower.startup()
@@ -174,7 +176,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     AdminUtils.deleteTopic(zkUtils, topic)
     // add partitions to topic
     val newPartition = new TopicPartition(topic, 1)
-    AdminUtils.addPartitions(zkUtils, topic, 2, "0:1:2,0:1:2")
+    AdminUtils.addPartitions(zkUtils, topic, expectedReplicaAssignment, 2, Some(Map(1 -> Seq(0, 1, 2), 2 -> Seq(0, 1, 2))))
     TestUtils.verifyTopicDeletion(zkUtils, topic, 1, servers)
     // verify that new partition doesn't exist on any broker either
     assertTrue("Replica logs not deleted after delete topic is complete",
@@ -281,7 +283,6 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
   }
 
   private def createTestTopicAndCluster(topic: String, brokerConfigs: Seq[Properties]): Seq[KafkaServer] = {
-    val expectedReplicaAssignment = Map(0 -> List(0, 1, 2))
     val topicPartition = new TopicPartition(topic, 0)
     // create brokers
     val servers = brokerConfigs.map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
