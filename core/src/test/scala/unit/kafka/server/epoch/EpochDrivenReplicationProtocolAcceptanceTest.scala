@@ -349,7 +349,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
   }
 
   private def getLog(broker: KafkaServer, partition: Int): Log = {
-    broker.logManager.logsByTopicPartition.get(new TopicPartition(topic, partition)).get
+    broker.logManager.logsByTopicPartition(new TopicPartition(topic, partition))
   }
 
   private def bounce(follower: KafkaServer): Unit = {
@@ -370,8 +370,8 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
 
   private def awaitISR(tp: TopicPartition): Unit = {
     TestUtils.waitUntilTrue(() => {
-      leader.replicaManager.getReplicaOrException(tp).partition.inSyncReplicas.map(_.brokerId).size == 2
-    }, "")
+      leader.replicaManager.getPartition(tp).get.inSyncReplicas.map(_.brokerId).size == 2
+    }, "Timed out waiting for replicas to join ISR")
   }
 
   private def createProducer(): KafkaProducer[Array[Byte], Array[Byte]] = {

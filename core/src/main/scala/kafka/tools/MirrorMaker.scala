@@ -650,7 +650,8 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
                          record.timestamp,
                          record.timestampType,
                          record.key,
-                         record.value)
+                         record.value,
+                         record.headers)
     }
 
     override def stop() {
@@ -754,7 +755,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
   private[tools] object defaultMirrorMakerMessageHandler extends MirrorMakerMessageHandler {
     override def handle(record: BaseConsumerRecord): util.List[ProducerRecord[Array[Byte], Array[Byte]]] = {
       val timestamp: java.lang.Long = if (record.timestamp == RecordBatch.NO_TIMESTAMP) null else record.timestamp
-      Collections.singletonList(new ProducerRecord[Array[Byte], Array[Byte]](record.topic, null, timestamp, record.key, record.value))
+      Collections.singletonList(new ProducerRecord(record.topic, null, timestamp, record.key, record.value, record.headers))
     }
   }
 

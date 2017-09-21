@@ -222,7 +222,7 @@ class Message(val buffer: ByteBuffer,
    * Compute the checksum of the message from the message contents
    */
   def computeChecksum: Long =
-    Crc32.crc32(buffer, MagicOffset, buffer.limit - MagicOffset)
+    Crc32.crc32(buffer, MagicOffset, buffer.limit() - MagicOffset)
   
   /**
    * Retrieve the previously computed CRC for this message
@@ -245,7 +245,7 @@ class Message(val buffer: ByteBuffer,
   /**
    * The complete serialized size of this message in bytes (including crc, header attributes, etc)
    */
-  def size: Int = buffer.limit
+  def size: Int = buffer.limit()
 
   /**
    * The position where the key size is stored.

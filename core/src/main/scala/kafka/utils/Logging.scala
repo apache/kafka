@@ -28,8 +28,8 @@ trait Logging {
   // Force initialization to register Log4jControllerMBean
   private val log4jController = Log4jController
 
-  private def msgWithLogIdent(msg: String) = 
-    if(logIdent == null) msg else logIdent + msg
+  protected def msgWithLogIdent(msg: String) =
+    if (logIdent == null) msg else logIdent + msg
 
   def trace(msg: => String): Unit = {
     if (logger.isTraceEnabled())
@@ -48,6 +48,8 @@ trait Logging {
   }
 
   def isDebugEnabled: Boolean = logger.isDebugEnabled
+
+  def isTraceEnabled: Boolean = logger.isTraceEnabled
 
   def debug(msg: => String): Unit = {
     if (logger.isDebugEnabled())

@@ -17,18 +17,16 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
+import java.util.Collection;
+
 /**
- * Options for the createAcls call.
+ * Options for {@link AdminClient#createAcls(Collection)}.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
  */
-public class CreateAclsOptions {
-    private Integer timeoutMs = null;
+@InterfaceStability.Evolving
+public class CreateAclsOptions extends AbstractOptions<CreateAclsOptions> {
 
-    public CreateAclsOptions timeoutMs(Integer timeoutMs) {
-        this.timeoutMs = timeoutMs;
-        return this;
-    }
-
-    public Integer timeoutMs() {
-        return timeoutMs;
-    }
 }

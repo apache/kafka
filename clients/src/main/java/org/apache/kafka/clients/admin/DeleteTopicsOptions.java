@@ -19,19 +19,14 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 
+import java.util.Collection;
+
 /**
- * Options for deleteTopics.
+ * Options for {@link AdminClient#deleteTopics(Collection)}.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
  */
-@InterfaceStability.Unstable
-public class DeleteTopicsOptions {
-    private Integer timeoutMs = null;
+@InterfaceStability.Evolving
+public class DeleteTopicsOptions extends AbstractOptions<DeleteTopicsOptions> {
 
-    public DeleteTopicsOptions timeoutMs(Integer timeoutMs) {
-        this.timeoutMs = timeoutMs;
-        return this;
-    }
-
-    public Integer timeoutMs() {
-        return timeoutMs;
-    }
 }

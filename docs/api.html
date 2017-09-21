@@ -35,11 +35,11 @@
 	<p>
 	To use the producer, you can use the following maven dependency:
 
-	<pre>
+	<pre class="brush: xml;">
 		&lt;dependency&gt;
 			&lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
 			&lt;artifactId&gt;kafka-clients&lt;/artifactId&gt;
-			&lt;version&gt;{{dotVersion}}.0&lt;/version&gt;
+			&lt;version&gt;{{fullDotVersion}}&lt;/version&gt;
 		&lt;/dependency&gt;
 	</pre>
 
@@ -51,11 +51,11 @@
 	<a href="/{{version}}/javadoc/index.html?org/apache/kafka/clients/consumer/KafkaConsumer.html" title="Kafka {{dotVersion}} Javadoc">javadocs</a>.
 	<p>
 	To use the consumer, you can use the following maven dependency:
-	<pre>
+	<pre class="brush: xml;">
 		&lt;dependency&gt;
 			&lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
 			&lt;artifactId&gt;kafka-clients&lt;/artifactId&gt;
-			&lt;version&gt;{{dotVersion}}.0&lt;/version&gt;
+			&lt;version&gt;{{fullDotVersion}}&lt;/version&gt;
 		&lt;/dependency&gt;
 	</pre>
 
@@ -70,11 +70,11 @@
 	<p>
 	To use Kafka Streams you can use the following maven dependency:
 
-	<pre>
+	<pre class="brush: xml;">
 		&lt;dependency&gt;
 			&lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
 			&lt;artifactId&gt;kafka-streams&lt;/artifactId&gt;
-			&lt;version&gt;{{dotVersion}}.0&lt;/version&gt;
+			&lt;version&gt;{{fullDotVersion}}&lt;/version&gt;
 		&lt;/dependency&gt;
 	</pre>
 
@@ -92,17 +92,17 @@
 	The AdminClient API supports managing and inspecting topics, brokers, acls, and other Kafka objects.
 	<p>
 	To use the AdminClient API, add the following Maven dependency:
-	<pre>
+	<pre class="brush: xml;">
 		&lt;dependency&gt;
 			&lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
 			&lt;artifactId&gt;kafka-clients&lt;/artifactId&gt;
-			&lt;version&gt;{{dotVersion}}.0&lt;/version&gt;
+			&lt;version&gt;{{fullDotVersion}}&lt;/version&gt;
 		&lt;/dependency&gt;
 	</pre>
 	For more information about the AdminClient APIs, see the <a href="/{{version}}/javadoc/index.html?org/apache/kafka/clients/admin/AdminClient.html" title="Kafka {{dotVersion}} Javadoc">javadoc</a>.
 	<p>
 
-	<h3><a id="legacyapis" href="#streamsapi">2.6 Legacy APIs</a></h3>
+	<h3><a id="legacyapis" href="#legacyapis">2.6 Legacy APIs</a></h3>
 
 	<p>
 	A more limited legacy producer and consumer api is also included in Kafka. These old Scala APIs are deprecated and only still available for compatibility purposes. Information on them can be found here <a href="/081/documentation.html#producerapi"  title="Kafka 0.8.1 Docs">

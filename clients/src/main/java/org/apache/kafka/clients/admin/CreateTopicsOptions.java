@@ -19,29 +19,31 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 
+import java.util.Collection;
+
 /**
- * Options for newTopics.
+ * Options for {@link AdminClient#createTopics(Collection)}.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
  */
-@InterfaceStability.Unstable
-public class CreateTopicsOptions {
-    private Integer timeoutMs = null;
+@InterfaceStability.Evolving
+public class CreateTopicsOptions extends AbstractOptions<CreateTopicsOptions> {
+
     private boolean validateOnly = false;
 
-    public CreateTopicsOptions timeoutMs(Integer timeoutMs) {
-        this.timeoutMs = timeoutMs;
-        return this;
-    }
-
-    public Integer timeoutMs() {
-        return timeoutMs;
-    }
-
+    /**
+     * Set to true if the request should be validated without creating the topic.
+     */
     public CreateTopicsOptions validateOnly(boolean validateOnly) {
         this.validateOnly = validateOnly;
         return this;
     }
 
-    public boolean validateOnly() {
+    /**
+     * Return true if the request should be validated without creating the topic.
+     */
+    public boolean shouldValidateOnly() {
         return validateOnly;
     }
+
 }

@@ -17,6 +17,7 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 
@@ -60,6 +61,13 @@ interface MetadataUpdater {
      * @param destination
      */
     void handleDisconnection(String destination);
+
+    /**
+     * Handle authentication failure. Propagate the authentication exception if awaiting metadata.
+     *
+     * @param exception authentication exception from broker
+     */
+    void handleAuthenticationFailure(AuthenticationException exception);
 
     /**
      * If `request` is a metadata request, handles it and returns `true`. Otherwise, returns `false`.

@@ -55,12 +55,13 @@ public class AclOperationTest {
     public void testIsUnknown() throws Exception {
         for (AclOperationTestInfo info : INFOS) {
             assertEquals(info.operation + " was supposed to have unknown == " + info.unknown,
-                info.unknown, info.operation.unknown());
+                info.unknown, info.operation.isUnknown());
         }
     }
 
     @Test
     public void testCode() throws Exception {
+        assertEquals(AclOperation.values().length, INFOS.length);
         for (AclOperationTestInfo info : INFOS) {
             assertEquals(info.operation + " was supposed to have code == " + info.code,
                 info.code, info.operation.code());

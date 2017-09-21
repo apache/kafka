@@ -19,19 +19,14 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 
+import java.util.Collection;
+
 /**
- * Options for describeTopics.
+ * Options for {@link AdminClient#describeTopics(Collection)}.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
  */
-@InterfaceStability.Unstable
-public class DescribeTopicsOptions {
-    private Integer timeoutMs = null;
+@InterfaceStability.Evolving
+public class DescribeTopicsOptions extends AbstractOptions<DescribeTopicsOptions> {
 
-    public DescribeTopicsOptions timeoutMs(Integer timeoutMs) {
-        this.timeoutMs = timeoutMs;
-        return this;
-    }
-
-    public Integer timeoutMs() {
-        return timeoutMs;
-    }
 }

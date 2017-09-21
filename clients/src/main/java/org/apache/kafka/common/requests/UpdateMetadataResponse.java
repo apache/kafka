@@ -18,13 +18,24 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
-public class UpdateMetadataResponse extends AbstractResponse {
+import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
 
-    private static final String ERROR_CODE_KEY_NAME = "error_code";
+public class UpdateMetadataResponse extends AbstractResponse {
+    private static final Schema UPDATE_METADATA_RESPONSE_V0 = new Schema(ERROR_CODE);
+    private static final Schema UPDATE_METADATA_RESPONSE_V1 = UPDATE_METADATA_RESPONSE_V0;
+    private static final Schema UPDATE_METADATA_RESPONSE_V2 = UPDATE_METADATA_RESPONSE_V1;
+    private static final Schema UPDATE_METADATA_RESPONSE_V3 = UPDATE_METADATA_RESPONSE_V2;
+    private static final Schema UPDATE_METADATA_RESPONSE_V4 = UPDATE_METADATA_RESPONSE_V3;
+
+    public static Schema[] schemaVersions() {
+        return new Schema[]{UPDATE_METADATA_RESPONSE_V0, UPDATE_METADATA_RESPONSE_V1, UPDATE_METADATA_RESPONSE_V2,
+            UPDATE_METADATA_RESPONSE_V3, UPDATE_METADATA_RESPONSE_V4};
+    }
 
     /**
      * Possible error code:
@@ -38,7 +49,7 @@ public class UpdateMetadataResponse extends AbstractResponse {
     }
 
     public UpdateMetadataResponse(Struct struct) {
-        error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
+        error = Errors.forCode(struct.get(ERROR_CODE));
     }
 
     public Errors error() {
@@ -46,13 +57,13 @@ public class UpdateMetadataResponse extends AbstractResponse {
     }
 
     public static UpdateMetadataResponse parse(ByteBuffer buffer, short version) {
-        return new UpdateMetadataResponse(ApiKeys.UPDATE_METADATA_KEY.parseResponse(version, buffer));
+        return new UpdateMetadataResponse(ApiKeys.UPDATE_METADATA.parseResponse(version, buffer));
     }
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.UPDATE_METADATA_KEY.responseSchema(version));
-        struct.set(ERROR_CODE_KEY_NAME, error.code());
+        Struct struct = new Struct(ApiKeys.UPDATE_METADATA.responseSchema(version));
+        struct.set(ERROR_CODE, error.code());
         return struct;
     }
 }

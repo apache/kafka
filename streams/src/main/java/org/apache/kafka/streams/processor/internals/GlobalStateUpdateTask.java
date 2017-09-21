@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -29,41 +30,32 @@ import java.util.Set;
  */
 public class GlobalStateUpdateTask implements GlobalStateMaintainer {
 
-    private static class SourceNodeAndDeserializer {
-        private final SourceNode sourceNode;
-        private final RecordDeserializer deserializer;
-
-        SourceNodeAndDeserializer(final SourceNode sourceNode,
-                                  final RecordDeserializer deserializer) {
-            this.sourceNode = sourceNode;
-            this.deserializer = deserializer;
-        }
-    }
-
     private final ProcessorTopology topology;
     private final InternalProcessorContext processorContext;
     private final Map<TopicPartition, Long> offsets = new HashMap<>();
-    private final Map<String, SourceNodeAndDeserializer> deserializers = new HashMap<>();
+    private final Map<String, SourceNodeRecordDeserializer> deserializers = new HashMap<>();
     private final GlobalStateManager stateMgr;
+    private final DeserializationExceptionHandler deserializationExceptionHandler;
 
 
     public GlobalStateUpdateTask(final ProcessorTopology topology,
                                  final InternalProcessorContext processorContext,
-                                 final GlobalStateManager stateMgr) {
+                                 final GlobalStateManager stateMgr,
+                                 final DeserializationExceptionHandler deserializationExceptionHandler) {
 
         this.topology = topology;
         this.stateMgr = stateMgr;
         this.processorContext = processorContext;
+        this.deserializationExceptionHandler = deserializationExceptionHandler;
     }
 
-    @SuppressWarnings("unchecked")
     public Map<TopicPartition, Long> initialize() {
         final Set<String> storeNames = stateMgr.initialize(processorContext);
         final Map<String, String> storeNameToTopic = topology.storeToChangelogTopic();
         for (final String storeName : storeNames) {
             final String sourceTopic = storeNameToTopic.get(storeName);
             final SourceNode source = topology.source(sourceTopic);
-            deserializers.put(sourceTopic, new SourceNodeAndDeserializer(source, new SourceNodeRecordDeserializer(source)));
+            deserializers.put(sourceTopic, new SourceNodeRecordDeserializer(source, deserializationExceptionHandler));
         }
         initTopology();
         processorContext.initialized();
@@ -74,17 +66,21 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
     @SuppressWarnings("unchecked")
     @Override
     public void update(final ConsumerRecord<byte[], byte[]> record) {
-        final SourceNodeAndDeserializer sourceNodeAndDeserializer = deserializers.get(record.topic());
-        final ConsumerRecord<Object, Object> deserialized = sourceNodeAndDeserializer.deserializer.deserialize(record);
-        final ProcessorRecordContext recordContext =
+        final SourceNodeRecordDeserializer sourceNodeAndDeserializer = deserializers.get(record.topic());
+        final ConsumerRecord<Object, Object> deserialized = sourceNodeAndDeserializer.tryDeserialize(processorContext, record);
+
+        if (deserialized != null) {
+            final ProcessorRecordContext recordContext =
                 new ProcessorRecordContext(deserialized.timestamp(),
-                                           deserialized.offset(),
-                                           deserialized.partition(),
-                                           deserialized.topic());
-        processorContext.setRecordContext(recordContext);
-        processorContext.setCurrentNode(sourceNodeAndDeserializer.sourceNode);
-        sourceNodeAndDeserializer.sourceNode.process(deserialized.key(), deserialized.value());
-        offsets.put(new TopicPartition(record.topic(), record.partition()), deserialized.offset() + 1);
+                    deserialized.offset(),
+                    deserialized.partition(),
+                    deserialized.topic());
+            processorContext.setRecordContext(recordContext);
+            processorContext.setCurrentNode(sourceNodeAndDeserializer.sourceNode());
+            sourceNodeAndDeserializer.sourceNode().process(deserialized.key(), deserialized.value());
+        }
+
+        offsets.put(new TopicPartition(record.topic(), record.partition()), record.offset() + 1);
     }
 
     public void flushState() {

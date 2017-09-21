@@ -17,32 +17,46 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
+import static org.apache.kafka.common.protocol.CommonFields.ERROR_MESSAGE;
+import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
+
 public class CreateAclsResponse extends AbstractResponse {
-    private final static String CREATION_RESPONSES = "creation_responses";
-    private final static String ERROR_CODE = "error_code";
-    private final static String ERROR_MESSAGE = "error_message";
+    private final static String CREATION_RESPONSES_KEY_NAME = "creation_responses";
+
+    private static final Schema CREATE_ACLS_RESPONSE_V0 = new Schema(
+            THROTTLE_TIME_MS,
+            new Field(CREATION_RESPONSES_KEY_NAME, new ArrayOf(new Schema(
+                    ERROR_CODE,
+                    ERROR_MESSAGE))));
+
+    public static Schema[] schemaVersions() {
+        return new Schema[]{CREATE_ACLS_RESPONSE_V0};
+    }
 
     public static class AclCreationResponse {
-        private final Throwable throwable;
+        private final ApiError error;
 
-        public AclCreationResponse(Throwable throwable) {
-            this.throwable = throwable;
+        public AclCreationResponse(ApiError error) {
+            this.error = error;
         }
 
-        public Throwable throwable() {
-            return throwable;
+        public ApiError error() {
+            return error;
         }
 
         @Override
         public String toString() {
-            return "(" + throwable + ")";
+            return "(" + error + ")";
         }
     }
 
@@ -56,38 +70,26 @@ public class CreateAclsResponse extends AbstractResponse {
     }
 
     public CreateAclsResponse(Struct struct) {
-        this.throttleTimeMs = struct.getInt(THROTTLE_TIME_KEY_NAME);
+        this.throttleTimeMs = struct.get(THROTTLE_TIME_MS);
         this.aclCreationResponses = new ArrayList<>();
-        for (Object responseStructObj : struct.getArray(CREATION_RESPONSES)) {
+        for (Object responseStructObj : struct.getArray(CREATION_RESPONSES_KEY_NAME)) {
             Struct responseStruct = (Struct) responseStructObj;
-            short errorCode = responseStruct.getShort(ERROR_CODE);
-            String errorMessage = responseStruct.getString(ERROR_MESSAGE);
-            if (errorCode != 0) {
-                this.aclCreationResponses.add(new AclCreationResponse(
-                        Errors.forCode(errorCode).exception(errorMessage)));
-            } else {
-                this.aclCreationResponses.add(new AclCreationResponse(null));
-            }
+            ApiError error = new ApiError(responseStruct);
+            this.aclCreationResponses.add(new AclCreationResponse(error));
         }
     }
 
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.CREATE_ACLS.responseSchema(version));
-        struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
+        struct.set(THROTTLE_TIME_MS, throttleTimeMs);
         List<Struct> responseStructs = new ArrayList<>();
         for (AclCreationResponse response : aclCreationResponses) {
-            Struct responseStruct = struct.instance(CREATION_RESPONSES);
-            if (response.throwable() == null) {
-                responseStruct.set(ERROR_CODE, (short) 0);
-            } else {
-                Errors errors = Errors.forException(response.throwable());
-                responseStruct.set(ERROR_CODE, errors.code());
-                responseStruct.set(ERROR_MESSAGE, response.throwable().getMessage());
-            }
+            Struct responseStruct = struct.instance(CREATION_RESPONSES_KEY_NAME);
+            response.error.write(responseStruct);
             responseStructs.add(responseStruct);
         }
-        struct.set(CREATION_RESPONSES, responseStructs.toArray());
+        struct.set(CREATION_RESPONSES_KEY_NAME, responseStructs.toArray());
         return struct;
     }
 

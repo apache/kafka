@@ -29,29 +29,36 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.OutOfOrderSequenceException;
+import org.apache.kafka.common.errors.ProducerFencedException;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Random;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static java.util.Collections.singleton;
 import static net.sourceforge.argparse4j.impl.Arguments.store;
+import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
 
 /**
  * This class is primarily meant for use with system tests. It copies messages from an input partition to an output
  * topic transactionally, committing the offsets and messages together.
  */
 public class TransactionalMessageCopier {
-     /** Get the command-line argument parser. */
+
+    /** Get the command-line argument parser. */
     private static ArgumentParser argParser() {
         ArgumentParser parser = ArgumentParsers
                 .newArgumentParser("transactional-message-copier")
                 .defaultHelp(true)
-                .description("This tool copies messages transactionally from an input partition to an output topic, committing the consumed offsets along with the output messages");
+                .description("This tool copies messages transactionally from an input partition to an output topic, " +
+                        "committing the consumed offsets along with the output messages");
 
         parser.addArgument("--input-topic")
                 .action(store())
@@ -68,7 +75,6 @@ public class TransactionalMessageCopier {
                 .metavar("INPUT-PARTITION")
                 .dest("inputPartition")
                 .help("Consume messages from this partition of the input topic.");
-
 
         parser.addArgument("--output-topic")
                 .action(store())
@@ -114,7 +120,6 @@ public class TransactionalMessageCopier {
                 .dest("messagesPerTransaction")
                 .help("The number of messages to put in each transaction. Default is 200.");
 
-
         parser.addArgument("--transactional-id")
                 .action(store())
                 .required(true)
@@ -123,6 +128,12 @@ public class TransactionalMessageCopier {
                 .dest("transactionalId")
                 .help("The transactionalId to assign to the producer");
 
+        parser.addArgument("--enable-random-aborts")
+                .action(storeTrue())
+                .type(Boolean.class)
+                .metavar("ENABLE-RANDOM-ABORTS")
+                .dest("enableRandomAborts")
+                .help("Whether or not to enable random transaction aborts (for system testing)");
 
         return parser;
     }
@@ -138,11 +149,16 @@ public class TransactionalMessageCopier {
                 "org.apache.kafka.common.serialization.StringSerializer");
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
                 "org.apache.kafka.common.serialization.StringSerializer");
+        // We set a small batch size to ensure that we have multiple inflight requests per transaction.
+        // If it is left at the default, each transaction will have only one batch per partition, hence not testing
+        // the case with multiple inflights.
+        props.put(ProducerConfig.BATCH_SIZE_CONFIG, "512");
+        props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "5");
 
         return new KafkaProducer<>(props);
     }
 
-    private static KafkaConsumer<String, String> createConsumer(Namespace parsedArgs, TopicPartition inputPartition) {
+    private static KafkaConsumer<String, String> createConsumer(Namespace parsedArgs) {
         String consumerGroup = parsedArgs.getString("consumerGroup");
         String brokerList = parsedArgs.getString("brokerList");
         Integer numMessagesPerTransaction = parsedArgs.getInt("messagesPerTransaction");
@@ -162,10 +178,7 @@ public class TransactionalMessageCopier {
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
                 "org.apache.kafka.common.serialization.StringDeserializer");
 
-        KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props);
-
-        return consumer;
-
+        return new KafkaConsumer<>(props);
     }
 
     private static ProducerRecord<String, String> producerRecordFromConsumerRecord(String topic, ConsumerRecord<String, String> record) {
@@ -180,9 +193,19 @@ public class TransactionalMessageCopier {
         return positions;
     }
 
+    private static void resetToLastCommittedPositions(KafkaConsumer<String, String> consumer) {
+        for (TopicPartition topicPartition : consumer.assignment()) {
+            OffsetAndMetadata offsetAndMetadata = consumer.committed(topicPartition);
+            if (offsetAndMetadata != null)
+                consumer.seek(topicPartition, offsetAndMetadata.offset());
+            else
+                consumer.seekToBeginning(singleton(topicPartition));
+        }
+    }
+
     private static long messagesRemaining(KafkaConsumer<String, String> consumer, TopicPartition partition) {
         long currentPosition = consumer.position(partition);
-        Map<TopicPartition, Long> endOffsets = consumer.endOffsets(Arrays.asList(partition));
+        Map<TopicPartition, Long> endOffsets = consumer.endOffsets(singleton(partition));
         if (endOffsets.containsKey(partition)) {
             return endOffsets.get(partition) - currentPosition;
         }
@@ -226,20 +249,19 @@ public class TransactionalMessageCopier {
         TopicPartition inputPartition = new TopicPartition(parsedArgs.getString("inputTopic"), parsedArgs.getInt("inputPartition"));
 
         final KafkaProducer<String, String> producer = createProducer(parsedArgs);
-        final KafkaConsumer<String, String> consumer = createConsumer(parsedArgs, inputPartition);
+        final KafkaConsumer<String, String> consumer = createConsumer(parsedArgs);
 
-        consumer.assign(Arrays.asList(inputPartition));
+        consumer.assign(singleton(inputPartition));
 
         long maxMessages = parsedArgs.getInt("maxMessages") == -1 ? Long.MAX_VALUE : parsedArgs.getInt("maxMessages");
         maxMessages = Math.min(messagesRemaining(consumer, inputPartition), maxMessages);
+        final boolean enableRandomAborts = parsedArgs.getBoolean("enableRandomAborts");
 
         producer.initTransactions();
-
 
         final AtomicBoolean isShuttingDown = new AtomicBoolean(false);
         final AtomicLong remainingMessages = new AtomicLong(maxMessages);
         final AtomicLong numMessagesProcessed = new AtomicLong(0);
-        int exitCode = 0;
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
             public void run() {
@@ -254,27 +276,38 @@ public class TransactionalMessageCopier {
         });
 
         try {
+            Random random = new Random();
             while (0 < remainingMessages.get()) {
-                if ((((double) numMessagesProcessed.get() / maxMessages) * 100) % 10 == 0) {
-                    // print status for every 10% we progress.
-                    System.out.println(statusAsJson(numMessagesProcessed.get(), remainingMessages.get(), transactionalId));
-                }
+                System.out.println(statusAsJson(numMessagesProcessed.get(), remainingMessages.get(), transactionalId));
                 if (isShuttingDown.get())
                     break;
                 int messagesInCurrentTransaction = 0;
                 long numMessagesForNextTransaction = Math.min(numMessagesPerTransaction, remainingMessages.get());
-                producer.beginTransaction();
 
-                while (messagesInCurrentTransaction < numMessagesForNextTransaction) {
-                    ConsumerRecords<String, String> records = consumer.poll(200L);
-                    for (ConsumerRecord<String, String> record : records) {
-                        producer.send(producerRecordFromConsumerRecord(outputTopic, record));
-                        messagesInCurrentTransaction++;
+                try {
+                    producer.beginTransaction();
+                    while (messagesInCurrentTransaction < numMessagesForNextTransaction) {
+                        ConsumerRecords<String, String> records = consumer.poll(200L);
+                        for (ConsumerRecord<String, String> record : records) {
+                            producer.send(producerRecordFromConsumerRecord(outputTopic, record));
+                            messagesInCurrentTransaction++;
+                        }
                     }
+                    producer.sendOffsetsToTransaction(consumerPositions(consumer), consumerGroup);
+
+                    if (enableRandomAborts && random.nextInt() % 3 == 0) {
+                        throw new KafkaException("Aborting transaction");
+                    } else {
+                        producer.commitTransaction();
+                        remainingMessages.set(maxMessages - numMessagesProcessed.addAndGet(messagesInCurrentTransaction));
+                    }
+                } catch (ProducerFencedException | OutOfOrderSequenceException e) {
+                    // We cannot recover from these errors, so just rethrow them and let the process fail
+                    throw e;
+                } catch (KafkaException e) {
+                    producer.abortTransaction();
+                    resetToLastCommittedPositions(consumer);
                 }
-                producer.sendOffsetsToTransaction(consumerPositions(consumer), consumerGroup);
-                producer.commitTransaction();
-                remainingMessages.set(maxMessages - numMessagesProcessed.addAndGet(messagesInCurrentTransaction));
             }
         } finally {
             producer.close();
@@ -282,6 +315,6 @@ public class TransactionalMessageCopier {
                 consumer.close();
             }
         }
-        System.exit(exitCode);
+        System.exit(0);
     }
 }

@@ -105,13 +105,13 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldLockGlobalStateDirectory() throws Exception {
+    public void shouldLockGlobalStateDirectory() {
         stateManager.initialize(context);
         assertTrue(new File(stateDirectory.globalStateDir(), ".lock").exists());
     }
 
     @Test(expected = LockException.class)
-    public void shouldThrowLockExceptionIfCantGetLock() throws Exception {
+    public void shouldThrowLockExceptionIfCantGetLock() throws IOException {
         final StateDirectory stateDir = new StateDirectory("appId", stateDirPath, time);
         try {
             stateDir.lockGlobalState(1);
@@ -122,7 +122,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldReadCheckpointOffsets() throws Exception {
+    public void shouldReadCheckpointOffsets() throws IOException {
         final Map<TopicPartition, Long> expected = writeCheckpoint();
 
         stateManager.initialize(context);
@@ -131,33 +131,33 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldNotDeleteCheckpointFileAfterLoaded() throws Exception {
+    public void shouldNotDeleteCheckpointFileAfterLoaded() throws IOException {
         writeCheckpoint();
         stateManager.initialize(context);
         assertTrue(checkpointFile.exists());
     }
 
     @Test(expected = StreamsException.class)
-    public void shouldThrowStreamsExceptionIfFailedToReadCheckpointedOffsets() throws Exception {
+    public void shouldThrowStreamsExceptionIfFailedToReadCheckpointedOffsets() throws IOException {
         writeCorruptCheckpoint();
         stateManager.initialize(context);
     }
 
     @Test
-    public void shouldInitializeStateStores() throws Exception {
+    public void shouldInitializeStateStores() {
         stateManager.initialize(context);
         assertTrue(store1.initialized);
         assertTrue(store2.initialized);
     }
 
     @Test
-    public void shouldReturnInitializedStoreNames() throws Exception {
+    public void shouldReturnInitializedStoreNames() {
         final Set<String> storeNames = stateManager.initialize(context);
         assertEquals(Utils.mkSet(store1.name(), store2.name()), storeNames);
     }
 
     @Test
-    public void shouldThrowIllegalArgumentIfTryingToRegisterStoreThatIsNotGlobal() throws Exception {
+    public void shouldThrowIllegalArgumentIfTryingToRegisterStoreThatIsNotGlobal() {
         stateManager.initialize(context);
 
         try {
@@ -169,7 +169,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldThrowIllegalArgumentExceptionIfAttemptingToRegisterStoreTwice() throws Exception {
+    public void shouldThrowIllegalArgumentExceptionIfAttemptingToRegisterStoreTwice() {
         stateManager.initialize(context);
         initializeConsumer(2, 1, t1);
         stateManager.register(store1, false, new TheStateRestoreCallback());
@@ -182,7 +182,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldThrowStreamsExceptionIfNoPartitionsFoundForStore() throws Exception {
+    public void shouldThrowStreamsExceptionIfNoPartitionsFoundForStore() {
         stateManager.initialize(context);
         try {
             stateManager.register(store1, false, new TheStateRestoreCallback());
@@ -193,7 +193,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldRestoreRecordsUpToHighwatermark() throws Exception {
+    public void shouldRestoreRecordsUpToHighwatermark() {
         initializeConsumer(2, 1, t1);
 
         stateManager.initialize(context);
@@ -204,7 +204,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldRestoreRecordsFromCheckpointToHighwatermark() throws Exception {
+    public void shouldRestoreRecordsFromCheckpointToHighwatermark() throws IOException {
         initializeConsumer(5, 6, t1);
 
         final OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint(new File(stateManager.baseDir(),
@@ -219,7 +219,7 @@ public class GlobalStateManagerImplTest {
 
 
     @Test
-    public void shouldFlushStateStores() throws Exception {
+    public void shouldFlushStateStores() {
         stateManager.initialize(context);
         final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
         // register the stores
@@ -234,7 +234,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test(expected = ProcessorStateException.class)
-    public void shouldThrowProcessorStateStoreExceptionIfStoreFlushFailed() throws Exception {
+    public void shouldThrowProcessorStateStoreExceptionIfStoreFlushFailed() {
         stateManager.initialize(context);
         final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
         // register the stores
@@ -250,7 +250,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldCloseStateStores() throws Exception {
+    public void shouldCloseStateStores() throws IOException {
         stateManager.initialize(context);
         final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
         // register the stores
@@ -265,7 +265,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldWriteCheckpointsOnClose() throws Exception {
+    public void shouldWriteCheckpointsOnClose() throws IOException {
         stateManager.initialize(context);
         final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
         initializeConsumer(1, 1, t1);
@@ -277,7 +277,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test(expected = ProcessorStateException.class)
-    public void shouldThrowProcessorStateStoreExceptionIfStoreCloseFailed() throws Exception {
+    public void shouldThrowProcessorStateStoreExceptionIfStoreCloseFailed() throws IOException {
         stateManager.initialize(context);
         initializeConsumer(1, 1, t1);
         stateManager.register(new NoOpReadOnlyStore(store1.name()) {
@@ -291,7 +291,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldThrowIllegalArgumentExceptionIfCallbackIsNull() throws Exception {
+    public void shouldThrowIllegalArgumentExceptionIfCallbackIsNull() {
         stateManager.initialize(context);
         try {
             stateManager.register(store1, false, null);
@@ -302,7 +302,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldUnlockGlobalStateDirectoryOnClose() throws Exception {
+    public void shouldUnlockGlobalStateDirectoryOnClose() throws IOException {
         stateManager.initialize(context);
         stateManager.close(Collections.<TopicPartition, Long>emptyMap());
         final StateDirectory stateDir = new StateDirectory("appId", stateDirPath, new MockTime());
@@ -315,7 +315,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldNotCloseStoresIfCloseAlreadyCalled() throws Exception {
+    public void shouldNotCloseStoresIfCloseAlreadyCalled() throws IOException {
         stateManager.initialize(context);
         initializeConsumer(1, 1, t1);
         stateManager.register(new NoOpReadOnlyStore("t1-store") {
@@ -334,7 +334,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldAttemptToCloseAllStoresEvenWhenSomeException() throws Exception {
+    public void shouldAttemptToCloseAllStoresEvenWhenSomeException() throws IOException {
         stateManager.initialize(context);
         initializeConsumer(1, 1, t1);
         initializeConsumer(1, 1, t2);
@@ -359,7 +359,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldReleaseLockIfExceptionWhenLoadingCheckpoints() throws Exception {
+    public void shouldReleaseLockIfExceptionWhenLoadingCheckpoints() throws IOException {
         writeCorruptCheckpoint();
         try {
             stateManager.initialize(context);
@@ -376,7 +376,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldCheckpointOffsets() throws Exception {
+    public void shouldCheckpointOffsets() throws IOException {
         final Map<TopicPartition, Long> offsets = Collections.singletonMap(t1, 25L);
         stateManager.initialize(context);
 
@@ -388,7 +388,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldNotRemoveOffsetsOfUnUpdatedTablesDuringCheckpoint() throws Exception {
+    public void shouldNotRemoveOffsetsOfUnUpdatedTablesDuringCheckpoint() {
         stateManager.initialize(context);
         final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
         initializeConsumer(10, 1, t1);
@@ -405,7 +405,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldSkipNullKeysWhenRestoring() throws Exception {
+    public void shouldSkipNullKeysWhenRestoring() {
         final HashMap<TopicPartition, Long> startOffsets = new HashMap<>();
         startOffsets.put(t1, 1L);
         final HashMap<TopicPartition, Long> endOffsets = new HashMap<>();
@@ -446,7 +446,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldThrowLockExceptionIfIOExceptionCaughtWhenTryingToLockStateDir() throws Exception {
+    public void shouldThrowLockExceptionIfIOExceptionCaughtWhenTryingToLockStateDir() {
         stateManager = new GlobalStateManagerImpl(topology, consumer, new StateDirectory("appId", stateDirPath, time) {
             @Override
             public boolean lockGlobalState(final int retry) throws IOException {

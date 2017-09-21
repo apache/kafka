@@ -20,19 +20,19 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
-import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 
 import java.util.Map;
 
 public class TestSecurityConfig extends AbstractConfig {
     private static final ConfigDef CONFIG = new ConfigDef()
-            .define(SslConfigs.SSL_CLIENT_AUTH_CONFIG, Type.STRING, null, Importance.MEDIUM,
-                    SslConfigs.SSL_CLIENT_AUTH_DOC)
-            .define(SaslConfigs.SASL_ENABLED_MECHANISMS, Type.LIST, SaslConfigs.DEFAULT_SASL_ENABLED_MECHANISMS,
-                    Importance.MEDIUM, SaslConfigs.SASL_ENABLED_MECHANISMS_DOC)
-            .define(SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Type.CLASS, SslConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS,
-                    Importance.MEDIUM, SslConfigs.PRINCIPAL_BUILDER_CLASS_DOC)
+            .define(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, Type.STRING, null, Importance.MEDIUM,
+                    BrokerSecurityConfigs.SSL_CLIENT_AUTH_DOC)
+            .define(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, Type.LIST,
+                    BrokerSecurityConfigs.DEFAULT_SASL_ENABLED_MECHANISMS,
+                    Importance.MEDIUM, BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_DOC)
+            .define(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Type.CLASS,
+                    null, Importance.MEDIUM, BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_DOC)
             .withClientSslSupport()
             .withClientSaslSupport();
 

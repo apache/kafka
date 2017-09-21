@@ -24,24 +24,14 @@ import org.apache.kafka.common.protocol.types.Struct;
 import java.nio.ByteBuffer;
 
 public abstract class AbstractResponse extends AbstractRequestResponse {
-    public static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     public static final int DEFAULT_THROTTLE_TIME = 0;
 
-    public Send toSend(String destination, RequestHeader requestHeader) {
-        return toSend(destination, requestHeader.apiVersion(), requestHeader.toResponseHeader());
+    protected Send toSend(String destination, ResponseHeader header, short apiVersion) {
+        return new NetworkSend(destination, serialize(apiVersion, header));
     }
 
     /**
-     * This should only be used if we need to return a response with a different version than the request, which
-     * should be very rare (an example is @link {@link ApiVersionsResponse#unsupportedVersionSend(String, RequestHeader)}).
-     * Typically {@link #toSend(String, RequestHeader)} should be used.
-     */
-    public Send toSend(String destination, short version, ResponseHeader responseHeader) {
-        return new NetworkSend(destination, serialize(version, responseHeader));
-    }
-
-    /**
-     * Visible for testing, typically {@link #toSend(String, RequestHeader)} should be used instead.
+     * Visible for testing, typically {@link #toSend(String, ResponseHeader, short)} should be used instead.
      */
     public ByteBuffer serialize(short version, ResponseHeader responseHeader) {
         return serialize(responseHeader.toStruct(), toStruct(version));
@@ -49,7 +39,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
 
     protected abstract Struct toStruct(short version);
 
-    public static AbstractResponse getResponse(ApiKeys apiKey, Struct struct) {
+    public static AbstractResponse parseResponse(ApiKeys apiKey, Struct struct) {
         switch (apiKey) {
             case PRODUCE:
                 return new ProduceResponse(struct);
@@ -75,9 +65,9 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
                 return new SyncGroupResponse(struct);
             case STOP_REPLICA:
                 return new StopReplicaResponse(struct);
-            case CONTROLLED_SHUTDOWN_KEY:
+            case CONTROLLED_SHUTDOWN:
                 return new ControlledShutdownResponse(struct);
-            case UPDATE_METADATA_KEY:
+            case UPDATE_METADATA:
                 return new UpdateMetadataResponse(struct);
             case LEADER_AND_ISR:
                 return new LeaderAndIsrResponse(struct);
@@ -119,10 +109,21 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
                 return new DescribeConfigsResponse(struct);
             case ALTER_CONFIGS:
                 return new AlterConfigsResponse(struct);
+            case ALTER_REPLICA_DIR:
+                return new AlterReplicaDirResponse(struct);
+            case DESCRIBE_LOG_DIRS:
+                return new DescribeLogDirsResponse(struct);
+            case SASL_AUTHENTICATE:
+                return new SaslAuthenticateResponse(struct);
+            case CREATE_PARTITIONS:
+                return new CreatePartitionsResponse(struct);
             default:
-                throw new AssertionError(String.format("ApiKey %s is not currently handled in `getResponse`, the " +
+                throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));
         }
     }
 
+    public String toString(short version) {
+        return toStruct(version).toString();
+    }
 }

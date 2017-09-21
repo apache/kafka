@@ -22,11 +22,9 @@ import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
 import joptsimple.OptionSpecBuilder;
-
 import kafka.admin.AdminClient;
 import kafka.admin.TopicCommand;
 import kafka.utils.ZkUtils;
-
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
@@ -123,7 +121,8 @@ public class StreamsResetter {
 
         } catch (final Throwable e) {
             exitCode = EXIT_CODE_ERROR;
-            System.err.println("ERROR: " + e.getMessage());
+            System.err.println("ERROR: " + e);
+            e.printStackTrace(System.err);
         } finally {
             if (adminClient != null) {
                 adminClient.close();
@@ -189,13 +188,11 @@ public class StreamsResetter {
             return;
         }
 
-        if (!dryRun) {
-            if (inputTopics.size() != 0) {
-                System.out.println("Seek-to-beginning for input topics " + inputTopics);
-            }
-            if (intermediateTopics.size() != 0) {
-                System.out.println("Seek-to-end for intermediate topics " + intermediateTopics);
-            }
+        if (inputTopics.size() != 0) {
+            System.out.println("Seek-to-beginning for input topics " + inputTopics);
+        }
+        if (intermediateTopics.size() != 0) {
+            System.out.println("Seek-to-end for intermediate topics " + intermediateTopics);
         }
 
         final Set<String> topicsToSubscribe = new HashSet<>(inputTopics.size() + intermediateTopics.size());
@@ -278,18 +275,16 @@ public class StreamsResetter {
         final List<String> intermediateTopics = options.valuesOf(intermediateTopicsOption);
 
         if (intermediateTopicPartitions.size() > 0) {
-            if (!dryRun) {
-                client.seekToEnd(intermediateTopicPartitions);
-            } else {
-                System.out.println("Following intermediate topics offsets will be reset to end (for consumer group " + groupId + ")");
-                for (final String topic : intermediateTopics) {
-                    if (allTopics.contains(topic)) {
-                        System.out.println("Topic: " + topic);
-                    }
+            System.out.println("Following intermediate topics offsets will be reset to end (for consumer group " + groupId + ")");
+            for (final String topic : intermediateTopics) {
+                if (allTopics.contains(topic)) {
+                    System.out.println("Topic: " + topic);
                 }
             }
+            if (!dryRun) {
+                client.seekToEnd(intermediateTopicPartitions);
+            }
         }
-
     }
 
     private void maybeSeekToBeginning(final KafkaConsumer<byte[], byte[]> client,
@@ -299,15 +294,14 @@ public class StreamsResetter {
         final String groupId = options.valueOf(applicationIdOption);
 
         if (inputTopicPartitions.size() > 0) {
+            System.out.println("Following input topics offsets will be reset to beginning (for consumer group " + groupId + ")");
+            for (final String topic : inputTopics) {
+                if (allTopics.contains(topic)) {
+                    System.out.println("Topic: " + topic);
+                }
+            }
             if (!dryRun) {
                 client.seekToBeginning(inputTopicPartitions);
-            } else {
-                System.out.println("Following input topics offsets will be reset to beginning (for consumer group " + groupId + ")");
-                for (final String topic : inputTopics) {
-                    if (allTopics.contains(topic)) {
-                        System.out.println("Topic: " + topic);
-                    }
-                }
             }
         }
     }
@@ -350,7 +344,7 @@ public class StreamsResetter {
     }
 
     private void printHelp(OptionParser parser) throws IOException {
-        System.err.println("The Application Reset Tool allows you to quickly reset an application in order to reprocess "
+        System.err.println("The Streams Reset Tool allows you to quickly reset an application in order to reprocess "
                 + "its data from scratch.\n"
                 + "* This tool resets offsets of input topics to the earliest available offset and it skips to the end of "
                 + "intermediate topics (topics used in the through() method).\n"

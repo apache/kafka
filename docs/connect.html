@@ -40,7 +40,7 @@
 
     In standalone mode all work is performed in a single process. This configuration is simpler to setup and get started with and may be useful in situations where only one worker makes sense (e.g. collecting log files), but it does not benefit from some of the features of Kafka Connect such as fault tolerance. You can start a standalone process with the following command:
 
-    <pre>
+    <pre class="brush: bash;">
     &gt; bin/connect-standalone.sh config/connect-standalone.properties connector1.properties [connector2.properties ...]
     </pre>
 
@@ -62,7 +62,7 @@
 
     Distributed mode handles automatic balancing of work, allows you to scale up (or down) dynamically, and offers fault tolerance both in the active tasks and for configuration and offset commit data. Execution is very similar to standalone mode:
 
-    <pre>
+    <pre class="brush: bash;">
     &gt; bin/connect-distributed.sh config/connect-distributed.properties
     </pre>
 
@@ -118,7 +118,7 @@
 
     <p>Throughout the example we'll use schemaless JSON data format. To use schemaless format, we changed the following two lines in <code>connect-standalone.properties</code> from true to false:</p>
 
-    <pre>
+    <pre class="brush: text;">
         key.converter.schemas.enable
         value.converter.schemas.enable
     </pre>
@@ -131,7 +131,7 @@
 
     After adding the transformations, <code>connect-file-source.properties</code> file looks as following:
 
-    <pre>
+    <pre class="brush: text;">
         name=local-file-source
         connector.class=FileStreamSource
         tasks.max=1
@@ -149,7 +149,7 @@
 
     When we ran the file source connector on my sample file without the transformations, and then read them using <code>kafka-console-consumer.sh</code>, the results were:
 
-    <pre>
+    <pre class="brush: text;">
         "foo"
         "bar"
         "hello world"
@@ -157,7 +157,7 @@
 
     We then create a new file connector, this time after adding the transformations to the configuration file. This time, the results will be:
 
-    <pre>
+    <pre class="brush: json;">
         {"line":"foo","data_source":"test-file-source"}
         {"line":"bar","data_source":"test-file-source"}
         {"line":"hello world","data_source":"test-file-source"}
@@ -176,7 +176,7 @@
         <li>ExtractField - Extract a specific field from Struct and Map and include only this field in results</li>
         <li>SetSchemaMetadata - modify the schema name or version</li>
         <li>TimestampRouter - Modify the topic of a record based on original topic and timestamp. Useful when using a sink that needs to write to different tables or indexes based on timestamps</li>
-        <li>RegexpRouter - modify the topic of a record based on original topic, replacement string and a regular expression</li>
+        <li>RegexRouter - modify the topic of a record based on original topic, replacement string and a regular expression</li>
     </ul>
 
     Details on how to configure each transformation are listed below:
@@ -247,24 +247,24 @@
 
     We'll cover the <code>SourceConnector</code> as a simple example. <code>SinkConnector</code> implementations are very similar. Start by creating the class that inherits from <code>SourceConnector</code> and add a couple of fields that will store parsed configuration information (the filename to read from and the topic to send data to):
 
-    <pre>
+    <pre class="brush: java;">
     public class FileStreamSourceConnector extends SourceConnector {
         private String filename;
         private String topic;
     </pre>
 
-    The easiest method to fill in is <code>getTaskClass()</code>, which defines the class that should be instantiated in worker processes to actually read the data:
+    The easiest method to fill in is <code>taskClass()</code>, which defines the class that should be instantiated in worker processes to actually read the data:
 
-    <pre>
+    <pre class="brush: java;">
     @Override
-    public Class&lt;? extends Task&gt; getTaskClass() {
+    public Class&lt;? extends Task&gt; taskClass() {
         return FileStreamSourceTask.class;
     }
     </pre>
 
     We will define the <code>FileStreamSourceTask</code> class below. Next, we add some standard lifecycle methods, <code>start()</code> and <code>stop()</code>:
 
-    <pre>
+    <pre class="brush: java;">
     @Override
     public void start(Map&lt;String, String&gt; props) {
         // The complete version includes error handling as well.
@@ -282,7 +282,7 @@
     handling a single file, so even though we may be permitted to generate more tasks as per the
     <code>maxTasks</code> argument, we return a list with only one entry:
 
-    <pre>
+    <pre class="brush: java;">
     @Override
     public List&lt;Map&lt;String, String&gt;&gt; taskConfigs(int maxTasks) {
         ArrayList&lt;Map&lt;String, String&gt;&gt; configs = new ArrayList&lt;&gt;();
@@ -310,7 +310,7 @@
     Just as with the connector, we need to create a class inheriting from the appropriate base <code>Task</code> class. It also has some standard lifecycle methods:
 
 
-    <pre>
+    <pre class="brush: java;">
     public class FileStreamSourceTask extends SourceTask {
         String filename;
         InputStream stream;
@@ -333,7 +333,7 @@
 
     Next, we implement the main functionality of the task, the <code>poll()</code> method which gets events from the input system and returns a <code>List&lt;SourceRecord&gt;</code>:
 
-    <pre>
+    <pre class="brush: java;">
     @Override
     public List&lt;SourceRecord&gt; poll() throws InterruptedException {
         try {
@@ -365,15 +365,16 @@
 
     The previous section described how to implement a simple <code>SourceTask</code>. Unlike <code>SourceConnector</code> and <code>SinkConnector</code>, <code>SourceTask</code> and <code>SinkTask</code> have very different interfaces because <code>SourceTask</code> uses a pull interface and <code>SinkTask</code> uses a push interface. Both share the common lifecycle methods, but the <code>SinkTask</code> interface is quite different:
 
-    <pre>
+    <pre class="brush: java;">
     public abstract class SinkTask implements Task {
         public void initialize(SinkTaskContext context) {
             this.context = context;
         }
 
         public abstract void put(Collection&lt;SinkRecord&gt; records);
-        
-        public abstract void flush(Map&lt;TopicPartition, Long&gt; offsets);
+
+        public void flush(Map&lt;TopicPartition, OffsetAndMetadata&gt; currentOffsets) {
+        }
     </pre>
 
     The <code>SinkTask</code> documentation contains full details, but this interface is nearly as simple as the <code>SourceTask</code>. The <code>put()</code> method should contain most of the implementation, accepting sets of <code>SinkRecords</code>, performing any required translation, and storing them in the destination system. This method does not need to ensure the data has been fully written to the destination system before returning. In fact, in many cases internal buffering will be useful so an entire batch of records can be sent at once, reducing the overhead of inserting events into the downstream data store. The <code>SinkRecords</code> contain essentially the same information as <code>SourceRecords</code>: Kafka topic, partition, offset and the event key and value.
@@ -388,7 +389,7 @@
 
     To correctly resume upon startup, the task can use the <code>SourceContext</code> passed into its <code>initialize()</code> method to access the offset data. In <code>initialize()</code>, we would add a bit more code to read the offset (if it exists) and seek to that position:
 
-    <pre>
+    <pre class="brush: java;">
         stream = new FileInputStream(filename);
         Map&lt;String, Object&gt; offset = context.offsetStorageReader().offset(Collections.singletonMap(FILENAME_FIELD, filename));
         if (offset != null) {
@@ -406,7 +407,7 @@
 
     Source connectors need to monitor the source system for changes, e.g. table additions/deletions in a database. When they pick up changes, they should notify the framework via the <code>ConnectorContext</code> object that reconfiguration is necessary. For example, in a <code>SourceConnector</code>:
 
-    <pre>
+    <pre class="brush: java;">
         if (inputsChanged())
             this.context.requestTaskReconfiguration();
     </pre>
@@ -423,7 +424,7 @@
 
     The following code in <code>FileStreamSourceConnector</code> defines the configuration and exposes it to the framework.
 
-    <pre>
+    <pre class="brush: java;">
         private static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(FILE_CONFIG, Type.STRING, Importance.HIGH, "Source filename.")
             .define(TOPIC_CONFIG, Type.STRING, Importance.HIGH, "The topic to publish data to");
@@ -445,7 +446,7 @@
 
     The API documentation provides a complete reference, but here is a simple example creating a <code>Schema</code> and <code>Struct</code>:
 
-    <pre>
+    <pre class="brush: java;">
     Schema schema = SchemaBuilder.struct().name(NAME)
         .field("name", Schema.STRING_SCHEMA)
         .field("age", Schema.INT_SCHEMA)
@@ -473,7 +474,7 @@
     When a connector is first submitted to the cluster, the workers rebalance the full set of connectors in the cluster and their tasks so that each worker has approximately the same amount of work. This same rebalancing procedure is also used when connectors increase or decrease the number of tasks they require, or when a connector's configuration is changed. You can use the REST API to view the current status of a connector and its tasks, including the id of the worker to which each was assigned. For example, querying the status of a file source (using <code>GET /connectors/file-source/status</code>) might produce output like the following:
     </p>
 
-    <pre>
+    <pre class="brush: json;">
     {
     "name": "file-source",
     "connector": {

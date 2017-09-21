@@ -27,11 +27,48 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.List;
 
+import static org.apache.kafka.common.record.DefaultRecordBatch.RECORDS_COUNT_OFFSET;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class DefaultRecordBatchTest {
+
+    @Test
+    public void testWriteEmptyHeader() {
+        long producerId = 23423L;
+        short producerEpoch = 145;
+        int baseSequence = 983;
+        long baseOffset = 15L;
+        long lastOffset = 37;
+        int partitionLeaderEpoch = 15;
+        long timestamp = System.currentTimeMillis();
+
+        for (TimestampType timestampType : Arrays.asList(TimestampType.CREATE_TIME, TimestampType.LOG_APPEND_TIME)) {
+            for (boolean isTransactional : Arrays.asList(true, false)) {
+                for (boolean isControlBatch : Arrays.asList(true, false)) {
+                    ByteBuffer buffer = ByteBuffer.allocate(2048);
+                    DefaultRecordBatch.writeEmptyHeader(buffer, RecordBatch.CURRENT_MAGIC_VALUE, producerId,
+                            producerEpoch, baseSequence, baseOffset, lastOffset, partitionLeaderEpoch, timestampType,
+                            timestamp, isTransactional, isControlBatch);
+                    buffer.flip();
+                    DefaultRecordBatch batch = new DefaultRecordBatch(buffer);
+                    assertEquals(producerId, batch.producerId());
+                    assertEquals(producerEpoch, batch.producerEpoch());
+                    assertEquals(baseSequence, batch.baseSequence());
+                    assertEquals(baseSequence + ((int) (lastOffset - baseOffset)), batch.lastSequence());
+                    assertEquals(baseOffset, batch.baseOffset());
+                    assertEquals(lastOffset, batch.lastOffset());
+                    assertEquals(partitionLeaderEpoch, batch.partitionLeaderEpoch());
+                    assertEquals(isTransactional, batch.isTransactional());
+                    assertEquals(timestampType, batch.timestampType());
+                    assertEquals(timestamp, batch.maxTimestamp());
+                    assertEquals(RecordBatch.NO_TIMESTAMP, batch.firstTimestamp());
+                    assertEquals(isControlBatch, batch.isControlBatch());
+                }
+            }
+        }
+    }
 
     @Test
     public void buildDefaultRecordBatch() {
@@ -150,6 +187,50 @@ public class DefaultRecordBatchTest {
         DefaultRecordBatch batch = new DefaultRecordBatch(buffer);
         assertFalse(batch.isValid());
         batch.ensureValid();
+    }
+
+    @Test(expected = InvalidRecordException.class)
+    public void testInvalidRecordCountTooManyNonCompressedV2() {
+        long now = System.currentTimeMillis();
+        DefaultRecordBatch batch = recordsWithInvalidRecordCount(RecordBatch.MAGIC_VALUE_V2, now, CompressionType.NONE, 5);
+        // force iteration through the batch to execute validation
+        // batch validation is a part of normal workflow for LogValidator.validateMessagesAndAssignOffsets
+        for (Record record: batch) {
+            record.isValid();
+        }
+    }
+
+    @Test(expected = InvalidRecordException.class)
+    public void testInvalidRecordCountTooLittleNonCompressedV2() {
+        long now = System.currentTimeMillis();
+        DefaultRecordBatch batch = recordsWithInvalidRecordCount(RecordBatch.MAGIC_VALUE_V2, now, CompressionType.NONE, 2);
+        // force iteration through the batch to execute validation
+        // batch validation is a part of normal workflow for LogValidator.validateMessagesAndAssignOffsets
+        for (Record record: batch) {
+            record.isValid();
+        }
+    }
+
+    @Test(expected = InvalidRecordException.class)
+    public void testInvalidRecordCountTooManyCompressedV2() {
+        long now = System.currentTimeMillis();
+        DefaultRecordBatch batch = recordsWithInvalidRecordCount(RecordBatch.MAGIC_VALUE_V2, now, CompressionType.GZIP, 5);
+        // force iteration through the batch to execute validation
+        // batch validation is a part of normal workflow for LogValidator.validateMessagesAndAssignOffsets
+        for (Record record: batch) {
+            record.isValid();
+        }
+    }
+
+    @Test(expected = InvalidRecordException.class)
+    public void testInvalidRecordCountTooLittleCompressedV2() {
+        long now = System.currentTimeMillis();
+        DefaultRecordBatch batch = recordsWithInvalidRecordCount(RecordBatch.MAGIC_VALUE_V2, now, CompressionType.GZIP, 2);
+        // force iteration through the batch to execute validation
+        // batch validation is a part of normal workflow for LogValidator.validateMessagesAndAssignOffsets
+        for (Record record: batch) {
+            record.isValid();
+        }
     }
 
     @Test(expected = InvalidRecordException.class)
@@ -301,4 +382,18 @@ public class DefaultRecordBatchTest {
         assertEquals(4, DefaultRecordBatch.incrementSequence(Integer.MAX_VALUE - 5, 10));
     }
 
+    private static DefaultRecordBatch recordsWithInvalidRecordCount(Byte magicValue, long timestamp,
+                                              CompressionType codec, int invalidCount) {
+        ByteBuffer buf = ByteBuffer.allocate(512);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L);
+        builder.appendWithOffset(0, timestamp, null, "hello".getBytes());
+        builder.appendWithOffset(1, timestamp, null, "there".getBytes());
+        builder.appendWithOffset(2, timestamp, null, "beautiful".getBytes());
+        MemoryRecords records = builder.build();
+        ByteBuffer buffer = records.buffer();
+        buffer.position(0);
+        buffer.putInt(RECORDS_COUNT_OFFSET, invalidCount);
+        buffer.position(0);
+        return new DefaultRecordBatch(buffer);
+    }
 }

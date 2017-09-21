@@ -19,9 +19,11 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -32,8 +34,8 @@ import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.io.File;
@@ -44,33 +46,23 @@ import static org.junit.Assert.assertEquals;
 public class KStreamWindowAggregateTest {
 
     final private Serde<String> strSerde = Serdes.String();
-
-    private KStreamTestDriver driver = null;
     private File stateDir = null;
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @Before
     public void setUp() throws IOException {
         stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
-    @After
-    public void tearDown() throws Exception {
-        if (driver != null) {
-            driver.close();
-            driver = null;
-        }
-        Utils.delete(stateDir);
-    }
-
     @Test
-    public void testAggBasic() throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
+    public void testAggBasic() {
+        final StreamsBuilder builder = new StreamsBuilder();
         String topic1 = "topic1";
 
-        KStream<String, String> stream1 = builder.stream(strSerde, strSerde, topic1);
+        KStream<String, String> stream1 = builder.stream(topic1, Consumed.with(strSerde, strSerde));
         KTable<Windowed<String>, String> table2 =
-            stream1.groupByKey(strSerde,
-                               strSerde)
+            stream1.groupByKey(Serialized.with(strSerde, strSerde))
                 .aggregate(MockInitializer.STRING_INIT,
                            MockAggregator.TOSTRING_ADDER,
                            TimeWindows.of(10).advanceBy(5),
@@ -79,7 +71,7 @@ public class KStreamWindowAggregateTest {
         MockProcessorSupplier<Windowed<String>, String> proc2 = new MockProcessorSupplier<>();
         table2.toStream().process(proc2);
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
 
         setRecordContext(0, topic1);
         driver.process(topic1, "A", "1");
@@ -155,14 +147,14 @@ public class KStreamWindowAggregateTest {
     }
 
     @Test
-    public void testJoin() throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
+    public void testJoin() {
+        final StreamsBuilder builder = new StreamsBuilder();
         String topic1 = "topic1";
         String topic2 = "topic2";
 
-        KStream<String, String> stream1 = builder.stream(strSerde, strSerde, topic1);
+        KStream<String, String> stream1 = builder.stream(topic1, Consumed.with(strSerde, strSerde));
         KTable<Windowed<String>, String> table1 =
-            stream1.groupByKey(strSerde, strSerde)
+            stream1.groupByKey(Serialized.with(strSerde, strSerde))
                 .aggregate(MockInitializer.STRING_INIT,
                            MockAggregator.TOSTRING_ADDER,
                            TimeWindows.of(10).advanceBy(5),
@@ -171,9 +163,9 @@ public class KStreamWindowAggregateTest {
         MockProcessorSupplier<Windowed<String>, String> proc1 = new MockProcessorSupplier<>();
         table1.toStream().process(proc1);
 
-        KStream<String, String> stream2 = builder.stream(strSerde, strSerde, topic2);
+        KStream<String, String> stream2 = builder.stream(topic2, Consumed.with(strSerde, strSerde));
         KTable<Windowed<String>, String> table2 =
-            stream2.groupByKey(strSerde, strSerde)
+            stream2.groupByKey(Serialized.with(strSerde, strSerde))
                 .aggregate(MockInitializer.STRING_INIT,
                            MockAggregator.TOSTRING_ADDER,
                            TimeWindows.of(10).advanceBy(5),
@@ -191,7 +183,7 @@ public class KStreamWindowAggregateTest {
             }
         }).toStream().process(proc3);
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
 
         setRecordContext(0, topic1);
         driver.process(topic1, "A", "1");

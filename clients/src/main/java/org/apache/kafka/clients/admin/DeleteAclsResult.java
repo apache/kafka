@@ -21,6 +21,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.errors.ApiException;
 
 import java.util.ArrayList;
@@ -29,36 +30,55 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The result of the deleteAcls call.
+ * The result of the {@link AdminClient#deleteAcls(Collection)} call.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
  */
+@InterfaceStability.Evolving
 public class DeleteAclsResult {
+
+    /**
+     * A class containing either the deleted ACL binding or an exception if the delete failed.
+     */
     public static class FilterResult {
-        private final AclBinding acl;
+        private final AclBinding binding;
         private final ApiException exception;
 
-        FilterResult(AclBinding acl, ApiException exception) {
-            this.acl = acl;
+        FilterResult(AclBinding binding, ApiException exception) {
+            this.binding = binding;
             this.exception = exception;
         }
 
-        public AclBinding acl() {
-            return acl;
+        /**
+         * Return the deleted ACL binding or null if there was an error.
+         */
+        public AclBinding binding() {
+            return binding;
         }
 
+        /**
+         * Return an exception if the ACL delete was not successful or null if it was.
+         */
         public ApiException exception() {
             return exception;
         }
     }
 
+    /**
+     * A class containing the results of the delete ACLs operation.
+     */
     public static class FilterResults {
-        private final List<FilterResult> acls;
+        private final List<FilterResult> values;
 
-        FilterResults(List<FilterResult> acls) {
-            this.acls = acls;
+        FilterResults(List<FilterResult> values) {
+            this.values = values;
         }
 
-        public List<FilterResult> acls() {
-            return acls;
+        /**
+         * Return a list of delete ACLs results for a given filter.
+         */
+        public List<FilterResult> values() {
+            return values;
         }
     }
 
@@ -69,10 +89,10 @@ public class DeleteAclsResult {
     }
 
     /**
-     * Return a map from topic names to futures which can be used to check the status of
-     * individual deletions.
+     * Return a map from acl filters to futures which can be used to check the status of the deletions by each
+     * filter.
      */
-    public Map<AclBindingFilter, KafkaFuture<FilterResults>> results() {
+    public Map<AclBindingFilter, KafkaFuture<FilterResults>> values() {
         return futures;
     }
 
@@ -95,11 +115,11 @@ public class DeleteAclsResult {
                             // have failed if any Future failed.
                             throw new KafkaException("DeleteAclsResult#all: internal error", e);
                         }
-                        for (FilterResult result : results.acls()) {
+                        for (FilterResult result : results.values()) {
                             if (result.exception() != null) {
                                 throw result.exception();
                             }
-                            acls.add(result.acl());
+                            acls.add(result.binding());
                         }
                     }
                     return acls;

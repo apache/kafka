@@ -20,18 +20,11 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * Options for the describeCluster call.
+ * Options for {@link AdminClient#describeCluster()}.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
  */
-@InterfaceStability.Unstable
-public class DescribeClusterOptions {
-    private Integer timeoutMs = null;
+@InterfaceStability.Evolving
+public class DescribeClusterOptions extends AbstractOptions<DescribeClusterOptions> {
 
-    public DescribeClusterOptions timeoutMs(Integer timeoutMs) {
-        this.timeoutMs = timeoutMs;
-        return this;
-    }
-
-    public Integer timeoutMs() {
-        return timeoutMs;
-    }
 }

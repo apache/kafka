@@ -1,7 +1,6 @@
 package kafka.common
 
 import kafka.cluster.{Partition, Replica}
-import kafka.utils.Json
 import org.apache.kafka.common.TopicPartition
 
 /**
@@ -36,5 +35,7 @@ case class TopicAndPartition(topic: String, partition: Int) {
 
   def asTuple = (topic, partition)
 
-  override def toString = "[%s,%d]".format(topic, partition)
+  def asTopicPartition = new TopicPartition(topic, partition)
+
+  override def toString: String = s"$topic-$partition"
 }

@@ -57,31 +57,27 @@ if [ -h /opt/kafka-dev ]; then
 fi
 ln -s /vagrant /opt/kafka-dev
 
-# Verification to catch provisioning errors.
-if [[ ! -x /opt/kafka-dev/bin/kafka-run-class.sh ]]; then
-    echo "ERROR: kafka-run-class.sh not found/executable in /opt/kafka-dev/bin"
-    find /opt/kafka-dev
-    ls -la /opt/kafka-dev/bin/kafka-run-class.sh || true
-    exit 1
-fi
-
-
 
 get_kafka() {
     version=$1
     scala_version=$2
 
     kafka_dir=/opt/kafka-$version
-    url=https://s3-us-west-2.amazonaws.com/kafka-packages-$version/kafka_$scala_version-$version.tgz
+    url=https://s3-us-west-2.amazonaws.com/kafka-packages/kafka_$scala_version-$version.tgz
+    # the .tgz above does not include the streams test jar hence we need to get it separately
+    url_streams_test=https://s3-us-west-2.amazonaws.com/kafka-packages/kafka-streams-$version-test.jar
     if [ ! -d /opt/kafka-$version ]; then
         pushd /tmp
         curl -O $url
+        curl -O $url_streams_test || true
         file_tgz=`basename $url`
+        file_streams_jar=`basename $url_streams_test` || true
         tar -xzf $file_tgz
         rm -rf $file_tgz
 
         file=`basename $file_tgz .tgz`
         mv $file $kafka_dir
+        mv $file_streams_jar $kafka_dir/libs || true
         popd
     fi
 }
@@ -97,6 +93,8 @@ get_kafka 0.10.1.1 2.11
 chmod a+rw /opt/kafka-0.10.1.1
 get_kafka 0.10.2.1 2.11
 chmod a+rw /opt/kafka-0.10.2.1
+get_kafka 0.11.0.0 2.11
+chmod a+rw /opt/kafka-0.11.0.0
 
 
 # For EC2 nodes, we want to use /mnt, which should have the local disk. On local

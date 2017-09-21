@@ -17,6 +17,7 @@
 
 package kafka.api
 
+import java.lang.{Long => JLong}
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 
@@ -56,7 +57,7 @@ class TransactionsTest extends KafkaServerTestHarness {
   @Before
   override def setUp(): Unit = {
     super.setUp()
-    val numPartitions = 3
+    val numPartitions = 4
     val topicConfig = new Properties()
     topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
     TestUtils.createTopic(zkUtils, topic1, numPartitions, numServers, servers, topicConfig)
@@ -124,27 +125,39 @@ class TransactionsTest extends KafkaServerTestHarness {
 
     producer1.beginTransaction()
     producer2.beginTransaction()
-    producer2.send(new ProducerRecord(topic1, 0, "x".getBytes, "1".getBytes))
-    producer2.send(new ProducerRecord(topic2, 0, "x".getBytes, "1".getBytes))
+
+    val latestVisibleTimestamp = System.currentTimeMillis()
+    producer2.send(new ProducerRecord(topic1, 0, latestVisibleTimestamp, "x".getBytes, "1".getBytes))
+    producer2.send(new ProducerRecord(topic2, 0, latestVisibleTimestamp, "x".getBytes, "1".getBytes))
     producer2.flush()
 
-    producer1.send(new ProducerRecord(topic1, 0, "a".getBytes, "1".getBytes))
-    producer1.send(new ProducerRecord(topic1, 0, "b".getBytes, "2".getBytes))
-    producer1.send(new ProducerRecord(topic2, 0, "c".getBytes, "3".getBytes))
-    producer1.send(new ProducerRecord(topic2, 0, "d".getBytes, "4".getBytes))
+    val latestWrittenTimestamp = latestVisibleTimestamp + 1
+    producer1.send(new ProducerRecord(topic1, 0, latestWrittenTimestamp, "a".getBytes, "1".getBytes))
+    producer1.send(new ProducerRecord(topic1, 0, latestWrittenTimestamp, "b".getBytes, "2".getBytes))
+    producer1.send(new ProducerRecord(topic2, 0, latestWrittenTimestamp, "c".getBytes, "3".getBytes))
+    producer1.send(new ProducerRecord(topic2, 0, latestWrittenTimestamp, "d".getBytes, "4".getBytes))
     producer1.flush()
 
-    producer2.send(new ProducerRecord(topic1, 0, "x".getBytes, "2".getBytes))
-    producer2.send(new ProducerRecord(topic2, 0, "x".getBytes, "2".getBytes))
+    producer2.send(new ProducerRecord(topic1, 0, latestWrittenTimestamp, "x".getBytes, "2".getBytes))
+    producer2.send(new ProducerRecord(topic2, 0, latestWrittenTimestamp, "x".getBytes, "2".getBytes))
     producer2.commitTransaction()
 
     // ensure the records are visible to the read uncommitted consumer
-    readUncommittedConsumer.assign(Set(new TopicPartition(topic1, 0), new TopicPartition(topic2, 0)).asJava)
+    val tp1 = new TopicPartition(topic1, 0)
+    val tp2 = new TopicPartition(topic2, 0)
+    readUncommittedConsumer.assign(Set(tp1, tp2).asJava)
     consumeRecords(readUncommittedConsumer, 8)
+    val readUncommittedOffsetsForTimes = readUncommittedConsumer.offsetsForTimes(Map(
+      tp1 -> (latestWrittenTimestamp: JLong),
+      tp2 -> (latestWrittenTimestamp: JLong)
+    ).asJava)
+    assertEquals(2, readUncommittedOffsetsForTimes.size)
+    assertEquals(latestWrittenTimestamp, readUncommittedOffsetsForTimes.get(tp1).timestamp)
+    assertEquals(latestWrittenTimestamp, readUncommittedOffsetsForTimes.get(tp2).timestamp)
     readUncommittedConsumer.unsubscribe()
 
     // we should only see the first two records which come before the undecided second transaction
-    readCommittedConsumer.assign(Set(new TopicPartition(topic1, 0), new TopicPartition(topic2, 0)).asJava)
+    readCommittedConsumer.assign(Set(tp1, tp2).asJava)
     val records = consumeRecords(readCommittedConsumer, 2)
     records.foreach { record =>
       assertEquals("x", new String(record.key))
@@ -157,6 +170,14 @@ class TransactionsTest extends KafkaServerTestHarness {
     readCommittedConsumer.assignment.asScala.foreach { tp =>
       assertEquals(1L, readCommittedConsumer.position(tp))
     }
+
+    // undecided timestamps should not be searchable either
+    val readCommittedOffsetsForTimes = readCommittedConsumer.offsetsForTimes(Map(
+      tp1 -> (latestWrittenTimestamp: JLong),
+      tp2 -> (latestWrittenTimestamp: JLong)
+    ).asJava)
+    assertNull(readCommittedOffsetsForTimes.get(tp1))
+    assertNull(readCommittedOffsetsForTimes.get(tp2))
   }
 
   @Test
@@ -368,7 +389,7 @@ class TransactionsTest extends KafkaServerTestHarness {
       val recordMetadata = result.get()
       error(s"Missed a producer fenced exception when writing to ${recordMetadata.topic}-${recordMetadata.partition}. Grab the logs!!")
       servers.foreach { server =>
-        error(s"log dirs: ${server.logManager.logDirs.map(_.getAbsolutePath).head}")
+        error(s"log dirs: ${server.logManager.liveLogDirs.map(_.getAbsolutePath).head}")
       }
       fail("Should not be able to send messages from a fenced producer.")
     } catch {
@@ -415,7 +436,7 @@ class TransactionsTest extends KafkaServerTestHarness {
       val recordMetadata = result.get()
       error(s"Missed a producer fenced exception when writing to ${recordMetadata.topic}-${recordMetadata.partition}. Grab the logs!!")
       servers.foreach { case (server) =>
-        error(s"log dirs: ${server.logManager.logDirs.map(_.getAbsolutePath).head}")
+        error(s"log dirs: ${server.logManager.liveLogDirs.map(_.getAbsolutePath).head}")
       }
       fail("Should not be able to send messages from a fenced producer.")
     } catch {
@@ -432,6 +453,53 @@ class TransactionsTest extends KafkaServerTestHarness {
     records.foreach { record =>
       TestUtils.assertCommittedAndGetValue(record)
     }
+  }
+
+  @Test
+  def testMultipleMarkersOneLeader(): Unit = {
+    val firstProducer = transactionalProducers.head
+    val consumer = transactionalConsumers.head
+    val unCommittedConsumer = nonTransactionalConsumers.head
+    val topicWith10Partitions = "largeTopic"
+    val topicWith10PartitionsAndOneReplica = "largeTopicOneReplica"
+    val topicConfig = new Properties()
+    topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
+
+    TestUtils.createTopic(zkUtils, topicWith10Partitions, 10, numServers, servers, topicConfig)
+    TestUtils.createTopic(zkUtils, topicWith10PartitionsAndOneReplica, 10, 1, servers, new Properties())
+
+    firstProducer.initTransactions()
+
+    firstProducer.beginTransaction()
+    sendTransactionalMessagesWithValueRange(firstProducer, topicWith10Partitions, 0, 5000, willBeCommitted = false)
+    sendTransactionalMessagesWithValueRange(firstProducer, topicWith10PartitionsAndOneReplica, 5000, 10000, willBeCommitted = false)
+    firstProducer.abortTransaction()
+
+    firstProducer.beginTransaction()
+    sendTransactionalMessagesWithValueRange(firstProducer, topicWith10Partitions, 10000, 11000, willBeCommitted = true)
+    firstProducer.commitTransaction()
+
+    consumer.subscribe(List(topicWith10PartitionsAndOneReplica, topicWith10Partitions).asJava)
+    unCommittedConsumer.subscribe(List(topicWith10PartitionsAndOneReplica, topicWith10Partitions).asJava)
+
+    val records = consumeRecords(consumer, 1000)
+    records.foreach { record =>
+      TestUtils.assertCommittedAndGetValue(record)
+    }
+
+    val allRecords = consumeRecords(unCommittedConsumer, 11000)
+    val expectedValues = Range(0, 11000).map(_.toString).toSet
+    allRecords.foreach { record =>
+      assertTrue(expectedValues.contains(TestUtils.recordValueAsString(record)))
+    }
+  }
+
+  private def sendTransactionalMessagesWithValueRange(producer: KafkaProducer[Array[Byte], Array[Byte]], topic: String,
+                                                      start: Int, end: Int, willBeCommitted: Boolean): Unit = {
+    for (i <- start until end) {
+      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic, i.toString, i.toString, willBeCommitted))
+    }
+    producer.flush()
   }
 
   private def serverProps() = {
@@ -461,7 +529,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     consumer
   }
 
-  private def createReadUncommittedConsumer(group: String = "group") = {
+  private def createReadUncommittedConsumer(group: String) = {
     val props = new Properties()
     props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_uncommitted")
     props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")

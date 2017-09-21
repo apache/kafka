@@ -20,25 +20,26 @@ package kafka.coordinator.transaction
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ClientResponse, RequestCompletionHandler}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.WriteTxnMarkersResponse
 
 import scala.collection.mutable
-import collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                                                 txnStateManager: TransactionStateManager,
                                                 txnMarkerChannelManager: TransactionMarkerChannelManager,
                                                 txnIdAndMarkerEntries: java.util.List[TxnIdAndMarkerEntry]) extends RequestCompletionHandler with Logging {
+
+  this.logIdent = "[Transaction Marker Request Completion Handler " + brokerId + "]: "
+
   override def onComplete(response: ClientResponse): Unit = {
     val requestHeader = response.requestHeader
     val correlationId = requestHeader.correlationId
     if (response.wasDisconnected) {
-      val api = ApiKeys.forId(requestHeader.apiKey)
-      val correlation = requestHeader.correlationId
-      trace(s"Cancelled $api request $requestHeader with correlation id $correlation due to node ${response.destination} being disconnected")
+      trace(s"Cancelled request with header $requestHeader due to node ${response.destination} being disconnected")
 
-      for (txnIdAndMarker: TxnIdAndMarkerEntry <- txnIdAndMarkerEntries) {
+      for (txnIdAndMarker <- txnIdAndMarkerEntries.asScala) {
         val transactionalId = txnIdAndMarker.txnId
         val txnMarker = txnIdAndMarker.txnMarkerEntry
 
@@ -54,6 +55,9 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
               s"cancel sending transaction markers $txnMarker to the brokers")
 
             txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
+
+          case Left(unexpectedError) =>
+            throw new IllegalStateException(s"Unhandled error $unexpectedError when fetching current transaction state")
 
           case Right(None) =>
             throw new IllegalStateException(s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
@@ -76,16 +80,16 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                 txnMarker.producerEpoch,
                 txnMarker.transactionResult,
                 txnMarker.coordinatorEpoch,
-                txnMarker.partitions.toSet)
+                txnMarker.partitions.asScala.toSet)
             }
         }
       }
     } else {
-      trace(s"Received response $response from node ${response.destination} with correlation id $correlationId")
+      debug(s"Received WriteTxnMarker response $response from node ${response.destination} with correlation id $correlationId")
 
       val writeTxnMarkerResponse = response.responseBody.asInstanceOf[WriteTxnMarkersResponse]
 
-      for (txnIdAndMarker: TxnIdAndMarkerEntry <- txnIdAndMarkerEntries) {
+      for (txnIdAndMarker <- txnIdAndMarkerEntries.asScala) {
         val transactionalId = txnIdAndMarker.txnId
         val txnMarker = txnIdAndMarker.txnMarkerEntry
         val errors = writeTxnMarkerResponse.errors(txnMarker.producerId)
@@ -105,6 +109,9 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
 
             txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
 
+          case Left(unexpectedError) =>
+            throw new IllegalStateException(s"Unhandled error $unexpectedError when fetching current transaction state")
+
           case Right(None) =>
             throw new IllegalStateException(s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
               s"no metadata in the cache; this is not expected")
@@ -123,10 +130,9 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
               abortSending = true
             } else {
               txnMetadata synchronized {
-                for ((topicPartition: TopicPartition, error: Errors) <- errors) {
+                for ((topicPartition, error) <- errors.asScala) {
                   error match {
                     case Errors.NONE =>
-
                       txnMetadata.removePartition(topicPartition)
 
                     case Errors.CORRUPT_MESSAGE |
@@ -174,7 +180,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
 
             if (!abortSending) {
               if (retryPartitions.nonEmpty) {
-                trace(s"Re-enqueuing ${txnMarker.transactionResult} transaction markers for transactional id $transactionalId " +
+                debug(s"Re-enqueuing ${txnMarker.transactionResult} transaction markers for transactional id $transactionalId " +
                   s"under coordinator epoch ${txnMarker.coordinatorEpoch}")
 
                 // re-enqueue with possible new leaders of the partitions

@@ -17,21 +17,16 @@
 
 package kafka.consumer
 
-import java.util
 import java.util.{Collections, Properties}
 import java.util.regex.Pattern
 
 import kafka.api.OffsetRequest
 import kafka.common.StreamEndException
 import kafka.message.Message
-import org.apache.kafka.clients.consumer.{ConsumerRecord, OffsetAndMetadata}
-import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.header.internals.RecordHeaders
-
-import scala.collection.mutable.HashMap
 
 /**
  * A base consumer used to abstract both old and new consumer
@@ -64,13 +59,8 @@ class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: 
   import org.apache.kafka.clients.consumer.KafkaConsumer
 
   val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](consumerProps)
-  val offsets = new HashMap[TopicPartition, Long]()
-
   consumerInit()
-  private var currentPartition: TopicPartition = null
-  private var polledRecords = consumer.poll(0)
-  private var partitionIter = polledRecords.partitions.iterator
-  private var recordIter: util.Iterator[ConsumerRecord[Array[Byte], Array[Byte]]] = null
+  var recordIter = consumer.poll(0).iterator
 
   def consumerInit() {
     (topic, partitionId, offset, whitelist) match {
@@ -82,7 +72,7 @@ class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: 
       case (Some(topic), None, None, None) =>
         consumer.subscribe(Collections.singletonList(topic))
       case (None, None, None, Some(whitelist)) =>
-        consumer.subscribe(Pattern.compile(whitelist), new NoOpConsumerRebalanceListener())
+        consumer.subscribe(Pattern.compile(whitelist))
       case _ =>
         throw new IllegalArgumentException("An invalid combination of arguments is provided. " +
             "Exactly one of 'topic' or 'whitelist' must be provided. " +
@@ -102,30 +92,21 @@ class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: 
   }
 
   override def receive(): BaseConsumerRecord = {
-    if (recordIter == null || !recordIter.hasNext) {
-      if (!partitionIter.hasNext) {
-        polledRecords = consumer.poll(timeoutMs)
-        partitionIter = polledRecords.partitions.iterator
-
-        if (!partitionIter.hasNext)
-          throw new ConsumerTimeoutException
-      }
-
-      currentPartition = partitionIter.next
-      recordIter = polledRecords.records(currentPartition).iterator
+    if (!recordIter.hasNext) {
+      recordIter = consumer.poll(timeoutMs).iterator
+      if (!recordIter.hasNext)
+        throw new ConsumerTimeoutException
     }
 
     val record = recordIter.next
-    offsets.put(currentPartition, record.offset + 1)
-
     BaseConsumerRecord(record.topic,
-      record.partition,
-      record.offset,
-      record.timestamp,
-      record.timestampType,
-      record.key,
-      record.value,
-      record.headers)
+                       record.partition,
+                       record.offset,
+                       record.timestamp,
+                       record.timestampType,
+                       record.key,
+                       record.value,
+                       record.headers)
   }
 
   override def stop() {
@@ -137,9 +118,7 @@ class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: 
   }
 
   override def commit() {
-    import scala.collection.JavaConverters._
-    consumer.commitSync(offsets.map { case (tp, offset) =>  (tp, new OffsetAndMetadata(offset))}.asJava)
-    offsets.clear()
+    this.consumer.commitSync()
   }
 }
 

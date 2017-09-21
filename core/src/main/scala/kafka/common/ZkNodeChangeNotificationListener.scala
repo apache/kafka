@@ -24,8 +24,6 @@ import org.I0Itec.zkclient.exception.ZkInterruptedException
 import org.I0Itec.zkclient.{IZkChildListener, IZkStateListener}
 import org.apache.kafka.common.utils.Time
 
-import scala.collection.JavaConverters._
-
 /**
  * Handle the notificationMessage.
  */
@@ -40,7 +38,7 @@ trait NotificationHandler {
  * notificationHandler's processNotification() method with the child's data as argument. As part of processing these changes it also
  * purges any children with currentTime - createTime > changeExpirationMs.
  *
- * The caller/user of this class should ensure that they use zkClient.subscribeStateChanges and call processAllNotifications
+ * The caller/user of this class should ensure that they use zkUtils.subscribeStateChanges and call processAllNotifications
  * method of this class from ZkStateChangeListener's handleNewSession() method. This is necessary to ensure that if zk session
  * is terminated and reestablished any missed notification will be processed immediately.
  * @param zkUtils
@@ -64,8 +62,8 @@ class ZkNodeChangeNotificationListener(private val zkUtils: ZkUtils,
    */
   def init() {
     zkUtils.makeSurePersistentPathExists(seqNodeRoot)
-    zkUtils.zkClient.subscribeChildChanges(seqNodeRoot, NodeChangeListener)
-    zkUtils.zkClient.subscribeStateChanges(ZkStateChangeListener)
+    zkUtils.subscribeChildChanges(seqNodeRoot, NodeChangeListener)
+    zkUtils.subscribeStateChanges(ZkStateChangeListener)
     processAllNotifications()
   }
 
@@ -77,8 +75,8 @@ class ZkNodeChangeNotificationListener(private val zkUtils: ZkUtils,
    * Process all changes
    */
   def processAllNotifications() {
-    val changes = zkUtils.zkClient.getChildren(seqNodeRoot)
-    processNotifications(changes.asScala.sorted)
+    val changes = zkUtils.getChildren(seqNodeRoot)
+    processNotifications(changes.sorted)
   }
 
   /**
@@ -93,12 +91,14 @@ class ZkNodeChangeNotificationListener(private val zkUtils: ZkUtils,
           val changeId = changeNumber(notification)
           if (changeId > lastExecutedChange) {
             val changeZnode = seqNodeRoot + "/" + notification
-            val (data, _) = zkUtils.readDataMaybeNull(changeZnode)
-            data.map(notificationHandler.processNotification(_)).getOrElse {
+            val data = zkUtils.readDataMaybeNull(changeZnode)._1.orNull
+            if (data != null) {
+              notificationHandler.processNotification(data)
+            } else {
               logger.warn(s"read null data from $changeZnode when processing notification $notification")
             }
+            lastExecutedChange = changeId
           }
-          lastExecutedChange = changeId
         }
         purgeObsoleteNotifications(now, notifications)
       } catch {

@@ -18,6 +18,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.Utils;
 
@@ -25,6 +28,10 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+
+import static org.apache.kafka.common.protocol.types.Type.BYTES;
+import static org.apache.kafka.common.protocol.types.Type.INT32;
+import static org.apache.kafka.common.protocol.types.Type.STRING;
 
 public class JoinGroupRequest extends AbstractRequest {
     private static final String GROUP_ID_KEY_NAME = "group_id";
@@ -35,6 +42,38 @@ public class JoinGroupRequest extends AbstractRequest {
     private static final String GROUP_PROTOCOLS_KEY_NAME = "group_protocols";
     private static final String PROTOCOL_NAME_KEY_NAME = "protocol_name";
     private static final String PROTOCOL_METADATA_KEY_NAME = "protocol_metadata";
+
+    /* Join group api */
+    private static final Schema JOIN_GROUP_REQUEST_PROTOCOL_V0 = new Schema(
+            new Field(PROTOCOL_NAME_KEY_NAME, STRING),
+            new Field(PROTOCOL_METADATA_KEY_NAME, BYTES));
+
+    private static final Schema JOIN_GROUP_REQUEST_V0 = new Schema(
+            new Field(GROUP_ID_KEY_NAME, STRING, "The group id."),
+            new Field(SESSION_TIMEOUT_KEY_NAME, INT32, "The coordinator considers the consumer dead if it receives " +
+                    "no heartbeat after this timeout in ms."),
+            new Field(MEMBER_ID_KEY_NAME, STRING, "The assigned consumer id or an empty string for a new consumer."),
+            new Field(PROTOCOL_TYPE_KEY_NAME, STRING, "Unique name for class of protocols implemented by group"),
+            new Field(GROUP_PROTOCOLS_KEY_NAME, new ArrayOf(JOIN_GROUP_REQUEST_PROTOCOL_V0), "List of protocols " +
+                    "that the member supports"));
+
+    private static final Schema JOIN_GROUP_REQUEST_V1 = new Schema(
+            new Field(GROUP_ID_KEY_NAME, STRING, "The group id."),
+            new Field(SESSION_TIMEOUT_KEY_NAME, INT32, "The coordinator considers the consumer dead if it receives no " +
+                    "heartbeat after this timeout in ms."),
+            new Field(REBALANCE_TIMEOUT_KEY_NAME, INT32, "The maximum time that the coordinator will wait for each " +
+                    "member to rejoin when rebalancing the group"),
+            new Field(MEMBER_ID_KEY_NAME, STRING, "The assigned consumer id or an empty string for a new consumer."),
+            new Field(PROTOCOL_TYPE_KEY_NAME, STRING, "Unique name for class of protocols implemented by group"),
+            new Field(GROUP_PROTOCOLS_KEY_NAME, new ArrayOf(JOIN_GROUP_REQUEST_PROTOCOL_V0), "List of protocols " +
+                    "that the member supports"));
+
+    /* v2 request is the same as v1. Throttle time has been added to response */
+    private static final Schema JOIN_GROUP_REQUEST_V2 = JOIN_GROUP_REQUEST_V1;
+
+    public static Schema[] schemaVersions() {
+        return new Schema[] {JOIN_GROUP_REQUEST_V0, JOIN_GROUP_REQUEST_V1, JOIN_GROUP_REQUEST_V2};
+    }
 
     public static final String UNKNOWN_MEMBER_ID = "";
 
