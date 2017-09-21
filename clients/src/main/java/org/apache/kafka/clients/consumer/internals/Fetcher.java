@@ -1263,7 +1263,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             this.rawBytesFetched = metrics.sensor("raw-bytes-fetched");
             this.rawBytesFetched.add(metrics.metricInstance(metricsRegistry.rawFetchSizeAvg), new Avg());
             this.rawBytesFetched.add(metrics.metricInstance(metricsRegistry.rawFetchSizeMax), new Max());
-            this.rawBytesFetched.add(metrics.metricInstance(metricsRegistry.rawBytesConsumedRate), new Rate());
+            this.rawBytesFetched.add(new Meter(metrics.metricInstance(metricsRegistry.rawBytesConsumedRate),
+                    metrics.metricInstance(metricsRegistry.rawBytesConsumedTotal)));
 
             this.bytesFetched = metrics.sensor("bytes-fetched");
             this.bytesFetched.add(metrics.metricInstance(metricsRegistry.fetchSizeAvg), new Avg());

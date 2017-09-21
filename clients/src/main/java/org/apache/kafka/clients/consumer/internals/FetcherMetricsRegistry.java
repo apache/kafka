@@ -28,6 +28,7 @@ public class FetcherMetricsRegistry {
     public MetricNameTemplate rawFetchSizeAvg;
     public MetricNameTemplate rawFetchSizeMax;
     public MetricNameTemplate rawBytesConsumedRate;
+    public MetricNameTemplate rawBytesConsumedTotal;
     public MetricNameTemplate fetchSizeAvg;
     public MetricNameTemplate fetchSizeMax;
     public MetricNameTemplate bytesConsumedRate;
@@ -72,6 +73,8 @@ public class FetcherMetricsRegistry {
                 "The maximum number of raw bytes fetched per request", tags);
         this.rawBytesConsumedRate = new MetricNameTemplate("raw-bytes-consumed-rate", groupName,
                 "The average number of raw bytes consumed per second", tags);
+        this.rawBytesConsumedTotal = new MetricNameTemplate("raw-bytes-consumed-total", groupName,
+                "The total number of raw bytes consumed", tags);
 
         this.fetchSizeAvg = new MetricNameTemplate("fetch-size-avg", groupName,
                 "The average number of bytes fetched per request", tags);
@@ -125,7 +128,7 @@ public class FetcherMetricsRegistry {
                 "The average number of records consumed per second for a topic", topicTags);
         this.topicRecordsConsumedTotal = new MetricNameTemplate("records-consumed-total", groupName,
                 "The total number of records consumed for a topic", topicTags);
-        
+
         /***** Partition level *****/
         this.partitionRecordsLag = new MetricNameTemplate("{topic}-{partition}.records-lag", groupName,
                 "The latest lag of the partition", tags);
@@ -142,6 +145,7 @@ public class FetcherMetricsRegistry {
             rawFetchSizeAvg,
             rawFetchSizeMax,
             rawBytesConsumedRate,
+            rawBytesConsumedTotal,
             fetchSizeAvg,
             fetchSizeMax,
             bytesConsumedRate,
