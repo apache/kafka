@@ -18,6 +18,9 @@ package org.apache.kafka.common.errors;
 
 /**
  * The client has attempted to perform an operation on an invalid topic.
+ * For example the topic name is too long, contains invalid characters etc.
+ * {@link UnknownTopicOrPartitionException} is used in contexts where a topic
+ * doesn't seem to exist based on possibly stale metadata.
  */
 public class InvalidTopicException extends ApiException {
 
