@@ -538,7 +538,7 @@ public enum Errors {
                 return new UnknownProducerIdException(message);
             }
     }),
-    REASSIGNMENT_IN_PROGRESS(59, "A partition reassignment is in progress",
+    REASSIGNMENT_IN_PROGRESS(60, "A partition reassignment is in progress",
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {
