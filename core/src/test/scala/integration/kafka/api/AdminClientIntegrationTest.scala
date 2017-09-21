@@ -430,10 +430,10 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
       NewPartitions.increaseTo(3, newPartition2Assignments.asScala.reverse.toList.asJava)).asJava, validateOnly)
     try {
       alterResult.values.get(topic2).get
-      fail("Expect InvalidPartitionsException when newCount is a decrease")
+      fail("Expect InvalidReplicaAssignmentException when newCount is a decrease")
     } catch {
       case e: ExecutionException =>
-        assertTrue(e.getCause.isInstanceOf[InvalidPartitionsException])
+        assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException])
         assertEquals("Not changing the number of partitions and the given assignments for partitions 1, 2 are incompatible with the existing assignments 0, 1; 1, 2.", e.getCause.getMessage)
     }
 
@@ -482,10 +482,10 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
       NewPartitions.increaseTo(6, asList(asList(1)))).asJava, validateOnly)
     try {
       altered = alterResult.values.get(topic1).get
-      fail("Expect InvalidRequestException when #assignments != newCount - oldCount")
+      fail("Expect InvalidReplicaAssignmentException when #assignments != newCount - oldCount")
     } catch {
       case e: ExecutionException =>
-        assertTrue(e.getCause.isInstanceOf[InvalidRequestException])
+        assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException])
         assertEquals("Increasing the number of partitions by 3 but 1 assignments provided.", e.getCause.getMessage)
     }
 
@@ -494,10 +494,10 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
       NewPartitions.increaseTo(4, asList(asList(1), asList(2)))).asJava, validateOnly)
     try {
       altered = alterResult.values.get(topic1).get
-      fail("Expect InvalidRequestException when #assignments != newCount - oldCount")
+      fail("Expect InvalidReplicaAssignmentException when #assignments != newCount - oldCount")
     } catch {
       case e: ExecutionException =>
-        assertTrue(e.getCause.isInstanceOf[InvalidRequestException])
+        assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException])
         assertEquals("Increasing the number of partitions by 1 but 2 assignments provided.", e.getCause.getMessage)
     }
 
@@ -546,10 +546,10 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
       NewPartitions.increaseTo(4, Collections.emptyList())).asJava, validateOnly)
     try {
       altered = alterResult.values.get(topic1).get
-      fail("Expect InvalidRequestException when assignments is empty")
+      fail("Expect InvalidReplicaAssignmentException when assignments is empty")
     } catch {
       case e: ExecutionException =>
-        assertTrue(e.getCause.isInstanceOf[InvalidRequestException])
+        assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException])
         assertEquals("Increasing the number of partitions by 1 but 0 assignments provided.", e.getCause.getMessage)
     }
 

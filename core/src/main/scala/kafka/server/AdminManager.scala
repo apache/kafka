@@ -239,7 +239,7 @@ class AdminManager(val config: KafkaConfig,
             assignments.size > numPartitionsIncrement && numPartitionsIncrement != 0)
             // If numPartitionsIncrement == 0 we allow it assignments.size > numPartitionsIncrement
             // but check the given assignments are compatible AdminUtils.addPartitions()
-            throw new InvalidRequestException(
+            throw new InvalidReplicaAssignmentException(
               s"Increasing the number of partitions by $numPartitionsIncrement " +
                 s"but ${assignments.size} assignments provided.")
 

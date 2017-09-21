@@ -294,7 +294,7 @@ object AdminUtils extends Logging with AdminUtilities {
         val tailOldPartitionIds = existingAssignment.toList.sortBy { case (p, b) => p }.takeRight(newAssignment.size).toMap
         if (tailOldPartitionIds != newAssignmentWithOldPartitionIds) {
           val mismatch = tailOldPartitionIds.filter { case (p, b) => newAssignmentWithOldPartitionIds(p) != b }
-          throw new InvalidPartitionsException(
+          throw new InvalidReplicaAssignmentException(
             s"Not changing the number of partitions and the given assignments for partitions " +
               s"${mismatch.keySet.mkString(", ")} are incompatible with the existing assignments " +
               s"${mismatch.values.map(_.mkString(", ")).mkString("; ")}.")
