@@ -460,13 +460,22 @@ object ConsoleConsumer extends Logging {
       KafkaMetricsReporter.startReporters(verifiableProps)
     }
 
-    if (options.has(groupIdOpt))
-      // group id provided as an argument takes precedence over one provided in the config file
-      extraConsumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, options.valueOf(groupIdOpt))
-    else if (!consumerProps.containsKey(ConsumerConfig.GROUP_ID_CONFIG) && !extraConsumerProps.containsKey(ConsumerConfig.GROUP_ID_CONFIG)) {
-      // provide the consumer with a randomly assigned group id if no group id is explicitly provided
-      groupIdPassed = false
+    // group id must not be provided more than once
+    val groupIdDirectPresent = options.has(groupIdOpt)
+    val groupIdPresentCount = Seq(
+        groupIdDirectPresent,                                          // via --group
+        consumerProps.containsKey(ConsumerConfig.GROUP_ID_CONFIG),     // via --consumer-property
+        extraConsumerProps.containsKey(ConsumerConfig.GROUP_ID_CONFIG) // via --cosumer.config
+    ).count(_ == true)
+
+    if (groupIdPresentCount > 1) {
+      CommandLineUtils.printUsageAndDie(parser, "The group id must be provided in one place only (directly using '--group', "
+                                              + "via '--consumer-property', or via '--consumer.config').")
+    } else if (groupIdDirectPresent)
+      consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, options.valueOf(groupIdOpt))
+    else if (groupIdPresentCount == 0) {
       consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, s"console-consumer-${new Random().nextInt(100000)}")
+      groupIdPassed = false
     }
 
     def tryParse(parser: OptionParser, args: Array[String]): OptionSet = {
