@@ -1367,11 +1367,13 @@ class KafkaApis(val requestChannel: RequestChannel,
       val (authorized, unauthorized) = notDuped.partition { case (topic, _) =>
         authorize(request.session, Alter, new Resource(Topic, topic))
       }
+
       val (queuedForDeletion, valid) = authorized.partition { case (topic, _) =>
         controller.topicDeletionManager.isTopicQueuedUpForDeletion(topic)
+
       }
 
-      val errors = dupes.map(_ -> new ApiError(Errors.INVALID_REQUEST, "Duplicate topic in request")) ++
+      val errors = dupes.map(_ -> new ApiError(Errors.INVALID_REQUEST, "Duplicate topic in request.")) ++
         unauthorized.keySet.map(_ -> new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, null)) ++
         queuedForDeletion.keySet.map(_ -> new ApiError(Errors.INVALID_TOPIC_EXCEPTION, "The topic is queued for deletion."))
 

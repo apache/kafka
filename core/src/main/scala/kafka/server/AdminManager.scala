@@ -219,7 +219,7 @@ class AdminManager(val config: KafkaConfig,
           case (topicPartition, replicas) => topicPartition.partition -> replicas
         }
         if (existingAssignment.isEmpty)
-          throw new UnknownTopicOrPartitionException(s"The topic '$topic' does not exist")
+          throw new UnknownTopicOrPartitionException(s"The topic '$topic' does not exist.")
 
         val oldNumPartitions = existingAssignment.size
         val newNumPartitions = newPartition.totalCount

@@ -354,7 +354,7 @@ object AdminUtils extends Logging with AdminUtilities {
       val repFactors = sortedBadRepFactors.map { case (_, rf) => rf }
       throw new InvalidReplicaAssignmentException(s"Inconsistent replication factor between partitions, " +
         s"partition 0 has ${existingAssignmentPartition0.size} while partitions [${partitions.mkString(", ")}] have " +
-        s"replication factors [${repFactors.mkString(", ")}], respectively")
+        s"replication factors [${repFactors.mkString(", ")}], respectively.")
     }
   }
 

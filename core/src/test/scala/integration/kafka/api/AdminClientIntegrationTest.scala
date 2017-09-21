@@ -436,7 +436,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     } catch {
       case e: ExecutionException =>
         assertTrue(e.getCause.isInstanceOf[UnknownTopicOrPartitionException])
-        assertEquals("The topic 'an-unknown-topic' does not exist", e.getCause.getMessage)
+        assertEquals("The topic 'an-unknown-topic' does not exist.", e.getCause.getMessage)
     }
 
     // try an invalid newCount
@@ -462,7 +462,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
       case e: ExecutionException =>
         assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException])
         assertEquals("Inconsistent replication factor between partitions, partition 0 has 1 " +
-          "while partitions [3] have replication factors [2], respectively",
+          "while partitions [3] have replication factors [2], respectively.",
           e.getCause.getMessage)
     }
 
@@ -502,7 +502,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
         e.printStackTrace()
         assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException])
         assertEquals("Inconsistent replication factor between partitions, partition 0 has 1 " +
-          "while partitions [4] have replication factors [2], respectively", e.getCause.getMessage)
+          "while partitions [4] have replication factors [2], respectively.", e.getCause.getMessage)
     }
 
     // try assignments with unknown brokers
