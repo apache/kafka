@@ -20,6 +20,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.utils.Time;
@@ -77,6 +78,7 @@ public class MockClient implements KafkaClient {
     private Node node = null;
     private final Set<String> ready = new HashSet<>();
     private final Map<Node, Long> blackedOut = new HashMap<>();
+    private final Map<Node, AuthenticationException> authenticationException = new HashMap<>();
     // Use concurrent queue for requests so that requests may be queried from a different thread
     private final Queue<ClientRequest> requests = new ConcurrentLinkedDeque<>();
     // Use concurrent queue for responses so that responses may be updated during poll() from a different thread.
@@ -117,11 +119,22 @@ public class MockClient implements KafkaClient {
         blackedOut.put(node, time.milliseconds() + duration);
     }
 
+    public void authenticationFailed(Node node, long duration) {
+        authenticationException.put(node, (AuthenticationException) Errors.SASL_AUTHENTICATION_FAILED.exception());
+        disconnect(node.idString());
+        blackout(node, duration);
+    }
+
+    public void authenticationSucceeded(Node node) {
+        isBlackedOut(node);
+    }
+
     private boolean isBlackedOut(Node node) {
         if (blackedOut.containsKey(node)) {
             long expiration = blackedOut.get(node);
             if (time.milliseconds() > expiration) {
                 blackedOut.remove(node);
+                authenticationException.remove(node);
                 return false;
             } else {
                 return true;
@@ -137,7 +150,7 @@ public class MockClient implements KafkaClient {
 
     @Override
     public AuthenticationException authenticationException(Node node) {
-        return null;
+        return authenticationException.get(node);
     }
 
     @Override
@@ -347,6 +360,7 @@ public class MockClient implements KafkaClient {
         responses.clear();
         futureResponses.clear();
         metadataUpdates.clear();
+        authenticationException.clear();
     }
 
     public void prepareMetadataUpdate(Cluster cluster, Set<String> unavailableTopics) {

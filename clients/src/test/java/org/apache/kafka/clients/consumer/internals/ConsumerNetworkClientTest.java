@@ -22,6 +22,7 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.protocol.Errors;
@@ -29,6 +30,7 @@ import org.apache.kafka.common.requests.HeartbeatRequest;
 import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
 import org.junit.Test;
@@ -67,6 +69,48 @@ public class ConsumerNetworkClientTest {
         ClientResponse clientResponse = future.value();
         HeartbeatResponse response = (HeartbeatResponse) clientResponse.responseBody();
         assertEquals(Errors.NONE, response.error());
+    }
+
+    @Test
+    public void sendWithAuthenticationFailure() throws InterruptedException {
+        client.authenticationFailed(node, 300);
+        client.prepareResponse(heartbeatResponse(Errors.NONE));
+        final RequestFuture<ClientResponse> future = consumerClient.send(node, heartbeat());
+        consumerClient.poll(future);
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return future.isDone();
+            }
+        }, 3000, "Future was not completed in time.");
+        assertTrue(future.failed());
+        assertTrue("Expected only an authentication error.", future.exception() instanceof AuthenticationException);
+
+        client.authenticationSucceeded(node);
+        time.sleep(30); // wait less than retry backoff period
+
+        final RequestFuture<ClientResponse> future2 = consumerClient.send(node, heartbeat());
+        consumerClient.poll(future2);
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return future2.isDone();
+            }
+        }, 3000, "Future was not completed in time.");
+        assertTrue(future2.failed());
+        assertTrue("Expected only an authentication error.", future2.exception() instanceof AuthenticationException);
+
+        time.sleep(300); // wait long enough this time
+
+        final RequestFuture<ClientResponse> future3 = consumerClient.send(node, heartbeat());
+        consumerClient.poll(future3);
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return future3.isDone();
+            }
+        }, 3000, "Future was not completed in time.");
+        assertTrue(future3.succeeded());
     }
 
     @Test

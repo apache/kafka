@@ -2035,6 +2035,35 @@ public class FetcherTest {
         assertEquals(5, records.get(1).offset());
     }
 
+    @Test
+    public void testFetchWithAuthenticationFailure() {
+        client.authenticationFailed(node, 300);
+
+        subscriptions.assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        assertEquals(1, fetcher.sendFetches());
+        consumerClient.poll(0);
+        assertFalse(fetcher.hasCompletedFetches());
+        assertTrue(consumerClient.connectionFailed(node));
+
+        client.authenticationSucceeded(node);
+        time.sleep(30); // wait less that retry backoff period
+
+        assertEquals(1, fetcher.sendFetches());
+        consumerClient.poll(0);
+        assertFalse(fetcher.hasCompletedFetches());
+        assertTrue(consumerClient.connectionFailed(node));
+
+        time.sleep(300); // wait long enough this time
+
+        client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.NONE, 100L, 0));
+        assertEquals(1, fetcher.sendFetches());
+        consumerClient.poll(0);
+        assertTrue(fetcher.hasCompletedFetches());
+        assertEquals(1, fetcher.fetchedRecords().size());
+    }
+
     private int appendTransactionalRecords(ByteBuffer buffer, long pid, long baseOffset, int baseSequence, SimpleRecord... records) {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
                 TimestampType.CREATE_TIME, baseOffset, time.milliseconds(), pid, (short) 0, baseSequence, true,
