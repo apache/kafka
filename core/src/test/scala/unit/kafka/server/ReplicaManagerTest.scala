@@ -175,6 +175,55 @@ class ReplicaManagerTest {
   }
 
   @Test
+  def testReceiveOutOfOrderSequenceExceptionWithLogStartOffset(): Unit = {
+    val timer = new MockTimer
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(timer)
+
+    try {
+      val brokerList = Seq[Integer](0, 1).asJava
+
+      val partition = replicaManager.getOrCreatePartition(new TopicPartition(topic, 0))
+      partition.getOrCreateReplica(0)
+
+      // Make this replica the leader.
+      val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0,
+        collection.immutable.Map(new TopicPartition(topic, 0) -> new LeaderAndIsrRequest.PartitionState(0, 0, 0, brokerList, 0, brokerList, true)).asJava,
+        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
+      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
+      replicaManager.getLeaderReplicaIfLocal(new TopicPartition(topic, 0))
+
+      val producerId = 234L
+      val epoch = 5.toShort
+
+      // write a few batches as part of a transaction
+      val numRecords = 3
+      for (sequence <- 0 until numRecords) {
+        val records = MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, epoch, sequence,
+          new SimpleRecord(s"message $sequence".getBytes))
+        appendRecords(replicaManager, new TopicPartition(topic, 0), records).onFire { response =>
+          assertEquals(Errors.NONE, response.error)
+        }
+      }
+
+      assertEquals(0, partition.logStartOffset)
+
+      // Append a record with an out of range sequence. We should get the OutOfOrderSequence error code with the log
+      // start offset set.
+      val outOfRangeSequence = numRecords + 10
+      val record = MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, epoch, outOfRangeSequence,
+        new SimpleRecord(s"message: $outOfRangeSequence".getBytes))
+      appendRecords(replicaManager, new TopicPartition(topic, 0), record).onFire { response =>
+        assertEquals(Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, response.error)
+        assertEquals(0, response.logStartOffset)
+      }
+
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+
+  }
+
+  @Test
   def testReadCommittedFetchLimitedAtLSO(): Unit = {
     val timer = new MockTimer
     val replicaManager = setupReplicaManagerWithMockedPurgatories(timer)

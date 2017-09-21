@@ -95,6 +95,12 @@ public class Struct {
         return getString(field.name);
     }
 
+    public Long getOrElse(Field.Int64 field, long alternative) {
+        if (hasField(field.name))
+            return getLong(field.name);
+        return alternative;
+    }
+
     public Integer getOrElse(Field.Int32 field, int alternative) {
         if (hasField(field.name))
             return getInt(field.name);

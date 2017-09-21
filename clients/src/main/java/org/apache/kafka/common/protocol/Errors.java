@@ -72,6 +72,7 @@ import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.TransactionCoordinatorFencedException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
@@ -524,7 +525,18 @@ public enum Errors {
             public ApiException build(String message) {
                 return new AuthenticationFailedException(message);
             }
-        });
+    }),
+    UNKNOWN_PRODUCER_ID(59, "This exception is raised by the broker if it could not locate the producer metadata " +
+            "associated with the producerId in question. This could happen if, for instance, the producer's records " +
+            "were deleted because their retention time had elapsed. Once the last records of the producerId are " +
+            "removed, the producer's metadata is removed from the broker, and future appends by the producer will " +
+            "return this exception.",
+        new ApiExceptionBuilder() {
+            @Override
+            public ApiException build(String message) {
+                return new UnknownProducerIdException(message);
+            }
+    });
 
     private interface ApiExceptionBuilder {
         ApiException build(String message);
