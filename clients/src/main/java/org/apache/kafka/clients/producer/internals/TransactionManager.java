@@ -684,10 +684,10 @@ public class TransactionManager {
             // If it has, we will retry it anyway.
             return true;
 
-        if (error == Errors.UNKNOWN_PRODUCER) {
+        if (error == Errors.UNKNOWN_PRODUCER_ID) {
             if (response.logStartOffset == -1)
                 // We don't know the log start offset with this response. We should just retry the request until we get it.
-                // The UNKNOWN_PRODUCER error code was added along with the new ProduceResponse which includes the
+                // The UNKNOWN_PRODUCER_ID error code was added along with the new ProduceResponse which includes the
                 // logStartOffset. So the '-1' sentinel is not for backward compatibility. Instead, it is possible for
                 // a broker to not know the logStartOffset at when it is returning the response because the partition
                 // may have moved away from the broker from the time the error was initially raised to the time the
@@ -698,7 +698,7 @@ public class TransactionManager {
             if (batch.sequenceHasBeenReset()) {
                 // When the first inflight batch fails due to the truncation case, then the sequences of all the other
                 // in flight batches would have been restarted from the beginning. However, when those responses
-                // come back from the broker, they would also come with an UNKNOWN_PRODUCER error. In this case, we should not
+                // come back from the broker, they would also come with an UNKNOWN_PRODUCER_ID error. In this case, we should not
                 // reset the sequence numbers to the beginning.
                 return true;
             } else if (lastAckedOffset(batch.topicPartition) < response.logStartOffset) {

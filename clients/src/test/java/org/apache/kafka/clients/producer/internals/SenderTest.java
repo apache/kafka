@@ -1200,7 +1200,7 @@ public class SenderTest {
 
         assertFalse(request2.isDone());
 
-        sendIdempotentProducerResponse(1, tp0, Errors.UNKNOWN_PRODUCER, -1L, 1010L);
+        sendIdempotentProducerResponse(1, tp0, Errors.UNKNOWN_PRODUCER_ID, -1L, 1010L);
         sender.run(time.milliseconds()); // receive response 0, should be retried since the logStartOffset > lastAckedOffset.
 
         // We should have reset the sequence number state of the partition because the state was lost on the broker.
@@ -1257,7 +1257,7 @@ public class SenderTest {
 
         assertFalse(request2.isDone());
 
-        sendIdempotentProducerResponse(1, tp0, Errors.UNKNOWN_PRODUCER, -1L, -1L);
+        sendIdempotentProducerResponse(1, tp0, Errors.UNKNOWN_PRODUCER_ID, -1L, -1L);
         sender.run(time.milliseconds()); // receive response 0, should be retried without resetting the sequence numbers since the log start offset is unknown.
 
         // We should have reset the sequence number state of the partition because the state was lost on the broker.
@@ -1325,7 +1325,7 @@ public class SenderTest {
         assertEquals(2, client.inFlightRequestCount());
 
 
-        sendIdempotentProducerResponse(1, tp0, Errors.UNKNOWN_PRODUCER, -1L, 1010L);
+        sendIdempotentProducerResponse(1, tp0, Errors.UNKNOWN_PRODUCER_ID, -1L, 1010L);
         sender.run(time.milliseconds()); // receive response 2, should reset the sequence numbers and be retried.
 
         // We should have reset the sequence number state of the partition because the state was lost on the broker.
@@ -1340,7 +1340,7 @@ public class SenderTest {
         assertEquals(2, client.inFlightRequestCount());
 
         // receive the original response 3. note the expected sequence is still the originally assigned sequence.
-        sendIdempotentProducerResponse(2, tp0, Errors.UNKNOWN_PRODUCER, -1, 1010L);
+        sendIdempotentProducerResponse(2, tp0, Errors.UNKNOWN_PRODUCER_ID, -1, 1010L);
         sender.run(time.milliseconds()); // receive response 3
 
         assertEquals(1, client.inFlightRequestCount());
@@ -1404,7 +1404,7 @@ public class SenderTest {
 
         assertFalse(request2.isDone());
 
-        sendIdempotentProducerResponse(1, tp0, Errors.UNKNOWN_PRODUCER, -1L, 10L);
+        sendIdempotentProducerResponse(1, tp0, Errors.UNKNOWN_PRODUCER_ID, -1L, 10L);
         sender.run(time.milliseconds()); // receive response 0, should cause a producerId reset since the logStartOffset < lastAckedOffset
 
         assertTrue(request2.isDone());

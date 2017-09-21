@@ -166,7 +166,7 @@ private[log] class ProducerAppendInfo(val producerId: Long,
             throw new OutOfOrderSequenceException(s"Invalid sequence number for new epoch: $producerEpoch " +
               s"(request epoch), $firstSeq (seq. number)")
           } else {
-            throw new UnknownProducerException(s"Found no record of producerId=$producerId on the broker. It is possible " +
+            throw new UnknownProducerIdException(s"Found no record of producerId=$producerId on the broker. It is possible " +
               s"that the last message with the producerId=$producerId has been removed due to hitting the retention limit.")
           }
         }
