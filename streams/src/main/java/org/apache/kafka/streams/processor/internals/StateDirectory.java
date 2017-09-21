@@ -73,7 +73,7 @@ public class StateDirectory {
         final File baseDir = new File(stateDirConfig);
         if (!baseDir.exists() && !baseDir.mkdirs()) {
             throw new ProcessorStateException(
-                String.format("state directory [%s] doesn't exist and couldn't be created", stateDirConfig));
+                String.format("base state directory [%s] doesn't exist and couldn't be created", stateDirConfig));
         }
         stateDir = new File(baseDir, applicationId);
         if (!stateDir.exists() && !stateDir.mkdir()) {
