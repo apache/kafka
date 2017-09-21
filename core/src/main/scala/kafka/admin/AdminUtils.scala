@@ -260,8 +260,11 @@ object AdminUtils extends Logging with AdminUtilities {
   *
   * @param zkUtils Zookeeper utilities
   * @param topic Topic for adding partitions to
+  * @param existingAssignment A map from partition id to its assigned replicas
+  * @param allBrokers All brokers in the cluster
   * @param numPartitions Number of partitions to be set
   * @param replicaAssignment Manual replica assignment, or none
+  * @param validateOnly If true, validate the parameters without actually adding the partitions
   * @return the updated replica assignment
   */
   def addPartitions(zkUtils: ZkUtils,
