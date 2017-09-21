@@ -17,9 +17,6 @@
 package kafka.tools;
 
 
-import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.DeleteTopicsResult;
-import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.KafkaFuture;
@@ -92,7 +89,7 @@ public class StreamsResetter {
 
         int exitCode = EXIT_CODE_SUCCESS;
 
-        KafkaAdminClient kafkaAdminClient = null;
+        org.apache.kafka.clients.admin.KafkaAdminClient kafkaAdminClient = null;
 
         try {
             parseArguments(args);
@@ -104,7 +101,7 @@ public class StreamsResetter {
 
             Properties adminClientProperties = new Properties();
             adminClientProperties.put("bootstrap.servers", options.valueOf(bootstrapServerOption));
-            kafkaAdminClient = (KafkaAdminClient) AdminClient.create(adminClientProperties);
+            kafkaAdminClient = (org.apache.kafka.clients.admin.KafkaAdminClient) org.apache.kafka.clients.admin.AdminClient.create(adminClientProperties);
 
             allTopics.clear();
             allTopics.addAll(kafkaAdminClient.listTopics().names().get(60, TimeUnit.SECONDS));
@@ -319,7 +316,7 @@ public class StreamsResetter {
         return options.valuesOf(intermediateTopicsOption).contains(topic);
     }
 
-    private void maybeDeleteInternalTopics(final KafkaAdminClient adminClient) {
+    private void maybeDeleteInternalTopics(final org.apache.kafka.clients.admin.KafkaAdminClient adminClient) {
 
         System.out.println("Deleting all internal/auto-created topics for application " + options.valueOf(applicationIdOption));
         List<String> topicsToDelete = new ArrayList<>();
@@ -338,16 +335,16 @@ public class StreamsResetter {
         System.out.println("Done.");
     }
 
-    private void doDelete(List<String> topicsToDelete, KafkaAdminClient adminClient) {
+    private void doDelete(List<String> topicsToDelete, org.apache.kafka.clients.admin.KafkaAdminClient adminClient) {
         RuntimeException deleteException = null;
-        DeleteTopicsResult deleteTopicsResult = adminClient.deleteTopics(topicsToDelete);
+        org.apache.kafka.clients.admin.DeleteTopicsResult deleteTopicsResult = adminClient.deleteTopics(topicsToDelete);
         Map<String, KafkaFuture<Void>> results = deleteTopicsResult.values();
 
         for (Map.Entry<String, KafkaFuture<Void>> entry : results.entrySet()) {
             try {
                 entry.getValue().get();
             } catch (Exception e) {
-                System.err.println("ERROR deleting topic " + entry.getKey() + " failed");
+                System.err.println("ERROR deleting topic " + entry.getKey() + " failed " + e.getMessage());
                 if (deleteException == null) {
                     deleteException = new RuntimeException(e);
                 }
