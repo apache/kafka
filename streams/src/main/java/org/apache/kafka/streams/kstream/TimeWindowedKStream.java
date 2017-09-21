@@ -25,7 +25,7 @@ import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.WindowStore;
 
 /**
- * {@code WindowedKStream} is an abstraction of a <i>windowed</i> record stream of {@link KeyValue} pairs.
+ * {@code TimeWindowedKStream} is an abstraction of a <i>windowed</i> record stream of {@link KeyValue} pairs.
  * It is an intermediate representation of a {@link KStream} in order to apply a windowed aggregation operation on the original
  * {@link KStream} records.
  * <p>
@@ -48,7 +48,7 @@ import org.apache.kafka.streams.state.WindowStore;
  * @see KStream
  * @see KGroupedStream
  */
-public interface WindowedKStream<K, V> {
+public interface TimeWindowedKStream<K, V> {
 
     /**
      * Count the number of records in this stream by the grouped key and the defined windows.
