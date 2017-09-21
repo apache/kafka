@@ -32,9 +32,8 @@ import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.transforms.util.SchemaUtil;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
-import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -79,9 +78,9 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
 
     private static final String PURPOSE = "cast types";
 
-    private static final Set<Schema.Type> SUPPORTED_CAST_TYPES = new HashSet<>(
-            Arrays.asList(Schema.Type.INT8, Schema.Type.INT16, Schema.Type.INT32, Schema.Type.INT64,
-                    Schema.Type.FLOAT32, Schema.Type.FLOAT64, Schema.Type.BOOLEAN, Schema.Type.STRING)
+    private static final Set<Schema.Type> SUPPORTED_CAST_TYPES = EnumSet.of(
+            Schema.Type.INT8, Schema.Type.INT16, Schema.Type.INT32, Schema.Type.INT64,
+                    Schema.Type.FLOAT32, Schema.Type.FLOAT64, Schema.Type.BOOLEAN, Schema.Type.STRING
     );
 
     // As a special case for casting the entire value (e.g. the incoming key is a int64 but you know it could be an
