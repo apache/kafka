@@ -567,7 +567,7 @@ object ConsumerGroupCommand extends Logging {
         .map { line =>
           val Array(topic, partition, offset) = line.split(",").map(_.trim)
           val topicPartition = new TopicPartition(topic, partition.toInt)
-          val offsetAndMetadata = new OffsetAndMetadata(offset.toLong])
+          val offsetAndMetadata = new OffsetAndMetadata(offset.toLong)
           (topicPartition, offsetAndMetadata)
         }.toMap
     }
