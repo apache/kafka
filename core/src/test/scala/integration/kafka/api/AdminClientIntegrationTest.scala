@@ -435,7 +435,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
       fail("Expect InvalidTopicException when using an unknown topic")
     } catch {
       case e: ExecutionException =>
-        assertTrue(e.getCause.isInstanceOf[InvalidTopicException])
+        assertTrue(e.getCause.isInstanceOf[UnknownTopicOrPartitionException])
         assertEquals("The topic 'an-unknown-topic' does not exist", e.getCause.getMessage)
     }
 
