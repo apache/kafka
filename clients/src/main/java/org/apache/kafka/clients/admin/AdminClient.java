@@ -87,7 +87,8 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * Create a batch of new topics with the default options.
      *
-     * This is a convenience method for #{@link #createTopics(Collection, CreateTopicsOptions)} with default options. See the overload for more details.
+     * This is a convenience method for #{@link #createTopics(Collection, CreateTopicsOptions)} with default options.
+     * See the overload for more details.
      *
      * @param newTopics         The new topics to create.
      * @return                  The CreateTopicsResult.

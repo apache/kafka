@@ -375,7 +375,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     val existingAssignment = zkUtils.getReplicaAssignmentForTopics(List(topic)).map {
       case (topicPartition, replicas) => topicPartition.partition -> replicas
     }
-    AdminUtils.addPartitions(zkUtils, topic, existingAssignment, 2)
+    AdminUtils.addPartitions(zkUtils, topic, existingAssignment, AdminUtils.getBrokerMetadatas(zkUtils), 2)
     // read metadata from a broker and verify the new topic partitions exist
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0)
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 1)

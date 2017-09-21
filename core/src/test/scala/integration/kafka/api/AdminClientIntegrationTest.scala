@@ -382,14 +382,14 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
       NewPartitions.increaseTo(2)).asJava, validateOnly)
     var altered = alterResult.values.get(topic1).get
     // assert that the topics still has 1 partition
-    assertEquals(1, client.describeTopics(Set(topic1).asJavaCollection).values.get(topic1).get.partitions.size)
+    assertEquals(1, client.describeTopics(Set(topic1).asJava).values.get(topic1).get.partitions.size)
 
     // try creating a new partition (no assignments), to bring the total to 3 partitions
     alterResult = client.createPartitions(Map(topic1 ->
       NewPartitions.increaseTo(3)).asJava)
     altered = alterResult.values.get(topic1).get
     // assert that the topics now has 2 partitions
-    var actualPartitions = client.describeTopics(Set(topic1).asJavaCollection).values.get(topic1).get.partitions
+    var actualPartitions = client.describeTopics(Set(topic1).asJava).values.get(topic1).get.partitions
     assertEquals(3, actualPartitions.size)
 
     // now try creating a new partition (with assignments), to bring the total to 3 partitions
@@ -397,10 +397,10 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
       NewPartitions.increaseTo(3, asList(asList(0, 1), asList(1, 2)))).asJava)
     altered = alterResult.values.get(topic2).get
     // assert that the topics now has 3 partitions
-    actualPartitions = client.describeTopics(Set(topic2).asJavaCollection).values.get(topic2).get.partitions
+    actualPartitions = client.describeTopics(Set(topic2).asJava).values.get(topic2).get.partitions
     assertEquals(3, actualPartitions.size)
-    assertEquals(List[Integer](0, 1), actualPartitions.get(1).replicas.asScala.map(_.id).toList)
-    assertEquals(List[Integer](1, 2), actualPartitions.get(2).replicas.asScala.map(_.id).toList)
+    assertEquals(Seq(0, 1), actualPartitions.get(1).replicas.asScala.map(_.id))
+    assertEquals(Seq(1, 2), actualPartitions.get(2).replicas.asScala.map(_.id))
 
     // try a newCount which would be a decrease
     alterResult = client.createPartitions(Map(topic1 ->
@@ -435,8 +435,8 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
       fail("Expect InvalidTopicException when using an unknown topic")
     } catch {
       case e: ExecutionException =>
-        assertTrue(e.getCause.isInstanceOf[InvalidTopicException])
-        assertEquals("The request attempted to perform an operation on an invalid topic.", e.getCause.getMessage)
+        assertTrue(e.getCause.isInstanceOf[UnknownTopicOrPartitionException])
+        assertEquals("The topic 'an-unknown-topic' does not exist", e.getCause.getMessage)
     }
 
     // try an invalid newCount

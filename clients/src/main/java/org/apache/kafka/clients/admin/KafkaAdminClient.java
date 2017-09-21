@@ -1835,7 +1835,8 @@ public class KafkaAdminClient extends AdminClient {
         return new DescribeReplicaLogDirResult(new HashMap<TopicPartitionReplica, KafkaFuture<ReplicaLogDirInfo>>(futures));
     }
 
-    public CreatePartitionsResult createPartitions(Map<String, NewPartitions> newPartitions, final CreatePartitionsOptions options) {
+    public CreatePartitionsResult createPartitions(Map<String, NewPartitions> newPartitions,
+                                                   final CreatePartitionsOptions options) {
         final Map<String, KafkaFutureImpl<Void>> futures = new HashMap<>(newPartitions.size());
         for (String topic : newPartitions.keySet()) {
             futures.put(topic, new KafkaFutureImpl<Void>());
@@ -1869,7 +1870,7 @@ public class KafkaAdminClient extends AdminClient {
                 completeAllExceptionally(futures.values(), throwable);
             }
         }, now);
-        return new CreatePartitionsResult((Map) futures);
+        return new CreatePartitionsResult(new HashMap<String, KafkaFuture<Void>>(futures));
     }
 
 }

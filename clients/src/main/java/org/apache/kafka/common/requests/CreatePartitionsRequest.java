@@ -39,7 +39,7 @@ import static org.apache.kafka.common.protocol.types.Type.INT32;
 
 public class CreatePartitionsRequest extends AbstractRequest {
 
-    private static final String TOPIC_PARTITION_COUNT_KEY_NAME = "topic_partitions";
+    private static final String TOPIC_PARTITIONS_KEY_NAME = "topic_partitions";
     private static final String NEW_PARTITIONS_KEY_NAME = "new_partitions";
     private static final String COUNT_KEY_NAME = "count";
     private static final String ASSIGNMENT_KEY_NAME = "assignment";
@@ -47,24 +47,25 @@ public class CreatePartitionsRequest extends AbstractRequest {
     private static final String VALIDATE_ONLY_KEY_NAME = "validate_only";
 
     private static final Schema CREATE_PARTITIONS_REQUEST_V0 = new Schema(
-            new Field(TOPIC_PARTITION_COUNT_KEY_NAME, new ArrayOf(
+            new Field(TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(
                     new Schema(
                             TOPIC_NAME,
                             new Field(NEW_PARTITIONS_KEY_NAME, new Schema(
                                     new Field(COUNT_KEY_NAME, INT32, "The new partition count."),
-                                    new Field(ASSIGNMENT_KEY_NAME, ArrayOf.nullable(new ArrayOf(INT32)), "The assigned brokers.")
+                                    new Field(ASSIGNMENT_KEY_NAME, ArrayOf.nullable(new ArrayOf(INT32)),
+                                            "The assigned brokers.")
                             )))),
                     "List of topic and the corresponding new partitions."),
             new Field(TIMEOUT_KEY_NAME, INT32, "The time in ms to wait for the partitions to be created."),
             new Field(VALIDATE_ONLY_KEY_NAME, BOOLEAN,
-                    "If true then validate the request, but don't actually increase the partition count."));
+                    "If true then validate the request, but don't actually increase the number of partitions."));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{CREATE_PARTITIONS_REQUEST_V0};
     }
 
     // It is an error for duplicate topics to be present in the request,
-    // so track duplicates here to allow detailed KafkaApis to report per-topic errors.
+    // so track duplicates here to allow KafkaApis to report per-topic errors.
     private final Set<String> duplicates;
     private final Map<String, NewPartitions> newPartitions;
     private final int timeout;
@@ -110,7 +111,7 @@ public class CreatePartitionsRequest extends AbstractRequest {
 
     public CreatePartitionsRequest(Struct struct, short apiVersion) {
         super(apiVersion);
-        Object[] topicCountArray = struct.getArray(TOPIC_PARTITION_COUNT_KEY_NAME);
+        Object[] topicCountArray = struct.getArray(TOPIC_PARTITIONS_KEY_NAME);
         Map<String, NewPartitions> counts = new HashMap<>(topicCountArray.length);
         Set<String> dupes = new HashSet<>();
         for (Object topicPartitionCountObj : topicCountArray) {
@@ -166,7 +167,7 @@ public class CreatePartitionsRequest extends AbstractRequest {
         Struct struct = new Struct(ApiKeys.CREATE_PARTITIONS.requestSchema(version()));
         List<Struct> topicPartitionsList = new ArrayList<>();
         for (Map.Entry<String, NewPartitions> topicPartitionCount : this.newPartitions.entrySet()) {
-            Struct topicPartitionCountStruct = struct.instance(TOPIC_PARTITION_COUNT_KEY_NAME);
+            Struct topicPartitionCountStruct = struct.instance(TOPIC_PARTITIONS_KEY_NAME);
             topicPartitionCountStruct.set(TOPIC_NAME, topicPartitionCount.getKey());
             NewPartitions count = topicPartitionCount.getValue();
             Struct partitionCountStruct = topicPartitionCountStruct.instance(NEW_PARTITIONS_KEY_NAME);
@@ -184,7 +185,7 @@ public class CreatePartitionsRequest extends AbstractRequest {
             topicPartitionCountStruct.set(NEW_PARTITIONS_KEY_NAME, partitionCountStruct);
             topicPartitionsList.add(topicPartitionCountStruct);
         }
-        struct.set(TOPIC_PARTITION_COUNT_KEY_NAME, topicPartitionsList.toArray(new Object[0]));
+        struct.set(TOPIC_PARTITIONS_KEY_NAME, topicPartitionsList.toArray(new Object[0]));
         struct.set(TIMEOUT_KEY_NAME, this.timeout);
         struct.set(VALIDATE_ONLY_KEY_NAME, this.validateOnly);
         return struct;

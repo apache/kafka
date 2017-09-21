@@ -55,7 +55,6 @@ import org.apache.kafka.common.requests.{SaslAuthenticateResponse, SaslHandshake
 import org.apache.kafka.common.resource.{Resource => AdminResource}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding}
 import DescribeLogDirsResponse.LogDirInfo
-import org.apache.kafka.clients.admin.NewPartitions
 
 import scala.collection.{mutable, _}
 import scala.collection.JavaConverters._
@@ -1336,39 +1335,41 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleCreatePartitionsRequest(request: RequestChannel.Request): Unit = {
-    val alterPartitionCountsRequest = request.body[CreatePartitionsRequest]
-    val (valid, errors) =
-    if (!controller.isActive) {
-      (Map.empty[String, NewPartitions],
-      alterPartitionCountsRequest.newPartitions.asScala.map { case (topic, _) =>
-        (topic, new ApiError(Errors.NOT_CONTROLLER, null))
-      })
-    } else {
-      // Special handling to add duplicate topics to the response
-      val dupes = alterPartitionCountsRequest.duplicates.asScala
-      val notDuped = alterPartitionCountsRequest.newPartitions.asScala.retain((topic, count) => !dupes.contains(topic))
-      val (authorized, unauthorized) = notDuped.partition { case (topic, _) =>
-        authorize(request.session, Alter, new Resource(Topic, topic))
-      }
-      val (queuedForDeletion, live) = authorized.partition{ case (topic, _) => controller.topicDeletionManager.isTopicQueuedUpForDeletion(topic) }
-      (live,
-      dupes.map(_ -> new ApiError(Errors.INVALID_REQUEST, "Duplicate topic in request")).toMap ++
-        unauthorized.map{ case (topic, np) =>
-          topic -> new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, Errors.TOPIC_AUTHORIZATION_FAILED.message())
-        } ++ queuedForDeletion.map{ case (topic, np) =>
-          topic -> new ApiError(Errors.INVALID_TOPIC_EXCEPTION, "The topic is queued for deletion.")
-        })
-    }
+    val createPartitionsRequest = request.body[CreatePartitionsRequest]
 
     def sendResponseCallback(results: Map[String, ApiError]): Unit = {
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
-        val responseBody = new CreatePartitionsResponse(requestThrottleMs, (results ++ errors).asJava)
-        trace(s"Sending alter partition counts response $responseBody for correlation id ${request.header.correlationId} to client ${request.header.clientId}.")
+        val responseBody = new CreatePartitionsResponse(requestThrottleMs, results.asJava)
+        trace(s"Sending create partitions response $responseBody for correlation id ${request.header.correlationId} to " +
+          s"client ${request.header.clientId}.")
         responseBody
       }
       sendResponseMaybeThrottle(request, createResponse)
     }
-    adminManager.createPartitions(alterPartitionCountsRequest.timeout(), valid, alterPartitionCountsRequest.validateOnly, request.context.listenerName, sendResponseCallback)
+
+    if (!controller.isActive) {
+      val result = createPartitionsRequest.newPartitions.asScala.map { case (topic, _) =>
+        (topic, new ApiError(Errors.NOT_CONTROLLER, null))
+      }
+      sendResponseCallback(result)
+    } else {
+      // Special handling to add duplicate topics to the response
+      val dupes = createPartitionsRequest.duplicates.asScala
+      val notDuped = createPartitionsRequest.newPartitions.asScala -- dupes
+      val (authorized, unauthorized) = notDuped.partition { case (topic, _) =>
+        authorize(request.session, Alter, new Resource(Topic, topic))
+      }
+      val (queuedForDeletion, valid) = authorized.partition { case (topic, _) =>
+        controller.topicDeletionManager.isTopicQueuedUpForDeletion(topic)
+      }
+
+      val errors = dupes.map(_ -> new ApiError(Errors.INVALID_REQUEST, "Duplicate topic in request")) ++
+        unauthorized.keySet.map(_ -> new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, null)) ++
+        queuedForDeletion.keySet.map(_ -> new ApiError(Errors.INVALID_TOPIC_EXCEPTION, "The topic is queued for deletion."))
+
+      adminManager.createPartitions(createPartitionsRequest.timeout, valid, createPartitionsRequest.validateOnly,
+        request.context.listenerName, result => sendResponseCallback(result ++ errors))
+    }
   }
 
   def handleDeleteTopicsRequest(request: RequestChannel.Request) {
