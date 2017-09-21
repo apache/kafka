@@ -169,8 +169,10 @@ abstract class AbstractFetcherThread(name: String,
           val topic = topicPartition.topic
           val partitionId = topicPartition.partition
           Option(partitionStates.stateValue(topicPartition)).foreach(currentPartitionFetchState =>
-            // we append to the log if the current offset is defined and it is the same as the offset requested during fetch
-            if (fetchRequest.offset(topicPartition) == currentPartitionFetchState.fetchOffset) {
+            // We append to the log if (1) the state of the partition is ready for fetching, and (2) the current offset
+            // is defined and it is the same as the offset requested during fetch
+            if (currentPartitionFetchState.isReadyForFetch &&
+                fetchRequest.offset(topicPartition) == currentPartitionFetchState.fetchOffset) {
               partitionData.error match {
                 case Errors.NONE =>
                   try {
@@ -404,8 +406,6 @@ case class ClientIdTopicPartition(clientId: String, topic: String, partitionId: 
 case class PartitionFetchState(fetchOffset: Long, delay: DelayedItem, truncatingLog: Boolean = false) {
 
   def this(offset: Long, truncatingLog: Boolean) = this(offset, new DelayedItem(0), truncatingLog)
-
-  def this(offset: Long, delay: DelayedItem) = this(offset, new DelayedItem(0), false)
 
   def this(fetchOffset: Long) = this(fetchOffset, new DelayedItem(0))
 
