@@ -35,42 +35,42 @@ public class SenderMetricsRegistry {
 
     private final List<MetricNameTemplate> allTemplates;
 
-    public MetricName batchSizeAvg;
-    public MetricName batchSizeMax;
-    public MetricName compressionRateAvg;
-    public MetricName recordQueueTimeAvg;
-    public MetricName recordQueueTimeMax;
-    public MetricName requestLatencyAvg;
-    public MetricName requestLatencyMax;   
-    public MetricName produceThrottleTimeAvg;
-    public MetricName produceThrottleTimeMax;
-    public MetricName recordSendRate;
-    public MetricName recordSendTotal;
-    public MetricName recordsPerRequestAvg;
-    public MetricName recordRetryRate;
-    public MetricName recordRetryTotal;
-    public MetricName recordErrorRate;
-    public MetricName recordErrorTotal;
-    public MetricName recordSizeMax;
-    public MetricName recordSizeAvg;
-    public MetricName requestsInFlight;
-    public MetricName metadataAge;
-    public MetricName batchSplitRate;
-    public MetricName batchSplitTotal;
+    public final MetricName batchSizeAvg;
+    public final MetricName batchSizeMax;
+    public final MetricName compressionRateAvg;
+    public final MetricName recordQueueTimeAvg;
+    public final MetricName recordQueueTimeMax;
+    public final MetricName requestLatencyAvg;
+    public final MetricName requestLatencyMax;   
+    public final MetricName produceThrottleTimeAvg;
+    public final MetricName produceThrottleTimeMax;
+    public final MetricName recordSendRate;
+    public final MetricName recordSendTotal;
+    public final MetricName recordsPerRequestAvg;
+    public final MetricName recordRetryRate;
+    public final MetricName recordRetryTotal;
+    public final MetricName recordErrorRate;
+    public final MetricName recordErrorTotal;
+    public final MetricName recordSizeMax;
+    public final MetricName recordSizeAvg;
+    public final MetricName requestsInFlight;
+    public final MetricName metadataAge;
+    public final MetricName batchSplitRate;
+    public final MetricName batchSplitTotal;
 
-    private MetricNameTemplate topicRecordSendRate;
-    private MetricNameTemplate topicRecordSendTotal;
-    private MetricNameTemplate topicByteRate;
-    private MetricNameTemplate topicByteTotal;
-    private MetricNameTemplate topicCompressionRate;
-    private MetricNameTemplate topicRecordRetryRate;
-    private MetricNameTemplate topicRecordRetryTotal;
-    private MetricNameTemplate topicRecordErrorRate;
-    private MetricNameTemplate topicRecordErrorTotal;
+    private final MetricNameTemplate topicRecordSendRate;
+    private final MetricNameTemplate topicRecordSendTotal;
+    private final MetricNameTemplate topicByteRate;
+    private final MetricNameTemplate topicByteTotal;
+    private final MetricNameTemplate topicCompressionRate;
+    private final MetricNameTemplate topicRecordRetryRate;
+    private final MetricNameTemplate topicRecordRetryTotal;
+    private final MetricNameTemplate topicRecordErrorRate;
+    private final MetricNameTemplate topicRecordErrorTotal;
     
-    private Metrics metrics;
-    private Set<String> tags;
-    private HashSet<String> topicTags;
+    private final Metrics metrics;
+    private final Set<String> tags;
+    private final HashSet<String> topicTags;
 
     public SenderMetricsRegistry(Metrics metrics) {
         this.metrics = metrics;
