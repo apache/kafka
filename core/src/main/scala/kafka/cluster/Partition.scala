@@ -518,14 +518,9 @@ class Partition(val topic: String,
     info
   }
 
-  def logStartOffset : Long = {
+  def logStartOffset: Long = {
     inReadLock(leaderIsrUpdateLock) {
-      leaderReplicaIfLocal match {
-        case Some(leaderReplica) =>
-          return leaderReplica.log.get.logStartOffset
-        case None =>
-          -1
-      }
+      leaderReplicaIfLocal.map(_.log.get.logStartOffset).getOrElse(-1)
     }
   }
 
