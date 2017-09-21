@@ -269,8 +269,8 @@ public class SenderTest {
             selector.clear();
         }
         Map<MetricName, KafkaMetric> allMetrics = metrics.metrics();
-        KafkaMetric avgMetric = allMetrics.get(this.senderMetricsRegistry.getProduceThrottleTimeAvg());
-        KafkaMetric maxMetric = allMetrics.get(this.senderMetricsRegistry.getProduceThrottleTimeMax());
+        KafkaMetric avgMetric = allMetrics.get(this.senderMetricsRegistry.produceThrottleTimeAvg);
+        KafkaMetric maxMetric = allMetrics.get(this.senderMetricsRegistry.produceThrottleTimeMax);
         // Throttle times are ApiVersions=400, Produce=(100, 200, 300)
         assertEquals(250, avgMetric.value(), EPS);
         assertEquals(400, maxMetric.value(), EPS);
@@ -1329,7 +1329,7 @@ public class SenderTest {
         sender.run(time.milliseconds()); // nothing to do, since the pid has changed. We should check the metrics for errors.
         assertEquals("Expected requests to be aborted after pid change", 0, client.inFlightRequestCount());
 
-        KafkaMetric recordErrors = m.metrics().get(senderMetrics.getRecordErrorRate());
+        KafkaMetric recordErrors = m.metrics().get(senderMetrics.recordErrorRate);
         assertTrue("Expected non-zero value for record send errors", recordErrors.value() > 0);
 
         assertTrue(responseFuture.isDone());
@@ -1468,7 +1468,7 @@ public class SenderTest {
             assertTrue("There should be no batch in the accumulator", accumulator.batches().get(tp).isEmpty());
 
             assertTrue("There should be a split",
-                    m.metrics().get(senderMetrics.getBatchSplitRate()).value() > 0);
+                    m.metrics().get(senderMetrics.batchSplitRate).value() > 0);
         }
     }
 
