@@ -476,7 +476,7 @@ public class TransactionManager {
         if (lastOffset > lastAckedOffset(batch.topicPartition)) {
             lastAckedOffset.put(batch.topicPartition, lastOffset);
         } else {
-            log.debug("partition {} keeps lastOffset at {}", batch.topicPartition, lastOffset);
+            log.trace("Partition {} keeps lastOffset at {}", batch.topicPartition, lastOffset);
         }
     }
 
