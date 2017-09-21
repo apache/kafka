@@ -600,7 +600,7 @@ public class Sender implements Runnable {
 
     private void failBatch(ProducerBatch batch, long baseOffset, long logAppendTime, RuntimeException exception, boolean adjustSequenceNumbers) {
         if (transactionManager != null) {
-            if ((exception instanceof OutOfOrderSequenceException || exception instanceof UnknownProducerIdException)
+            if (exception instanceof OutOfOrderSequenceException
                     && !transactionManager.isTransactional()
                     && transactionManager.hasProducerId(batch.producerId())) {
                 log.error("The broker returned {} for topic-partition " +

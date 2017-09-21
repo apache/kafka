@@ -465,7 +465,7 @@ public class TransactionManager {
     synchronized long lastAckedOffset(TopicPartition topicPartition) {
         Long offset = lastAckedOffset.get(topicPartition);
         if (offset == null)
-            return -1;
+            return ProduceResponse.INVALID_OFFSET;
         return offset;
     }
 
@@ -473,8 +473,11 @@ public class TransactionManager {
         if (response.baseOffset == ProduceResponse.INVALID_OFFSET)
             return;
         long lastOffset = response.baseOffset + batch.recordCount - 1;
-        if (lastOffset > lastAckedOffset(batch.topicPartition))
+        if (lastOffset > lastAckedOffset(batch.topicPartition)) {
             lastAckedOffset.put(batch.topicPartition, lastOffset);
+        } else {
+            log.debug("partition {} keeps lastOffset at {}", batch.topicPartition, lastOffset);
+        }
     }
 
     // If a batch is failed fatally, the sequence numbers for future batches bound for the partition must be adjusted
