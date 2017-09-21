@@ -18,7 +18,7 @@ package kafka.server
 
 import java.util.Collections
 
-import org.apache.kafka.common.metrics.{MetricConfig, Metrics, Quota}
+import org.apache.kafka.common.metrics.{MetricConfig, Metrics, Quota, Sanitizer}
 import org.apache.kafka.common.utils.MockTime
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{Before, Test}
@@ -374,12 +374,21 @@ class ClientQuotaManagerTest {
   }
 
   @Test
-  def testQuotaUserSanitize() {
-    val principal = "CN=Some characters !@#$%&*()_-+=';:,/~"
-    val sanitizedPrincipal = QuotaId.sanitize(principal)
-    // Apart from % used in percent-encoding all characters of sanitized principal must be characters allowed in client-id
-    ConfigCommand.validateChars("sanitized-principal", sanitizedPrincipal.replace('%', '_'))
-    assertEquals(principal, QuotaId.desanitize(sanitizedPrincipal))
+  def testSanitizeClientId() {
+    val metrics = newMetrics
+    val clientMetrics = new ClientQuotaManager(config, metrics, QuotaType.Produce, time)
+    val clientId = "client@#$%"
+    try {
+      clientMetrics.maybeRecordAndThrottle("ANONYMOUS", clientId, 100, callback)
+      
+      val throttleTimeSensor = metrics.getSensor("ProduceThrottleTime-:" + Sanitizer.sanitize(clientId))
+      assertTrue("Throttle time sensor should exist", throttleTimeSensor != null)
+
+      val byteRateSensor = metrics.getSensor("Produce-:"  + Sanitizer.sanitize(clientId))
+      assertTrue("Byte rate sensor should exist", byteRateSensor != null)
+    } finally {
+      clientMetrics.shutdown()
+    }
   }
 
   def newMetrics: Metrics = {
