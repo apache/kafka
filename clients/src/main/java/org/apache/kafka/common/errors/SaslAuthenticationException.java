@@ -16,15 +16,24 @@
  */
 package org.apache.kafka.common.errors;
 
-public class AuthenticationFailedException extends AuthenticationException {
+/**
+ * This exception indicates that SASL authentication has failed. The error message
+ * in the exception indicates the actual cause of failure.
+ * <p>
+ * SASL authentication failures typically indicate invalid credentials, but
+ * could also include other failures specific to the SASL mechanism used
+ * for authentication.
+ * </p>
+ */
+public class SaslAuthenticationException extends AuthenticationException {
 
     private static final long serialVersionUID = 1L;
 
-    public AuthenticationFailedException(String message) {
+    public SaslAuthenticationException(String message) {
         super(message);
     }
 
-    public AuthenticationFailedException(String message, Throwable cause) {
+    public SaslAuthenticationException(String message, Throwable cause) {
         super(message, cause);
     }
 

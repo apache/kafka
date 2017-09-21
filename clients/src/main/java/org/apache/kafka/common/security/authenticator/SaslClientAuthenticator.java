@@ -104,7 +104,8 @@ public class SaslClientAuthenticator implements Authenticator {
     private RequestHeader currentRequestHeader;
     // Version of SaslAuthenticate request/responses
     private short saslAuthenticateVersion;
-    // Sasl authentication error which may be one of NONE, UNSUPPORTED_SASL_MECHANISM, ILLEGAL_SASL_STATE, AUTHENTICATION_FAILED or NETWORK_EXCEPTION
+    // Sasl authentication error which may be one of NONE, UNSUPPORTED_SASL_MECHANISM, ILLEGAL_SASL_STATE,
+    // SASL_AUTHENTICATION_FAILED or NETWORK_EXCEPTION
     private Errors error;
 
     public SaslClientAuthenticator(Map<String, ?> configs,
