@@ -267,9 +267,9 @@ object AdminUtils extends Logging with AdminUtilities {
   def addPartitions(zkUtils: ZkUtils,
                     topic: String,
                     existingAssignment: Map[Int, Seq[Int]],
+                    allBrokers: Seq[BrokerMetadata],
                     numPartitions: Int = 1,
                     replicaAssignment: Option[Map[Int, Seq[Int]]] = None,
-                    rackAwareMode: RackAwareMode = RackAwareMode.Enforced,
                     validateOnly: Boolean = false): Map[Int, Seq[Int]] = {
     val existingAssignmentPartition0 = existingAssignment.getOrElse(0,
       throw new AdminOperationException(
@@ -283,15 +283,14 @@ object AdminUtils extends Logging with AdminUtilities {
           s"Topic $topic currently has ${existingAssignment.size} partitions, " +
           s"$numPartitions would not be an increase.")
 
-    val brokerMetadatas = getBrokerMetadatas(zkUtils, rackAwareMode)
     replicaAssignment.foreach { proposedReplicaAssignment =>
       validateReplicaAssignment(proposedReplicaAssignment, existingAssignmentPartition0,
-        brokerMetadatas.map(_.id).toSet)
+        allBrokers.map(_.id).toSet)
     }
 
     val proposedAssignmentForNewPartitions = replicaAssignment.getOrElse {
-      val startIndex = math.max(0, brokerMetadatas.indexWhere(_.id >= existingAssignmentPartition0.head))
-      AdminUtils.assignReplicasToBrokers(brokerMetadatas, partitionsToAdd, existingAssignmentPartition0.size,
+      val startIndex = math.max(0, allBrokers.indexWhere(_.id >= existingAssignmentPartition0.head))
+      AdminUtils.assignReplicasToBrokers(allBrokers, partitionsToAdd, existingAssignmentPartition0.size,
         startIndex, existingAssignment.size)
     }
     val proposedAssignment = existingAssignment ++ proposedAssignmentForNewPartitions

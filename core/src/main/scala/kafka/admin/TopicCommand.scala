@@ -155,7 +155,8 @@ object TopicCommand extends Logging {
           val partitionList = replicaAssignmentString.split(",").drop(startPartitionId)
           AdminUtils.parseReplicaAssignment(partitionList.mkString(","), startPartitionId)
         }
-        AdminUtils.addPartitions(zkUtils, topic, existingAssignment, nPartitions, newAssignment)
+        val allBrokers = AdminUtils.getBrokerMetadatas(zkUtils)
+        AdminUtils.addPartitions(zkUtils, topic, existingAssignment, allBrokers, nPartitions, newAssignment)
         println("Adding partitions succeeded!")
       }
     }

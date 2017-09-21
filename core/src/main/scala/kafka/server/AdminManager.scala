@@ -204,7 +204,8 @@ class AdminManager(val config: KafkaConfig,
                        callback: Map[String, ApiError] => Unit): Unit = {
 
     val reassignPartitionsInProgress = zkUtils.pathExists(ZkUtils.ReassignPartitionsPath)
-    val allLiveBrokerIds = zkUtils.getAllBrokersInCluster.map(_.id)
+    val allBrokers = AdminUtils.getBrokerMetadatas(zkUtils)
+    val allBrokerIds = allBrokers.map(_.id)
 
     // 1. map over topics creating assignment and calling AdminUtils
     val metadata = newPartitions.map { case (topic, newPartition) =>
@@ -231,7 +232,7 @@ class AdminManager(val config: KafkaConfig,
         }
 
         val reassignment = Option(newPartition.assignments).map(_.asScala.map(_.asScala.map(_.toInt))).map { assignments =>
-          val unknownBrokers = assignments.flatten.toSet -- allLiveBrokerIds
+          val unknownBrokers = assignments.flatten.toSet -- allBrokerIds
           if (unknownBrokers.nonEmpty)
             throw new InvalidReplicaAssignmentException(
               s"Unknown broker(s) in replica assignment: ${unknownBrokers.mkString(", ")}.")
@@ -246,8 +247,8 @@ class AdminManager(val config: KafkaConfig,
           }.toMap
         }
 
-        val updatedReplicaAssignment = AdminUtils.addPartitions(zkUtils, topic, existingAssignment, newPartition.totalCount, reassignment,
-          validateOnly = validateOnly)
+        val updatedReplicaAssignment = AdminUtils.addPartitions(zkUtils, topic, existingAssignment, allBrokers,
+          newPartition.totalCount, reassignment, validateOnly = validateOnly)
         CreateTopicMetadata(topic, updatedReplicaAssignment, ApiError.NONE)
       } catch {
         case e: AdminOperationException =>
