@@ -699,10 +699,8 @@ public class Sender implements Runnable {
 
     public static Sensor throttleTimeSensor(SenderMetricsRegistry metrics) {
         Sensor produceThrottleTimeSensor = metrics.sensor("produce-throttle-time");
-        MetricName m = metrics.produceThrottleTimeAvg;
-        produceThrottleTimeSensor.add(m, new Avg());
-        m = metrics.produceThrottleTimeMax;
-        produceThrottleTimeSensor.add(m, new Max());
+        produceThrottleTimeSensor.add(metrics.produceThrottleTimeAvg, new Avg());
+        produceThrottleTimeSensor.add(metrics.produceThrottleTimeMax, new Max());
         return produceThrottleTimeSensor;
     }
 
@@ -725,33 +723,25 @@ public class Sender implements Runnable {
             this.metrics = metrics;
 
             this.batchSizeSensor = metrics.sensor("batch-size");
-            MetricName m = metrics.batchSizeAvg;
-            this.batchSizeSensor.add(m, new Avg());
-            m = metrics.batchSizeMax;
-            this.batchSizeSensor.add(m, new Max());
+            this.batchSizeSensor.add(metrics.batchSizeAvg, new Avg());
+            this.batchSizeSensor.add(metrics.batchSizeMax, new Max());
 
             this.compressionRateSensor = metrics.sensor("compression-rate");
-            m = metrics.compressionRateAvg;
-            this.compressionRateSensor.add(m, new Avg());
+            this.compressionRateSensor.add(metrics.compressionRateAvg, new Avg());
 
             this.queueTimeSensor = metrics.sensor("queue-time");
-            m = metrics.recordQueueTimeAvg;
-            this.queueTimeSensor.add(m, new Avg());
-            m = metrics.recordQueueTimeMax;
-            this.queueTimeSensor.add(m, new Max());
+            this.queueTimeSensor.add(metrics.recordQueueTimeAvg, new Avg());
+            this.queueTimeSensor.add(metrics.recordQueueTimeMax, new Max());
 
             this.requestTimeSensor = metrics.sensor("request-time");
-            m = metrics.requestLatencyAvg;
-            this.requestTimeSensor.add(m, new Avg());
-            m = metrics.requestLatencyMax;
-            this.requestTimeSensor.add(m, new Max());
+            this.requestTimeSensor.add(metrics.requestLatencyAvg, new Avg());
+            this.requestTimeSensor.add(metrics.requestLatencyMax, new Max());
 
             this.recordsPerRequestSensor = metrics.sensor("records-per-request");
             MetricName rateMetricName = metrics.recordSendRate;
             MetricName totalMetricName = metrics.recordSendTotal;
             this.recordsPerRequestSensor.add(new Meter(rateMetricName, totalMetricName));
-            m = metrics.recordsPerRequestAvg;
-            this.recordsPerRequestSensor.add(m, new Avg());
+            this.recordsPerRequestSensor.add(metrics.recordsPerRequestAvg, new Avg());
 
             this.retrySensor = metrics.sensor("record-retries");
             rateMetricName = metrics.recordRetryRate;
@@ -764,19 +754,15 @@ public class Sender implements Runnable {
             this.errorSensor.add(new Meter(rateMetricName, totalMetricName));
 
             this.maxRecordSizeSensor = metrics.sensor("record-size");
-            m = metrics.recordSizeMax;
-            this.maxRecordSizeSensor.add(m, new Max());
-            m = metrics.recordSizeAvg;
-            this.maxRecordSizeSensor.add(m, new Avg());
+            this.maxRecordSizeSensor.add(metrics.recordSizeMax, new Max());
+            this.maxRecordSizeSensor.add(metrics.recordSizeAvg, new Avg());
 
-            m = metrics.requestsInFlight;
-            this.metrics.addMetric(m, new Measurable() {
+            this.metrics.addMetric(metrics.requestsInFlight, new Measurable() {
                 public double measure(MetricConfig config, long now) {
                     return client.inFlightRequestCount();
                 }
             });
-            m = metrics.metadataAge;
-            metrics.addMetric(m, new Measurable() {
+            metrics.addMetric(metrics.metadataAge, new Measurable() {
                 public double measure(MetricConfig config, long now) {
                     return (now - metadata.lastSuccessfulUpdate()) / 1000.0;
                 }
