@@ -149,14 +149,15 @@ public final class Metadata {
 
     /**
      * If any non-retriable authentication exceptions were encountered during
-     * metadata update, clear and throw the exception.
+     * metadata update, clear and return the exception.
      */
-    public synchronized void maybeThrowAuthenticationException() {
+    public synchronized AuthenticationException getAndClearAuthenticationException() {
         if (authenticationException != null) {
             AuthenticationException exception = authenticationException;
             authenticationException = null;
-            throw exception;
-        }
+            return exception;
+        } else
+            return null;
     }
 
     /**
@@ -169,7 +170,9 @@ public final class Metadata {
         long begin = System.currentTimeMillis();
         long remainingWaitMs = maxWaitMs;
         while (this.version <= lastVersion) {
-            maybeThrowAuthenticationException();
+            AuthenticationException ex = getAndClearAuthenticationException();
+            if (ex != null)
+                throw ex;
             if (remainingWaitMs != 0)
                 wait(remainingWaitMs);
             long elapsed = System.currentTimeMillis() - begin;

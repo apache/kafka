@@ -850,15 +850,10 @@ public class KafkaAdminClient extends AdminClient {
 
         /**
          * If an authentication exception is encountered with connection to any broker,
-         * fail all pending requests. Returns true if an authentication exception was encountered.
+         * fail all pending requests.
          */
-        private boolean handleAuthenticationException(long now, Map<Node, List<Call>> callsToSend) {
-            AuthenticationException authenticationException = null;
-            try {
-                metadata.maybeThrowAuthenticationException();
-            } catch (AuthenticationException e) {
-                authenticationException = e;
-            }
+        private void handleAuthenticationException(long now, Map<Node, List<Call>> callsToSend) {
+            AuthenticationException authenticationException = metadata.getAndClearAuthenticationException();
             if (authenticationException == null) {
                 for (Node node : callsToSend.keySet()) {
                     authenticationException = client.authenticationException(node);
@@ -868,20 +863,20 @@ public class KafkaAdminClient extends AdminClient {
             }
             if (authenticationException != null) {
                 synchronized (this) {
-                    for (Call newCall : newCalls) {
-                        newCall.fail(now, authenticationException);
-                    }
-                    newCalls.clear();
+                    failCalls(now, newCalls, authenticationException);
                 }
                 for (List<Call> calls : callsToSend.values()) {
-                    for (Call call : calls) {
-                        call.handleFailure(authenticationException);
-                    }
+                    failCalls(now, calls, authenticationException);
                 }
                 callsToSend.clear();
-                return true;
-            } else
-                return false;
+            }
+        }
+
+        private void failCalls(long now, List<Call> calls, AuthenticationException authenticationException) {
+            for (Call call : calls) {
+                call.fail(now, authenticationException);
+            }
+            calls.clear();
         }
 
         /**
@@ -1011,9 +1006,7 @@ public class KafkaAdminClient extends AdminClient {
 
                 // Update the current time and handle the latest responses.
                 now = time.milliseconds();
-                if (handleAuthenticationException(now, callsToSend) &&
-                        hardShutdownTimeMs.get() != INVALID_SHUTDOWN_TIME)
-                    break;
+                handleAuthenticationException(now, callsToSend);
                 handleResponses(now, responses, callsInFlight, correlationIdToCalls);
             }
             int numTimedOut = 0;

@@ -32,6 +32,8 @@ import org.apache.kafka.common.network.NetworkTestUtils;
 import org.apache.kafka.common.network.NioEchoServer;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.security.TestSecurityConfig;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -76,11 +78,11 @@ public class ClientAuthenticationFailureTest {
 
     @Test
     public void testConsumerWithInvalidCredentials() {
-        saslClientConfigs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:" + server.port());
-        saslClientConfigs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringDeserializer");
-        saslClientConfigs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringDeserializer");
+        Map<String, Object> props = new HashMap<>(saslClientConfigs);
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:" + server.port());
+        StringDeserializer deserializer = new StringDeserializer();
 
-        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(saslClientConfigs)) {
+        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props, deserializer, deserializer)) {
             consumer.subscribe(Arrays.asList(topic));
             consumer.poll(100);
             fail("Expected an authentication error!");
@@ -93,12 +95,12 @@ public class ClientAuthenticationFailureTest {
 
     @Test
     public void testProducerWithInvalidCredentials() {
-        saslClientConfigs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:" + server.port());
-        saslClientConfigs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer");
-        saslClientConfigs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer");
+        Map<String, Object> props = new HashMap<>(saslClientConfigs);
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:" + server.port());
+        StringSerializer serializer = new StringSerializer();
 
-        ProducerRecord<String, String> record = new ProducerRecord<>(topic, "message");
-        try (KafkaProducer<String, String> producer = new KafkaProducer<>(saslClientConfigs)) {
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props, serializer, serializer)) {
+            ProducerRecord<String, String> record = new ProducerRecord<>(topic, "message");
             producer.send(record).get();
             fail("Expected an authentication error!");
         } catch (Exception e) {
@@ -125,12 +127,11 @@ public class ClientAuthenticationFailureTest {
     public void testTransactionalProducerWithInvalidCredentials() throws Exception {
         Map<String, Object> props = new HashMap<>(saslClientConfigs);
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:" + server.port());
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer");
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer");
         props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "txclient-1");
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
+        StringSerializer serializer = new StringSerializer();
 
-        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props, serializer, serializer)) {
             producer.initTransactions();
             fail("Expected an authentication error!");
         } catch (SaslAuthenticationException e) {

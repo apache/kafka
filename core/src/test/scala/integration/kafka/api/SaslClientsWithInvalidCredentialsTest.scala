@@ -73,17 +73,17 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
 
   @Test
   def testProducerWithAuthenticationFailure() {
-    verifyAuthenticationException(() => sendOneRecord(10000))
-    verifyAuthenticationException(() => producers.head.partitionsFor(topic))
+    verifyAuthenticationException(sendOneRecord(10000))
+    verifyAuthenticationException(producers.head.partitionsFor(topic))
 
     createClientCredential()
-    verifyWithRetry(() => sendOneRecord())
+    verifyWithRetry(sendOneRecord())
   }
 
   @Test
   def testTransactionalProducerWithAuthenticationFailure() {
     val txProducer = createTransactionalProducer()
-    verifyAuthenticationException(() => txProducer.initTransactions())
+    verifyAuthenticationException(txProducer.initTransactions())
 
     createClientCredential()
     try {
@@ -120,12 +120,12 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   }
 
   private def verifyConsumerWithAuthenticationFailure(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) {
-    verifyAuthenticationException(() => consumer.poll(10000))
-    verifyAuthenticationException(() => consumer.partitionsFor(topic))
+    verifyAuthenticationException(consumer.poll(10000))
+    verifyAuthenticationException(consumer.partitionsFor(topic))
 
     createClientCredential()
-    verifyWithRetry(() => sendOneRecord())
-    verifyWithRetry(() => assertEquals(1, consumer.poll(1000).count))
+    verifyWithRetry(sendOneRecord())
+    verifyWithRetry(assertEquals(1, consumer.poll(1000).count))
   }
 
   @Test
@@ -147,10 +147,10 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     }
 
     try {
-      verifyAuthenticationException(() => describeTopic())
+      verifyAuthenticationException(describeTopic())
 
       createClientCredential()
-      verifyWithRetry(() => describeTopic())
+      verifyWithRetry(describeTopic())
     } finally {
       adminClient.close
     }
@@ -174,9 +174,9 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     val consumer = consumers.head
     consumer.subscribe(List(topic).asJava)
 
-    verifyAuthenticationException(() => consumerGroupService.listGroups)
+    verifyAuthenticationException(consumerGroupService.listGroups)
     createClientCredential()
-    verifyWithRetry(() => consumer.poll(1000))
+    verifyWithRetry(consumer.poll(1000))
     assertEquals(1, consumerGroupService.listGroups.size)
   }
 
@@ -197,10 +197,10 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     }
   }
 
-  private def verifyAuthenticationException(f: () => Unit): Unit = {
+  private def verifyAuthenticationException(action: => Unit): Unit = {
     val startMs = System.currentTimeMillis
     try {
-      f()
+      action
       fail("Expected an authentication exception")
     } catch {
       case e: SaslAuthenticationException =>
@@ -211,12 +211,12 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     }
   }
 
-  private def verifyWithRetry(f: () => Unit): Unit = {
+  private def verifyWithRetry(action: => Unit): Unit = {
     var attempts = 0
     TestUtils.waitUntilTrue(() => {
       try {
         attempts += 1
-        f()
+        action
         true
       } catch {
         case _: SaslAuthenticationException => false

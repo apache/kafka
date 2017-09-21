@@ -231,7 +231,7 @@ public class Sender implements Runnable {
                 }
             } catch (AuthenticationException e) {
                 // This is already logged as error, but propagated here to perform any clean ups.
-                log.trace("Authentication exception while processing transactional request");
+                log.trace("Authentication exception while processing transactional request: {}", e);
                 transactionManager.authenticationFailed(e);
             }
         }
