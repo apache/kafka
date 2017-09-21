@@ -247,7 +247,7 @@ public class RequestResponseTest {
         checkRequest(createCreatePartitionsRequest());
         checkRequest(createCreatePartitionsRequestWithAssignments());
         checkErrorResponse(createCreatePartitionsRequest(), new InvalidTopicException());
-        checkResponse(createCreatePartitionsErrorResponse(), 0);
+        checkResponse(createCreatePartitionsResponse(), 0);
     }
 
     @Test
@@ -1126,7 +1126,7 @@ public class RequestResponseTest {
         return new CreatePartitionsRequest(assignments, 0, false, (short) 0);
     }
 
-    private CreatePartitionsResponse createCreatePartitionsErrorResponse() {
+    private CreatePartitionsResponse createCreatePartitionsResponse() {
         Map<String, ApiError> results = new HashMap<>();
         results.put("my_topic", ApiError.fromThrowable(
                 new InvalidReplicaAssignmentException("The assigned brokers included an unknown broker")));

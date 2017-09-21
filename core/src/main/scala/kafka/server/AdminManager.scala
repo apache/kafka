@@ -19,13 +19,13 @@ package kafka.server
 import java.util.{Collections, Properties}
 
 import kafka.admin.{AdminOperationException, AdminUtils}
-import kafka.common.{TopicAlreadyMarkedForDeletionException}
+import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
 import org.apache.kafka.clients.admin.NewPartitions
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource}
-import org.apache.kafka.common.errors.{ApiException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, InvalidTopicException, PolicyViolationException}
+import org.apache.kafka.common.errors.{ApiException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, InvalidTopicException, PolicyViolationException, ReassignmentInProgressException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -147,7 +147,7 @@ class AdminManager(val config: KafkaConfig,
       responseCallback(results)
     } else {
       // 3. else pass the assignments and errors to the delayed operation and set the keys
-      val delayedCreate = new DelayedCreateTopics(timeout, metadata.toSeq, this, responseCallback)
+      val delayedCreate = new DelayedCreatePartitions(timeout, metadata.toSeq, this, responseCallback)
       val delayedCreateKeys = createInfo.keys.map(new TopicKey(_)).toSeq
       // try to complete the request immediately, otherwise put it into the purgatory
       topicPurgatory.tryCompleteElseWatch(delayedCreate, delayedCreateKeys)
@@ -203,10 +203,25 @@ class AdminManager(val config: KafkaConfig,
                        listenerName: ListenerName,
                        callback: Map[String, ApiError] => Unit): Unit = {
 
+    val reassignPartitionsInProgress = zkUtils.pathExists(ZkUtils.ReassignPartitionsPath)
+    val allBrokers = AdminUtils.getBrokerMetadatas(zkUtils)
+    val allBrokerIds = allBrokers.map(_.id)
+
     // 1. map over topics creating assignment and calling AdminUtils
-    val metadata = newPartitions.map{ case (topic, newPartition) =>
+    val metadata = newPartitions.map { case (topic, newPartition) =>
       try {
-        val oldNumPartitions = zkUtils.getTopicPartitionCount(topic).getOrElse(throw new InvalidTopicException())
+        // We prevent addition partitions while a reassignment is in progress, since
+        // during reassignment there is no meaningful notion of replication factor
+        if (reassignPartitionsInProgress)
+          throw new ReassignmentInProgressException("A partition reassignment is in progress.")
+
+        val existingAssignment = zkUtils.getReplicaAssignmentForTopics(List(topic)).map {
+          case (topicPartition, replicas) => topicPartition.partition -> replicas
+        }
+        if (existingAssignment.isEmpty)
+          throw new UnknownTopicOrPartitionException(s"The topic '$topic' does not exist")
+
+        val oldNumPartitions = existingAssignment.size
         val newNumPartitions = newPartition.totalCount
         val numPartitionsIncrement = newNumPartitions - oldNumPartitions
         if (numPartitionsIncrement < 0) {
@@ -215,38 +230,31 @@ class AdminManager(val config: KafkaConfig,
         } else if (numPartitionsIncrement == 0) {
           throw new InvalidPartitionsException(s"Topic already has $oldNumPartitions partitions.")
         }
-        val existingAssignment = zkUtils.getReplicaAssignmentForTopics(List(topic)).map {
-          case (topicPartition, replicas) => topicPartition.partition -> replicas
-        }
-        if (existingAssignment.isEmpty)
-          throw new InvalidTopicException(s"The topic $topic does not exist")
-        val reassignment = if (newPartition.assignments == null) {
-          None
-        } else {
-          val assignments = newPartition.assignments.asScala.map(inner => inner.asScala.toList)
-          // check each broker exists
-          val unknownBrokers = assignments.flatten.toSet -- zkUtils.getAllBrokersInCluster.map(broker => broker.id)
-          if (unknownBrokers.nonEmpty) {
+
+        val reassignment = Option(newPartition.assignments).map(_.asScala.map(_.asScala.map(_.toInt))).map { assignments =>
+          val unknownBrokers = assignments.flatten.toSet -- allBrokerIds
+          if (unknownBrokers.nonEmpty)
             throw new InvalidReplicaAssignmentException(
               s"Unknown broker(s) in replica assignment: ${unknownBrokers.mkString(", ")}.")
-          }
-          if (assignments.size != numPartitionsIncrement) {
+
+          if (assignments.size != numPartitionsIncrement)
             throw new InvalidRequestException(
               s"Increasing the number of partitions by $numPartitionsIncrement " +
                 s"but ${assignments.size} assignments provided.")
-          }
-          Some(newPartition.assignments.asScala.toList.zipWithIndex.map{ case (replicas, index) =>
-            existingAssignment.size + index -> replicas.asScala.map(_.toInt)
-          }.toMap)
+
+          assignments.zipWithIndex.map { case (replicas, index) =>
+            existingAssignment.size + index -> replicas
+          }.toMap
         }
 
-        val added = AdminUtils.addPartitions(zkUtils, topic, existingAssignment, newPartition.totalCount, reassignment, validateOnly = validateOnly)
-        CreatePartitionMetadata(topic, added.keySet, ApiError.NONE)
+        val updatedReplicaAssignment = AdminUtils.addPartitions(zkUtils, topic, existingAssignment, allBrokers,
+          newPartition.totalCount, reassignment, validateOnly = validateOnly)
+        CreateTopicMetadata(topic, updatedReplicaAssignment, ApiError.NONE)
       } catch {
         case e: AdminOperationException =>
-          CreatePartitionMetadata(topic, null, ApiError.fromThrowable(e))
+          CreateTopicMetadata(topic, Map.empty, ApiError.fromThrowable(e))
         case e: ApiException =>
-          CreatePartitionMetadata(topic, null, ApiError.fromThrowable(e))
+          CreateTopicMetadata(topic, Map.empty, ApiError.fromThrowable(e))
       }
     }
 
