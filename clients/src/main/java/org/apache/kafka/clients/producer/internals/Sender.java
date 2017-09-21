@@ -717,7 +717,7 @@ public class Sender implements Runnable {
         public final Sensor compressionRateSensor;
         public final Sensor maxRecordSizeSensor;
         public final Sensor batchSplitSensor;
-        private SenderMetricsRegistry metrics;
+        private final SenderMetricsRegistry metrics;
 
         public SenderMetrics(SenderMetricsRegistry metrics) {
             this.metrics = metrics;
