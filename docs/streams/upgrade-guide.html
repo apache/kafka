@@ -118,7 +118,6 @@
             Note: the previous aggregate functions on <code>KGroupedStream</code> still work, but have been deprecated.
         </li>
     </ul>
-
     <p>
         Modified methods in <code>Processor</code>:
     </p>
@@ -147,6 +146,16 @@
         The task ids, store names and processor names are no longer in the sensor metrics names, but instead are added as tags of the sensors to achieve consistent metrics hierarchy.
         As a result you may need to make corresponding code changes on your metrics reporting and monitoring tools when upgrading to 1.0.0.
         Detailed metrics sensor can be found in the <a href="#kafka_streams_monitoring">Streams Monitoring</a> section.
+    </p>
+
+    <p>
+        The introduction of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-173%3A+Add+prefix+to+StreamsConfig+to+enable+setting+default+internal+topic+configs">KIP-173</a>
+        enables you to provide topic configuration parameters for any topics created by Kafka Streams.
+        This includes repartition and changelog topics.
+        You can provide the configs via the <code>StreamsConfig</code> by adding the configs with the prefix as defined by <code>StreamsConfig#topicPrefix(String)</code>.
+        Any properties in the <code>StreamsConfig</code> with the prefix will be applied when creating internal topics.
+        Any configs that aren't topic configs will be ignored.
+        If you already use <code>StateStoreSupplier</code> or <code>Materialized</code> to provide configs for changelogs, then they will take precedence over those supplied in the config.
     </p>
 
     <h3><a id="streams_api_changes_0110" href="#streams_api_changes_0110">Streams API changes in 0.11.0.0</a></h3>
