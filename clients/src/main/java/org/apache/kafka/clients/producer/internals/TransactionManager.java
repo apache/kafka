@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.protocol.Errors;
@@ -613,6 +614,11 @@ public class TransactionManager {
     synchronized void retry(TxnRequestHandler request) {
         request.setRetry();
         enqueueRequest(request);
+    }
+
+    synchronized void authenticationFailed(AuthenticationException e) {
+        for (TxnRequestHandler request : pendingRequests)
+            request.fatalError(e);
     }
 
     Node coordinator(FindCoordinatorRequest.CoordinatorType type) {
