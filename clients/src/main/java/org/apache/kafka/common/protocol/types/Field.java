@@ -62,6 +62,16 @@ public class Field {
         }
     }
 
+    public static class Int64 extends Field {
+        public Int64(String name, String docString) {
+            super(name, Type.INT64, docString, false, null);
+        }
+
+        public Int64(String name, String docString, long defaultValue) {
+            super(name, Type.INT64, docString, true, defaultValue);
+        }
+    }
+
     public static class Int16 extends Field {
         public Int16(String name, String docString) {
             super(name, Type.INT16, docString, false, null);

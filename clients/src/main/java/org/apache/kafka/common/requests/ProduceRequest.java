@@ -102,9 +102,17 @@ public class ProduceRequest extends AbstractRequest {
      */
     private static final Schema PRODUCE_REQUEST_V4 = PRODUCE_REQUEST_V3;
 
+    /**
+     * The body of the PRODUCE_REQUEST_V5 is the same as PRODUCE_REQUEST_V4.
+     * The version number is bumped since the PRODUCE_RESPONSE_V5 includes an additional partition level
+     * field: the log_start_offset.
+     */
+    private static final Schema PRODUCE_REQUEST_V5 = PRODUCE_REQUEST_V4;
+
+
     public static Schema[] schemaVersions() {
         return new Schema[] {PRODUCE_REQUEST_V0, PRODUCE_REQUEST_V1, PRODUCE_REQUEST_V2, PRODUCE_REQUEST_V3,
-            PRODUCE_REQUEST_V4};
+            PRODUCE_REQUEST_V4, PRODUCE_REQUEST_V5};
     }
 
     public static class Builder extends AbstractRequest.Builder<ProduceRequest> {
@@ -119,7 +127,7 @@ public class ProduceRequest extends AbstractRequest {
                        int timeout,
                        Map<TopicPartition, MemoryRecords> partitionRecords,
                        String transactionalId) {
-            super(ApiKeys.PRODUCE, (short) (magic == RecordBatch.MAGIC_VALUE_V2 ? 3 : 2));
+            super(ApiKeys.PRODUCE, (short) (magic == RecordBatch.MAGIC_VALUE_V2 ? ApiKeys.PRODUCE.latestVersion() : 2));
             this.magic = magic;
             this.acks = acks;
             this.timeout = timeout;
@@ -304,6 +312,7 @@ public class ProduceRequest extends AbstractRequest {
             case 2:
             case 3:
             case 4:
+            case 5:
                 return new ProduceResponse(responseMap, throttleTimeMs);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
@@ -366,6 +375,7 @@ public class ProduceRequest extends AbstractRequest {
 
             case 3:
             case 4:
+            case 5:
                 return RecordBatch.MAGIC_VALUE_V2;
 
             default:
