@@ -280,30 +280,47 @@ object AdminUtils extends Logging with AdminUtilities {
           s"Assignment: $existingAssignment"))
 
     val partitionsToAdd = numPartitions - existingAssignment.size
-    if (partitionsToAdd <= 0)
+    if (partitionsToAdd < 0)
       throw new InvalidPartitionsException(
         s"The number of partitions for a topic can only be increased. " +
           s"Topic $topic currently has ${existingAssignment.size} partitions, " +
           s"$numPartitions would not be an increase.")
+    else if (partitionsToAdd == 0) {
+      if (replicaAssignment.isDefined) {
+        // Check the provided assignments are compatible with the tail of the existing
+        val newAssignment = replicaAssignment.get
+        // keyed according to the old assignment
+        val newAssignmentWithOldPartitionIds = newAssignment.toList.sortBy { case (p, b) => p }.map { case (p, b) => p - existingAssignment.size + 1 -> b }.toMap
+        val tailOldPartitionIds = existingAssignment.toList.sortBy { case (p, b) => p }.takeRight(newAssignment.size).toMap
+        if (tailOldPartitionIds != newAssignmentWithOldPartitionIds) {
+          val mismatch = tailOldPartitionIds.filter { case (p, b) => newAssignmentWithOldPartitionIds(p) != b }
+          throw new InvalidPartitionsException(
+            s"Not changing the number of partitions and the given assignments for partitions " +
+              s"${mismatch.keySet.mkString(", ")} are incompatible with the existing assignments " +
+              s"${mismatch.values.map(_.mkString(", ")).mkString("; ")}.")
+        }
+      }
+      existingAssignment
+    } else {
+      replicaAssignment.foreach { proposedReplicaAssignment =>
+        validateReplicaAssignment(proposedReplicaAssignment, existingAssignmentPartition0,
+          allBrokers.map(_.id).toSet)
+      }
 
-    replicaAssignment.foreach { proposedReplicaAssignment =>
-      validateReplicaAssignment(proposedReplicaAssignment, existingAssignmentPartition0,
-        allBrokers.map(_.id).toSet)
+      val proposedAssignmentForNewPartitions = replicaAssignment.getOrElse {
+        val startIndex = math.max(0, allBrokers.indexWhere(_.id >= existingAssignmentPartition0.head))
+        AdminUtils.assignReplicasToBrokers(allBrokers, partitionsToAdd, existingAssignmentPartition0.size,
+          startIndex, existingAssignment.size)
+      }
+      val proposedAssignment = existingAssignment ++ proposedAssignmentForNewPartitions
+      if (!validateOnly) {
+        info(s"Creating $partitionsToAdd partitions for '$topic' with the following replica assignment: " +
+          s"$proposedAssignmentForNewPartitions.")
+        // add the combined new list
+        AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, proposedAssignment, update = true)
+      }
+      proposedAssignment
     }
-
-    val proposedAssignmentForNewPartitions = replicaAssignment.getOrElse {
-      val startIndex = math.max(0, allBrokers.indexWhere(_.id >= existingAssignmentPartition0.head))
-      AdminUtils.assignReplicasToBrokers(allBrokers, partitionsToAdd, existingAssignmentPartition0.size,
-        startIndex, existingAssignment.size)
-    }
-    val proposedAssignment = existingAssignment ++ proposedAssignmentForNewPartitions
-    if (!validateOnly) {
-      info(s"Creating $partitionsToAdd partitions for '$topic' with the following replica assignment: " +
-        s"$proposedAssignmentForNewPartitions.")
-      // add the combined new list
-      AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, proposedAssignment, update = true)
-    }
-    proposedAssignment
   }
 
   /**

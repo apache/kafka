@@ -227,8 +227,6 @@ class AdminManager(val config: KafkaConfig,
         if (numPartitionsIncrement < 0) {
           throw new InvalidPartitionsException(
             s"Topic currently has $oldNumPartitions partitions, which is higher than the requested $newNumPartitions.")
-        } else if (numPartitionsIncrement == 0) {
-          throw new InvalidPartitionsException(s"Topic already has $oldNumPartitions partitions.")
         }
 
         val reassignment = Option(newPartition.assignments).map(_.asScala.map(_.asScala.map(_.toInt))).map { assignments =>
@@ -237,7 +235,10 @@ class AdminManager(val config: KafkaConfig,
             throw new InvalidReplicaAssignmentException(
               s"Unknown broker(s) in replica assignment: ${unknownBrokers.mkString(", ")}.")
 
-          if (assignments.size != numPartitionsIncrement)
+          if (assignments.size < numPartitionsIncrement ||
+            assignments.size > numPartitionsIncrement && numPartitionsIncrement != 0)
+            // If numPartitionsIncrement == 0 we allow it assignments.size > numPartitionsIncrement
+            // but check the given assignments are compatible AdminUtils.addPartitions()
             throw new InvalidRequestException(
               s"Increasing the number of partitions by $numPartitionsIncrement " +
                 s"but ${assignments.size} assignments provided.")

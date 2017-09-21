@@ -393,14 +393,15 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     assertEquals(3, actualPartitions.size)
 
     // now try creating a new partition (with assignments), to bring the total to 3 partitions
+    val newPartition2Assignments = asList[util.List[Integer]](asList(0, 1), asList(1, 2))
     alterResult = client.createPartitions(Map(topic2 ->
-      NewPartitions.increaseTo(3, asList(asList(0, 1), asList(1, 2)))).asJava)
+      NewPartitions.increaseTo(3, newPartition2Assignments)).asJava)
     altered = alterResult.values.get(topic2).get
     // assert that the topics now has 3 partitions
-    actualPartitions = client.describeTopics(Set(topic2).asJava).values.get(topic2).get.partitions
-    assertEquals(3, actualPartitions.size)
-    assertEquals(Seq(0, 1), actualPartitions.get(1).replicas.asScala.map(_.id))
-    assertEquals(Seq(1, 2), actualPartitions.get(2).replicas.asScala.map(_.id))
+    var actualPartitions2 = client.describeTopics(Set(topic2).asJavaCollection).values.get(topic2).get.partitions
+    assertEquals(3, actualPartitions2.size)
+    assertEquals(Seq(0, 1), actualPartitions2.get(1).replicas.asScala.map(_.id).toList)
+    assertEquals(Seq(1, 2), actualPartitions2.get(2).replicas.asScala.map(_.id).toList)
 
     // try a newCount which would be a decrease
     alterResult = client.createPartitions(Map(topic1 ->
@@ -414,16 +415,26 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
         assertEquals("Topic currently has 3 partitions, which is higher than the requested 1.", e.getCause.getMessage)
     }
 
-    // try a newCount which would be a noop
-    alterResult = client.createPartitions(Map(topic1 ->
+    // try a newCount which would be a noop (wihout assignment)
+    alterResult = client.createPartitions(Map(topic2 ->
       NewPartitions.increaseTo(3)).asJava, validateOnly)
+    alterResult.values.get(topic2).get
+
+    // try a newCount which would be a noop (where the assignment matches current state)
+    alterResult = client.createPartitions(Map(topic2 ->
+      NewPartitions.increaseTo(3, newPartition2Assignments)).asJava, validateOnly)
+    alterResult.values.get(topic2).get
+
+    // try a newCount which would be a noop (where the assignment doesn't match current state)
+    alterResult = client.createPartitions(Map(topic2 ->
+      NewPartitions.increaseTo(3, newPartition2Assignments.asScala.reverse.toList.asJava)).asJava, validateOnly)
     try {
-      alterResult.values.get(topic1).get
-      fail("Expect InvalidPartitionsException when newCount == oldCount")
+      alterResult.values.get(topic2).get
+      fail("Expect InvalidPartitionsException when newCount is a decrease")
     } catch {
       case e: ExecutionException =>
         assertTrue(e.getCause.isInstanceOf[InvalidPartitionsException])
-        assertEquals("Topic already has 3 partitions.", e.getCause.getMessage)
+        assertEquals("Not changing the number of partitions and the given assignments for partitions 1, 2 are incompatible with the existing assignments 0, 1; 1, 2.", e.getCause.getMessage)
     }
 
     // try a bad topic name
@@ -466,7 +477,19 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
           e.getCause.getMessage)
     }
 
-    // try #assignments incompatible with the increase
+    // try #assignments < with the increase
+    alterResult = client.createPartitions(Map(topic1 ->
+      NewPartitions.increaseTo(6, asList(asList(1)))).asJava, validateOnly)
+    try {
+      altered = alterResult.values.get(topic1).get
+      fail("Expect InvalidRequestException when #assignments != newCount - oldCount")
+    } catch {
+      case e: ExecutionException =>
+        assertTrue(e.getCause.isInstanceOf[InvalidRequestException])
+        assertEquals("Increasing the number of partitions by 3 but 1 assignments provided.", e.getCause.getMessage)
+    }
+
+    // try #assignments > with the increase
     alterResult = client.createPartitions(Map(topic1 ->
       NewPartitions.increaseTo(4, asList(asList(1), asList(2)))).asJava, validateOnly)
     try {
