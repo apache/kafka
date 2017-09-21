@@ -125,6 +125,7 @@ public class FetcherMetricsRegistry {
                 "The average number of records consumed per second for a topic", topicTags);
         this.topicRecordsConsumedTotal = new MetricNameTemplate("records-consumed-total", groupName,
                 "The total number of records consumed for a topic", topicTags);
+        
         /***** Partition level *****/
         this.partitionRecordsLag = new MetricNameTemplate("{topic}-{partition}.records-lag", groupName,
                 "The latest lag of the partition", tags);
