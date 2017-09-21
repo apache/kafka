@@ -24,12 +24,10 @@ import org.apache.kafka.common.requests.ApiError
 import scala.collection._
 
 /**
-  * The create metadata maintained by the delayed create operation
-  *
-  * TODO: local state doesn't count, need to know state of all relevant brokers
-  *
+  * The create metadata maintained by the delayed create topic or create partitions operations.
   */
 case class CreateTopicMetadata(topic: String, replicaAssignments: Map[Int, Seq[Int]], error: ApiError)
+
 
 /**
   * A delayed create topics operation that can be created by the admin manager and watched
@@ -42,16 +40,16 @@ class DelayedCreateTopics(delayMs: Long,
   extends DelayedOperation(delayMs) {
 
   /**
-    * The operation can be completed if all of the topics that do not have an error exist and every partition has a leader in the controller.
+    * The operation can be completed if all of the topics that do not have an error exist and every partition has a
+    * leader in the controller.
     * See KafkaController.onNewTopicCreation
     */
   override def tryComplete() : Boolean = {
     trace(s"Trying to complete operation for $createMetadata")
 
-    val leaderlessPartitionCount = createMetadata.filter(_.error.isSuccess)
-      .foldLeft(0) { case (topicCounter, metadata) =>
-        topicCounter + missingLeaderCount(metadata.topic, metadata.replicaAssignments.keySet)
-      }
+    val leaderlessPartitionCount = createMetadata.filter(_.error.isSuccess).foldLeft(0) { case (topicCounter, metadata) =>
+      topicCounter + missingLeaderCount(metadata.topic, metadata.replicaAssignments.keySet)
+    }
 
     if (leaderlessPartitionCount == 0) {
       trace("All partitions have a leader, completing the delayed operation")
