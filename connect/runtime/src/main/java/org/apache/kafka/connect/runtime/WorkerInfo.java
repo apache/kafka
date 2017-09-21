@@ -49,18 +49,6 @@ public class WorkerInfo {
     }
 
     /**
-     * Collect general runtime information.
-     */
-    protected void addRuntimeInfo() {
-        List<String> jvmArgs = RUNTIME.getInputArguments();
-        values.put("jvm.args", jvmArgs);
-    }
-
-    private static Object format(Object value) {
-        return value == null ? "NA" : value;
-    }
-
-    /**
      * Log the values of this object at level INFO.
      */
     // Equivalent to logAll in AbstractConfig
@@ -78,6 +66,18 @@ public class WorkerInfo {
             b.append(Utils.NL);
         }
         log.info(b.toString());
+    }
+
+    private static Object format(Object value) {
+        return value == null ? "NA" : value;
+    }
+
+    /**
+     * Collect general runtime information.
+     */
+    protected void addRuntimeInfo() {
+        List<String> jvmArgs = RUNTIME.getInputArguments();
+        values.put("jvm.args", jvmArgs);
     }
 
 }
