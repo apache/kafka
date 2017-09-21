@@ -25,9 +25,8 @@ import kafka.utils.TestUtils._
 import kafka.utils.TestUtils
 import kafka.cluster.Broker
 import kafka.client.ClientUtils
-import kafka.common.TopicAndPartition
 import kafka.server.{KafkaConfig, KafkaServer}
-import org.apache.kafka.common.errors.{InvalidReplicaAssignmentException, InvalidTopicException}
+import org.apache.kafka.common.errors.InvalidReplicaAssignmentException
 import org.apache.kafka.common.network.ListenerName
 import org.junit.{After, Before, Test}
 
@@ -74,7 +73,7 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
   @Test
   def testWrongReplicaCount(): Unit = {
     try {
-      AdminUtils.addPartitions(zkUtils, topic1, topic1Assignment, 2, Some(Map(1 -> Seq(0, 1), 2 -> Seq(0, 1, 2))))
+      AdminUtils.addPartitions(zkUtils, topic1, topic1Assignment, 2, Some(Map(0 -> Seq(0, 1), 1 -> Seq(0, 1, 2))))
       fail("Add partitions should fail")
     } catch {
       case _: InvalidReplicaAssignmentException => //this is good
@@ -121,6 +120,7 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
 
   @Test
   def testManualAssignmentOfReplicas(): Unit = {
+    // Add 2 partitions
     AdminUtils.addPartitions(zkUtils, topic2, topic2Assignment, 3,
       Some(Map(0 -> Seq(1, 2), 1 -> Seq(0, 1), 2 -> Seq(2, 3))))
     // wait until leader is elected
@@ -137,15 +137,15 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
     val metadata = ClientUtils.fetchTopicMetadata(Set(topic2),
       brokers.map(_.getBrokerEndPoint(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))),
       "AddPartitionsTest-testManualAssignmentOfReplicas", 2000, 0).topicsMetadata
-    val metaDataForTopic2 = metadata.filter(p => p.topic.equals(topic2))
+    val metaDataForTopic2 = metadata.filter(_.topic == topic2)
     val partitionDataForTopic2 = metaDataForTopic2.head.partitionsMetadata.sortBy(_.partitionId)
-    assertEquals(partitionDataForTopic2.size, 3)
-    assertEquals(partitionDataForTopic2(1).partitionId, 1)
-    assertEquals(partitionDataForTopic2(2).partitionId, 2)
+    assertEquals(3, partitionDataForTopic2.size)
+    assertEquals(1, partitionDataForTopic2(1).partitionId)
+    assertEquals(2, partitionDataForTopic2(2).partitionId)
     val replicas = partitionDataForTopic2(1).replicas
-    assertEquals(replicas.size, 2)
-    assert(replicas.head.id == 0 || replicas.head.id == 1)
-    assert(replicas(1).id == 0 || replicas(1).id == 1)
+    assertEquals(2, replicas.size)
+    assertTrue(replicas.head.id == 0 || replicas.head.id == 1)
+    assertTrue(replicas(1).id == 0 || replicas(1).id == 1)
   }
 
   @Test

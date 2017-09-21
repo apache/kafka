@@ -156,7 +156,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     val newPartition = new TopicPartition(topic, 1)
     follower.shutdown()
     // add partitions to topic
-    AdminUtils.addPartitions(zkUtils, topic, expectedReplicaAssignment, 2, Some(Map(1 -> Seq(0, 1, 2), 2 -> Seq(0, 1, 2))), false)
+    AdminUtils.addPartitions(zkUtils, topic, expectedReplicaAssignment, 2, Some(Map(1 -> Seq(0, 1, 2), 2 -> Seq(0, 1, 2))))
     // start topic deletion
     AdminUtils.deleteTopic(zkUtils, topic)
     follower.startup()
@@ -275,11 +275,9 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
   }
 
   private def createTestTopicAndCluster(topic: String, deleteTopicEnabled: Boolean = true): Seq[KafkaServer] = {
-
-    val brokerConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false)
-    brokerConfigs.foreach(p => p.setProperty("delete.topic.enable", deleteTopicEnabled.toString)
-    )
-    createTestTopicAndCluster(topic,brokerConfigs)
+    val brokerConfigs = TestUtils.createBrokerConfigs(3, zkConnect, enableControlledShutdown = false)
+    brokerConfigs.foreach(_.setProperty("delete.topic.enable", deleteTopicEnabled.toString))
+    createTestTopicAndCluster(topic, brokerConfigs)
   }
 
   private def createTestTopicAndCluster(topic: String, brokerConfigs: Seq[Properties]): Seq[KafkaServer] = {
