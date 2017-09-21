@@ -20,7 +20,9 @@ import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
 import org.apache.kafka.clients.producer.internals.ProducerMetrics;
 import org.apache.kafka.clients.producer.internals.RecordAccumulator;
@@ -316,7 +318,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
             String transactionalId = userProvidedConfigs.containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG) ?
                     (String) userProvidedConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG) : null;
-            LogContext logContext = new LogContext(String.format("[Producer clientId=%s, transactionalId=%s] ", clientId, transactionalId));
+            LogContext logContext;
+            if (transactionalId == null)
+                logContext = new LogContext(String.format("[Producer clientId=%s] ", clientId));
+            else
+                logContext = new LogContext(String.format("[Producer clientId=%s, transactionalId=%s] ", clientId, transactionalId));
             log = logContext.logger(KafkaProducer.class);
             log.trace("Starting the Kafka producer");
 
@@ -530,7 +536,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
      *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
      * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
-     *         transactional.id is not authorized
+     *         transactional.id is not authorized. See the exception for more details
      * @throws KafkaException if the producer has encountered a previous fatal error or for any other unexpected error
      */
     public void initTransactions() {
@@ -550,7 +556,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
      *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
      * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
-     *         transactional.id is not authorized
+     *         transactional.id is not authorized. See the exception for more details
      * @throws KafkaException if the producer has encountered a previous fatal error or for any other unexpected error
      */
     public void beginTransaction() throws ProducerFencedException {
@@ -559,12 +565,17 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
-     * Sends a list of consumed offsets to the consumer group coordinator, and also marks
+     * Sends a list of specified offsets to the consumer group coordinator, and also marks
      * those offsets as part of the current transaction. These offsets will be considered
-     * consumed only if the transaction is committed successfully.
-     *
+     * committed only if the transaction is committed successfully. The committed offset should
+     * be the next message your application will consume, i.e. lastProcessedMessageOffset + 1.
+     * <p>
      * This method should be used when you need to batch consumed and produced messages
-     * together, typically in a consume-transform-produce pattern.
+     * together, typically in a consume-transform-produce pattern. Thus, the specified
+     * {@code consumerGroupId} should be the same as config parameter {@code group.id} of the used
+     * {@link KafkaConsumer consumer}. Note, that the consumer should have {@code enable.auto.commit=false}
+     * and should also not commit offsets manually (via {@link KafkaConsumer#commitSync(Map) sync} or
+     * {@link KafkaConsumer#commitAsync(Map, OffsetCommitCallback) async} commits).
      *
      * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started
      * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
@@ -573,7 +584,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws org.apache.kafka.common.errors.UnsupportedForMessageFormatException  fatal error indicating the message
      *         format used for the offsets topic on the broker does not support transactions
      * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
-     *         transactional.id is not authorized
+     *         transactional.id is not authorized. See the exception for more details
      * @throws KafkaException if the producer has encountered a previous fatal or abortable error, or for any
      *         other unexpected error
      */
@@ -597,7 +608,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
      *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
      * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
-     *         transactional.id is not authorized
+     *         transactional.id is not authorized. See the exception for more details
      * @throws KafkaException if the producer has encountered a previous fatal or abortable error, or for any
      *         other unexpected error
      */
@@ -618,7 +629,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
      *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
      * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
-     *         transactional.id is not authorized
+     *         transactional.id is not authorized. See the exception for more details
      * @throws KafkaException if the producer has encountered a previous fatal error or for any other unexpected error
      */
     public void abortTransaction() throws ProducerFencedException {
@@ -734,6 +745,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @param callback A user-supplied callback to execute when the record has been acknowledged by the server (null
      *        indicates no callback)
      *
+     * @throws AuthenticationException if authentication fails. See the exception for more details
      * @throws IllegalStateException if a transactional.id has been configured and no transaction has been started
      * @throws InterruptException If the thread is interrupted while blocked
      * @throws SerializationException If the key or value are not valid objects given the configured serializers
@@ -956,6 +968,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     /**
      * Get the partition metadata for the given topic. This can be used for custom partitioning.
+     * @throws AuthenticationException if authentication fails. See the exception for more details
      * @throws InterruptException If the thread is interrupted while blocked
      */
     @Override

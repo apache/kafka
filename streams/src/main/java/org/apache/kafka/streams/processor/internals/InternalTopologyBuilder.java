@@ -1744,7 +1744,7 @@ public class InternalTopologyBuilder {
 
         private String subtopologiesAsString() {
             final StringBuilder sb = new StringBuilder();
-            sb.append("Sub-topologies: \n");
+            sb.append("Sub-topologies:\n");
             if (subtopologies.isEmpty()) {
                 sb.append("  none\n");
             } else {

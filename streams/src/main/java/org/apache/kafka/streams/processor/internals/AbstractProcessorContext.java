@@ -46,12 +46,11 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     final StateManager stateManager;
 
     public AbstractProcessorContext(final TaskId taskId,
-                             final String applicationId,
-                             final StreamsConfig config,
-                             final StreamsMetrics metrics,
-                             final StateManager stateManager,
-                             final ThreadCache cache) {
-
+                                    final String applicationId,
+                                    final StreamsConfig config,
+                                    final StreamsMetrics metrics,
+                                    final StateManager stateManager,
+                                    final ThreadCache cache) {
         this.taskId = taskId;
         this.applicationId = applicationId;
         this.config = config;
@@ -93,7 +92,9 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     }
 
     @Override
-    public void register(final StateStore store, final boolean loggingEnabled, final StateRestoreCallback stateRestoreCallback) {
+    public void register(final StateStore store,
+                         final boolean loggingEnabled,
+                         final StateRestoreCallback stateRestoreCallback) {
         if (initialized) {
             throw new IllegalStateException("Can only create state stores during initialization.");
         }

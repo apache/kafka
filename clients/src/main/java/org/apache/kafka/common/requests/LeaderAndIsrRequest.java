@@ -93,7 +93,8 @@ public class LeaderAndIsrRequest extends AbstractRequest {
             new Field(PARTITION_STATES_KEY_NAME, new ArrayOf(LEADER_AND_ISR_REQUEST_PARTITION_STATE_V0)),
             new Field(LIVE_LEADERS_KEY_NAME, new ArrayOf(LEADER_AND_ISR_REQUEST_LIVE_LEADER_V0)));
 
-    // LEADER_AND_ISR_REQUEST_V1 added a per-partition is_new Field. This field specifies whether the replica should have existed on the broker or not.
+    // LEADER_AND_ISR_REQUEST_V1 added a per-partition is_new Field. This field specifies whether the replica should
+    // have existed on the broker or not.
     private static final Schema LEADER_AND_ISR_REQUEST_V1 = new Schema(
             new Field(CONTROLLER_ID_KEY_NAME, INT32, "The controller id."),
             new Field(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),

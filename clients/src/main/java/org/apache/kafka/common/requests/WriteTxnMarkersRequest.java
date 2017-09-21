@@ -40,7 +40,7 @@ import static org.apache.kafka.common.protocol.types.Type.INT64;
 
 public class WriteTxnMarkersRequest extends AbstractRequest {
     private static final String COORDINATOR_EPOCH_KEY_NAME = "coordinator_epoch";
-    private static final String TXN_MARKER_ENTRY_KEY_NAME = "transaction_markers";
+    private static final String TXN_MARKERS_KEY_NAME = "transaction_markers";
 
     private static final String PRODUCER_ID_KEY_NAME = "producer_id";
     private static final String PRODUCER_EPOCH_KEY_NAME = "producer_epoch";
@@ -60,7 +60,8 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
                     "hosted by this transaction coordinator"));
 
     private static final Schema WRITE_TXN_MARKERS_REQUEST_V0 = new Schema(
-            new Field(TXN_MARKER_ENTRY_KEY_NAME, new ArrayOf(WRITE_TXN_MARKERS_ENTRY_V0), "The transaction markers to be written."));
+            new Field(TXN_MARKERS_KEY_NAME, new ArrayOf(WRITE_TXN_MARKERS_ENTRY_V0), "The transaction markers to " +
+                    "be written."));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{WRITE_TXN_MARKERS_REQUEST_V0};
@@ -160,7 +161,7 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
     public WriteTxnMarkersRequest(Struct struct, short version) {
         super(version);
         List<TxnMarkerEntry> markers = new ArrayList<>();
-        Object[] markersArray = struct.getArray(TXN_MARKER_ENTRY_KEY_NAME);
+        Object[] markersArray = struct.getArray(TXN_MARKERS_KEY_NAME);
         for (Object markerObj : markersArray) {
             Struct markerStruct = (Struct) markerObj;
 
@@ -197,7 +198,7 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
         Object[] markersArray = new Object[markers.size()];
         int i = 0;
         for (TxnMarkerEntry entry : markers) {
-            Struct markerStruct = struct.instance(TXN_MARKER_ENTRY_KEY_NAME);
+            Struct markerStruct = struct.instance(TXN_MARKERS_KEY_NAME);
             markerStruct.set(PRODUCER_ID_KEY_NAME, entry.producerId);
             markerStruct.set(PRODUCER_EPOCH_KEY_NAME, entry.producerEpoch);
             markerStruct.set(COORDINATOR_EPOCH_KEY_NAME, entry.coordinatorEpoch);
@@ -215,7 +216,7 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
             markerStruct.set(TOPICS_KEY_NAME, partitionsArray);
             markersArray[i++] = markerStruct;
         }
-        struct.set(TXN_MARKER_ENTRY_KEY_NAME, markersArray);
+        struct.set(TXN_MARKERS_KEY_NAME, markersArray);
 
         return struct;
     }

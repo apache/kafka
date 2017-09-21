@@ -35,6 +35,8 @@ import org.apache.kafka.common.requests.ControlledShutdownRequest;
 import org.apache.kafka.common.requests.ControlledShutdownResponse;
 import org.apache.kafka.common.requests.CreateAclsRequest;
 import org.apache.kafka.common.requests.CreateAclsResponse;
+import org.apache.kafka.common.requests.CreatePartitionsRequest;
+import org.apache.kafka.common.requests.CreatePartitionsResponse;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.DeleteAclsRequest;
@@ -97,7 +99,7 @@ import org.apache.kafka.common.requests.WriteTxnMarkersRequest;
 import org.apache.kafka.common.requests.WriteTxnMarkersResponse;
 
 import java.nio.ByteBuffer;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.common.protocol.types.Type.BYTES;
 import static org.apache.kafka.common.protocol.types.Type.NULLABLE_BYTES;
@@ -167,8 +169,9 @@ public enum ApiKeys {
     DESCRIBE_LOG_DIRS(35, "DescribeLogDirs", DescribeLogDirsRequest.schemaVersions(),
             DescribeLogDirsResponse.schemaVersions()),
     SASL_AUTHENTICATE(36, "SaslAuthenticate", SaslAuthenticateRequest.schemaVersions(),
-            SaslAuthenticateResponse.schemaVersions());
-
+            SaslAuthenticateResponse.schemaVersions()),
+    CREATE_PARTITIONS(37, "CreatePartitions", CreatePartitionsRequest.schemaVersions(),
+            CreatePartitionsResponse.schemaVersions());
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;
@@ -325,18 +328,16 @@ public enum ApiKeys {
     }
 
     private static boolean retainsBufferReference(Schema schema) {
-        final AtomicReference<Boolean> foundBufferReference = new AtomicReference<>(Boolean.FALSE);
-        SchemaVisitor detector = new SchemaVisitorAdapter() {
+        final AtomicBoolean hasBuffer = new AtomicBoolean(false);
+        Schema.Visitor detector = new Schema.Visitor() {
             @Override
             public void visit(Type field) {
-                if (field == BYTES || field == NULLABLE_BYTES || field == RECORDS) {
-                    foundBufferReference.set(Boolean.TRUE);
-                }
+                if (field == BYTES || field == NULLABLE_BYTES || field == RECORDS)
+                    hasBuffer.set(true);
             }
         };
-        foundBufferReference.set(Boolean.FALSE);
-        ProtoUtils.walk(schema, detector);
-        return foundBufferReference.get();
+        schema.walk(detector);
+        return hasBuffer.get();
     }
 
 }

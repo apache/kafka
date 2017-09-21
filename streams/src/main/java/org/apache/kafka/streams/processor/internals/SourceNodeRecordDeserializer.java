@@ -63,12 +63,12 @@ class SourceNodeRecordDeserializer implements RecordDeserializer {
     }
 
     public ConsumerRecord<Object, Object> tryDeserialize(final ProcessorContext processorContext,
-                                                         ConsumerRecord<byte[], byte[]> rawRecord) {
+                                                         final ConsumerRecord<byte[], byte[]> rawRecord) {
 
         // catch and process if we have a deserialization handler
         try {
             return deserialize(rawRecord);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             final DeserializationExceptionHandler.DeserializationHandlerResponse response =
                     deserializationExceptionHandler.handle(processorContext, rawRecord, e);
             if (response == DeserializationExceptionHandler.DeserializationHandlerResponse.FAIL) {

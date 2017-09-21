@@ -109,7 +109,7 @@ class AssignedTasks {
 
     void initializeNewTasks() {
         if (!created.isEmpty()) {
-            log.trace("Initializing {}s {}", taskTypeName, created.keySet());
+            log.debug("Initializing {}s {}", taskTypeName, created.keySet());
         }
         for (final Iterator<Map.Entry<TaskId, Task>> it = created.entrySet().iterator(); it.hasNext(); ) {
             final Map.Entry<TaskId, Task> entry = it.next();
@@ -137,7 +137,7 @@ class AssignedTasks {
         restoredPartitions.addAll(restored);
         for (final Iterator<Map.Entry<TaskId, Task>> it = restoring.entrySet().iterator(); it.hasNext(); ) {
             final Map.Entry<TaskId, Task> entry = it.next();
-            Task task = entry.getValue();
+            final Task task = entry.getValue();
             if (restoredPartitions.containsAll(task.changelogPartitions())) {
                 transitionToRunning(task);
                 resume.addAll(task.partitions());
@@ -303,11 +303,12 @@ class AssignedTasks {
         builder.append("\n");
     }
 
-    private List<Task> allInitializedTasks() {
+    private List<Task> allTasks() {
         final List<Task> tasks = new ArrayList<>();
         tasks.addAll(running.values());
         tasks.addAll(suspended.values());
         tasks.addAll(restoring.values());
+        tasks.addAll(created.values());
         return tasks;
     }
 
@@ -428,8 +429,7 @@ class AssignedTasks {
     }
 
     void close(final boolean clean) {
-        close(allInitializedTasks(), clean);
-        close(created.values(), clean);
+        close(allTasks(), clean);
         clear();
     }
 

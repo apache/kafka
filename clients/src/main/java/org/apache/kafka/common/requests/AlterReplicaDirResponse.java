@@ -48,9 +48,9 @@ public class AlterReplicaDirResponse extends AbstractResponse {
 
     private static final Schema ALTER_REPLICA_DIR_RESPONSE_V0 = new Schema(
             THROTTLE_TIME_MS,
-            new Field("topics", new ArrayOf(new Schema(
+            new Field(TOPICS_KEY_NAME, new ArrayOf(new Schema(
                     TOPIC_NAME,
-                    new Field("partitions", new ArrayOf(new Schema(
+                    new Field(PARTITIONS_KEY_NAME, new ArrayOf(new Schema(
                             PARTITION_ID,
                             ERROR_CODE)))))));
 

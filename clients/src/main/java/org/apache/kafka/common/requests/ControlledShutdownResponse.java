@@ -44,7 +44,7 @@ public class ControlledShutdownResponse extends AbstractResponse {
 
     private static final Schema CONTROLLED_SHUTDOWN_RESPONSE_V0 = new Schema(
             ERROR_CODE,
-            new Field("partitions_remaining", new ArrayOf(CONTROLLED_SHUTDOWN_PARTITION_V0), "The partitions " +
+            new Field(PARTITIONS_REMAINING_KEY_NAME, new ArrayOf(CONTROLLED_SHUTDOWN_PARTITION_V0), "The partitions " +
                     "that the broker still leads."));
 
     private static final Schema CONTROLLED_SHUTDOWN_RESPONSE_V1 = CONTROLLED_SHUTDOWN_RESPONSE_V0;

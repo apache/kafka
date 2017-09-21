@@ -64,6 +64,9 @@ import org.apache.kafka.common.requests.AlterConfigsRequest;
 import org.apache.kafka.common.requests.AlterConfigsResponse;
 import org.apache.kafka.common.requests.AlterReplicaDirRequest;
 import org.apache.kafka.common.requests.AlterReplicaDirResponse;
+import org.apache.kafka.common.requests.CreatePartitionsRequest;
+import org.apache.kafka.common.requests.CreatePartitionsResponse;
+import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.CreateAclsRequest;
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation;
 import org.apache.kafka.common.requests.CreateAclsResponse;
@@ -78,7 +81,6 @@ import org.apache.kafka.common.requests.DeleteTopicsRequest;
 import org.apache.kafka.common.requests.DeleteTopicsResponse;
 import org.apache.kafka.common.requests.DescribeAclsRequest;
 import org.apache.kafka.common.requests.DescribeAclsResponse;
-import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.DescribeConfigsRequest;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
 import org.apache.kafka.common.requests.DescribeLogDirsRequest;
@@ -1799,4 +1801,42 @@ public class KafkaAdminClient extends AdminClient {
 
         return new DescribeReplicaLogDirResult(new HashMap<TopicPartitionReplica, KafkaFuture<ReplicaLogDirInfo>>(futures));
     }
+
+    public CreatePartitionsResult createPartitions(Map<String, NewPartitions> newPartitions, final CreatePartitionsOptions options) {
+        final Map<String, KafkaFutureImpl<Void>> futures = new HashMap<>(newPartitions.size());
+        for (String topic : newPartitions.keySet()) {
+            futures.put(topic, new KafkaFutureImpl<Void>());
+        }
+        final Map<String, NewPartitions> requestMap = new HashMap<>(newPartitions);
+
+        final long now = time.milliseconds();
+        runnable.call(new Call("createPartitions", calcDeadlineMs(now, options.timeoutMs()),
+                new ControllerNodeProvider()) {
+
+            @Override
+            public AbstractRequest.Builder createRequest(int timeoutMs) {
+                return new CreatePartitionsRequest.Builder(requestMap, timeoutMs, options.validateOnly());
+            }
+
+            @Override
+            public void handleResponse(AbstractResponse abstractResponse) {
+                CreatePartitionsResponse response = (CreatePartitionsResponse) abstractResponse;
+                for (Map.Entry<String, ApiError> result : response.errors().entrySet()) {
+                    KafkaFutureImpl<Void> future = futures.get(result.getKey());
+                    if (result.getValue().isSuccess()) {
+                        future.complete(null);
+                    } else {
+                        future.completeExceptionally(result.getValue().exception());
+                    }
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                completeAllExceptionally(futures.values(), throwable);
+            }
+        }, now);
+        return new CreatePartitionsResult((Map) futures);
+    }
+
 }

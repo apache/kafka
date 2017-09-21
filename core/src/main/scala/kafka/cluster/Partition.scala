@@ -518,6 +518,12 @@ class Partition(val topic: String,
     info
   }
 
+  def logStartOffset: Long = {
+    inReadLock(leaderIsrUpdateLock) {
+      leaderReplicaIfLocal.map(_.log.get.logStartOffset).getOrElse(-1)
+    }
+  }
+
   /**
    * Update logStartOffset and low watermark if 1) offset <= highWatermark and 2) it is the leader replica.
    * This function can trigger log segment deletion and log rolling.

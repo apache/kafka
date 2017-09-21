@@ -14,25 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.protocol;
 
-import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Schema;
-import org.apache.kafka.common.protocol.types.Type;
+package org.apache.kafka.common.errors;
 
-public abstract class SchemaVisitorAdapter implements SchemaVisitor {
-    @Override
-    public void visit(Schema schema) {
-        //nop
+/**
+ * Thrown if a request cannot be completed because a partition reassignment is in progress.
+ */
+public class ReassignmentInProgressException extends ApiException {
+
+    public ReassignmentInProgressException(String msg) {
+        super(msg);
     }
 
-    @Override
-    public void visit(ArrayOf array) {
-        //nop
-    }
-
-    @Override
-    public void visit(Type field) {
-        //nop
+    public ReassignmentInProgressException(String msg, Throwable cause) {
+        super(msg, cause);
     }
 }

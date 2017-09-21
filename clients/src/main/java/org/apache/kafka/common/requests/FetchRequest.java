@@ -60,7 +60,7 @@ public class FetchRequest extends AbstractRequest {
             new Field(FETCH_OFFSET_KEY_NAME, INT64, "Message offset."),
             new Field(MAX_BYTES_KEY_NAME, INT32, "Maximum bytes to fetch."));
 
-    // FETCH_REQUEST_PARTITION_V1 added log_start_offset field - the earliest available offset of partition data that can be consumed.
+    // FETCH_REQUEST_PARTITION_V5 added log_start_offset field - the earliest available offset of partition data that can be consumed.
     private static final Schema FETCH_REQUEST_PARTITION_V5 = new Schema(
             PARTITION_ID,
             new Field(FETCH_OFFSET_KEY_NAME, INT64, "Message offset."),

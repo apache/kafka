@@ -62,7 +62,7 @@ public class DeleteRecordsResponse extends AbstractResponse {
 
     private static final Schema DELETE_RECORDS_RESPONSE_V0 = new Schema(
             THROTTLE_TIME_MS,
-            new Field("topics", new ArrayOf(DELETE_RECORDS_RESPONSE_TOPIC_V0)));
+            new Field(TOPICS_KEY_NAME, new ArrayOf(DELETE_RECORDS_RESPONSE_TOPIC_V0)));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{DELETE_RECORDS_RESPONSE_V0};

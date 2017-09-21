@@ -20,6 +20,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,6 +60,7 @@ public final class Metadata {
     private int version;
     private long lastRefreshMs;
     private long lastSuccessfulRefreshMs;
+    private AuthenticationException authenticationException;
     private Cluster cluster;
     private boolean needUpdate;
     /* Topics with expiry time */
@@ -146,15 +148,28 @@ public final class Metadata {
     }
 
     /**
+     * If any non-retriable authentication exceptions were encountered during
+     * metadata update, clear and throw the exception.
+     */
+    public synchronized void maybeThrowAuthenticationException() {
+        if (authenticationException != null) {
+            AuthenticationException exception = authenticationException;
+            authenticationException = null;
+            throw exception;
+        }
+    }
+
+    /**
      * Wait for metadata update until the current version is larger than the last version we know of
      */
     public synchronized void awaitUpdate(final int lastVersion, final long maxWaitMs) throws InterruptedException {
         if (maxWaitMs < 0) {
-            throw new IllegalArgumentException("Max time to wait for metadata updates should not be < 0 milli seconds");
+            throw new IllegalArgumentException("Max time to wait for metadata updates should not be < 0 milliseconds");
         }
         long begin = System.currentTimeMillis();
         long remainingWaitMs = maxWaitMs;
         while (this.version <= lastVersion) {
+            maybeThrowAuthenticationException();
             if (remainingWaitMs != 0)
                 wait(remainingWaitMs);
             long elapsed = System.currentTimeMillis() - begin;
@@ -256,8 +271,11 @@ public final class Metadata {
      * Record an attempt to update the metadata that failed. We need to keep track of this
      * to avoid retrying immediately.
      */
-    public synchronized void failedUpdate(long now) {
+    public synchronized void failedUpdate(long now, AuthenticationException authenticationException) {
         this.lastRefreshMs = now;
+        this.authenticationException = authenticationException;
+        if (authenticationException != null)
+            this.notifyAll();
     }
 
     /**

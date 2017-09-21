@@ -14,14 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.protocol;
 
-import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Schema;
-import org.apache.kafka.common.protocol.types.Type;
+package org.apache.kafka.common.errors;
 
-public interface SchemaVisitor {
-    void visit(Schema schema);
-    void visit(ArrayOf array);
-    void visit(Type field);
+/**
+ * This exception is raised by the broker if it could not locate the producer metadata associated with the producerId
+ * in question. This could happen if, for instance, the producer's records were deleted because their retention time
+ * had elapsed. Once the last records of the producerId are removed, the producer's metadata is removed from the broker,
+ * and future appends by the producer will return this exception.
+ */
+public class UnknownProducerIdException extends OutOfOrderSequenceException {
+
+    public UnknownProducerIdException(String message) {
+        super(message);
+    }
+
 }

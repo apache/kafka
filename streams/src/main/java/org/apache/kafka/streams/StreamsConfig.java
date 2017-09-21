@@ -342,10 +342,10 @@ public class StreamsConfig extends AbstractConfig {
                     Importance.MEDIUM,
                     CLIENT_ID_DOC)
             .define(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
-                Type.CLASS,
-                LogAndFailExceptionHandler.class.getName(),
-                Importance.MEDIUM,
-                DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC)
+                    Type.CLASS,
+                    LogAndFailExceptionHandler.class.getName(),
+                    Importance.MEDIUM,
+                    DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC)
             .define(DEFAULT_KEY_SERDE_CLASS_CONFIG,
                     Type.CLASS,
                     Serdes.ByteArraySerde.class.getName(),

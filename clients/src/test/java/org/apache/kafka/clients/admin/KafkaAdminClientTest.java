@@ -29,9 +29,11 @@ import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.CreatePartitionsResponse;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.CreateAclsResponse;
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse;
@@ -375,6 +377,40 @@ public class KafkaAdminClientTest {
             DescribeConfigsResult result2 = env.adminClient().describeConfigs(Collections.singleton(
                 new ConfigResource(ConfigResource.Type.BROKER, "0")));
             result2.all().get();
+        }
+    }
+
+    @Test
+    public void testCreatePartitions() throws Exception {
+        try (MockKafkaAdminClientEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
+            env.kafkaClient().setNode(env.cluster().controller());
+
+            Map<String, ApiError> m = new HashMap<>();
+            m.put("my_topic", ApiError.NONE);
+            m.put("other_topic", ApiError.fromThrowable(new InvalidTopicException("some detailed reason")));
+
+            // Test a call where one filter has an error.
+            env.kafkaClient().prepareResponse(new CreatePartitionsResponse(0, m));
+
+            Map<String, NewPartitions> counts = new HashMap<>();
+            counts.put("my_topic", NewPartitions.increaseTo(3));
+            counts.put("other_topic", NewPartitions.increaseTo(3, asList(asList(2), asList(3))));
+
+            CreatePartitionsResult results = env.adminClient().createPartitions(counts);
+            Map<String, KafkaFuture<Void>> values = results.values();
+            KafkaFuture<Void> myTopicResult = values.get("my_topic");
+            myTopicResult.get();
+            KafkaFuture<Void> otherTopicResult = values.get("other_topic");
+            try {
+                otherTopicResult.get();
+                fail("get() should throw ExecutionException");
+            } catch (ExecutionException e0) {
+                assertTrue(e0.getCause() instanceof InvalidTopicException);
+                InvalidTopicException e = (InvalidTopicException) e0.getCause();
+                assertEquals("some detailed reason", e.getMessage());
+            }
         }
     }
 

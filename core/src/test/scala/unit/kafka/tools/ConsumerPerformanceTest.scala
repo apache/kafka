@@ -26,21 +26,36 @@ import org.junit.Test
 class ConsumerPerformanceTest {
 
   private val outContent = new ByteArrayOutputStream()
+  private val dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss:SSS")
 
   @Test
-  def testHeaderMatchBody(): Unit = {
+  def testDetailedHeaderMatchBody(): Unit = {
+    testHeaderMatchContent(detailed = true, useOldConsumer = false, 2,
+      () => ConsumerPerformance.printNewConsumerProgress(1, 1024 * 1024, 0, 1, 0, 0, 1, dateFormat, 1L))
+    testHeaderMatchContent(detailed = true, useOldConsumer = true, 4,
+      () => ConsumerPerformance.printOldConsumerProgress(1, 1024 * 1024, 0, 1, 0, 0, 1,
+      dateFormat))
+  }
+
+  @Test
+  def testNonDetailedHeaderMatchBody(): Unit = {
+    testHeaderMatchContent(detailed = false, useOldConsumer = false, 2, () => println(s"${dateFormat.format(System.currentTimeMillis)}, " +
+      s"${dateFormat.format(System.currentTimeMillis)}, 1.0, 1.0, 1, 1.0, 1, 1, 1.1, 1.1"))
+    testHeaderMatchContent(detailed = false, useOldConsumer = true, 4, () => println(s"${dateFormat.format(System.currentTimeMillis)}, " +
+      s"${dateFormat.format(System.currentTimeMillis)}, 1.0, 1.0, 1, 1.0"))
+  }
+
+  private def testHeaderMatchContent(detailed: Boolean, useOldConsumer: Boolean, expectedOutputLineCount: Int, fun: () => Unit): Unit = {
     Console.withOut(outContent) {
-      ConsumerPerformance.printHeader(true)
-      ConsumerPerformance.printProgressMessage(1, 1024 * 1024, 0, 1, 0, 0, 1,
-        new SimpleDateFormat("yyyy-MM-dd HH:mm:ss:SSS")
-      )
+      ConsumerPerformance.printHeader(detailed, useOldConsumer)
+      fun()
+
+      val contents = outContent.toString.split("\n")
+      assertEquals(expectedOutputLineCount, contents.length)
+      val header = contents(0)
+      val body = contents(1)
+
+      assertEquals(header.split(",").length, body.split(",").length)
     }
-
-    val contents = outContent.toString.split("\n")
-    assertEquals(2, contents.length)
-    val header = contents(0)
-    val body = contents(1)
-
-    assertEquals(header.split(",").length, body.split(",").length)
   }
 }

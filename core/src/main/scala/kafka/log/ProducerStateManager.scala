@@ -161,9 +161,15 @@ private[log] class ProducerAppendInfo(val producerId: Long,
         s"with a newer epoch. $producerEpoch (request epoch), ${currentEntry.producerEpoch} (server epoch)")
     } else if (validateSequenceNumbers) {
       if (producerEpoch != currentEntry.producerEpoch) {
-        if (firstSeq != 0)
-          throw new OutOfOrderSequenceException(s"Invalid sequence number for new epoch: $producerEpoch " +
-            s"(request epoch), $firstSeq (seq. number)")
+        if (firstSeq != 0) {
+          if (currentEntry.producerEpoch != RecordBatch.NO_PRODUCER_EPOCH) {
+            throw new OutOfOrderSequenceException(s"Invalid sequence number for new epoch: $producerEpoch " +
+              s"(request epoch), $firstSeq (seq. number)")
+          } else {
+            throw new UnknownProducerIdException(s"Found no record of producerId=$producerId on the broker. It is possible " +
+              s"that the last message with the producerId=$producerId has been removed due to hitting the retention limit.")
+          }
+        }
       } else if (currentEntry.lastSeq == RecordBatch.NO_SEQUENCE && firstSeq != 0) {
         // the epoch was bumped by a control record, so we expect the sequence number to be reset
         throw new OutOfOrderSequenceException(s"Out of order sequence number for producerId $producerId: found $firstSeq " +
