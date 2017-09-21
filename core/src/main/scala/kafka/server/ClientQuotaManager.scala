@@ -325,6 +325,8 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
 
   /**
    * Returns the quota for the client with the specified (non-encoded) user principal and client-id.
+   * 
+   * Note: this method is expensive, it is meant to be used by tests only
    */
   def quota(user: String, clientId: String) = {
     quotaEntity(Sanitizer.sanitize(user), Sanitizer.sanitize(clientId)).quota

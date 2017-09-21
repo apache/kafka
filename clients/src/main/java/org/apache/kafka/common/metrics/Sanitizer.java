@@ -23,9 +23,12 @@ import java.nio.charset.StandardCharsets;
 
 import org.apache.kafka.common.KafkaException;
 
-
+/**
+ * Utility class for sanitizing/desanitizing user principal and client-ids
+ * to a safe value for use in MetricName and as Zookeeper node name
+ */
 public class Sanitizer {
-    
+
     public static String sanitize(String name) {
         String encoded = "";
         try {
@@ -33,9 +36,9 @@ public class Sanitizer {
             StringBuilder builder = new StringBuilder();
             for (int i = 0; i < encoded.length(); i++) {
                 char c = encoded.charAt(i);
-                if (c == '*') {
+                if (c == '*') {         // Metric ObjectName treats * as pattern
                     builder.append("%2A");
-                } else if (c == '+') {
+                } else if (c == '+') {  // Space URL-encoded as +, replace with percent encoding
                     builder.append("%20");
                 } else {
                     builder.append(c);

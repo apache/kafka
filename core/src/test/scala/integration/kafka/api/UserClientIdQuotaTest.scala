@@ -31,8 +31,10 @@ class UserClientIdQuotaTest extends BaseQuotaTest {
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
 
   override val userPrincipal = "O=A client,CN=localhost"
-  override def producerQuotaId = QuotaId(Some(Sanitizer.sanitize(userPrincipal)), Some(producerClientId))
-  override def consumerQuotaId = QuotaId(Some(Sanitizer.sanitize(userPrincipal)), Some(consumerClientId))
+  override def producerClientId = "QuotasTestProducer-!@#$%^&*()"
+  override def consumerClientId = "QuotasTestConsumer-!@#$%^&*()"
+  override def producerQuotaId = QuotaId(Some(Sanitizer.sanitize(userPrincipal)), Some(Sanitizer.sanitize(producerClientId)))
+  override def consumerQuotaId = QuotaId(Some(Sanitizer.sanitize(userPrincipal)), Some(Sanitizer.sanitize(consumerClientId)))
 
   @Before
   override def setUp() {
@@ -59,11 +61,11 @@ class UserClientIdQuotaTest extends BaseQuotaTest {
 
   override def removeQuotaOverrides() {
     val emptyProps = new Properties
-    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, Sanitizer.sanitize(userPrincipal) + "/clients/" + producerClientId, emptyProps)
-    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, Sanitizer.sanitize(userPrincipal) + "/clients/" + consumerClientId, emptyProps)
+    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, Sanitizer.sanitize(userPrincipal) + "/clients/" + Sanitizer.sanitize(producerClientId), emptyProps)
+    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, Sanitizer.sanitize(userPrincipal) + "/clients/" + Sanitizer.sanitize(consumerClientId), emptyProps)
   }
 
   private def updateQuotaOverride(userPrincipal: String, clientId: String, properties: Properties) {
-    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, Sanitizer.sanitize(userPrincipal) + "/clients/" + clientId, properties)
+    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, Sanitizer.sanitize(userPrincipal) + "/clients/" + Sanitizer.sanitize(clientId), properties)
   }
 }

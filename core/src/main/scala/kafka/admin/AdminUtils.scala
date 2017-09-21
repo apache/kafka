@@ -516,14 +516,14 @@ object AdminUtils extends Logging with AdminUtilities {
    * and <user> configs are not specified.
    *
    * @param zkUtils Zookeeper utilities used to write the config to ZK
-   * @param clientId: The clientId for which configs are being changed
+   * @param sanitizedClientId: The sanitized clientId for which configs are being changed
    * @param configs: The final set of configs that will be applied to the topic. If any new configs need to be added or
    *                 existing configs need to be deleted, it should be done prior to invoking this API
    *
    */
-  def changeClientIdConfig(zkUtils: ZkUtils, clientId: String, configs: Properties) {
+  def changeClientIdConfig(zkUtils: ZkUtils, sanitizedClientId: String, configs: Properties) {
     DynamicConfig.Client.validate(configs)
-    changeEntityConfig(zkUtils, ConfigType.Client, clientId, configs)
+    changeEntityConfig(zkUtils, ConfigType.Client, sanitizedClientId, configs)
   }
 
   /**
