@@ -615,11 +615,6 @@ public class Sender implements Runnable {
             transactionManager.removeInFlightBatch(batch);
             if (adjustSequenceNumbers)
                 transactionManager.adjustSequencesDueToFailedBatch(batch);
-            if (exception instanceof UnknownProducerException)
-                // We don't want to return the UnknownProducerException to the user because we already have the
-                // OutOfOrderSequenceException to indicate data loss, and there is no point having two of them
-                // indicating the same thing.
-                exception = Errors.OUT_OF_ORDER_SEQUENCE_NUMBER.exception();
         }
 
         this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);

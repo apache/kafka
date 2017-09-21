@@ -23,13 +23,10 @@ package org.apache.kafka.common.errors;
  * had elapsed. Once the last records of the producerId are removed, the producer's metadata is removed from the broker,
  * and future appends by the producer will return this exception.
  */
-public class UnknownProducerException extends ApiException {
+public class UnknownProducerException extends OutOfOrderSequenceException {
 
     public UnknownProducerException(String message) {
         super(message);
     }
 
-    public UnknownProducerException(String message, Throwable cause) {
-        super(message, cause);
-    }
 }
