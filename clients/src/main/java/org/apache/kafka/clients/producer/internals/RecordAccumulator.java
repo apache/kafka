@@ -132,37 +132,37 @@ public final class RecordAccumulator {
         this.time = time;
         this.apiVersions = apiVersions;
         this.transactionManager = transactionManager;
-        registerMetrics(metrics, metricGrpName, metricsRegistry);
+        registerMetrics(metricsRegistry);
     }
 
-    private void registerMetrics(Metrics metrics, String metricGrpName, RecordAccumulatorMetricsRegistry metricsRegistry) {
-        MetricName metricName = metricsRegistry.waitingThreads;
+    private void registerMetrics(RecordAccumulatorMetricsRegistry metrics) {
+        MetricName metricName = metrics.waitingThreads;
         Measurable waitingThreads = new Measurable() {
             public double measure(MetricConfig config, long now) {
                 return free.queued();
             }
         };
-        metricsRegistry.addMetric(metricName, waitingThreads);
+        metrics.addMetric(metricName, waitingThreads);
 
-        metricName = metricsRegistry.bufferTotalBytes;
+        metricName = metrics.bufferTotalBytes;
         Measurable totalBytes = new Measurable() {
             public double measure(MetricConfig config, long now) {
                 return free.totalMemory();
             }
         };
-        metricsRegistry.addMetric(metricName, totalBytes);
+        metrics.addMetric(metricName, totalBytes);
 
-        metricName = metricsRegistry.bufferAvailableBytes;
+        metricName = metrics.bufferAvailableBytes;
         Measurable availableBytes = new Measurable() {
             public double measure(MetricConfig config, long now) {
                 return free.availableMemory();
             }
         };
-        metricsRegistry.addMetric(metricName, availableBytes);
+        metrics.addMetric(metricName, availableBytes);
 
-        Sensor bufferExhaustedRecordSensor = metricsRegistry.sensor("buffer-exhausted-records");
-        MetricName rateMetricName = metricsRegistry.bufferExhaustedRate;
-        MetricName totalMetricName = metricsRegistry.bufferExhaustedTotal;
+        Sensor bufferExhaustedRecordSensor = metrics.sensor("buffer-exhausted-records");
+        MetricName rateMetricName = metrics.bufferExhaustedRate;
+        MetricName totalMetricName = metrics.bufferExhaustedTotal;
         bufferExhaustedRecordSensor.add(new Meter(rateMetricName, totalMetricName));
     }
 
