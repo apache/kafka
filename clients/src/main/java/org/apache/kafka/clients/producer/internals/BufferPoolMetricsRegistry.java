@@ -21,7 +21,7 @@ import org.apache.kafka.common.metrics.Metrics;
 
 public class BufferPoolMetricsRegistry extends MetricsRegistry {
 
-    private final static String metricGrpName = "producer-metrics";
+    private final static String METRIC_GROUP_NAME = "producer-metrics";
     public final MetricName bufferPoolWaitRatio;
     public final MetricName bufferPoolWaitTimeTotal;
 
@@ -29,10 +29,10 @@ public class BufferPoolMetricsRegistry extends MetricsRegistry {
         super(metrics);
 
         this.bufferPoolWaitRatio = createMetricName("bufferpool-wait-ratio",
-                metricGrpName,
+                METRIC_GROUP_NAME,
                 "The fraction of time an appender waits for space allocation.", tags);
         this.bufferPoolWaitTimeTotal = createMetricName("bufferpool-wait-time-total",
-                metricGrpName,
+                METRIC_GROUP_NAME,
                 "The total time an appender waits for space allocation.", tags);
 
     }
