@@ -336,7 +336,7 @@ public class RecordAccumulatorTest {
         long lingerMs = Long.MAX_VALUE / 4;
         long retryBackoffMs = Long.MAX_VALUE / 2;
         final RecordAccumulator accum = new RecordAccumulator(logContext, 1024 + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * 1024,
-                CompressionType.NONE, lingerMs, retryBackoffMs, metrics, metricsRegistry, time, new ApiVersions(), null);
+                CompressionType.NONE, lingerMs, retryBackoffMs, metricsRegistry, time, new ApiVersions(), null);
 
         long now = time.milliseconds();
         accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs);
@@ -627,7 +627,7 @@ public class RecordAccumulatorTest {
         apiVersions.update("foobar", NodeApiVersions.create(Arrays.asList(new ApiVersionsResponse.ApiVersion(ApiKeys.PRODUCE.id,
                 (short) 0, (short) 2))));
         RecordAccumulator accum = new RecordAccumulator(logContext, batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * batchSize,
-                CompressionType.NONE, 10, 100L, metrics, metricsRegistry, time, apiVersions, new TransactionManager());
+                CompressionType.NONE, 10, 100L, metricsRegistry, time, apiVersions, new TransactionManager());
         accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, 0);
     }
 
@@ -849,7 +849,6 @@ public class RecordAccumulatorTest {
                 type,
                 lingerMs,
                 100L,
-                metrics,
                 metricsRegistry,
                 time,
                 new ApiVersions(),

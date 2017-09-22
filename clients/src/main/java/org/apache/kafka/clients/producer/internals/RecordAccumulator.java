@@ -27,7 +27,6 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.record.AbstractRecords;
@@ -97,7 +96,6 @@ public final class RecordAccumulator {
      *        latency for potentially better throughput due to more batching (and hence fewer, larger requests).
      * @param retryBackoffMs An artificial delay time to retry the produce request upon receiving an error. This avoids
      *        exhausting all retries in a short period of time.
-     * @param metrics The metrics
      * @param metricsRegistry The metrics registry
      * @param time The time instance to use
      * @param apiVersions Request API versions for current connected brokers
@@ -110,7 +108,6 @@ public final class RecordAccumulator {
                              CompressionType compression,
                              long lingerMs,
                              long retryBackoffMs,
-                             Metrics metrics,
                              RecordAccumulatorMetricsRegistry metricsRegistry,
                              Time time,
                              ApiVersions apiVersions,
@@ -125,7 +122,6 @@ public final class RecordAccumulator {
         this.lingerMs = lingerMs;
         this.retryBackoffMs = retryBackoffMs;
         this.batches = new CopyOnWriteMap<>();
-        String metricGrpName = "producer-metrics";
         this.free = new BufferPool(totalSize, batchSize, metricsRegistry.bufferPoolMetrics, time);
         this.incomplete = new IncompleteBatches();
         this.muted = new HashSet<>();
