@@ -16,8 +16,6 @@
  */
 package kafka.server
 
-import java.net.{URLEncoder, URLDecoder}
-import java.nio.charset.StandardCharsets
 import java.util.concurrent.{ConcurrentHashMap, DelayQueue, TimeUnit}
 import java.util.concurrent.locks.ReentrantReadWriteLock
 

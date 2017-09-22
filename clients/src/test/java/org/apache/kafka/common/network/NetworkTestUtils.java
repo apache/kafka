@@ -89,6 +89,6 @@ public class NetworkTestUtils {
             }
         }
         assertTrue("Channel was not closed by timeout", closed);
-        assertEquals(channelState, selector.disconnected().get(node).state());
+        assertEquals(channelState, selector.disconnected().get(node).value());
     }
 }

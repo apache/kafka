@@ -461,7 +461,7 @@ public class SaslAuthenticatorTest {
         selector.send(request.toSend(node1, header));
         // This test uses a non-SASL PLAINTEXT client in order to do manual handshake.
         // So the channel is in READY state.
-        NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.state());
+        NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.value());
         selector.close();
 
         // Test good connection still works
@@ -487,7 +487,7 @@ public class SaslAuthenticatorTest {
         byte[] bytes = new byte[1024];
         random.nextBytes(bytes);
         selector.send(new NetworkSend(node1, ByteBuffer.wrap(bytes)));
-        NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.state());
+        NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.value());
         selector.close();
 
         // Test good connection still works
@@ -498,7 +498,7 @@ public class SaslAuthenticatorTest {
         createClientConnection(SecurityProtocol.PLAINTEXT, node2);
         random.nextBytes(bytes);
         selector.send(new NetworkSend(node2, ByteBuffer.wrap(bytes)));
-        NetworkTestUtils.waitForChannelClose(selector, node2, ChannelState.READY.state());
+        NetworkTestUtils.waitForChannelClose(selector, node2, ChannelState.READY.value());
         selector.close();
 
         // Test good connection still works
@@ -526,7 +526,7 @@ public class SaslAuthenticatorTest {
         ApiVersionsRequest request = createApiVersionsRequestV0();
         RequestHeader versionsHeader = new RequestHeader(ApiKeys.API_VERSIONS, request.version(), "someclient", 2);
         selector.send(request.toSend(node1, versionsHeader));
-        NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.state());
+        NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.value());
         selector.close();
 
         // Test good connection still works
@@ -553,7 +553,7 @@ public class SaslAuthenticatorTest {
         buffer.put(new byte[buffer.capacity() - 4]);
         buffer.rewind();
         selector.send(new NetworkSend(node1, buffer));
-        NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.state());
+        NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.value());
         selector.close();
 
         // Test good connection still works
@@ -567,7 +567,7 @@ public class SaslAuthenticatorTest {
         buffer.put(new byte[buffer.capacity() - 4]);
         buffer.rewind();
         selector.send(new NetworkSend(node2, buffer));
-        NetworkTestUtils.waitForChannelClose(selector, node2, ChannelState.READY.state());
+        NetworkTestUtils.waitForChannelClose(selector, node2, ChannelState.READY.value());
         selector.close();
 
         // Test good connection still works
@@ -592,7 +592,7 @@ public class SaslAuthenticatorTest {
         RequestHeader metadataRequestHeader1 = new RequestHeader(ApiKeys.METADATA, metadataRequest1.version(),
                 "someclient", 1);
         selector.send(metadataRequest1.toSend(node1, metadataRequestHeader1));
-        NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.state());
+        NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.value());
         selector.close();
 
         // Test good connection still works
@@ -606,7 +606,7 @@ public class SaslAuthenticatorTest {
         RequestHeader metadataRequestHeader2 = new RequestHeader(ApiKeys.METADATA,
                 metadataRequest2.version(), "someclient", 2);
         selector.send(metadataRequest2.toSend(node2, metadataRequestHeader2));
-        NetworkTestUtils.waitForChannelClose(selector, node2, ChannelState.READY.state());
+        NetworkTestUtils.waitForChannelClose(selector, node2, ChannelState.READY.value());
         selector.close();
 
         // Test good connection still works
@@ -912,7 +912,7 @@ public class SaslAuthenticatorTest {
         // Without SASL_AUTHENTICATE headers, disconnect state is ChannelState.AUTHENTICATE which is
         // a hint that channel was closed during authentication, unlike ChannelState.AUTHENTICATE_FAILED
         // which is an actual authentication failure reported by the broker.
-        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE.state());
+        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE.value());
     }
 
     private void createServer(SecurityProtocol securityProtocol, String saslMechanism,
