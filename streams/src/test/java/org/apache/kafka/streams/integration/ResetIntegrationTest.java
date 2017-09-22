@@ -357,13 +357,15 @@ public class ResetIntegrationTest {
                 "--application-id", APP_ID + testNo,
                 "--bootstrap-servers", CLUSTER.bootstrapServers(),
                 "--input-topics", INPUT_TOPIC,
-                "--intermediate-topics", INTERMEDIATE_USER_TOPIC
+                "--intermediate-topics", INTERMEDIATE_USER_TOPIC,
+                "--zookeeper", "localhost:2181"
             };
         } else {
             parameters = new String[]{
                 "--application-id", APP_ID + testNo,
                 "--bootstrap-servers", CLUSTER.bootstrapServers(),
-                "--input-topics", INPUT_TOPIC
+                "--input-topics", INPUT_TOPIC,
+                "--zookeeper", "localhost:2181"
             };
         }
         final Properties cleanUpConfig = new Properties();
@@ -385,9 +387,9 @@ public class ResetIntegrationTest {
         expectedRemainingTopicsAfterCleanup.add(OUTPUT_TOPIC_2_RERUN);
         expectedRemainingTopicsAfterCleanup.add("__consumer_offsets");
 
-        Set<String> allTopics = new HashSet<>();
+        final Set<String> allTopics = new HashSet<>();
         try {
-            ListTopicsOptions listTopicsOptions = new ListTopicsOptions();
+            final ListTopicsOptions listTopicsOptions = new ListTopicsOptions();
             listTopicsOptions.listInternal(true);
             allTopics.addAll(kafkaAdminClient.listTopics(listTopicsOptions).names().get(30000, TimeUnit.MILLISECONDS));
             assertThat(allTopics, equalTo(expectedRemainingTopicsAfterCleanup));
