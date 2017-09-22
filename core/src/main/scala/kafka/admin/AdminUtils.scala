@@ -24,14 +24,11 @@ import kafka.utils.ZkUtils._
 import java.util.Random
 import java.util.Properties
 
-import kafka.common.{TopicAlreadyMarkedForDeletionException, TopicAndPartition}
-import org.apache.kafka.common.errors.{BrokerNotAvailableException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidReplicationFactorException, InvalidTopicException, ReassignmentInProgressException, TopicExistsException, UnknownTopicOrPartitionException}
+import kafka.common.TopicAlreadyMarkedForDeletionException
+import org.apache.kafka.common.errors.{BrokerNotAvailableException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidReplicationFactorException, InvalidTopicException, TopicExistsException, UnknownTopicOrPartitionException}
 
-import scala.collection._
+import collection.{Map, Set, mutable, _}
 import scala.collection.JavaConverters._
-import scala.collection.mutable
-import collection.Map
-import collection.Set
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import org.apache.kafka.common.internals.Topic
 
@@ -263,27 +260,24 @@ object AdminUtils extends Logging with AdminUtilities {
   *
   * @param zkUtils Zookeeper utilities
   * @param topic Topic for adding partitions to
+  * @param existingAssignment A map from partition id to its assigned replicas
+  * @param allBrokers All brokers in the cluster
   * @param numPartitions Number of partitions to be set
   * @param replicaAssignment Manual replica assignment, or none
-  * @param checkBrokerAvailable Ignore checking if assigned replica broker is available. Only used for testing
+  * @param validateOnly If true, validate the parameters without actually adding the partitions
+  * @return the updated replica assignment
   */
   def addPartitions(zkUtils: ZkUtils,
                     topic: String,
                     existingAssignment: Map[Int, Seq[Int]],
+                    allBrokers: Seq[BrokerMetadata],
                     numPartitions: Int = 1,
                     replicaAssignment: Option[Map[Int, Seq[Int]]] = None,
-                    checkBrokerAvailable: Boolean = true,
-                    rackAwareMode: RackAwareMode = RackAwareMode.Enforced,
                     validateOnly: Boolean = false): Map[Int, Seq[Int]] = {
-    if (zkUtils.pathExists(ZkUtils.ReassignPartitionsPath)) {
-      // We prevent addition partitions while a reassignment is in progress, since
-      // during reassignment there is no meaningful notion of replication factor
-      throw new ReassignmentInProgressException("A partition reassignment is in progress.")
-    }
-
     val existingAssignmentPartition0 = existingAssignment.getOrElse(0,
       throw new AdminOperationException(
-        s"Unexpected existing replica assignment for topic '$topic', partition id 0 is missing. Assignment: $existingAssignment"))
+        s"Unexpected existing replica assignment for topic '$topic', partition id 0 is missing. " +
+          s"Assignment: $existingAssignment"))
 
     val partitionsToAdd = numPartitions - existingAssignment.size
     if (partitionsToAdd <= 0)
@@ -292,76 +286,76 @@ object AdminUtils extends Logging with AdminUtilities {
           s"Topic $topic currently has ${existingAssignment.size} partitions, " +
           s"$numPartitions would not be an increase.")
 
-    // create the new partition replication list
-    val brokerMetadatas = getBrokerMetadatas(zkUtils, rackAwareMode)
-    val newPartitionReplicaList = replicaAssignment.getOrElse{
-      val startIndex = math.max(0, brokerMetadatas.indexWhere(_.id >= existingAssignmentPartition0.head))
-      AdminUtils.assignReplicasToBrokers(brokerMetadatas, partitionsToAdd, existingAssignmentPartition0.size,
+    replicaAssignment.foreach { proposedReplicaAssignment =>
+      validateReplicaAssignment(proposedReplicaAssignment, existingAssignmentPartition0,
+        allBrokers.map(_.id).toSet)
+    }
+
+    val proposedAssignmentForNewPartitions = replicaAssignment.getOrElse {
+      val startIndex = math.max(0, allBrokers.indexWhere(_.id >= existingAssignmentPartition0.head))
+      AdminUtils.assignReplicasToBrokers(allBrokers, partitionsToAdd, existingAssignmentPartition0.size,
         startIndex, existingAssignment.size)
     }
-    validateReplicaAssignment(newPartitionReplicaList, existingAssignmentPartition0, brokerMetadatas.map(_.id).toSet, checkBrokerAvailable)
-
-    // check if manual assignment has the right replication factor
-    val unmatchedRepFactorList = newPartitionReplicaList.values.filter(p => p.size != existingAssignmentPartition0.size)
-    if (unmatchedRepFactorList.nonEmpty)
-      throw new InvalidReplicaAssignmentException(s"Existing topic replication factor of ${existingAssignmentPartition0.size}, but manual replication assignment would imply replication factor(s) of ${unmatchedRepFactorList.map(_.size).mkString(",")}.")
+    val proposedAssignment = existingAssignment ++ proposedAssignmentForNewPartitions
     if (!validateOnly) {
-      info(s"Add partition list for $topic is $newPartitionReplicaList.")
-      val partitionReplicaList = existingAssignment.map{ case (partitiondId, replicas) => (partitiondId, replicas) }
+      info(s"Creating $partitionsToAdd partitions for '$topic' with the following replica assignment: " +
+        s"$proposedAssignmentForNewPartitions.")
       // add the combined new list
-      AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, partitionReplicaList ++ newPartitionReplicaList, update = true)
+      AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, proposedAssignment, update = true)
     }
-    newPartitionReplicaList
+    proposedAssignment
   }
 
   /**
-    * Parse a replica assignment string of the form
-    * <pre><code>
+    * Parse a replica assignment string of the form:
+    * {{{
     * broker_id_for_part1_replica1:broker_id_for_part1_replica2,
     * broker_id_for_part2_replica1:broker_id_for_part2_replica2,
     * ...
-    * </code></pre>
-    * @param replicaAssignmentList The string to parse
-    * @param startPartitionId
-    * @return
+    * }}}
     */
-  def parseManualReplicaAssignment(replicaAssignmentList: String, startPartitionId: Int): Map[Int, List[Int]] = {
-    var partitionList = replicaAssignmentList.split(",")
-    val ret = new mutable.HashMap[Int, List[Int]]()
+  def parseReplicaAssignment(replicaAssignmentsString: String, startPartitionId: Int): Map[Int, Seq[Int]] = {
+    val assignmentStrings = replicaAssignmentsString.split(",")
+    val assignmentMap = mutable.Map[Int, Seq[Int]]()
     var partitionId = startPartitionId
-    //partitionList = partitionList.takeRight(partitionList.size - partitionId)
-    for (i <- partitionList.indices) {
-      val brokerList = partitionList(i).split(":").map(s => s.trim().toInt).toList
-      ret.put(partitionId, brokerList)
+    for (assignmentString <- assignmentStrings) {
+      val brokerIds = assignmentString.split(":").map(_.trim.toInt).toSeq
+      assignmentMap.put(partitionId, brokerIds)
       partitionId = partitionId + 1
     }
-    ret.toMap
+    assignmentMap
   }
 
-  def validateReplicaAssignment(replicaAssignment: Map[Int, Seq[Int]],
-                                existingAssignmentPartition0: Seq[Int],
-                                availableBrokerList: Set[Int], checkBrokerAvailable: Boolean = true): Unit = {
+  private def validateReplicaAssignment(replicaAssignment: Map[Int, Seq[Int]],
+                                        existingAssignmentPartition0: Seq[Int],
+                                        availableBrokerIds: Set[Int]): Unit = {
 
-    val badRepFactor = replicaAssignment.toSeq.sortBy(_._1).reverse.map { case (partitionId, brokerList) =>
-      if (brokerList.isEmpty)
+    replicaAssignment.foreach { case (partitionId, replicas) =>
+      if (replicas.isEmpty)
         throw new InvalidReplicaAssignmentException(
           s"Cannot have replication factor of 0 for partition id $partitionId.")
-      if (brokerList.size != brokerList.toSet.size)
+      if (replicas.size != replicas.toSet.size)
         throw new InvalidReplicaAssignmentException(
           s"Duplicate brokers not allowed in replica assignment: " +
-            s"${brokerList.mkString(", ")} for partition id $partitionId.")
-      if (checkBrokerAvailable && !brokerList.toSet.subsetOf(availableBrokerList))
+            s"${replicas.mkString(", ")} for partition id $partitionId.")
+      if (!replicas.toSet.subsetOf(availableBrokerIds))
         throw new BrokerNotAvailableException(
           s"Some brokers specified for partition id $partitionId are not available. " +
-            s"Specified brokers: ${brokerList.mkString(", ")}, " +
-            s"available brokers: ${availableBrokerList.mkString(", ")}.")
-      partitionId -> brokerList.size
-
-    }.filter{ case (partitionId, repFactor) => repFactor != existingAssignmentPartition0.size}
-    if (badRepFactor.nonEmpty)
+            s"Specified brokers: ${replicas.mkString(", ")}, " +
+            s"available brokers: ${availableBrokerIds.mkString(", ")}.")
+      partitionId -> replicas.size
+    }
+    val badRepFactors = replicaAssignment.collect {
+      case (partition, replicas) if replicas.size != existingAssignmentPartition0.size => partition -> replicas.size
+    }
+    if (badRepFactors.nonEmpty) {
+      val sortedBadRepFactors = badRepFactors.toSeq.sortBy { case (partitionId, _) => partitionId }
+      val partitions = sortedBadRepFactors.map { case (partitionId, _) => partitionId }
+      val repFactors = sortedBadRepFactors.map { case (_, rf) => rf }
       throw new InvalidReplicaAssignmentException(s"Inconsistent replication factor between partitions, " +
-        s"partition 0 has ${existingAssignmentPartition0.size} " +
-        s"while partitions [${badRepFactor.map(_._1).mkString(", ")}] have replication factors [${badRepFactor.map(_._2).mkString(", ")}], respectively")
+        s"partition 0 has ${existingAssignmentPartition0.size} while partitions [${partitions.mkString(", ")}] have " +
+        s"replication factors [${repFactors.mkString(", ")}], respectively")
+    }
   }
 
   def deleteTopic(zkUtils: ZkUtils, topic: String) {
@@ -548,14 +542,14 @@ object AdminUtils extends Logging with AdminUtilities {
    * and <user> configs are not specified.
    *
    * @param zkUtils Zookeeper utilities used to write the config to ZK
-   * @param clientId: The clientId for which configs are being changed
+   * @param sanitizedClientId: The sanitized clientId for which configs are being changed
    * @param configs: The final set of configs that will be applied to the topic. If any new configs need to be added or
    *                 existing configs need to be deleted, it should be done prior to invoking this API
    *
    */
-  def changeClientIdConfig(zkUtils: ZkUtils, clientId: String, configs: Properties) {
+  def changeClientIdConfig(zkUtils: ZkUtils, sanitizedClientId: String, configs: Properties) {
     DynamicConfig.Client.validate(configs)
-    changeEntityConfig(zkUtils, ConfigType.Client, clientId, configs)
+    changeEntityConfig(zkUtils, ConfigType.Client, sanitizedClientId, configs)
   }
 
   /**

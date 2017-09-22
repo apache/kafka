@@ -150,15 +150,13 @@ object TopicCommand extends Logging {
         if (existingAssignment.isEmpty)
           throw new InvalidTopicException(s"The topic $topic does not exist")
         val replicaAssignmentStr = opts.options.valueOf(opts.replicaAssignmentOpt)
-        val newAssignment = if (replicaAssignmentStr == null || replicaAssignmentStr.isEmpty)
-          None
-        else {
-          var partitionList = replicaAssignmentStr.split(",")
-          val startPartitionId = existingAssignment.size;
-          partitionList = partitionList.takeRight(partitionList.size - startPartitionId)
-          Some(AdminUtils.parseManualReplicaAssignment(partitionList.mkString(","), startPartitionId))
+        val newAssignment = Option(replicaAssignmentStr).filter(_.nonEmpty).map { replicaAssignmentString =>
+          val startPartitionId = existingAssignment.size
+          val partitionList = replicaAssignmentString.split(",").drop(startPartitionId)
+          AdminUtils.parseReplicaAssignment(partitionList.mkString(","), startPartitionId)
         }
-        AdminUtils.addPartitions(zkUtils, topic, existingAssignment, nPartitions, newAssignment)
+        val allBrokers = AdminUtils.getBrokerMetadatas(zkUtils)
+        AdminUtils.addPartitions(zkUtils, topic, existingAssignment, allBrokers, nPartitions, newAssignment)
         println("Adding partitions succeeded!")
       }
     }

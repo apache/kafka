@@ -1157,7 +1157,7 @@ public class SenderTest {
         assertEquals(1000, transactionManager.lastAckedOffset(tp0));
         assertEquals(1, transactionManager.lastAckedSequence(tp0));
 
-        client.respondToRequest(firstClientRequest, produceResponse(tp0, -1, Errors.DUPLICATE_SEQUENCE_NUMBER, -1));
+        client.respondToRequest(firstClientRequest, produceResponse(tp0, ProduceResponse.INVALID_OFFSET, Errors.DUPLICATE_SEQUENCE_NUMBER, 0));
 
         sender.run(time.milliseconds()); // receive response 0
 
@@ -1165,6 +1165,10 @@ public class SenderTest {
         assertEquals(1, transactionManager.lastAckedSequence(tp0));
         assertEquals(1000, transactionManager.lastAckedOffset(tp0));
         assertFalse(client.hasInFlightRequests());
+
+        RecordMetadata unknownMetadata = request1.get();
+        assertFalse(unknownMetadata.hasOffset());
+        assertEquals(-1L, unknownMetadata.offset());
     }
 
     @Test

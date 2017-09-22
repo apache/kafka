@@ -14,22 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.errors;
+package org.apache.kafka.common.metrics;
 
-/**
- * This exception indicates that the SASL mechanism requested by the client
- * is not enabled on the broker.
- */
-public class UnsupportedSaslMechanismException extends AuthenticationException {
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
-    private static final long serialVersionUID = 1L;
+import java.io.UnsupportedEncodingException;
 
-    public UnsupportedSaslMechanismException(String message) {
-        super(message);
+import org.junit.Test;
+
+public class SanitizerTest {
+
+    @Test
+    public void testSanitize() throws UnsupportedEncodingException {
+        String principal = "CN=Some characters !@#$%&*()_-+=';:,/~";
+        String sanitizedPrincipal = Sanitizer.sanitize(principal);
+        assertTrue(sanitizedPrincipal.replace('%', '_').matches("[a-zA-Z0-9\\._\\-]+"));
+        assertEquals(principal, Sanitizer.desanitize(sanitizedPrincipal));
     }
-
-    public UnsupportedSaslMechanismException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }

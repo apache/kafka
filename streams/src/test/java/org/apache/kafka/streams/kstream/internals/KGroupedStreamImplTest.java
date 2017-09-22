@@ -257,7 +257,6 @@ public class KGroupedStreamImplTest {
         });
 
         doAggregateSessionWindows(results);
-        assertNull(table.queryableStoreName());
     }
 
     private void doCountSessionWindows(final Map<Windowed<String>, Long> results) {

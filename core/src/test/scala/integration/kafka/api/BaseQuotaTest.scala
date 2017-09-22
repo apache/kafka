@@ -22,7 +22,7 @@ import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.common.{MetricName, TopicPartition}
-import org.apache.kafka.common.metrics.{KafkaMetric, Quota}
+import org.apache.kafka.common.metrics.{KafkaMetric, Quota, Sanitizer}
 import org.junit.Assert._
 import org.junit.{Before, Test}
 
@@ -39,8 +39,8 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
   val consumerCount = 1
 
   private val producerBufferSize = 300000
-  protected val producerClientId = "QuotasTestProducer-1"
-  protected val consumerClientId = "QuotasTestConsumer-1"
+  protected def producerClientId = "QuotasTestProducer-1"
+  protected def consumerClientId = "QuotasTestConsumer-1"
 
   this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false")
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "2")
@@ -210,7 +210,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
 
   private def verifyProducerThrottleTimeMetric(producer: KafkaProducer[_, _]) {
     val tags = new HashMap[String, String]
-    tags.put("client-id", producerClientId)
+    tags.put("client-id", Sanitizer.sanitize(producerClientId))
     val avgMetric = producer.metrics.get(new MetricName("produce-throttle-time-avg", "producer-metrics", "", tags))
     val maxMetric = producer.metrics.get(new MetricName("produce-throttle-time-max", "producer-metrics", "", tags))
 
@@ -220,7 +220,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
 
   private def verifyConsumerThrottleTimeMetric(consumer: KafkaConsumer[_, _], maxThrottleTime: Option[Double] = None) {
     val tags = new HashMap[String, String]
-    tags.put("client-id", consumerClientId)
+    tags.put("client-id", Sanitizer.sanitize(consumerClientId))
     val avgMetric = consumer.metrics.get(new MetricName("fetch-throttle-time-avg", "consumer-fetch-manager-metrics", "", tags))
     val maxMetric = consumer.metrics.get(new MetricName("fetch-throttle-time-max", "consumer-fetch-manager-metrics", "", tags))
 
@@ -234,7 +234,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
                                   quotaType.toString,
                                   "Tracking throttle-time per user/client-id",
                                   "user", quotaId.sanitizedUser.getOrElse(""),
-                                  "client-id", quotaId.clientId.getOrElse(""))
+                                  "client-id", quotaId.sanitizedClientId.getOrElse(""))
   }
 
   def throttleMetric(quotaType: QuotaType, quotaId: QuotaId): KafkaMetric = {

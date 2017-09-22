@@ -17,7 +17,7 @@
 package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.errors.ApiException;
-import org.apache.kafka.common.errors.AuthenticationFailedException;
+import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.ConcurrentTransactionsException;
@@ -520,11 +520,11 @@ public enum Errors {
                 return new LogDirNotFoundException(message);
             }
     }),
-    AUTHENTICATION_FAILED(58, "Authentication failed.",
+    SASL_AUTHENTICATION_FAILED(58, "SASL Authentication failed.",
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {
-                return new AuthenticationFailedException(message);
+                return new SaslAuthenticationException(message);
             }
     }),
     UNKNOWN_PRODUCER_ID(59, "This exception is raised by the broker if it could not locate the producer metadata " +

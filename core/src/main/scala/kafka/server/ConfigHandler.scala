@@ -29,7 +29,7 @@ import kafka.utils.Implicits._
 import kafka.utils.Logging
 import org.apache.kafka.common.config.ConfigDef.Validator
 import org.apache.kafka.common.config.ConfigException
-import org.apache.kafka.common.metrics.Quota
+import org.apache.kafka.common.metrics.{Quota, Sanitizer}
 import org.apache.kafka.common.metrics.Quota._
 
 import scala.collection.JavaConverters._
@@ -117,25 +117,25 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
  */
 class QuotaConfigHandler(private val quotaManagers: QuotaManagers) {
 
-  def updateQuotaConfig(sanitizedUser: Option[String], clientId: Option[String], config: Properties) {
+  def updateQuotaConfig(sanitizedUser: Option[String], sanitizedClientId: Option[String], config: Properties) {
     val producerQuota =
       if (config.containsKey(DynamicConfig.Client.ProducerByteRateOverrideProp))
         Some(new Quota(config.getProperty(DynamicConfig.Client.ProducerByteRateOverrideProp).toLong, true))
       else
         None
-    quotaManagers.produce.updateQuota(sanitizedUser, clientId, producerQuota)
+    quotaManagers.produce.updateQuota(sanitizedUser, sanitizedClientId, producerQuota)
     val consumerQuota =
       if (config.containsKey(DynamicConfig.Client.ConsumerByteRateOverrideProp))
         Some(new Quota(config.getProperty(DynamicConfig.Client.ConsumerByteRateOverrideProp).toLong, true))
       else
         None
-    quotaManagers.fetch.updateQuota(sanitizedUser, clientId, consumerQuota)
+    quotaManagers.fetch.updateQuota(sanitizedUser, sanitizedClientId, consumerQuota)
     val requestQuota =
       if (config.containsKey(DynamicConfig.Client.RequestPercentageOverrideProp))
         Some(new Quota(config.getProperty(DynamicConfig.Client.RequestPercentageOverrideProp).toDouble, true))
       else
         None
-    quotaManagers.request.updateQuota(sanitizedUser, clientId, requestQuota)
+    quotaManagers.request.updateQuota(sanitizedUser, sanitizedClientId, requestQuota)
   }
 }
 
@@ -145,14 +145,14 @@ class QuotaConfigHandler(private val quotaManagers: QuotaManagers) {
  */
 class ClientIdConfigHandler(private val quotaManagers: QuotaManagers) extends QuotaConfigHandler(quotaManagers) with ConfigHandler {
 
-  def processConfigChanges(clientId: String, clientConfig: Properties) {
-    updateQuotaConfig(None, Some(clientId), clientConfig)
+  def processConfigChanges(sanitizedClientId: String, clientConfig: Properties) {
+    updateQuotaConfig(None, Some(sanitizedClientId), clientConfig)
   }
 }
 
 /**
  * The UserConfigHandler will process <user> and <user, client-id> quota changes in ZK.
- * The callback provides the node name containing sanitized user principal, client-id if this is
+ * The callback provides the node name containing sanitized user principal, sanitized client-id if this is
  * a <user, client-id> update and the full properties set read from ZK.
  */
 class UserConfigHandler(private val quotaManagers: QuotaManagers, val credentialProvider: CredentialProvider) extends QuotaConfigHandler(quotaManagers) with ConfigHandler {
@@ -163,10 +163,10 @@ class UserConfigHandler(private val quotaManagers: QuotaManagers, val credential
     if (entities.length != 1 && entities.length != 3)
       throw new IllegalArgumentException("Invalid quota entity path: " + quotaEntityPath)
     val sanitizedUser = entities(0)
-    val clientId = if (entities.length == 3) Some(entities(2)) else None
-    updateQuotaConfig(Some(sanitizedUser), clientId, config)
-    if (!clientId.isDefined && sanitizedUser != ConfigEntityName.Default)
-      credentialProvider.updateCredentials(QuotaId.desanitize(sanitizedUser), config)
+    val sanitizedClientId = if (entities.length == 3) Some(entities(2)) else None
+    updateQuotaConfig(Some(sanitizedUser), sanitizedClientId, config)
+    if (!sanitizedClientId.isDefined && sanitizedUser != ConfigEntityName.Default)
+      credentialProvider.updateCredentials(Sanitizer.desanitize(sanitizedUser), config)
   }
 }
 
