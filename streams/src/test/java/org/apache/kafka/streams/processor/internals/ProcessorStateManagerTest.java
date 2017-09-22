@@ -506,7 +506,7 @@ public class ProcessorStateManagerTest {
                 throw new RuntimeException("KABOOM!");
             }
         };
-        stateManager.register(stateStore, false, stateStore.stateRestoreCallback);
+        stateManager.register(stateStore, stateStore.stateRestoreCallback);
 
         try {
             stateManager.flush();
@@ -571,8 +571,8 @@ public class ProcessorStateManagerTest {
                 flushedStore.set(true);
             }
         };
-        stateManager.register(stateStore1, false, stateStore1.stateRestoreCallback);
-        stateManager.register(stateStore2, false, stateStore2.stateRestoreCallback);
+        stateManager.register(stateStore1, stateStore1.stateRestoreCallback);
+        stateManager.register(stateStore2, stateStore2.stateRestoreCallback);
 
         try {
             stateManager.flush();
@@ -606,8 +606,8 @@ public class ProcessorStateManagerTest {
                 closedStore.set(true);
             }
         };
-        stateManager.register(stateStore1, false, stateStore1.stateRestoreCallback);
-        stateManager.register(stateStore2, false, stateStore2.stateRestoreCallback);
+        stateManager.register(stateStore1, stateStore1.stateRestoreCallback);
+        stateManager.register(stateStore2, stateStore2.stateRestoreCallback);
 
         try {
             stateManager.close(Collections.<TopicPartition, Long>emptyMap());

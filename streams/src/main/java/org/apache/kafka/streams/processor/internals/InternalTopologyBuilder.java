@@ -178,8 +178,10 @@ public class InternalTopologyBuilder {
     }
 
     private static class StateStoreSupplierFactory extends AbstractStateStoreFactory {
+        @SuppressWarnings("deprecation")
         private final StateStoreSupplier supplier;
 
+        @SuppressWarnings("deprecation")
         StateStoreSupplierFactory(final StateStoreSupplier<?> supplier) {
             super(supplier.name(),
                   supplier.loggingEnabled(),
@@ -495,6 +497,7 @@ public class InternalTopologyBuilder {
         nodeGrouper.unite(name, predecessorNames);
     }
 
+    @SuppressWarnings("deprecation")
     public final void addStateStore(final StateStoreSupplier supplier,
                                     final String... processorNames) {
         Objects.requireNonNull(supplier, "supplier can't be null");
@@ -527,6 +530,7 @@ public class InternalTopologyBuilder {
         }
     }
 
+    @SuppressWarnings("deprecation")
     public final void addGlobalStore(final StateStoreSupplier<KeyValueStore> storeSupplier,
                                      final String sourceName,
                                      final TimestampExtractor timestampExtractor,
@@ -1612,8 +1616,8 @@ public class InternalTopologyBuilder {
             return Collections.unmodifiableSet(nodes);
         }
 
-        // only for testing
-        public Iterator<TopologyDescription.Node> nodesInOrder() {
+        // visible for testing
+        Iterator<TopologyDescription.Node> nodesInOrder() {
             return nodes.iterator();
         }
 

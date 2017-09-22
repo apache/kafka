@@ -40,8 +40,7 @@ import java.util.Map;
 
 public class ProcessorStateManager implements StateManager {
 
-
-    public static final String STATE_CHANGELOG_TOPIC_SUFFIX = "-changelog";
+    private static final String STATE_CHANGELOG_TOPIC_SUFFIX = "-changelog";
     static final String CHECKPOINT_FILE_NAME = ".checkpoint";
 
     private final Logger log;
@@ -118,7 +117,6 @@ public class ProcessorStateManager implements StateManager {
         return baseDir;
     }
 
-    // TODO: parameter loggingEnabled can be removed now
     @Override
     public void register(final StateStore store,
                          final StateRestoreCallback stateRestoreCallback) {
