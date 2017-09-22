@@ -43,6 +43,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
+import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.PartitionGrouper;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
@@ -765,13 +766,20 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         consumer.subscribe(builder.sourceTopicPattern(), rebalanceListener);
 
         while (isRunning()) {
-            recordsProcessedBeforeCommit = runOnce(recordsProcessedBeforeCommit);
+            try {
+                recordsProcessedBeforeCommit = runOnce(recordsProcessedBeforeCommit);
+            } catch (final TaskMigratedException ignoreAndRejoinGroup) {
+                log.warn("Detected a task that got migrated to another thread. " +
+                    "This implies that this thread missed a rebalance and dropped out of the consumer group. " +
+                    "Trying to rejoin the consumer group now.");
+            }
         }
     }
 
     /**
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
+     * @throws TaskMigratedException if another thread did write to the changelog topic that is currently restored
      */
     // Visible for testing
     long runOnce(final long recordsProcessedBeforeCommit) {

@@ -24,6 +24,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.slf4j.Logger;
 
@@ -70,6 +71,9 @@ public class StoreChangelogReader implements ChangelogReader {
         needsInitializing.put(restorer.partition(), restorer);
     }
 
+    /**
+     * @throws TaskMigratedException if another thread did write to the changelog topic that is currently restored
+     */
     public Collection<TopicPartition> restore() {
         if (!needsInitializing.isEmpty()) {
             initialize();
@@ -230,6 +234,9 @@ public class StoreChangelogReader implements ChangelogReader {
         needsInitializing.clear();
     }
 
+    /**
+     * @throws TaskMigratedException if another thread did write to the changelog topic that is currently restored
+     */
     private void restorePartition(final ConsumerRecords<byte[], byte[]> allRecords,
                                   final TopicPartition topicPartition) {
         final StateRestorer restorer = stateRestorers.get(topicPartition);
@@ -238,7 +245,7 @@ public class StoreChangelogReader implements ChangelogReader {
         restorer.setRestoredOffset(pos);
         if (restorer.hasCompleted(pos, endOffset)) {
             if (pos > endOffset + 1) {
-                throw new IllegalStateException(
+                throw new TaskMigratedException(
                         String.format("Log end offset of %s should not change while restoring: old end offset %d, current offset %d",
                                       topicPartition,
                                       endOffset,
