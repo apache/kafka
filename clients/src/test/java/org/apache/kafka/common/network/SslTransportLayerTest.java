@@ -191,7 +191,7 @@ public class SslTransportLayerTest {
         // Create a server with endpoint validation enabled on the server SSL engine
         SslChannelBuilder serverChannelBuilder = new TestSslChannelBuilder(Mode.SERVER) {
             @Override
-            public TestSslTransportLayer newTransportLayer(String id, SelectionKey key, SSLEngine sslEngine) throws IOException {
+            protected TestSslTransportLayer newTransportLayer(String id, SelectionKey key, SSLEngine sslEngine) throws IOException {
                 SSLParameters sslParams = sslEngine.getSSLParameters();
                 sslParams.setEndpointIdentificationAlgorithm("HTTPS");
                 sslEngine.setSSLParameters(sslParams);
@@ -630,11 +630,11 @@ public class SslTransportLayerTest {
         boolean done = false;
         for (int i = 1; i <= 100; i++) {
             int readFailureIndex = failRead ? i : Integer.MAX_VALUE;
-            int writeFailureIndex = failWrite ? i : Integer.MAX_VALUE;
+            int flushFailureIndex = failWrite ? i : Integer.MAX_VALUE;
             String node = String.valueOf(i);
 
             channelBuilder.readFailureIndex = readFailureIndex;
-            channelBuilder.writeFailureIndex = writeFailureIndex;
+            channelBuilder.flushFailureIndex = flushFailureIndex;
             channelBuilder.configure(sslClientConfigs);
             this.selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder, new LogContext());
 
@@ -674,7 +674,7 @@ public class SslTransportLayerTest {
             String node = "0";
             TestSslChannelBuilder serverChannelBuilder = new TestSslChannelBuilder(Mode.SERVER);
             serverChannelBuilder.configure(sslServerConfigs);
-            serverChannelBuilder.writeDelayCount = i;
+            serverChannelBuilder.flushDelayCount = i;
             server = new NioEchoServer(ListenerName.forSecurityProtocol(SecurityProtocol.SSL),
                     SecurityProtocol.SSL, new TestSecurityConfig(sslServerConfigs),
                     "localhost", serverChannelBuilder, null);
@@ -758,8 +758,8 @@ public class SslTransportLayerTest {
         private Integer netWriteBufSizeOverride;
         private Integer appBufSizeOverride;
         long readFailureIndex = Long.MAX_VALUE;
-        long writeFailureIndex = Long.MAX_VALUE;
-        int writeDelayCount = 0;
+        long flushFailureIndex = Long.MAX_VALUE;
+        int flushDelayCount = 0;
 
         public TestSslChannelBuilder(Mode mode) {
             super(mode);
@@ -780,7 +780,7 @@ public class SslTransportLayerTest {
             return transportLayer;
         }
 
-        public TestSslTransportLayer newTransportLayer(String id, SelectionKey key, SSLEngine sslEngine) throws IOException {
+        protected TestSslTransportLayer newTransportLayer(String id, SelectionKey key, SSLEngine sslEngine) throws IOException {
             return new TestSslTransportLayer(id, key, sslEngine);
         }
 
@@ -799,18 +799,18 @@ public class SslTransportLayerTest {
             private final ResizeableBufferSize netReadBufSize;
             private final ResizeableBufferSize netWriteBufSize;
             private final ResizeableBufferSize appBufSize;
-            private final AtomicLong readsRemaining;
-            private final AtomicLong writesRemaining;
-            private final AtomicInteger delayedWritesRemaining;
+            private final AtomicLong numReadsRemaining;
+            private final AtomicLong numFlushesRemaining;
+            private final AtomicInteger numDelayedFlushesRemaining;
 
             public TestSslTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine) throws IOException {
                 super(channelId, key, sslEngine, false);
                 this.netReadBufSize = new ResizeableBufferSize(netReadBufSizeOverride);
                 this.netWriteBufSize = new ResizeableBufferSize(netWriteBufSizeOverride);
                 this.appBufSize = new ResizeableBufferSize(appBufSizeOverride);
-                readsRemaining = new AtomicLong(readFailureIndex);
-                writesRemaining = new AtomicLong(writeFailureIndex);
-                delayedWritesRemaining = new AtomicInteger(writeDelayCount);
+                numReadsRemaining = new AtomicLong(readFailureIndex);
+                numFlushesRemaining = new AtomicLong(flushFailureIndex);
+                numDelayedFlushesRemaining = new AtomicInteger(flushDelayCount);
             }
 
             @Override
@@ -836,19 +836,23 @@ public class SslTransportLayerTest {
 
             @Override
             protected int readFromSocketChannel() throws IOException {
-                if (readsRemaining.decrementAndGet() == 0 && !ready())
+                if (numReadsRemaining.decrementAndGet() == 0 && !ready())
                     throw new IOException("Test exception during read");
                 return super.readFromSocketChannel();
             }
 
             @Override
             protected boolean flush(ByteBuffer buf) throws IOException {
-                if (writesRemaining.decrementAndGet() == 0 && !ready())
+                if (numFlushesRemaining.decrementAndGet() == 0 && !ready())
                     throw new IOException("Test exception during write");
-                else if (delayedWritesRemaining.getAndDecrement() != 0)
+                else if (numDelayedFlushesRemaining.getAndDecrement() != 0)
                     return false;
-                delayedWritesRemaining.set(writeDelayCount);
+                resetDelayedFlush();
                 return super.flush(buf);
+            }
+
+            private void resetDelayedFlush() {
+                numDelayedFlushesRemaining.set(flushDelayCount);
             }
         }
 

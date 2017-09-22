@@ -139,7 +139,7 @@ public class SaslClientAuthenticator implements Authenticator {
 
             saslClient = createSaslClient();
         } catch (Exception e) {
-            throw new UnsupportedSaslMechanismException("Failed to configure SaslClientAuthenticator", e);
+            throw new SaslAuthenticationException("Failed to configure SaslClientAuthenticator", e);
         }
     }
 
@@ -154,7 +154,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 }
             });
         } catch (PrivilegedActionException e) {
-            throw new UnsupportedSaslMechanismException("Failed to create SaslClient with mechanism " + mechanism, e.getCause());
+            throw new SaslAuthenticationException("Failed to create SaslClient with mechanism " + mechanism, e.getCause());
         }
     }
 
@@ -401,7 +401,7 @@ public class SaslClientAuthenticator implements Authenticator {
         } catch (SchemaException | IllegalArgumentException e) {
             LOG.debug("Invalid SASL mechanism response, server may be expecting only GSSAPI tokens");
             setSaslState(SaslState.FAILED);
-            throw new SaslAuthenticationException("Invalid SASL mechanism response, server may be expecting a different protocol", e);
+            throw new IllegalSaslStateException("Invalid SASL mechanism response, server may be expecting a different protocol", e);
         }
     }
 
