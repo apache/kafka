@@ -33,7 +33,6 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
@@ -60,8 +59,8 @@ public class NioEchoServer extends Thread {
         serverSocketChannel.configureBlocking(false);
         serverSocketChannel.socket().bind(new InetSocketAddress(serverHost, 0));
         this.port = serverSocketChannel.socket().getLocalPort();
-        this.socketChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
-        this.newChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
+        this.socketChannels = new ArrayList<SocketChannel>();
+        this.newChannels = new ArrayList<SocketChannel>();
         this.credentialCache = credentialCache;
         if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL)
             ScramCredentialUtils.createCache(credentialCache, ScramMechanism.mechanismNames());
@@ -85,11 +84,10 @@ public class NioEchoServer extends Thread {
             acceptorThread.start();
             while (serverSocketChannel.isOpen()) {
                 selector.poll(1000);
-                synchronized (newChannels) {
+                synchronized (this) {
                     for (SocketChannel socketChannel : newChannels) {
                         String id = id(socketChannel);
                         selector.register(id, socketChannel);
-                        socketChannels.add(socketChannel);
                     }
                     newChannels.clear();
                 }
@@ -140,7 +138,12 @@ public class NioEchoServer extends Thread {
         return selector;
     }
 
-    public void closeConnections() throws IOException {
+    public synchronized void addNewConnection(SocketChannel channel) {
+        newChannels.add(channel);
+        socketChannels.add(channel);
+    }
+
+    public synchronized void closeConnections() throws IOException {
         for (SocketChannel channel : socketChannels)
             channel.close();
         socketChannels.clear();
@@ -171,7 +174,7 @@ public class NioEchoServer extends Thread {
                             if (key.isAcceptable()) {
                                 SocketChannel socketChannel = ((ServerSocketChannel) key.channel()).accept();
                                 socketChannel.configureBlocking(false);
-                                newChannels.add(socketChannel);
+                                addNewConnection(socketChannel);
                                 selector.wakeup();
                             }
                             it.remove();
