@@ -22,6 +22,7 @@ import java.util.Arrays.asList
 import java.util.concurrent.{ExecutionException, TimeUnit}
 import java.io.File
 
+import kafka.common.TopicAndPartition
 import org.apache.kafka.clients.admin.KafkaAdminClientTest
 import org.apache.kafka.common.utils.{Time, Utils}
 import kafka.integration.KafkaServerTestHarness
@@ -735,6 +736,181 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     future2.get
     client.close()
     assertEquals(1, factory.failuresInjected)
+  }
+
+  @Test
+  def testElectPreferredLeaders(): Unit = {
+    client = AdminClient.create(createConfig)
+
+    var prefer0 = Seq(0, 1, 2)
+    var prefer1 = Seq(1, 2, 0)
+    var prefer2 = Seq(2, 0, 1)
+
+    val partition1 = new TopicPartition("elect-preferred-leaders-topic-1", 0)
+    TestUtils.createTopic(zkUtils, partition1.topic, Map[Int, Seq[Int]](partition1.partition -> prefer0), servers)
+
+    val partition2 = new TopicPartition("elect-preferred-leaders-topic-2", 0)
+    TestUtils.createTopic(zkUtils, partition2.topic, Map[Int, Seq[Int]](partition2.partition -> prefer0), servers)
+
+    def getLeader(topicPartition: TopicPartition) =
+      client.describeTopics(asList(topicPartition.topic)).values.get(topicPartition.topic).
+        get.partitions.get(topicPartition.partition).leader.id
+
+    def changePreferredLeader(newAssignment: Seq[Int]) = {
+      val prior1 = getLeader(partition1)
+      val prior2 = getLeader(partition2)
+
+      zkUtils.updatePartitionReassignmentData(Map(
+        new TopicAndPartition(partition1) -> newAssignment,
+        new TopicAndPartition(partition2) -> newAssignment))
+      // Check the leader hasn't moved
+      assertEquals(prior1, getLeader(partition1))
+      assertEquals(prior1, getLeader(partition2))
+    }
+
+    // Check current leaders are 0
+    assertEquals(0, getLeader(partition1))
+    assertEquals(0, getLeader(partition2))
+
+    // Noop election
+    var electResult = client.electPreferredLeaders(asList(partition1))
+    electResult.partitionResult(partition1).get()
+    assertEquals(0, getLeader(partition1))
+
+    // Noop election with null partitions
+    electResult = client.electPreferredLeaders(null)
+    electResult.partitionResult(partition1).get()
+    assertEquals(0, getLeader(partition1))
+    electResult.partitionResult(partition2).get()
+    assertEquals(0, getLeader(partition2))
+
+    // Now change the preferred leader to 1
+    changePreferredLeader(prefer1)
+
+    // meaningful election
+    electResult = client.electPreferredLeaders(asList(partition1))
+    assertEquals(Set(partition1).asJava, electResult.partitions.get)
+    electResult.partitionResult(partition1).get()
+    assertEquals(1, getLeader(partition1))
+    // topic 2 unchanged
+    try {
+      electResult.partitionResult(partition2).get()
+      fail("topic 2 wasn't requested")
+    } catch {
+      case e: ExecutionException =>
+        val cause = e.getCause
+        assertTrue(cause.isInstanceOf[IllegalArgumentException])
+        assertEquals("Preferred leader election for partition \"elect-preferred-leaders-topic-2-0\" was not attempted",
+          cause.getMessage)
+        assertEquals(0, getLeader(partition2))
+    }
+
+    // meaningful election with null partitions
+    electResult = client.electPreferredLeaders(null)
+    assertEquals(Set(partition1, partition2).asJava, electResult.partitions.get)
+    electResult.partitionResult(partition1).get()
+    assertEquals(1, getLeader(partition1))
+    electResult.partitionResult(partition2).get()
+    assertEquals(1, getLeader(partition2))
+
+    // unknown topic
+    val unknownPartition = new TopicPartition("topic-does-not-exist", 0)
+    electResult = client.electPreferredLeaders(asList(unknownPartition))
+    assertEquals(Set(unknownPartition).asJava, electResult.partitions.get)
+    try {
+      electResult.partitionResult(unknownPartition).get()
+    } catch {
+      case e: Exception =>
+        val cause = e.getCause
+        assertTrue(cause.isInstanceOf[UnknownTopicOrPartitionException])
+        assertEquals("The partition 'topic-does-not-exist-0' does not exist.",
+          cause.getMessage)
+        assertEquals(1, getLeader(partition1))
+        assertEquals(1, getLeader(partition2))
+    }
+
+    // Now change the preferred leader to 2
+    changePreferredLeader(prefer2)
+
+    // mixed results
+    electResult = client.electPreferredLeaders(asList(unknownPartition, partition1))
+    assertEquals(Set(unknownPartition, partition1).asJava, electResult.partitions.get)
+    assertEquals(2, getLeader(partition1))
+    assertEquals(1, getLeader(partition2))
+    try {
+      electResult.partitionResult(unknownPartition).get()
+    } catch {
+      case e: Exception =>
+        val cause = e.getCause
+        assertTrue(cause.isInstanceOf[UnknownTopicOrPartitionException])
+        assertEquals("The partition 'topic-does-not-exist-0' does not exist.",
+          cause.getMessage)
+    }
+
+    // dupe partitions
+    electResult = client.electPreferredLeaders(asList(partition2, partition2))
+    assertEquals(Set(partition2).asJava, electResult.partitions.get)
+    electResult.partitionResult(partition2).get()
+    assertEquals(2, getLeader(partition2))
+
+    // Now change the preferred leader to 1
+    changePreferredLeader(prefer1)
+    // but shut it down...
+    servers(1).shutdown()
+    //assertEquals(2, getLeader(partition1))
+    //assertEquals(2, getLeader(partition2))
+
+    // ... now what happens if we try to elect the preferred leader and it's down?
+    val shortTimeout = new ElectPreferredLeadersOptions().timeoutMs(10000)
+    electResult = client.electPreferredLeaders(asList(partition1), shortTimeout)
+    assertEquals(Set(partition1).asJava, electResult.partitions.get)
+    try {
+      electResult.partitionResult(partition1).get()
+      fail()
+    } catch {
+      case e: Exception =>
+        val cause = e.getCause
+        cause.printStackTrace()
+        assertTrue(cause.isInstanceOf[LeaderNotAvailableException])
+        assertTrue(s"Wrong message ${cause.getMessage}", cause.getMessage.contains(
+          "Preferred replica 1 for partition elect-preferred-leaders-topic-1-0 is either not alive or not in the isr."))
+    }
+    assertEquals(2, getLeader(partition1))
+
+    // preferred leader unavailable with null argument
+    electResult = client.electPreferredLeaders(null, shortTimeout)
+    assertEquals(Set(partition1, partition2).asJava, electResult.partitions.get)
+    try {
+      electResult.partitionResult(partition1).get()
+      fail()
+    } catch {
+      case e: Exception =>
+        val cause = e.getCause
+        cause.printStackTrace()
+        assertTrue(cause.isInstanceOf[LeaderNotAvailableException])
+        assertTrue(s"Wrong message ${cause.getMessage}", cause.getMessage.contains(
+          "Preferred replica 1 for partition elect-preferred-leaders-topic-1-0 is either not alive or not in the isr."))
+    }
+    try {
+      electResult.partitionResult(partition2).get()
+      fail()
+    } catch {
+      case e: Exception =>
+        val cause = e.getCause
+        cause.printStackTrace()
+        assertTrue(cause.isInstanceOf[LeaderNotAvailableException])
+        assertTrue(s"Wrong message ${cause.getMessage}", cause.getMessage.contains(
+          "Preferred replica 1 for partition elect-preferred-leaders-topic-2-0 is either not alive or not in the isr."))
+    }
+
+    assertEquals(2, getLeader(partition1))
+    assertEquals(2, getLeader(partition2))
+
+
+    // TODO authz failure
+
+    // TODO timeout
+
   }
 }
 
