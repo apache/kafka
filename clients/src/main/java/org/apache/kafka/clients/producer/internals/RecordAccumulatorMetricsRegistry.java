@@ -21,7 +21,7 @@ import org.apache.kafka.common.metrics.Metrics;
 
 public class RecordAccumulatorMetricsRegistry extends MetricsRegistry {
 
-    final static String metricGrpName = "producer-metrics";
+    final static String METRIC_GROUP_NAME = "producer-metrics";
 
     public final MetricName waitingThreads;
     public final MetricName bufferTotalBytes;
@@ -32,11 +32,11 @@ public class RecordAccumulatorMetricsRegistry extends MetricsRegistry {
     public RecordAccumulatorMetricsRegistry(Metrics metrics) {
         super(metrics);
 
-        this.waitingThreads = createMetricName("waiting-threads", metricGrpName, "The number of user threads blocked waiting for buffer memory to enqueue their records", this.tags);
-        this.bufferTotalBytes = createMetricName("buffer-total-bytes", metricGrpName, "The maximum amount of buffer memory the client can use (whether or not it is currently used).", tags);
-        this.bufferAvailableBytes = createMetricName("buffer-available-bytes", metricGrpName, "The total amount of buffer memory that is not being used (either unallocated or in the free list).", tags);
-        this.bufferExhaustedRate = createMetricName("buffer-exhausted-rate", metricGrpName, "The average per-second number of record sends that are dropped due to buffer exhaustion", tags);
-        this.bufferExhaustedTotal = createMetricName("buffer-exhausted-total", metricGrpName, "The total number of record sends that are dropped due to buffer exhaustion", tags);
+        this.waitingThreads = createMetricName("waiting-threads", METRIC_GROUP_NAME, "The number of user threads blocked waiting for buffer memory to enqueue their records", this.tags);
+        this.bufferTotalBytes = createMetricName("buffer-total-bytes", METRIC_GROUP_NAME, "The maximum amount of buffer memory the client can use (whether or not it is currently used).", tags);
+        this.bufferAvailableBytes = createMetricName("buffer-available-bytes", METRIC_GROUP_NAME, "The total amount of buffer memory that is not being used (either unallocated or in the free list).", tags);
+        this.bufferExhaustedRate = createMetricName("buffer-exhausted-rate", METRIC_GROUP_NAME, "The average per-second number of record sends that are dropped due to buffer exhaustion", tags);
+        this.bufferExhaustedTotal = createMetricName("buffer-exhausted-total", METRIC_GROUP_NAME, "The total number of record sends that are dropped due to buffer exhaustion", tags);
     }
 
 }
