@@ -61,9 +61,8 @@ public class BufferPool {
      * @param poolableSize The buffer size to cache in the free list rather than deallocating
      * @param metricsRegistry the metrics registry
      * @param time time instance
-     * @param metricGrpName logical group name for metrics
      */
-    public BufferPool(long memory, int poolableSize, BufferPoolMetricsRegistry metricsRegistry, Time time, String metricGrpName) {
+    public BufferPool(long memory, int poolableSize, BufferPoolMetricsRegistry metricsRegistry, Time time) {
         this.poolableSize = poolableSize;
         this.lock = new ReentrantLock();
         this.free = new ArrayDeque<>();
