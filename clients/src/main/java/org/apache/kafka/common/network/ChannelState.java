@@ -18,6 +18,8 @@ package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.errors.AuthenticationException;
 
+import java.util.Objects;
+
 /**
  * States for KafkaChannel:
  * <ul>
@@ -37,8 +39,8 @@ import org.apache.kafka.common.errors.AuthenticationException;
  *       to a send failure.</li>
  *   <li>AUTHENTICATION_FAILED: Channels are moved to this state if the requested SASL mechanism is not
  *       enabled in the broker or when brokers with versions 1.0.0 and above provide an error response
- *       during SASL authentication. {@link #exception()} gives the reason provided by the broker for
- *       authentication failure.</li>
+ *       during SASL authentication. {@link AuthenticationFailed#exception()} gives the reason provided by the broker
+ *       for authentication failure.</li>
  *   <li>LOCAL_CLOSE: Channels are moved to LOCAL_CLOSE state if close() is initiated locally.</li>
  * </ul>
  * If the remote endpoint closes a channel, the state of the channel reflects the state the channel
@@ -53,7 +55,7 @@ import org.apache.kafka.common.errors.AuthenticationException;
  *   <li>Security misconfiguration with older broker: NOT_CONNECTED => AUTHENTICATE, disconnected in AUTHENTICATE state</li>
  * </ul>
  */
-public class ChannelState {
+public abstract class ChannelState {
     public enum State {
         NOT_CONNECTED,
         AUTHENTICATE,
@@ -62,31 +64,62 @@ public class ChannelState {
         FAILED_SEND,
         AUTHENTICATION_FAILED,
         LOCAL_CLOSE
-    };
-    // AUTHENTICATION_FAILED has a custom exception. For other states,
-    // create a reusable `ChannelState` instance per-state.
-    public static final ChannelState NOT_CONNECTED = new ChannelState(State.NOT_CONNECTED);
-    public static final ChannelState AUTHENTICATE = new ChannelState(State.AUTHENTICATE);
-    public static final ChannelState READY = new ChannelState(State.READY);
-    public static final ChannelState EXPIRED = new ChannelState(State.EXPIRED);
-    public static final ChannelState FAILED_SEND = new ChannelState(State.FAILED_SEND);
-    public static final ChannelState LOCAL_CLOSE = new ChannelState(State.LOCAL_CLOSE);
-
-    private final State state;
-    private final AuthenticationException exception;
-    public ChannelState(State state) {
-        this(state, null);
-    }
-    public ChannelState(State state, AuthenticationException exception) {
-        this.state = state;
-        this.exception = exception;
     }
 
-    public State state() {
-        return state;
+    public static final ChannelState NOT_CONNECTED = new BasicChannelState(State.NOT_CONNECTED);
+    public static final ChannelState AUTHENTICATE = new BasicChannelState(State.AUTHENTICATE);
+    public static final ChannelState READY = new BasicChannelState(State.READY);
+    public static final ChannelState EXPIRED = new BasicChannelState(State.EXPIRED);
+    public static final ChannelState FAILED_SEND = new BasicChannelState(State.FAILED_SEND);
+    public static final ChannelState LOCAL_CLOSE = new BasicChannelState(State.LOCAL_CLOSE);
+
+    private final State value;
+
+    ChannelState(State value) {
+        this.value = value;
     }
 
-    public AuthenticationException exception() {
-        return exception;
+    public State value() {
+        return value;
+    }
+
+    /**
+     * This should only be called after checking that `value == State.AUTHENTICATION_FAILED`.
+     * @throws ClassCastException if value != State.AUTHENTICATION_FAILED.
+     */
+    public AuthenticationFailed asAuthenticationFailed() {
+        return (AuthenticationFailed) this;
+    }
+
+    @Override
+    public String toString() {
+        return "ChannelState(" + value.toString() + ")";
+    }
+
+    private static class BasicChannelState extends ChannelState {
+        BasicChannelState(State state) {
+            super(state);
+        }
+    }
+
+    public static class AuthenticationFailed extends ChannelState {
+
+        private final AuthenticationException exception;
+
+        public AuthenticationFailed(AuthenticationException exception) {
+            super(State.AUTHENTICATION_FAILED);
+            Objects.requireNonNull(exception, "exception should not be null");
+            this.exception = exception;
+        }
+
+        public AuthenticationException exception() {
+            return exception;
+        }
+
+        @Override
+        public String toString() {
+            return "AuthenticationFailed(exception=" + exception + ")";
+        }
     }
 }
+

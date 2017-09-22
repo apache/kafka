@@ -82,7 +82,7 @@ public class KafkaChannel {
                     case SASL_AUTHENTICATION_FAILED:
                     case ILLEGAL_SASL_STATE:
                     case UNSUPPORTED_SASL_MECHANISM:
-                        state = new ChannelState(ChannelState.State.AUTHENTICATION_FAILED, e);
+                        state = new ChannelState.AuthenticationFailed(e);
                         break;
                     default:
                         // Other errors are handled as network exceptions in Selector
