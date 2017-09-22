@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.network;
 
-import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 import java.io.Closeable;
@@ -28,15 +28,14 @@ import java.io.IOException;
 public interface Authenticator extends Closeable {
     /**
      * Implements any authentication mechanism. Use transportLayer to read or write tokens.
-     * If no further authentication needs to be done returns.
+     * For security protocols PLAINTEXT and SSL, this is a no-op since no further authentication
+     * needs to be done. For SASL_PLAINTEXT and SASL_SSL, this performs the SASL authentication.
+     *
+     * @throws AuthenticationException if authentication fails due to invalid credentials or
+     *      other security configuration errors
+     * @throws IOException if read/write fails due to an I/O error
      */
-    void authenticate() throws IOException;
-
-    /**
-     * Returns the first error encountered during authentication
-     * @return authentication error if authentication failed, Errors.NONE otherwise
-     */
-    Errors error();
+    void authenticate() throws AuthenticationException, IOException;
 
     /**
      * Returns Principal using PrincipalBuilder

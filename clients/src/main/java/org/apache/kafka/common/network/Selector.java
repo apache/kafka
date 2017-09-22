@@ -42,6 +42,7 @@ import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -485,6 +486,8 @@ public class Selector implements Selectable, AutoCloseable {
                 String desc = channel.socketDescription();
                 if (e instanceof IOException)
                     log.debug("Connection with {} disconnected", desc, e);
+                else if (e instanceof AuthenticationException) // will be logged later as error by clients
+                    log.debug("Connection with {} disconnected due to authentication exception", desc, e);
                 else
                     log.warn("Unexpected error from {}; closing connection", desc, e);
                 close(channel, true);

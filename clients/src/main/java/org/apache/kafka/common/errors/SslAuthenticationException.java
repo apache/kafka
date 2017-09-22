@@ -19,28 +19,25 @@ package org.apache.kafka.common.errors;
 import javax.net.ssl.SSLException;
 
 /**
- * This exception indicates that SASL authentication has failed.
- * On authentication failure, clients abort the operation requested and raise one
- * of the subclasses of this exception:
- * <ul>
- *   </li>{@link SaslAuthenticationException} if SASL handshake fails with invalid credentials
- *   or any other failure specific to the SASL mechanism used for authentication</li>
- *   <li>{@link UnsupportedSaslMechanismException} if the SASL mechanism requested by the client
- *   is not supported on the broker.</li>
- *   <li>{@link IllegalSaslStateException} if an unexpected request is received on during SASL
- *   handshake. This could be due to misconfigured security protocol.</li>
- *   <li>{@link SslAuthenticationException} if SSL handshake failed due to any {@link SSLException}.
- * </ul>
+ * This exception indicates that SSL handshake has failed. See {@link #getCause()}
+ * for the {@link SSLException} that caused this failure.
+ * <p>
+ * SSL handshake failures in clients may indicate client authentication
+ * failure due to untrusted certificates if server is configured to request
+ * client certificates. Handshake failures could also indicate misconfigured
+ * security including protocol/cipher suite mismatch, server certificate
+ * authentication failure or server host name verification failure.
+ * </p>
  */
-public class AuthenticationException extends ApiException {
+public class SslAuthenticationException extends AuthenticationException {
 
     private static final long serialVersionUID = 1L;
 
-    public AuthenticationException(String message) {
+    public SslAuthenticationException(String message) {
         super(message);
     }
 
-    public AuthenticationException(String message, Throwable cause) {
+    public SslAuthenticationException(String message, Throwable cause) {
         super(message, cause);
     }
 
