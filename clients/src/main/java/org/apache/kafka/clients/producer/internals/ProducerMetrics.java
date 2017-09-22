@@ -29,10 +29,12 @@ public class ProducerMetrics {
 
     public SenderMetricsRegistry senderMetrics;
     private Metrics metrics;
+    private RecordAccumulatorMetricsRegistry recordAccumuatorMetrics;
 
     public ProducerMetrics(Metrics metrics) {
         this.metrics = metrics;
         this.senderMetrics = new SenderMetricsRegistry(this.metrics);
+        this.recordAccumuatorMetrics = new RecordAccumulatorMetricsRegistry(this.metrics);
     }
 
     private List<MetricNameTemplate> getAllTemplates() {
