@@ -636,7 +636,8 @@ public class Sender implements Runnable {
      */
     private boolean canRetry(ProducerBatch batch, ProduceResponse.PartitionResponse response) {
         return batch.attempts() < this.retries &&
-                ((response.error.exception() instanceof RetriableException) || transactionManager.canRetry(response, batch));
+                ((response.error.exception() instanceof RetriableException) ||
+                        (transactionManager != null && transactionManager.canRetry(response, batch)));
     }
 
     /**
