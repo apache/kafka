@@ -16,12 +16,24 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Metrics;
 
 public class BufferPoolMetricsRegistry extends MetricsRegistry {
 
+    private final static String metricGrpName = "producer-metrics";
+    public final MetricName bufferPoolWaitRatio;
+    public final MetricName bufferPoolWaitTimeTotal;
+
     public BufferPoolMetricsRegistry(Metrics metrics) {
         super(metrics);
+
+        this.bufferPoolWaitRatio = createMetricName("bufferpool-wait-ratio",
+                metricGrpName,
+                "The fraction of time an appender waits for space allocation.", tags);
+        this.bufferPoolWaitTimeTotal = createMetricName("bufferpool-wait-time-total",
+                metricGrpName,
+                "The total time an appender waits for space allocation.", tags);
 
     }
 

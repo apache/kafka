@@ -76,12 +76,8 @@ public class BufferPool {
         this.metrics = metrics;
         this.time = time;
         this.waitTime = this.metrics.sensor(WAIT_TIME_SENSOR_NAME);
-        MetricName rateMetricName = metrics.metricName("bufferpool-wait-ratio",
-                                                   metricGrpName,
-                                                   "The fraction of time an appender waits for space allocation.");
-        MetricName totalMetricName = metrics.metricName("bufferpool-wait-time-total",
-                                                   metricGrpName,
-                                                   "The total time an appender waits for space allocation.");
+        MetricName rateMetricName = metricsRegistry.bufferPoolWaitRatio;
+        MetricName totalMetricName = metricsRegistry.bufferPoolWaitTimeTotal;
         this.waitTime.add(new Meter(TimeUnit.NANOSECONDS, rateMetricName, totalMetricName));
     }
 
