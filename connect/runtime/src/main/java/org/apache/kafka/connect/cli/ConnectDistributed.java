@@ -88,7 +88,7 @@ public class ConnectDistributed {
         DistributedHerder herder = new DistributedHerder(config, time, worker, statusBackingStore, configBackingStore,
                 advertisedUrl.toString());
         final Connect connect = new Connect(herder, rest);
-        log.info("Kafka Connect distributed worker initialized @{}ms", time.hiResClockMs() - initStart);
+        log.info("Kafka Connect distributed worker initialization took {}ms", time.hiResClockMs() - initStart);
         try {
             connect.start();
         } catch (Exception e) {

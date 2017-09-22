@@ -23,6 +23,7 @@ import org.apache.kafka.connect.runtime.Connect;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.Worker;
+import org.apache.kafka.connect.runtime.WorkerInfo;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
@@ -63,6 +64,8 @@ public class ConnectStandalone {
         Time time = Time.SYSTEM;
         log.info("Kafka Connect standalone worker initializing ...");
         long initStart = time.hiResClockMs();
+        WorkerInfo initInfo = new WorkerInfo();
+        initInfo.logAll();
 
         String workerPropsFile = args[0];
         Map<String, String> workerProps = !workerPropsFile.isEmpty() ?
@@ -81,7 +84,7 @@ public class ConnectStandalone {
 
         Herder herder = new StandaloneHerder(worker);
         final Connect connect = new Connect(herder, rest);
-        log.info("Kafka Connect standalone worker initialized @{}ms", time.hiResClockMs() - initStart);
+        log.info("Kafka Connect standalone worker initialization took {}ms", time.hiResClockMs() - initStart);
 
         try {
             connect.start();
