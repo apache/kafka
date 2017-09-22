@@ -432,7 +432,7 @@ public class StreamsBuilder {
         final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
         return internalStreamsBuilder.globalTable(topic,
                                                   new ConsumedInternal<>(Consumed.with(materializedInternal.keySerde(),
-                                                                                           materializedInternal.valueSerde())),
+                                                                                       materializedInternal.valueSerde())),
                                                   materializedInternal);
     }
 
