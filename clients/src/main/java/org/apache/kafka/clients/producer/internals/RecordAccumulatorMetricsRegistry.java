@@ -16,7 +16,11 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.metrics.Metrics;
 
 public class RecordAccumulatorMetricsRegistry extends MetricsRegistry {
@@ -35,11 +39,20 @@ public class RecordAccumulatorMetricsRegistry extends MetricsRegistry {
         super(metrics);
 
         this.bufferPoolMetrics = new BufferPoolMetricsRegistry(metrics);
+        
         this.waitingThreads = createMetricName("waiting-threads", METRIC_GROUP_NAME, "The number of user threads blocked waiting for buffer memory to enqueue their records", this.tags);
         this.bufferTotalBytes = createMetricName("buffer-total-bytes", METRIC_GROUP_NAME, "The maximum amount of buffer memory the client can use (whether or not it is currently used).", tags);
         this.bufferAvailableBytes = createMetricName("buffer-available-bytes", METRIC_GROUP_NAME, "The total amount of buffer memory that is not being used (either unallocated or in the free list).", tags);
         this.bufferExhaustedRate = createMetricName("buffer-exhausted-rate", METRIC_GROUP_NAME, "The average per-second number of record sends that are dropped due to buffer exhaustion", tags);
         this.bufferExhaustedTotal = createMetricName("buffer-exhausted-total", METRIC_GROUP_NAME, "The total number of record sends that are dropped due to buffer exhaustion", tags);
+    }
+
+    
+    public List<MetricNameTemplate> getAllTemplates() {
+        List<MetricNameTemplate> l = new ArrayList<>();
+        l.addAll(this.bufferPoolMetrics.getAllTemplates());
+        l.addAll(this.allTemplates);
+        return l;
     }
 
 }
