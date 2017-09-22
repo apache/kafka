@@ -130,8 +130,7 @@ public class SessionWindowedKStreamImplTest {
     @Test
     public void shouldMaterializeCount() {
         stream.count(Materialized.<String, Long, SessionStore<Bytes, byte[]>>as("count-store")
-                             .withKeySerde(Serdes.String())
-                             .withValueSerde(Serdes.Long()));
+                             .withKeySerde(Serdes.String()));
 
         processData();
         final SessionStore<String, Long> store = (SessionStore<String, Long>) driver.allStateStores().get("count-store");
