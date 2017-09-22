@@ -25,8 +25,7 @@ import java.util.concurrent.locks.{Lock, ReentrantLock}
 import kafka.log.IndexSearchType.IndexSearchEntity
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.{CoreUtils, Logging}
-import org.apache.kafka.common.utils.{OperatingSystem, Utils}
-import sun.nio.ch.DirectBuffer
+import org.apache.kafka.common.utils.{MappedByteBuffers, OperatingSystem, Utils}
 
 import scala.math.ceil
 
@@ -109,7 +108,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
 
       /* Windows won't let us modify the file length while the file is mmapped :-( */
       if (OperatingSystem.IS_WINDOWS)
-        forceUnmap(mmap)
+        safeForceUnmap()
       try {
         raf.setLength(roundedNewSize)
         mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
@@ -150,10 +149,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
       // However, in some cases it can pause application threads(STW) for a long moment reading metadata from a physical disk.
       // To prevent this, we forcefully cleanup memory mapping within proper execution which never affects API responsiveness.
       // See https://issues.apache.org/jira/browse/KAFKA-4614 for the details.
-      CoreUtils.swallow(forceUnmap(mmap))
-      // Accessing unmapped mmap crashes JVM by SEGV.
-      // Accessing it after this method called sounds like a bug but for safety, assign null and do not allow later access.
-      mmap = null
+      safeForceUnmap()
     }
     file.delete()
   }
@@ -178,11 +174,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
     trimToValidSize()
   }
 
-  def closeHandler() = {
-    // File handler of the index field will be closed after the mmap is garbage collected
-    CoreUtils.swallow(forceUnmap(mmap))
-    mmap = null
-  }
+  def closeHandler(): Unit = safeForceUnmap()
 
   /**
    * Do a basic sanity check on this index to detect obvious problems
@@ -202,22 +194,19 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    */
   def truncateTo(offset: Long): Unit
 
+  protected def safeForceUnmap(): Unit = {
+    try forceUnmap()
+    catch {
+      case t: Throwable => error(s"Error unmapping index $file", t)
+    }
+  }
+
   /**
    * Forcefully free the buffer's mmap.
    */
-  protected def forceUnmap(m: MappedByteBuffer) {
-    try {
-      m match {
-        case buffer: DirectBuffer =>
-          val bufferCleaner = buffer.cleaner()
-          /* cleaner can be null if the mapped region has size 0 */
-          if (bufferCleaner != null)
-            bufferCleaner.clean()
-        case _ =>
-      }
-    } catch {
-      case t: Throwable => error("Error when freeing index buffer", t)
-    }
+  protected[log] def forceUnmap() {
+    try MappedByteBuffers.unmap(file.getAbsolutePath, mmap)
+    finally mmap = null // Accessing unmapped mmap crashes JVM by SEGV so we null it out to be safe
   }
 
   /**
