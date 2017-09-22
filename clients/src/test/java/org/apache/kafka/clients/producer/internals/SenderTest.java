@@ -1847,8 +1847,8 @@ public class SenderTest {
             future.get();
             fail("Future should have raised " + expectedExceptionType.getName());
         } catch (ExecutionException e) {
-            assertTrue("Unexpected cause " + e.getClass(),
-                    expectedExceptionType.isAssignableFrom(e.getCause().getClass()));
+            Class<? extends Throwable> causeType = e.getCause().getClass();
+            assertTrue("Unexpected cause " + causeType, expectedExceptionType.isAssignableFrom(causeType));
         }
     }
 
