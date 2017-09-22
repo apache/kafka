@@ -58,6 +58,7 @@ import static org.junit.Assert.fail;
 public class BufferPoolTest {
     private final MockTime time = new MockTime();
     private final Metrics metrics = new Metrics(time);
+    private final BufferPoolMetricsRegistry metricsRegistry = new BufferPoolMetricsRegistry(metrics);
     private final long maxBlockTimeMs = 2000;
     private final String metricGroup = "TestMetrics";
 
@@ -73,7 +74,7 @@ public class BufferPoolTest {
     public void testSimple() throws Exception {
         long totalMemory = 64 * 1024;
         int size = 1024;
-        BufferPool pool = new BufferPool(totalMemory, size, metrics, time, metricGroup);
+        BufferPool pool = new BufferPool(totalMemory, size, metrics, metricsRegistry, time, metricGroup);
         ByteBuffer buffer = pool.allocate(size, maxBlockTimeMs);
         assertEquals("Buffer size should equal requested size.", size, buffer.limit());
         assertEquals("Unallocated memory should have shrunk", totalMemory - size, pool.unallocatedMemory());
@@ -100,7 +101,7 @@ public class BufferPoolTest {
      */
     @Test(expected = IllegalArgumentException.class)
     public void testCantAllocateMoreMemoryThanWeHave() throws Exception {
-        BufferPool pool = new BufferPool(1024, 512, metrics, time, metricGroup);
+        BufferPool pool = new BufferPool(1024, 512, metrics, metricsRegistry, time, metricGroup);
         ByteBuffer buffer = pool.allocate(1024, maxBlockTimeMs);
         assertEquals(1024, buffer.limit());
         pool.deallocate(buffer);
@@ -112,7 +113,7 @@ public class BufferPoolTest {
      */
     @Test
     public void testDelayedAllocation() throws Exception {
-        BufferPool pool = new BufferPool(5 * 1024, 1024, metrics, time, metricGroup);
+        BufferPool pool = new BufferPool(5 * 1024, 1024, metrics, metricsRegistry, time, metricGroup);
         ByteBuffer buffer = pool.allocate(1024, maxBlockTimeMs);
         CountDownLatch doDealloc = asyncDeallocate(pool, buffer);
         CountDownLatch allocation = asyncAllocate(pool, 5 * 1024);
@@ -170,7 +171,7 @@ public class BufferPoolTest {
      */
     @Test
     public void testBlockTimeout() throws Exception {
-        BufferPool pool = new BufferPool(10, 1, metrics, Time.SYSTEM, metricGroup);
+        BufferPool pool = new BufferPool(10, 1, metrics, metricsRegistry, Time.SYSTEM, metricGroup);
         ByteBuffer buffer1 = pool.allocate(1, maxBlockTimeMs);
         ByteBuffer buffer2 = pool.allocate(1, maxBlockTimeMs);
         ByteBuffer buffer3 = pool.allocate(1, maxBlockTimeMs);
@@ -197,7 +198,7 @@ public class BufferPoolTest {
      */
     @Test
     public void testCleanupMemoryAvailabilityWaiterOnBlockTimeout() throws Exception {
-        BufferPool pool = new BufferPool(2, 1, metrics, time, metricGroup);
+        BufferPool pool = new BufferPool(2, 1, metrics, metricsRegistry, time, metricGroup);
         pool.allocate(1, maxBlockTimeMs);
         try {
             pool.allocate(2, maxBlockTimeMs);
@@ -213,7 +214,7 @@ public class BufferPoolTest {
      */
     @Test
     public void testCleanupMemoryAvailabilityWaiterOnInterruption() throws Exception {
-        BufferPool pool = new BufferPool(2, 1, metrics, time, metricGroup);
+        BufferPool pool = new BufferPool(2, 1, metrics, metricsRegistry, time, metricGroup);
         long blockTime = 5000;
         pool.allocate(1, maxBlockTimeMs);
         Thread t1 = new Thread(new BufferPoolAllocator(pool, blockTime));
@@ -260,7 +261,7 @@ public class BufferPoolTest {
 
         replay(mockedMetrics, mockedSensor, metricName);
 
-        BufferPool bufferPool = new BufferPool(2, 1, mockedMetrics, time,  metricGroup);
+        BufferPool bufferPool = new BufferPool(2, 1, mockedMetrics, metricsRegistry,  time, metricGroup);
         bufferPool.allocate(1, 0);
         try {
             bufferPool.allocate(2, 1000);
@@ -304,7 +305,7 @@ public class BufferPoolTest {
         final int iterations = 50000;
         final int poolableSize = 1024;
         final long totalMemory = numThreads / 2 * poolableSize;
-        final BufferPool pool = new BufferPool(totalMemory, poolableSize, metrics, time, metricGroup);
+        final BufferPool pool = new BufferPool(totalMemory, poolableSize, metrics, metricsRegistry, time, metricGroup);
         List<StressTestThread> threads = new ArrayList<StressTestThread>();
         for (int i = 0; i < numThreads; i++)
             threads.add(new StressTestThread(pool, iterations));
@@ -322,7 +323,7 @@ public class BufferPoolTest {
         long memory = 20_000_000_000L;
         int poolableSize = 2_000_000_000;
         final AtomicInteger freeSize = new AtomicInteger(0);
-        BufferPool pool = new BufferPool(memory, poolableSize, metrics, time, metricGroup) {
+        BufferPool pool = new BufferPool(memory, poolableSize, metrics, metricsRegistry, time, metricGroup) {
             @Override
             protected ByteBuffer allocateByteBuffer(int size) {
                 // Ignore size to avoid OOM due to large buffers
@@ -348,7 +349,7 @@ public class BufferPoolTest {
 
     @Test
     public void outOfMemoryOnAllocation() {
-        BufferPool bufferPool = new BufferPool(1024, 1024, metrics, time, metricGroup) {
+        BufferPool bufferPool = new BufferPool(1024, 1024, metrics, metricsRegistry, time, metricGroup) {
             @Override
             protected ByteBuffer allocateByteBuffer(int size) {
                 throw new OutOfMemoryError();

@@ -29,12 +29,12 @@ public class RecordAccumulatorMetricsRegistry extends MetricsRegistry {
     public final MetricName bufferExhaustedRate;
     public final MetricName bufferExhaustedTotal;
 
-    public final BufferPoolMetricsRegistry bufferpoolMetrics;
+    public final BufferPoolMetricsRegistry bufferPoolMetrics;
 
     public RecordAccumulatorMetricsRegistry(Metrics metrics) {
         super(metrics);
 
-        this.bufferpoolMetrics = new BufferPoolMetricsRegistry(metrics);
+        this.bufferPoolMetrics = new BufferPoolMetricsRegistry(metrics);
         this.waitingThreads = createMetricName("waiting-threads", METRIC_GROUP_NAME, "The number of user threads blocked waiting for buffer memory to enqueue their records", this.tags);
         this.bufferTotalBytes = createMetricName("buffer-total-bytes", METRIC_GROUP_NAME, "The maximum amount of buffer memory the client can use (whether or not it is currently used).", tags);
         this.bufferAvailableBytes = createMetricName("buffer-available-bytes", METRIC_GROUP_NAME, "The total amount of buffer memory that is not being used (either unallocated or in the free list).", tags);
