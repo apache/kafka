@@ -382,6 +382,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     config.getLong(ProducerConfig.LINGER_MS_CONFIG),
                     retryBackoffMs,
                     metrics,
+                    metricsRegistry.recordAccumulatorMetrics,
                     time,
                     apiVersions,
                     transactionManager);

@@ -98,6 +98,7 @@ public final class RecordAccumulator {
      * @param retryBackoffMs An artificial delay time to retry the produce request upon receiving an error. This avoids
      *        exhausting all retries in a short period of time.
      * @param metrics The metrics
+     * @param metricsRegistry The metrics registry
      * @param time The time instance to use
      * @param apiVersions Request API versions for current connected brokers
      * @param transactionManager The shared transaction state object which tracks producer IDs, epochs, and sequence
@@ -110,6 +111,7 @@ public final class RecordAccumulator {
                              long lingerMs,
                              long retryBackoffMs,
                              Metrics metrics,
+                             RecordAccumulatorMetricsRegistry metricsRegistry,
                              Time time,
                              ApiVersions apiVersions,
                              TransactionManager transactionManager) {
