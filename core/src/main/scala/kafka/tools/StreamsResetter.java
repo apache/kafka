@@ -102,7 +102,7 @@ public class StreamsResetter {
 
             validateNoActiveConsumers(groupId);
 
-            Properties adminClientProperties = new Properties();
+            final Properties adminClientProperties = new Properties();
             adminClientProperties.put("bootstrap.servers", options.valueOf(bootstrapServerOption));
             kafkaAdminClient = (KafkaAdminClient) AdminClient.create(adminClientProperties);
 
@@ -121,7 +121,7 @@ public class StreamsResetter {
             e.printStackTrace(System.err);
         } finally {
             if (kafkaAdminClient != null) {
-                kafkaAdminClient.close();
+                kafkaAdminClient.close(60, TimeUnit.SECONDS);
             }
         }
 
@@ -156,7 +156,7 @@ public class StreamsResetter {
             .ofType(String.class)
             .defaultsTo("localhost:9092")
             .describedAs("urls");
-        zookeeperOption = optionParser.accepts("zookeeper", "Zookeeper option is deprecated");
+        zookeeperOption = optionParser.accepts("zookeeper", "Zookeeper option is deprecated by bootstrap.servers, as the reset tool would no longer access Zookeeper directly");
 
         inputTopicsOption = optionParser.accepts("input-topics", "Comma-separated list of user input topics. For these topics, the tool will reset the offset to the earliest available offset.")
             .withRequiredArg()
@@ -338,14 +338,15 @@ public class StreamsResetter {
         System.out.println("Done.");
     }
 
-    private void doDelete(List<String> topicsToDelete, KafkaAdminClient adminClient) {
+    private void doDelete(final List<String> topicsToDelete,
+                          final KafkaAdminClient adminClient) {
         RuntimeException deleteException = null;
-        DeleteTopicsResult deleteTopicsResult = adminClient.deleteTopics(topicsToDelete);
-        Map<String, KafkaFuture<Void>> results = deleteTopicsResult.values();
+        final DeleteTopicsResult deleteTopicsResult = adminClient.deleteTopics(topicsToDelete);
+        final Map<String, KafkaFuture<Void>> results = deleteTopicsResult.values();
 
         for (Map.Entry<String, KafkaFuture<Void>> entry : results.entrySet()) {
             try {
-                entry.getValue().get();
+                entry.getValue().get(30, TimeUnit.SECONDS);
             } catch (Exception e) {
                 System.err.println("ERROR deleting topic " + entry.getKey() + " failed " + e.getMessage());
                 if (deleteException == null) {

@@ -108,7 +108,7 @@ public class ResetIntegrationTest {
         }
 
         if (kafkaAdminClient != null) {
-            kafkaAdminClient.close();
+            kafkaAdminClient.close(10, TimeUnit.SECONDS);
             kafkaAdminClient = null;
         }
     }
