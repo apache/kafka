@@ -125,7 +125,7 @@ class PartitionStateMachine(controller: KafkaController, stateChangeLogger: Stat
   def handleStateChangesWithResults(partitions: Set[TopicAndPartition], targetState: PartitionState,
                          leaderSelector: PartitionLeaderSelector = noOpPartitionLeaderSelector,
                          callbacks: Callbacks = (new CallbackBuilder).build): Map[TopicAndPartition, Throwable] = {
-    info("Invoking state change to %s for partitions %s".format(targetState, partitions.mkString(",")))
+    info(s"Invoking state change to $targetState for partitions ${partitions.mkString(",")}")
     val result = new mutable.HashMap[TopicAndPartition, Throwable]()
     try {
       brokerRequestBatch.newBatch()

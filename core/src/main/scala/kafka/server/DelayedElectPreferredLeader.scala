@@ -27,20 +27,20 @@ import org.apache.kafka.common.requests.ApiError
 
 import scala.collection.{Map, Set, mutable}
 
+case class ElectPreferredLeaderMetadata(partition: TopicAndPartition, leader: Int)
+
 /** A delayed elect preferred leader operation that can be created by the replica manager and watched
   * in the elect preferred leader purgatory
   */
 class DelayedElectPreferredLeader(delayMs: Long,
-                                  waiting: Set[TopicAndPartition],
+                                  expectedLeaders: Set[ElectPreferredLeaderMetadata],
                                   results: Map[TopicAndPartition, ApiError],
                                   replicaManager: ReplicaManager,
-                                  controllerContext: ControllerContext,
                                   responseCallback: Map[TopicAndPartition, ApiError] => Unit)
     extends DelayedOperation(delayMs) {
 
-  val expectedLeaders: Map[TopicAndPartition, Int]= waiting.map(tp => tp -> controllerContext.partitionReplicaAssignment(tp).head).toMap
-  var waitingPartitions: Set[TopicAndPartition] = new mutable.HashSet[TopicAndPartition]() ++= waiting
-  val fullResults = new mutable.HashSet() ++= results
+  var waitingPartitions = expectedLeaders.to[mutable.Set]
+  val fullResults = results.to[mutable.Set]
 
   /**
     * Call-back to execute when a delayed operation gets expired and hence forced to complete.
@@ -54,7 +54,7 @@ class DelayedElectPreferredLeader(delayMs: Long,
   override def onComplete(): Unit = {
     // This could be called to force complete, so I need the full list of partitions, so I can time them all out.
     updateWaiting()
-    val timedout = waitingPartitions.map(partition => partition -> new ApiError(Errors.REQUEST_TIMED_OUT, null)).toMap
+    val timedout = waitingPartitions.map(meta => meta.partition -> new ApiError(Errors.REQUEST_TIMED_OUT, null)).toMap
     responseCallback(timedout ++ fullResults)
   }
 
@@ -71,24 +71,22 @@ class DelayedElectPreferredLeader(delayMs: Long,
     */
   override def tryComplete(): Boolean = {
     updateWaiting()
-    debug("tryComplete() waitingPartitions: %s".format(waitingPartitions))
-    if (waitingPartitions.isEmpty)
-      forceComplete()
-    else
-      false
+    debug(s"tryComplete() waitingPartitions: $waitingPartitions")
+    waitingPartitions.isEmpty && forceComplete()
   }
 
   private def updateWaiting() = {
-    waitingPartitions.foreach{tp =>
-      val ps = replicaManager.metadataCache.getPartitionInfo(tp.topic, tp.partition)
+    waitingPartitions.foreach{m =>
+      val ps = replicaManager.metadataCache.getPartitionInfo(m.partition.topic, m.partition.partition)
       ps match {
         case Some(ps) =>
-          if (expectedLeaders(tp) == ps.basePartitionState.leader) {
-            waitingPartitions -= tp
-            fullResults += tp -> ApiError.NONE
+          if (m.leader == ps.basePartitionState.leader) {
+            waitingPartitions -= m
+            fullResults += m.partition -> ApiError.NONE
           }
         case None =>
       }
     }
   }
+
 }
