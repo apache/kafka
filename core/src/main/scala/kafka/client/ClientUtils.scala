@@ -17,6 +17,7 @@
 package kafka.client
 
 import org.apache.kafka.clients.CommonClientConfigs
+import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.MetadataResponse
 
@@ -101,14 +102,21 @@ object ClientUtils extends Logging {
    * Used to send a metadata request using AdminClient
    * @param topics The topics for which the metadata needs to be fetched
    * @param brokers The brokers in the cluster as configured on the producer through metadata.broker.list
+   * @param clientId The client's identifier
+   * @param autoCreateTopic Whether a missing topic in the request should be automatically created
    * @return metadata response
    */
-  def fetchMetadata(topics: Set[String], brokers: Seq[BrokerEndPoint], autoCreateTopic: Boolean = false): MetadataResponse = {
+  def fetchMetadata(topics: Set[String], brokers: Seq[BrokerEndPoint], clientId: Option[String] = None,
+                    timeout: Option[Int], autoCreateTopic: Boolean = true): MetadataResponse = {
     var fetchMetaDataSucceeded: Boolean = false
     var i: Int = 0
 
     val props = new Properties()
     props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokers.map(_.connectionString()).mkString(","))
+    if (clientId.nonEmpty)
+      props.put(ConsumerConfig.CLIENT_ID_CONFIG, clientId.get)
+    if (timeout.nonEmpty)
+      props.put(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, timeout.get.toString)
     val adminClient = AdminClient.create(props)
 
     adminClient.getTopicsMetadata(topics.toList, autoCreateTopic)
@@ -148,11 +156,9 @@ object ClientUtils extends Logging {
     */
   def channelToOffsetManager(group: String, zkUtils: ZkUtils, socketTimeoutMs: Int = 3000, retryBackOffMs: Int = 1000) = {
     var queryChannel = channelToAnyBroker(zkUtils)
-
     var offsetManagerChannelOpt: Option[BlockingChannel] = None
 
     while (offsetManagerChannelOpt.isEmpty) {
-
       var coordinatorOpt: Option[BrokerEndPoint] = None
 
       while (coordinatorOpt.isEmpty) {

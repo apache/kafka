@@ -17,20 +17,21 @@
 
 package kafka.admin
 
-import kafka.api.TopicMetadata
+import kafka.client.ClientUtils
 import kafka.cluster.Broker
 import kafka.server.{KafkaConfig, KafkaServer}
-import org.apache.kafka.common.errors.InvalidReplicaAssignmentException
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
 
+import org.apache.kafka.common.errors.InvalidReplicaAssignmentException
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.kafka.common.PartitionInfo
+import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata
 
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
+import scala.collection.JavaConverters._
 
 class AddPartitionsTest extends ZooKeeperTestHarness {
   var configs: Seq[KafkaConfig] = null
@@ -110,11 +111,12 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
     TestUtils.waitUntilMetadataIsPropagated(servers, topic1, 1)
     TestUtils.waitUntilMetadataIsPropagated(servers, topic1, 2)
     val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
-    val metadataForTopic1 =
-      AdminUtils.fetchTopicMetadata(
-              Set(topic1), brokers.map(_.getBrokerEndPoint(listenerName)),
-              "AddPartitionsTest-testIncrementPartitions", 2000).get(topic1).getOrElse(List())
-    val partitionDataForTopic1 = metadataForTopic1.sortBy(_.partition)
+    val metadataForTopic1 = ClientUtils.fetchMetadata(
+        Set(topic1), brokers.map(_.getBrokerEndPoint(listenerName)), Some("AddPartitionsTest-testIncrementPartitions"), Some(2000))
+            .topicMetadata.asScala.find(_.topic == topic1)
+    val partitionDataForTopic1 = metadataForTopic1.fold(List[PartitionMetadata]()) { m =>
+        m.partitionMetadata.asScala.sortBy(_.partition).toList
+    }
     assertEquals(partitionDataForTopic1.size, 3)
     assertEquals(partitionDataForTopic1(1).partition, 1)
     assertEquals(partitionDataForTopic1(2).partition, 2)
@@ -139,17 +141,16 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
     // read metadata from a broker and verify the new topic partitions exist
     TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 1)
     TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 2)
-    val metadataForTopic2 = AdminUtils.fetchTopicMetadata(Set(topic2),
+    val metadataForTopic2 = ClientUtils.fetchMetadata(Set(topic2),
       brokers.map(_.getBrokerEndPoint(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))),
-      "AddPartitionsTest-testManualAssignmentOfReplicas", 2000, 0).topicsMetadata
-    val metaDataForTopic2 = metadata.filter(_.topic == topic2)
-    val partitionDataForTopic2 = metaDataForTopic2.head.partitionsMetadata.sortBy(_.partitionId)
-      "AddPartitionsTest-testManualAssignmentOfReplicas", 2000).get(topic2).getOrElse(List())
-    val partitionDataForTopic2 = metadataForTopic2.sortBy(_.partition)
+      Some("AddPartitionsTest-testManualAssignmentOfReplicas"), Some(2000)).topicMetadata.asScala.find(_.topic == topic2)
+    val partitionDataForTopic2 = metadataForTopic2.fold(List[PartitionMetadata]()) { m =>
+      m.partitionMetadata.asScala.sortBy(_.partition).toList
+    }
     assertEquals(3, partitionDataForTopic2.size)
     assertEquals(1, partitionDataForTopic2(1).partition)
     assertEquals(2, partitionDataForTopic2(2).partition)
-    val replicas = partitionDataForTopic2(1).replicas
+    val replicas = partitionDataForTopic2(1).replicas.asScala
     assertEquals(2, replicas.size)
     assertTrue(replicas.head.id == 0 || replicas.head.id == 1)
     assertTrue(replicas(1).id == 0 || replicas(1).id == 1)
@@ -167,17 +168,20 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
     TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 5)
     TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 6)
 
-    val metadataForTopic3 = AdminUtils.fetchTopicMetadata(Set(topic3),
+    val metadataForTopic3 = ClientUtils.fetchMetadata(Set(topic3),
       brokers.map(_.getBrokerEndPoint(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))),
-      "AddPartitionsTest-testReplicaPlacementAllServers", 2000).get(topic3).getOrElse(List())
+      Some("AddPartitionsTest-testReplicaPlacementAllServers"), Some(2000)).topicMetadata.asScala.find(_.topic == topic3)
+    val partitionDataForTopic3 = metadataForTopic3.fold(List[PartitionMetadata]()) { m =>
+      m.partitionMetadata.asScala.sortBy(_.partition).toList
+    }
 
-    validateLeaderAndReplicas(metadataForTopic3, 0, 2, Set(2, 3, 0, 1))
-    validateLeaderAndReplicas(metadataForTopic3, 1, 3, Set(3, 2, 0, 1))
-    validateLeaderAndReplicas(metadataForTopic3, 2, 0, Set(0, 3, 1, 2))
-    validateLeaderAndReplicas(metadataForTopic3, 3, 1, Set(1, 0, 2, 3))
-    validateLeaderAndReplicas(metadataForTopic3, 4, 2, Set(2, 3, 0, 1))
-    validateLeaderAndReplicas(metadataForTopic3, 5, 3, Set(3, 0, 1, 2))
-    validateLeaderAndReplicas(metadataForTopic3, 6, 0, Set(0, 1, 2, 3))
+    validateLeaderAndReplicas(partitionDataForTopic3, 0, 2, Set(2, 3, 0, 1))
+    validateLeaderAndReplicas(partitionDataForTopic3, 1, 3, Set(3, 2, 0, 1))
+    validateLeaderAndReplicas(partitionDataForTopic3, 2, 0, Set(0, 3, 1, 2))
+    validateLeaderAndReplicas(partitionDataForTopic3, 3, 1, Set(1, 0, 2, 3))
+    validateLeaderAndReplicas(partitionDataForTopic3, 4, 2, Set(2, 3, 0, 1))
+    validateLeaderAndReplicas(partitionDataForTopic3, 5, 3, Set(3, 0, 1, 2))
+    validateLeaderAndReplicas(partitionDataForTopic3, 6, 0, Set(0, 1, 2, 3))
   }
 
   @Test
@@ -188,16 +192,19 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
     TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 1)
     TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 2)
 
-    val metadataForTopic2 = AdminUtils.fetchTopicMetadata(Set(topic2),
+    val metadataForTopic2 = ClientUtils.fetchMetadata(Set(topic2),
       brokers.map(_.getBrokerEndPoint(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))),
-      "AddPartitionsTest-testReplicaPlacementPartialServers", 2000).get(topic2).getOrElse(List())
+      Some("AddPartitionsTest-testReplicaPlacementPartialServers"), Some(2000)).topicMetadata.asScala.find(_.topic == topic2)
+    val partitionDataForTopic2 = metadataForTopic2.fold(List[PartitionMetadata]()) { m =>
+      m.partitionMetadata.asScala.sortBy(_.partition).toList
+    }
 
-    validateLeaderAndReplicas(metadataForTopic2, 0, 1, Set(1, 2))
-    validateLeaderAndReplicas(metadataForTopic2, 1, 2, Set(0, 2))
-    validateLeaderAndReplicas(metadataForTopic2, 2, 3, Set(1, 3))
+    validateLeaderAndReplicas(partitionDataForTopic2, 0, 1, Set(1, 2))
+    validateLeaderAndReplicas(partitionDataForTopic2, 1, 2, Set(0, 2))
+    validateLeaderAndReplicas(partitionDataForTopic2, 2, 3, Set(1, 3))
   }
 
-  def validateLeaderAndReplicas(metadata: List[PartitionInfo], partitionId: Int, expectedLeaderId: Int, expectedReplicas: Set[Int]) = {
+  def validateLeaderAndReplicas(metadata: List[PartitionMetadata], partitionId: Int, expectedLeaderId: Int, expectedReplicas: Set[Int]) = {
     val partitionOpt = metadata.find(_.partition == partitionId)
     assertTrue(s"Partition $partitionId should exist", partitionOpt.isDefined)
     val partition = partitionOpt.get
@@ -205,6 +212,6 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
     assertTrue("Partition leader should exist", !partition.leader.isEmpty)
     assertEquals("Partition leader id should match", expectedLeaderId, partition.leader.id)
 
-    assertEquals("Replica set should match", expectedReplicas, partition.replicas.map(_.id).toSet)
+    assertEquals("Replica set should match", expectedReplicas, partition.replicas.asScala.map(_.id).toSet)
   }
 }

@@ -126,22 +126,22 @@ object ReplicaVerificationTool extends Logging {
     info("Getting topic metadata...")
     val brokerList = options.valueOf(brokerListOpt)
     ToolsUtils.validatePortOrDie(parser,brokerList)
-    val metadataTargetBrokers = AdminUtils.parseBrokerList(brokerList)
-    val topicsMetadataResponse = AdminUtils.fetchTopicMetadata(Set[String](), metadataTargetBrokers, clientId, maxWaitMs)
-    val brokerMap = topicsMetadataResponse.values.flatten.map(m =>
-      (m.leader.id, BrokerEndPoint(m.leader.id, m.leader.host, m.leader.port))).toMap
-    val filteredTopicMetadata = topicsMetadataResponse.filterKeys(
-        topicWhiteListFiler.isTopicAllowed(_, excludeInternalTopics = false))
+    val metadataTargetBrokers = BrokerEndPoint.parseBrokerList(brokerList)
+    val topicsMetadataResponse = ClientUtils.fetchMetadata(Set[String](), metadataTargetBrokers, Some(clientId), Some(maxWaitMs), false).topicMetadata.asScala
+    val brokerMap = topicsMetadataResponse.flatMap(_.partitionMetadata.asScala).map(m =>
+        (m.leader.id, BrokerEndPoint(m.leader.id, m.leader.host, m.leader.port))).toMap
+    val filteredTopicMetadata = topicsMetadataResponse.filter(m =>
+        topicWhiteListFiler.isTopicAllowed(m.topic, excludeInternalTopics = false))
 
     if (filteredTopicMetadata.isEmpty) {
       error("No topics found. " + topicWhiteListOpt + ", if specified, is either filtering out all topics or there is no topic.")
       Exit.exit(1)
     }
 
-    val topicPartitionReplicaList: Seq[TopicPartitionReplica] = filteredTopicMetadata.values.flatten.flatMap {
-      partitionMetadata =>
-        partitionMetadata.replicas.map(broker =>
-          TopicPartitionReplica(topic = partitionMetadata.topic, partitionId = partitionMetadata.partition, replicaId = broker.id))
+    val topicPartitionReplicaList: Seq[TopicPartitionReplica] = filteredTopicMetadata.flatMap { metadata =>
+        metadata.partitionMetadata.asScala.flatMap(partitionMetadata =>
+            partitionMetadata.replicas.asScala.map(broker =>
+                TopicPartitionReplica(topic = metadata.topic, partitionId = partitionMetadata.partition, replicaId = broker.id)))
     }.toSeq
     debug("Selected topic partitions: " + topicPartitionReplicaList)
     val topicAndPartitionsPerBroker: Map[Int, Seq[TopicAndPartition]] = topicPartitionReplicaList.groupBy(_.replicaId)
@@ -153,8 +153,8 @@ object ReplicaVerificationTool extends Logging {
           .map { case (topicAndPartition, replicaSet) => topicAndPartition -> replicaSet.size }
     debug("Expected replicas per topic partition: " + expectedReplicasPerTopicAndPartition)
     val leadersPerBroker: Map[Int, Seq[TopicAndPartition]] = filteredTopicMetadata.flatMap { topicMetadataResponse =>
-      topicMetadataResponse._2.map { partitionMetadata =>
-        (TopicAndPartition(partitionMetadata.topic, partitionMetadata.partition), partitionMetadata.leader.id)
+        topicMetadataResponse.partitionMetadata.asScala.map { partitionMetadata =>
+            (TopicAndPartition(topicMetadataResponse.topic, partitionMetadata.partition), partitionMetadata.leader.id)
       }
     }.groupBy(_._2).mapValues(topicAndPartitionAndLeaderIds => topicAndPartitionAndLeaderIds.map { case (topicAndPartition, _) =>
        topicAndPartition
