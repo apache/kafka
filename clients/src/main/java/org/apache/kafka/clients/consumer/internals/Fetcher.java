@@ -206,6 +206,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         @Override
                         public void onSuccess(ClientResponse resp) {
                             FetchResponse<Records> response = (FetchResponse<Records>) resp.responseBody();
+                            sensors.rawBytesFetched.record(
+                                    FetchResponse.sizeOf(request.latestAllowedVersion(), response.responseData().entrySet().iterator()));
                             FetchSessionHandler handler = sessionHandlers.get(fetchTarget.id());
                             if (handler == null) {
                                 log.error("Unable to find FetchSessionHandler for node {}. Ignoring fetch response.",
@@ -1332,6 +1334,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private static class FetchManagerMetrics {
         private final Metrics metrics;
         private FetcherMetricsRegistry metricsRegistry;
+        private final Sensor rawBytesFetched;
         private final Sensor bytesFetched;
         private final Sensor recordsFetched;
         private final Sensor fetchLatency;
@@ -1343,6 +1346,12 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         private FetchManagerMetrics(Metrics metrics, FetcherMetricsRegistry metricsRegistry) {
             this.metrics = metrics;
             this.metricsRegistry = metricsRegistry;
+
+            this.rawBytesFetched = metrics.sensor("raw-bytes-fetched");
+            this.rawBytesFetched.add(metrics.metricInstance(metricsRegistry.rawFetchSizeAvg), new Avg());
+            this.rawBytesFetched.add(metrics.metricInstance(metricsRegistry.rawFetchSizeMax), new Max());
+            this.rawBytesFetched.add(new Meter(metrics.metricInstance(metricsRegistry.rawBytesConsumedRate),
+                    metrics.metricInstance(metricsRegistry.rawBytesConsumedTotal)));
 
             this.bytesFetched = metrics.sensor("bytes-fetched");
             this.bytesFetched.add(metrics.metricInstance(metricsRegistry.fetchSizeAvg), new Avg());

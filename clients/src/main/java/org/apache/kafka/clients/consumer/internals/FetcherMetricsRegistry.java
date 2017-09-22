@@ -26,6 +26,10 @@ import org.apache.kafka.common.MetricNameTemplate;
 
 public class FetcherMetricsRegistry {
 
+    public MetricNameTemplate rawFetchSizeAvg;
+    public MetricNameTemplate rawFetchSizeMax;
+    public MetricNameTemplate rawBytesConsumedRate;
+    public MetricNameTemplate rawBytesConsumedTotal;
     public MetricNameTemplate fetchSizeAvg;
     public MetricNameTemplate fetchSizeMax;
     public MetricNameTemplate bytesConsumedRate;
@@ -67,6 +71,15 @@ public class FetcherMetricsRegistry {
 
         /***** Client level *****/
         String groupName = metricGrpPrefix + "-fetch-manager-metrics";
+
+        this.rawFetchSizeAvg = new MetricNameTemplate("raw-fetch-size-avg", groupName,
+                "The average number of raw bytes fetched per request", tags);
+        this.rawFetchSizeMax = new MetricNameTemplate("raw-fetch-size-max", groupName,
+                "The maximum number of raw bytes fetched per request", tags);
+        this.rawBytesConsumedRate = new MetricNameTemplate("raw-bytes-consumed-rate", groupName,
+                "The average number of raw bytes consumed per second", tags);
+        this.rawBytesConsumedTotal = new MetricNameTemplate("raw-bytes-consumed-total", groupName,
+                "The total number of raw bytes consumed", tags);
 
         this.fetchSizeAvg = new MetricNameTemplate("fetch-size-avg", groupName,
                 "The average number of bytes fetched per request", tags);
@@ -144,6 +157,10 @@ public class FetcherMetricsRegistry {
 
     public List<MetricNameTemplate> getAllTemplates() {
         return Arrays.asList(
+            rawFetchSizeAvg,
+            rawFetchSizeMax,
+            rawBytesConsumedRate,
+            rawBytesConsumedTotal,
             fetchSizeAvg,
             fetchSizeMax,
             bytesConsumedRate,
