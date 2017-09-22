@@ -1865,7 +1865,6 @@ public class KafkaAdminClient extends AdminClient {
                         future.completeExceptionally(result.getValue().exception());
                     }
                 }
-
             }
 
             @Override
@@ -1876,7 +1875,9 @@ public class KafkaAdminClient extends AdminClient {
         return new CreatePartitionsResult(new HashMap<String, KafkaFuture<Void>>(futures));
     }
 
-    public ElectPreferredLeadersResult electPreferredLeaders(final Collection<TopicPartition> partitions, ElectPreferredLeadersOptions options) {
+    @Override
+    public ElectPreferredLeadersResult electPreferredLeaders(final Collection<TopicPartition> partitions,
+                                                             ElectPreferredLeadersOptions options) {
 
         final KafkaFutureImpl<Map<TopicPartition, KafkaFutureImpl<Void>>> futures = new KafkaFutureImpl<>();
         final Map<TopicPartition, KafkaFutureImpl<Void>> mapOfFutures;
@@ -1927,7 +1928,6 @@ public class KafkaAdminClient extends AdminClient {
                 if (!knownPartitions) {
                     futures.complete(mapOfFutures);
                 }
-
             }
 
             @Override

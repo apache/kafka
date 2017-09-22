@@ -351,7 +351,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     val currentLeader = TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partition, oldLeaderOpt = None)
     // trigger preferred replica election
     val preferredReplicaElection = new ZkPreferredReplicaLeaderElectionCommand(zkUtils)
-    preferredReplicaElection.moveLeaderToPreferredReplica(Some(Set(TopicAndPartition(topic, partition))))
+    preferredReplicaElection.electPreferredLeaders(Some(Set(TopicAndPartition(topic, partition))))
     val newLeader = TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partition, oldLeaderOpt = Some(currentLeader))
     assertEquals("Preferred replica election failed", preferredReplica, newLeader)
   }

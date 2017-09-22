@@ -44,13 +44,13 @@ public class ElectPreferredLeadersRequest extends AbstractRequest {
     private static final String PARTITIONS_KEY_NAME = "partitions";
 
     public static final Schema ELECT_PREFERRED_LEADERS_REQUEST_V0 = new Schema(
-            new Field("topic_partitions", ArrayOf.nullable(
+            new Field(TOPIC_PARTITIONS_KEY_NAME, ArrayOf.nullable(
                     new Schema(
                             TOPIC_NAME,
-                            new Field("partitions",
+                            new Field(PARTITIONS_KEY_NAME,
                                     new ArrayOf(INT32),
                                     "The partitions of this topic whose preferred leader should be elected")))),
-            new Field("timeout", INT32, "The time in ms to wait for the elections to be completed.")
+            new Field(TIMEOUT_KEY_NAME, INT32, "The time in ms to wait for the elections to be completed.")
     );
 
     public static Schema[] schemaVersions() {
@@ -147,7 +147,8 @@ public class ElectPreferredLeadersRequest extends AbstractRequest {
                     errors.put(partition, error);
                 return new ElectPreferredLeadersResponse(throttleTimeMs, errors);
             default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
+                throw new IllegalArgumentException(String.format(
+                        "Version %d is not valid. Valid versions for %s are 0 to %d",
                         version, this.getClass().getSimpleName(), ApiKeys.ELECT_PREFERRED_LEADERS.latestVersion()));
         }
     }

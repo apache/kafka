@@ -44,9 +44,9 @@ public class ElectPreferredLeadersResponse extends AbstractResponse {
 
     public static final Schema ELECT_PREFERRED_LEADERS_RESPONSE_V0 = new Schema(
             THROTTLE_TIME_MS,
-            new Field("replica_election_result", new ArrayOf(new Schema(
+            new Field(REPLICA_ELECTION_RESULT_KEY_NAME, new ArrayOf(new Schema(
                     TOPIC_NAME,
-                    new Field("partition_results", new ArrayOf(
+                    new Field(PARTITION_RESULTS_KEY_NAME, new ArrayOf(
                             new Schema(
                                     PARTITION_ID,
                                     ERROR_CODE,

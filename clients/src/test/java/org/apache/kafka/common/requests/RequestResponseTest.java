@@ -249,7 +249,6 @@ public class RequestResponseTest {
         checkRequest(createElectPreferredLeadersRequestNullPartitions());
         checkErrorResponse(createElectPreferredLeadersRequest(), new UnknownServerException());
         checkResponse(createElectPreferredLeadersResponse(), 0);
-
     }
 
     @Test

@@ -24,21 +24,11 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 /**
  * The result of {@link AdminClient#electPreferredLeaders(Collection, ElectPreferredLeadersOptions)}
- *
- * <p>The {@code KafkaFuture}s available from instances of this class may be completed
- * exceptionally due to:</p>
- * <ul>
- *   <li>{@link org.apache.kafka.common.protocol.Errors#CLUSTER_AUTHORIZATION_FAILED CLUSTER_AUTHORIZATION_FAILED} if the authenticated user didn't have {@code Alter} access to the cluster.</li>
- *   <li>{@link org.apache.kafka.common.protocol.Errors#UNKNOWN_TOPIC_OR_PARTITION UNKNOWN_TOPIC_OR_PARTITION} if the topic or partition did not exist within the cluster.</li>
- *   <li>{@link org.apache.kafka.common.protocol.Errors#INVALID_TOPIC_EXCEPTION INVALID_TOPIC_EXCEPTION} if the topic was already queued for deletion.</li>
- *   <li>{@link org.apache.kafka.common.protocol.Errors#NOT_CONTROLLER NOT_CONTROLLER} if the request was sent to a broker that was not the controller for the cluster.</li>
- *   <li>{@link org.apache.kafka.common.protocol.Errors#REQUEST_TIMED_OUT REQUEST_TIMED_OUT} if the request timed out before the election was complete.</li>
- *   <li>{@link org.apache.kafka.common.protocol.Errors#UNKNOWN_SERVER_ERROR UNKNOWN_SERVER_ERROR} if the preferred leader was not alive or not in the ISR.</li>
- * </ul>
  *
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
@@ -89,7 +79,7 @@ public class ElectPreferredLeadersResult {
      * {@link AdminClient#electPreferredLeaders(Collection)} is called
      * with a null {@code partitions} argument.</p>
      */
-    public KafkaFuture<Collection<TopicPartition>> partitions() {
+    public KafkaFuture<Set<TopicPartition>> partitions() {
         final Map<TopicPartition, ? extends KafkaFuture<Void>> map;
         try {
             map = futures.get();
@@ -98,7 +88,7 @@ public class ElectPreferredLeadersResult {
         } catch (ExecutionException e) {
             return exceptionalFuture(e.getCause());
         }
-        KafkaFutureImpl<Collection<TopicPartition>> result = new KafkaFutureImpl<>();
+        KafkaFutureImpl<Set<TopicPartition>> result = new KafkaFutureImpl<>();
         result.complete(map.keySet());
         return result;
     }
