@@ -301,8 +301,10 @@ public class StreamsBuilder {
                                                   final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
+        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
         return internalStreamsBuilder.table(topic,
-                                            new ConsumedInternal<K, V>(),
+                                            new ConsumedInternal<>(Consumed.with(materializedInternal.keySerde(),
+                                                                                 materializedInternal.valueSerde())),
                                             new MaterializedInternal<>(materialized));
     }
 
@@ -429,9 +431,11 @@ public class StreamsBuilder {
                                                               final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
+        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
         return internalStreamsBuilder.globalTable(topic,
-                                                  new ConsumedInternal<K, V>(),
-                                                  new MaterializedInternal<>(materialized));
+                                                  new ConsumedInternal<>(Consumed.with(materializedInternal.keySerde(),
+                                                                                       materializedInternal.valueSerde())),
+                                                  materializedInternal);
     }
 
 

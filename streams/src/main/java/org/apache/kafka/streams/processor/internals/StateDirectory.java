@@ -62,39 +62,50 @@ public class StateDirectory {
         }
     }
 
+    /**
+     * Ensures that the state base directory as well as the application's sub-directory are created.
+     *
+     * @throws ProcessorStateException if the base state directory or application state directory does not exist
+     *                                 and could not be created
+     */
     public StateDirectory(final String applicationId, final String stateDirConfig, final Time time) {
         this.time = time;
         final File baseDir = new File(stateDirConfig);
         if (!baseDir.exists() && !baseDir.mkdirs()) {
-            throw new ProcessorStateException(String.format("state directory [%s] doesn't exist and couldn't be created",
-                                                            stateDirConfig));
+            throw new ProcessorStateException(
+                String.format("base state directory [%s] doesn't exist and couldn't be created", stateDirConfig));
         }
         stateDir = new File(baseDir, applicationId);
         if (!stateDir.exists() && !stateDir.mkdir()) {
-            throw new ProcessorStateException(String.format("state directory [%s] doesn't exist and couldn't be created",
-                                                            stateDir.getPath()));
+            throw new ProcessorStateException(
+                String.format("state directory [%s] doesn't exist and couldn't be created", stateDir.getPath()));
         }
     }
 
     /**
-     * Get or create the directory for the {@link TaskId}
-     * @param taskId
+     * Get or create the directory for the provided {@link TaskId}.
      * @return directory for the {@link TaskId}
+     * @throws ProcessorStateException if the task directory does not exists and could not be created
      */
     File directoryForTask(final TaskId taskId) {
         final File taskDir = new File(stateDir, taskId.toString());
         if (!taskDir.exists() && !taskDir.mkdir()) {
-            throw new ProcessorStateException(String.format("task directory [%s] doesn't exist and couldn't be created",
-                                                            taskDir.getPath()));
+            throw new ProcessorStateException(
+                String.format("task directory [%s] doesn't exist and couldn't be created", taskDir.getPath()));
         }
         return taskDir;
     }
 
+    /**
+     * Get or create the directory for the global stores.
+     * @return directory for the global stores
+     * @throws ProcessorStateException if the global store directory does not exists and could not be created
+     */
     File globalStateDir() {
         final File dir = new File(stateDir, "global");
         if (!dir.exists() && !dir.mkdir()) {
-            throw new ProcessorStateException(String.format("global state directory [%s] doesn't exist and couldn't be created",
-                                                            dir.getPath()));
+            throw new ProcessorStateException(
+                String.format("global state directory [%s] doesn't exist and couldn't be created", dir.getPath()));
         }
         return dir;
     }
@@ -102,6 +113,7 @@ public class StateDirectory {
     private String logPrefix() {
         return String.format("stream-thread [%s]", Thread.currentThread().getName());
     }
+
     /**
      * Get the lock for the {@link TaskId}s directory if it is available
      * @param taskId
@@ -192,9 +204,7 @@ public class StateDirectory {
     }
 
     /**
-     * Unlock the state directory for the given {@link TaskId}
-     * @param taskId
-     * @throws IOException
+     * Unlock the state directory for the given {@link TaskId}.
      */
     synchronized void unlock(final TaskId taskId) throws IOException {
         final LockAndOwner lockAndOwner = locks.get(taskId);
