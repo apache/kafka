@@ -224,8 +224,8 @@ public class NodeApiVersions {
             short maxVersion = (short) Math.min(maxAllowedVersion, apiVersion.maxVersion);
             if (minVersion > maxVersion)
                 throw new UnsupportedVersionException("The broker does not support " + apiKey +
-                        "with version in range [" + minAllowedVersion + "," + maxAllowedVersion + "]. The supported" +
-                        "range is [" + apiVersion.minVersion + "," + apiVersion.maxVersion + "].");
+                        " with version in range [" + minAllowedVersion + "," + maxAllowedVersion + "]. The supported" +
+                        " range is [" + apiVersion.minVersion + "," + apiVersion.maxVersion + "].");
             return maxVersion;
         }
     }
