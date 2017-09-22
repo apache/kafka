@@ -244,14 +244,14 @@ public class SslTransportLayer implements TransportLayer {
         if (state == State.READY)
             state = State.HANDSHAKE;
 
-        // Read any available bytes before attempting any writes to ensure that handshake failures
-        // reported by the peer are processed even if writes fail (since peer closes connection
-        // if handshake fails)
         int read = 0;
-        if (key.isReadable())
-            read = readFromSocketChannel();
-
         try {
+            // Read any available bytes before attempting any writes to ensure that handshake failures
+            // reported by the peer are processed even if writes fail (since peer closes connection
+            // if handshake fails)
+            if (key.isReadable())
+                read = readFromSocketChannel();
+
             doHandshake();
         } catch (SSLException e) {
             handshakeFailure(e, true);
@@ -285,10 +285,10 @@ public class SslTransportLayer implements TransportLayer {
         if (!flush(netWriteBuffer)) {
             key.interestOps(key.interestOps() | SelectionKey.OP_WRITE);
             return;
-        } else if (handshakeException != null) {
-            // Throw pending handshake exception since `netWriteBuffer` has been flushed
-            throw handshakeException;
         }
+        // Throw any pending handshake exception since `netWriteBuffer` has been flushed
+        maybeThrowSslAuthenticationException();
+
         switch (handshakeStatus) {
             case NEED_TASK:
                 log.trace("SSLHandshake NEED_TASK channelId {}, appReadBuffer pos {}, netReadBuffer pos {}, netWriteBuffer pos {}",
