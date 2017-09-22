@@ -130,11 +130,13 @@ Next, we create the input topic named <b>streams-plaintext-input</b> and the out
     --topic streams-plaintext-input
 Created topic "streams-plaintext-input".
 
+# note: we create the output topic with compaction enabled because the output stream is a KTable
 &gt; bin/kafka-topics.sh --create \
     --zookeeper localhost:2181 \
     --replication-factor 1 \
     --partitions 1 \
-    --topic streams-wordcount-output
+    --topic streams-wordcount-output \
+    --config cleanup.policy=compact
 Created topic "streams-wordcount-output".
 </pre>
 
