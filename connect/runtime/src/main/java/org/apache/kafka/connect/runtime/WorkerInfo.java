@@ -77,7 +77,14 @@ public class WorkerInfo {
      */
     protected void addRuntimeInfo() {
         List<String> jvmArgs = RUNTIME.getInputArguments();
-        values.put("jvm.args", jvmArgs);
+        values.put("jvm.args", Utils.join(jvmArgs, ", "));
+        String[] jvmSpec = {
+                RUNTIME.getVmVendor(),
+                RUNTIME.getVmName(),
+                RUNTIME.getSystemProperties().get("java.version"),
+                RUNTIME.getVmVersion()
+        };
+        values.put("jvm.spec", Utils.join(jvmSpec, ", "));
     }
 
 }
