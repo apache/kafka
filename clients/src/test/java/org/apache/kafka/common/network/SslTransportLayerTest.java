@@ -52,6 +52,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -600,10 +601,13 @@ public class SslTransportLayerTest {
         }
         assertTrue("Send time not recorded", channel.getAndResetNetworkThreadTimeNanos() > 0);
         assertEquals("Time not reset", 0, channel.getAndResetNetworkThreadTimeNanos());
+        assertFalse("Unexpected bytes buffered", channel.hasBytesBuffered());
+        assertEquals(0, selector.completedReceives().size());
 
         selector.unmute(node);
         while (selector.completedReceives().isEmpty()) {
             selector.poll(100L);
+            assertEquals(0, selector.numStagedReceives(channel));
         }
         assertTrue("Receive time not recorded", channel.getAndResetNetworkThreadTimeNanos() > 0);
     }
