@@ -147,7 +147,7 @@ public class MockClient implements KafkaClient {
         while (iter.hasNext()) {
             ClientRequest request = iter.next();
             if (request.destination().equals(node)) {
-                short version = request.requestBuilder().desiredOrLatestVersion();
+                short version = request.requestBuilder().latestAllowedVersion();
                 responses.add(new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
                         request.createdTimeMs(), now, true, null, null));
                 iter.remove();
@@ -165,7 +165,8 @@ public class MockClient implements KafkaClient {
                 continue;
 
             AbstractRequest.Builder<?> builder = request.requestBuilder();
-            short version = nodeApiVersions.usableVersion(request.apiKey(), builder.desiredVersion());
+            short version = nodeApiVersions.usableVersion(request.apiKey(), builder.oldestAllowedVersion(),
+                    builder.latestAllowedVersion());
             AbstractRequest abstractRequest = request.requestBuilder().build(version);
             if (!futureResp.requestMatcher.matches(abstractRequest))
                 throw new IllegalStateException("Request matcher did not match next-in-line request " + abstractRequest);
@@ -234,7 +235,7 @@ public class MockClient implements KafkaClient {
     public void respondToRequest(ClientRequest clientRequest, AbstractResponse response) {
         AbstractRequest request = clientRequest.requestBuilder().build();
         requests.remove(clientRequest);
-        short version = clientRequest.requestBuilder().desiredOrLatestVersion();
+        short version = clientRequest.requestBuilder().latestAllowedVersion();
         responses.add(new ClientResponse(clientRequest.makeHeader(version), clientRequest.callback(), clientRequest.destination(),
                 clientRequest.createdTimeMs(), time.milliseconds(), false, null, response));
     }
@@ -242,7 +243,7 @@ public class MockClient implements KafkaClient {
 
     public void respond(AbstractResponse response, boolean disconnected) {
         ClientRequest request = requests.remove();
-        short version = request.requestBuilder().desiredOrLatestVersion();
+        short version = request.requestBuilder().latestAllowedVersion();
         responses.add(new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
                 request.createdTimeMs(), time.milliseconds(), disconnected, null, response));
     }
@@ -257,7 +258,7 @@ public class MockClient implements KafkaClient {
             ClientRequest request = iterator.next();
             if (request.destination().equals(node.idString())) {
                 iterator.remove();
-                short version = request.requestBuilder().desiredOrLatestVersion();
+                short version = request.requestBuilder().latestAllowedVersion();
                 responses.add(new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
                         request.createdTimeMs(), time.milliseconds(), disconnected, null, response));
                 return;
