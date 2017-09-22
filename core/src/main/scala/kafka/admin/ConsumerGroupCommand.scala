@@ -566,8 +566,8 @@ object ConsumerGroupCommand extends Logging {
       resetPlanCsv.split("\n")
         .map { line =>
           val Array(topic, partition, offset) = line.split(",").map(_.trim)
-          val topicPartition = new TopicPartition(topic, partition.asInstanceOf[Int])
-          val offsetAndMetadata = new OffsetAndMetadata(offset.asInstanceOf[Long])
+          val topicPartition = new TopicPartition(topic, partition.toInt)
+          val offsetAndMetadata = new OffsetAndMetadata(offset.toLong)
           (topicPartition, offsetAndMetadata)
         }.toMap
     }
