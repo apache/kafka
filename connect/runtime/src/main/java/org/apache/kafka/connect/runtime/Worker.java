@@ -68,8 +68,6 @@ public class Worker {
     private final String workerId;
     private final Plugins plugins;
     private final WorkerConfig config;
-    private final Converter defaultKeyConverter;
-    private final Converter defaultValueConverter;
     private final Converter internalKeyConverter;
     private final Converter internalValueConverter;
     private final OffsetBackingStore offsetBackingStore;
@@ -91,18 +89,7 @@ public class Worker {
         this.time = time;
         this.plugins = plugins;
         this.config = config;
-        // Converters are required properties, thus getClass won't return null.
-        this.defaultKeyConverter = plugins.newConverter(
-                config.getClass(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG).getName(),
-                config
-        );
-        this.defaultKeyConverter.configure(config.originalsWithPrefix("key.converter."), true);
-        this.defaultValueConverter = plugins.newConverter(
-                config.getClass(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG).getName(),
-                config
-        );
-        this.defaultValueConverter.configure(config.originalsWithPrefix("value.converter."), false);
-        // Same, internal converters are required properties, thus getClass won't return null.
+        // Internal converters are required properties, thus getClass won't return null.
         this.internalKeyConverter = plugins.newConverter(
                 config.getClass(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG).getName(),
                 config
@@ -378,13 +365,25 @@ public class Worker {
             Converter keyConverter = connConfig.getConfiguredInstance(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, Converter.class);
             if (keyConverter != null)
                 keyConverter.configure(connConfig.originalsWithPrefix("key.converter."), true);
-            else
+            else {
+                Converter defaultKeyConverter = plugins.newConverter(
+                        config.getClass(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG).getName(),
+                        config
+                );
+                defaultKeyConverter.configure(config.originalsWithPrefix("key.converter."), true);
                 keyConverter = defaultKeyConverter;
+            }
             Converter valueConverter = connConfig.getConfiguredInstance(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, Converter.class);
             if (valueConverter != null)
                 valueConverter.configure(connConfig.originalsWithPrefix("value.converter."), false);
-            else
+            else {
+                Converter defaultValueConverter = plugins.newConverter(
+                        config.getClass(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG).getName(),
+                        config
+                );
+                defaultValueConverter.configure(config.originalsWithPrefix("value.converter."), false);
                 valueConverter = defaultValueConverter;
+            }
 
             workerTask = buildWorkerTask(connConfig, id, task, statusListener, initialState, keyConverter, valueConverter, connectorLoader);
             workerTask.initialize(taskConfig);

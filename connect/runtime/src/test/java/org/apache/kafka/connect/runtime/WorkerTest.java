@@ -429,7 +429,7 @@ public class WorkerTest extends ThreadedTest {
 
     @Test
     public void testAddRemoveTask() throws Exception {
-        expectConverters();
+        expectConverters(true);
         expectStartStorage();
 
         // Create
@@ -551,7 +551,7 @@ public class WorkerTest extends ThreadedTest {
 
     @Test
     public void testCleanupTasksOnStop() throws Exception {
-        expectConverters();
+        expectConverters(true);
         expectStartStorage();
 
         // Create
@@ -734,32 +734,40 @@ public class WorkerTest extends ThreadedTest {
     }
 
     private void expectConverters() {
-        expectConverters(JsonConverter.class);
+        expectConverters(JsonConverter.class, false);
     }
 
-    private void expectConverters(Class<? extends Converter> converterClass) {
-        // connector default
-        Converter keyConverter = PowerMock.createMock(converterClass);
-        Converter valueConverter = PowerMock.createMock(converterClass);
+    private void expectConverters(Boolean expectDefaultConverters) {
+        expectConverters(JsonConverter.class, expectDefaultConverters);
+    }
+
+    private void expectConverters(Class<? extends Converter> converterClass, Boolean expectDefaultConverters) {
+        // As default converters are instantiated when a task starts, they are expected only if the `startTask` method is called
+        if (expectDefaultConverters) {
+            // connector default
+            Converter keyConverter = PowerMock.createMock(converterClass);
+            Converter valueConverter = PowerMock.createMock(converterClass);
+
+            // Instantiate and configure default
+            EasyMock.expect(plugins.newConverter(JsonConverter.class.getName(), config))
+                    .andReturn(keyConverter);
+            keyConverter.configure(
+                    EasyMock.<Map<String, ?>>anyObject(),
+                    EasyMock.anyBoolean()
+            );
+            EasyMock.expectLastCall();
+            EasyMock.expect(plugins.newConverter(JsonConverter.class.getName(), config))
+                    .andReturn(valueConverter);
+            valueConverter.configure(
+                    EasyMock.<Map<String, ?>>anyObject(),
+                    EasyMock.anyBoolean()
+            );
+            EasyMock.expectLastCall();
+        }
+
         //internal
         Converter internalKeyConverter = PowerMock.createMock(converterClass);
         Converter internalValueConverter = PowerMock.createMock(converterClass);
-
-        // Instantiate and configure default
-        EasyMock.expect(plugins.newConverter(JsonConverter.class.getName(), config))
-                .andReturn(keyConverter);
-        keyConverter.configure(
-                EasyMock.<Map<String, ?>>anyObject(),
-                EasyMock.anyBoolean()
-        );
-        EasyMock.expectLastCall();
-        EasyMock.expect(plugins.newConverter(JsonConverter.class.getName(), config))
-                .andReturn(valueConverter);
-        valueConverter.configure(
-                EasyMock.<Map<String, ?>>anyObject(),
-                EasyMock.anyBoolean()
-        );
-        EasyMock.expectLastCall();
 
         // Instantiate and configure internal
         EasyMock.expect(plugins.newConverter(JsonConverter.class.getName(), config))
