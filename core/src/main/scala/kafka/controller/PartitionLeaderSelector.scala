@@ -18,7 +18,7 @@ package kafka.controller
 
 import kafka.admin.AdminUtils
 import kafka.api.LeaderAndIsr
-import kafka.common.{LeaderElectionNotNeededException, NoReplicaOnlineException, StateChangeFailedException, TopicAndPartition}
+import kafka.common.{LeaderElectionNotNeededException, NoReplicaOnlineException, PreferredLeaderUnavailableException, StateChangeFailedException, TopicAndPartition}
 import kafka.log.LogConfig
 import kafka.server.{ConfigType, KafkaConfig}
 import kafka.utils.Logging
@@ -154,7 +154,7 @@ class PreferredReplicaPartitionLeaderSelector(controllerContext: ControllerConte
         val newLeaderAndIsr = currentLeaderAndIsr.newLeader(preferredReplica)
         (newLeaderAndIsr, assignedReplicas)
       } else {
-        throw new StateChangeFailedException(s"Preferred replica $preferredReplica for partition $topicAndPartition " +
+        throw new PreferredLeaderUnavailableException(s"Preferred replica $preferredReplica for partition $topicAndPartition " +
           s"is either not alive or not in the isr. Current leader and ISR: [$currentLeaderAndIsr]")
       }
     }

@@ -30,7 +30,7 @@ import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{Logging, TestUtils, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{UnknownServerException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.errors.{LeaderNotAvailableException, UnknownServerException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.Assert._
@@ -238,7 +238,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
       case e: AdminCommandFailedException =>
         assertEquals("1 preferred replica(s) could not be elected", e.getMessage)
         val suppressed = e.getSuppressed()(0)
-        assertTrue(suppressed.isInstanceOf[UnknownServerException])
+        assertTrue(suppressed.isInstanceOf[LeaderNotAvailableException])
         assertTrue(suppressed.getMessage, suppressed.getMessage.contains("is either not alive or not in the isr"))
         // Check we still have the same leader
         assertEquals(leader, getLeader(testPartition))

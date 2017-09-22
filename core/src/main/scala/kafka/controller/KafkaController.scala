@@ -1475,7 +1475,15 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
 
         val electionErrors = onPreferredReplicaElectionWithResults(electablePartitions, viaZk=viaZk)
         val successfulPartitions = electablePartitions -- electionErrors.keySet
-        val results = electionErrors.map(e => e._1 -> ApiError.fromThrowable(e._2)) ++
+        val results = electionErrors.map { case (partition, ex) =>
+          val apiError = if (ex.isInstanceOf[StateChangeFailedException] &&
+            ex.getCause != null &&
+            ex.getCause.isInstanceOf[PreferredLeaderUnavailableException])
+            new ApiError(Errors.LEADER_NOT_AVAILABLE, ex.getCause.getMessage)
+          else
+            ApiError.fromThrowable(ex)
+          partition -> apiError
+        } ++
           alreadyPreferred.map(_ -> ApiError.NONE) ++
           partitionsForTopicsToBeDeleted.map(_-> new ApiError(Errors.INVALID_TOPIC_EXCEPTION, "The topic is being deleted"))
         debug("PreferredReplicaLeaderElection waiting: %s, results: %s".format(successfulPartitions, results))
