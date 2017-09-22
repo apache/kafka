@@ -351,6 +351,7 @@ public class ResetIntegrationTest {
     }
 
     private void cleanGlobal(final String intermediateUserTopic) {
+        // leaving --zookeeper arg here to ensure tool works if users add it
         final String[] parameters;
         if (intermediateUserTopic != null) {
             parameters = new String[]{
@@ -364,8 +365,7 @@ public class ResetIntegrationTest {
             parameters = new String[]{
                 "--application-id", APP_ID + testNo,
                 "--bootstrap-servers", CLUSTER.bootstrapServers(),
-                "--input-topics", INPUT_TOPIC,
-                "--zookeeper", "localhost:2181"
+                "--input-topics", INPUT_TOPIC
             };
         }
         final Properties cleanUpConfig = new Properties();
@@ -376,7 +376,7 @@ public class ResetIntegrationTest {
         Assert.assertEquals(0, exitCode);
     }
 
-    private void assertInternalTopicsGotDeleted(final String intermediateUserTopic) {
+    private void assertInternalTopicsGotDeleted(final String intermediateUserTopic) throws Exception {
         final Set<String> expectedRemainingTopicsAfterCleanup = new HashSet<>();
         expectedRemainingTopicsAfterCleanup.add(INPUT_TOPIC);
         if (intermediateUserTopic != null) {
@@ -388,14 +388,12 @@ public class ResetIntegrationTest {
         expectedRemainingTopicsAfterCleanup.add("__consumer_offsets");
 
         final Set<String> allTopics = new HashSet<>();
-        try {
-            final ListTopicsOptions listTopicsOptions = new ListTopicsOptions();
-            listTopicsOptions.listInternal(true);
-            allTopics.addAll(kafkaAdminClient.listTopics(listTopicsOptions).names().get(30000, TimeUnit.MILLISECONDS));
-            assertThat(allTopics, equalTo(expectedRemainingTopicsAfterCleanup));
-        } catch (Exception e) {
-            Assert.fail("An Exception was thrown checking internal topics deleted " + e);
-        }
+
+        final ListTopicsOptions listTopicsOptions = new ListTopicsOptions();
+        listTopicsOptions.listInternal(true);
+        allTopics.addAll(kafkaAdminClient.listTopics(listTopicsOptions).names().get(30000, TimeUnit.MILLISECONDS));
+        assertThat(allTopics, equalTo(expectedRemainingTopicsAfterCleanup));
+
     }
 
     private class WaitUntilConsumerGroupGotClosed implements TestCondition {
