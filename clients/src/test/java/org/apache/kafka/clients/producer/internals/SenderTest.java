@@ -30,6 +30,7 @@ import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
+import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -345,7 +346,7 @@ public class SenderTest {
                 sender.run(time.milliseconds()); // resend
             }
             sender.run(time.milliseconds());
-            completedWithError(future, Errors.NETWORK_EXCEPTION);
+            assertFutureFailure(future, NetworkException.class);
         } finally {
             m.close();
         }
@@ -1758,16 +1759,6 @@ public class SenderTest {
         };
     }
 
-    private void completedWithError(Future<RecordMetadata> future, Errors error) throws Exception {
-        assertTrue("Request should be completed", future.isDone());
-        try {
-            future.get();
-            fail("Should have thrown an exception.");
-        } catch (ExecutionException e) {
-            assertEquals(error.exception().getClass(), e.getCause().getClass());
-        }
-    }
-
     private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs, long logStartOffset) {
         ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(error, offset, RecordBatch.NO_TIMESTAMP, logStartOffset);
         Map<TopicPartition, ProduceResponse.PartitionResponse> partResp = Collections.singletonMap(tp, resp);
@@ -1839,7 +1830,6 @@ public class SenderTest {
         client.prepareResponse(new InitProducerIdResponse(0, error, pid, epoch));
     }
 
-
     private void assertFutureFailure(Future<?> future, Class<? extends Exception> expectedExceptionType)
             throws InterruptedException {
         assertTrue(future.isDone());
@@ -1848,7 +1838,7 @@ public class SenderTest {
             fail("Future should have raised " + expectedExceptionType.getName());
         } catch (ExecutionException e) {
             Class<? extends Throwable> causeType = e.getCause().getClass();
-            assertTrue("Unexpected cause " + causeType, expectedExceptionType.isAssignableFrom(causeType));
+            assertTrue("Unexpected cause " + causeType.getName(), expectedExceptionType.isAssignableFrom(causeType));
         }
     }
 
