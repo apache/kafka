@@ -21,6 +21,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.management.ManagementFactory;
+import java.lang.management.OperatingSystemMXBean;
 import java.lang.management.RuntimeMXBean;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -33,9 +34,11 @@ import java.util.TreeMap;
 public class WorkerInfo {
     private static final Logger log = LoggerFactory.getLogger(WorkerInfo.class);
     private static final RuntimeMXBean RUNTIME;
+    private static final OperatingSystemMXBean OS;
 
     static {
         RUNTIME = ManagementFactory.getRuntimeMXBean();
+        OS = ManagementFactory.getOperatingSystemMXBean();
     }
 
     private final Map<String, Object> values;
@@ -46,6 +49,7 @@ public class WorkerInfo {
     public WorkerInfo() {
         this.values = new LinkedHashMap<>();
         addRuntimeInfo();
+        addSystemInfo();
     }
 
     /**
@@ -85,6 +89,19 @@ public class WorkerInfo {
                 RUNTIME.getVmVersion()
         };
         values.put("jvm.spec", Utils.join(jvmSpec, ", "));
+    }
+
+    /**
+     * Collect system information.
+     */
+    protected void addSystemInfo() {
+        String[] osInfo = {
+                OS.getName(),
+                OS.getArch(),
+                OS.getVersion(),
+        };
+        values.put("os.spec", Utils.join(osInfo, ", "));
+        values.put("os.vcpus", String.valueOf(OS.getAvailableProcessors()));
     }
 
 }
