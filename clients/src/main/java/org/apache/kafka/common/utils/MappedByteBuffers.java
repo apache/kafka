@@ -42,22 +42,28 @@ import static java.lang.invoke.MethodType.methodType;
  */
 public final class MappedByteBuffers {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(MappedByteBuffers.class);
+    private static final Logger log = LoggerFactory.getLogger(MappedByteBuffers.class);
 
     // null if unmap is not supported
     private static final MethodHandle UNMAP;
 
     // null if unmap is supported
-    private static final String UNMAP_NOT_SUPPORTED_REASON;
+    private static final RuntimeException UNMAP_NOT_SUPPORTED_EXCEPTION;
 
     static {
-        Object unmap = lookupUnmapMethodHandle();
-        if (unmap instanceof MethodHandle) {
+        Object unmap = null;
+        RuntimeException exception = null;
+        try {
+            unmap = lookupUnmapMethodHandle();
+        } catch (RuntimeException e) {
+            exception = e;
+        }
+        if (unmap != null) {
             UNMAP = (MethodHandle) unmap;
-            UNMAP_NOT_SUPPORTED_REASON = null;
+            UNMAP_NOT_SUPPORTED_EXCEPTION = null;
         } else {
             UNMAP = null;
-            UNMAP_NOT_SUPPORTED_REASON = (String) unmap;
+            UNMAP_NOT_SUPPORTED_EXCEPTION = exception;
         }
     }
 
@@ -67,7 +73,7 @@ public final class MappedByteBuffers {
         if (!buffer.isDirect())
             throw new IllegalArgumentException("Unmapping only works with direct buffers");
         if (UNMAP == null)
-            throw new UnsupportedOperationException(UNMAP_NOT_SUPPORTED_REASON);
+            throw UNMAP_NOT_SUPPORTED_EXCEPTION;
 
         try {
             UNMAP.invokeExact((ByteBuffer) buffer);
@@ -76,29 +82,20 @@ public final class MappedByteBuffers {
         }
     }
 
-    /**
-     * Return an unmap MethodHandle or a String with the reason why unmap is not supported.
-     */
-    private static Object lookupUnmapMethodHandle() {
+    private static MethodHandle lookupUnmapMethodHandle() {
         final MethodHandles.Lookup lookup = lookup();
         try {
-            try {
+            if (Java.IS_JAVA9_COMPATIBLE)
                 return unmapJava9(lookup);
-            } catch (SecurityException e) {
-                return e.getMessage();
-            } catch (ReflectiveOperationException | RuntimeException e) {
-                LOGGER.debug("Falling back to unmap implementation for Java 7/Java 8 due to " + e.getMessage());
+            else
                 return unmapJava7Or8(lookup);
-            }
-        } catch (SecurityException se) {
-            return se.getMessage();
-        } catch (ReflectiveOperationException | RuntimeException e) {
-            return "Unmapping is not supported on this platform, because internal Java APIs are not compatible with " +
-                    "this Kafka version: " + e;
+        } catch (ReflectiveOperationException | RuntimeException e1) {
+            throw new UnsupportedOperationException("Unmapping is not supported on this platform, because internal " +
+                "Java APIs are not compatible with this Kafka version", e1);
         }
     }
 
-    private static Object unmapJava7Or8(MethodHandles.Lookup lookup) throws ReflectiveOperationException {
+    private static MethodHandle unmapJava7Or8(MethodHandles.Lookup lookup) throws ReflectiveOperationException {
         /* "Compile" a MethodHandle that is roughly equivalent to the following lambda:
          *
          * (ByteBuffer buffer) -> {
@@ -123,7 +120,7 @@ public final class MappedByteBuffers {
         return unmapper;
     }
 
-    private static Object unmapJava9(MethodHandles.Lookup lookup) throws ReflectiveOperationException {
+    private static MethodHandle unmapJava9(MethodHandles.Lookup lookup) throws ReflectiveOperationException {
         Class<?> unsafeClass = Class.forName("sun.misc.Unsafe");
         MethodHandle unmapper = lookup.findVirtual(unsafeClass, "invokeCleaner",
                 methodType(void.class, ByteBuffer.class));
