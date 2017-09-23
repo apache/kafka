@@ -20,7 +20,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
@@ -67,8 +66,7 @@ public class ProcessorStateManager implements StateManager {
     private OffsetCheckpoint checkpoint;
 
     /**
-     * @throws LockException if the state directory cannot be locked because another thread holds the lock
-     *                       (this might be recoverable by retrying)
+     * @throws ProcessorStateException if the task directory does not exist and could not be created
      * @throws IOException if any severe error happens while creating or locking the state directory
      */
     public ProcessorStateManager(final TaskId taskId,
@@ -96,15 +94,7 @@ public class ProcessorStateManager implements StateManager {
         restoreCallbacks = isStandby ? new HashMap<String, StateRestoreCallback>() : null;
         this.storeToChangelogTopic = storeToChangelogTopic;
 
-        // get a handle on the parent/base directory of the task directory
-        // note that the parent directory could have been accidentally deleted here,
-        // so catch that exception if that is the case
-        try {
-            baseDir = stateDirectory.directoryForTask(taskId);
-        } catch (final ProcessorStateException e) {
-            throw new LockException(String.format("%sFailed to get the directory for task %s. Exception %s",
-                logPrefix, taskId, e));
-        }
+        baseDir = stateDirectory.directoryForTask(taskId);
 
         // load the checkpoint information
         checkpoint = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
@@ -256,40 +246,49 @@ public class ProcessorStateManager implements StateManager {
 
     @Override
     public void flush() {
+        ProcessorStateException firstException = null;
+        // attempting to flush the stores
         if (!stores.isEmpty()) {
             log.debug("Flushing all stores registered in the state manager");
             for (final StateStore store : stores.values()) {
+                log.trace("Flushing store {}", store.name());
                 try {
-                    log.trace("Flushing store={}", store.name());
                     store.flush();
                 } catch (final Exception e) {
-                    throw new ProcessorStateException(String.format("%sFailed to flush state store %s", logPrefix, store.name()), e);
+                    if (firstException == null) {
+                        firstException = new ProcessorStateException(String.format("%sFailed to flush state store %s", logPrefix, store.name()), e);
+                    }
+                    log.error("Failed to flush state store {}: ", store.name(), e);
                 }
             }
+        }
+
+        if (firstException != null) {
+            throw firstException;
         }
     }
 
     /**
      * {@link StateStore#close() Close} all stores (even in case of failure).
-     * Re-throw the first
+     * Log all exception and re-throw the first exception that did occur at the end.
      * @throws ProcessorStateException if any error happens when closing the state stores
      */
     @Override
     public void close(final Map<TopicPartition, Long> ackedOffsets) throws ProcessorStateException {
-        RuntimeException firstException = null;
+        ProcessorStateException firstException = null;
         // attempting to close the stores, just in case they
         // are not closed by a ProcessorNode yet
         if (!stores.isEmpty()) {
             log.debug("Closing its state manager and all the registered state stores");
-            for (final Map.Entry<String, StateStore> entry : stores.entrySet()) {
-                log.debug("Closing storage engine {}", entry.getKey());
+            for (final StateStore store : stores.values()) {
+                log.debug("Closing storage engine {}", store.name());
                 try {
-                    entry.getValue().close();
+                    store.close();
                 } catch (final Exception e) {
                     if (firstException == null) {
-                        firstException = new ProcessorStateException(String.format("%sFailed to close state store %s", logPrefix, entry.getKey()), e);
+                        firstException = new ProcessorStateException(String.format("%sFailed to close state store %s", logPrefix, store.name()), e);
                     }
-                    log.error("Failed to close state store {}: ", entry.getKey(), e);
+                    log.error("Failed to close state store {}: ", store.name(), e);
                 }
             }
 
@@ -309,11 +308,11 @@ public class ProcessorStateManager implements StateManager {
     public void checkpoint(final Map<TopicPartition, Long> ackedOffsets) {
         log.trace("Writing checkpoint: {}", ackedOffsets);
         checkpointedOffsets.putAll(changelogReader.restoredOffsets());
-        for (final Map.Entry<String, StateStore> entry : stores.entrySet()) {
-            final String storeName = entry.getKey();
+        for (final StateStore store : stores.values()) {
+            final String storeName = store.name();
             // only checkpoint the offset to the offsets file if
             // it is persistent AND changelog enabled
-            if (entry.getValue().persistent() && storeToChangelogTopic.containsKey(storeName)) {
+            if (store.persistent() && storeToChangelogTopic.containsKey(storeName)) {
                 final String changelogTopic = storeToChangelogTopic.get(storeName);
                 final TopicPartition topicPartition = new TopicPartition(changelogTopic, getPartition(storeName));
                 if (ackedOffsets.containsKey(topicPartition)) {
