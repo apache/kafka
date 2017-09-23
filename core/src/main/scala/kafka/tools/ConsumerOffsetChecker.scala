@@ -95,7 +95,7 @@ object ConsumerOffsetChecker extends Logging {
   }
 
   def main(args: Array[String]) {
-    warn("WARNING: ConsumerOffsetChecker is deprecated and will be dropped in releases following 0.9.0. Use ConsumerGroupCommand instead.")
+    warn("WARNING: ConsumerOffsetChecker supports the old consumer only and does not report offsets for new consumer-based groups. It is deprecated and will be dropped in releases following 0.9.0. Use ConsumerGroupCommand instead.")
 
     val parser = new OptionParser(false)
 
