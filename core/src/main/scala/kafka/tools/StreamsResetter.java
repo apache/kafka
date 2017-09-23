@@ -32,6 +32,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -73,6 +74,7 @@ public class StreamsResetter {
     private static OptionSpec<String> inputTopicsOption;
     private static OptionSpec<String> intermediateTopicsOption;
     private static OptionSpecBuilder dryRunOption;
+    private static OptionSpec<String> commandConfigOption;
 
     private OptionSet options = null;
     private final Properties consumerConfig = new Properties();
@@ -95,9 +97,17 @@ public class StreamsResetter {
             parseArguments(args);
             dryRun = options.has(dryRunOption);
 
-            adminClient = AdminClient.createSimplePlaintext(options.valueOf(bootstrapServerOption));
             final String groupId = options.valueOf(applicationIdOption);
 
+            final Properties props = new Properties();
+            if (options.has(commandConfigOption)) {
+                props.putAll(Utils.loadProps(options.valueOf(commandConfigOption)));
+            }
+            props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOption));
+
+            consumerConfig.putAll(props);
+
+            adminClient = AdminClient.create(props);
 
             zkUtils = ZkUtils.apply(options.valueOf(zookeeperOption),
                 30000,
@@ -164,6 +174,11 @@ public class StreamsResetter {
             .withValuesSeparatedBy(',')
             .describedAs("list");
         dryRunOption = optionParser.accepts("dry-run", "Display the actions that would be performed without executing the reset commands.");
+        commandConfigOption = optionParser.accepts("command-config", "Property file containing configs to be passed to Admin Client and Embedded Consumer")
+                .withRequiredArg()
+                .ofType(String.class)
+                .describedAs("command config property file");
+
 
         try {
             options = optionParser.parse(args);
