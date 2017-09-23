@@ -131,9 +131,9 @@ public class ProduceRequest extends AbstractRequest {
                                        int timeout,
                                        Map<TopicPartition, MemoryRecords> partitionRecords,
                                        String transactionalId) {
-            // The Produce API is a bit fussy in its version requirements because we expect the message
-            // format version to be updated in lockstep with the request version. In particular, we
-            // cannot use an older message format version with the newer request versions.
+            // Message format upgrades correspond with a bump in the produce request version. Older
+            // message format versions are generally not supported by the produce request versions
+            // following the bump.
 
             final short minVersion;
             final short maxVersion;
