@@ -26,6 +26,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -49,19 +50,12 @@ public class StoreChangelogReader implements ChangelogReader {
     private final Map<TopicPartition, StateRestorer> needsRestoring = new HashMap<>();
     private final Map<TopicPartition, StateRestorer> needsInitializing = new HashMap<>();
 
-    public StoreChangelogReader(final String threadId,
-                                final Consumer<byte[], byte[]> consumer,
+    public StoreChangelogReader(final Consumer<byte[], byte[]> consumer,
                                 final StateRestoreListener userStateRestoreListener,
                                 final LogContext logContext) {
         this.consumer = consumer;
         this.log = logContext.logger(getClass());
         this.userStateRestoreListener = userStateRestoreListener;
-    }
-
-    public StoreChangelogReader(final Consumer<byte[], byte[]> consumer,
-                                final StateRestoreListener stateRestoreListener,
-                                final LogContext logContext) {
-        this("", consumer, stateRestoreListener, logContext);
     }
 
     @Override
@@ -74,7 +68,7 @@ public class StoreChangelogReader implements ChangelogReader {
     /**
      * @throws TaskMigratedException if another thread did write to the changelog topic that is currently restored
      */
-    public Collection<TopicPartition> restore() {
+    public Collection<TopicPartition> restore(final AssignedTasks active) {
         if (!needsInitializing.isEmpty()) {
             initialize();
         }
@@ -87,7 +81,7 @@ public class StoreChangelogReader implements ChangelogReader {
         final Set<TopicPartition> partitions = new HashSet<>(needsRestoring.keySet());
         final ConsumerRecords<byte[], byte[]> allRecords = consumer.poll(10);
         for (final TopicPartition partition : partitions) {
-            restorePartition(allRecords, partition);
+            restorePartition(allRecords, partition, active.restoringTaskIdFor(partition));
         }
 
         if (needsRestoring.isEmpty()) {
@@ -238,18 +232,15 @@ public class StoreChangelogReader implements ChangelogReader {
      * @throws TaskMigratedException if another thread did write to the changelog topic that is currently restored
      */
     private void restorePartition(final ConsumerRecords<byte[], byte[]> allRecords,
-                                  final TopicPartition topicPartition) {
+                                  final TopicPartition topicPartition,
+                                  final TaskId taskId) {
         final StateRestorer restorer = stateRestorers.get(topicPartition);
         final Long endOffset = endOffsets.get(topicPartition);
         final long pos = processNext(allRecords.records(topicPartition), restorer, endOffset);
         restorer.setRestoredOffset(pos);
         if (restorer.hasCompleted(pos, endOffset)) {
             if (pos > endOffset + 1) {
-                throw new TaskMigratedException(
-                        String.format("Log end offset of %s should not change while restoring: old end offset %d, current offset %d",
-                                      topicPartition,
-                                      endOffset,
-                                      pos));
+                throw new TaskMigratedException(taskId, topicPartition, endOffset, pos);
             }
 
             log.debug("Completed restoring state from changelog {} with {} records ranging from offset {} to {}",

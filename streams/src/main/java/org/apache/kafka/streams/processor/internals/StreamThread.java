@@ -27,7 +27,6 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -292,7 +291,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                     taskManager.suspendTasksAndState();
                 } catch (final Throwable t) {
                     log.error("Error caught during partition revocation, " +
-                            "will abort the current process and re-throw at the end of rebalance: {}", t.getMessage());
+                              "will abort the current process and re-throw at the end of rebalance: {}", t.getMessage());
                     streamThread.setRebalanceException(t);
                 } finally {
                     streamThread.refreshMetadataState();
@@ -665,8 +664,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         log.info("Creating restore consumer client");
         final Map<String, Object> consumerConfigs = config.getRestoreConsumerConfigs(threadClientId);
         final Consumer<byte[], byte[]> restoreConsumer = clientSupplier.getRestoreConsumer(consumerConfigs);
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(threadClientId,
-                                                                              restoreConsumer,
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreConsumer,
                                                                               userStateRestoreListener,
                                                                               logContext);
 
@@ -780,6 +778,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
      * @throws TaskMigratedException if another thread did write to the changelog topic that is currently restored
+     *                               or if the task producer got fenced (EOS only)
      */
     // Visible for testing
     long runOnce(final long recordsProcessedBeforeCommit) {
@@ -819,6 +818,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
     /**
      * Get the next batch of records by polling.
      * @return Next batch of records or null if no records available.
+     * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     private ConsumerRecords<byte[], byte[]> pollRequests() {
         ConsumerRecords<byte[], byte[]> records = null;
@@ -830,7 +830,9 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         }
 
         if (rebalanceException != null) {
-            if (!(rebalanceException instanceof ProducerFencedException)) {
+            if (rebalanceException instanceof TaskMigratedException) {
+                throw (TaskMigratedException) rebalanceException;
+            } else {
                 throw new StreamsException(logPrefix + "Failed to rebalance.", rebalanceException);
             }
         }

@@ -27,7 +27,6 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockBatchingStateRestoreListener;
-import org.apache.kafka.test.MockChangelogReader;
 import org.apache.kafka.test.MockStateStoreSupplier;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;

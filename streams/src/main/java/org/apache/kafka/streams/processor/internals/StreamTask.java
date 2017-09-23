@@ -31,6 +31,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -145,8 +146,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
         if (eosEnabled) {
-            this.producer.initTransactions();
-            this.producer.beginTransaction();
+            try {
+                this.producer.initTransactions();
+                this.producer.beginTransaction();
+            } catch (final ProducerFencedException fatal) {
+                throw new TaskMigratedException(id, fatal);
+            }
             transactionInFlight = true;
         }
     }
@@ -172,7 +177,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     public void resume() {
         log.debug("Resuming");
         if (eosEnabled) {
-            producer.beginTransaction();
+            try {
+                producer.beginTransaction();
+            } catch (final ProducerFencedException fatal) {
+                throw new TaskMigratedException(id, fatal);
+            }
             transactionInFlight = true;
         }
         initTopology();
@@ -214,6 +223,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             if (recordInfo.queue().size() == maxBufferedSize) {
                 consumer.resume(singleton(partition));
             }
+        } catch (final ProducerFencedException fatal) {
+            throw new TaskMigratedException(id, fatal);
         } catch (final KafkaException e) {
             throw new StreamsException(format("Exception caught in process. taskId=%s, processor=%s, topic=%s, partition=%d, offset=%d",
                 id(),
@@ -246,6 +257,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         try {
             node.punctuate(timestamp, punctuator);
+        } catch (final ProducerFencedException fatal) {
+            throw new TaskMigratedException(id, fatal);
         } catch (final KafkaException e) {
             throw new StreamsException(String.format("%sException caught while punctuating processor '%s'", logPrefix,  node.name()), e);
         } finally {
@@ -303,40 +316,44 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     private void commitOffsets(final boolean startNewTransaction) {
-        if (commitOffsetNeeded) {
-            log.trace("Committing offsets");
-            final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
-            for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
-                final TopicPartition partition = entry.getKey();
-                final long offset = entry.getValue() + 1;
-                consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset));
-                stateMgr.putOffsetLimit(partition, offset);
-            }
+        try {
+            if (commitOffsetNeeded) {
+                log.trace("Committing offsets");
+                final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
+                for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
+                    final TopicPartition partition = entry.getKey();
+                    final long offset = entry.getValue() + 1;
+                    consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset));
+                    stateMgr.putOffsetLimit(partition, offset);
+                }
 
-            if (eosEnabled) {
-                producer.sendOffsetsToTransaction(consumedOffsetsAndMetadata, applicationId);
+                if (eosEnabled) {
+                    producer.sendOffsetsToTransaction(consumedOffsetsAndMetadata, applicationId);
+                    producer.commitTransaction();
+                    transactionInFlight = false;
+                    if (startNewTransaction) {
+                        transactionInFlight = true;
+                        producer.beginTransaction();
+                    }
+                } else {
+                    try {
+                        consumer.commitSync(consumedOffsetsAndMetadata);
+                    } catch (final CommitFailedException e) {
+                        log.warn("Failed offset commits {} due to CommitFailedException", consumedOffsetsAndMetadata);
+                        throw e;
+                    }
+                }
+                commitOffsetNeeded = false;
+            } else if (eosEnabled && !startNewTransaction && transactionInFlight) { // need to make sure to commit txn for suspend case
                 producer.commitTransaction();
                 transactionInFlight = false;
-                if (startNewTransaction) {
-                    transactionInFlight = true;
-                    producer.beginTransaction();
-                }
-            } else {
-                try {
-                    consumer.commitSync(consumedOffsetsAndMetadata);
-                } catch (final CommitFailedException e) {
-                    log.warn("Failed offset commits {} due to CommitFailedException", consumedOffsetsAndMetadata);
-                    throw e;
-                }
             }
-            commitOffsetNeeded = false;
-        } else if (eosEnabled && !startNewTransaction && transactionInFlight) { // need to make sure to commit txn for suspend case
-            producer.commitTransaction();
-            transactionInFlight = false;
+        } catch (final ProducerFencedException fatal) {
+            throw new TaskMigratedException(id, fatal);
         }
     }
 
-    void initTopology() {
+    private void initTopology() {
         // initialize the task by initializing all its processor nodes in the topology
         log.trace("Initializing processor nodes of the topology");
         for (final ProcessorNode node : topology.processors()) {

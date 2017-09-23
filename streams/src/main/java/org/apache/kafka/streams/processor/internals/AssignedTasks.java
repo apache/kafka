@@ -51,6 +51,7 @@ class AssignedTasks {
     // IQ may access this map.
     private Map<TaskId, Task> running = new ConcurrentHashMap<>();
     private Map<TopicPartition, Task> runningByPartition = new HashMap<>();
+    private Map<TopicPartition, TaskId> restoringByPartition = new HashMap<>();
     private int committed = 0;
 
 
@@ -121,7 +122,7 @@ class AssignedTasks {
             try {
                 if (!entry.getValue().initialize()) {
                     log.debug("transitioning {} {} to restoring", taskTypeName, entry.getKey());
-                    restoring.put(entry.getKey(), entry.getValue());
+                    addToRestoring(entry.getValue());
                 } else {
                     transitionToRunning(entry.getValue());
                 }
@@ -188,6 +189,7 @@ class AssignedTasks {
         restoring.clear();
         created.clear();
         runningByPartition.clear();
+        restoringByPartition.clear();
         return firstException.get();
     }
 
@@ -213,11 +215,7 @@ class AssignedTasks {
             try {
                 task.suspend();
                 suspended.put(task.id(), task);
-            } catch (final CommitFailedException e) {
-                suspended.put(task.id(), task);
-                // commit failed during suspension. Just log it.
-                log.warn("Failed to commit {} {} state when suspending due to CommitFailedException", taskTypeName, task.id());
-            } catch (final ProducerFencedException e) {
+            } catch (final CommitFailedException | ProducerFencedException e) {
                 closeZombieTask(task);
                 it.remove();
             } catch (final RuntimeException e) {
@@ -236,11 +234,11 @@ class AssignedTasks {
     }
 
     private void closeZombieTask(final Task task) {
-        log.warn("Producer of task {} fenced; closing zombie task", task.id());
+        log.warn("{} {} got migrated to another thread already. Closing it as zombie.", taskTypeName, task.id());
         try {
             task.close(false, true);
         } catch (final Exception e) {
-            log.warn("{} Failed to close zombie due to {}, ignore and proceed", taskTypeName, e);
+            log.warn("Failed to close zombie {} {} due to {}; ignore and proceed.", taskTypeName, task.id(), e.getMessage());
         }
     }
 
@@ -265,6 +263,17 @@ class AssignedTasks {
         return false;
     }
 
+    private void addToRestoring(final Task task) {
+        final TaskId id = task.id();
+        restoring.put(id, task);
+        for (TopicPartition topicPartition : task.partitions()) {
+            restoringByPartition.put(topicPartition, id);
+        }
+        for (TopicPartition topicPartition : task.changelogPartitions()) {
+            restoringByPartition.put(topicPartition, id);
+        }
+    }
+
     private void transitionToRunning(final Task task) {
         log.debug("transitioning {} {} to running", taskTypeName, task.id());
         running.put(task.id(), task);
@@ -274,6 +283,10 @@ class AssignedTasks {
         for (TopicPartition topicPartition : task.changelogPartitions()) {
             runningByPartition.put(topicPartition, task);
         }
+    }
+
+    TaskId restoringTaskIdFor(final TopicPartition partition) {
+        return restoringByPartition.get(partition);
     }
 
     Task runningTaskFor(final TopicPartition partition) {
@@ -332,6 +345,7 @@ class AssignedTasks {
 
     void clear() {
         runningByPartition.clear();
+        restoringByPartition.clear();
         running.clear();
         created.clear();
         suspended.clear();
