@@ -330,7 +330,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def stopReplicaRequest = new StopReplicaRequest.Builder(brokerId, Int.MaxValue, true, Set(tp).asJava).build()
 
-  private def controlledShutdownRequest = new requests.ControlledShutdownRequest.Builder(brokerId).build()
+  private def controlledShutdownRequest = new requests.ControlledShutdownRequest.Builder(brokerId,
+    ApiKeys.CONTROLLED_SHUTDOWN.latestVersion).build()
 
   private def createTopicsRequest =
     new CreateTopicsRequest.Builder(Map(createTopic -> new TopicDetails(1, 1.toShort)).asJava, 0).build()

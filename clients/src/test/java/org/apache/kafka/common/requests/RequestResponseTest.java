@@ -744,11 +744,11 @@ public class RequestResponseTest {
     }
 
     private ControlledShutdownRequest createControlledShutdownRequest() {
-        return new ControlledShutdownRequest.Builder(10).build();
+        return new ControlledShutdownRequest.Builder(10, ApiKeys.CONTROLLED_SHUTDOWN.latestVersion()).build();
     }
 
     private ControlledShutdownRequest createControlledShutdownRequest(int version) {
-        return new ControlledShutdownRequest.Builder(10).build((short) version);
+        return new ControlledShutdownRequest.Builder(10, ApiKeys.CONTROLLED_SHUTDOWN.latestVersion()).build((short) version);
     }
 
     private ControlledShutdownResponse createControlledShutdownResponse() {

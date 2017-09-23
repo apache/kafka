@@ -112,7 +112,6 @@ public class ListOffsetRequest extends AbstractRequest {
         }
 
         public static Builder forConsumer(boolean requireTimestamp, IsolationLevel isolationLevel) {
-            // If we need a timestamp in the response, the minimum RPC version we can send is v1. Otherwise, v0 is OK.
             short minVersion = 0;
             if (isolationLevel == IsolationLevel.READ_COMMITTED)
                 minVersion = 2;
@@ -177,6 +176,7 @@ public class ListOffsetRequest extends AbstractRequest {
             if (partitionTimestamps != null) {
                 bld.append(", partitionTimestamps=").append(partitionTimestamps);
             }
+            bld.append(", isolationLevel=").append(isolationLevel);
             bld.append(")");
             return bld.toString();
         }

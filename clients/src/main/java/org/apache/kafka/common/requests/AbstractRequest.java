@@ -27,8 +27,8 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
 
     public static abstract class Builder<T extends AbstractRequest> {
         private final ApiKeys apiKey;
-        private final short minVersion;
-        private final short maxVersion;
+        private final short oldestAllowedVersion;
+        private final short latestAllowedVersion;
 
         public Builder(ApiKeys apiKey) {
             this(apiKey, apiKey.oldestVersion(), apiKey.latestVersion());
@@ -38,10 +38,10 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
             this(apiKey, desiredVersion, desiredVersion);
         }
 
-        public Builder(ApiKeys apiKey, short minVersion, short maxVersion) {
+        public Builder(ApiKeys apiKey, short oldestAllowedVersion, short latestAllowedVersion) {
             this.apiKey = apiKey;
-            this.minVersion = minVersion;
-            this.maxVersion = maxVersion;
+            this.oldestAllowedVersion = oldestAllowedVersion;
+            this.latestAllowedVersion = latestAllowedVersion;
         }
 
         public ApiKeys apiKey() {
@@ -49,11 +49,11 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
         }
 
         public short oldestAllowedVersion() {
-            return minVersion;
+            return oldestAllowedVersion;
         }
 
         public short latestAllowedVersion() {
-            return maxVersion;
+            return latestAllowedVersion;
         }
 
         public T build() {
