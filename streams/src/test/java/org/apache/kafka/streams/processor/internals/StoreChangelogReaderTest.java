@@ -160,8 +160,8 @@ public class StoreChangelogReaderTest {
         changelogReader.register(new StateRestorer(one, restoreListener1, null, Long.MAX_VALUE, true, "storeName2"));
         changelogReader.register(new StateRestorer(two, restoreListener2, null, Long.MAX_VALUE, true, "storeName3"));
 
-        expect(active.restoringTaskIdFor(one)).andReturn(null);
-        expect(active.restoringTaskIdFor(two)).andReturn(null);
+        expect(active.restoringTaskFor(one)).andReturn(null);
+        expect(active.restoringTaskFor(two)).andReturn(null);
         replay(active);
         changelogReader.restore(active);
 
@@ -187,8 +187,8 @@ public class StoreChangelogReaderTest {
         changelogReader.register(new StateRestorer(one, restoreListener1, null, Long.MAX_VALUE, true, "storeName2"));
         changelogReader.register(new StateRestorer(two, restoreListener2, null, Long.MAX_VALUE, true, "storeName3"));
 
-        expect(active.restoringTaskIdFor(one)).andReturn(null);
-        expect(active.restoringTaskIdFor(two)).andReturn(null);
+        expect(active.restoringTaskFor(one)).andReturn(null);
+        expect(active.restoringTaskFor(two)).andReturn(null);
         replay(active);
         changelogReader.restore(active);
 
@@ -305,9 +305,9 @@ public class StoreChangelogReaderTest {
         changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, false, "storeName"));
 
         final TopicPartition postInitialization = new TopicPartition("other", 0);
-        expect(active.restoringTaskIdFor(topicPartition)).andReturn(null);
-        expect(active.restoringTaskIdFor(topicPartition)).andReturn(null);
-        expect(active.restoringTaskIdFor(postInitialization)).andReturn(null);
+        expect(active.restoringTaskFor(topicPartition)).andReturn(null);
+        expect(active.restoringTaskFor(topicPartition)).andReturn(null);
+        expect(active.restoringTaskFor(postInitialization)).andReturn(null);
         replay(active);
 
         assertTrue(changelogReader.restore(active).isEmpty());

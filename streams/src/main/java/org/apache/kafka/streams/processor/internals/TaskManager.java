@@ -68,6 +68,9 @@ class TaskManager {
         this.log = logContext.logger(getClass());
     }
 
+    /**
+     * @throws TaskMigratedException if the task producer got fenced (EOS only)
+     */
     void createTasks(final Collection<TopicPartition> assignment) {
         if (threadMetadataProvider == null) {
             throw new IllegalStateException(logPrefix + "taskIdProvider has not been initialized while adding stream tasks. This should not happen.");
@@ -93,6 +96,9 @@ class TaskManager {
         this.threadMetadataProvider = threadMetadataProvider;
     }
 
+    /**
+     * @throws TaskMigratedException if the task producer got fenced (EOS only)
+     */
     private void addStreamTasks(final Collection<TopicPartition> assignment) {
         Map<TaskId, Set<TopicPartition>> assignedTasks = threadMetadataProvider.activeTasks();
         if (assignedTasks.isEmpty()) {
@@ -133,6 +139,9 @@ class TaskManager {
         }
     }
 
+    /**
+     * @throws TaskMigratedException if the task producer got fenced (EOS only)
+     */
     private void addStandbyTasks() {
         final Map<TaskId, Set<TopicPartition>> assignedStandbyTasks = threadMetadataProvider.standbyTasks();
         if (assignedStandbyTasks.isEmpty()) {
@@ -178,6 +187,7 @@ class TaskManager {
     /**
      * Similar to shutdownTasksAndState, however does not close the task managers, in the hope that
      * soon the tasks will be assigned again
+     * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     void suspendTasksAndState()  {
         log.debug("Suspending all active tasks {} and standby tasks {}", active.runningTaskIds(), standby.runningTaskIds());
@@ -189,8 +199,9 @@ class TaskManager {
         // remove the changelog partitions from restore consumer
         restoreConsumer.assign(Collections.<TopicPartition>emptyList());
 
-        if (firstException.get() != null) {
-            throw new StreamsException(logPrefix + "failed to suspend stream tasks", firstException.get());
+        final Exception exception = firstException.get();
+        if (exception != null) {
+            throw new StreamsException(logPrefix + "failed to suspend stream tasks", exception);
         }
     }
 
@@ -290,19 +301,33 @@ class TaskManager {
         }
     }
 
+    /**
+     * @throws TaskMigratedException if committing offsets failed (non-EOS)
+     *                               or if the task producer got fenced (EOS)
+     */
     int commitAll() {
         int committed = active.commit();
         return committed + standby.commit();
     }
 
+    /**
+     * @throws TaskMigratedException if the task producer got fenced (EOS only)
+     */
     int process() {
         return active.process();
     }
 
+    /**
+     * @throws TaskMigratedException if the task producer got fenced (EOS only)
+     */
     int punctuate() {
         return active.punctuate();
     }
 
+    /**
+     * @throws TaskMigratedException if committing offsets failed (non-EOS)
+     *                               or if the task producer got fenced (EOS)
+     */
     int maybeCommitActiveTasks() {
         return active.maybeCommit();
     }

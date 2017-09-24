@@ -339,6 +339,9 @@ public class StreamThread extends Thread implements ThreadDataProvider {
             this.log = log;
         }
 
+        /**
+         * @throws TaskMigratedException if the task producer got fenced (EOS only)
+         */
         Collection<Task> createTasks(final Consumer<byte[], byte[]> consumer, final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
             final List<Task> createdTasks = new ArrayList<>();
             for (final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions : tasksToBeCreated.entrySet()) {
@@ -391,6 +394,9 @@ public class StreamThread extends Thread implements ThreadDataProvider {
             this.threadClientId = threadClientId;
         }
 
+        /**
+         * @throws TaskMigratedException if the task producer got fenced (EOS only)
+         */
         @Override
         StreamTask createTask(final Consumer<byte[], byte[]> consumer, final TaskId taskId, final Set<TopicPartition> partitions) {
             taskCreatedSensor.record();
@@ -769,7 +775,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
             } catch (final TaskMigratedException ignoreAndRejoinGroup) {
                 log.warn("Detected a task that got migrated to another thread. " +
                     "This implies that this thread missed a rebalance and dropped out of the consumer group. " +
-                    "Trying to rejoin the consumer group now.");
+                    "Trying to rejoin the consumer group now.", ignoreAndRejoinGroup);
             }
         }
     }
@@ -778,7 +784,8 @@ public class StreamThread extends Thread implements ThreadDataProvider {
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
      * @throws TaskMigratedException if another thread did write to the changelog topic that is currently restored
-     *                               or if the task producer got fenced (EOS only)
+     *                               or if committing offsets failed (non-EOS)
+     *                               or if the task producer got fenced (EOS)
      */
     // Visible for testing
     long runOnce(final long recordsProcessedBeforeCommit) {
@@ -905,6 +912,8 @@ public class StreamThread extends Thread implements ThreadDataProvider {
      * @param recordsProcessedBeforeCommit number of records to be processed before commit is called.
      *                                     if UNLIMITED_RECORDS, then commit is never called
      * @return Number of records processed since last commit.
+     * @throws TaskMigratedException if committing offsets failed (non-EOS)
+     *                               or if the task producer got fenced (EOS)
      */
     private long processAndMaybeCommit(final long recordsProcessedBeforeCommit) {
 
@@ -936,6 +945,9 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         return totalProcessedSinceLastMaybeCommit;
     }
 
+    /**
+     * @throws TaskMigratedException if the task producer got fenced (EOS only)
+     */
     private void punctuate() {
         final int punctuated = taskManager.punctuate();
         if (punctuated > 0) {
@@ -976,6 +988,8 @@ public class StreamThread extends Thread implements ThreadDataProvider {
 
     /**
      * Commit all tasks owned by this thread if specified interval time has elapsed
+     * @throws TaskMigratedException if committing offsets failed (non-EOS)
+     *                               or if the task producer got fenced (EOS)
      */
     void maybeCommit(final long now) {
         if (commitTimeMs >= 0 && lastCommitMs + commitTimeMs < now) {

@@ -26,7 +26,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
-import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -81,7 +80,7 @@ public class StoreChangelogReader implements ChangelogReader {
         final Set<TopicPartition> partitions = new HashSet<>(needsRestoring.keySet());
         final ConsumerRecords<byte[], byte[]> allRecords = consumer.poll(10);
         for (final TopicPartition partition : partitions) {
-            restorePartition(allRecords, partition, active.restoringTaskIdFor(partition));
+            restorePartition(allRecords, partition, active.restoringTaskFor(partition));
         }
 
         if (needsRestoring.isEmpty()) {
@@ -233,14 +232,14 @@ public class StoreChangelogReader implements ChangelogReader {
      */
     private void restorePartition(final ConsumerRecords<byte[], byte[]> allRecords,
                                   final TopicPartition topicPartition,
-                                  final TaskId taskId) {
+                                  final Task task) {
         final StateRestorer restorer = stateRestorers.get(topicPartition);
         final Long endOffset = endOffsets.get(topicPartition);
         final long pos = processNext(allRecords.records(topicPartition), restorer, endOffset);
         restorer.setRestoredOffset(pos);
         if (restorer.hasCompleted(pos, endOffset)) {
             if (pos > endOffset + 1) {
-                throw new TaskMigratedException(taskId, topicPartition, endOffset, pos);
+                throw new TaskMigratedException(task, topicPartition, endOffset, pos);
             }
 
             log.debug("Completed restoring state from changelog {} with {} records ranging from offset {} to {}",

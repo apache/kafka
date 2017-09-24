@@ -18,7 +18,7 @@ package org.apache.kafka.streams.errors;
 
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.Task;
 
 /**
  * Indicates that a task got migrated to another thread.
@@ -28,26 +28,25 @@ public class TaskMigratedException extends StreamsException {
 
     private final static long serialVersionUID = 1L;
 
-    public TaskMigratedException(final TaskId taskId) {
-        this(taskId, null);
+    public TaskMigratedException(final Task task) {
+        this(task, null);
     }
 
-    public TaskMigratedException(final TaskId taskId,
+    public TaskMigratedException(final Task task,
                                  final TopicPartition topicPartition,
                                  final long endOffset,
                                  final long pos) {
-        super(String.format("Task %s migrated to another thread. " +
-                            "Log end offset of %s should not change while restoring: old end offset %d, current offset %d",
-                            taskId,
+        super(String.format("Log end offset of %s should not change while restoring: old end offset %d, current offset %d\n%s",
                             topicPartition,
                             endOffset,
-                            pos),
+                            pos,
+                            task.toString("> ")),
             null);
     }
 
-    public TaskMigratedException(final TaskId taskId,
+    public TaskMigratedException(final Task task,
                                  final Throwable throwable) {
-        super(String.format("Task %s migrated to another thread.", taskId), throwable);
+        super(task.toString(), throwable);
     }
 
 }
