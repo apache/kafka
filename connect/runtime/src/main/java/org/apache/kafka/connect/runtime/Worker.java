@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.utils.Time;
@@ -24,6 +25,7 @@ import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
@@ -426,6 +428,14 @@ public class Worker {
                     internalKeyConverter, internalValueConverter);
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
+            //client.id worker group ID + task ID
+            if (config instanceof DistributedConfig) { //Check to differentiate between ConnectStandalone vs ConnectDistributed.
+                if (connConfig.getString(ProducerConfig.CLIENT_ID_CONFIG) == null) {
+                    producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, config.getString(DistributedConfig.GROUP_ID_CONFIG) + id);
+                } else {
+                    producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, connConfig.getString(CommonClientConfigs.CLIENT_ID_CONFIG));
+                }
+            }
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
             return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter,
                     valueConverter, transformationChain, producer, offsetReader, offsetWriter, config, loader, time);

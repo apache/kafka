@@ -162,14 +162,14 @@ public class AbstractHerderTest extends EasyMockSupport {
         assertEquals(TestSourceConnector.class.getName(), result.name());
         assertEquals(Arrays.asList(ConnectorConfig.COMMON_GROUP, ConnectorConfig.TRANSFORMS_GROUP), result.groups());
         assertEquals(2, result.errorCount());
-        // Base connector config has 6 fields, connector's configs add 2
-        assertEquals(8, result.values().size());
+        // Base connector config has 6 fields, connector's configs add 3(with client.id)
+        assertEquals(9, result.values().size());
         // Missing name should generate an error
         assertEquals(ConnectorConfig.NAME_CONFIG, result.values().get(0).configValue().name());
         assertEquals(1, result.values().get(0).configValue().errors().size());
         // "required" config from connector should generate an error
-        assertEquals("required", result.values().get(6).configValue().name());
-        assertEquals(1, result.values().get(6).configValue().errors().size());
+        assertEquals("required", result.values().get(7).configValue().name());
+        assertEquals(1, result.values().get(7).configValue().errors().size());
 
         verifyAll();
     }
@@ -208,15 +208,15 @@ public class AbstractHerderTest extends EasyMockSupport {
         );
         assertEquals(expectedGroups, result.groups());
         assertEquals(2, result.errorCount());
-        // Base connector config has 6 fields, connector's configs add 2, 2 type fields from the transforms, and
+        // Base connector config has 6 fields, connector's configs add 3(with client.id), 2 type fields from the transforms, and
         // 1 from the valid transformation's config
-        assertEquals(11, result.values().size());
+        assertEquals(12, result.values().size());
         // Should get 2 type fields from the transforms, first adds its own config since it has a valid class
-        assertEquals("transforms.xformA.type", result.values().get(6).configValue().name());
+         assertEquals("transforms.xformA.type", result.values().get(7).configValue().name());
         assertTrue(result.values().get(6).configValue().errors().isEmpty());
-        assertEquals("transforms.xformA.subconfig", result.values().get(7).configValue().name());
-        assertEquals("transforms.xformB.type", result.values().get(8).configValue().name());
-        assertFalse(result.values().get(8).configValue().errors().isEmpty());
+        assertEquals("transforms.xformA.subconfig", result.values().get(8).configValue().name());
+        assertEquals("transforms.xformB.type", result.values().get(9).configValue().name());
+        assertFalse(result.values().get(9).configValue().errors().isEmpty());
 
         verifyAll();
     }

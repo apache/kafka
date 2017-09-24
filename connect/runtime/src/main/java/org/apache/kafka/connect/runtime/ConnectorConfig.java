@@ -83,6 +83,10 @@ public class ConnectorConfig extends AbstractConfig {
     private static final String TRANSFORMS_DOC = "Aliases for the transformations to be applied to records.";
     private static final String TRANSFORMS_DISPLAY = "Transforms";
 
+    private static final String CLIENT_ID = "client.id";
+    private static final String CLIENT_ID_DOC = "group ID + task ID as default value, if not set as connector config parameter.";
+    private static final String CLIENT_ID_DISPLAY = "Client.Id";
+
     private final EnrichedConnectorConfig enrichedConfig;
     private static class EnrichedConnectorConfig extends AbstractConfig {
         EnrichedConnectorConfig(ConfigDef configDef, Map<String, String> props) {
@@ -110,7 +114,8 @@ public class ConnectorConfig extends AbstractConfig {
                             throw new ConfigException(name, value, "Duplicate alias provided.");
                         }
                     }
-                }, Importance.LOW, TRANSFORMS_DOC, TRANSFORMS_GROUP, 6, Width.LONG, TRANSFORMS_DISPLAY);
+                }, Importance.LOW, TRANSFORMS_DOC, TRANSFORMS_GROUP, 6, Width.LONG, TRANSFORMS_DISPLAY)
+                .define(CLIENT_ID, Type.STRING, null, Importance.HIGH, CLIENT_ID_DOC, COMMON_GROUP, 7, Width.LONG, CLIENT_ID_DISPLAY);
     }
 
     public ConnectorConfig(Plugins plugins) {

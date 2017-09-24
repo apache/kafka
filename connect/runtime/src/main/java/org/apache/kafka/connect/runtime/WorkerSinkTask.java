@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -31,6 +32,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
+import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.Converter;
@@ -407,6 +409,14 @@ class WorkerSinkTask extends WorkerTask {
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+        //Client.id worker group ID + task ID
+        if(workerConfig instanceof DistributedConfig) {
+            if (workerConfig.getString(ConsumerConfig.CLIENT_ID_CONFIG) == null) {
+                props.put(ConsumerConfig.CLIENT_ID_CONFIG, workerConfig.getString(DistributedConfig.GROUP_ID_CONFIG) + id);
+            } else {
+                props.put(ConsumerConfig.CLIENT_ID_CONFIG, workerConfig.getString(CommonClientConfigs.CLIENT_ID_CONFIG));
+            }
+        }
 
         props.putAll(workerConfig.originalsWithPrefix("consumer."));
 
