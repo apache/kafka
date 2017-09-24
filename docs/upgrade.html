@@ -66,6 +66,7 @@
         This was only intended for use on the broker, but it is no longer in use and the implementations have not been maintained.
         A stub implementation has been retained for binary compatibility.</li>
     <li>The Java clients and tools now accept any string as a client-id.</li>
+    <li>The deprecated tool <code>kafka-consumer-offset-checker.sh</code> has been removed. Use <code>kafka-consumer-groups.sh</code> to get consumer group details.</li>
 </ul>
 
 <h5><a id="upgrade_100_new_protocols" href="#upgrade_100_new_protocols">New Protocol Versions</a></h5>
@@ -163,7 +164,7 @@
         This config specifies the time, in milliseconds, that the <code>GroupCoordinator</code> will delay the initial consumer rebalance.
         The rebalance will be further delayed by the value of <code>group.initial.rebalance.delay.ms</code> as new members join the group, up to a maximum of <code>max.poll.interval.ms</code>.
         The default value for this is 3 seconds.
-        During development and testing it might be desirable to set this to 0 inorder to not delay test execution time.
+        During development and testing it might be desirable to set this to 0 in order to not delay test execution time.
     </li>
     <li><code>org.apache.kafka.common.Cluster#partitionsForTopic</code>, <code>partitionsForNode</code> and <code>availablePartitionsForTopic</code> methods
         will return an empty list instead of <code>null</code> (which is considered a bad practice) in case the metadata for the required topic does not exist.
@@ -205,7 +206,7 @@
     tool.</li>
   <li>EoS in Kafka introduces new request APIs and modifies several existing ones. See
     <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-98+-+Exactly+Once+Delivery+and+Transactional+Messaging#KIP-98-ExactlyOnceDeliveryandTransactionalMessaging-RPCProtocolSummary">KIP-98</a>
-    for the full details</code></li>
+    for the full details</li>
 </ol>
 
 <h5><a id="upgrade_11_message_format" href="#upgrade_11_message_format">Notes on the new message format in 0.11.0</a></h5>
@@ -236,7 +237,7 @@
   is already not possible in that case. In order to avoid the cost of down-conversion, you should ensure that consumer applications
   are upgraded to the latest 0.11.0 client. Significantly, since the old consumer has been deprecated in 0.11.0.0, it does not support
   the new message format. You must upgrade to use the new consumer to use the new message format without the cost of down-conversion.
-  Note that 0.11.0 consumers support backwards compability with brokers 0.10.0 brokers and upward, so it is possible to upgrade the
+  Note that 0.11.0 consumers support backwards compatibility with brokers 0.10.0 brokers and upward, so it is possible to upgrade the
   clients first before the brokers.
 </p>
 
@@ -483,7 +484,6 @@ work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9
         <code>def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream)</code> </li>
     <li> MessageReader interface was changed from <code>def readMessage(): KeyedMessage[Array[Byte], Array[Byte]]</code> to
         <code>def readMessage(): ProducerRecord[Array[Byte], Array[Byte]]</code> </li>
-    </li>
     <li> MessageFormatter's package was changed from <code>kafka.tools</code> to <code>kafka.common</code> </li>
     <li> MessageReader's package was changed from <code>kafka.tools</code> to <code>kafka.common</code> </li>
     <li> MirrorMakerMessageHandler no longer exposes the <code>handle(record: MessageAndMetadata[Array[Byte], Array[Byte]])</code> method as it was never called. </li>
