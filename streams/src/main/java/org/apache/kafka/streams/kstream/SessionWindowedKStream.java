@@ -92,7 +92,7 @@ public interface SessionWindowedKStream<K, V> {
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
      * @param materialized  an instance of {@link Materialized} used to materialize a state store. Cannot be {@code null}.
-     *                      Note: the valueSerde will be automatically set to {@link Serdes#Long()} 
+     *                      Note: the valueSerde will be automatically set to {@link Serdes#Long()} if there is no valueSerde provided
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys and {@link Long} values
      * that represent the latest (rolling) count (i.e., number of records) for each key within a window
      */
