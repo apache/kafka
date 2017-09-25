@@ -346,7 +346,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         return branchChildren;
     }
 
-    
     @Override 
     public KStream<K, V> merge(final KStream<K, V> stream) {
         Objects.requireNonNull(stream);
@@ -355,20 +354,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     
     private KStream<K, V> merge(final InternalStreamsBuilder builder,
                                 final KStream<K, V> stream) {
-
-        String name = builder.newName(MERGE_NAME);
-        String[] parentNames = new String[2];
-        Set<String> allSourceNodes = new HashSet<>();
-        boolean requireRepartitioning = false;
-        
-        parentNames[0] = this.name;
-        requireRepartitioning |= repartitionRequired;
-        allSourceNodes.addAll(sourceNodes);
-        
         KStreamImpl<K, V> streamImpl = (KStreamImpl<K, V>) stream;
-        
-        parentNames[1] = streamImpl.name;
-        requireRepartitioning |= streamImpl.repartitionRequired;
+        String name = builder.newName(MERGE_NAME);
+        String[] parentNames = {this.name, streamImpl.name};
+        Set<String> allSourceNodes = new HashSet<>();
+
+        boolean requireRepartitioning = streamImpl.repartitionRequired || repartitionRequired;
+        allSourceNodes.addAll(sourceNodes);
         allSourceNodes.addAll(streamImpl.sourceNodes);
 
         builder.internalTopologyBuilder.addProcessor(name, new KStreamPassThrough<>(), parentNames);

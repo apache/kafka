@@ -95,6 +95,7 @@ public class StreamsBuilderTest {
         assertEquals(Utils.mkList("A:aa"), throughProcessorSupplier.processed);
     }
     
+    @Test
     public void testMerge() {
         final String topic1 = "topic-1";
         final String topic2 = "topic-2";
