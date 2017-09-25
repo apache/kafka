@@ -22,7 +22,7 @@ import org.apache.kafka.common.metrics.Gauge;
  * A gauge with an immutable value.
  */
 public class ImmutableValue<T> implements Gauge<T> {
-    private T value;
+    private final T value;
 
     public ImmutableValue(T value) {
         this.value = value;

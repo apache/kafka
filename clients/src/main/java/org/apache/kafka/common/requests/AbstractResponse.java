@@ -66,10 +66,8 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
 
     protected void updateErrorCounts(Map<Errors, Integer> errorCounts, Errors error) {
         if (error != Errors.NONE) {
-            if (errorCounts.containsKey(error))
-                errorCounts.put(error, errorCounts.get(error) + 1);
-            else
-                errorCounts.put(error, 1);
+            Integer count = errorCounts.get(error);
+            errorCounts.put(error, count == null ? 1 : count + 1);
         }
     }
 

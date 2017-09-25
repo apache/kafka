@@ -120,7 +120,6 @@ private[kafka] object LogValidator extends Logging {
                                                    isFromClient: Boolean): ValidationAndOffsetAssignResult = {
     val sizeInBytesAfterConversion = AbstractRecords.estimateSizeInBytes(toMagicValue, offsetCounter.value,
       CompressionType.NONE, records.records)
-    val startNanos = if (isFromClient) time.nanoseconds else 0
     val startOffset = offsetCounter.value
 
     val (producerId, producerEpoch, sequence, isTransactional) = {

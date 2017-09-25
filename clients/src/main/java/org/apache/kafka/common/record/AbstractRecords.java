@@ -66,7 +66,6 @@ public abstract class AbstractRecords implements Records {
         List<RecordBatchAndRecords> recordBatchAndRecordsList = new ArrayList<>();
         int totalSizeEstimate = 0;
         long conversionCount = 0;
-        long tempMemory = 0;
         long conversionTimeNanos = 0;
 
         long startNanos = time.nanoseconds();
@@ -109,7 +108,7 @@ public abstract class AbstractRecords implements Records {
         buffer.flip();
         if (conversionCount > 0)
             conversionTimeNanos = time.nanoseconds() - startNanos;
-        return new ConvertedRecords<>(MemoryRecords.readableRecords(buffer), tempMemory,
+        return new ConvertedRecords<>(MemoryRecords.readableRecords(buffer), buffer.remaining(),
                 conversionCount, conversionTimeNanos);
     }
 

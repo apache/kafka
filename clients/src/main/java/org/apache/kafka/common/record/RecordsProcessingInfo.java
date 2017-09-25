@@ -41,4 +41,10 @@ public class RecordsProcessingInfo {
     public long conversionTimeNanos() {
         return conversionTimeNanos;
     }
+
+    @Override
+    public String toString() {
+        return String.format("RecordsProcessingInfo(temporaryMemorySize=%d, conversionCount=%d, conversionTimeNanos=%d)",
+                temporaryMemorySize, conversionCount, conversionTimeNanos);
+    }
 }

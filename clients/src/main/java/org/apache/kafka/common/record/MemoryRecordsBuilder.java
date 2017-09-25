@@ -200,6 +200,7 @@ public class MemoryRecordsBuilder {
 
     public MemoryRecordsBuilder withTime(Time time) {
         this.time = time;
+        this.startNanos = time.nanoseconds();
         return this;
     }
 
@@ -329,7 +330,7 @@ public class MemoryRecordsBuilder {
             buffer.position(initialPosition);
             builtRecords = MemoryRecords.readableRecords(buffer.slice());
 
-            long buildTimeNanos = time == null ? 0 : time.nanoseconds() - startNanos;
+            long buildTimeNanos = time == null ? -1 : time.nanoseconds() - startNanos;
             recordsProcessingInfo = new RecordsProcessingInfo(builtRecords.sizeInBytes(), numRecords, buildTimeNanos);
         }
     }

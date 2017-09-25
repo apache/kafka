@@ -519,7 +519,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         downConvertMagic.map { magic =>
           trace(s"Down converting records from partition $tp to message format version $magic for fetch request from $clientId")
           val converted = data.records.downConvert(magic, fetchRequest.fetchData.get(tp).fetchOffset, time)
-          updateRecordsProcessingInfo(request, tp, converted)
+          updateRecordsProcessingInfo(request, tp, converted.recordsProcessingInfo)
           new FetchResponse.PartitionData(data.error, data.highWatermark, FetchResponse.INVALID_LAST_STABLE_OFFSET,
             data.logStartOffset, data.abortedTransactions, converted.records)
         }

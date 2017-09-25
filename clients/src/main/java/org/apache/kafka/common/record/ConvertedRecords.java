@@ -16,16 +16,21 @@
  */
 package org.apache.kafka.common.record;
 
-public class ConvertedRecords<T extends Records> extends RecordsProcessingInfo {
+public class ConvertedRecords<T extends Records> {
 
     private final T records;
+    private final RecordsProcessingInfo recordsProcessingInfo;
 
     public ConvertedRecords(T records, long temporaryMemorySize, long conversionCount, long conversionTimeNanos) {
-        super(temporaryMemorySize, conversionCount, conversionTimeNanos);
         this.records = records;
+        this.recordsProcessingInfo = new RecordsProcessingInfo(temporaryMemorySize, conversionCount, conversionTimeNanos);
     }
 
     public T records() {
         return records;
+    }
+
+    public RecordsProcessingInfo recordsProcessingInfo() {
+        return recordsProcessingInfo;
     }
 }
