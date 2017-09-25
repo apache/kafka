@@ -76,20 +76,55 @@ public class Histogram {
         return b.toString();
     }
 
+    /**
+     * An algorithm for determining the bin in which a value is to be placed as well as calculating the upper end
+     * of each bin.
+     */
     public interface BinScheme {
-        public int bins();
 
-        public int toBin(double value);
+        /**
+         * Get the number of bins.
+         *
+         * @return the number of bins
+         */
+        int bins();
 
-        public double fromBin(int bin);
+        /**
+         * Determine the 0-based bin number in which the supplied value should be placed.
+         *
+         * @param value the value
+         * @return the 0-based index of the bin
+         */
+        int toBin(double value);
+
+        /**
+         * Determine the value at the upper range of the specified bin.
+         *
+         * @param bin the 0-based bin number
+         * @return the value at the upper end of the bin; or {@link Float#NEGATIVE_INFINITY negative infinity}
+         * if the bin number is negative or {@link Float#POSITIVE_INFINITY positive infinity} if the 0-based
+         * bin number is greater than or equal to the {@link #bins() number of bins}.
+         */
+        double fromBin(int bin);
     }
 
+    /**
+     * A scheme for calculating the bins where the width of each bin is a constant determined by the range of values
+     * and the number of bins.
+     */
     public static class ConstantBinScheme implements BinScheme {
         private final double min;
         private final double max;
         private final int bins;
         private final double bucketWidth;
 
+        /**
+         * Create a bin scheme with the specified number of bins that all have the same width.
+         *
+         * @param bins the number of bins; must be at least 2
+         * @param min the minimum value to be counted in the bins
+         * @param max the maximum value to be counted in the bins
+         */
         public ConstantBinScheme(int bins, double min, double max) {
             if (bins < 2)
                 throw new IllegalArgumentException("Must have at least 2 bins.");
@@ -105,9 +140,9 @@ public class Histogram {
 
         public double fromBin(int b) {
             if (b < 0)
-                return Double.NEGATIVE_INFINITY;
+                return Float.NEGATIVE_INFINITY;
             else if (b > bins - 1)
-                return Double.POSITIVE_INFINITY;
+                return Float.POSITIVE_INFINITY;
             else
                 return min + b * bucketWidth;
         }
@@ -122,11 +157,22 @@ public class Histogram {
         }
     }
 
+    /**
+     * A scheme for calculating the bins where the width of each bin is one more than the previous bin, and therefore
+     * the bin widths are increasing at a linear rate. However, the bin widths are scaled such that the specified range
+     * of values will all fit within the bins (e.g., the upper range of the last bin is equal to the maximum value).
+     */
     public static class LinearBinScheme implements BinScheme {
         private final int bins;
         private final double max;
         private final double scale;
 
+        /**
+         * Create a linear bin scheme with the specified number of bins and the maximum value to be counted in the bins.
+         *
+         * @param numBins the number of bins; must be at least 2
+         * @param max the maximum value to be counted in the bins
+         */
         public LinearBinScheme(int numBins, double max) {
             if (numBins < 2)
                 throw new IllegalArgumentException("Must have at least 2 bins.");

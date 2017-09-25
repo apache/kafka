@@ -57,19 +57,19 @@ public class FrequenciesTest {
     @Test(expected = IllegalArgumentException.class)
     public void testFrequencyCenterValueAboveMax() {
         new Frequencies(4, 1.0, 4.0,
-                               freq("1", 1.0), freq("2", 20.0));
+                        freq("1", 1.0), freq("2", 20.0));
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void testFrequencyCenterValueBelowMin() {
         new Frequencies(4, 1.0, 4.0,
-                               freq("1", 1.0), freq("2", -20.0));
+                        freq("1", 1.0), freq("2", -20.0));
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void testMoreFrequencyParametersThanBuckets() {
         new Frequencies(1, 1.0, 4.0,
-                               freq("1", 1.0), freq("2", -20.0));
+                        freq("1", 1.0), freq("2", -20.0));
     }
 
     @Test
@@ -108,10 +108,10 @@ public class FrequenciesTest {
         MetricName name3 = name("3");
         MetricName name4 = name("4");
         Frequencies frequencies = new Frequencies(4, 1.0, 4.0,
-                                                         new Frequency(name1, 1.0),
-                                                         new Frequency(name2, 2.0),
-                                                         new Frequency(name3, 3.0),
-                                                         new Frequency(name4, 4.0));
+                                                  new Frequency(name1, 1.0),
+                                                  new Frequency(name2, 2.0),
+                                                  new Frequency(name3, 3.0),
+                                                  new Frequency(name4, 4.0));
         Sensor sensor = metrics.sensor("test", config);
         sensor.add(frequencies);
         Metric metric1 = this.metrics.metrics().get(name1);
