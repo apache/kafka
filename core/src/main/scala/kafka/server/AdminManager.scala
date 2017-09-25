@@ -122,15 +122,15 @@ class AdminManager(val config: KafkaConfig,
             else
               AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, assignments, configs, update = false)
         }
-        CreateTopicMetadata(topic, assignments, ApiError.NONE)
+        CreatePartitionsMetadata(topic, assignments, ApiError.NONE)
       } catch {
         // Log client errors at a lower level than unexpected exceptions
         case e@ (_: PolicyViolationException | _: ApiException) =>
           info(s"Error processing create topic request for topic $topic with arguments $arguments", e)
-          CreateTopicMetadata(topic, Map(), ApiError.fromThrowable(e))
+          CreatePartitionsMetadata(topic, Map(), ApiError.fromThrowable(e))
         case e: Throwable =>
           error(s"Error processing create topic request for topic $topic with arguments $arguments", e)
-          CreateTopicMetadata(topic, Map(), ApiError.fromThrowable(e))
+          CreatePartitionsMetadata(topic, Map(), ApiError.fromThrowable(e))
       }
     }
 
@@ -250,12 +250,12 @@ class AdminManager(val config: KafkaConfig,
 
         val updatedReplicaAssignment = AdminUtils.addPartitions(zkUtils, topic, existingAssignment, allBrokers,
           newPartition.totalCount, reassignment, validateOnly = validateOnly)
-        CreateTopicMetadata(topic, updatedReplicaAssignment, ApiError.NONE)
+        CreatePartitionsMetadata(topic, updatedReplicaAssignment, ApiError.NONE)
       } catch {
         case e: AdminOperationException =>
-          CreateTopicMetadata(topic, Map.empty, ApiError.fromThrowable(e))
+          CreatePartitionsMetadata(topic, Map.empty, ApiError.fromThrowable(e))
         case e: ApiException =>
-          CreateTopicMetadata(topic, Map.empty, ApiError.fromThrowable(e))
+          CreatePartitionsMetadata(topic, Map.empty, ApiError.fromThrowable(e))
       }
     }
 
