@@ -23,7 +23,7 @@ import com.yammer.metrics.core.Gauge
 import kafka.admin.AdminUtils
 import kafka.api.LeaderAndIsr
 import kafka.controller.KafkaController
-import kafka.log.LogConfig
+import kafka.log.{LogAppendInfo, LogConfig}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server._
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
@@ -264,8 +264,10 @@ class Partition(val topic: String,
 
   /**
    * Update the log end offset of a certain replica of this partition
+   *
+   * @return true if the leader's log start offset or high watermark have been updated
    */
-  def updateReplicaLogReadResult(replica: Replica, logReadResult: LogReadResult) {
+  def updateReplicaLogReadResult(replica: Replica, logReadResult: LogReadResult): Boolean = {
     val replicaId = replica.brokerId
     // No need to calculate low watermark if there is no delayed DeleteRecordsRequest
     val oldLeaderLW = if (replicaManager.delayedDeleteRecordsPurgatory.delayed > 0) lowWatermarkIfLeader else -1L
@@ -278,11 +280,13 @@ class Partition(val topic: String,
     // if it is not in the ISR yet
     val leaderHWIncremented = maybeExpandIsr(replicaId, logReadResult)
 
+    val result = leaderLWIncremented || leaderHWIncremented
     // some delayed operations may be unblocked after HW or LW changed
-    if (leaderLWIncremented || leaderHWIncremented)
+    if (result)
       tryCompleteDelayedRequests()
 
     debug(s"Recorded replica $replicaId log end offset (LEO) position ${logReadResult.info.fetchOffsetMetadata.messageOffset}.")
+    result
   }
 
   /**
@@ -293,7 +297,9 @@ class Partition(val topic: String,
    * even if its log end offset is >= HW. However, to be consistent with how the follower determines
    * whether a replica is in-sync, we only check HW.
    *
-   * This function can be triggered when a replica's LEO has incremented
+   * This function can be triggered when a replica's LEO has incremented.
+   *
+   * @return true if the high watermark has been updated
    */
   def maybeExpandIsr(replicaId: Int, logReadResult: LogReadResult): Boolean = {
     inWriteLock(leaderIsrUpdateLock) {
@@ -473,7 +479,7 @@ class Partition(val topic: String,
     laggingReplicas
   }
 
-  def appendRecordsToLeader(records: MemoryRecords, isFromClient: Boolean, requiredAcks: Int = 0) = {
+  def appendRecordsToLeader(records: MemoryRecords, isFromClient: Boolean, requiredAcks: Int = 0): LogAppendInfo = {
     val (info, leaderHWIncremented) = inReadLock(leaderIsrUpdateLock) {
       leaderReplicaIfLocal match {
         case Some(leaderReplica) =>

@@ -460,17 +460,15 @@ class ReplicaManagerTest {
 
         val tp0Status = responseStatusMap.get(tp0)
         assertTrue(tp0Status.isDefined)
-//        assertEquals(1, tp0Status.get.highWatermark)
+        assertEquals(1, tp0Status.get.highWatermark)
         assertEquals(Errors.NONE, tp0Status.get.error)
         assertTrue(tp0Status.get.records.batches.iterator.hasNext)
-        println("tp0hw " + tp0Status.get.highWatermark)
 
         val tp1Status = responseStatusMap.get(tp1)
         assertTrue(tp1Status.isDefined)
-//        assertEquals(1, tp1Status.get.highWatermark)
+        assertEquals(0, tp1Status.get.highWatermark)
         assertEquals(Errors.NONE, tp1Status.get.error)
         assertTrue(tp1Status.get.records.batches.iterator.hasNext)
-        println("tp1hw " + tp1Status.get.highWatermark)
       }
 
       replicaManager.fetchMessages(
