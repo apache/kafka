@@ -780,9 +780,8 @@ class ReplicaManager(val config: KafkaConfig,
       quota = quota,
       isolationLevel = isolationLevel)
 
-    // if the fetch comes from the follower,
-    // update its corresponding log end offset
-    if(Request.isValidBrokerId(replicaId))
+    // if the fetch comes from a follower, update its log end offset for each partition
+    if (Request.isValidBrokerId(replicaId))
       updateFollowerLogReadResults(replicaId, logReadResults)
 
     // check if this fetch request can be satisfied right away
@@ -1286,12 +1285,20 @@ class ReplicaManager(val config: KafkaConfig,
     readResults.foreach { case (topicPartition, readResult) =>
       getPartition(topicPartition) match {
         case Some(partition) =>
-          if (partition ne ReplicaManager.OfflinePartition)
-            partition.updateReplicaLogReadResult(replicaId, readResult)
-
-          // for producer requests with ack > 1, we need to check
-          // if they can be unblocked after some follower's log end offsets have moved
-          tryCompleteDelayedProduce(new TopicPartitionOperationKey(topicPartition))
+          if (partition ne ReplicaManager.OfflinePartition) {
+            partition.getReplica(replicaId) match {
+              case Some(replica) =>
+                partition.updateReplicaLogReadResult(replica, readResult)
+                // for producer requests with ack > 1, we need to check
+                // if they can be unblocked after some follower's log end offsets have moved
+                tryCompleteDelayedProduce(new TopicPartitionOperationKey(topicPartition))
+              case None =>
+                warn(s"Leader $localBrokerId failed to record follower $replicaId's position " +
+                  s"${readResult.info.fetchOffsetMetadata.messageOffset} since the replica is not recognized to be " +
+                  s"one of the assigned replicas ${partition.assignedReplicas.map(_.brokerId).mkString(",")} " +
+                  s"for partition $topicPartition.")
+            }
+          }
         case None =>
           warn("While recording the replica LEO, the partition %s hasn't been created.".format(topicPartition))
       }
