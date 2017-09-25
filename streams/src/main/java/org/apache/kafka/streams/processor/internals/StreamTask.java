@@ -322,7 +322,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     protected void flushState() {
         log.trace("Flushing state and producer");
         super.flushState();
-        recordCollector.flush();
+        try {
+            recordCollector.flush();
+        } catch (final ProducerFencedException fatal) {
+            throw new TaskMigratedException(this, fatal);
+        }
     }
 
     /**

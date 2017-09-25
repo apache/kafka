@@ -859,7 +859,10 @@ public class StreamThreadTest {
         producer.fenceProducer();
         mockTime.sleep(config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG) + 1L);
         consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, new byte[0], new byte[0]));
-        thread.runOnce(-1);
+        try {
+            thread.runOnce(-1);
+            fail("Should have thrown TaskMigratedException");
+        } catch (final TaskMigratedException expected) { /* ignore */ }
         TestUtils.waitForCondition(
             new TestCondition() {
                 @Override
