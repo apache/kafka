@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import com.yammer.metrics.core.Gauge
 import kafka.api._
 import kafka.cluster.{Partition, Replica}
-import kafka.controller.{KafkaController, OfflinePartition, StateChangeLogger}
+import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log.{Log, LogAppendInfo, LogManager}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.QuotaFactory.UnboundedQuota
@@ -1289,16 +1289,13 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   private def updateFollowerLogReadResults(replicaId: Int, readResults: Seq[(TopicPartition, LogReadResult)]) {
-    debug("Recording follower broker %d log read results: %s ".format(replicaId, readResults))
+    debug(s"Recording follower broker $replicaId log read results: $readResults")
     readResults.foreach { case (topicPartition, readResult) =>
       nonOfflinePartition(topicPartition) match {
         case Some(partition) =>
           partition.getReplica(replicaId) match {
             case Some(replica) =>
               partition.updateReplicaLogReadResult(replica, readResult)
-              // for producer requests with ack > 1, we need to check
-              // if they can be unblocked after some follower's log end offsets have moved
-              tryCompleteDelayedProduce(new TopicPartitionOperationKey(topicPartition))
             case None =>
               warn(s"Leader $localBrokerId failed to record follower $replicaId's position " +
                 s"${readResult.info.fetchOffsetMetadata.messageOffset} since the replica is not recognized to be " +
