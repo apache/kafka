@@ -24,7 +24,7 @@ import org.apache.kafka.common.requests.ProduceResponse;
 /**
  * The metadata for a record that has been acknowledged by the server
  */
-public final class RecordMetadata {
+public class RecordMetadata {
 
     /**
      * Partition value for record without partition assigned
