@@ -18,10 +18,10 @@
 package kafka.utils
 
 import kafka.controller.LeaderIsrAndControllerEpoch
-import kafka.server.{ReplicaFetcherManager, KafkaConfig}
+import kafka.server.{KafkaConfig, ReplicaFetcherManager}
 import kafka.api.LeaderAndIsr
 import kafka.zk.ZooKeeperTestHarness
-import kafka.common.TopicAndPartition
+import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
 import org.junit.{Before, Test}
 import org.easymock.EasyMock
@@ -59,7 +59,7 @@ class ReplicationUtilsTest extends ZooKeeperTestHarness {
     EasyMock.replay(log)
 
     val logManager = EasyMock.createMock(classOf[kafka.log.LogManager])
-    EasyMock.expect(logManager.getLog(TopicAndPartition(topic, partitionId))).andReturn(Some(log)).anyTimes()
+    EasyMock.expect(logManager.getLog(new TopicPartition(topic, partitionId))).andReturn(Some(log)).anyTimes()
     EasyMock.replay(logManager)
 
     val replicaManager = EasyMock.createMock(classOf[kafka.server.ReplicaManager])

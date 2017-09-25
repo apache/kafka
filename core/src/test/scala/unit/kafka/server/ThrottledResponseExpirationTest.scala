@@ -43,7 +43,7 @@ class ThrottledResponseExpirationTest {
 
   @Test
   def testExpire() {
-    val clientMetrics = new ClientQuotaManager(ClientQuotaManagerConfig(), metrics, "producer", time)
+    val clientMetrics = new ClientQuotaManager(ClientQuotaManagerConfig(), metrics, QuotaType.Produce, time)
 
     val delayQueue = new DelayQueue[ThrottledResponse]()
     val reaper = new clientMetrics.ThrottledRequestReaper(delayQueue)

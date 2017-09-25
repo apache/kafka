@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -19,6 +19,7 @@ package org.apache.kafka.common.security.ssl;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.config.types.Password;
 
@@ -26,8 +27,10 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
+import java.security.SecureRandom;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
@@ -51,6 +54,7 @@ public class SslFactory implements Configurable {
     private String[] cipherSuites;
     private String[] enabledProtocols;
     private String endpointIdentification;
+    private SecureRandom secureRandomImplementation;
     private SSLContext sslContext;
     private boolean needClientAuth;
     private boolean wantClientAuth;
@@ -83,9 +87,18 @@ public class SslFactory implements Configurable {
         if (endpointIdentification != null)
             this.endpointIdentification = endpointIdentification;
 
+        String secureRandomImplementation = (String) configs.get(SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG);
+        if (secureRandomImplementation != null) {
+            try {
+                this.secureRandomImplementation = SecureRandom.getInstance(secureRandomImplementation);
+            } catch (GeneralSecurityException e) {
+                throw new KafkaException(e);
+            }
+        }
+
         String clientAuthConfig = clientAuthConfigOverride;
         if (clientAuthConfig == null)
-            clientAuthConfig = (String) configs.get(SslConfigs.SSL_CLIENT_AUTH_CONFIG);
+            clientAuthConfig = (String) configs.get(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG);
         if (clientAuthConfig != null) {
             if (clientAuthConfig.equals("required"))
                 this.needClientAuth = true;
@@ -134,7 +147,7 @@ public class SslFactory implements Configurable {
         KeyStore ts = truststore == null ? null : truststore.load();
         tmf.init(ts);
 
-        sslContext.init(keyManagers, tmf.getTrustManagers(), null);
+        sslContext.init(keyManagers, tmf.getTrustManagers(), this.secureRandomImplementation);
         return sslContext;
     }
 
@@ -143,6 +156,8 @@ public class SslFactory implements Configurable {
         if (cipherSuites != null) sslEngine.setEnabledCipherSuites(cipherSuites);
         if (enabledProtocols != null) sslEngine.setEnabledProtocols(enabledProtocols);
 
+        // SSLParameters#setEndpointIdentificationAlgorithm enables endpoint validation
+        // only in client mode. Hence, validation is enabled only for clients.
         if (mode == Mode.SERVER) {
             sslEngine.setUseClientMode(false);
             if (needClientAuth)
@@ -180,20 +195,19 @@ public class SslFactory implements Configurable {
     private void createTruststore(String type, String path, Password password) {
         if (path == null && password != null) {
             throw new KafkaException("SSL trust store is not specified, but trust store password is specified.");
-        } else if (path != null && password == null) {
-            throw new KafkaException("SSL trust store is specified, but trust store password is not specified.");
-        } else if (path != null && password != null) {
+        } else if (path != null) {
             this.truststore = new SecurityStore(type, path, password);
         }
     }
 
-    private class SecurityStore {
+    private static class SecurityStore {
         private final String type;
         private final String path;
         private final Password password;
 
         private SecurityStore(String type, String path, Password password) {
-            this.type = type == null ? KeyStore.getDefaultType() : type;
+            Objects.requireNonNull(type, "type must not be null");
+            this.type = type;
             this.path = path;
             this.password = password;
         }
@@ -203,7 +217,9 @@ public class SslFactory implements Configurable {
             try {
                 KeyStore ks = KeyStore.getInstance(type);
                 in = new FileInputStream(path);
-                ks.load(in, password.value().toCharArray());
+                // If a password is not set access to the truststore is still available, but integrity checking is disabled.
+                char[] passwordChars = password != null ? password.value().toCharArray() : null;
+                ks.load(in, passwordChars);
                 return ks;
             } finally {
                 if (in != null) in.close();

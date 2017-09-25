@@ -14,6 +14,7 @@
 # limitations under the License.
 
 from ducktape.mark import parametrize
+from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
 
 from kafkatest.services.zookeeper import ZookeeperService
@@ -23,6 +24,7 @@ from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
 import random
+
 
 class ReassignPartitionsTest(ProduceConsumeValidateTest):
     """
@@ -37,7 +39,7 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
 
         self.topic = "test_topic"
         self.zk = ZookeeperService(test_context, num_nodes=1)
-        self.kafka = KafkaService(test_context, num_nodes=3, zk=self.zk, topics={self.topic: {
+        self.kafka = KafkaService(test_context, num_nodes=4, zk=self.zk, topics={self.topic: {
                                                                     "partitions": 20,
                                                                     "replication-factor": 3,
                                                                     'configs': {"min.insync.replicas": 2}}
@@ -86,8 +88,9 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         # Wait until finished or timeout
         wait_until(lambda: self.kafka.verify_reassign_partitions(partition_info), timeout_sec=self.timeout_sec, backoff_sec=.5)
 
-    @parametrize(security_protocol="PLAINTEXT", bounce_brokers=False)
+    @cluster(num_nodes=7)
     @parametrize(security_protocol="PLAINTEXT", bounce_brokers=True)
+    @parametrize(security_protocol="PLAINTEXT", bounce_brokers=False)
     def test_reassign_partitions(self, bounce_brokers, security_protocol):
         """Reassign partitions tests.
         Setup: 1 zk, 3 kafka nodes, 1 topic with partitions=3, replication-factor=3, and min.insync.replicas=2
@@ -106,5 +109,5 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka, self.topic, throughput=self.producer_throughput)
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic, new_consumer=new_consumer, consumer_timeout_ms=60000, message_validator=is_int)
         self.kafka.start()
-        
+
         self.run_produce_consume_validate(core_test_action=lambda: self.reassign_partitions(bounce_brokers))

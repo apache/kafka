@@ -13,22 +13,27 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# see kafka.server.KafkaConfig for additional details and defaults
 
 # This script can be used to set up a driver machine on aws from which you will run tests
 # or bring up your mini Kafka cluster.
 
 # Install dependencies
-sudo apt-get install -y maven openjdk-6-jdk build-essential \
-            ruby-dev zlib1g-dev realpath python-setuptools
+sudo apt-get install -y \
+  maven \
+  openjdk-8-jdk-headless \
+  build-essential \
+  ruby-dev \
+  zlib1g-dev \
+  realpath \
+  python-setuptools
 
 base_dir=`dirname $0`/../..
 
 if [ -z `which vagrant` ]; then
     echo "Installing vagrant..."
-    wget https://releases.hashicorp.com/vagrant/1.7.2/vagrant_1.7.2_x86_64.deb
-    sudo dpkg -i vagrant_1.7.2_x86_64.deb
-    rm -f vagrant_1.7.2_x86_64.deb
+    wget https://releases.hashicorp.com/vagrant/1.9.3/vagrant_1.9.3_x86_64.deb
+    sudo dpkg -i vagrant_1.9.3_x86_64.deb
+    rm -f vagrant_1.9.3_x86_64.deb
 fi
 
 # Install necessary vagrant plugins

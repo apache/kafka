@@ -29,14 +29,12 @@ import kafka.utils.TestUtils
 object FixedPortTestUtils {
   def choosePorts(count: Int): Seq[Int] = {
     try {
-      val sockets = (0 until count).map(i => new ServerSocket(0))
+      val sockets = (0 until count).map(_ => new ServerSocket(0))
       val ports = sockets.map(_.getLocalPort())
       sockets.foreach(_.close())
       ports
     } catch {
-      case e: IOException => {
-        throw new RuntimeException(e)
-      }
+      case e: IOException => throw new RuntimeException(e)
     }
   }
 
@@ -45,8 +43,9 @@ object FixedPortTestUtils {
     enableControlledShutdown: Boolean = true,
     enableDeleteTopic: Boolean = false): Seq[Properties] = {
     val ports = FixedPortTestUtils.choosePorts(numConfigs)
-    (0 until numConfigs)
-      .map(node => TestUtils.createBrokerConfig(node, zkConnect, enableControlledShutdown, enableDeleteTopic, ports(node)))
+    (0 until numConfigs).map { node =>
+      TestUtils.createBrokerConfig(node, zkConnect, enableControlledShutdown, enableDeleteTopic, ports(node))
+    }
   }
 
 }

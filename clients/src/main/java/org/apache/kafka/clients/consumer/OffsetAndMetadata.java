@@ -1,16 +1,22 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.clients.consumer;
+
+import org.apache.kafka.common.requests.OffsetFetchResponse;
 
 import java.io.Serializable;
 
@@ -30,7 +36,12 @@ public class OffsetAndMetadata implements Serializable {
      */
     public OffsetAndMetadata(long offset, String metadata) {
         this.offset = offset;
-        this.metadata = metadata;
+        // The server converts null metadata to an empty string. So we store it as an empty string as well on the client
+        // to be consistent.
+        if (metadata == null)
+            this.metadata = OffsetFetchResponse.NO_METADATA;
+        else
+            this.metadata = metadata;
     }
 
     /**
@@ -58,14 +69,13 @@ public class OffsetAndMetadata implements Serializable {
         OffsetAndMetadata that = (OffsetAndMetadata) o;
 
         if (offset != that.offset) return false;
-        return metadata == null ? that.metadata == null : metadata.equals(that.metadata);
-
+        return metadata.equals(that.metadata);
     }
 
     @Override
     public int hashCode() {
         int result = (int) (offset ^ (offset >>> 32));
-        result = 31 * result + (metadata != null ? metadata.hashCode() : 0);
+        result = 31 * result + metadata.hashCode();
         return result;
     }
 

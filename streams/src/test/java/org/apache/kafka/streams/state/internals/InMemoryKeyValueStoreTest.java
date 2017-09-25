@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -20,6 +20,11 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
+import org.junit.Test;
+
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
 
 public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
@@ -27,7 +32,8 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
     @Override
     protected <K, V> KeyValueStore<K, V> createKeyValueStore(
             ProcessorContext context,
-            Class<K> keyClass, Class<V> valueClass,
+            Class<K> keyClass,
+            Class<V> valueClass,
             boolean useContextSerdes) {
 
         StateStoreSupplier supplier;
@@ -40,5 +46,24 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         KeyValueStore<K, V> store = (KeyValueStore<K, V>) supplier.get();
         store.init(context, store);
         return store;
+    }
+
+    @Test
+    public void shouldRemoveKeysWithNullValues() {
+        store.close();
+        // Add any entries that will be restored to any store
+        // that uses the driver's context ...
+        driver.addEntryToRestoreLog(0, "zero");
+        driver.addEntryToRestoreLog(1, "one");
+        driver.addEntryToRestoreLog(2, "two");
+        driver.addEntryToRestoreLog(3, "three");
+        driver.addEntryToRestoreLog(0, null);
+
+        store = createKeyValueStore(driver.context(), Integer.class, String.class, true);
+        context.restore(store.name(), driver.restoredEntries());
+
+        assertEquals(3, driver.sizeOf(store));
+
+        assertThat(store.get(0), nullValue());
     }
 }

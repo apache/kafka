@@ -16,7 +16,7 @@
 import importlib
 import os
 
-from kafkatest.version import get_version, KafkaVersion, TRUNK
+from kafkatest.version import get_version, KafkaVersion, DEV_BRANCH
 
 
 """This module serves a few purposes:
@@ -43,7 +43,7 @@ TOOLS_JAR_NAME = "tools"
 TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME = "tools-dependant-libs"
 
 JARS = {
-    "trunk": {
+    "dev": {
         CORE_JAR_NAME: "core/build/*/*.jar",
         CORE_LIBS_JAR_NAME: "core/build/libs/*.jar",
         CORE_DEPENDANT_TEST_LIBS_JAR_NAME: "core/build/dependant-testlibs/*.jar",
@@ -97,7 +97,7 @@ class KafkaPathResolverMixin(object):
 class KafkaSystemTestPathResolver(object):
     """Path resolver for Kafka system tests which assumes the following layout:
 
-        /opt/kafka-trunk        # Current version of kafka under test
+        /opt/kafka-dev          # Current version of kafka under test
         /opt/kafka-0.9.0.1      # Example of an older version of kafka installed from tarball
         /opt/kafka-<version>    # Other previous versions of kafka
         ...
@@ -106,7 +106,7 @@ class KafkaSystemTestPathResolver(object):
         self.context = context
         self.project = project
 
-    def home(self, node_or_version=TRUNK):
+    def home(self, node_or_version=DEV_BRANCH):
         version = self._version(node_or_version)
         home_dir = self.project
         if version is not None:
@@ -114,15 +114,15 @@ class KafkaSystemTestPathResolver(object):
 
         return os.path.join(KAFKA_INSTALL_ROOT, home_dir)
 
-    def bin(self, node_or_version=TRUNK):
+    def bin(self, node_or_version=DEV_BRANCH):
         version = self._version(node_or_version)
         return os.path.join(self.home(version), "bin")
 
-    def script(self, script_name, node_or_version=TRUNK):
+    def script(self, script_name, node_or_version=DEV_BRANCH):
         version = self._version(node_or_version)
         return os.path.join(self.bin(version), script_name)
 
-    def jar(self, jar_name, node_or_version=TRUNK):
+    def jar(self, jar_name, node_or_version=DEV_BRANCH):
         version = self._version(node_or_version)
         return os.path.join(self.home(version), JARS[str(version)][jar_name])
 

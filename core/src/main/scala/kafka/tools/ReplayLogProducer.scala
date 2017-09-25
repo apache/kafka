@@ -18,12 +18,13 @@
 package kafka.tools
 
 import joptsimple.OptionParser
-import java.util.concurrent.{Executors, CountDownLatch}
+import java.util.concurrent.CountDownLatch
 import java.util.Properties
 import kafka.consumer._
 import kafka.utils.{ToolsUtils, CommandLineUtils, Logging, ZkUtils}
 import kafka.api.OffsetRequest
 import org.apache.kafka.clients.producer.{ProducerRecord, KafkaProducer, ProducerConfig}
+import scala.collection.JavaConverters._
 
 object ReplayLogProducer extends Logging {
 
@@ -31,9 +32,6 @@ object ReplayLogProducer extends Logging {
 
   def main(args: Array[String]) {
     val config = new Config(args)
-
-    val executor = Executors.newFixedThreadPool(config.numThreads)
-    val allDone = new CountDownLatch(config.numThreads)
 
     // if there is no group specified then avoid polluting zookeeper with persistent group data, this is a hack
     ZkUtils.maybeDeletePath(config.zkConnect, "/consumers/" + GroupId)
@@ -51,7 +49,7 @@ object ReplayLogProducer extends Logging {
     val consumerConnector: ConsumerConnector = Consumer.create(consumerConfig)
     val topicMessageStreams = consumerConnector.createMessageStreams(Predef.Map(config.inputTopic -> config.numThreads))
     var threadList = List[ZKConsumerThread]()
-    for ((topic, streamList) <- topicMessageStreams)
+    for (streamList <- topicMessageStreams.values)
       for (stream <- streamList)
         threadList ::= new ZKConsumerThread(config, stream)
 
@@ -63,7 +61,7 @@ object ReplayLogProducer extends Logging {
   }
 
   class Config(args: Array[String]) {
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the form host:port. " +
       "Multiple URLS can be given to allow fail-over.")
       .withRequiredArg
@@ -117,8 +115,7 @@ object ReplayLogProducer extends Logging {
     val outputTopic = options.valueOf(outputTopicOpt)
     val reportingInterval = options.valueOf(reportingIntervalOpt).intValue
     val isSync = options.has(syncOpt)
-    import scala.collection.JavaConversions._
-    val producerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(propertyOpt))
+    val producerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(propertyOpt).asScala)
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")

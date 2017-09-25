@@ -84,9 +84,15 @@ class RatTask extends DefaultTask {
     if (!reportDir.exists()) {
       reportDir.mkdirs()
     }
-    generateXmlReport(reportDir)
-    printUnknownFiles()
-    generateHtmlReport()
+    def origEncoding = System.getProperty("file.encoding")
+    try {
+      System.setProperty("file.encoding", "UTF-8") //affects the output of the ant rat task
+      generateXmlReport(reportDir)
+      printUnknownFiles()
+      generateHtmlReport()
+    } finally {
+      System.setProperty("file.encoding", origEncoding)
+    }
   }
 }
 
@@ -109,7 +115,7 @@ class RatPlugin implements Plugin<Project> {
       mavenCentral()
     }
     project.dependencies {
-      rat 'org.apache.rat:apache-rat-tasks:0.11'
+      rat 'org.apache.rat:apache-rat-tasks:0.12'
     }
   }
 }

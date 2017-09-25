@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -18,9 +18,19 @@ package org.apache.kafka.common.protocol;
 
 import org.junit.Test;
 
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
 public class ProtoUtilsTest {
-    @Test(expected = IllegalArgumentException.class)
-    public void schemaVersionOutOfRange() {
-        ProtoUtils.requestSchema(ApiKeys.PRODUCE.id, Protocol.REQUESTS[ApiKeys.PRODUCE.id].length);
+    @Test
+    public void testDelayedAllocationSchemaDetection() throws Exception {
+        //verifies that schemas known to retain a reference to the underlying byte buffer are correctly detected.
+        for (ApiKeys key : ApiKeys.values()) {
+            if (key == ApiKeys.PRODUCE || key == ApiKeys.JOIN_GROUP || key == ApiKeys.SYNC_GROUP || key == ApiKeys.SASL_AUTHENTICATE) {
+                assertTrue(key + " should require delayed allocation", key.requiresDelayedAllocation);
+            } else {
+                assertFalse(key + " should not require delayed allocation", key.requiresDelayedAllocation);
+            }
+        }
     }
 }

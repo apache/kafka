@@ -22,19 +22,22 @@ import kafka.cluster.BrokerEndPoint
 
 class GroupCoordinatorResponse(private val underlying: kafka.api.GroupCoordinatorResponse) {
 
-  def errorCode = underlying.errorCode
+  def error = underlying.error
+
+  def errorCode = error.code
 
   def coordinator: BrokerEndPoint = {
     import kafka.javaapi.Implicits._
     underlying.coordinatorOpt
   }
 
-  override def equals(other: Any) = canEqual(other) && {
-    val otherConsumerMetadataResponse = other.asInstanceOf[kafka.javaapi.GroupCoordinatorResponse]
-    this.underlying.equals(otherConsumerMetadataResponse.underlying)
+  override def equals(obj: Any): Boolean = {
+    obj match {
+      case null => false
+      case other: GroupCoordinatorResponse => this.underlying.equals(other.underlying)
+      case _ => false
+    }
   }
-
-  def canEqual(other: Any) = other.isInstanceOf[kafka.javaapi.GroupCoordinatorResponse]
 
   override def hashCode = underlying.hashCode
 

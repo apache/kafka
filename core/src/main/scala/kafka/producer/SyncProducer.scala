@@ -58,7 +58,7 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
      */
     if (logger.isDebugEnabled) {
       val buffer = new RequestOrResponseSend("", request).buffer
-      trace("verifying sendbuffer of size " + buffer.limit)
+      trace("verifying sendbuffer of size " + buffer.limit())
       val requestTypeId = buffer.getShort()
       if(requestTypeId == ApiKeys.PRODUCE.id) {
         val request = ProducerRequest.readFrom(buffer)
@@ -107,7 +107,7 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
     val aggregateTimer = producerRequestStats.getProducerRequestAllBrokersStats.requestTimer
     aggregateTimer.time {
       specificTimer.time {
-        response = doSend(producerRequest, if(producerRequest.requiredAcks == 0) false else true)
+        response = doSend(producerRequest, producerRequest.requiredAcks != 0)
       }
     }
     if(producerRequest.requiredAcks != 0) {

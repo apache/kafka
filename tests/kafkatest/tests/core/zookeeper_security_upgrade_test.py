@@ -13,7 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.mark import matrix
+from ducktape.mark import matrix, ignore
+from ducktape.mark.resource import cluster
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
@@ -52,7 +53,7 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
 
         self.consumer = ConsoleConsumer(
             self.test_context, self.num_consumers, self.kafka, self.topic,
-            consumer_timeout_ms=60000, message_validator=is_int, new_consumer=True)
+            consumer_timeout_ms=60000, message_validator=is_int)
 
         self.consumer.group_id = self.group
 
@@ -92,7 +93,8 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
             self.kafka.stop_node(node)
             self.kafka.start_node(node)
 
-    @matrix(security_protocol=["PLAINTEXT","SSL","SASL_SSL","SASL_PLAINTEXT"])
+    @cluster(num_nodes=9)
+    @matrix(security_protocol=["PLAINTEXT", "SSL", "SASL_SSL", "SASL_PLAINTEXT"])
     def test_zk_security_upgrade(self, security_protocol):
         self.zk.start()
         self.kafka.security_protocol = security_protocol
@@ -101,9 +103,9 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
         # set acls
         if self.is_secure:
             self.kafka.authorizer_class_name = KafkaService.SIMPLE_AUTHORIZER
-            self.acls.set_acls(security_protocol, self.kafka, self.zk, self.topic, self.group)
+            self.acls.set_acls(security_protocol, self.kafka, self.topic, self.group)
 
-        if(self.no_sasl):
+        if self.no_sasl:
             self.kafka.start()
         else:
             self.kafka.start(self.zk.zk_principals)

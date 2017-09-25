@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -28,8 +28,10 @@ public class HeartbeatTest {
 
     private long timeout = 300L;
     private long interval = 100L;
+    private long maxPollInterval = 900L;
+    private long retryBackoff = 10L;
     private MockTime time = new MockTime();
-    private Heartbeat heartbeat = new Heartbeat(timeout, interval, -1L);
+    private Heartbeat heartbeat = new Heartbeat(timeout, interval, maxPollInterval, retryBackoff);
 
     @Test
     public void testShouldHeartbeat() {
@@ -64,7 +66,7 @@ public class HeartbeatTest {
     public void testResetSession() {
         heartbeat.sentHeartbeat(time.milliseconds());
         time.sleep(305);
-        heartbeat.resetSessionTimeout(time.milliseconds());
+        heartbeat.resetTimeouts(time.milliseconds());
         assertFalse(heartbeat.sessionTimeoutExpired(time.milliseconds()));
     }
 }

@@ -20,6 +20,13 @@ then
   exit 1
 fi
 
+# CYGINW == 1 if Cygwin is detected, else 0.
+if [[ $(uname -a) =~ "CYGWIN" ]]; then
+  CYGWIN=1
+else
+  CYGWIN=0
+fi
+
 if [ -z "$INCLUDE_TEST_JARS" ]; then
   INCLUDE_TEST_JARS=false
 fi
@@ -41,11 +48,11 @@ should_include_file() {
 base_dir=$(dirname $0)/..
 
 if [ -z "$SCALA_VERSION" ]; then
-	SCALA_VERSION=2.10.6
+  SCALA_VERSION=2.11.11
 fi
 
 if [ -z "$SCALA_BINARY_VERSION" ]; then
-	SCALA_BINARY_VERSION=2.10
+  SCALA_BINARY_VERSION=$(echo $SCALA_VERSION | cut -f 1-2 -d '.')
 fi
 
 # run ./gradlew copyDependantLibs to get all dependant jars in a local dir
@@ -104,7 +111,7 @@ do
   CLASSPATH="$CLASSPATH:$dir/*"
 done
 
-for cc_pkg in "api" "runtime" "file" "json" "tools"
+for cc_pkg in "api" "transforms" "runtime" "file" "json" "tools"
 do
   for file in "$base_dir"/connect/${cc_pkg}/build/libs/connect-${cc_pkg}*.jar;
   do
@@ -133,6 +140,11 @@ do
 done
 shopt -u nullglob
 
+if [ -z "$CLASSPATH" ] ; then
+  echo "Classpath is empty. Please build the project first e.g. by running './gradlew jar -Pscala_version=$SCALA_VERSION'"
+  exit 1
+fi
+
 # JMX settings
 if [ -z "$KAFKA_JMX_OPTS" ]; then
   KAFKA_JMX_OPTS="-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false  -Dcom.sun.management.jmxremote.ssl=false "
@@ -145,13 +157,16 @@ fi
 
 # Log directory to use
 if [ "x$LOG_DIR" = "x" ]; then
-    LOG_DIR="$base_dir/logs"
+  LOG_DIR="$base_dir/logs"
 fi
 
 # Log4j settings
 if [ -z "$KAFKA_LOG4J_OPTS" ]; then
   # Log to console. This is a tool.
-  KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/config/tools-log4j.properties"
+  LOG4J_DIR="$base_dir/config/tools-log4j.properties"
+  # If Cygwin is detected, LOG4J_DIR is converted to Windows format.
+  (( CYGWIN )) && LOG4J_DIR=$(cygpath --path --mixed "${LOG4J_DIR}")
+  KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:${LOG4J_DIR}"
 else
   # create logs directory
   if [ ! -d "$LOG_DIR" ]; then
@@ -159,6 +174,8 @@ else
   fi
 fi
 
+# If Cygwin is detected, LOG_DIR is converted to Windows format.
+(( CYGWIN )) && LOG_DIR=$(cygpath --path --mixed "${LOG_DIR}")
 KAFKA_LOG4J_OPTS="-Dkafka.logs.dir=$LOG_DIR $KAFKA_LOG4J_OPTS"
 
 # Generic jvm settings you want to add
@@ -200,7 +217,7 @@ fi
 
 # JVM performance options
 if [ -z "$KAFKA_JVM_PERFORMANCE_OPTS" ]; then
-  KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+DisableExplicitGC -Djava.awt.headless=true"
+  KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -Djava.awt.headless=true"
 fi
 
 
@@ -233,8 +250,18 @@ GC_FILE_SUFFIX='-gc.log'
 GC_LOG_FILE_NAME=''
 if [ "x$GC_LOG_ENABLED" = "xtrue" ]; then
   GC_LOG_FILE_NAME=$DAEMON_NAME$GC_FILE_SUFFIX
-  KAFKA_GC_LOG_OPTS="-Xloggc:$LOG_DIR/$GC_LOG_FILE_NAME -verbose:gc -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps "
+  # the first segment of the version number, which is '1' for releases before Java 9
+  # it then becomes '9', '10', ...
+  JAVA_MAJOR_VERSION=$($JAVA -version 2>&1 | sed -E -n 's/.* version "([^.-]*).*"/\1/p')
+  if [[ "$JAVA_MAJOR_VERSION" -ge "9" ]] ; then
+    KAFKA_GC_LOG_OPTS="-Xlog:gc*:file=$LOG_DIR/$GC_LOG_FILE_NAME:time,tags:filecount=10,filesize=102400"
+  else
+    KAFKA_GC_LOG_OPTS="-Xloggc:$LOG_DIR/$GC_LOG_FILE_NAME -verbose:gc -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=10 -XX:GCLogFileSize=100M"
+  fi
 fi
+
+# If Cygwin is detected, classpath is converted to Windows format.
+(( CYGWIN )) && CLASSPATH=$(cygpath --path --mixed "${CLASSPATH}")
 
 # Launch mode
 if [ "x$DAEMON_MODE" = "xtrue" ]; then

@@ -23,12 +23,12 @@ import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse
 import org.junit.Assert._
 import org.junit.Test
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 object ApiVersionsRequestTest {
   def validateApiVersionsResponse(apiVersionsResponse: ApiVersionsResponse) {
     assertEquals("API keys in ApiVersionsResponse must match API keys supported by broker.", ApiKeys.values.length, apiVersionsResponse.apiVersions.size)
-    for (expectedApiVersion: ApiVersion <- ApiVersionsResponse.apiVersionsResponse.apiVersions) {
+    for (expectedApiVersion: ApiVersion <- ApiVersionsResponse.defaultApiVersionsResponse().apiVersions.asScala) {
       val actualApiVersion = apiVersionsResponse.apiVersion(expectedApiVersion.apiKey)
       assertNotNull(s"API key ${actualApiVersion.apiKey} is supported by broker, but not received in ApiVersionsResponse.", actualApiVersion)
       assertEquals("API key must be supported by the broker.", expectedApiVersion.apiKey, actualApiVersion.apiKey)
@@ -44,18 +44,19 @@ class ApiVersionsRequestTest extends BaseRequestTest {
 
   @Test
   def testApiVersionsRequest() {
-    val apiVersionsResponse = sendApiVersionsRequest(new ApiVersionsRequest, 0)
+    val apiVersionsResponse = sendApiVersionsRequest(new ApiVersionsRequest.Builder().build())
     ApiVersionsRequestTest.validateApiVersionsResponse(apiVersionsResponse)
   }
 
   @Test
   def testApiVersionsRequestWithUnsupportedVersion() {
-    val apiVersionsResponse = sendApiVersionsRequest(new ApiVersionsRequest, Short.MaxValue)
-    assertEquals(Errors.UNSUPPORTED_VERSION.code(), apiVersionsResponse.errorCode)
+    val apiVersionsRequest = new ApiVersionsRequest(0)
+    val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, Some(Short.MaxValue), 0)
+    assertEquals(Errors.UNSUPPORTED_VERSION, apiVersionsResponse.error)
   }
 
-  private def sendApiVersionsRequest(request: ApiVersionsRequest, version: Short): ApiVersionsResponse = {
-    val response = send(request, ApiKeys.API_VERSIONS, Some(version))
-    ApiVersionsResponse.parse(response)
+  private def sendApiVersionsRequest(request: ApiVersionsRequest, apiVersion: Option[Short] = None, responseVersion: Short = 1): ApiVersionsResponse = {
+    val response = connectAndSend(request, ApiKeys.API_VERSIONS, apiVersion = apiVersion)
+    ApiVersionsResponse.parse(response, responseVersion)
   }
 }

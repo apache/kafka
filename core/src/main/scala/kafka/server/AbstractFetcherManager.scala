@@ -23,14 +23,14 @@ import scala.collection.Map
 import kafka.utils.Logging
 import kafka.cluster.BrokerEndPoint
 import kafka.metrics.KafkaMetricsGroup
-import kafka.common.TopicAndPartition
 import com.yammer.metrics.core.Gauge
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 
 abstract class AbstractFetcherManager(protected val name: String, clientId: String, numFetchers: Int = 1)
   extends Logging with KafkaMetricsGroup {
   // map of (source broker_id, fetcher_id per source broker) => fetcher
-  private val fetcherThreadMap = new mutable.HashMap[BrokerAndFetcherId, AbstractFetcherThread]
+  private val fetcherThreadMap = new mutable.HashMap[BrokerIdAndFetcherId, AbstractFetcherThread]
   private val mapLock = new Object
   this.logIdent = "[" + name + "] "
 
@@ -71,42 +71,50 @@ abstract class AbstractFetcherManager(protected val name: String, clientId: Stri
   // to be defined in subclass to create a specific fetcher
   def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread
 
-  def addFetcherForPartitions(partitionAndOffsets: Map[TopicAndPartition, BrokerAndInitialOffset]) {
+  def addFetcherForPartitions(partitionAndOffsets: Map[TopicPartition, BrokerAndInitialOffset]) {
     mapLock synchronized {
-      val partitionsPerFetcher = partitionAndOffsets.groupBy{ case(topicAndPartition, brokerAndInitialOffset) =>
-        BrokerAndFetcherId(brokerAndInitialOffset.broker, getFetcherId(topicAndPartition.topic, topicAndPartition.partition))}
+      val partitionsPerFetcher = partitionAndOffsets.groupBy { case(topicPartition, brokerAndInitialOffset) =>
+        BrokerAndFetcherId(brokerAndInitialOffset.broker, getFetcherId(topicPartition.topic, topicPartition.partition))}
+
+      def addAndStartFetcherThread(brokerAndFetcherId: BrokerAndFetcherId, brokerIdAndFetcherId: BrokerIdAndFetcherId) {
+        val fetcherThread = createFetcherThread(brokerAndFetcherId.fetcherId, brokerAndFetcherId.broker)
+        fetcherThreadMap.put(brokerIdAndFetcherId, fetcherThread)
+        fetcherThread.start
+      }
+
       for ((brokerAndFetcherId, partitionAndOffsets) <- partitionsPerFetcher) {
-        var fetcherThread: AbstractFetcherThread = null
-        fetcherThreadMap.get(brokerAndFetcherId) match {
-          case Some(f) => fetcherThread = f
+        val brokerIdAndFetcherId = BrokerIdAndFetcherId(brokerAndFetcherId.broker.id, brokerAndFetcherId.fetcherId)
+        fetcherThreadMap.get(brokerIdAndFetcherId) match {
+          case Some(f) if f.sourceBroker.host == brokerAndFetcherId.broker.host && f.sourceBroker.port == brokerAndFetcherId.broker.port =>
+            // reuse the fetcher thread
+          case Some(f) =>
+            f.shutdown()
+            addAndStartFetcherThread(brokerAndFetcherId, brokerIdAndFetcherId)
           case None =>
-            fetcherThread = createFetcherThread(brokerAndFetcherId.fetcherId, brokerAndFetcherId.broker)
-            fetcherThreadMap.put(brokerAndFetcherId, fetcherThread)
-            fetcherThread.start
+            addAndStartFetcherThread(brokerAndFetcherId, brokerIdAndFetcherId)
         }
 
-        fetcherThreadMap(brokerAndFetcherId).addPartitions(partitionAndOffsets.map { case (topicAndPartition, brokerAndInitOffset) =>
-          topicAndPartition -> brokerAndInitOffset.initOffset
+        fetcherThreadMap(brokerIdAndFetcherId).addPartitions(partitionAndOffsets.map { case (tp, brokerAndInitOffset) =>
+          tp -> brokerAndInitOffset.initOffset
         })
       }
     }
 
-    info("Added fetcher for partitions %s".format(partitionAndOffsets.map{ case (topicAndPartition, brokerAndInitialOffset) =>
-      "[" + topicAndPartition + ", initOffset " + brokerAndInitialOffset.initOffset + " to broker " + brokerAndInitialOffset.broker + "] "}))
+    info("Added fetcher for partitions %s".format(partitionAndOffsets.map { case (topicPartition, brokerAndInitialOffset) =>
+      "[" + topicPartition + ", initOffset " + brokerAndInitialOffset.initOffset + " to broker " + brokerAndInitialOffset.broker + "] "}))
   }
 
-  def removeFetcherForPartitions(partitions: Set[TopicAndPartition]) {
+  def removeFetcherForPartitions(partitions: Set[TopicPartition]) {
     mapLock synchronized {
-      for ((key, fetcher) <- fetcherThreadMap) {
+      for (fetcher <- fetcherThreadMap.values)
         fetcher.removePartitions(partitions)
-      }
     }
     info("Removed fetcher for partitions %s".format(partitions.mkString(",")))
   }
 
   def shutdownIdleFetcherThreads() {
     mapLock synchronized {
-      val keysToBeRemoved = new mutable.HashSet[BrokerAndFetcherId]
+      val keysToBeRemoved = new mutable.HashSet[BrokerIdAndFetcherId]
       for ((key, fetcher) <- fetcherThreadMap) {
         if (fetcher.partitionCount <= 0) {
           fetcher.shutdown()
@@ -120,6 +128,10 @@ abstract class AbstractFetcherManager(protected val name: String, clientId: Stri
   def closeAllFetchers() {
     mapLock synchronized {
       for ( (_, fetcher) <- fetcherThreadMap) {
+        fetcher.initiateShutdown()
+      }
+
+      for ( (_, fetcher) <- fetcherThreadMap) {
         fetcher.shutdown()
       }
       fetcherThreadMap.clear()
@@ -130,3 +142,5 @@ abstract class AbstractFetcherManager(protected val name: String, clientId: Stri
 case class BrokerAndFetcherId(broker: BrokerEndPoint, fetcherId: Int)
 
 case class BrokerAndInitialOffset(broker: BrokerEndPoint, initOffset: Long)
+
+case class BrokerIdAndFetcherId(brokerId: Int, fetcherId: Int)

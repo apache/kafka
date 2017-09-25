@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.tools;
 
 
@@ -42,10 +41,11 @@ public class ThroughputThrottler {
     private static final long NS_PER_SEC = 1000 * NS_PER_MS;
     private static final long MIN_SLEEP_NS = 2 * NS_PER_MS;
 
-    long sleepTimeNs;
-    long sleepDeficitNs = 0;
-    long targetThroughput = -1;
-    long startMs;
+    private final long startMs;
+    private final long sleepTimeNs;
+    private final long targetThroughput;
+
+    private long sleepDeficitNs = 0;
     private boolean wakeup = false;
 
     /**
@@ -102,16 +102,14 @@ public class ThroughputThrottler {
         // If enough sleep deficit has accumulated, sleep a little
         if (sleepDeficitNs >= MIN_SLEEP_NS) {
             long sleepStartNs = System.nanoTime();
-            long currentTimeNs = sleepStartNs;
             try {
                 synchronized (this) {
-                    long elapsed = currentTimeNs - sleepStartNs;
-                    long remaining = sleepDeficitNs - elapsed;
+                    long remaining = sleepDeficitNs;
                     while (!wakeup && remaining > 0) {
                         long sleepMs = remaining / 1000000;
                         long sleepNs = remaining - sleepMs * 1000000;
                         this.wait(sleepMs, (int) sleepNs);
-                        elapsed = System.nanoTime() - sleepStartNs;
+                        long elapsed = System.nanoTime() - sleepStartNs;
                         remaining = sleepDeficitNs - elapsed;
                     }
                     wakeup = false;

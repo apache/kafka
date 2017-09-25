@@ -1,0 +1,158 @@
+<!--
+ Licensed to the Apache Software Foundation (ASF) under one or more
+ contributor license agreements.  See the NOTICE file distributed with
+ this work for additional information regarding copyright ownership.
+ The ASF licenses this file to You under the Apache License, Version 2.0
+ (the "License"); you may not use this file except in compliance with
+ the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<script><!--#include virtual="js/templateData.js" --></script>
+
+<script id="toc-template" type="text/x-handlebars-template">
+
+    <ul class="toc">
+        <li><a href="#gettingStarted">1. Getting Started</a>
+            <ul>
+                <li><a href="#introduction">1.1 Introduction</a>
+                <li><a href="#uses">1.2 Use Cases</a>
+                <li><a href="#quickstart">1.3 Quick Start</a>
+                <li><a href="#ecosystem">1.4 Ecosystem</a>
+                <li><a href="#upgrade">1.5 Upgrading</a>
+            </ul>
+        </li>
+        <li><a href="#api">2. APIs</a>
+            <ul>
+                <li><a href="#producerapi">2.1 Producer API</a>
+                <li><a href="#consumerapi">2.2 Consumer API</a>
+                <li><a href="/{{version}}/documentation/streams">2.3 Streams API</a>
+                <li><a href="#connectapi">2.4 Connect API</a>
+                <li><a href="#adminapi">2.5 AdminClient API</a>
+                <li><a href="#legacyapis">2.6 Legacy APIs</a>
+            </ul>
+        </li>
+        <li><a href="#configuration">3. Configuration</a>
+            <ul>
+                <li><a href="#brokerconfigs">3.1 Broker Configs</a>
+                <li><a href="#topicconfigs">3.2 Topic Configs</a>
+                <li><a href="#producerconfigs">3.3 Producer Configs</a>
+                <li><a href="#consumerconfigs">3.4 Consumer Configs</a>
+                    <ul>
+                        <li><a href="#newconsumerconfigs">3.4.1 New Consumer Configs</a>
+                        <li><a href="#oldconsumerconfigs">3.4.2 Old Consumer Configs</a>
+                    </ul>
+                <li><a href="#connectconfigs">3.5 Kafka Connect Configs</a>
+                <li><a href="#streamsconfigs">3.6 Kafka Streams Configs</a>
+                <li><a href="#adminclientconfigs">3.7 AdminClient Configs</a>
+            </ul>
+        </li>
+        <li><a href="#design">4. Design</a>
+            <ul>
+                <li><a href="#majordesignelements">4.1 Motivation</a>
+                <li><a href="#persistence">4.2 Persistence</a>
+                <li><a href="#maximizingefficiency">4.3 Efficiency</a>
+                <li><a href="#theproducer">4.4 The Producer</a>
+                <li><a href="#theconsumer">4.5 The Consumer</a>
+                <li><a href="#semantics">4.6 Message Delivery Semantics</a>
+                <li><a href="#replication">4.7 Replication</a>
+                <li><a href="#compaction">4.8 Log Compaction</a>
+                <li><a href="#design_quotas">4.9 Quotas</a>
+            </ul>
+        </li>
+        <li><a href="#implementation">5. Implementation</a>
+            <ul>
+                <li><a href="#networklayer">5.1 Network Layer</a>
+                <li><a href="#messages">5.2 Messages</a>
+                <li><a href="#messageformat">5.3 Message format</a>
+                <li><a href="#log">5.4 Log</a>
+                <li><a href="#distributionimpl">5.5 Distribution</a>
+            </ul>
+        </li>
+        <li><a href="#operations">6. Operations</a>
+            <ul>
+                <li><a href="#basic_ops">6.1 Basic Kafka Operations</a>
+                    <ul>
+                        <li><a href="#basic_ops_add_topic">Adding and removing topics</a>
+                        <li><a href="#basic_ops_modify_topic">Modifying topics</a>
+                        <li><a href="#basic_ops_restarting">Graceful shutdown</a>
+                        <li><a href="#basic_ops_leader_balancing">Balancing leadership</a>
+                        <li><a href="#basic_ops_consumer_lag">Checking consumer position</a>
+                        <li><a href="#basic_ops_mirror_maker">Mirroring data between clusters</a>
+                        <li><a href="#basic_ops_cluster_expansion">Expanding your cluster</a>
+                        <li><a href="#basic_ops_decommissioning_brokers">Decommissioning brokers</a>
+                        <li><a href="#basic_ops_increase_replication_factor">Increasing replication factor</a>
+                    </ul>
+                <li><a href="#datacenters">6.2 Datacenters</a>
+                <li><a href="#config">6.3 Important Configs</a>
+                    <ul>
+                        <li><a href="#clientconfig">Important Client Configs</a>
+                        <li><a href="#prodconfig">A Production Server Configs</a>
+                    </ul>
+                <li><a href="#java">6.4 Java Version</a>
+                <li><a href="#hwandos">6.5 Hardware and OS</a>
+                    <ul>
+                        <li><a href="#os">OS</a>
+                        <li><a href="#diskandfs">Disks and Filesystems</a>
+                        <li><a href="#appvsosflush">Application vs OS Flush Management</a>
+                        <li><a href="#linuxflush">Linux Flush Behavior</a>
+                        <li><a href="#ext4">Ext4 Notes</a>
+                    </ul>
+                <li><a href="#monitoring">6.6 Monitoring</a>
+                <li><a href="#zk">6.7 ZooKeeper</a>
+                    <ul>
+                        <li><a href="#zkversion">Stable Version</a>
+                        <li><a href="#zkops">Operationalization</a>
+                    </ul>
+            </ul>
+        </li>
+        <li><a href="#security">7. Security</a>
+            <ul>
+                <li><a href="#security_overview">7.1 Security Overview</a></li>
+                <li><a href="#security_ssl">7.2 Encryption and Authentication using SSL</a></li>
+                <li><a href="#security_sasl">7.3 Authentication using SASL</a></li>
+                <li><a href="#security_authz">7.4 Authorization and ACLs</a></li>
+                <li><a href="#security_rolling_upgrade">7.5 Incorporating Security Features in a Running Cluster</a></li>
+                <li><a href="#zk_authz">7.6 ZooKeeper Authentication</a></li>
+                <ul>
+                    <li><a href="#zk_authz_new">New Clusters</a></li>
+                    <li><a href="#zk_authz_migration">Migrating Clusters</a></li>
+                    <li><a href="#zk_authz_ensemble">Migrating the ZooKeeper Ensemble</a></li>
+                </ul>
+            </ul>
+        </li>
+        <li><a href="#connect">8. Kafka Connect</a>
+            <ul>
+                <li><a href="#connect_overview">8.1 Overview</a></li>
+                <li><a href="#connect_user">8.2 User Guide</a></li>
+                <ul>
+                    <li><a href="#connect_running">Running Kafka Connect</a></li>
+                    <li><a href="#connect_configuring">Configuring Connectors</a></li>
+                    <li><a href="#connect_transforms">Transformations</a></li>
+                    <li><a href="#connect_rest">REST API</a></li>
+                </ul>
+                <li><a href="#connect_development">8.3 Connector Development Guide</a></li>
+            </ul>
+        </li>
+        <li><a href="/{{version}}/documentation/streams">9. Kafka Streams</a>
+            <ul>
+                <li><a href="/{{version}}/documentation/streams/quickstart">9.1 Play with a Streams Application</a></li>
+                <li><a href="/{{version}}/documentation/streams/tutorial">9.2 Write your own Streams Applications</a></li>
+                <li><a href="/{{version}}/documentation/streams/developer-guide">9.3 Developer Manual</a></li>
+                <li><a href="/{{version}}/documentation/streams/core-concepts">9.4 Core Concepts</a></li>
+                <li><a href="/{{version}}/documentation/streams/architecture">9.5 Architecture</a></li>
+                <li><a href="/{{version}}/documentation/streams/upgrade-guide">9.6 Upgrade Guide</a></li>
+            </ul>
+        </li>
+    </ul>
+
+</script>
+
+<div class="p-toc"></div>

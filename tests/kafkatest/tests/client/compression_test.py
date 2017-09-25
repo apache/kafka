@@ -15,6 +15,7 @@
 
 from ducktape.mark import parametrize
 from ducktape.utils.util import wait_until
+from ducktape.mark.resource import cluster
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
@@ -22,6 +23,7 @@ from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int_with_prefix
+
 
 class CompressionTest(ProduceConsumeValidateTest):
     """
@@ -51,6 +53,7 @@ class CompressionTest(ProduceConsumeValidateTest):
         # Override this since we're adding services outside of the constructor
         return super(CompressionTest, self).min_cluster_size() + self.num_producers + self.num_consumers
 
+    @cluster(num_nodes=7)
     @parametrize(compression_types=["snappy","gzip","lz4","none"], new_consumer=True)
     @parametrize(compression_types=["snappy","gzip","lz4","none"], new_consumer=False)
     def test_compressed_topic(self, compression_types, new_consumer):

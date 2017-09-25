@@ -20,7 +20,9 @@ package kafka.cluster
 import kafka.common.{BrokerEndPointNotAvailableException, BrokerNotAvailableException, KafkaException}
 import kafka.utils.Json
 import org.apache.kafka.common.Node
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.utils.Time
 
 /**
  * A Kafka broker.
@@ -28,6 +30,15 @@ import org.apache.kafka.common.protocol.SecurityProtocol
  * Each end-point is (host, port, protocolType).
  */
 object Broker {
+
+  private val HostKey = "host"
+  private val PortKey = "port"
+  private val VersionKey = "version"
+  private val EndpointsKey = "endpoints"
+  private val RackKey = "rack"
+  private val JmxPortKey = "jmx_port"
+  private val ListenerSecurityProtocolMapKey = "listener_security_protocol_map"
+  private val TimestampKey = "timestamp"
 
   /**
     * Create a broker object from id and JSON string.
@@ -48,20 +59,32 @@ object Broker {
     * {
     *   "version":2,
     *   "host":"localhost",
-    *   "port":9092
+    *   "port":9092,
     *   "jmx_port":9999,
     *   "timestamp":"2233345666",
     *   "endpoints":["PLAINTEXT://host1:9092", "SSL://host1:9093"]
     * }
     *
-    * Version 3 (current) JSON schema for a broker is:
+    * Version 3 JSON schema for a broker is:
     * {
     *   "version":3,
     *   "host":"localhost",
-    *   "port":9092
+    *   "port":9092,
     *   "jmx_port":9999,
     *   "timestamp":"2233345666",
     *   "endpoints":["PLAINTEXT://host1:9092", "SSL://host1:9093"],
+    *   "rack":"dc1"
+    * }
+    *
+    * Version 4 (current) JSON schema for a broker is:
+    * {
+    *   "version":4,
+    *   "host":"localhost",
+    *   "port":9092,
+    *   "jmx_port":9999,
+    *   "timestamp":"2233345666",
+    *   "endpoints":["CLIENT://host1:9092", "REPLICATION://host1:9093"],
+    *   "listener_security_protocol_map":{"CLIENT":"SSL", "REPLICATION":"PLAINTEXT"},
     *   "rack":"dc1"
     * }
     */
@@ -70,26 +93,31 @@ object Broker {
       throw new BrokerNotAvailableException(s"Broker id $id does not exist")
     try {
       Json.parseFull(brokerInfoString) match {
-        case Some(m) =>
-          val brokerInfo = m.asInstanceOf[Map[String, Any]]
-          val version = brokerInfo("version").asInstanceOf[Int]
+        case Some(js) =>
+          val brokerInfo = js.asJsonObject
+          val version = brokerInfo(VersionKey).to[Int]
+
           val endpoints =
             if (version < 1)
               throw new KafkaException(s"Unsupported version of broker registration: $brokerInfoString")
             else if (version == 1) {
-              val host = brokerInfo("host").asInstanceOf[String]
-              val port = brokerInfo("port").asInstanceOf[Int]
-              Map(SecurityProtocol.PLAINTEXT -> new EndPoint(host, port, SecurityProtocol.PLAINTEXT))
+              val host = brokerInfo(HostKey).to[String]
+              val port = brokerInfo(PortKey).to[Int]
+              val securityProtocol = SecurityProtocol.PLAINTEXT
+              val endPoint = new EndPoint(host, port, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)
+              Seq(endPoint)
             }
             else {
-              val listeners = brokerInfo("endpoints").asInstanceOf[List[String]]
-              listeners.map { listener =>
-                val ep = EndPoint.createEndPoint(listener)
-                (ep.protocolType, ep)
-              }.toMap
+              val securityProtocolMap = brokerInfo.get(ListenerSecurityProtocolMapKey).map(
+                _.to[Map[String, String]].map { case (listenerName, securityProtocol) =>
+                  new ListenerName(listenerName) -> SecurityProtocol.forName(securityProtocol)
+                })
+              val listeners = brokerInfo(EndpointsKey).to[Seq[String]]
+              listeners.map(EndPoint.createEndPoint(_, securityProtocolMap))
             }
-          val rack = brokerInfo.get("rack").filter(_ != null).map(_.asInstanceOf[String])
-          new Broker(id, endpoints, rack)
+
+          val rack = brokerInfo.get(RackKey).flatMap(_.to[Option[String]])
+          Broker(id, endpoints, rack)
         case None =>
           throw new BrokerNotAvailableException(s"Broker id $id does not exist")
       }
@@ -98,34 +126,57 @@ object Broker {
         throw new KafkaException(s"Failed to parse the broker info from zookeeper: $brokerInfoString", t)
     }
   }
+
+  def toJson(version: Int, id: Int, host: String, port: Int, advertisedEndpoints: Seq[EndPoint], jmxPort: Int,
+             rack: Option[String]): String = {
+    val jsonMap = collection.mutable.Map(VersionKey -> version,
+      HostKey -> host,
+      PortKey -> port,
+      EndpointsKey -> advertisedEndpoints.map(_.connectionString).toArray,
+      JmxPortKey -> jmxPort,
+      TimestampKey -> Time.SYSTEM.milliseconds().toString
+    )
+    rack.foreach(rack => if (version >= 3) jsonMap += (RackKey -> rack))
+
+    if (version >= 4) {
+      jsonMap += (ListenerSecurityProtocolMapKey -> advertisedEndpoints.map { endPoint =>
+        endPoint.listenerName.value -> endPoint.securityProtocol.name
+      }.toMap)
+    }
+
+    Json.encode(jsonMap)
+  }
 }
 
-case class Broker(id: Int, endPoints: collection.Map[SecurityProtocol, EndPoint], rack: Option[String]) {
+case class Broker(id: Int, endPoints: Seq[EndPoint], rack: Option[String]) {
+
+  private val endPointsMap = endPoints.map { endPoint =>
+    endPoint.listenerName -> endPoint
+  }.toMap
+
+  if (endPointsMap.size != endPoints.size)
+    throw new IllegalArgumentException(s"There is more than one end point with the same listener name: ${endPoints.mkString(",")}")
 
   override def toString: String =
-    s"$id : ${endPoints.values.mkString("(",",",")")} : ${rack.orNull}"
+    s"$id : ${endPointsMap.values.mkString("(",",",")")} : ${rack.orNull}"
 
-  def this(id: Int, endPoints: Map[SecurityProtocol, EndPoint]) = {
-    this(id, endPoints, None)
+  def this(id: Int, host: String, port: Int, listenerName: ListenerName, protocol: SecurityProtocol) = {
+    this(id, Seq(EndPoint(host, port, listenerName, protocol)), None)
   }
 
-  def this(id: Int, host: String, port: Int, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT) = {
-    this(id, Map(protocol -> EndPoint(host, port, protocol)), None)
+  def this(bep: BrokerEndPoint, listenerName: ListenerName, protocol: SecurityProtocol) = {
+    this(bep.id, bep.host, bep.port, listenerName, protocol)
   }
 
-  def this(bep: BrokerEndPoint, protocol: SecurityProtocol) = {
-    this(bep.id, bep.host, bep.port, protocol)
-  }
-
-  def getNode(protocolType: SecurityProtocol): Node = {
-    val endpoint = endPoints.getOrElse(protocolType,
-      throw new BrokerEndPointNotAvailableException(s"End point with security protocol $protocolType not found for broker $id"))
+  def getNode(listenerName: ListenerName): Node = {
+    val endpoint = endPointsMap.getOrElse(listenerName,
+      throw new BrokerEndPointNotAvailableException(s"End point with listener name ${listenerName.value} not found for broker $id"))
     new Node(id, endpoint.host, endpoint.port, rack.orNull)
   }
 
-  def getBrokerEndPoint(protocolType: SecurityProtocol): BrokerEndPoint = {
-    val endpoint = endPoints.getOrElse(protocolType,
-      throw new BrokerEndPointNotAvailableException(s"End point with security protocol $protocolType not found for broker $id"))
+  def getBrokerEndPoint(listenerName: ListenerName): BrokerEndPoint = {
+    val endpoint = endPointsMap.getOrElse(listenerName,
+      throw new BrokerEndPointNotAvailableException(s"End point with listener name ${listenerName.value} not found for broker $id"))
     new BrokerEndPoint(id, endpoint.host, endpoint.port)
   }
 

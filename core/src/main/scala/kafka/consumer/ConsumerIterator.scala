@@ -17,7 +17,7 @@
 
 package kafka.consumer
 
-import kafka.utils.{IteratorTemplate, Logging, CoreUtils}
+import kafka.utils.{IteratorTemplate, Logging}
 import java.util.concurrent.{TimeUnit, BlockingQueue}
 import kafka.serializer.Decoder
 import java.util.concurrent.atomic.AtomicReference
@@ -30,6 +30,7 @@ import kafka.common.{KafkaException, MessageSizeTooLargeException}
  * The iterator takes a shutdownCommand object which can be added to the queue to trigger a shutdown
  *
  */
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 class ConsumerIterator[K, V](private val channel: BlockingQueue[FetchedDataChunk],
                              consumerTimeoutMs: Int,
                              private val keyDecoder: Decoder[K],
@@ -116,5 +117,7 @@ class ConsumerIterator[K, V](private val channel: BlockingQueue[FetchedDataChunk
   }
 }
 
+@deprecated("This class has been deprecated and will be removed in a future release. " +
+            "Please use org.apache.kafka.common.errors.TimeoutException instead.", "0.11.0.0")
 class ConsumerTimeoutException() extends RuntimeException()
 

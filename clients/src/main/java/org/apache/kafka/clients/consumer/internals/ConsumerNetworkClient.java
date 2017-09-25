@@ -1,14 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.clients.consumer.internals;
 
@@ -18,75 +22,68 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.RequestHeader;
-import org.apache.kafka.common.requests.RequestSend;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Higher level consumer access to the network layer with basic support for futures and
- * task scheduling. This class is not thread-safe, except for wakeup().
+ * Higher level consumer access to the network layer with basic support for request futures. This class
+ * is thread-safe, but provides no synchronization for response callbacks. This guarantees that no locks
+ * are held when they are invoked.
  */
 public class ConsumerNetworkClient implements Closeable {
-    private static final Logger log = LoggerFactory.getLogger(ConsumerNetworkClient.class);
+    private static final long MAX_POLL_TIMEOUT_MS = 5000L;
 
+    // the mutable state of this class is protected by the object's monitor (excluding the wakeup
+    // flag and the request completion queue below).
+    private final Logger log;
     private final KafkaClient client;
-    private final AtomicBoolean wakeup = new AtomicBoolean(false);
-    private final DelayedTaskQueue delayedTasks = new DelayedTaskQueue();
-    private final Map<Node, List<ClientRequest>> unsent = new HashMap<>();
+    private final UnsentRequests unsent = new UnsentRequests();
     private final Metadata metadata;
     private final Time time;
     private final long retryBackoffMs;
     private final long unsentExpiryMs;
+    private final AtomicBoolean wakeupDisabled = new AtomicBoolean();
 
-    // this count is only accessed from the consumer's main thread
-    private int wakeupDisabledCount = 0;
+    // when requests complete, they are transferred to this queue prior to invocation. The purpose
+    // is to avoid invoking them while holding this object's monitor which can open the door for deadlocks.
+    private final ConcurrentLinkedQueue<RequestFutureCompletionHandler> pendingCompletion = new ConcurrentLinkedQueue<>();
 
+    // this flag allows the client to be safely woken up without waiting on the lock above. It is
+    // atomic to avoid the need to acquire the lock above in order to enable it concurrently.
+    private final AtomicBoolean wakeup = new AtomicBoolean(false);
 
-    public ConsumerNetworkClient(KafkaClient client,
+    public ConsumerNetworkClient(LogContext logContext,
+                                 KafkaClient client,
                                  Metadata metadata,
                                  Time time,
                                  long retryBackoffMs,
                                  long requestTimeoutMs) {
+        this.log = logContext.logger(ConsumerNetworkClient.class);
         this.client = client;
         this.metadata = metadata;
         this.time = time;
         this.retryBackoffMs = retryBackoffMs;
         this.unsentExpiryMs = requestTimeoutMs;
-    }
-
-    /**
-     * Schedule a new task to be executed at the given time. This is "best-effort" scheduling and
-     * should only be used for coarse synchronization.
-     * @param task The task to be scheduled
-     * @param at The time it should run
-     */
-    public void schedule(DelayedTask task, long at) {
-        delayedTasks.add(task, at);
-    }
-
-    /**
-     * Unschedule a task. This will remove all instances of the task from the task queue.
-     * This is a no-op if the task is not scheduled.
-     * @param task The task to be unscheduled.
-     */
-    public void unschedule(DelayedTask task) {
-        delayedTasks.remove(task);
     }
 
     /**
@@ -96,43 +93,53 @@ public class ConsumerNetworkClient implements Closeable {
      * Use the returned future to obtain the result of the send. Note that there is no
      * need to check for disconnects explicitly on the {@link ClientResponse} object;
      * instead, the future will be failed with a {@link DisconnectException}.
+     *
      * @param node The destination of the request
-     * @param api The Kafka API call
-     * @param request The request payload
+     * @param requestBuilder A builder for the request payload
      * @return A future which indicates the result of the send.
      */
-    public RequestFuture<ClientResponse> send(Node node,
-                                              ApiKeys api,
-                                              AbstractRequest request) {
+    public RequestFuture<ClientResponse> send(Node node, AbstractRequest.Builder<?> requestBuilder) {
         long now = time.milliseconds();
-        RequestFutureCompletionHandler future = new RequestFutureCompletionHandler();
-        RequestHeader header = client.nextRequestHeader(api);
-        RequestSend send = new RequestSend(node.idString(), header, request.toStruct());
-        put(node, new ClientRequest(now, true, send, future));
-        return future;
+        RequestFutureCompletionHandler completionHandler = new RequestFutureCompletionHandler();
+        ClientRequest clientRequest = client.newClientRequest(node.idString(), requestBuilder, now, true,
+                completionHandler);
+        unsent.put(node, clientRequest);
+
+        // wakeup the client in case it is blocking in poll so that we can send the queued request
+        client.wakeup();
+        return completionHandler.future;
     }
 
-    private void put(Node node, ClientRequest request) {
-        List<ClientRequest> nodeUnsent = unsent.get(node);
-        if (nodeUnsent == null) {
-            nodeUnsent = new ArrayList<>();
-            unsent.put(node, nodeUnsent);
-        }
-        nodeUnsent.add(request);
-    }
-
-    public Node leastLoadedNode() {
+    public synchronized Node leastLoadedNode() {
         return client.leastLoadedNode(time.milliseconds());
+    }
+
+    public synchronized boolean hasReadyNodes() {
+        return client.hasReadyNodes();
     }
 
     /**
      * Block until the metadata has been refreshed.
      */
     public void awaitMetadataUpdate() {
+        awaitMetadataUpdate(Long.MAX_VALUE);
+    }
+
+    /**
+     * Block waiting on the metadata refresh with a timeout.
+     *
+     * @return true if update succeeded, false otherwise.
+     */
+    public boolean awaitMetadataUpdate(long timeout) {
+        long startMs = time.milliseconds();
         int version = this.metadata.requestUpdate();
         do {
-            poll(Long.MAX_VALUE);
-        } while (this.metadata.version() == version);
+            poll(timeout);
+            AuthenticationException ex = this.metadata.getAndClearAuthenticationException();
+            if (ex != null)
+                throw ex;
+        } while (this.metadata.version() == version && time.milliseconds() - startMs < timeout);
+        return this.metadata.version() > version;
     }
 
     /**
@@ -149,6 +156,9 @@ public class ConsumerNetworkClient implements Closeable {
      * on the current poll if one is active, or the next poll.
      */
     public void wakeup() {
+        // wakeup should be safe without holding the client lock since it simply delegates to
+        // Selector's wakeup, which is threadsafe
+        log.debug("Received user wakeup");
         this.wakeup.set(true);
         this.client.wakeup();
     }
@@ -157,10 +167,11 @@ public class ConsumerNetworkClient implements Closeable {
      * Block indefinitely until the given request future has finished.
      * @param future The request future to await.
      * @throws WakeupException if {@link #wakeup()} is called from another thread
+     * @throws InterruptException if the calling thread is interrupted
      */
     public void poll(RequestFuture<?> future) {
         while (!future.isDone())
-            poll(Long.MAX_VALUE);
+            poll(MAX_POLL_TIMEOUT_MS, time.milliseconds(), future);
     }
 
     /**
@@ -169,13 +180,14 @@ public class ConsumerNetworkClient implements Closeable {
      * @param timeout The maximum duration (in ms) to wait for the request
      * @return true if the future is done, false otherwise
      * @throws WakeupException if {@link #wakeup()} is called from another thread
+     * @throws InterruptException if the calling thread is interrupted
      */
     public boolean poll(RequestFuture<?> future, long timeout) {
         long begin = time.milliseconds();
         long remaining = timeout;
         long now = begin;
         do {
-            poll(remaining, now, true);
+            poll(remaining, now, future);
             now = time.milliseconds();
             long elapsed = now - begin;
             remaining = timeout - elapsed;
@@ -187,9 +199,10 @@ public class ConsumerNetworkClient implements Closeable {
      * Poll for any network IO.
      * @param timeout The maximum time to wait for an IO event.
      * @throws WakeupException if {@link #wakeup()} is called from another thread
+     * @throws InterruptException if the calling thread is interrupted
      */
     public void poll(long timeout) {
-        poll(timeout, time.milliseconds(), true);
+        poll(timeout, time.milliseconds(), null);
     }
 
     /**
@@ -197,67 +210,87 @@ public class ConsumerNetworkClient implements Closeable {
      * @param timeout timeout in milliseconds
      * @param now current time in milliseconds
      */
-    public void poll(long timeout, long now) {
-        poll(timeout, now, true);
+    public void poll(long timeout, long now, PollCondition pollCondition) {
+        poll(timeout, now, pollCondition, false);
     }
 
     /**
-     * Poll for network IO and return immediately. This will not trigger wakeups,
-     * nor will it execute any delayed tasks.
+     * Poll for any network IO.
+     * @param timeout timeout in milliseconds
+     * @param now current time in milliseconds
+     * @param disableWakeup If TRUE disable triggering wake-ups
+     */
+    public void poll(long timeout, long now, PollCondition pollCondition, boolean disableWakeup) {
+        // there may be handlers which need to be invoked if we woke up the previous call to poll
+        firePendingCompletedRequests();
+
+        synchronized (this) {
+            // send all the requests we can send now
+            trySend(now);
+
+            // check whether the poll is still needed by the caller. Note that if the expected completion
+            // condition becomes satisfied after the call to shouldBlock() (because of a fired completion
+            // handler), the client will be woken up.
+            if (pollCondition == null || pollCondition.shouldBlock()) {
+                // if there are no requests in flight, do not block longer than the retry backoff
+                if (client.inFlightRequestCount() == 0)
+                    timeout = Math.min(timeout, retryBackoffMs);
+                client.poll(Math.min(MAX_POLL_TIMEOUT_MS, timeout), now);
+                now = time.milliseconds();
+            } else {
+                client.poll(0, now);
+            }
+
+            // handle any disconnects by failing the active requests. note that disconnects must
+            // be checked immediately following poll since any subsequent call to client.ready()
+            // will reset the disconnect status
+            checkDisconnects(now);
+            if (!disableWakeup) {
+                // trigger wakeups after checking for disconnects so that the callbacks will be ready
+                // to be fired on the next call to poll()
+                maybeTriggerWakeup();
+            }
+            // throw InterruptException if this thread is interrupted
+            maybeThrowInterruptException();
+
+            // try again to send requests since buffer space may have been
+            // cleared or a connect finished in the poll
+            trySend(now);
+
+            // fail requests that couldn't be sent if they have expired
+            failExpiredRequests(now);
+
+            // clean unsent requests collection to keep the map from growing indefinitely
+            unsent.clean();
+        }
+
+        // called without the lock to avoid deadlock potential if handlers need to acquire locks
+        firePendingCompletedRequests();
+    }
+
+    /**
+     * Poll for network IO and return immediately. This will not trigger wakeups.
      */
     public void pollNoWakeup() {
-        disableWakeups();
-        try {
-            poll(0, time.milliseconds(), false);
-        } finally {
-            enableWakeups();
-        }
-    }
-
-    private void poll(long timeout, long now, boolean executeDelayedTasks) {
-        // send all the requests we can send now
-        trySend(now);
-
-        // ensure we don't poll any longer than the deadline for
-        // the next scheduled task
-        timeout = Math.min(timeout, delayedTasks.nextTimeout(now));
-        clientPoll(timeout, now);
-        now = time.milliseconds();
-
-        // handle any disconnects by failing the active requests. note that disconnects must
-        // be checked immediately following poll since any subsequent call to client.ready()
-        // will reset the disconnect status
-        checkDisconnects(now);
-
-        // execute scheduled tasks
-        if (executeDelayedTasks)
-            delayedTasks.poll(now);
-
-        // try again to send requests since buffer space may have been
-        // cleared or a connect finished in the poll
-        trySend(now);
-
-        // fail requests that couldn't be sent if they have expired
-        failExpiredRequests(now);
-    }
-
-    /**
-     * Execute delayed tasks now.
-     * @param now current time in milliseconds
-     * @throws WakeupException if a wakeup has been requested
-     */
-    public void executeDelayedTasks(long now) {
-        delayedTasks.poll(now);
-        maybeTriggerWakeup();
+        poll(0, time.milliseconds(), null, true);
     }
 
     /**
      * Block until all pending requests from the given node have finished.
      * @param node The node to await requests from
+     * @param timeoutMs The maximum time in milliseconds to block
+     * @return true If all requests finished, false if the timeout expired first
      */
-    public void awaitPendingRequests(Node node) {
-        while (pendingRequestCount(node) > 0)
-            poll(retryBackoffMs);
+    public boolean awaitPendingRequests(Node node, long timeoutMs) {
+        long startMs = time.milliseconds();
+        long remainingMs = timeoutMs;
+
+        while (hasPendingRequests(node) && remainingMs > 0) {
+            poll(remainingMs);
+            remainingMs = timeoutMs - (time.milliseconds() - startMs);
+        }
+
+        return !hasPendingRequests(node);
     }
 
     /**
@@ -267,9 +300,23 @@ public class ConsumerNetworkClient implements Closeable {
      * @return The number of pending requests
      */
     public int pendingRequestCount(Node node) {
-        List<ClientRequest> pending = unsent.get(node);
-        int unsentCount = pending == null ? 0 : pending.size();
-        return unsentCount + client.inFlightRequestCount(node.idString());
+        synchronized (this) {
+            return unsent.requestCount(node) + client.inFlightRequestCount(node.idString());
+        }
+    }
+
+    /**
+     * Check whether there is pending request to the given node. This includes both request that
+     * have been transmitted (i.e. in-flight requests) and those which are awaiting transmission.
+     * @param node The node in question
+     * @return A boolean indicating whether there is pending request
+     */
+    public boolean hasPendingRequests(Node node) {
+        if (unsent.hasRequests(node))
+            return true;
+        synchronized (this) {
+            return client.hasInFlightRequests(node.idString());
+        }
     }
 
     /**
@@ -278,10 +325,38 @@ public class ConsumerNetworkClient implements Closeable {
      * @return The total count of pending requests
      */
     public int pendingRequestCount() {
-        int total = 0;
-        for (List<ClientRequest> requests: unsent.values())
-            total += requests.size();
-        return total + client.inFlightRequestCount();
+        synchronized (this) {
+            return unsent.requestCount() + client.inFlightRequestCount();
+        }
+    }
+
+    /**
+     * Check whether there is pending request. This includes both requests that
+     * have been transmitted (i.e. in-flight requests) and those which are awaiting transmission.
+     * @return A boolean indicating whether there is pending request
+     */
+    public boolean hasPendingRequests() {
+        if (unsent.hasRequests())
+            return true;
+        synchronized (this) {
+            return client.hasInFlightRequests();
+        }
+    }
+
+    private void firePendingCompletedRequests() {
+        boolean completedRequestsFired = false;
+        for (;;) {
+            RequestFutureCompletionHandler completionHandler = pendingCompletion.poll();
+            if (completionHandler == null)
+                break;
+
+            completionHandler.fireCompletion();
+            completedRequestsFired = true;
+        }
+
+        // wakeup the client in case it is blocking in poll for this future's completion
+        if (completedRequestsFired)
+            client.wakeup();
     }
 
     private void checkDisconnects(long now) {
@@ -289,61 +364,64 @@ public class ConsumerNetworkClient implements Closeable {
         // by NetworkClient, so we just need to check whether connections for any of the unsent
         // requests have been disconnected; if they have, then we complete the corresponding future
         // and set the disconnect flag in the ClientResponse
-        Iterator<Map.Entry<Node, List<ClientRequest>>> iterator = unsent.entrySet().iterator();
-        while (iterator.hasNext()) {
-            Map.Entry<Node, List<ClientRequest>> requestEntry = iterator.next();
-            Node node = requestEntry.getKey();
+        for (Node node : unsent.nodes()) {
             if (client.connectionFailed(node)) {
                 // Remove entry before invoking request callback to avoid callbacks handling
                 // coordinator failures traversing the unsent list again.
-                iterator.remove();
-                for (ClientRequest request : requestEntry.getValue()) {
-                    RequestFutureCompletionHandler handler =
-                            (RequestFutureCompletionHandler) request.callback();
-                    handler.onComplete(new ClientResponse(request, now, true, null));
+                Collection<ClientRequest> requests = unsent.remove(node);
+                for (ClientRequest request : requests) {
+                    RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) request.callback();
+                    AuthenticationException authenticationException = client.authenticationException(node);
+                    if (authenticationException != null)
+                        handler.onFailure(authenticationException);
+                    else
+                        handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().desiredOrLatestVersion()),
+                            request.callback(), request.destination(), request.createdTimeMs(), now, true,
+                            null, null));
                 }
             }
         }
     }
 
+    public void disconnect(Node node) {
+        synchronized (this) {
+            failUnsentRequests(node, DisconnectException.INSTANCE);
+            client.disconnect(node.idString());
+        }
+
+        // We need to poll to ensure callbacks from in-flight requests on the disconnected socket are fired
+        pollNoWakeup();
+    }
+
     private void failExpiredRequests(long now) {
         // clear all expired unsent requests and fail their corresponding futures
-        Iterator<Map.Entry<Node, List<ClientRequest>>> iterator = unsent.entrySet().iterator();
-        while (iterator.hasNext()) {
-            Map.Entry<Node, List<ClientRequest>> requestEntry = iterator.next();
-            Iterator<ClientRequest> requestIterator = requestEntry.getValue().iterator();
-            while (requestIterator.hasNext()) {
-                ClientRequest request = requestIterator.next();
-                if (request.createdTimeMs() < now - unsentExpiryMs) {
-                    RequestFutureCompletionHandler handler =
-                            (RequestFutureCompletionHandler) request.callback();
-                    handler.raise(new TimeoutException("Failed to send request after " + unsentExpiryMs + " ms."));
-                    requestIterator.remove();
-                } else
-                    break;
-            }
-            if (requestEntry.getValue().isEmpty())
-                iterator.remove();
+        Collection<ClientRequest> expiredRequests = unsent.removeExpiredRequests(now, unsentExpiryMs);
+        for (ClientRequest request : expiredRequests) {
+            RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) request.callback();
+            handler.onFailure(new TimeoutException("Failed to send request after " + unsentExpiryMs + " ms."));
         }
     }
 
-    protected void failUnsentRequests(Node node, RuntimeException e) {
+    private void failUnsentRequests(Node node, RuntimeException e) {
         // clear unsent requests to node and fail their corresponding futures
-        List<ClientRequest> unsentRequests = unsent.remove(node);
-        if (unsentRequests != null) {
-            for (ClientRequest request : unsentRequests) {
-                RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) request.callback();
-                handler.raise(e);
+        synchronized (this) {
+            Collection<ClientRequest> unsentRequests = unsent.remove(node);
+            for (ClientRequest unsentRequest : unsentRequests) {
+                RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) unsentRequest.callback();
+                handler.onFailure(e);
             }
         }
+
+        // called without the lock to avoid deadlock potential
+        firePendingCompletedRequests();
     }
 
     private boolean trySend(long now) {
         // send any requests that can be sent now
         boolean requestsSent = false;
-        for (Map.Entry<Node, List<ClientRequest>> requestEntry: unsent.entrySet()) {
-            Node node = requestEntry.getKey();
-            Iterator<ClientRequest> iterator = requestEntry.getValue().iterator();
+
+        for (Node node : unsent.nodes()) {
+            Iterator<ClientRequest> iterator = unsent.requestIterator(node);
             while (iterator.hasNext()) {
                 ClientRequest request = iterator.next();
                 if (client.ready(node, now)) {
@@ -356,75 +434,199 @@ public class ConsumerNetworkClient implements Closeable {
         return requestsSent;
     }
 
-    private void clientPoll(long timeout, long now) {
-        client.poll(timeout, now);
-        maybeTriggerWakeup();
-    }
-
-    private void maybeTriggerWakeup() {
-        if (wakeupDisabledCount == 0 && wakeup.get()) {
+    public void maybeTriggerWakeup() {
+        if (!wakeupDisabled.get() && wakeup.get()) {
+            log.debug("Raising WakeupException in response to user wakeup");
             wakeup.set(false);
             throw new WakeupException();
         }
     }
 
-    public void disableWakeups() {
-        wakeupDisabledCount++;
+    private void maybeThrowInterruptException() {
+        if (Thread.interrupted()) {
+            throw new InterruptException(new InterruptedException());
+        }
     }
 
-    public void enableWakeups() {
-        if (wakeupDisabledCount <= 0)
-            throw new IllegalStateException("Cannot enable wakeups since they were never disabled");
-
-        wakeupDisabledCount--;
-
-        // re-wakeup the client if the flag was set since previous wake-up call
-        // could be cleared by poll(0) while wakeups were disabled
-        if (wakeupDisabledCount == 0 && wakeup.get())
-            this.client.wakeup();
+    public void disableWakeups() {
+        wakeupDisabled.set(true);
     }
 
     @Override
     public void close() throws IOException {
-        client.close();
+        synchronized (this) {
+            client.close();
+        }
     }
 
     /**
      * Find whether a previous connection has failed. Note that the failure state will persist until either
-     * {@link #tryConnect(Node)} or {@link #send(Node, ApiKeys, AbstractRequest)} has been called.
+     * {@link #tryConnect(Node)} or {@link #send(Node, AbstractRequest.Builder)} has been called.
      * @param node Node to connect to if possible
      */
     public boolean connectionFailed(Node node) {
-        return client.connectionFailed(node);
+        synchronized (this) {
+            return client.connectionFailed(node);
+        }
     }
 
     /**
      * Initiate a connection if currently possible. This is only really useful for resetting the failed
-     * status of a socket. If there is an actual request to send, then {@link #send(Node, ApiKeys, AbstractRequest)}
+     * status of a socket. If there is an actual request to send, then {@link #send(Node, AbstractRequest.Builder)}
      * should be used.
      * @param node The node to connect to
      */
     public void tryConnect(Node node) {
-        client.ready(node, time.milliseconds());
+        synchronized (this) {
+            client.ready(node, time.milliseconds());
+        }
     }
 
-    public static class RequestFutureCompletionHandler
-            extends RequestFuture<ClientResponse>
-            implements RequestCompletionHandler {
+    private class RequestFutureCompletionHandler implements RequestCompletionHandler {
+        private final RequestFuture<ClientResponse> future;
+        private ClientResponse response;
+        private RuntimeException e;
+
+        private RequestFutureCompletionHandler() {
+            this.future = new RequestFuture<>();
+        }
+
+        public void fireCompletion() {
+            if (e != null) {
+                future.raise(e);
+            } else if (response.wasDisconnected()) {
+                RequestHeader requestHeader = response.requestHeader();
+                int correlation = requestHeader.correlationId();
+                log.debug("Cancelled {} request {} with correlation id {} due to node {} being disconnected",
+                        requestHeader.apiKey(), requestHeader, correlation, response.destination());
+                future.raise(DisconnectException.INSTANCE);
+            } else if (response.versionMismatch() != null) {
+                future.raise(response.versionMismatch());
+            } else {
+                future.complete(response);
+            }
+        }
+
+        public void onFailure(RuntimeException e) {
+            this.e = e;
+            pendingCompletion.add(this);
+        }
 
         @Override
         public void onComplete(ClientResponse response) {
-            if (response.wasDisconnected()) {
-                ClientRequest request = response.request();
-                RequestSend send = request.request();
-                ApiKeys api = ApiKeys.forId(send.header().apiKey());
-                int correlation = send.header().correlationId();
-                log.debug("Cancelled {} request {} with correlation id {} due to node {} being disconnected",
-                        api, request, correlation, send.destination());
-                raise(DisconnectException.INSTANCE);
-            } else {
-                complete(response);
-            }
+            this.response = response;
+            pendingCompletion.add(this);
         }
     }
+
+    /**
+     * When invoking poll from a multi-threaded environment, it is possible that the condition that
+     * the caller is awaiting has already been satisfied prior to the invocation of poll. We therefore
+     * introduce this interface to push the condition checking as close as possible to the invocation
+     * of poll. In particular, the check will be done while holding the lock used to protect concurrent
+     * access to {@link org.apache.kafka.clients.NetworkClient}, which means implementations must be
+     * very careful about locking order if the callback must acquire additional locks.
+     */
+    public interface PollCondition {
+        /**
+         * Return whether the caller is still awaiting an IO event.
+         * @return true if so, false otherwise.
+         */
+        boolean shouldBlock();
+    }
+
+    /*
+     * A threadsafe helper class to hold requests per node that have not been sent yet
+     */
+    private final static class UnsentRequests {
+        private final ConcurrentMap<Node, ConcurrentLinkedQueue<ClientRequest>> unsent;
+
+        private UnsentRequests() {
+            unsent = new ConcurrentHashMap<>();
+        }
+
+        public void put(Node node, ClientRequest request) {
+            // the lock protects the put from a concurrent removal of the queue for the node
+            synchronized (unsent) {
+                ConcurrentLinkedQueue<ClientRequest> requests = unsent.get(node);
+                if (requests == null) {
+                    requests = new ConcurrentLinkedQueue<>();
+                    unsent.put(node, requests);
+                }
+                requests.add(request);
+            }
+        }
+
+        public int requestCount(Node node) {
+            ConcurrentLinkedQueue<ClientRequest> requests = unsent.get(node);
+            return requests == null ? 0 : requests.size();
+        }
+
+        public int requestCount() {
+            int total = 0;
+            for (ConcurrentLinkedQueue<ClientRequest> requests : unsent.values())
+                total += requests.size();
+            return total;
+        }
+
+        public boolean hasRequests(Node node) {
+            ConcurrentLinkedQueue<ClientRequest> requests = unsent.get(node);
+            return requests != null && !requests.isEmpty();
+        }
+
+        public boolean hasRequests() {
+            for (ConcurrentLinkedQueue<ClientRequest> requests : unsent.values())
+                if (!requests.isEmpty())
+                    return true;
+            return false;
+        }
+
+        public Collection<ClientRequest> removeExpiredRequests(long now, long unsentExpiryMs) {
+            List<ClientRequest> expiredRequests = new ArrayList<>();
+            for (ConcurrentLinkedQueue<ClientRequest> requests : unsent.values()) {
+                Iterator<ClientRequest> requestIterator = requests.iterator();
+                while (requestIterator.hasNext()) {
+                    ClientRequest request = requestIterator.next();
+                    if (request.createdTimeMs() < now - unsentExpiryMs) {
+                        expiredRequests.add(request);
+                        requestIterator.remove();
+                    } else
+                        break;
+                }
+            }
+            return expiredRequests;
+        }
+
+        public void clean() {
+            // the lock protects removal from a concurrent put which could otherwise mutate the
+            // queue after it has been removed from the map
+            synchronized (unsent) {
+                Iterator<ConcurrentLinkedQueue<ClientRequest>> iterator = unsent.values().iterator();
+                while (iterator.hasNext()) {
+                    ConcurrentLinkedQueue<ClientRequest> requests = iterator.next();
+                    if (requests.isEmpty())
+                        iterator.remove();
+                }
+            }
+        }
+
+        public Collection<ClientRequest> remove(Node node) {
+            // the lock protects removal from a concurrent put which could otherwise mutate the
+            // queue after it has been removed from the map
+            synchronized (unsent) {
+                ConcurrentLinkedQueue<ClientRequest> requests = unsent.remove(node);
+                return requests == null ? Collections.<ClientRequest>emptyList() : requests;
+            }
+        }
+
+        public Iterator<ClientRequest> requestIterator(Node node) {
+            ConcurrentLinkedQueue<ClientRequest> requests = unsent.get(node);
+            return requests == null ? Collections.<ClientRequest>emptyIterator() : requests.iterator();
+        }
+
+        public Collection<Node> nodes() {
+            return unsent.keySet();
+        }
+    }
+
 }

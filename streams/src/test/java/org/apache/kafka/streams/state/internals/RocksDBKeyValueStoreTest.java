@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -16,11 +16,10 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.Stores;
 import org.junit.Test;
@@ -28,29 +27,38 @@ import org.rocksdb.Options;
 
 import java.util.Map;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     @SuppressWarnings("unchecked")
     @Override
-    protected <K, V> KeyValueStore<K, V> createKeyValueStore(
-            ProcessorContext context,
-            Class<K> keyClass,
-            Class<V> valueClass,
-            boolean useContextSerdes) {
-
-        StateStoreSupplier supplier;
+    protected <K, V> KeyValueStore<K, V> createKeyValueStore(final ProcessorContext context,
+                                                             final Class<K> keyClass,
+                                                             final Class<V> valueClass,
+                                                             final boolean useContextSerdes) {
+        final Stores.PersistentKeyValueFactory<?, ?> factory;
         if (useContextSerdes) {
-            supplier = Stores.create("my-store").withKeys(context.keySerde()).withValues(context.valueSerde()).persistent().build();
+            factory = Stores
+                    .create("my-store")
+                    .withKeys(context.keySerde())
+                    .withValues(context.valueSerde())
+                    .persistent();
+
         } else {
-            supplier = Stores.create("my-store").withKeys(keyClass).withValues(valueClass).persistent().build();
+            factory = Stores
+                    .create("my-store")
+                    .withKeys(keyClass)
+                    .withValues(valueClass)
+                    .persistent();
         }
 
-        KeyValueStore<K, V> store = (KeyValueStore<K, V>) supplier.get();
+        final KeyValueStore<K, V> store = (KeyValueStore<K, V>) factory.build().get();
         store.init(context, store);
         return store;
-
     }
 
     public static class TheRocksDbConfigSetter implements RocksDBConfigSetter {
@@ -64,11 +72,72 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldUseCustomRocksDbConfigSetter() throws Exception {
-        final KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
-        driver.setConfig(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, TheRocksDbConfigSetter.class);
-        createKeyValueStore(driver.context(), Integer.class, String.class, false);
+    public void shouldUseCustomRocksDbConfigSetter() {
         assertTrue(TheRocksDbConfigSetter.called);
+    }
+
+    @Test
+    public void shouldPerformRangeQueriesWithCachingDisabled() {
+        context.setTime(1L);
+        store.put(1, "hi");
+        store.put(2, "goodbye");
+        final KeyValueIterator<Integer, String> range = store.range(1, 2);
+        assertEquals("hi", range.next().value);
+        assertEquals("goodbye", range.next().value);
+        assertFalse(range.hasNext());
+    }
+
+    @Test
+    public void shouldPerformAllQueriesWithCachingDisabled() {
+        context.setTime(1L);
+        store.put(1, "hi");
+        store.put(2, "goodbye");
+        final KeyValueIterator<Integer, String> range = store.all();
+        assertEquals("hi", range.next().value);
+        assertEquals("goodbye", range.next().value);
+        assertFalse(range.hasNext());
+    }
+
+    @Test
+    public void shouldCloseOpenIteratorsWhenStoreClosedAndThrowInvalidStateStoreOnHasNextAndNext() {
+        context.setTime(1L);
+        store.put(1, "hi");
+        store.put(2, "goodbye");
+        final KeyValueIterator<Integer, String> iteratorOne = store.range(1, 5);
+        final KeyValueIterator<Integer, String> iteratorTwo = store.range(1, 4);
+
+        assertTrue(iteratorOne.hasNext());
+        assertTrue(iteratorTwo.hasNext());
+
+        store.close();
+
+        try {
+            iteratorOne.hasNext();
+            fail("should have thrown InvalidStateStoreException on closed store");
+        } catch (final InvalidStateStoreException e) {
+            // ok
+        }
+
+        try {
+            iteratorOne.next();
+            fail("should have thrown InvalidStateStoreException on closed store");
+        } catch (final InvalidStateStoreException e) {
+            // ok
+        }
+
+        try {
+            iteratorTwo.hasNext();
+            fail("should have thrown InvalidStateStoreException on closed store");
+        } catch (final InvalidStateStoreException e) {
+            // ok
+        }
+
+        try {
+            iteratorTwo.next();
+            fail("should have thrown InvalidStateStoreException on closed store");
+        } catch (final InvalidStateStoreException e) {
+            // ok
+        }
     }
 
 }

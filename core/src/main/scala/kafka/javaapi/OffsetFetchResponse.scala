@@ -20,14 +20,11 @@ package kafka.javaapi
 import java.nio.ByteBuffer
 
 import kafka.common.{TopicAndPartition, OffsetMetadataAndError}
-import collection.JavaConversions
+import collection.JavaConverters._
 
 class OffsetFetchResponse(private val underlying: kafka.api.OffsetFetchResponse) {
 
-  def offsets: java.util.Map[TopicAndPartition, OffsetMetadataAndError] = {
-    import JavaConversions._
-    underlying.requestInfo
-  }
+  def offsets: java.util.Map[TopicAndPartition, OffsetMetadataAndError] = underlying.requestInfo.asJava
 
 }
 

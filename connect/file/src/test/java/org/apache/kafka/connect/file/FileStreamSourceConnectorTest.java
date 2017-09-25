@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -13,15 +13,15 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
+ */
 package org.apache.kafka.connect.file;
 
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.easymock.EasyMock;
+import org.easymock.EasyMockSupport;
 import org.junit.Before;
 import org.junit.Test;
-import org.powermock.api.easymock.PowerMock;
 
 import java.util.HashMap;
 import java.util.List;
@@ -30,7 +30,7 @@ import java.util.Map;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
-public class FileStreamSourceConnectorTest {
+public class FileStreamSourceConnectorTest extends EasyMockSupport {
 
     private static final String SINGLE_TOPIC = "test";
     private static final String MULTIPLE_TOPICS = "test1,test2";
@@ -43,7 +43,7 @@ public class FileStreamSourceConnectorTest {
     @Before
     public void setup() {
         connector = new FileStreamSourceConnector();
-        ctx = PowerMock.createMock(ConnectorContext.class);
+        ctx = createMock(ConnectorContext.class);
         connector.initialize(ctx);
 
         sourceProperties = new HashMap<>();
@@ -53,7 +53,7 @@ public class FileStreamSourceConnectorTest {
 
     @Test
     public void testSourceTasks() {
-        PowerMock.replayAll();
+        replayAll();
 
         connector.start(sourceProperties);
         List<Map<String, String>> taskConfigs = connector.taskConfigs(1);
@@ -71,12 +71,12 @@ public class FileStreamSourceConnectorTest {
         assertEquals(SINGLE_TOPIC,
                 taskConfigs.get(0).get(FileStreamSourceConnector.TOPIC_CONFIG));
 
-        PowerMock.verifyAll();
+        verifyAll();
     }
 
     @Test
     public void testSourceTasksStdin() {
-        PowerMock.replayAll();
+        EasyMock.replay(ctx);
 
         sourceProperties.remove(FileStreamSourceConnector.FILE_CONFIG);
         connector.start(sourceProperties);
@@ -84,7 +84,7 @@ public class FileStreamSourceConnectorTest {
         assertEquals(1, taskConfigs.size());
         assertNull(taskConfigs.get(0).get(FileStreamSourceConnector.FILE_CONFIG));
 
-        PowerMock.verifyAll();
+        EasyMock.verify(ctx);
     }
 
     @Test(expected = ConnectException.class)
@@ -95,11 +95,11 @@ public class FileStreamSourceConnectorTest {
 
     @Test
     public void testTaskClass() {
-        PowerMock.replayAll();
+        EasyMock.replay(ctx);
 
         connector.start(sourceProperties);
         assertEquals(FileStreamSourceTask.class, connector.taskClass());
 
-        PowerMock.verifyAll();
+        EasyMock.verify(ctx);
     }
 }

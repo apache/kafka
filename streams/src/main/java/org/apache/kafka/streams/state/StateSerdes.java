@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -6,7 +6,7 @@
  * (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -32,18 +32,21 @@ public final class StateSerdes<K, V> {
     /**
      * Create a new instance of {@link StateSerdes} for the given state name and key-/value-type classes.
      *
-     * @param stateName   the name of the state
-     * @param keyClass    the class of the key type
-     * @param valueClass  the class of the value type
-     * @param <K>         the key type
-     * @param <V>         the value type
-     * @return            a new instance of {@link StateSerdes}
+     * @param topic      the topic name
+     * @param keyClass   the class of the key type
+     * @param valueClass the class of the value type
+     * @param <K>        the key type
+     * @param <V>        the value type
+     * @return a new instance of {@link StateSerdes}
      */
-    public static <K, V> StateSerdes<K, V> withBuiltinTypes(String stateName, Class<K> keyClass, Class<V> valueClass) {
-        return new StateSerdes<>(stateName, Serdes.serdeFrom(keyClass), Serdes.serdeFrom(valueClass));
+    public static <K, V> StateSerdes<K, V> withBuiltinTypes(
+        final String topic,
+        final Class<K> keyClass,
+        final Class<V> valueClass) {
+        return new StateSerdes<>(topic, Serdes.serdeFrom(keyClass), Serdes.serdeFrom(valueClass));
     }
 
-    private final String stateName;
+    private final String topic;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
 
@@ -53,22 +56,25 @@ public final class StateSerdes<K, V> {
      * is provided to bind this serde factory to, so that future calls for serialize / deserialize do not
      * need to provide the topic name any more.
      *
-     * @param stateName     the name of the state
+     * @param topic         the topic name
      * @param keySerde      the serde for keys; cannot be null
      * @param valueSerde    the serde for values; cannot be null
      * @throws IllegalArgumentException if key or value serde is null
      */
-    @SuppressWarnings("unchecked")
-    public StateSerdes(String stateName,
-                       Serde<K> keySerde,
-                       Serde<V> valueSerde) {
-        this.stateName = stateName;
-
-        if (keySerde == null)
+    public StateSerdes(final String topic,
+                       final Serde<K> keySerde,
+                       final Serde<V> valueSerde) {
+        if (topic == null) {
+            throw new IllegalArgumentException("topic cannot be null");
+        }
+        if (keySerde == null) {
             throw new IllegalArgumentException("key serde cannot be null");
-        if (valueSerde == null)
+        }
+        if (valueSerde == null) {
             throw new IllegalArgumentException("value serde cannot be null");
+        }
 
+        this.topic = topic;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
     }
@@ -128,12 +134,12 @@ public final class StateSerdes<K, V> {
     }
 
     /**
-     * Return the name of the state.
+     * Return the topic.
      *
-     * @return the name of the state
+     * @return the topic
      */
-    public String stateName() {
-        return stateName;
+    public String topic() {
+        return topic;
     }
 
     /**
@@ -143,7 +149,7 @@ public final class StateSerdes<K, V> {
      * @return        the key as typed object
      */
     public K keyFrom(byte[] rawKey) {
-        return keySerde.deserializer().deserialize(stateName, rawKey);
+        return keySerde.deserializer().deserialize(topic, rawKey);
     }
 
     /**
@@ -153,7 +159,7 @@ public final class StateSerdes<K, V> {
      * @return          the value as typed object
      */
     public V valueFrom(byte[] rawValue) {
-        return valueSerde.deserializer().deserialize(stateName, rawValue);
+        return valueSerde.deserializer().deserialize(topic, rawValue);
     }
 
     /**
@@ -163,7 +169,7 @@ public final class StateSerdes<K, V> {
      * @return     the serialized key
      */
     public byte[] rawKey(K key) {
-        return keySerde.serializer().serialize(stateName, key);
+        return keySerde.serializer().serialize(topic, key);
     }
 
     /**
@@ -173,6 +179,6 @@ public final class StateSerdes<K, V> {
      * @return       the serialized value
      */
     public byte[] rawValue(V value) {
-        return valueSerde.serializer().serialize(stateName, value);
+        return valueSerde.serializer().serialize(topic, value);
     }
 }

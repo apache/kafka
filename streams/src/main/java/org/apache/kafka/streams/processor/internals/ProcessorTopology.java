@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,32 +14,37 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
+
+import org.apache.kafka.streams.processor.StateStore;
 
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
 public class ProcessorTopology {
 
     private final List<ProcessorNode> processorNodes;
+    private final List<StateStore> stateStores;
+    private final List<StateStore> globalStateStores;
     private final Map<String, SourceNode> sourceByTopics;
     private final Map<String, SinkNode> sinkByTopics;
-    private final List<StateStoreSupplier> stateStoreSuppliers;
-    private final Map<String, String> sourceStoreToSourceTopic;
-    public ProcessorTopology(List<ProcessorNode> processorNodes,
-                             Map<String, SourceNode> sourceByTopics,
-                             Map<String, SinkNode> sinkByTopics,
-                             List<StateStoreSupplier> stateStoreSuppliers,
-                             Map<String, String> sourceStoreToSourceTopic) {
+    private final Map<String, String> storeToChangelogTopic;
+
+    public ProcessorTopology(final List<ProcessorNode> processorNodes,
+                             final Map<String, SourceNode> sourceByTopics,
+                             final Map<String, SinkNode> sinkByTopics,
+                             final List<StateStore> stateStores,
+                             final Map<String, String> storeToChangelogTopic,
+                             final List<StateStore> globalStateStores) {
         this.processorNodes = Collections.unmodifiableList(processorNodes);
         this.sourceByTopics = Collections.unmodifiableMap(sourceByTopics);
         this.sinkByTopics   = Collections.unmodifiableMap(sinkByTopics);
-        this.stateStoreSuppliers = Collections.unmodifiableList(stateStoreSuppliers);
-        this.sourceStoreToSourceTopic = sourceStoreToSourceTopic;
+        this.stateStores    = Collections.unmodifiableList(stateStores);
+        this.storeToChangelogTopic = Collections.unmodifiableMap(storeToChangelogTopic);
+        this.globalStateStores = Collections.unmodifiableList(globalStateStores);
     }
 
     public Set<String> sourceTopics() {
@@ -70,48 +75,61 @@ public class ProcessorTopology {
         return processorNodes;
     }
 
-    public List<StateStoreSupplier> stateStoreSuppliers() {
-        return stateStoreSuppliers;
+    public List<StateStore> stateStores() {
+        return stateStores;
     }
 
-    public Map<String, String> sourceStoreToSourceTopic() {
-        return sourceStoreToSourceTopic;
+    public Map<String, String> storeToChangelogTopic() {
+        return storeToChangelogTopic;
     }
 
-    private String childrenToString(List<ProcessorNode<?, ?>> children) {
+    public List<StateStore> globalStateStores() {
+        return globalStateStores;
+    }
+
+    private String childrenToString(String indent, List<ProcessorNode<?, ?>> children) {
         if (children == null || children.isEmpty()) {
             return "";
         }
 
-        StringBuilder sb = new StringBuilder("children [");
+        StringBuilder sb = new StringBuilder(indent + "\tchildren:\t[");
         for (ProcessorNode child : children) {
-            sb.append(child.name() + ",");
+            sb.append(child.name());
+            sb.append(", ");
         }
-        sb.setLength(sb.length() - 1);
+        sb.setLength(sb.length() - 2);  // remove the last comma
         sb.append("]\n");
 
         // recursively print children
-        for (ProcessorNode child : children) {
-            sb.append("\t\t\t\t" + child.toString());
-            sb.append(childrenToString(child.children()));
+        for (ProcessorNode<?, ?> child : children) {
+            sb.append(child.toString(indent)).append(childrenToString(indent, child.children()));
         }
         return sb.toString();
     }
 
     /**
-     * Produces a string representation contain useful information this topology.
+     * Produces a string representation containing useful information this topology starting with the given indent.
      * This is useful in debugging scenarios.
      * @return A string representation of this instance.
      */
+    @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder("ProcessorTopology:\n");
+        return toString("");
+    }
+
+    /**
+     * Produces a string representation containing useful information this topology.
+     * This is useful in debugging scenarios.
+     * @return A string representation of this instance.
+     */
+    public String toString(final String indent) {
+        final StringBuilder sb = new StringBuilder(indent + "ProcessorTopology:\n");
 
         // start from sources
-        for (SourceNode source : sourceByTopics.values()) {
-            sb.append("\t\t\t\t" + source.toString());
-            sb.append(childrenToString(source.children()));
-            sb.append("\n");
+        for (SourceNode<?, ?> source : sourceByTopics.values()) {
+            sb.append(source.toString(indent + "\t")).append(childrenToString(indent + "\t", source.children()));
         }
         return sb.toString();
     }
+
 }

@@ -16,8 +16,9 @@
 
 from ducktape.utils.util import wait_until
 from ducktape.tests.test import Test
-from kafkatest.services.verifiable_producer import VerifiableProducer
+from ducktape.mark.resource import cluster
 
+from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.replica_verification_tool import ReplicaVerificationTool
@@ -59,9 +60,8 @@ class ReplicaVerificationToolTest(Test):
 
     def start_producer(self, max_messages, acks, timeout):
         # This will produce to kafka cluster
+        current_acked = 0
         self.producer = VerifiableProducer(self.test_context, num_nodes=1, kafka=self.kafka, topic=TOPIC, throughput=1000, acks=acks, max_messages=max_messages)
-        current_acked = self.producer.num_acked
-        self.logger.info("current_acked = %s" % current_acked)
         self.producer.start()
         wait_until(lambda: acks == 0 or self.producer.num_acked >= current_acked + max_messages, timeout_sec=timeout,
                    err_msg="Timeout awaiting messages to be produced and acked")
@@ -69,6 +69,7 @@ class ReplicaVerificationToolTest(Test):
     def stop_producer(self):
         self.producer.stop()
 
+    @cluster(num_nodes=6)
     def test_replica_lags(self, security_protocol='PLAINTEXT'):
         """
         Tests ReplicaVerificationTool
@@ -77,6 +78,7 @@ class ReplicaVerificationToolTest(Test):
         self.start_kafka(security_protocol, security_protocol)
         self.start_replica_verification_tool(security_protocol)
         self.start_producer(max_messages=10, acks=-1, timeout=15)
+
         # Verify that there is no lag in replicas and is correctly reported by ReplicaVerificationTool
         wait_until(lambda: self.replica_verifier.get_lag_for_partition(TOPIC, 0) == 0, timeout_sec=10,
                    err_msg="Timed out waiting to reach zero replica lags.")

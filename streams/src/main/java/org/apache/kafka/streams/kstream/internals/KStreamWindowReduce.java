@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.KeyValue;
@@ -57,13 +56,14 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
     private class KStreamWindowReduceProcessor extends AbstractProcessor<K, V> {
 
         private WindowStore<K, V> windowStore;
+        private TupleForwarder<Windowed<K>, V> tupleForwarder;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(ProcessorContext context) {
             super.init(context);
-
             windowStore = (WindowStore<K, V>) context.getStateStore(storeName);
+            tupleForwarder = new TupleForwarder<>(windowStore, context, new ForwardingCacheFlushListener<Windowed<K>, V>(context, sendOldValues), sendOldValues);
         }
 
         @Override
@@ -107,24 +107,16 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
 
                         // update the store with the new value
                         windowStore.put(key, newAgg, window.start());
-
-                        // forward the aggregated change pair
-                        if (sendOldValues)
-                            context().forward(new Windowed<>(key, window), new Change<>(newAgg, oldAgg));
-                        else
-                            context().forward(new Windowed<>(key, window), new Change<>(newAgg, null));
-
+                        tupleForwarder.maybeForward(new Windowed<>(key, window), newAgg, oldAgg);
                         matchedWindows.remove(entry.key);
                     }
                 }
             }
 
             // create the new window for the rest of unmatched window that do not exist yet
-            for (long windowStartMs : matchedWindows.keySet()) {
-                windowStore.put(key, value, windowStartMs);
-
-                // send the new aggregate pair (there will be no old value)
-                context().forward(new Windowed<>(key, matchedWindows.get(windowStartMs)), new Change<>(value, null));
+            for (final Map.Entry<Long, W> entry : matchedWindows.entrySet()) {
+                windowStore.put(key, value, entry.getKey());
+                tupleForwarder.maybeForward(new Windowed<>(key, entry.getValue()), value, null);
             }
         }
     }
@@ -138,6 +130,10 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
                 return new KStreamWindowReduceValueGetter();
             }
 
+            @Override
+            public String[] storeNames() {
+                return new String[]{storeName};
+            }
         };
     }
 

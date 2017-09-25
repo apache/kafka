@@ -62,7 +62,7 @@ class ConsoleProducerTest {
       new ConsoleProducer.ProducerConfig(invalidArgs)
       Assert.fail("Should have thrown an UnrecognizedOptionException")
     } catch {
-      case e: joptsimple.OptionException => // expected exception
+      case _: joptsimple.OptionException => // expected exception
     }
   }
 

@@ -22,7 +22,7 @@ ZKID=$1
 NUM_ZK=$2
 JMX_PORT=$3
 
-kafka_dir=/opt/kafka-trunk
+kafka_dir=/opt/kafka-dev
 cd $kafka_dir
 
 cp $kafka_dir/config/zookeeper.properties $kafka_dir/config/zookeeper-$ZKID.properties

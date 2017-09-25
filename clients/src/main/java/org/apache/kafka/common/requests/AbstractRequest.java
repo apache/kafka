@@ -1,12 +1,12 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.network.NetworkSend;
+import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -23,63 +25,168 @@ import java.nio.ByteBuffer;
 
 public abstract class AbstractRequest extends AbstractRequestResponse {
 
-    public AbstractRequest(Struct struct) {
-        super(struct);
+    public static abstract class Builder<T extends AbstractRequest> {
+        private final ApiKeys apiKey;
+        private final Short desiredVersion;
+
+        public Builder(ApiKeys apiKey) {
+            this(apiKey, null);
+        }
+
+        public Builder(ApiKeys apiKey, Short desiredVersion) {
+            this.apiKey = apiKey;
+            this.desiredVersion = desiredVersion;
+        }
+
+        public ApiKeys apiKey() {
+            return apiKey;
+        }
+
+        public short desiredOrLatestVersion() {
+            return desiredVersion == null ? apiKey.latestVersion() : desiredVersion;
+        }
+
+        public Short desiredVersion() {
+            return desiredVersion;
+        }
+
+        public T build() {
+            return build(desiredOrLatestVersion());
+        }
+
+        public abstract T build(short version);
+    }
+
+    private final short version;
+
+    public AbstractRequest(short version) {
+        this.version = version;
     }
 
     /**
-     * Get an error response for a request for a given api version
+     * Get the version of this AbstractRequest object.
      */
-    public abstract AbstractRequestResponse getErrorResponse(int versionId, Throwable e);
+    public short version() {
+        return version;
+    }
+
+    public Send toSend(String destination, RequestHeader header) {
+        return new NetworkSend(destination, serialize(header));
+    }
 
     /**
-     * Factory method for getting a request object based on ApiKey ID and a buffer
+     * Use with care, typically {@link #toSend(String, RequestHeader)} should be used instead.
      */
-    public static AbstractRequest getRequest(int requestId, int versionId, ByteBuffer buffer) {
-        ApiKeys apiKey = ApiKeys.forId(requestId);
+    public ByteBuffer serialize(RequestHeader header) {
+        return serialize(header.toStruct(), toStruct());
+    }
+
+    protected abstract Struct toStruct();
+
+    public String toString(boolean verbose) {
+        return toStruct().toString();
+    }
+
+    @Override
+    public final String toString() {
+        return toString(true);
+    }
+
+    /**
+     * Get an error response for a request
+     */
+    public AbstractResponse getErrorResponse(Throwable e) {
+        return getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, e);
+    }
+
+    /**
+     * Get an error response for a request with specified throttle time in the response if applicable
+     */
+    public abstract AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e);
+
+    /**
+     * Factory method for getting a request object based on ApiKey ID and a version
+     */
+    public static AbstractRequest parseRequest(ApiKeys apiKey, short apiVersion, Struct struct) {
         switch (apiKey) {
             case PRODUCE:
-                return ProduceRequest.parse(buffer, versionId);
+                return new ProduceRequest(struct, apiVersion);
             case FETCH:
-                return FetchRequest.parse(buffer, versionId);
+                return new FetchRequest(struct, apiVersion);
             case LIST_OFFSETS:
-                return ListOffsetRequest.parse(buffer, versionId);
+                return new ListOffsetRequest(struct, apiVersion);
             case METADATA:
-                return MetadataRequest.parse(buffer, versionId);
+                return new MetadataRequest(struct, apiVersion);
             case OFFSET_COMMIT:
-                return OffsetCommitRequest.parse(buffer, versionId);
+                return new OffsetCommitRequest(struct, apiVersion);
             case OFFSET_FETCH:
-                return OffsetFetchRequest.parse(buffer, versionId);
-            case GROUP_COORDINATOR:
-                return GroupCoordinatorRequest.parse(buffer, versionId);
+                return new OffsetFetchRequest(struct, apiVersion);
+            case FIND_COORDINATOR:
+                return new FindCoordinatorRequest(struct, apiVersion);
             case JOIN_GROUP:
-                return JoinGroupRequest.parse(buffer, versionId);
+                return new JoinGroupRequest(struct, apiVersion);
             case HEARTBEAT:
-                return HeartbeatRequest.parse(buffer, versionId);
+                return new HeartbeatRequest(struct, apiVersion);
             case LEAVE_GROUP:
-                return LeaveGroupRequest.parse(buffer, versionId);
+                return new LeaveGroupRequest(struct, apiVersion);
             case SYNC_GROUP:
-                return SyncGroupRequest.parse(buffer, versionId);
+                return new SyncGroupRequest(struct, apiVersion);
             case STOP_REPLICA:
-                return StopReplicaRequest.parse(buffer, versionId);
-            case CONTROLLED_SHUTDOWN_KEY:
-                return ControlledShutdownRequest.parse(buffer, versionId);
-            case UPDATE_METADATA_KEY:
-                return UpdateMetadataRequest.parse(buffer, versionId);
+                return new StopReplicaRequest(struct, apiVersion);
+            case CONTROLLED_SHUTDOWN:
+                return new ControlledShutdownRequest(struct, apiVersion);
+            case UPDATE_METADATA:
+                return new UpdateMetadataRequest(struct, apiVersion);
             case LEADER_AND_ISR:
-                return LeaderAndIsrRequest.parse(buffer, versionId);
+                return new LeaderAndIsrRequest(struct, apiVersion);
             case DESCRIBE_GROUPS:
-                return DescribeGroupsRequest.parse(buffer, versionId);
+                return new DescribeGroupsRequest(struct, apiVersion);
             case LIST_GROUPS:
-                return ListGroupsRequest.parse(buffer, versionId);
+                return new ListGroupsRequest(struct, apiVersion);
             case SASL_HANDSHAKE:
-                return SaslHandshakeRequest.parse(buffer, versionId);
+                return new SaslHandshakeRequest(struct, apiVersion);
             case API_VERSIONS:
-                return ApiVersionsRequest.parse(buffer, versionId);
+                return new ApiVersionsRequest(struct, apiVersion);
             case CREATE_TOPICS:
-                return CreateTopicsRequest.parse(buffer, versionId);
+                return new CreateTopicsRequest(struct, apiVersion);
+            case DELETE_TOPICS:
+                return new DeleteTopicsRequest(struct, apiVersion);
+            case DELETE_RECORDS:
+                return new DeleteRecordsRequest(struct, apiVersion);
+            case INIT_PRODUCER_ID:
+                return new InitProducerIdRequest(struct, apiVersion);
+            case OFFSET_FOR_LEADER_EPOCH:
+                return new OffsetsForLeaderEpochRequest(struct, apiVersion);
+            case ADD_PARTITIONS_TO_TXN:
+                return new AddPartitionsToTxnRequest(struct, apiVersion);
+            case ADD_OFFSETS_TO_TXN:
+                return new AddOffsetsToTxnRequest(struct, apiVersion);
+            case END_TXN:
+                return new EndTxnRequest(struct, apiVersion);
+            case WRITE_TXN_MARKERS:
+                return new WriteTxnMarkersRequest(struct, apiVersion);
+            case TXN_OFFSET_COMMIT:
+                return new TxnOffsetCommitRequest(struct, apiVersion);
+            case DESCRIBE_ACLS:
+                return new DescribeAclsRequest(struct, apiVersion);
+            case CREATE_ACLS:
+                return new CreateAclsRequest(struct, apiVersion);
+            case DELETE_ACLS:
+                return new DeleteAclsRequest(struct, apiVersion);
+            case DESCRIBE_CONFIGS:
+                return new DescribeConfigsRequest(struct, apiVersion);
+            case ALTER_CONFIGS:
+                return new AlterConfigsRequest(struct, apiVersion);
+            case ALTER_REPLICA_DIR:
+                return new AlterReplicaDirRequest(struct, apiVersion);
+            case DESCRIBE_LOG_DIRS:
+                return new DescribeLogDirsRequest(struct, apiVersion);
+            case SASL_AUTHENTICATE:
+                return new SaslAuthenticateRequest(struct, apiVersion);
+            case CREATE_PARTITIONS:
+                return new CreatePartitionsRequest(struct, apiVersion);
             default:
-                throw new AssertionError(String.format("ApiKey %s is not currently handled in `getRequest`, the " +
+                throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));
         }
     }
