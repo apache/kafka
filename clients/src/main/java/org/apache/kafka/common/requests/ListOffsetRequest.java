@@ -17,7 +17,6 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
@@ -104,7 +103,6 @@ public class ListOffsetRequest extends AbstractRequest {
 
     public static class Builder extends AbstractRequest.Builder<ListOffsetRequest> {
         private final int replicaId;
-        private final short minVersion;
         private final IsolationLevel isolationLevel;
         private Map<TopicPartition, PartitionData> offsetData = null;
         private Map<TopicPartition, Long> partitionTimestamps = null;
@@ -114,18 +112,16 @@ public class ListOffsetRequest extends AbstractRequest {
         }
 
         public static Builder forConsumer(boolean requireTimestamp, IsolationLevel isolationLevel) {
-            // If we need a timestamp in the response, the minimum RPC version we can send is v1. Otherwise, v0 is OK.
             short minVersion = 0;
             if (isolationLevel == IsolationLevel.READ_COMMITTED)
                 minVersion = 2;
             else if (requireTimestamp)
                 minVersion = 1;
-            return new Builder(minVersion, null, CONSUMER_REPLICA_ID, isolationLevel);
+            return new Builder(minVersion, ApiKeys.LIST_OFFSETS.latestVersion(), CONSUMER_REPLICA_ID, isolationLevel);
         }
 
-        private Builder(short minVersion, Short desiredVersion, int replicaId, IsolationLevel isolationLevel) {
-            super(ApiKeys.LIST_OFFSETS, desiredVersion);
-            this.minVersion = minVersion;
+        private Builder(short minVersion, short maxVersion, int replicaId, IsolationLevel isolationLevel) {
+            super(ApiKeys.LIST_OFFSETS, minVersion, maxVersion);
             this.replicaId = replicaId;
             this.isolationLevel = isolationLevel;
         }
@@ -142,10 +138,6 @@ public class ListOffsetRequest extends AbstractRequest {
 
         @Override
         public ListOffsetRequest build(short version) {
-            if (version < minVersion) {
-                throw new UnsupportedVersionException("Cannot create a v" + version + " ListOffsetRequest because " +
-                    "we require features supported only in " + minVersion + " or later.");
-            }
             if (version == 0) {
                 if (offsetData == null) {
                     if (partitionTimestamps == null) {
@@ -184,7 +176,7 @@ public class ListOffsetRequest extends AbstractRequest {
             if (partitionTimestamps != null) {
                 bld.append(", partitionTimestamps=").append(partitionTimestamps);
             }
-            bld.append(", minVersion=").append(minVersion);
+            bld.append(", isolationLevel=").append(isolationLevel);
             bld.append(")");
             return bld.toString();
         }
