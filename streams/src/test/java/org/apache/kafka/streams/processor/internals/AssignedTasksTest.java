@@ -194,7 +194,6 @@ public class AssignedTasksTest {
         EasyMock.verify(t1);
     }
 
-
     @Test
     public void shouldCloseTaskOnSuspendWhenRuntimeException() {
         mockTaskInitialization();
@@ -205,7 +204,7 @@ public class AssignedTasksTest {
         EasyMock.replay(t1);
 
         suspendTask();
-        assertThat(assignedTasks.previousTaskIds(), equalTo(Collections.EMPTY_SET));
+        assertTrue(assignedTasks.previousTaskIds().isEmpty());
         EasyMock.verify(t1);
     }
 
@@ -219,6 +218,38 @@ public class AssignedTasksTest {
         EasyMock.replay(t1);
 
         suspendTask();
+
+        assertTrue(assignedTasks.previousTaskIds().isEmpty());
+        EasyMock.verify(t1);
+    }
+
+    @Test
+    public void shouldCloseTaskOnCloseWhenRuntimeException() {
+        mockTaskInitialization();
+        t1.close(true, false);
+        EasyMock.expectLastCall().andThrow(new RuntimeException("KABOOM!"));
+        t1.close(false, false);
+        EasyMock.expectLastCall();
+        EasyMock.replay(t1);
+
+        addAndInitTask();
+        assignedTasks.close(true);
+
+        assertTrue(assignedTasks.previousTaskIds().isEmpty());
+        EasyMock.verify(t1);
+    }
+
+    @Test
+    public void shouldCloseTaskOnCloseWhenProducerFencedException() {
+        mockTaskInitialization();
+        t1.close(true, false);
+        EasyMock.expectLastCall().andThrow(new ProducerFencedException("KABOOM!"));
+        t1.close(false, true);
+        EasyMock.expectLastCall().andThrow(new ProducerFencedException("KABOOM!"));
+        EasyMock.replay(t1);
+
+        addAndInitTask();
+        assignedTasks.close(true);
 
         assertTrue(assignedTasks.previousTaskIds().isEmpty());
         EasyMock.verify(t1);

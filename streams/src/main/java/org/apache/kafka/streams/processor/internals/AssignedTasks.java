@@ -472,18 +472,11 @@ class AssignedTasks implements RestoringTasks {
     }
 
     void close(final boolean clean) {
-        close(allTasks(), clean);
-        clear();
-    }
-
-    private void close(final Collection<Task> tasks, final boolean clean) {
-        for (Iterator<Task> it = tasks.iterator(); it.hasNext(); ) {
-            final Task task = it.next();
+        for (final Task task : allTasks()) {
             try {
                 task.close(clean, false);
             } catch (final ProducerFencedException ignoreAndSwallow) {
                 closeZombieTask(task);
-                it.remove();
             } catch (final Throwable t) {
                 log.error("Failed while closing {} {} due to the following error:",
                           task.getClass().getSimpleName(),
@@ -500,8 +493,10 @@ class AssignedTasks implements RestoringTasks {
                             t);
                     }
                 }
-                it.remove();
             }
         }
+
+        clear();
+
     }
 }
