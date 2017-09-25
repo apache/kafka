@@ -477,26 +477,31 @@ class AssignedTasks implements RestoringTasks {
                 task.close(clean, false);
             } catch (final ProducerFencedException ignoreAndSwallow) {
                 closeZombieTask(task);
-            } catch (final Throwable t) {
+            } catch (final Throwable logAndSwallow) {
                 log.error("Failed while closing {} {} due to the following error:",
                           task.getClass().getSimpleName(),
                           task.id(),
-                          t);
-                if (clean) {
-                    try {
-                        log.info("Try to close {} {} unclean.", task.getClass().getSimpleName(), task.id());
-                        task.close(false, false);
-                    } catch (final RuntimeException ignoreAndSwallow) {
-                        log.error("Failed while closing {} {} due to the following error:",
-                            task.getClass().getSimpleName(),
-                            task.id(),
-                            t);
-                    }
-                }
+                    logAndSwallow);
+                closeUncleanIfRequired(task, clean);
             }
         }
 
         clear();
+    }
+
+    private void closeUncleanIfRequired(final Task task,
+                                        final boolean triedToCloseCleanlyPreviously) {
+        if (triedToCloseCleanlyPreviously) {
+            log.info("Try to close {} {} unclean.", task.getClass().getSimpleName(), task.id());
+            try {
+                task.close(false, false);
+            } catch (final RuntimeException logAndSwallow) {
+                log.error("Failed while closing {} {} due to the following error:",
+                    task.getClass().getSimpleName(),
+                    task.id(),
+                    logAndSwallow);
+            }
+        }
 
     }
 }
