@@ -30,8 +30,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Set;
 
-import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertSame;
@@ -206,8 +204,8 @@ public class AssignedTasksTest {
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
 
-        assertThat(suspendTask(), not(nullValue()));
-        assertThat(assignedTasks.previousTaskIds(), equalTo(Collections.singleton(taskId1)));
+        suspendTask();
+        assertThat(assignedTasks.previousTaskIds(), equalTo(Collections.EMPTY_SET));
         EasyMock.verify(t1);
     }
 
@@ -220,7 +218,8 @@ public class AssignedTasksTest {
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
 
-        assertThat(suspendTask(), nullValue());
+        suspendTask();
+
         assertTrue(assignedTasks.previousTaskIds().isEmpty());
         EasyMock.verify(t1);
     }
@@ -436,9 +435,9 @@ public class AssignedTasksTest {
         assignedTasks.initializeNewTasks();
     }
 
-    private RuntimeException suspendTask() {
+    private void suspendTask() {
         addAndInitTask();
-        return assignedTasks.suspend();
+        assignedTasks.suspend();
     }
 
     private void mockRunningTaskSuspension() {

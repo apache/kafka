@@ -20,7 +20,6 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
@@ -199,7 +198,8 @@ public class TaskManagerTest {
 
     @Test
     public void shouldSuspendActiveTasks() {
-        EasyMock.expect(active.suspend()).andReturn(null);
+        active.suspend();
+        EasyMock.expectLastCall();
         replay();
 
         taskManager.suspendTasksAndState();
@@ -208,7 +208,8 @@ public class TaskManagerTest {
 
     @Test
     public void shouldSuspendStandbyTasks() {
-        EasyMock.expect(standby.suspend()).andReturn(null);
+        standby.suspend();
+        EasyMock.expectLastCall();
         replay();
 
         taskManager.suspendTasksAndState();
@@ -223,23 +224,6 @@ public class TaskManagerTest {
 
         taskManager.suspendTasksAndState();
         verify(restoreConsumer);
-    }
-
-    @Test
-    public void shouldThrowStreamsExceptionAtEndIfExceptionDuringSuspend() {
-        EasyMock.expect(active.suspend()).andReturn(new RuntimeException(""));
-        EasyMock.expect(standby.suspend()).andReturn(new RuntimeException(""));
-        EasyMock.expectLastCall();
-        restoreConsumer.assign(Collections.<TopicPartition>emptyList());
-
-        replay();
-        try {
-            taskManager.suspendTasksAndState();
-            fail("Should have thrown streams exception");
-        } catch (StreamsException e) {
-            // expected
-        }
-        verify(restoreConsumer, active, standby);
     }
 
     @Test

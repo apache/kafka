@@ -35,7 +35,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicReference;
 
 class AssignedTasks implements RestoringTasks {
     private final Logger log;
@@ -174,14 +173,13 @@ class AssignedTasks implements RestoringTasks {
         return running.values();
     }
 
-    RuntimeException suspend() {
-        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
+    void suspend() {
         log.trace("Suspending running {} {}", taskTypeName, runningTaskIds());
-        firstException.compareAndSet(null, suspendTasks(running.values()));
+        suspendTasks(running.values());
         log.trace("Close restoring {} {}", taskTypeName, restoring.keySet());
-        firstException.compareAndSet(null, closeNonRunningTasks(restoring.values()));
+        closeNonRunningTasks(restoring.values());
         log.trace("Close created {} {}", taskTypeName, created.keySet());
-        firstException.compareAndSet(null, closeNonRunningTasks(created.values()));
+        closeNonRunningTasks(created.values());
         previousActiveTasks.clear();
         previousActiveTasks.addAll(running.keySet());
         running.clear();
@@ -189,26 +187,21 @@ class AssignedTasks implements RestoringTasks {
         created.clear();
         runningByPartition.clear();
         restoringByPartition.clear();
-        return firstException.get();
     }
 
-    private RuntimeException closeNonRunningTasks(final Collection<Task> tasks) {
-        RuntimeException exception = null;
-        for (final Task task : tasks) {
+    private void closeNonRunningTasks(final Collection<Task> tasks) {
+        for (Iterator<Task> it = tasks.iterator(); it.hasNext(); ) {
+            final Task task = it.next();
             try {
                 task.close(false, false);
-            } catch (final RuntimeException e) {
-                log.error("Failed to close {}, {}", taskTypeName, task.id(), e);
-                if (exception == null) {
-                    exception = e;
-                }
+            } catch (final RuntimeException ignoreAndSwallow) {
+                log.error("Failed to close {}, {}", taskTypeName, task.id(), ignoreAndSwallow);
             }
+            it.remove();
         }
-        return exception;
     }
 
-    private RuntimeException suspendTasks(final Collection<Task> tasks) {
-        RuntimeException exception = null;
+    private void suspendTasks(final Collection<Task> tasks) {
         for (Iterator<Task> it = tasks.iterator(); it.hasNext(); ) {
             final Task task = it.next();
             try {
@@ -218,19 +211,16 @@ class AssignedTasks implements RestoringTasks {
                 // as we suspend a task, we are either shutting down or rebalancing, thus, we swallow and move on
                 closeZombieTask(task);
                 it.remove();
-            } catch (final RuntimeException e) {
-                log.error("Suspending {} {} failed due to the following error:", taskTypeName, task.id(), e);
+            } catch (final RuntimeException fatal) {
+                log.error("Suspending {} {} failed due to the following error (closing this task unclean):", taskTypeName, task.id(), fatal);
                 try {
                     task.close(false, false);
-                } catch (final Exception f) {
-                    log.error("After suspending failed, closing the same {} {} failed again due to the following error:", taskTypeName, task.id(), f);
+                } catch (final Exception ignoreAndSwallow) {
+                    log.error("After suspending failed, closing the same {} {} failed again due to the following error:", taskTypeName, task.id(), ignoreAndSwallow);
                 }
-                if (exception == null) {
-                    exception = e;
-                }
+                it.remove();
             }
         }
-        return exception;
     }
 
     private void closeZombieTask(final Task task) {
@@ -475,9 +465,8 @@ class AssignedTasks implements RestoringTasks {
                     suspendedTask.closeSuspended(true, false, null);
                 } catch (final Exception e) {
                     log.error("Failed to remove suspended {} {} due to the following error:", taskTypeName, suspendedTask.id(), e);
-                } finally {
-                    standByTaskIterator.remove();
                 }
+                standByTaskIterator.remove();
             }
         }
     }
@@ -488,14 +477,30 @@ class AssignedTasks implements RestoringTasks {
     }
 
     private void close(final Collection<Task> tasks, final boolean clean) {
-        for (final Task task : tasks) {
+        for (Iterator<Task> it = tasks.iterator(); it.hasNext(); ) {
+            final Task task = it.next();
             try {
                 task.close(clean, false);
+            } catch (final ProducerFencedException ignoreAndSwallow) {
+                closeZombieTask(task);
+                it.remove();
             } catch (final Throwable t) {
                 log.error("Failed while closing {} {} due to the following error:",
                           task.getClass().getSimpleName(),
                           task.id(),
                           t);
+                if (clean) {
+                    try {
+                        log.info("Try to close {} {} unclean.", task.getClass().getSimpleName(), task.id());
+                        task.close(false, false);
+                    } catch (final RuntimeException ignoreAndSwallow) {
+                        log.error("Failed while closing {} {} due to the following error:",
+                            task.getClass().getSimpleName(),
+                            task.id(),
+                            t);
+                    }
+                }
+                it.remove();
             }
         }
     }
