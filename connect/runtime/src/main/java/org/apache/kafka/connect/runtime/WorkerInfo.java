@@ -26,7 +26,6 @@ import java.lang.management.RuntimeMXBean;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
 
 /**
  * Connect Worker system and runtime information.
@@ -62,7 +61,7 @@ public class WorkerInfo {
         b.append(" values: ");
         b.append(Utils.NL);
 
-        for (Map.Entry<String, Object> entry : new TreeMap<>(values).entrySet()) {
+        for (Map.Entry<String, Object> entry : values.entrySet()) {
             b.append('\t');
             b.append(entry.getKey());
             b.append(" = ");
@@ -89,6 +88,7 @@ public class WorkerInfo {
                 RUNTIME.getVmVersion()
         };
         values.put("jvm.spec", Utils.join(jvmSpec, ", "));
+        values.put("jvm.classpath", RUNTIME.getClassPath());
     }
 
     /**
