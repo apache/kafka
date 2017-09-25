@@ -384,12 +384,13 @@ public class NetworkClient implements KafkaClient {
             // the case when sending the initial ApiVersionRequest which fetches the version
             // information itself.  It is also the case when discoverBrokerVersions is set to false.
             if (versionInfo == null) {
-                version = builder.desiredOrLatestVersion();
+                version = builder.latestAllowedVersion();
                 if (discoverBrokerVersions && log.isTraceEnabled())
                     log.trace("No version information found when sending {} with correlation id {} to node {}. " +
                             "Assuming version {}.", clientRequest.apiKey(), clientRequest.correlationId(), nodeId, version);
             } else {
-                version = versionInfo.usableVersion(clientRequest.apiKey(), builder.desiredVersion());
+                version = versionInfo.usableVersion(clientRequest.apiKey(), builder.oldestAllowedVersion(),
+                        builder.latestAllowedVersion());
             }
             // The call to build may also throw UnsupportedVersionException, if there are essential
             // fields that cannot be represented in the chosen version.
@@ -399,7 +400,7 @@ public class NetworkClient implements KafkaClient {
             // Instead, simply add it to the local queue of aborted requests.
             log.debug("Version mismatch when attempting to send {} with correlation id {} to {}", builder,
                     clientRequest.correlationId(), clientRequest.destination(), e);
-            ClientResponse clientResponse = new ClientResponse(clientRequest.makeHeader(builder.desiredOrLatestVersion()),
+            ClientResponse clientResponse = new ClientResponse(clientRequest.makeHeader(builder.latestAllowedVersion()),
                     clientRequest.callback(), clientRequest.destination(), now, now,
                     false, e, null);
             abortedSends.add(clientResponse);
