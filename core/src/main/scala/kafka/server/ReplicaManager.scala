@@ -23,14 +23,14 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import com.yammer.metrics.core.Gauge
 import kafka.api._
 import kafka.cluster.{Partition, Replica}
-import kafka.controller.{KafkaController, StateChangeLogger}
+import kafka.controller.{KafkaController, OfflinePartition, StateChangeLogger}
 import kafka.log.{Log, LogAppendInfo, LogManager}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{ControllerMovedException, CorruptRecordException, LogDirNotFoundException, InvalidTimestampException, InvalidTopicException, KafkaStorageException, NotEnoughReplicasException, NotLeaderForPartitionException, OffsetOutOfRangeException, PolicyViolationException, _}
+import org.apache.kafka.common.errors.{ControllerMovedException, CorruptRecordException, InvalidTimestampException, InvalidTopicException, KafkaStorageException, LogDirNotFoundException, NotEnoughReplicasException, NotLeaderForPartitionException, OffsetOutOfRangeException, PolicyViolationException, _}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
@@ -204,7 +204,7 @@ class ReplicaManager(val config: KafkaConfig,
   val leaderCount = newGauge(
     "LeaderCount",
     new Gauge[Int] {
-      def value = getLeaderPartitions.size
+      def value = leaderPartitionsIterator.size
     }
   )
   val partitionCount = newGauge(
@@ -216,7 +216,7 @@ class ReplicaManager(val config: KafkaConfig,
   val offlineReplicaCount = newGauge(
     "OfflineReplicaCount",
     new Gauge[Int] {
-      def value = allPartitions.values.count(_ eq ReplicaManager.OfflinePartition)
+      def value = offlinePartitionsIterator.size
     }
   )
   val underReplicatedPartitions = newGauge(
@@ -229,7 +229,7 @@ class ReplicaManager(val config: KafkaConfig,
   val underMinIsrPartitionCount = newGauge(
     "UnderMinIsrPartitionCount",
     new Gauge[Int] {
-      def value = getLeaderPartitions.count(_.isUnderMinIsr)
+      def value = leaderPartitionsIterator.count(_.isUnderMinIsr)
     }
   )
 
@@ -237,8 +237,7 @@ class ReplicaManager(val config: KafkaConfig,
   val isrShrinkRate = newMeter("IsrShrinksPerSec", "shrinks", TimeUnit.SECONDS)
   val failedIsrUpdatesRate = newMeter("FailedIsrUpdatesPerSec", "failedUpdates", TimeUnit.SECONDS)
 
-  def underReplicatedPartitionCount: Int =
-    getLeaderPartitions.count(_.isUnderReplicated)
+  def underReplicatedPartitionCount: Int = leaderPartitionsIterator.count(_.isUnderReplicated)
 
   def startHighWaterMarksCheckPointThread() = {
     if(highWatermarkCheckPointThreadStarted.compareAndSet(false, true))
@@ -326,7 +325,7 @@ class ReplicaManager(val config: KafkaConfig,
             throw new KafkaStorageException(s"Partition $topicPartition is on an offline disk")
           val removedPartition = allPartitions.remove(topicPartition)
           if (removedPartition != null) {
-            val topicHasPartitions = allPartitions.values.exists(partition => topicPartition.topic == partition.topic)
+            val topicHasPartitions = allPartitions.values.exists(_.topic == topicPartition.topic)
             if (!topicHasPartitions)
               brokerTopicStats.removeMetrics(topicPartition.topic)
             // this will delete the local log. This call may throw exception if the log is on offline directory
@@ -382,6 +381,15 @@ class ReplicaManager(val config: KafkaConfig,
   def getPartition(topicPartition: TopicPartition): Option[Partition] =
     Option(allPartitions.get(topicPartition))
 
+  def nonOfflinePartition(topicPartition: TopicPartition): Option[Partition] =
+    getPartition(topicPartition).filter(_ ne ReplicaManager.OfflinePartition)
+
+  def nonOfflinePartitionsIterator: Iterator[Partition] =
+    allPartitions.values.iterator.filter(_ ne ReplicaManager.OfflinePartition)
+
+  def offlinePartitionsIterator: Iterator[Partition] =
+    allPartitions.values.iterator.filter(_ eq ReplicaManager.OfflinePartition)
+
   def getReplicaOrException(topicPartition: TopicPartition): Replica = {
     getPartition(topicPartition) match {
       case Some(partition) =>
@@ -412,7 +420,7 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   def getReplica(topicPartition: TopicPartition, replicaId: Int): Option[Replica] =
-    getPartition(topicPartition).filter(_ ne ReplicaManager.OfflinePartition).flatMap(_.getReplica(replicaId))
+    nonOfflinePartition(topicPartition).flatMap(_.getReplica(replicaId))
 
   def getReplica(tp: TopicPartition): Option[Replica] = getReplica(tp, localBrokerId)
 
@@ -957,9 +965,9 @@ class ReplicaManager(val config: KafkaConfig,
    *  the quota is exceeded and the replica is not in sync.
    */
   def shouldLeaderThrottle(quota: ReplicaQuota, topicPartition: TopicPartition, replicaId: Int): Boolean = {
-    val isReplicaInSync = getPartition(topicPartition).filter(_ ne ReplicaManager.OfflinePartition).flatMap { partition =>
-      partition.getReplica(replicaId).map(partition.inSyncReplicas.contains)
-    }.getOrElse(false)
+    val isReplicaInSync = nonOfflinePartition(topicPartition).exists { partition =>
+      partition.getReplica(replicaId).exists(partition.inSyncReplicas.contains)
+    }
     quota.isThrottled(topicPartition) && quota.isQuotaExceeded && !isReplicaInSync
   }
 
@@ -1277,27 +1285,25 @@ class ReplicaManager(val config: KafkaConfig,
 
   private def maybeShrinkIsr(): Unit = {
     trace("Evaluating ISR list of partitions to see which replicas can be removed from the ISR")
-    allPartitions.values.filter(_ ne ReplicaManager.OfflinePartition).foreach(partition => partition.maybeShrinkIsr(config.replicaLagTimeMaxMs))
+    nonOfflinePartitionsIterator.foreach(_.maybeShrinkIsr(config.replicaLagTimeMaxMs))
   }
 
   private def updateFollowerLogReadResults(replicaId: Int, readResults: Seq[(TopicPartition, LogReadResult)]) {
     debug("Recording follower broker %d log read results: %s ".format(replicaId, readResults))
     readResults.foreach { case (topicPartition, readResult) =>
-      getPartition(topicPartition) match {
+      nonOfflinePartition(topicPartition) match {
         case Some(partition) =>
-          if (partition ne ReplicaManager.OfflinePartition) {
-            partition.getReplica(replicaId) match {
-              case Some(replica) =>
-                partition.updateReplicaLogReadResult(replica, readResult)
-                // for producer requests with ack > 1, we need to check
-                // if they can be unblocked after some follower's log end offsets have moved
-                tryCompleteDelayedProduce(new TopicPartitionOperationKey(topicPartition))
-              case None =>
-                warn(s"Leader $localBrokerId failed to record follower $replicaId's position " +
-                  s"${readResult.info.fetchOffsetMetadata.messageOffset} since the replica is not recognized to be " +
-                  s"one of the assigned replicas ${partition.assignedReplicas.map(_.brokerId).mkString(",")} " +
-                  s"for partition $topicPartition.")
-            }
+          partition.getReplica(replicaId) match {
+            case Some(replica) =>
+              partition.updateReplicaLogReadResult(replica, readResult)
+              // for producer requests with ack > 1, we need to check
+              // if they can be unblocked after some follower's log end offsets have moved
+              tryCompleteDelayedProduce(new TopicPartitionOperationKey(topicPartition))
+            case None =>
+              warn(s"Leader $localBrokerId failed to record follower $replicaId's position " +
+                s"${readResult.info.fetchOffsetMetadata.messageOffset} since the replica is not recognized to be " +
+                s"one of the assigned replicas ${partition.assignedReplicas.map(_.brokerId).mkString(",")} " +
+                s"for partition $topicPartition.")
           }
         case None =>
           warn("While recording the replica LEO, the partition %s hasn't been created.".format(topicPartition))
@@ -1305,24 +1311,16 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  private def getLeaderPartitions: List[Partition] =
-    allPartitions.values.filter(partition => (partition ne ReplicaManager.OfflinePartition) && partition.leaderReplicaIfLocal.isDefined).toList
+  private def leaderPartitionsIterator: Iterator[Partition] =
+    nonOfflinePartitionsIterator.filter(_.leaderReplicaIfLocal.isDefined)
 
-  def getLogEndOffset(topicPartition: TopicPartition): Option[Long] = {
-    getPartition(topicPartition) match {
-      case Some(partition) =>
-        if (partition eq ReplicaManager.OfflinePartition)
-          None
-        else
-          partition.leaderReplicaIfLocal.map(_.logEndOffset.messageOffset)
-      case None => None
-    }
-  }
+  def getLogEndOffset(topicPartition: TopicPartition): Option[Long] =
+    nonOfflinePartition(topicPartition).flatMap(_.leaderReplicaIfLocal.map(_.logEndOffset.messageOffset))
 
   // Flushes the highwatermark value for all partitions to the highwatermark file
   def checkpointHighWatermarks() {
-    val replicas = allPartitions.values.filter(_ ne ReplicaManager.OfflinePartition).flatMap(_.getReplica(localBrokerId))
-    val replicasByDir = replicas.filter(_.log.isDefined).groupBy(_.log.get.dir.getParent)
+    val replicas = nonOfflinePartitionsIterator.flatMap(_.getReplica(localBrokerId)).filter(_.log.isDefined).toBuffer
+    val replicasByDir = replicas.groupBy(_.log.get.dir.getParent)
     for ((dir, reps) <- replicasByDir) {
       val hwms = reps.map(r => r.topicPartition -> r.highWatermark.messageOffset).toMap
       try {
@@ -1341,13 +1339,9 @@ class ReplicaManager(val config: KafkaConfig,
 
     info(s"Stopping serving replicas in dir $dir")
     replicaStateChangeLock synchronized {
-      val newOfflinePartitions = allPartitions.values.filter { partition =>
-        if (partition eq ReplicaManager.OfflinePartition)
-          false
-        else partition.getReplica(config.brokerId) match {
-          case Some(replica) =>
-            replica.log.isDefined && replica.log.get.dir.getParent == dir
-          case None => false
+      val newOfflinePartitions = nonOfflinePartitionsIterator.filter { partition =>
+        partition.getReplica(config.brokerId).exists { replica =>
+          replica.log.isDefined && replica.log.get.dir.getParent == dir
         }
       }.map(_.topicPartition)
 
