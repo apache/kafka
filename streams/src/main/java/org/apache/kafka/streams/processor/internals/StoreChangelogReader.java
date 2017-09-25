@@ -65,7 +65,7 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     /**
-     * @throws TaskMigratedException if another thread did write to the changelog topic that is currently restored
+     * @throws TaskMigratedException if another thread wrote to the changelog topic that is currently restored
      */
     public Collection<TopicPartition> restore(final AssignedTasks active) {
         if (!needsInitializing.isEmpty()) {
@@ -228,7 +228,7 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     /**
-     * @throws TaskMigratedException if another thread did write to the changelog topic that is currently restored
+     * @throws TaskMigratedException if another thread wrote to the changelog topic that is currently restored
      */
     private void restorePartition(final ConsumerRecords<byte[], byte[]> allRecords,
                                   final TopicPartition topicPartition,
@@ -257,12 +257,11 @@ public class StoreChangelogReader implements ChangelogReader {
                              final StateRestorer restorer,
                              final Long endOffset) {
         final List<KeyValue<byte[], byte[]>> restoreRecords = new ArrayList<>();
-        long nextPosition = -1;
+        long offset = -1;
 
         for (final ConsumerRecord<byte[], byte[]> record : records) {
-            final long offset = record.offset();
+            offset = record.offset();
             if (restorer.hasCompleted(offset, endOffset)) {
-                nextPosition = record.offset();
                 break;
             }
             if (record.key() != null) {
@@ -270,17 +269,16 @@ public class StoreChangelogReader implements ChangelogReader {
             }
         }
 
-        if (nextPosition == -1) {
-            nextPosition = consumer.position(restorer.partition());
+        if (offset == -1) {
+            offset = consumer.position(restorer.partition());
         }
 
         if (!restoreRecords.isEmpty()) {
             restorer.restore(restoreRecords);
-            restorer.restoreBatchCompleted(nextPosition, records.size());
-
+            restorer.restoreBatchCompleted(offset + 1, records.size());
         }
 
-        return nextPosition;
+        return consumer.position(restorer.partition());
     }
 
     private boolean hasPartition(final TopicPartition topicPartition) {

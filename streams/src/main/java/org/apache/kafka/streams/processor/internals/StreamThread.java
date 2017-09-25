@@ -783,7 +783,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
     /**
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
-     * @throws TaskMigratedException if another thread did write to the changelog topic that is currently restored
+     * @throws TaskMigratedException if another thread wrote to the changelog topic that is currently restored
      *                               or if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      */

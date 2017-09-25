@@ -25,6 +25,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.test.MockRestoreCallback;
 import org.apache.kafka.test.MockStateRestoreListener;
@@ -38,6 +39,7 @@ import org.junit.runner.RunWith;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -57,6 +59,8 @@ public class StoreChangelogReaderTest {
 
     @Mock(type = MockType.NICE)
     private AssignedTasks active;
+    @Mock(type = MockType.NICE)
+    private Task task;
 
     private final MockStateRestoreListener callback = new MockStateRestoreListener();
     private final CompositeRestoreListener restoreListener = new CompositeRestoreListener(callback);
@@ -328,19 +332,44 @@ public class StoreChangelogReaderTest {
         assertThat(callbackTwo.restored.size(), equalTo(3));
     }
 
-    private void setupConsumer(final long messages, final TopicPartition topicPartition) {
+    @Test
+    public void shouldThrowTaskMigratedExceptionIfEndOffsetGetsExceededDuringRestore() {
+        final int messages = 10;
+        setupConsumer(messages, topicPartition);
+        consumer.updateEndOffsets(new HashMap<TopicPartition, Long>() {
+            {
+                put(topicPartition, 5L);
+            }
+        });
+        changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true,
+            "storeName"));
+
+        expect(active.restoringTaskFor(topicPartition)).andReturn(task);
+        replay(active);
+
+        try {
+            changelogReader.restore(active);
+            fail("Should have thrown TaskMigratedException");
+        } catch (final TaskMigratedException expected) { /* ignore */ }
+    }
+
+    private void setupConsumer(final long messages,
+                               final TopicPartition topicPartition) {
         assignPartition(messages, topicPartition);
         addRecords(messages, topicPartition, 0);
         consumer.assign(Collections.<TopicPartition>emptyList());
     }
 
-    private void addRecords(final long messages, final TopicPartition topicPartition, final int startingOffset) {
+    private void addRecords(final long messages,
+                            final TopicPartition topicPartition,
+                            final int startingOffset) {
         for (int i = 0; i < messages; i++) {
             consumer.addRecord(new ConsumerRecord<>(topicPartition.topic(), topicPartition.partition(), startingOffset + i, new byte[0], new byte[0]));
         }
     }
 
-    private void assignPartition(final long messages, final TopicPartition topicPartition) {
+    private void assignPartition(final long messages,
+                                 final TopicPartition topicPartition) {
         consumer.updatePartitions(topicPartition.topic(),
                                   Collections.singletonList(
                                           new PartitionInfo(topicPartition.topic(),
