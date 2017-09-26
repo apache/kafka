@@ -391,7 +391,6 @@ abstract class WorkerTask implements Runnable {
                         return taskStateTimer.durationRatio(matchingState, now);
                     }
                 });
-                metricGroup.registerMetric(metricName);
             }
         }
 

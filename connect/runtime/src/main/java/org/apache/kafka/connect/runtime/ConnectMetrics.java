@@ -53,7 +53,7 @@ public class ConnectMetrics {
     private final Metrics metrics;
     private final Time time;
     private final String workerId;
-    private final ConcurrentMap<String, MetricGroup> groupsByName = new ConcurrentHashMap<>();
+    private final ConcurrentMap<MetricGroupId, MetricGroup> groupsByName = new ConcurrentHashMap<>();
 
     /**
      * Create an instance.
@@ -109,6 +109,7 @@ public class ConnectMetrics {
 
     /**
      * Get or create a {@link MetricGroup} with the specified group name and the given tags.
+     * Each group is uniquely identified by the name and tags.
      *
      * @param groupName    the name of the metric group; may not be null and must be a
      *                     {@link #checkNameIsValid(String) valid name}
@@ -122,6 +123,7 @@ public class ConnectMetrics {
 
     /**
      * Get or create a {@link MetricGroup} with the specified group name and the given tags.
+     * Each group is uniquely identified by the name and tags.
      *
      * @param groupName       the name of the metric group; may not be null and must be a
      *                        {@link #checkNameIsValid(String) valid name}
@@ -131,14 +133,20 @@ public class ConnectMetrics {
      * @throws IllegalArgumentException if the group name is not valid
      */
     public MetricGroup group(String groupName, boolean includeWorkerId, String... tagKeyValues) {
-        MetricGroup group = groupsByName.get(groupName);
+        MetricGroupId groupId = groupId(groupName, includeWorkerId, tagKeyValues);
+        MetricGroup group = groupsByName.get(groupId);
         if (group == null) {
-            Map<String, String> tags = tags(includeWorkerId ? workerId : null, tagKeyValues);
-            group = new MetricGroup(groupName, tags);
-            MetricGroup previous = groupsByName.putIfAbsent(groupName, group);
+            group = new MetricGroup(groupId);
+            MetricGroup previous = groupsByName.putIfAbsent(groupId, group);
             if (previous != null) group = previous;
         }
         return group;
+    }
+
+    protected MetricGroupId groupId(String groupName, boolean includeWorkerId, String... tagKeyValues) {
+        checkNameIsValid(groupName);
+        Map<String, String> tags = tags(includeWorkerId ? workerId : null, tagKeyValues);
+        return new MetricGroupId(groupName, tags);
     }
 
     /**
@@ -159,26 +167,94 @@ public class ConnectMetrics {
         AppInfoParser.unregisterAppInfo(JMX_PREFIX, workerId);
     }
 
-    /**
-     * A group of metrics. Each group maps to a JMX MBean and each metric maps to an MBean attribute.
-     */
-    public class MetricGroup {
+    public static class MetricGroupId {
         private final String groupName;
         private final Map<String, String> tags;
+        private final int hc;
+        private final String str;
+
+        public MetricGroupId(String groupName, Map<String, String> tags) {
+            assert groupName != null;
+            assert tags != null;
+            this.groupName = groupName;
+            this.tags = Collections.unmodifiableMap(new HashMap<>(tags));
+            this.hc = Objects.hash(this.groupName, this.tags);
+            StringBuilder sb = new StringBuilder(this.groupName);
+            for (Map.Entry<String, String> entry : this.tags.entrySet()) {
+                sb.append(";").append(entry.getKey()).append('=').append(entry.getValue());
+            }
+            this.str = sb.toString();
+        }
+
+        /**
+         * Get the group name.
+         *
+         * @return the group name; never null
+         */
+        public String groupName() {
+            return groupName;
+        }
+
+        /**
+         * Get the immutable map of tag names and values.
+         *
+         * @return the tags; never null
+         */
+        public Map<String, String> tags() {
+            return tags;
+        }
+
+        /**
+         * Determine if the supplied metric name is part of this group identifier.
+         *
+         * @param metricName the metric name
+         * @return true if the metric name's group and tags match this group identifier, or false otherwise
+         */
+        public boolean includes(MetricName metricName) {
+            return metricName != null && groupName.equals(metricName.group()) && tags.equals(metricName.tags());
+        }
+
+        @Override
+        public int hashCode() {
+            return hc;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj == this) return true;
+            if (obj instanceof MetricGroupId) {
+                MetricGroupId that = (MetricGroupId) obj;
+                return this.groupName.equals(that.groupName) && this.tags.equals(that.tags);
+            }
+            return false;
+        }
+
+        @Override
+        public String toString() {
+            return str;
+        }
+    }
+
+    /**
+     * A group of metrics. Each group maps to a JMX MBean and each metric maps to an MBean attribute.
+     * <p>
+     * Sensors should be added via the {@code sensor} methods on this class, rather than directly through
+     * the {@link Metrics} class, so that the sensor names are made to be unique (based on the group name)
+     * and so the sensors are removed when this group is {@link #close() closed}.
+     */
+    public class MetricGroup {
+        private final MetricGroupId groupId;
         private final Set<String> sensorNames = new HashSet<>();
-        private final Set<MetricName> metricNames = new HashSet<>();
+        private final String sensorPrefix;
 
         /**
          * Create a group of Connect metrics.
          *
-         * @param groupName the name of the group; may not be null and must be valid
-         * @param tags      the tags; may not be null but may be empty
-         * @throws IllegalArgumentException if the name is not valid
+         * @param groupId the identifier of the group; may not be null and must be valid
          */
-        protected MetricGroup(String groupName, Map<String, String> tags) {
-            checkNameIsValid(groupName);
-            this.groupName = groupName;
-            this.tags = Collections.unmodifiableMap(new HashMap<>(tags));
+        protected MetricGroup(MetricGroupId groupId) {
+            this.groupId = groupId;
+            sensorPrefix = "connect-sensor-group: " + groupId.toString() + ";";
         }
 
         /**
@@ -191,11 +267,15 @@ public class ConnectMetrics {
          */
         public MetricName metricName(String name, String desc) {
             checkNameIsValid(name);
-            return metrics.metricName(name, groupName, desc, tags);
+            return metrics.metricName(name, groupId.groupName(), desc, groupId.tags());
         }
 
         /**
          * The {@link Metrics} that this group belongs to.
+         * <p>
+         * Do not use this to add {@link Sensor Sensors}, since they will not be removed when this group is
+         * {@link #close() closed}. Metrics can be added directly, as long as the metric names are obtained from
+         * this group via the {@link #metricName(String, String)} method.
          *
          * @return the metrics; never null
          */
@@ -209,25 +289,11 @@ public class ConnectMetrics {
          * @return the unmodifiable tags; never null but may be empty
          */
         Map<String, String> tags() {
-            return tags;
-        }
-
-        /**
-         * Register a metric that is not associated with a Sensor. This must be called if the metrics are to be
-         * automatically removed when this group is {@link #close() closed}.
-         *
-         * Any metric added directly to the {@link #metrics() Metrics} must be registered if they are to be
-         * automatically removed.
-         *
-         * @param metricName the name of the metric
-         */
-        public synchronized void registerMetric(MetricName metricName) {
-            if (metricName != null) metricNames.add(metricName);
+            return groupId.tags();
         }
 
         /**
          * Add to this group an indicator metric with a function that will be used to obtain the indicator state.
-         * The resulting metric is automatically {@link #registerMetric(MetricName) registered} with this group.
          *
          * @param name        the name of the metric; may not be null and must be a
          *                    {@link #checkNameIsValid(String) valid name}
@@ -244,7 +310,6 @@ public class ConnectMetrics {
                         return predicate.matches() ? 1.0d : 0.0d;
                     }
                 });
-                registerMetric(metricName);
             }
         }
 
@@ -307,7 +372,8 @@ public class ConnectMetrics {
          * @return The sensor that is created
          */
         public synchronized Sensor sensor(String name, MetricConfig config, Sensor.RecordingLevel recordingLevel, Sensor... parents) {
-            Sensor result = metrics.sensor(name, config, Long.MAX_VALUE, recordingLevel, parents);
+            // We need to make sure that all sensor names are unique across all groups, so use the sensor prefix
+            Sensor result = metrics.sensor(sensorPrefix + name, config, Long.MAX_VALUE, recordingLevel, parents);
             if (result != null) sensorNames.add(result.name());
             return result;
         }
@@ -331,11 +397,12 @@ public class ConnectMetrics {
             for (String sensorName : sensorNames) {
                 metrics.removeSensor(sensorName);
             }
-            for (MetricName metricName : metricNames) {
-                metrics.removeMetric(metricName);
-            }
             sensorNames.clear();
-            metricNames.clear();
+            for (MetricName metricName : new HashSet<>(metrics.metrics().keySet())) {
+                if (groupId.includes(metricName)) {
+                    metrics.removeMetric(metricName);
+                }
+            }
         }
     }
 
