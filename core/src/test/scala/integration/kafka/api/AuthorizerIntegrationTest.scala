@@ -69,6 +69,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   val clientId = "client-Id"
   val tp = new TopicPartition(topic, part)
   val logDir = "logDir"
+  val deleteRecordsPartition = new TopicPartition(deleteTopic, part)
   val topicAndPartition = TopicAndPartition(topic, part)
   val group = "my-group"
   val topicResource = new Resource(Topic, topic)
@@ -128,6 +129,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       ApiKeys.CONTROLLED_SHUTDOWN -> classOf[requests.ControlledShutdownResponse],
       ApiKeys.CREATE_TOPICS -> classOf[CreateTopicsResponse],
       ApiKeys.DELETE_TOPICS -> classOf[requests.DeleteTopicsResponse],
+      ApiKeys.DELETE_RECORDS -> classOf[requests.DeleteRecordsResponse],
       ApiKeys.OFFSET_FOR_LEADER_EPOCH -> classOf[OffsetsForLeaderEpochResponse],
       ApiKeys.DESCRIBE_CONFIGS -> classOf[DescribeConfigsResponse],
       ApiKeys.ALTER_CONFIGS -> classOf[AlterConfigsResponse],
@@ -163,6 +165,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.CONTROLLED_SHUTDOWN -> ((resp: requests.ControlledShutdownResponse) => resp.error),
     ApiKeys.CREATE_TOPICS -> ((resp: CreateTopicsResponse) => resp.errors.asScala.find(_._1 == createTopic).get._2.error),
     ApiKeys.DELETE_TOPICS -> ((resp: requests.DeleteTopicsResponse) => resp.errors.asScala.find(_._1 == deleteTopic).get._2),
+    ApiKeys.DELETE_RECORDS -> ((resp: requests.DeleteRecordsResponse) => resp.responses.get(deleteRecordsPartition).error),
     ApiKeys.OFFSET_FOR_LEADER_EPOCH -> ((resp: OffsetsForLeaderEpochResponse) => resp.responses.get(tp).error),
     ApiKeys.DESCRIBE_CONFIGS -> ((resp: DescribeConfigsResponse) =>
       resp.configs.get(new RResource(RResourceType.TOPIC, tp.topic)).error.error),
@@ -201,6 +204,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.CONTROLLED_SHUTDOWN -> clusterAcl,
     ApiKeys.CREATE_TOPICS -> clusterCreateAcl,
     ApiKeys.DELETE_TOPICS -> topicDeleteAcl,
+    ApiKeys.DELETE_RECORDS -> topicDeleteAcl,
     ApiKeys.OFFSET_FOR_LEADER_EPOCH -> clusterAcl,
     ApiKeys.DESCRIBE_CONFIGS -> topicDescribeConfigsAcl,
     ApiKeys.ALTER_CONFIGS -> topicAlterConfigsAcl,
@@ -338,6 +342,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def deleteTopicsRequest = new DeleteTopicsRequest.Builder(Set(deleteTopic).asJava, 5000).build()
 
+  private def deleteRecordsRequest = new DeleteRecordsRequest.Builder(5000, Collections.singletonMap(deleteRecordsPartition, 0L)).build()
+
   private def describeConfigsRequest =
     new DescribeConfigsRequest.Builder(Collections.singleton(new RResource(RResourceType.TOPIC, tp.topic))).build()
 
@@ -386,6 +392,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       ApiKeys.CONTROLLED_SHUTDOWN -> controlledShutdownRequest,
       ApiKeys.CREATE_TOPICS -> createTopicsRequest,
       ApiKeys.DELETE_TOPICS -> deleteTopicsRequest,
+      ApiKeys.DELETE_RECORDS -> deleteRecordsRequest,
       ApiKeys.OFFSET_FOR_LEADER_EPOCH -> offsetsForLeaderEpochRequest,
       ApiKeys.DESCRIBE_CONFIGS -> describeConfigsRequest,
       ApiKeys.ALTER_CONFIGS -> alterConfigsRequest,
@@ -434,7 +441,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       ApiKeys.LIST_OFFSETS -> createListOffsetsRequest,
       ApiKeys.OFFSET_COMMIT -> createOffsetCommitRequest,
       ApiKeys.OFFSET_FETCH -> createOffsetFetchRequest,
-      ApiKeys.DELETE_TOPICS -> deleteTopicsRequest
+      ApiKeys.DELETE_TOPICS -> deleteTopicsRequest,
+      ApiKeys.DELETE_RECORDS -> deleteRecordsRequest
     )
 
     for ((key, request) <- requestKeyToRequest) {
@@ -910,7 +918,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testUnauthorizedDeleteWithoutDescribe() {
+  def testUnauthorizedDeleteTopicsWithoutDescribe() {
     val response = connectAndSend(deleteTopicsRequest, ApiKeys.DELETE_TOPICS)
     val version = ApiKeys.DELETE_TOPICS.latestVersion
     val deleteResponse = DeleteTopicsResponse.parse(response, version)
@@ -918,7 +926,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testUnauthorizedDeleteWithDescribe() {
+  def testUnauthorizedDeleteTopicsWithDescribe() {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)), deleteTopicResource)
     val response = connectAndSend(deleteTopicsRequest, ApiKeys.DELETE_TOPICS)
     val version = ApiKeys.DELETE_TOPICS.latestVersion
@@ -928,13 +936,40 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testDeleteWithWildCardAuth() {
+  def testDeleteTopicsWithWildCardAuth() {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Delete)), new Resource(Topic, "*"))
     val response = connectAndSend(deleteTopicsRequest, ApiKeys.DELETE_TOPICS)
     val version = ApiKeys.DELETE_TOPICS.latestVersion
     val deleteResponse = DeleteTopicsResponse.parse(response, version)
 
     assertEquals(Errors.NONE, deleteResponse.errors.asScala.head._2)
+  }
+
+  @Test
+  def testUnauthorizedDeleteRecordsWithoutDescribe() {
+    val response = connectAndSend(deleteRecordsRequest, ApiKeys.DELETE_RECORDS)
+    val version = ApiKeys.DELETE_RECORDS.latestVersion
+    val deleteRecordsResponse = DeleteRecordsResponse.parse(response, version)
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, deleteRecordsResponse.responses.asScala.head._2.error)
+  }
+
+  @Test
+  def testUnauthorizedDeleteRecordsWithDescribe() {
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)), deleteTopicResource)
+    val response = connectAndSend(deleteRecordsRequest, ApiKeys.DELETE_RECORDS)
+    val version = ApiKeys.DELETE_RECORDS.latestVersion
+    val deleteRecordsResponse = DeleteRecordsResponse.parse(response, version)
+    assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED, deleteRecordsResponse.responses.asScala.head._2.error)
+  }
+
+  @Test
+  def testDeleteRecordsWithWildCardAuth() {
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Delete)), new Resource(Topic, "*"))
+    val response = connectAndSend(deleteRecordsRequest, ApiKeys.DELETE_RECORDS)
+    val version = ApiKeys.DELETE_RECORDS.latestVersion
+    val deleteRecordsResponse = DeleteRecordsResponse.parse(response, version)
+
+    assertEquals(Errors.NONE, deleteRecordsResponse.responses.asScala.head._2.error)
   }
 
   @Test(expected = classOf[TransactionalIdAuthorizationException])
