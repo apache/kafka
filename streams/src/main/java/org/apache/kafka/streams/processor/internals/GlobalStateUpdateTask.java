@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 
@@ -37,17 +38,18 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
     private final Map<String, RecordDeserializer> deserializers = new HashMap<>();
     private final GlobalStateManager stateMgr;
     private final DeserializationExceptionHandler deserializationExceptionHandler;
-
+    private final LogContext logContext;
 
     public GlobalStateUpdateTask(final ProcessorTopology topology,
                                  final InternalProcessorContext processorContext,
                                  final GlobalStateManager stateMgr,
-                                 final DeserializationExceptionHandler deserializationExceptionHandler) {
-
+                                 final DeserializationExceptionHandler deserializationExceptionHandler,
+                                 final LogContext logContext) {
         this.topology = topology;
         this.stateMgr = stateMgr;
         this.processorContext = processorContext;
         this.deserializationExceptionHandler = deserializationExceptionHandler;
+        this.logContext = logContext;
     }
 
     /**
@@ -60,7 +62,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
         for (final String storeName : storeNames) {
             final String sourceTopic = storeNameToTopic.get(storeName);
             final SourceNode source = topology.source(sourceTopic);
-            deserializers.put(sourceTopic, new RecordDeserializer(source, deserializationExceptionHandler));
+            deserializers.put(sourceTopic, new RecordDeserializer(source, deserializationExceptionHandler, logContext));
         }
         initTopology();
         processorContext.initialized();
@@ -72,7 +74,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
     @Override
     public void update(final ConsumerRecord<byte[], byte[]> record) {
         final RecordDeserializer sourceNodeAndDeserializer = deserializers.get(record.topic());
-        final ConsumerRecord<Object, Object> deserialized = sourceNodeAndDeserializer.tryDeserialize(processorContext, record);
+        final ConsumerRecord<Object, Object> deserialized = sourceNodeAndDeserializer.deserialize(processorContext, record);
 
         if (deserialized != null) {
             final ProcessorRecordContext recordContext =

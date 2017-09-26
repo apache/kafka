@@ -19,7 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.common.utils.LogContext;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -40,26 +40,12 @@ public class RecordDeserializerTest {
         new byte[0]);
 
 
-    @Test(expected = StreamsException.class)
-    public void shouldThrowStreamsExceptionIfKeyFailsToDeserialize() {
-        final RecordDeserializer recordDeserializer = new RecordDeserializer(
-            new TheSourceNode(true, false), null);
-        recordDeserializer.deserialize(rawRecord);
-    }
-
-    @Test(expected = StreamsException.class)
-    public void shouldThrowStreamsExceptionIfKeyValueFailsToDeserialize() {
-        final RecordDeserializer recordDeserializer = new RecordDeserializer(
-            new TheSourceNode(false, true), null);
-        recordDeserializer.deserialize(rawRecord);
-    }
-
     @SuppressWarnings("deprecation")
     @Test
     public void shouldReturnNewConsumerRecordWithDeserializedValueWhenNoExceptions() {
         final RecordDeserializer recordDeserializer = new RecordDeserializer(
-            new TheSourceNode(false, false, "key", "value"), null);
-        final ConsumerRecord<Object, Object> record = recordDeserializer.deserialize(rawRecord);
+            new TheSourceNode(false, false, "key", "value"), null, new LogContext());
+        final ConsumerRecord<Object, Object> record = recordDeserializer.deserialize(null, rawRecord);
         assertEquals(rawRecord.topic(), record.topic());
         assertEquals(rawRecord.partition(), record.partition());
         assertEquals(rawRecord.offset(), record.offset());

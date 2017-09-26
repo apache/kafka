@@ -18,73 +18,56 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.slf4j.Logger;
 
-import static java.lang.String.format;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
 
 class RecordDeserializer {
     private final SourceNode sourceNode;
     private final DeserializationExceptionHandler deserializationExceptionHandler;
+    private final Logger log;
 
     RecordDeserializer(final SourceNode sourceNode,
-                       final DeserializationExceptionHandler deserializationExceptionHandler) {
+                       final DeserializationExceptionHandler deserializationExceptionHandler,
+                       final LogContext logContext) {
         this.sourceNode = sourceNode;
         this.deserializationExceptionHandler = deserializationExceptionHandler;
-    }
-
-    /**
-     * @throws StreamsException if a deserialization exception occurs
-     */
-    @SuppressWarnings("deprecation")
-    ConsumerRecord<Object, Object> deserialize(final ConsumerRecord<byte[], byte[]> rawRecord) {
-        final Object key;
-        try {
-            key = sourceNode.deserializeKey(rawRecord.topic(), rawRecord.headers(), rawRecord.key());
-        } catch (Exception e) {
-            throw new StreamsException(format("Failed to deserialize key for record. topic=%s, partition=%d, offset=%d",
-                                              rawRecord.topic(), rawRecord.partition(), rawRecord.offset()), e);
-        }
-
-        final Object value;
-        try {
-            value = sourceNode.deserializeValue(rawRecord.topic(), rawRecord.headers(), rawRecord.value());
-        } catch (Exception e) {
-            throw new StreamsException(format("Failed to deserialize value for record. topic=%s, partition=%d, offset=%d",
-                                              rawRecord.topic(), rawRecord.partition(), rawRecord.offset()), e);
-        }
-
-        return new ConsumerRecord<>(rawRecord.topic(),
-                                    rawRecord.partition(),
-                                    rawRecord.offset(),
-                                    rawRecord.timestamp(),
-                                    TimestampType.CREATE_TIME,
-                                    rawRecord.checksum(),
-                                    rawRecord.serializedKeySize(),
-                                    rawRecord.serializedValueSize(),
-                                    key,
-                                    value);
-
+        this.log = logContext.logger(RecordDeserializer.class);
     }
 
     /**
      * @throws StreamsException if a deserialization error occurs and the deserialization callback returns
      * {@link DeserializationExceptionHandler.DeserializationHandlerResponse#FAIL FAIL} or throws an exception itself
      */
-    ConsumerRecord<Object, Object> tryDeserialize(final ProcessorContext processorContext,
-                                                  final ConsumerRecord<byte[], byte[]> rawRecord) {
+    @SuppressWarnings("deprecation")
+    ConsumerRecord<Object, Object> deserialize(final ProcessorContext processorContext,
+                                               final ConsumerRecord<byte[], byte[]> rawRecord) {
 
-        // catch and process if we have a deserialization handler
         try {
-            return deserialize(rawRecord);
+            return new ConsumerRecord<>(
+                rawRecord.topic(),
+                rawRecord.partition(),
+                rawRecord.offset(),
+                rawRecord.timestamp(),
+                TimestampType.CREATE_TIME,
+                rawRecord.checksum(),
+                rawRecord.serializedKeySize(),
+                rawRecord.serializedValueSize(),
+                sourceNode.deserializeKey(rawRecord.topic(), rawRecord.headers(), rawRecord.key()),
+                sourceNode.deserializeValue(rawRecord.topic(), rawRecord.headers(), rawRecord.value()));
         } catch (final Exception deserializationException) {
             final DeserializationExceptionHandler.DeserializationHandlerResponse response;
             try {
                 response = deserializationExceptionHandler.handle(processorContext, rawRecord, deserializationException);
-            } catch (final RuntimeException fatalUserException) {
-                throw new StreamsException("Fatal user code error in deserialization callback.", fatalUserException);
+            } catch (final Exception fatalUserException) {
+                log.error("Deserialization error callback failed after deserialization error for record {}",
+                          rawRecord,
+                          deserializationException);
+                throw new StreamsException("Fatal user code error in deserialization error callback", fatalUserException);
             }
 
             if (response == DeserializationExceptionHandler.DeserializationHandlerResponse.FAIL) {
