@@ -745,20 +745,14 @@ public class Sender implements Runnable {
             this.requestTimeSensor.add(metrics.requestLatencyMax, new Max());
 
             this.recordsPerRequestSensor = metrics.sensor("records-per-request");
-            MetricName rateMetricName = metrics.recordSendRate;
-            MetricName totalMetricName = metrics.recordSendTotal;
-            this.recordsPerRequestSensor.add(new Meter(rateMetricName, totalMetricName));
+            this.recordsPerRequestSensor.add(new Meter(metrics.recordSendRate, metrics.recordSendTotal));
             this.recordsPerRequestSensor.add(metrics.recordsPerRequestAvg, new Avg());
 
             this.retrySensor = metrics.sensor("record-retries");
-            rateMetricName = metrics.recordRetryRate;
-            totalMetricName = metrics.recordRetryTotal;
-            this.retrySensor.add(new Meter(rateMetricName, totalMetricName));
+            this.retrySensor.add(new Meter(metrics.recordRetryRate, metrics.recordRetryTotal));
 
             this.errorSensor = metrics.sensor("errors");
-            rateMetricName = metrics.recordErrorRate;
-            totalMetricName = metrics.recordErrorTotal;
-            this.errorSensor.add(new Meter(rateMetricName, totalMetricName));
+            this.errorSensor.add(new Meter(metrics.recordErrorRate, metrics.recordErrorTotal));
 
             this.maxRecordSizeSensor = metrics.sensor("record-size");
             this.maxRecordSizeSensor.add(metrics.recordSizeMax, new Max());
@@ -776,9 +770,7 @@ public class Sender implements Runnable {
             });
 
             this.batchSplitSensor = metrics.sensor("batch-split-rate");
-            rateMetricName = metrics.batchSplitRate;
-            totalMetricName = metrics.batchSplitTotal;
-            this.batchSplitSensor.add(new Meter(rateMetricName, totalMetricName));
+            this.batchSplitSensor.add(new Meter(metrics.batchSplitRate, metrics.batchSplitTotal));
         }
 
         private void maybeRegisterTopicMetrics(String topic) {
