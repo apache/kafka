@@ -478,10 +478,10 @@ public class Metrics implements Closeable {
      * @param metricName The name of the metric
      * @param gauge The gauge associated with this metric
      */
-    public void addMetric(MetricName metricName, Gauge<?> gauge) {
+    public void addMetric(MetricName metricName, MetricValue<?> metricValue) {
         KafkaMetric m = new KafkaMetric(new Object(),
                                         Utils.notNull(metricName),
-                                        Utils.notNull(gauge),
+                                        Utils.notNull(metricValue),
                                         this.config,
                                         this.time);
         registerMetric(m);

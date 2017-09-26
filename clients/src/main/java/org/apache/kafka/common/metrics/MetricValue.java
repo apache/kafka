@@ -14,23 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.record;
+package org.apache.kafka.common.metrics;
 
-public class ConvertedRecords<T extends Records> {
-
-    private final T records;
-    private final RecordsProcessingStats recordsProcessingStats;
-
-    public ConvertedRecords(T records, long temporaryMemoryBytes, long conversionCount, long conversionTimeNanos) {
-        this.records = records;
-        this.recordsProcessingStats = new RecordsProcessingStats(temporaryMemoryBytes, conversionCount, conversionTimeNanos);
-    }
-
-    public T records() {
-        return records;
-    }
-
-    public RecordsProcessingStats recordsProcessingStats() {
-        return recordsProcessingStats;
-    }
+/**
+ * Super-interface for {@link Measurable} or {@link Gauge} that provides
+ * metric values.
+ * <p>
+ * In the future for Java8 and above, {@link Gauge#value(MetricConfig, long)} will be
+ * moved to this interface with a default implementation in {@link Measurable} that returns
+ * {@link Measurable#measure(MetricConfig, long)}.
+ * </p>
+ */
+public interface MetricValue<T> {
 }

@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.metrics;
 
-import java.util.Objects;
-
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.utils.Time;
@@ -27,24 +25,13 @@ public final class KafkaMetric implements Metric {
     private MetricName metricName;
     private final Object lock;
     private final Time time;
-    private final Measurable measurable;
-    private final Gauge<?> gauge;
+    private final MetricValue<?> metricValue;
     private MetricConfig config;
 
-    KafkaMetric(Object lock, MetricName metricName, Measurable measurable, MetricConfig config, Time time) {
-        this(lock, metricName, Objects.requireNonNull(measurable), null, config, time);
-    }
-
-    KafkaMetric(Object lock, MetricName metricName, Gauge<?> gauge, MetricConfig config, Time time) {
-        this(lock, metricName, null, Objects.requireNonNull(gauge), config, time);
-    }
-
-    private KafkaMetric(Object lock, MetricName metricName, Measurable measurable, Gauge<?> gauge,
-            MetricConfig config, Time time) {
+    KafkaMetric(Object lock, MetricName metricName, MetricValue<?> metricValue, MetricConfig config, Time time) {
         this.metricName = metricName;
         this.lock = lock;
-        this.measurable = measurable;
-        this.gauge = gauge;
+        this.metricValue = metricValue;
         this.config = config;
         this.time = time;
     }
@@ -67,24 +54,30 @@ public final class KafkaMetric implements Metric {
     }
 
     @Override
-    public Object metricValue() {
+    public Object currentValue() {
         long now = time.milliseconds();
         synchronized (this.lock) {
-            if (this.measurable != null)
-                return measurableValue(now);
+            if (this.metricValue instanceof Measurable)
+                return ((Measurable) metricValue).measure(config, now);
+            else if (this.metricValue instanceof Gauge)
+                return ((Gauge<?>) metricValue).value(config, now);
             else
-                return this.gauge.value(config, now);
+                throw new IllegalStateException("Not a valid metric: " + this.metricValue.getClass());
         }
     }
 
     public Measurable measurable() {
-        return this.measurable;
+        if (this.metricValue instanceof Measurable)
+            return (Measurable) metricValue;
+        else
+            throw new IllegalStateException("Not a measurable: " + this.metricValue.getClass());
     }
 
     double measurableValue(long timeMs) {
-        if (this.measurable == null)
+        if (this.metricValue instanceof Measurable)
+            return ((Measurable) metricValue).measure(config, timeMs);
+        else
             throw new IllegalStateException("Not a measurable metric");
-        return this.measurable.measure(config, timeMs);
     }
 
     public void config(MetricConfig config) {

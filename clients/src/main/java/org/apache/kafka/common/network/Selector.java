@@ -450,10 +450,6 @@ public class Selector implements Selectable, AutoCloseable {
                                 socketChannel.socket().getSendBufferSize(),
                                 socketChannel.socket().getSoTimeout(),
                                 channel.id());
-
-                        // Include PLAINTEXT in successful authentication metric, all others added after KafkaChannel.prepare()
-                        if (channel.ready())
-                            sensors.successfulAuthentication.record();
                     } else
                         continue;
                 }

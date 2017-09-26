@@ -17,7 +17,6 @@
 package org.apache.kafka.common.network;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.config.AbstractConfig;
@@ -97,8 +96,7 @@ public class NioEchoServer extends Thread {
             if (entry.getKey().name().equals(name))
                 return entry.getValue().value();
         }
-        fail("Metric not found, " + name + ", found=" + metrics.metrics().keySet());
-        return 0.0;
+        throw new IllegalStateException("Metric not found, " + name + ", found=" + metrics.metrics().keySet());
     }
 
     public void verifyAuthenticationMetrics(int successfulAuthentications, final int failedAuthentications)

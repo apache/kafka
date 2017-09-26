@@ -234,7 +234,7 @@ public class MemoryRecordsBuilderTest {
             double computedCompressionRate = (double) compressedSize / uncompressedSize;
             assertEquals(computedCompressionRate, builder.compressionRatio(), 0.00001);
         }
-        verifyRecordsProcessingInfo(builder.recordsProcessingInfo(), built.sizeInBytes(), records.length, false);
+        verifyRecordsProcessingStats(builder.recordsProcessingStats(), built.sizeInBytes(), records.length, false);
     }
 
     @Test
@@ -259,7 +259,7 @@ public class MemoryRecordsBuilderTest {
         assertEquals(records.sizeInBytes(), builder.estimatedSizeInBytes());
         if (compressionType == CompressionType.NONE)
             assertEquals(records.sizeInBytes(), bytesWrittenBeforeClose);
-        verifyRecordsProcessingInfo(builder.recordsProcessingInfo(), records.sizeInBytes(), 10, false);
+        verifyRecordsProcessingStats(builder.recordsProcessingStats(), records.sizeInBytes(), 10, false);
     }
 
     @Test
@@ -291,7 +291,7 @@ public class MemoryRecordsBuilderTest {
             double computedCompressionRate = (double) compressedSize / uncompressedSize;
             assertEquals(computedCompressionRate, builder.compressionRatio(), 0.00001);
         }
-        verifyRecordsProcessingInfo(builder.recordsProcessingInfo(), built.sizeInBytes(), records.length, false);
+        verifyRecordsProcessingStats(builder.recordsProcessingStats(), built.sizeInBytes(), records.length, false);
     }
 
     @Test
@@ -468,7 +468,7 @@ public class MemoryRecordsBuilderTest {
         ConvertedRecords<MemoryRecords> convertedRecords = MemoryRecords.readableRecords(buffer)
                 .downConvert(RecordBatch.MAGIC_VALUE_V1, 0, time);
         MemoryRecords records = convertedRecords.records();
-        verifyRecordsProcessingInfo(convertedRecords.recordsProcessingInfo(), records.sizeInBytes(), 3, true);
+        verifyRecordsProcessingStats(convertedRecords.recordsProcessingStats(), records.sizeInBytes(), 3, true);
 
         List<? extends RecordBatch> batches = Utils.toList(records.batches().iterator());
         if (compressionType != CompressionType.NONE) {
@@ -508,7 +508,7 @@ public class MemoryRecordsBuilderTest {
         ConvertedRecords<MemoryRecords> convertedRecords = MemoryRecords.readableRecords(buffer)
                 .downConvert(RecordBatch.MAGIC_VALUE_V1, 0, time);
         MemoryRecords records = convertedRecords.records();
-        verifyRecordsProcessingInfo(convertedRecords.recordsProcessingInfo(), records.sizeInBytes(), 2, true);
+        verifyRecordsProcessingStats(convertedRecords.recordsProcessingStats(), records.sizeInBytes(), 2, true);
 
         List<? extends RecordBatch> batches = Utils.toList(records.batches().iterator());
         if (compressionType != CompressionType.NONE) {
@@ -535,7 +535,7 @@ public class MemoryRecordsBuilderTest {
         convertedRecords = MemoryRecords.readableRecords(buffer).downConvert(RecordBatch.MAGIC_VALUE_V1, 2L, time);
         records = convertedRecords.records();
         int converted = compressionType == CompressionType.NONE ? 1 : 2;
-        verifyRecordsProcessingInfo(convertedRecords.recordsProcessingInfo(), records.sizeInBytes(), converted, true);
+        verifyRecordsProcessingStats(convertedRecords.recordsProcessingStats(), records.sizeInBytes(), converted, true);
 
         batches = Utils.toList(records.batches().iterator());
         logRecords = Utils.toList(records.records().iterator());
@@ -637,16 +637,16 @@ public class MemoryRecordsBuilderTest {
         return values;
     }
 
-    private void verifyRecordsProcessingInfo(RecordsProcessingInfo processingInfo, long size, int count,
+    private void verifyRecordsProcessingStats(RecordsProcessingStats processingStats, long size, int count,
             boolean hasTime) {
-        assertNotNull("Records processing info is null", processingInfo);
-        assertEquals(count, processingInfo.conversionCount());
-        assertEquals(size, processingInfo.temporaryMemorySize());
+        assertNotNull("Records processing info is null", processingStats);
+        assertEquals(count, processingStats.conversionCount());
+        assertEquals(size, processingStats.temporaryMemoryBytes());
         if (hasTime)
-            assertTrue("Invalid conversion time " + processingInfo, processingInfo.conversionTimeNanos() > 0 &&
-                    processingInfo.conversionTimeNanos() < TimeUnit.SECONDS.toNanos(60));
+            assertTrue("Invalid conversion time " + processingStats, processingStats.conversionTimeNanos() > 0 &&
+                    processingStats.conversionTimeNanos() < TimeUnit.SECONDS.toNanos(60));
         else
-            assertEquals(-1, processingInfo.conversionTimeNanos());
+            assertEquals(-1, processingStats.conversionTimeNanos());
     }
 
 }

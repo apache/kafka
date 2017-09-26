@@ -435,7 +435,7 @@ class ReplicaManager(val config: KafkaConfig,
                     entriesPerPartition: Map[TopicPartition, MemoryRecords],
                     responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                     delayedProduceLock: Option[Object] = None,
-                    processingInfoCallback: Map[TopicPartition, RecordsProcessingInfo] => Unit = info => {}) {
+                    processingStatsCallback: Map[TopicPartition, RecordsProcessingStats] => Unit = info => {}) {
     if (isValidRequiredAcks(requiredAcks)) {
       val sTime = time.milliseconds
       val localProduceResults = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
@@ -449,7 +449,7 @@ class ReplicaManager(val config: KafkaConfig,
                   new PartitionResponse(result.error, result.info.firstOffset, result.info.logAppendTime, result.info.logStartOffset)) // response status
       }
       if (isFromClient)
-        processingInfoCallback(localProduceResults.mapValues(status => status.info.recordsProcessingInfo))
+        processingStatsCallback(localProduceResults.mapValues(status => status.info.recordsProcessingStats))
 
       if (delayedProduceRequestRequired(requiredAcks, entriesPerPartition, localProduceResults)) {
         // create delayed produce operation

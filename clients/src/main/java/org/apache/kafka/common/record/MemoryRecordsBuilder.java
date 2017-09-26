@@ -75,7 +75,7 @@ public class MemoryRecordsBuilder {
 
     private MemoryRecords builtRecords;
     private boolean aborted = false;
-    private RecordsProcessingInfo recordsProcessingInfo;
+    private RecordsProcessingStats recordsProcessingStats;
 
     public MemoryRecordsBuilder(ByteBufferOutputStream bufferStream,
                                 byte magic,
@@ -130,7 +130,7 @@ public class MemoryRecordsBuilder {
         bufferStream.position(initialPosition + batchHeaderSize);
         this.bufferStream = bufferStream;
         this.appendStream = new DataOutputStream(compressionType.wrapForOutput(this.bufferStream, magic));
-        this.recordsProcessingInfo = RecordsProcessingInfo.EMPTY;
+        this.recordsProcessingStats = RecordsProcessingStats.EMPTY;
     }
 
     /**
@@ -240,8 +240,8 @@ public class MemoryRecordsBuilder {
         }
     }
 
-    public RecordsProcessingInfo recordsProcessingInfo() {
-        return recordsProcessingInfo;
+    public RecordsProcessingStats recordsProcessingStats() {
+        return recordsProcessingStats;
     }
 
     public void setProducerState(long producerId, short producerEpoch, int baseSequence, boolean isTransactional) {
@@ -321,7 +321,7 @@ public class MemoryRecordsBuilder {
             buffer.position(initialPosition);
             builtRecords = MemoryRecords.readableRecords(buffer.slice());
 
-            recordsProcessingInfo = new RecordsProcessingInfo(builtRecords.sizeInBytes(), numRecords);
+            recordsProcessingStats = new RecordsProcessingStats(builtRecords.sizeInBytes(), numRecords);
         }
     }
 

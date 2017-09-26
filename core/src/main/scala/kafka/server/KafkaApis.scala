@@ -44,7 +44,7 @@ import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANS
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, MemoryRecords, RecordBatch, RecordsProcessingInfo}
+import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, MemoryRecords, RecordBatch, RecordsProcessingStats}
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse
 import org.apache.kafka.common.requests.DeleteAclsResponse.{AclDeletionResult, AclFilterResponse}
 import org.apache.kafka.common.requests.{Resource => RResource, ResourceType => RResourceType, _}
@@ -444,9 +444,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         produceResponseCallback)
     }
 
-    def processingInfoCallback(processingInfo: Map[TopicPartition, RecordsProcessingInfo]): Unit = {
-      processingInfo.foreach { case (tp, info) =>
-        updateRecordsProcessingInfo(request, tp, info)
+    def processingStatsCallback(processingStats: Map[TopicPartition, RecordsProcessingStats]): Unit = {
+      processingStats.foreach { case (tp, info) =>
+        updateRecordsProcessingStats(request, tp, info)
       }
     }
 
@@ -463,7 +463,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         isFromClient = true,
         entriesPerPartition = authorizedRequestInfo,
         responseCallback = sendResponseCallback,
-        processingInfoCallback = processingInfoCallback)
+        processingStatsCallback = processingStatsCallback)
 
       // if the request is put into the purgatory, it will have a held reference and hence cannot be garbage collected;
       // hence we clear its data here in order to let GC reclaim its memory since it is already appended to log
@@ -519,7 +519,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         downConvertMagic.map { magic =>
           trace(s"Down converting records from partition $tp to message format version $magic for fetch request from $clientId")
           val converted = data.records.downConvert(magic, fetchRequest.fetchData.get(tp).fetchOffset, time)
-          updateRecordsProcessingInfo(request, tp, converted.recordsProcessingInfo)
+          updateRecordsProcessingStats(request, tp, converted.recordsProcessingStats)
           new FetchResponse.PartitionData(data.error, data.highWatermark, FetchResponse.INVALID_LAST_STABLE_OFFSET,
             data.logStartOffset, data.abortedTransactions, converted.records)
         }
@@ -2010,8 +2010,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       throw new ClusterAuthorizationException(s"Request $request is not authorized.")
   }
 
-  private def updateRecordsProcessingInfo(request: RequestChannel.Request, tp: TopicPartition, processingInfo: RecordsProcessingInfo): Unit = {
-    val conversionCount = processingInfo.conversionCount
+  private def updateRecordsProcessingStats(request: RequestChannel.Request, tp: TopicPartition, processingStats: RecordsProcessingStats): Unit = {
+    val conversionCount = processingStats.conversionCount
     request.header.apiKey match {
       case ApiKeys.PRODUCE =>
         brokerTopicStats.topicStats(tp.topic).produceMessageConversionsRate.mark(conversionCount)
@@ -2022,8 +2022,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       case _ =>
         throw new IllegalStateException("Message conversion info is recorded only for Produce/Fetch requests")
     }
-    request.temporaryMemorySize = processingInfo.temporaryMemorySize
-    request.messageConversionsTimeNanos = processingInfo.conversionTimeNanos
+    request.temporaryMemoryBytes = processingStats.temporaryMemoryBytes
+    request.messageConversionsTimeNanos = processingStats.conversionTimeNanos
   }
 
   private def handleError(request: RequestChannel.Request, e: Throwable) {
@@ -2076,7 +2076,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def sendResponse(request: RequestChannel.Request, responseOpt: Option[AbstractResponse]): Unit = {
-    // Update error metrics if there are any errors in the response
+    // Update error metrics for each error code in the response including Errors.NONE
     responseOpt.foreach(response => requestChannel.updateErrorMetrics(request.header.apiKey, response.errorCounts.asScala))
 
     responseOpt match {

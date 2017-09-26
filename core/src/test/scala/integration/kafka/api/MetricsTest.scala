@@ -186,7 +186,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
       verifyKafkaMetric(name, metrics, entity) { matchingMetrics =>
         assertEquals(1, matchingMetrics.size)
         val metric = matchingMetrics.head
-        val value = metric.metricValue
+        val value = metric.currentValue
         assertNotNull(s"$entity metric not recorded $name", value)
         assertNotNull(s"$entity metric $name should be a non-empty String",
             value.isInstanceOf[String] && !value.asInstanceOf[String].isEmpty)
@@ -207,19 +207,19 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
   }
 
   private def verifyBrokerMessageConversionMetrics(server: KafkaServer, recordSize: Int): Unit = {
-    val requestSize = verifyYammerMetricRecorded(s"RequestSize,request=Produce")
-    val tempSize = verifyYammerMetricRecorded(s"TemporaryMemorySize,request=Produce")
-    assertTrue(s"Unexpected temporary memory size requestSize $requestSize tempSize $tempSize",
-        tempSize >= recordSize)
+    val requestBytes = verifyYammerMetricRecorded(s"RequestBytes,request=Produce")
+    val tempBytes = verifyYammerMetricRecorded(s"TemporaryMemoryBytes,request=Produce")
+    assertTrue(s"Unexpected temporary memory size requestBytes $requestBytes tempBytes $tempBytes",
+        tempBytes >= recordSize)
 
     verifyYammerMetricRecorded(s"ProduceMessageConversionsPerSec")
     verifyYammerMetricRecorded(s"MessageConversionsTimeMs,request=Produce", value => value > 0.0)
 
-    verifyYammerMetricRecorded(s"RequestSize,request=Fetch")
+    verifyYammerMetricRecorded(s"RequestBytes,request=Fetch")
     // Temporary size for fetch should be zero after KAFKA-5968 is fixed
-    verifyYammerMetricRecorded(s"TemporaryMemorySize,request=Fetch", value => value >= 0.0)
+    verifyYammerMetricRecorded(s"TemporaryMemoryBytes,request=Fetch", value => value >= 0.0)
 
-    verifyYammerMetricRecorded(s"RequestSize,request=Metadata") // request size recorded for all request types, check one
+    verifyYammerMetricRecorded(s"RequestBytes,request=Metadata") // request size recorded for all request types, check one
   }
 
   private def verifyBrokerZkMetrics(server: KafkaServer, topic: String): Unit = {

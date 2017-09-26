@@ -20,15 +20,10 @@ package org.apache.kafka.common.metrics;
  * A non-measurable gauge value that can be registered as a metric.
  * This is separate from {@link Measurable} to avoid breaking the public API.
  */
-public interface Gauge<T> {
+public interface Gauge<T> extends MetricValue<T> {
 
     /**
      * Returns the current value associated with this gauge.
-     * <p>
-     * In the future we may introduce a super-interface that is implemented
-     * by {@link Measurable} as well with a default implementation that returns
-     * {@link Measurable#measure(MetricConfig, long)} (for Java8 and above).
-     * </p>
      * @param config The configuration for this metric
      * @param now The POSIX time in milliseconds the measurement is being taken
      */
