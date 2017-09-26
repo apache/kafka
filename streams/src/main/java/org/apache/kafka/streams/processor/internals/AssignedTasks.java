@@ -37,7 +37,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
-class AssignedTasks {
+class AssignedTasks implements RestoringTaskGetter {
     private final Logger log;
     private final String taskTypeName;
     private final TaskAction maybeCommitAction;
@@ -293,7 +293,8 @@ class AssignedTasks {
         }
     }
 
-    Task restoringTaskFor(final TopicPartition partition) {
+    @Override
+    public Task restoringTaskFor(final TopicPartition partition) {
         return restoringByPartition.get(partition);
     }
 

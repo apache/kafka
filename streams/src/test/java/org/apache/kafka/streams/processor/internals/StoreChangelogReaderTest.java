@@ -39,7 +39,6 @@ import org.junit.runner.RunWith;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -336,11 +335,7 @@ public class StoreChangelogReaderTest {
     public void shouldThrowTaskMigratedExceptionIfEndOffsetGetsExceededDuringRestore() {
         final int messages = 10;
         setupConsumer(messages, topicPartition);
-        consumer.updateEndOffsets(new HashMap<TopicPartition, Long>() {
-            {
-                put(topicPartition, 5L);
-            }
-        });
+        consumer.updateEndOffsets(Collections.singletonMap(topicPartition, 5L));
         changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true,
             "storeName"));
 

@@ -18,36 +18,6 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-
-public class MockChangelogReader implements ChangelogReader {
-    private final Set<TopicPartition> registered = new HashSet<>();
-
-    @Override
-    public void register(final StateRestorer restorer) {
-        registered.add(restorer.partition());
-    }
-
-    @Override
-    public Collection<TopicPartition> restore(final RestoringTaskGetter active) {
-        return registered;
-    }
-
-    @Override
-    public Map<TopicPartition, Long> restoredOffsets() {
-        return Collections.emptyMap();
-    }
-
-    @Override
-    public void reset() {
-        registered.clear();
-    }
-
-    public boolean wasRegistered(final TopicPartition partition) {
-        return registered.contains(partition);
-    }
+public interface RestoringTaskGetter {
+    Task restoringTaskFor(final TopicPartition partition);
 }
