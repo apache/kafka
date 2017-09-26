@@ -59,6 +59,7 @@ public final class KafkaMetric implements Metric {
     }
 
     @Override
+    @Deprecated
     public double value() {
         synchronized (this.lock) {
             return measurableValue(time.milliseconds());
@@ -67,11 +68,12 @@ public final class KafkaMetric implements Metric {
 
     @Override
     public Object metricValue() {
+        long now = time.milliseconds();
         synchronized (this.lock) {
             if (this.measurable != null)
-                return measurableValue(time.milliseconds());
+                return measurableValue(now);
             else
-                return this.gauge.value();
+                return this.gauge.value(config, now);
         }
     }
 

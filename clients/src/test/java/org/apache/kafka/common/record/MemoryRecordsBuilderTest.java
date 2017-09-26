@@ -218,7 +218,6 @@ public class MemoryRecordsBuilderTest {
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.MAGIC_VALUE_V0, compressionType,
                 TimestampType.CREATE_TIME, 0L, 0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
                 false, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
-        builder = builder.withTime(time);
 
         int uncompressedSize = 0;
         for (LegacyRecord record : records) {
@@ -235,7 +234,7 @@ public class MemoryRecordsBuilderTest {
             double computedCompressionRate = (double) compressedSize / uncompressedSize;
             assertEquals(computedCompressionRate, builder.compressionRatio(), 0.00001);
         }
-        verifyRecordsProcessingInfo(builder.recordsProcessingInfo(), built.sizeInBytes(), records.length, true);
+        verifyRecordsProcessingInfo(builder.recordsProcessingInfo(), built.sizeInBytes(), records.length, false);
     }
 
     @Test
@@ -277,7 +276,6 @@ public class MemoryRecordsBuilderTest {
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.MAGIC_VALUE_V1, compressionType,
                 TimestampType.CREATE_TIME, 0L, 0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
                 false, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
-        builder = builder.withTime(time);
 
         int uncompressedSize = 0;
         for (LegacyRecord record : records) {
@@ -293,7 +291,7 @@ public class MemoryRecordsBuilderTest {
             double computedCompressionRate = (double) compressedSize / uncompressedSize;
             assertEquals(computedCompressionRate, builder.compressionRatio(), 0.00001);
         }
-        verifyRecordsProcessingInfo(builder.recordsProcessingInfo(), built.sizeInBytes(), records.length, true);
+        verifyRecordsProcessingInfo(builder.recordsProcessingInfo(), built.sizeInBytes(), records.length, false);
     }
 
     @Test

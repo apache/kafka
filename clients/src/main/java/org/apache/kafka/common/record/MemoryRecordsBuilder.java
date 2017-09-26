@@ -20,7 +20,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
-import org.apache.kafka.common.utils.Time;
 
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -55,7 +54,6 @@ public class MemoryRecordsBuilder {
     private final boolean isControlBatch;
     private final int partitionLeaderEpoch;
     private final int writeLimit;
-    private Time time;
 
     // Use a conservative estimate of the compression ratio. The producer overrides this using statistics
     // from previous batches before appending any records.
@@ -77,7 +75,6 @@ public class MemoryRecordsBuilder {
 
     private MemoryRecords builtRecords;
     private boolean aborted = false;
-    private long startNanos;
     private RecordsProcessingInfo recordsProcessingInfo;
 
     public MemoryRecordsBuilder(ByteBufferOutputStream bufferStream,
@@ -196,12 +193,6 @@ public class MemoryRecordsBuilder {
 
     public boolean isTransactional() {
         return isTransactional;
-    }
-
-    public MemoryRecordsBuilder withTime(Time time) {
-        this.time = time;
-        this.startNanos = time.nanoseconds();
-        return this;
     }
 
     /**
@@ -330,8 +321,7 @@ public class MemoryRecordsBuilder {
             buffer.position(initialPosition);
             builtRecords = MemoryRecords.readableRecords(buffer.slice());
 
-            long buildTimeNanos = time == null ? -1 : time.nanoseconds() - startNanos;
-            recordsProcessingInfo = new RecordsProcessingInfo(builtRecords.sizeInBytes(), numRecords, buildTimeNanos);
+            recordsProcessingInfo = new RecordsProcessingInfo(builtRecords.sizeInBytes(), numRecords);
         }
     }
 

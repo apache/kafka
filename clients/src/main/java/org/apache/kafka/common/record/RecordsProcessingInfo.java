@@ -18,11 +18,15 @@ package org.apache.kafka.common.record;
 
 public class RecordsProcessingInfo {
 
-    public static final RecordsProcessingInfo EMPTY = new RecordsProcessingInfo(0L, 0L, 0L);
+    public static final RecordsProcessingInfo EMPTY = new RecordsProcessingInfo(0L, 0L);
 
     private final long temporaryMemorySize;
     private final long conversionCount;
-    private final long conversionTimeNanos;
+    private long conversionTimeNanos;
+
+    public RecordsProcessingInfo(long temporaryMemorySize, long conversionCount) {
+        this(temporaryMemorySize, conversionCount, -1);
+    }
 
     public RecordsProcessingInfo(long temporaryMemorySize, long conversionCount, long conversionTimeNanos) {
         this.temporaryMemorySize = temporaryMemorySize;
@@ -40,6 +44,10 @@ public class RecordsProcessingInfo {
 
     public long conversionTimeNanos() {
         return conversionTimeNanos;
+    }
+
+    public void conversionTimeNanos(long nanos) {
+        this.conversionTimeNanos = nanos;
     }
 
     @Override

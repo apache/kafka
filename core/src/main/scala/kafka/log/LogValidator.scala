@@ -120,7 +120,6 @@ private[kafka] object LogValidator extends Logging {
                                                    isFromClient: Boolean): ValidationAndOffsetAssignResult = {
     val sizeInBytesAfterConversion = AbstractRecords.estimateSizeInBytes(toMagicValue, offsetCounter.value,
       CompressionType.NONE, records.records)
-    val startOffset = offsetCounter.value
 
     val (producerId, producerEpoch, sequence, isTransactional) = {
       val first = records.batches.asScala.head
@@ -130,8 +129,6 @@ private[kafka] object LogValidator extends Logging {
     val newBuffer = ByteBuffer.allocate(sizeInBytesAfterConversion)
     var builder = MemoryRecords.builder(newBuffer, toMagicValue, CompressionType.NONE, timestampType,
       offsetCounter.value, now, producerId, producerEpoch, sequence, isTransactional, partitionLeaderEpoch)
-    if (isFromClient)
-      builder = builder.withTime(time)
 
     for (batch <- records.batches.asScala) {
       validateBatch(batch, isFromClient, toMagicValue)
@@ -144,12 +141,16 @@ private[kafka] object LogValidator extends Logging {
 
     val convertedRecords = builder.build()
     val info = builder.info
+    val recordsProcessingInfo = builder.recordsProcessingInfo
+    if (isFromClient)
+      recordsProcessingInfo.conversionTimeNanos(time.nanoseconds - now)
+
     ValidationAndOffsetAssignResult(
       validatedRecords = convertedRecords,
       maxTimestamp = info.maxTimestamp,
       shallowOffsetOfMaxTimestamp = info.shallowOffsetOfMaxTimestamp,
       messageSizeMaybeChanged = true,
-      recordsProcessingInfo = builder.recordsProcessingInfo)
+      recordsProcessingInfo = recordsProcessingInfo)
   }
 
   private def assignOffsetsNonCompressed(records: MemoryRecords,
@@ -317,13 +318,12 @@ private[kafka] object LogValidator extends Logging {
                                            isTransactional: Boolean,
                                            partitionLeaderEpoch: Int,
                                            isFromClient: Boolean): ValidationAndOffsetAssignResult = {
+    val startNanos = if (isFromClient) time.nanoseconds else 0
     val estimatedSize = AbstractRecords.estimateSizeInBytes(magic, offsetCounter.value, compressionType,
       validatedRecords.asJava)
     val buffer = ByteBuffer.allocate(estimatedSize)
     var builder = MemoryRecords.builder(buffer, magic, compressionType, timestampType, offsetCounter.value,
       logAppendTime, producerId, producerEpoch, baseSequence, isTransactional, partitionLeaderEpoch)
-    if (isFromClient)
-      builder = builder.withTime(time)
 
     validatedRecords.foreach { record =>
       builder.appendWithOffset(offsetCounter.getAndIncrement(), record)
@@ -331,13 +331,16 @@ private[kafka] object LogValidator extends Logging {
 
     val records = builder.build()
     val info = builder.info
+    val recordsProcessingInfo = builder.recordsProcessingInfo
+    if (isFromClient)
+      recordsProcessingInfo.conversionTimeNanos(time.nanoseconds - startNanos)
 
     ValidationAndOffsetAssignResult(
       validatedRecords = records,
       maxTimestamp = info.maxTimestamp,
       shallowOffsetOfMaxTimestamp = info.shallowOffsetOfMaxTimestamp,
       messageSizeMaybeChanged = true,
-      recordsProcessingInfo = builder.recordsProcessingInfo)
+      recordsProcessingInfo = recordsProcessingInfo)
   }
 
   private def validateKey(record: Record, compactedTopic: Boolean) {

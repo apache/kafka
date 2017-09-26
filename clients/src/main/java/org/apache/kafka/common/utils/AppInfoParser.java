@@ -25,8 +25,9 @@ import javax.management.MBeanServer;
 import javax.management.ObjectName;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.Gauge;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.stats.ImmutableValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,7 +61,7 @@ public class AppInfoParser {
             AppInfo mBean = new AppInfo();
             ManagementFactory.getPlatformMBeanServer().registerMBean(mBean, name);
 
-            registerMetrics(metrics);
+            registerMetrics(metrics); // prefix will be added later by JmxReporter
         } catch (JMException e) {
             log.warn("Error registering AppInfo mbean", e);
         }
@@ -119,5 +120,18 @@ public class AppInfoParser {
             return AppInfoParser.getCommitId();
         }
 
+    }
+
+    static class ImmutableValue<T> implements Gauge<T> {
+        private final T value;
+
+        public ImmutableValue(T value) {
+            this.value = value;
+        }
+
+        @Override
+        public T value(MetricConfig config, long now) {
+            return value;
+        }
     }
 }
