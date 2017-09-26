@@ -59,7 +59,7 @@ public class StreamsBuilder {
     final InternalTopologyBuilder internalTopologyBuilder = topology.internalTopologyBuilder;
 
     private final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
-
+    
     /**
      * Create a {@link KStream} from the specified topics.
      * The default {@code "auto.offset.reset"} strategy, default {@link TimestampExtractor}, and default key and value
@@ -490,18 +490,6 @@ public class StreamsBuilder {
                                               processorName,
                                               stateUpdateSupplier);
         return this;
-    }
-
-    /**
-     * Create a new instance of {@link KStream} by merging the given {@link KStream}s.
-     * <p>
-     * There is no ordering guarantee for records from different {@link KStream}s.
-     *
-     * @param streams the {@link KStream}s to be merged
-     * @return a {@link KStream} containing all records of the given streams
-     */
-    public synchronized <K, V> KStream<K, V> merge(final KStream<K, V>... streams) {
-        return internalStreamsBuilder.merge(streams);
     }
 
     /**

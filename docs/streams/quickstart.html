@@ -129,12 +129,18 @@ Next, we create the input topic named <b>streams-plaintext-input</b> and the out
     --partitions 1 \
     --topic streams-plaintext-input
 Created topic "streams-plaintext-input".
+</pre>
 
+Note: we create the output topic with compaction enabled because the output stream is a changelog stream
+(cf. <a href="#anchor-changelog-output">explanation of application output</a> below).
+
+<pre class="brush: bash;">
 &gt; bin/kafka-topics.sh --create \
     --zookeeper localhost:2181 \
     --replication-factor 1 \
     --partitions 1 \
-    --topic streams-wordcount-output
+    --topic streams-wordcount-output \
+    --config cleanup.policy=compact
 Created topic "streams-wordcount-output".
 </pre>
 
@@ -263,6 +269,7 @@ hello kafka streams
 join kafka summit
 </pre>
 
+<a name="anchor-changelog-output"></a>
 The <b>streams-wordcount-output</b> topic will subsequently show the corresponding updated word counts (see last three lines):
 
 <pre class="brush: bash;">
