@@ -27,8 +27,8 @@ import org.apache.kafka.common.metrics.Metrics;
 
 public class ProducerMetrics {
 
-    public SenderMetricsRegistry senderMetrics;
-    private Metrics metrics;
+    public final SenderMetricsRegistry senderMetrics;
+    private final Metrics metrics;
 
     public ProducerMetrics(Metrics metrics) {
         this.metrics = metrics;
