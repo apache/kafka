@@ -1394,9 +1394,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseMaybeThrottle(request, createResponse)
     }
 
-    if (!controller.isActive) {
+    if (!controller.isActive || !config.deleteTopicEnable) {
+      val error = if (!controller.isActive) Errors.NOT_CONTROLLER else Errors.NONE
       val results = deleteTopicRequest.topics.asScala.map { topic =>
-        (topic, Errors.NOT_CONTROLLER)
+        (topic, error)
       }.toMap
       sendResponseCallback(results)
     } else {
