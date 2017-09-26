@@ -76,10 +76,14 @@ public interface ProcessorContext {
      * Registers and possibly restores the specified storage engine.
      *
      * @param store the storage engine
-     * @throws IllegalStateException If store get's registered after initialized is already finished
+     * @param loggingEnabledIsDeprecatedAndIgnored deprecated parameter {@code loggingEnabled} is ignored:
+     *                                             if you want to enable logging on a state stores call
+     *                                             {@link org.apache.kafka.streams.state.StoreBuilder#withLoggingEnabled(Map)}
+     *                                             when creating the store
+     * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
      */
-    void register(StateStore store, StateRestoreCallback stateRestoreCallback);
+    void register(StateStore store, boolean loggingEnabledIsDeprecatedAndIgnored, StateRestoreCallback stateRestoreCallback);
 
     /**
      * Get the state store given the store name.

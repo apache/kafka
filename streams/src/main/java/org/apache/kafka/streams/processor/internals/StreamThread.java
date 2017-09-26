@@ -757,7 +757,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
 
     /**
      * Main event loop for polling, and processing records through topologies.
-     * @throws IllegalStateException If store get's registered after initialized is already finished
+     * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
      */
     private void runLoop() {
@@ -770,7 +770,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
     }
 
     /**
-     * @throws IllegalStateException If store get's registered after initialized is already finished
+     * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
      */
     // Visible for testing
