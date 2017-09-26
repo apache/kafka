@@ -113,10 +113,12 @@ public class Histogram {
      * and the number of bins.
      */
     public static class ConstantBinScheme implements BinScheme {
+        private static final int MIN_BIN_NUMBER = 0;
         private final double min;
         private final double max;
         private final int bins;
         private final double bucketWidth;
+        private final int maxBinNumber;
 
         /**
          * Create a bin scheme with the specified number of bins that all have the same width.
@@ -132,6 +134,7 @@ public class Histogram {
             this.max = max;
             this.bins = bins;
             this.bucketWidth = (max - min) / bins;
+            this.maxBinNumber = bins - 1;
         }
 
         public int bins() {
@@ -139,21 +142,24 @@ public class Histogram {
         }
 
         public double fromBin(int b) {
-            if (b < 0)
+            if (b < MIN_BIN_NUMBER) {
                 return Float.NEGATIVE_INFINITY;
-            else if (b > bins - 1)
+            }
+            if (b > maxBinNumber) {
                 return Float.POSITIVE_INFINITY;
-            else
-                return min + b * bucketWidth;
+            }
+            return min + b * bucketWidth;
         }
 
         public int toBin(double x) {
-            if (x <= min)
-                return 0;
-            else if (x >= max)
-                return bins - 1;
-            else
-                return (int) ((x - min) / bucketWidth);
+            int binNumber = (int) ((x - min) / bucketWidth);
+            if (binNumber < MIN_BIN_NUMBER) {
+                return MIN_BIN_NUMBER;
+            }
+            if (binNumber > maxBinNumber) {
+                return maxBinNumber;
+            }
+            return binNumber;
         }
     }
 

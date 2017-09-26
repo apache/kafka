@@ -170,6 +170,8 @@ public class WorkerConnector {
             log.error("{} Error while shutting down connector", this, t);
             this.state = State.FAILED;
             statusListener.onFailure(connName, t);
+        } finally {
+            metrics.close();
         }
     }
 
@@ -241,6 +243,10 @@ public class WorkerConnector {
                     return state == matchingState;
                 }
             });
+        }
+
+        public void close() {
+            metricGroup.close();
         }
 
         @Override

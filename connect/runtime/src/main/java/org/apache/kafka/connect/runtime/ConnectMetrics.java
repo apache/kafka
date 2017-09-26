@@ -31,9 +31,11 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
@@ -163,6 +165,8 @@ public class ConnectMetrics {
     public class MetricGroup {
         private final String groupName;
         private final Map<String, String> tags;
+        private final Set<String> sensorNames = new HashSet<>();
+        private final Set<MetricName> metricNames = new HashSet<>();
 
         /**
          * Create a group of Connect metrics.
@@ -209,7 +213,21 @@ public class ConnectMetrics {
         }
 
         /**
+         * Register a metric that is not associated with a Sensor. This must be called if the metrics are to be
+         * automatically removed when this group is {@link #close() closed}.
+         *
+         * Any metric added directly to the {@link #metrics() Metrics} must be registered if they are to be
+         * automatically removed.
+         *
+         * @param metricName the name of the metric
+         */
+        public synchronized void registerMetric(MetricName metricName) {
+            if (metricName != null) metricNames.add(metricName);
+        }
+
+        /**
          * Add to this group an indicator metric with a function that will be used to obtain the indicator state.
+         * The resulting metric is automatically {@link #registerMetric(MetricName) registered} with this group.
          *
          * @param name        the name of the metric; may not be null and must be a
          *                    {@link #checkNameIsValid(String) valid name}
@@ -226,7 +244,98 @@ public class ConnectMetrics {
                         return predicate.matches() ? 1.0d : 0.0d;
                     }
                 });
+                registerMetric(metricName);
             }
+        }
+
+        /**
+         * Get or create a sensor with the given unique name and no parent sensors. This uses
+         * a default recording level of INFO.
+         *
+         * @param name The sensor name
+         * @return The sensor
+         */
+        public Sensor sensor(String name) {
+            return sensor(name, null, Sensor.RecordingLevel.INFO);
+        }
+
+        /**
+         * Get or create a sensor with the given unique name and no parent sensors. This uses
+         * a default recording level of INFO.
+         *
+         * @param name The sensor name
+         * @return The sensor
+         */
+        public Sensor sensor(String name, Sensor... parents) {
+            return sensor(name, null, Sensor.RecordingLevel.INFO, parents);
+        }
+
+        /**
+         * Get or create a sensor with the given unique name and zero or more parent sensors. All parent sensors will
+         * receive every value recorded with this sensor.
+         *
+         * @param name           The name of the sensor
+         * @param recordingLevel The recording level.
+         * @param parents        The parent sensors
+         * @return The sensor that is created
+         */
+        public Sensor sensor(String name, Sensor.RecordingLevel recordingLevel, Sensor... parents) {
+            return sensor(name, null, recordingLevel, parents);
+        }
+
+        /**
+         * Get or create a sensor with the given unique name and zero or more parent sensors. All parent sensors will
+         * receive every value recorded with this sensor.
+         *
+         * @param name    The name of the sensor
+         * @param config  A default configuration to use for this sensor for metrics that don't have their own config
+         * @param parents The parent sensors
+         * @return The sensor that is created
+         */
+        public Sensor sensor(String name, MetricConfig config, Sensor... parents) {
+            return sensor(name, config, Sensor.RecordingLevel.INFO, parents);
+        }
+
+        /**
+         * Get or create a sensor with the given unique name and zero or more parent sensors. All parent sensors will
+         * receive every value recorded with this sensor.
+         *
+         * @param name           The name of the sensor
+         * @param config         A default configuration to use for this sensor for metrics that don't have their own config
+         * @param recordingLevel The recording level.
+         * @param parents        The parent sensors
+         * @return The sensor that is created
+         */
+        public synchronized Sensor sensor(String name, MetricConfig config, Sensor.RecordingLevel recordingLevel, Sensor... parents) {
+            Sensor result = metrics.sensor(name, config, Long.MAX_VALUE, recordingLevel, parents);
+            if (result != null) sensorNames.add(result.name());
+            return result;
+        }
+
+        /**
+         * Remove the sensors (if they exist), associated metrics, and their children.
+         *
+         * @param sensors The sensors to be removed
+         */
+        public synchronized void removeSensors(Sensor... sensors) {
+            for (Sensor sensor : sensors) {
+                metrics.removeSensor(sensor.name());
+                sensorNames.remove(sensor.name());
+            }
+        }
+
+        /**
+         * Remove all sensors and metrics associated with this group.
+         */
+        public synchronized void close() {
+            for (String sensorName : sensorNames) {
+                metrics.removeSensor(sensorName);
+            }
+            for (MetricName metricName : metricNames) {
+                metrics.removeMetric(metricName);
+            }
+            sensorNames.clear();
+            metricNames.clear();
         }
     }
 

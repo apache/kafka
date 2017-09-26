@@ -132,6 +132,12 @@ abstract class WorkerTask implements Runnable {
 
     protected abstract void close();
 
+    /**
+     * Method called when this worker task has been completely closed, and when the subclass should clean up
+     * all resources.
+     */
+    protected abstract void releaseResources();
+
     protected boolean isStopping() {
         return stopping;
     }
@@ -211,8 +217,16 @@ abstract class WorkerTask implements Runnable {
             if (t instanceof Error)
                 throw (Error) t;
         } finally {
-            Plugins.compareAndSwapLoaders(savedLoader);
-            shutdownLatch.countDown();
+            try {
+                Plugins.compareAndSwapLoaders(savedLoader);
+                shutdownLatch.countDown();
+            } finally {
+                try {
+                    releaseResources();
+                } finally {
+                    taskMetricsGroup.close();
+                }
+            }
         }
     }
 
@@ -308,11 +322,11 @@ abstract class WorkerTask implements Runnable {
                     "Signals whether the connector task is in the destroyed state.");
 
             addRatioMetric(State.RUNNING, "running-ratio",
-                    "The fraction of time this task has spent in the paused state.");
+                    "The fraction of time this task has spent in the running state.");
             addRatioMetric(State.PAUSED, "pause-ratio",
                     "The fraction of time this task has spent in the paused state.");
 
-            commitTime = metricGroup.metrics().sensor("commit-time");
+            commitTime = metricGroup.sensor("commit-time");
             commitTime.add(metricGroup.metricName("offset-commit-max-time-ms",
                     "The maximum time in milliseconds taken by this task to commit offsets"),
                     new Max());
@@ -342,7 +356,7 @@ abstract class WorkerTask implements Runnable {
 //                                                            new Percentile(p99, 99));
 //            commitTime.add(commitPercentiles);
 
-            batchSize = metricGroup.metrics().sensor("batch-size");
+            batchSize = metricGroup.sensor("batch-size");
             batchSize.add(metricGroup.metricName("batch-size-max",
                     "The maximum size of the batches processed by the connector"),
                     new Max());
@@ -355,7 +369,7 @@ abstract class WorkerTask implements Runnable {
             MetricName offsetCommitSucceeds = metricGroup.metricName("offset-commit-success-percentage",
                     "The average percentage of this task's offset commit attempts that failed");
             Frequencies commitFrequencies = Frequencies.forBooleanValues(offsetCommitFailures, offsetCommitSucceeds);
-            commitAttempts = metricGroup.metrics().sensor("offset-commit-completion");
+            commitAttempts = metricGroup.sensor("offset-commit-completion");
             commitAttempts.add(commitFrequencies);
         }
 
@@ -377,7 +391,12 @@ abstract class WorkerTask implements Runnable {
                         return taskStateTimer.durationRatio(matchingState, now);
                     }
                 });
+                metricGroup.registerMetric(metricName);
             }
+        }
+
+        void close() {
+            metricGroup.close();
         }
 
         void recordCommit(long duration, boolean success, Throwable error) {
@@ -443,7 +462,6 @@ abstract class WorkerTask implements Runnable {
         double currentMetricValue(String name) {
             MetricName metricName = metricGroup.metricName(name, "desc");
             return metricGroup.metrics().metric(metricName).value();
-
         }
     }
 }

@@ -138,6 +138,10 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     @Override
+    protected void releaseResources() {
+    }
+
+    @Override
     public void transitionTo(TargetState state) {
         super.transitionTo(state);
         consumer.wakeup();

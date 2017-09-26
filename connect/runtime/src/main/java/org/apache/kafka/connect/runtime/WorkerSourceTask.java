@@ -125,6 +125,10 @@ class WorkerSourceTask extends WorkerTask {
     }
 
     @Override
+    protected void releaseResources() {
+    }
+
+    @Override
     public void stop() {
         super.stop();
         stopRequestedLatch.countDown();

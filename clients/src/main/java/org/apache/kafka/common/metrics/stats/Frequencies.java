@@ -84,7 +84,7 @@ public class Frequencies extends SampledStat implements CompoundStat {
      *                                  {@link Frequency#centerValue() center value} within the specified range
      */
     public Frequencies(int buckets, double min, double max, Frequency... frequencies) {
-        super(0.0);
+        super(0.0); // initial value is unused by this implementation
         if (max < min) {
             throw new IllegalArgumentException("The maximum value " + max
                                                        + " must be greater than the minimum value " + min);
