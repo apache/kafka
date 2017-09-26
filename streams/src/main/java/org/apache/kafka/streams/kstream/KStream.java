@@ -446,6 +446,19 @@ public interface KStream<K, V> {
      * @param printed options for printing
      */
     void print(final Printed<K, V> printed);
+    
+    /**
+     * Merge this stream and the given stream into one larger stream.
+     * <p>
+     * There is no ordering guarantee between records from this {@code KStream} and records from
+     * the provided {@code KStream} in the merged stream.
+     * Relative order is preserved within each input stream though (ie, records within one input
+     * stream are processed in order).
+     *
+     * @param a stream which is to be merged into this stream
+     * @return a merged stream containing all records from this and the provided {@code KStream}
+     */
+    KStream<K, V> merge(final KStream<K, V> stream);
 
     /**
      * Write the records of this stream to a file at the given path.
