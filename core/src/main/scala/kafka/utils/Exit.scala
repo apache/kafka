@@ -22,14 +22,16 @@ import org.apache.kafka.common.utils.{Exit => JExit}
   * Internal class that should be used instead of `Exit.exit()` and `Runtime.getRuntime().halt()` so that tests can
   * easily change the behaviour.
   */
-object Exit {
+object Exit extends Logging {
 
   def exit(statusCode: Int, message: Option[String] = None): Nothing = {
+    info(s"Exiting process with status code $statusCode due to internal request")
     JExit.exit(statusCode, message.orNull)
     throw new AssertionError("exit should not return, but it did.")
   }
 
   def halt(statusCode: Int, message: Option[String] = None): Nothing = {
+    info(s"Halting process with status code $statusCode due to internal request")
     JExit.halt(statusCode, message.orNull)
     throw new AssertionError("halt should not return, but it did.")
   }
