@@ -30,6 +30,7 @@ import org.apache.kafka.common.errors.DuplicateSequenceException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
+import org.apache.kafka.common.errors.IncompatibleWithConfigException;
 import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
 import org.apache.kafka.common.errors.InvalidCommitOffsetSizeException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
@@ -97,7 +98,7 @@ import java.util.Map;
  * Do not add exceptions that occur only on the client or only on the server here.
  */
 public enum Errors {
-    UNKNOWN_SERVER_ERROR(-1, "The server experienced an unexpected error when processing the request",
+    UNKNOWN_SERVER_ERROR(-1, "The server experienced an unexpected error when processing the request.",
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {
@@ -167,7 +168,7 @@ public enum Errors {
                 return new BrokerNotAvailableException(message);
             }
         }),
-    REPLICA_NOT_AVAILABLE(9, "The replica is not available for the requested topic-partition",
+    REPLICA_NOT_AVAILABLE(9, "The replica is not available for the requested topic-partition.",
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {
@@ -273,7 +274,7 @@ public enum Errors {
                 return new InconsistentGroupProtocolException(message);
             }
         }),
-    INVALID_GROUP_ID(24, "The configured groupId is invalid",
+    INVALID_GROUP_ID(24, "The configured groupId is invalid.",
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {
@@ -303,7 +304,7 @@ public enum Errors {
                 return new RebalanceInProgressException(message);
             }
         }),
-    INVALID_COMMIT_OFFSET_SIZE(28, "The committing offset data size is not valid",
+    INVALID_COMMIT_OFFSET_SIZE(28, "The committing offset data size is not valid.",
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {
@@ -424,14 +425,14 @@ public enum Errors {
                 return new PolicyViolationException(message);
             }
         }),
-    OUT_OF_ORDER_SEQUENCE_NUMBER(45, "The broker received an out of order sequence number",
+    OUT_OF_ORDER_SEQUENCE_NUMBER(45, "The broker received an out of order sequence number.",
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {
                 return new OutOfOrderSequenceException(message);
             }
         }),
-    DUPLICATE_SEQUENCE_NUMBER(46, "The broker received a duplicate sequence number",
+    DUPLICATE_SEQUENCE_NUMBER(46, "The broker received a duplicate sequence number.",
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {
@@ -446,7 +447,7 @@ public enum Errors {
                 return new ProducerFencedException(message);
             }
         }),
-    INVALID_TXN_STATE(48, "The producer attempted a transactional operation in an invalid state",
+    INVALID_TXN_STATE(48, "The producer attempted a transactional operation in an invalid state.",
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {
@@ -454,7 +455,7 @@ public enum Errors {
             }
         }),
     INVALID_PRODUCER_ID_MAPPING(49, "The producer attempted to use a producer id which is not currently assigned to " +
-            "its transactional id",
+            "its transactional id.",
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {
@@ -470,7 +471,7 @@ public enum Errors {
             }
         }),
     CONCURRENT_TRANSACTIONS(51, "The producer attempted to update a transaction " +
-                "while another concurrent operation on the same transaction was ongoing",
+                "while another concurrent operation on the same transaction was ongoing.",
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {
@@ -478,14 +479,14 @@ public enum Errors {
             }
         }),
     TRANSACTION_COORDINATOR_FENCED(52, "Indicates that the transaction coordinator sending a WriteTxnMarker " +
-            "is no longer the current coordinator for a given producer",
+            "is no longer the current coordinator for a given producer.",
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {
                 return new TransactionCoordinatorFencedException(message);
             }
         }),
-    TRANSACTIONAL_ID_AUTHORIZATION_FAILED(53, "Transactional Id authorization failed",
+    TRANSACTIONAL_ID_AUTHORIZATION_FAILED(53, "Transactional Id authorization failed.",
                                                   new ApiExceptionBuilder() {
         @Override
         public ApiException build(String message) {
@@ -538,13 +539,20 @@ public enum Errors {
                 return new UnknownProducerIdException(message);
             }
     }),
-    REASSIGNMENT_IN_PROGRESS(60, "A partition reassignment is in progress",
+    REASSIGNMENT_IN_PROGRESS(60, "A partition reassignment is in progress.",
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {
                 return new ReassignmentInProgressException(message);
             }
-    });
+    }),
+    INCOMPATIBLE_WITH_CONFIG(61, "The operation requested is incompatible with the configuration.",
+            new ApiExceptionBuilder() {
+                @Override
+                public ApiException build(String message) {
+                    return new IncompatibleWithConfigException(message);
+                }
+            });
 
     private interface ApiExceptionBuilder {
         ApiException build(String message);
