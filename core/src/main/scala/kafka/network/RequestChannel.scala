@@ -246,8 +246,11 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
   def sendResponse(response: RequestChannel.Response) {
     if (isTraceEnabled) {
       val requestHeader = response.request.header
-      trace(s"Sending ${requestHeader.apiKey} response to client ${requestHeader.clientId} of " +
-        s"${response.responseSend.get.size} bytes.")
+      val size = response.responseSend match {
+        case Some(send) => send.size
+        case None => 0
+      }
+      trace(s"Sending ${requestHeader.apiKey} response[action=${response.responseAction}, size=$size] to client")
     }
 
     responseQueues(response.processor).put(response)
