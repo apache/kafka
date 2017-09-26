@@ -53,7 +53,11 @@ public class MockConnectMetrics extends ConnectMetrics {
     }
 
     public MockConnectMetrics() {
-        super("mock", new WorkerConfig(WorkerConfig.baseConfigDef(), DEFAULT_WORKER_CONFIG), new MockTime());
+        this(new MockTime());
+    }
+
+    public MockConnectMetrics(MockTime time) {
+        super("mock", new WorkerConfig(WorkerConfig.baseConfigDef(), DEFAULT_WORKER_CONFIG), time);
     }
 
     @Override
@@ -133,7 +137,8 @@ public class MockConnectMetrics extends ConnectMetrics {
          * @return the current value of the metric
          */
         public double currentMetricValue(MetricName metricName) {
-            return metricsByName.get(metricName).value();
+            KafkaMetric metric = metricsByName.get(metricName);
+            return metric != null ? metric.value() : Double.NaN;
         }
     }
 }
