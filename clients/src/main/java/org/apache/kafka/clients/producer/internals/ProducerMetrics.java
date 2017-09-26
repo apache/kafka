@@ -37,7 +37,7 @@ public class ProducerMetrics {
 
     private List<MetricNameTemplate> getAllTemplates() {
         List<MetricNameTemplate> l = new ArrayList<>();
-        l.addAll(this.senderMetrics.getAllTemplates());
+        l.addAll(this.senderMetrics.allTemplates());
         return l;
     }
 

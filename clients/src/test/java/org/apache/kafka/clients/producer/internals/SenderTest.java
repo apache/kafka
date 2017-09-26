@@ -301,7 +301,7 @@ public class SenderTest {
             if (!n.group().equals("kafka-metrics-count"))
                 allMetrics.add(new MetricNameTemplate(n.name(), n.group(), "", n.tags().keySet()));
         }
-        TestUtils.checkEquals(allMetrics, new HashSet<>(metricsRegistry.getAllTemplates()), "metrics", "templates");
+        TestUtils.checkEquals(allMetrics, new HashSet<>(metricsRegistry.allTemplates()), "metrics", "templates");
     }
 
     @Test

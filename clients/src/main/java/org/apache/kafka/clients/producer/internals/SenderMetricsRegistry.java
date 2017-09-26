@@ -124,43 +124,43 @@ public class SenderMetricsRegistry {
     }
 
     /** topic level metrics **/
-    public MetricName topicRecordSendRate(Map<String, String> metricTags) {
-        return this.metrics.metricInstance(this.topicRecordSendRate, metricTags);
+    public MetricName topicRecordSendRate(Map<String, String> tags) {
+        return this.metrics.metricInstance(this.topicRecordSendRate, tags);
     }
 
-    public MetricName topicRecordSendTotal(Map<String, String> metricTags) {
-        return this.metrics.metricInstance(this.topicRecordSendTotal, metricTags);
+    public MetricName topicRecordSendTotal(Map<String, String> tags) {
+        return this.metrics.metricInstance(this.topicRecordSendTotal, tags);
     }
 
-    public MetricName topicByteRate(Map<String, String> metricTags) {
-        return this.metrics.metricInstance(this.topicByteRate, metricTags);
+    public MetricName topicByteRate(Map<String, String> tags) {
+        return this.metrics.metricInstance(this.topicByteRate, tags);
     }
 
-    public MetricName topicByteTotal(Map<String, String> metricTags) {
-        return this.metrics.metricInstance(this.topicByteTotal, metricTags);
+    public MetricName topicByteTotal(Map<String, String> tags) {
+        return this.metrics.metricInstance(this.topicByteTotal, tags);
     }
 
-    public MetricName topicCompressionRate(Map<String, String> metricTags) {
-        return this.metrics.metricInstance(this.topicCompressionRate, metricTags);
+    public MetricName topicCompressionRate(Map<String, String> tags) {
+        return this.metrics.metricInstance(this.topicCompressionRate, tags);
     }
 
-    public MetricName topicRecordRetryRate(Map<String, String> metricTags) {
-        return this.metrics.metricInstance(this.topicRecordRetryRate, metricTags);
+    public MetricName topicRecordRetryRate(Map<String, String> tags) {
+        return this.metrics.metricInstance(this.topicRecordRetryRate, tags);
     }
 
-    public MetricName topicRecordRetryTotal(Map<String, String> metricTags) {
-        return this.metrics.metricInstance(this.topicRecordRetryTotal, metricTags);
+    public MetricName topicRecordRetryTotal(Map<String, String> tags) {
+        return this.metrics.metricInstance(this.topicRecordRetryTotal, tags);
     }
 
-    public MetricName topicRecordErrorRate(Map<String, String> metricTags) {
-        return this.metrics.metricInstance(this.topicRecordErrorRate, metricTags);
+    public MetricName topicRecordErrorRate(Map<String, String> tags) {
+        return this.metrics.metricInstance(this.topicRecordErrorRate, tags);
     }
 
-    public MetricName topicRecordErrorTotal(Map<String, String> metricTags) {
-        return this.metrics.metricInstance(this.topicRecordErrorTotal, metricTags);
+    public MetricName topicRecordErrorTotal(Map<String, String> tags) {
+        return this.metrics.metricInstance(this.topicRecordErrorTotal, tags);
     }
 
-    public List<MetricNameTemplate> getAllTemplates() {
+    public List<MetricNameTemplate> allTemplates() {
         return allTemplates;
     }
 
