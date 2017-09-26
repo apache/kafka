@@ -31,6 +31,7 @@ import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockProcessorNode;
+import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.NoOpProcessorContext;
 import org.apache.kafka.test.NoOpReadOnlyStore;
 import org.apache.kafka.test.TestUtils;
@@ -61,6 +62,7 @@ public class GlobalStateManagerImplTest {
 
     private final MockTime time = new MockTime();
     private final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
+    private final MockStateRestoreListener stateRestoreListener = new MockStateRestoreListener();
     private final TopicPartition t1 = new TopicPartition("t1", 1);
     private final TopicPartition t2 = new TopicPartition("t2", 1);
     private GlobalStateManagerImpl stateManager;
@@ -95,7 +97,7 @@ public class GlobalStateManagerImplTest {
         stateDirPath = TestUtils.tempDirectory().getPath();
         stateDirectory = new StateDirectory("appId", stateDirPath, time);
         consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
-        stateManager = new GlobalStateManagerImpl(topology, consumer, stateDirectory);
+        stateManager = new GlobalStateManagerImpl(topology, consumer, stateDirectory, stateRestoreListener);
         checkpointFile = new File(stateManager.baseDir(), ProcessorStateManager.CHECKPOINT_FILE_NAME);
     }
 
@@ -452,7 +454,7 @@ public class GlobalStateManagerImplTest {
             public boolean lockGlobalState(final int retry) throws IOException {
                 throw new IOException("KABOOM!");
             }
-        });
+        }, null);
 
         try {
             stateManager.initialize(context);
