@@ -100,7 +100,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     val server = servers.head
     verifyBrokerMessageConversionMetrics(server, recordSize)
     verifyBrokerErrorMetrics(servers.head)
-    verifyBrokerZkMetrics(server)
+    verifyBrokerZkMetrics(server, topic)
 
     generateAuthenticationFailure(tp)
     verifyBrokerAuthenticationMetrics(server)
@@ -222,13 +222,25 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     verifyYammerMetricRecorded(s"RequestSize,request=Metadata") // request size recorded for all request types, check one
   }
 
-  private def verifyBrokerZkMetrics(server: KafkaServer): Unit = {
-    verifyYammerMetricRecorded("ZooKeeperLatency")
+  private def verifyBrokerZkMetrics(server: KafkaServer, topic: String): Unit = {
+    // Latency is rounded to milliseconds, so we may need to retry some operations to get latency > 0.
+    val (_, recorded) = TestUtils.computeUntilTrue({
+      servers.head.zkUtils.getLeaderAndIsrForPartition(topic, 0)
+      yammerMetricValue("ZooKeeperLatency").asInstanceOf[Double]
+    })(latency => latency > 0.0)
+    assertTrue("ZooKeeper latency not recorded", recorded)
+
     assertEquals(s"Unexpected ZK state ${server.zkUtils.zkConnection.getZookeeperState}",
         "CONNECTED", yammerMetricValue("SessionState"))
   }
 
   private def verifyBrokerErrorMetrics(server: KafkaServer): Unit = {
+
+    def errorMetricCount = Metrics.defaultRegistry.allMetrics.keySet.asScala.filter(_.getName == "ErrorsPerSec").size
+
+    val startErrorMetricCount = errorMetricCount
+    verifyYammerMetricRecorded("name=ErrorsPerSec,request=Metadata,error=NONE")
+
     try {
       consumers.head.partitionsFor("12{}!")
     } catch {
@@ -236,15 +248,14 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     }
     verifyYammerMetricRecorded("name=ErrorsPerSec,request=Metadata,error=INVALID_TOPIC_EXCEPTION")
 
-    def errorMetricCount = Metrics.defaultRegistry.allMetrics.keySet.asScala.filter(_.getName == "ErrorsPerSec").size
-
     // Check that error metrics are registered dynamically
-    assertEquals(1, errorMetricCount)
+    val currentErrorMetricCount = errorMetricCount
+    assertEquals(startErrorMetricCount + 1, currentErrorMetricCount)
+    assertTrue(s"Too many error metrics $currentErrorMetricCount" , currentErrorMetricCount < 10)
 
     // Verify that error metric is updated with producer acks=0 when no response is sent
     sendRecords(producers.head, 1, 100, new TopicPartition("non-existent", 0))
     verifyYammerMetricRecorded("name=ErrorsPerSec,request=Metadata,error=LEADER_NOT_AVAILABLE")
-    assertEquals(2, errorMetricCount)
   }
 
   private def verifyKafkaMetric[T](name: String, metrics: java.util.Map[MetricName, _ <: Metric], entity: String,

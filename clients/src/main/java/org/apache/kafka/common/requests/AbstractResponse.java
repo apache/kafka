@@ -44,10 +44,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
     public abstract Map<Errors, Integer> errorCounts();
 
     protected Map<Errors, Integer> errorCounts(Errors error) {
-        if (error != Errors.NONE)
-            return Collections.singletonMap(error, 1);
-        else
-            return Collections.emptyMap();
+        return Collections.singletonMap(error, 1);
     }
 
     protected Map<Errors, Integer> errorCounts(Map<?, Errors> errors) {
@@ -65,10 +62,8 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
     }
 
     protected void updateErrorCounts(Map<Errors, Integer> errorCounts, Errors error) {
-        if (error != Errors.NONE) {
-            Integer count = errorCounts.get(error);
-            errorCounts.put(error, count == null ? 1 : count + 1);
-        }
+        Integer count = errorCounts.get(error);
+        errorCounts.put(error, count == null ? 1 : count + 1);
     }
 
     protected abstract Struct toStruct(short version);
