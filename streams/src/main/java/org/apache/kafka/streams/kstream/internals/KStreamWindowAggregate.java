@@ -16,17 +16,18 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
-import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 import java.util.Map;
 
@@ -107,8 +108,10 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
                         // try to add the new new value (there will never be old value)
                         T newAgg = aggregator.apply(key, value, oldAgg);
 
+                        setOldAggregateValueForStore(oldAgg);
                         // update the store with the new value
                         windowStore.put(key, newAgg, window.start());
+
                         tupleForwarder.maybeForward(new Windowed<>(key, window), newAgg, oldAgg);
                         matchedWindows.remove(entry.key);
                     }
@@ -118,9 +121,16 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
             // create the new window for the rest of unmatched window that do not exist yet
             for (Map.Entry<Long, W> entry : matchedWindows.entrySet()) {
                 T oldAgg = initializer.apply();
+                setOldAggregateValueForStore(oldAgg);
                 T newAgg = aggregator.apply(key, value, oldAgg);
                 windowStore.put(key, newAgg, entry.getKey());
                 tupleForwarder.maybeForward(new Windowed<>(key, entry.getValue()), newAgg, oldAgg);
+            }
+        }
+
+        private void setOldAggregateValueForStore(T oldAgg) {
+            if (windowStore instanceof WrappedStateStore.AbstractStateStore) {
+                ((WrappedStateStore.AbstractStateStore) windowStore).setPrevious(oldAgg);
             }
         }
     }

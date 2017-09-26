@@ -28,6 +28,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -101,6 +102,7 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
                 }
             }
 
+            setOldAggregateValueForStore(agg);
             agg = aggregator.apply(key, value, agg);
             final Windowed<K> sessionKey = new Windowed<>(key, mergedWindow);
             if (!mergedWindow.equals(newSessionWindow)) {
@@ -113,7 +115,14 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
             tupleForwarder.maybeForward(sessionKey, agg, null);
         }
 
+        private void setOldAggregateValueForStore(T oldAgg) {
+            if (store instanceof WrappedStateStore.AbstractStateStore) {
+                ((WrappedStateStore.AbstractStateStore) store).setPrevious(oldAgg);
+            }
+        }
+
     }
+
 
 
     private SessionWindow mergeSessionWindow(final SessionWindow one, final SessionWindow two) {
