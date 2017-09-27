@@ -81,12 +81,13 @@ class WorkerSinkTask extends WorkerTask {
                           TaskStatus.Listener statusListener,
                           TargetState initialState,
                           WorkerConfig workerConfig,
+                          ConnectMetrics connectMetrics,
                           Converter keyConverter,
                           Converter valueConverter,
                           TransformationChain<SinkRecord> transformationChain,
                           ClassLoader loader,
                           Time time) {
-        super(id, statusListener, initialState, loader);
+        super(id, statusListener, initialState, loader, connectMetrics);
 
         this.workerConfig = workerConfig;
         this.task = task;
@@ -134,6 +135,10 @@ class WorkerSinkTask extends WorkerTask {
         if (consumer != null)
             consumer.close();
         transformationChain.close();
+    }
+
+    @Override
+    protected void releaseResources() {
     }
 
     @Override
@@ -211,18 +216,21 @@ class WorkerSinkTask extends WorkerTask {
             log.debug("{} Received out of order commit callback for sequence number {}, but most recent sequence number is {}",
                     this, seqno, commitSeqno);
         } else {
+            long durationMillis = time.milliseconds() - commitStarted;
             if (error != null) {
                 log.error("{} Commit of offsets threw an unexpected exception for sequence number {}: {}",
                         this, seqno, committedOffsets, error);
                 commitFailures++;
+                recordCommitFailure(durationMillis, error);
             } else {
                 log.debug("{} Finished offset commit successfully in {} ms for sequence number {}: {}",
-                        this, time.milliseconds() - commitStarted, seqno, committedOffsets);
+                        this, durationMillis, seqno, committedOffsets);
                 if (committedOffsets != null) {
                     log.debug("{} Setting last committed offsets to {}", this, committedOffsets);
                     lastCommittedOffsets = committedOffsets;
                 }
                 commitFailures = 0;
+                recordCommitSuccess(durationMillis);
             }
             committing = false;
         }
@@ -466,6 +474,7 @@ class WorkerSinkTask extends WorkerTask {
             // Since we reuse the messageBatch buffer, ensure we give the task its own copy
             log.trace("{} Delivering batch of {} messages to task", this, messageBatch.size());
             task.put(new ArrayList<>(messageBatch));
+            recordBatch(messageBatch.size());
             currentOffsets.putAll(origOffsets);
             messageBatch.clear();
             // If we had paused all consumer topic partitions to try to redeliver data, then we should resume any that

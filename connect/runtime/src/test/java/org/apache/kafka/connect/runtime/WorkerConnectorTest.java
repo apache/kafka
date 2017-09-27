@@ -55,7 +55,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
     @Before
     public void setup() {
         connectorConfig = new ConnectorConfig(plugins, CONFIG);
-        metrics = new MockConnectorMetrics();
+        metrics = new MockConnectMetrics();
     }
 
     @After
