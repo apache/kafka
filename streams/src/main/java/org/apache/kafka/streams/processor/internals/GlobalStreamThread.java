@@ -298,7 +298,10 @@ public class GlobalStreamThread extends Thread {
 
     private StateConsumer initialize() {
         try {
-            final GlobalStateManager stateMgr = new GlobalStateManagerImpl(topology, consumer, stateDirectory, stateRestoreListener);
+            final GlobalStateManager stateMgr = new GlobalStateManagerImpl(topology,
+                                                                           consumer,
+                                                                           stateDirectory,
+                                                                           stateRestoreListener);
             final StateConsumer stateConsumer
                     = new StateConsumer(this.logContext,
                                         consumer,

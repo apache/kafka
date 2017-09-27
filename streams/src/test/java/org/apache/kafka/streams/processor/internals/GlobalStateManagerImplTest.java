@@ -475,7 +475,7 @@ public class GlobalStateManagerImplTest {
             public boolean lockGlobalState(final int retry) throws IOException {
                 throw new IOException("KABOOM!");
             }
-        }, null);
+        }, stateRestoreListener);
 
         try {
             stateManager.initialize(context);

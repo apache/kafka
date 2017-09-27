@@ -50,6 +50,7 @@ public class GlobalStreamThreadTest {
     private final KStreamBuilder builder = new KStreamBuilder();
     private final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final MockTime time = new MockTime();
+    private final MockStateRestoreListener stateRestoreListener = new MockStateRestoreListener();
     private GlobalStreamThread globalStreamThread;
     private StreamsConfig config;
 
@@ -67,7 +68,7 @@ public class GlobalStreamThreadTest {
                                                     new Metrics(),
                                                     new MockTime(),
                                                     "clientId",
-                                                    new MockStateRestoreListener());
+                                                     stateRestoreListener);
     }
 
     @Test
@@ -98,7 +99,8 @@ public class GlobalStreamThreadTest {
                                                     new StateDirectory("appId", TestUtils.tempDirectory().getPath(), time),
                                                     new Metrics(),
                                                     new MockTime(),
-                                                    "clientId", null);
+                                                    "clientId",
+                                                    stateRestoreListener);
 
         try {
             globalStreamThread.start();
