@@ -179,7 +179,6 @@ public class KafkaStreamsTest {
         builder.globalTable("anyTopic");
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numThreads);
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
-        streams.setGlobalStateRestoreListener(null);
 
 
         streams.start();
