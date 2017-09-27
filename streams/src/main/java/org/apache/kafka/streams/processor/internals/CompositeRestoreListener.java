@@ -58,7 +58,11 @@ public class CompositeRestoreListener implements BatchingStateRestoreCallback, S
         try {
             userRestoreListener.onRestoreStart(topicPartition, storeName, startingOffset, endingOffset);
         } catch (final Exception fatalUserException) {
-            throw new StreamsException("Fatal user code error in store restore listener.", fatalUserException);
+            throw new StreamsException(
+                String.format("Fatal user code error in store restore listener for store %s, partition %s.",
+                              storeName,
+                              topicPartition),
+                fatalUserException);
         }
         storeRestoreListener.onRestoreStart(topicPartition, storeName, startingOffset, endingOffset);
     }
@@ -75,7 +79,11 @@ public class CompositeRestoreListener implements BatchingStateRestoreCallback, S
         try {
             userRestoreListener.onBatchRestored(topicPartition, storeName, batchEndOffset, numRestored);
         } catch (final Exception fatalUserException) {
-            throw new StreamsException("Fatal user code error in store restore listener.", fatalUserException);
+            throw new StreamsException(
+                String.format("Fatal user code error in store restore listener for store %s, partition %s.",
+                    storeName,
+                    topicPartition),
+                fatalUserException);
         }
         storeRestoreListener.onBatchRestored(topicPartition, storeName, batchEndOffset, numRestored);
     }
@@ -91,7 +99,11 @@ public class CompositeRestoreListener implements BatchingStateRestoreCallback, S
         try {
             userRestoreListener.onRestoreEnd(topicPartition, storeName, totalRestored);
         } catch (final Exception fatalUserException) {
-            throw new StreamsException("Fatal user code error in store restore listener.", fatalUserException);
+            throw new StreamsException(
+                String.format("Fatal user code error in store restore listener for store %s, partition %s.",
+                    storeName,
+                    topicPartition),
+                fatalUserException);
         }
         storeRestoreListener.onRestoreEnd(topicPartition, storeName, totalRestored);
     }
