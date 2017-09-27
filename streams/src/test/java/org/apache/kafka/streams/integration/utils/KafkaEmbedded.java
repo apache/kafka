@@ -110,7 +110,27 @@ public class KafkaEmbedded {
      * You can use this to tell Kafka producers and consumers how to connect to this instance.
      */
     public String brokerList() {
-        return kafka.config().hostName() + ":" + kafka.boundPort(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT));
+        Object listenerConfig = effectiveConfig.get(KafkaConfig$.MODULE$.InterBrokerListenerNameProp());
+        SecurityProtocol securityProtocol = SecurityProtocol.PLAINTEXT;
+        if (listenerConfig != null) {
+            switch (listenerConfig.toString()) {
+                case "PLAINTEXT":
+                    securityProtocol = SecurityProtocol.PLAINTEXT;
+                    break;
+                case "SSL":
+                    securityProtocol = SecurityProtocol.SSL;
+                    break;
+                case "SASL_PLAINTEXT":
+                    securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
+                    break;
+                case "SASL_SSL":
+                    securityProtocol = SecurityProtocol.SASL_SSL;
+                    break;
+                default:
+                    throw new IllegalArgumentException("Unknown security protocol: " + listenerConfig.toString());
+            }
+        }
+        return kafka.config().hostName() + ":" + kafka.boundPort(ListenerName.forSecurityProtocol(securityProtocol));
     }
 
 

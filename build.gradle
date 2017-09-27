@@ -893,6 +893,7 @@ project(':streams') {
     testCompile project(':core').sourceSets.test.output
     testCompile libs.junit
     testCompile libs.easymock
+    testCompile libs.bcpkix
 
     testRuntime libs.slf4jlog4j
   }
