@@ -126,7 +126,7 @@ class TransactionsTest(Test):
                 input_topic=input_topic,
                 output_topic=output_topic,
                 input_partition=i,
-                transactional_id="transactional-copier-" + str(i)
+                transactional_id="copier-" + str(i)
             ))
         return copiers
 
@@ -227,9 +227,9 @@ class TransactionsTest(Test):
         self.kafka.logs["kafka_data_1"]["collect_default"] = True
         self.kafka.logs["kafka_data_2"]["collect_default"] = True
         self.kafka.logs["kafka_operational_logs_debug"]["collect_default"] = True
-        if check_order is True:
-            # To check ordering, we simply create input and output partitions
-            # with a single topic.
+        if check_order:
+            # To check ordering, we simply create input and output topics
+            # with a single partition.
             # We reduce the number of seed messages to copy to account for the fewer output
             # partitions, and thus lower parallelism. This helps keep the test
             # time shorter.
@@ -262,7 +262,7 @@ class TransactionsTest(Test):
         assert input_message_set == concurrently_consumed_message_set, \
             "Input and concurrently consumed output message sets are not equal. Num input messages: %d. Num concurrently_consumed_messages: %d" %\
             (len(input_message_set), len(concurrently_consumed_message_set))
-        if check_order is True:
+        if check_order:
             assert input_messages == sorted(input_messages), "The seed messages themselves were not in order"
             assert output_messages == input_messages, "Output messages are not in order"
             assert concurrently_consumed_messages == output_messages, "Concurrently consumed messages are not in order"
