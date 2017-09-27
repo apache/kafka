@@ -136,6 +136,9 @@ public class Protocol {
             b.append(" API (Key: ");
             b.append(key.id);
             b.append("):</a></h5>\n\n");
+            if (key.doc != null) {
+                b.append("<p>").append(key.doc).append("</p>\n\n");
+            }
             // Requests
             b.append("<b>Requests:</b><br>\n");
             Schema[] requests = key.requestSchemas;
