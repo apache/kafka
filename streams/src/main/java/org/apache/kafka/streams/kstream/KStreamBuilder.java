@@ -37,7 +37,6 @@ import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreSupplier;
 
 import java.util.Collections;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
 /**
@@ -51,8 +50,6 @@ import java.util.regex.Pattern;
  */
 @Deprecated
 public class KStreamBuilder extends org.apache.kafka.streams.processor.TopologyBuilder {
-
-    private final AtomicInteger index = new AtomicInteger(0);
 
     private final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(super.internalTopologyBuilder);
 
@@ -1249,7 +1246,7 @@ public class KStreamBuilder extends org.apache.kafka.streams.processor.TopologyB
      * @return a new unique name
      */
     public String newName(final String prefix) {
-        return prefix + String.format("%010d", index.getAndIncrement());
+        return internalStreamsBuilder.newName(prefix);
     }
 
     /**
@@ -1261,7 +1258,7 @@ public class KStreamBuilder extends org.apache.kafka.streams.processor.TopologyB
      * @return a new unique name
      */
     public String newStoreName(final String prefix) {
-        return prefix + String.format(KTableImpl.STATE_STORE_NAME + "%010d", index.getAndIncrement());
+        return internalStreamsBuilder.newStoreName(prefix);
     }
 
 }
