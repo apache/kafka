@@ -48,7 +48,7 @@ public class MetricsRegistry {
         return template;
     }
 
-    public List<MetricNameTemplate> getAllTemplates() {
+    public List<MetricNameTemplate> allTemplates() {
         return allTemplates;
     }
 

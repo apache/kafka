@@ -27,9 +27,9 @@ import org.apache.kafka.common.metrics.Metrics;
 
 public class ProducerMetrics {
 
+    private final Metrics metrics;
     public final RecordAccumulatorMetricsRegistry recordAccumulatorMetrics;
     public final SenderMetricsRegistry senderMetrics;
-    private final Metrics metrics;
 
     public ProducerMetrics(Metrics metrics) {
         this.metrics = metrics;
@@ -39,7 +39,7 @@ public class ProducerMetrics {
 
     private List<MetricNameTemplate> getAllTemplates() {
         List<MetricNameTemplate> l = new ArrayList<>();
-        l.addAll(this.recordAccumulatorMetrics.getAllTemplates());
+        l.addAll(this.recordAccumulatorMetrics.allTemplates());
         l.addAll(this.senderMetrics.allTemplates());
         return l;
     }

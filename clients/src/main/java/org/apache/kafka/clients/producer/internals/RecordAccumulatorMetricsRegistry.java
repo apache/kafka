@@ -48,9 +48,9 @@ public class RecordAccumulatorMetricsRegistry extends MetricsRegistry {
     }
 
     
-    public List<MetricNameTemplate> getAllTemplates() {
+    public List<MetricNameTemplate> allTemplates() {
         List<MetricNameTemplate> l = new ArrayList<>();
-        l.addAll(this.bufferPoolMetrics.getAllTemplates());
+        l.addAll(this.bufferPoolMetrics.allTemplates());
         l.addAll(this.allTemplates);
         return l;
     }
