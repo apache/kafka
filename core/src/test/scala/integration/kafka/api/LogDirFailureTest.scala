@@ -17,7 +17,6 @@
 package kafka.api
 
 import java.util.Collections
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{ExecutionException, TimeUnit}
 
 import kafka.controller.{OfflineReplica, PartitionAndReplica}
@@ -44,6 +43,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
   val consumerCount: Int = 1
   val serverCount: Int = 2
   private val topic = "topic"
+  private val partitionNum = 12
 
   this.logDirCount = 3
   this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
@@ -54,7 +54,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
   @Before
   override def setUp() {
     super.setUp()
-    TestUtils.createTopic(zkUtils, topic, 12, serverCount, servers = servers)
+    TestUtils.createTopic(zkUtils, topic, partitionNum, serverCount, servers = servers)
   }
 
   @Test
@@ -79,46 +79,11 @@ class LogDirFailureTest extends IntegrationTestHarness {
     val followerId = partitionInfo.replicas().map(_.id()).find(_ != leaderServerId).get
     val followerServer = servers.find(_.config.brokerId == followerId).get
 
-
-    val running = new AtomicBoolean(true)
-    @volatile var numMessages = 0
-    val thread = new Thread() {
-      override def run(): Unit = {
-        val producer = TestUtils.createNewProducer(
-          TestUtils.getBrokerListStrFromServers(servers, protocol = securityProtocol),
-          securityProtocol = securityProtocol,
-          trustStoreFile = trustStoreFile,
-          retries = 5,
-          requestTimeoutMs = 2000,
-          acks = 1
-        )
-
-        while (running.get()) {
-          producer.send(new ProducerRecord(topic, s"xxxxxxxxxxxxxxxxxxxx-$numMessages".getBytes))
-          numMessages += 1
-        }
-        producer.close()
-      }
+    followerServer.replicaManager.markPartitionOffline(partition)
+    TestUtils.produceMessage(servers, topic, 0, "message")
+    followerServer.replicaManager.replicaFetcherManager.fetcherThreadMap.values.foreach { thread =>
+      assertTrue("ReplicaFetcherThread should still be working if its partition count > 0", thread.shutdownLatch.getCount > 0)
     }
-
-    thread.start()
-    // Wait for some messages to be produced
-    Thread.sleep(1000)
-
-    // Make log directory of the partition on the follower broker offline
-    val replica = followerServer.replicaManager.getReplicaOrException(partition)
-    val logDir = replica.log.get.dir.getParentFile
-    followerServer.replicaManager.handleLogDirFailure(logDir.getAbsolutePath)
-
-    try {
-      followerServer.replicaManager.replicaFetcherManager.fetcherThreadMap.values.foreach { thread =>
-        assertTrue("ReplicaFetcherThread should still be working if its partition count > 0", thread.shutdownLatch.getCount > 0)
-      }
-    } finally {
-      running.set(false)
-      thread.join()
-    }
-
   }
 
   def testProduceAfterLogDirFailureOnLeader(failureType: LogDirFailureType) {

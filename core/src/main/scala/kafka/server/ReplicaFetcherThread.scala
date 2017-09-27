@@ -76,7 +76,7 @@ class ReplicaFetcherThread(name: String,
   private val fetchSize = brokerConfig.replicaFetchMaxBytes
   private val shouldSendLeaderEpochRequest: Boolean = brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV2
 
-  private def epochCache(tp: TopicPartition): Option[LeaderEpochCache] =  replicaMgr.getReplica(tp).map(_.epochs.get)
+  private def epochCacheOpt(tp: TopicPartition): Option[LeaderEpochCache] =  replicaMgr.getReplica(tp).map(_.epochs.get)
 
   override def shutdown(): Unit = {
     super.shutdown()
@@ -158,7 +158,7 @@ class ReplicaFetcherThread(name: String,
 
       warn(s"Reset fetch offset for partition $topicPartition from ${replica.logEndOffset.messageOffset} to current " +
         s"leader's latest offset $leaderEndOffset")
-      replicaMgr.logManager.truncateTo(Map(topicPartition -> leaderEndOffset), writeCheckpoint = true)
+      replicaMgr.logManager.truncateTo(Map(topicPartition -> leaderEndOffset))
       leaderEndOffset
     } else {
       /**
@@ -280,7 +280,7 @@ class ReplicaFetcherThread(name: String,
             else
               epochOffset.endOffset
 
-          replicaMgr.logManager.truncateTo(Map(tp -> truncationOffset), writeCheckpoint = false)
+          replicaMgr.logManager.truncateTo(Map(tp -> truncationOffset))
           truncationPoints.put(tp, truncationOffset)
         }
       } catch {
@@ -290,9 +290,6 @@ class ReplicaFetcherThread(name: String,
       }
     }
 
-    if (truncationPoints.nonEmpty)
-      replicaMgr.logManager.checkpointLogRecoveryOffsets()
-
     // For partitions that encountered an error, delay them a bit before retrying the leader epoch request
     delayPartitions(partitionsWithError, brokerConfig.replicaFetchBackoffMs.toLong)
 
@@ -300,15 +297,16 @@ class ReplicaFetcherThread(name: String,
   }
 
   override def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): Map[TopicPartition, Int] = {
-    val result = allPartitions
+    val partitionEpochOpts = allPartitions
       .filter { case (_, state) => state.isTruncatingLog }
-      .map { case (tp, _) => tp -> epochCache(tp) }
-      .filter { case (tp, epochCacheOpt) => epochCacheOpt.nonEmpty }
-      .map { case (tp, epochCacheOpt) => tp -> epochCacheOpt.get.latestEpoch() }.toMap
+      .map { case (tp, _) => tp -> epochCacheOpt(tp) }.toMap
 
-    debug(s"Build leaderEpoch request $result")
+    val (partitionsWithEpoch, partitionsWithoutEpoch) = partitionEpochOpts.partition { case (tp, epochCacheOpt) => epochCacheOpt.nonEmpty }
+    if (partitionsWithoutEpoch.nonEmpty)
+      handlePartitionsWithErrors(partitionsWithoutEpoch.keys)
 
-    result
+    debug(s"Build leaderEpoch request $partitionsWithEpoch")
+    partitionsWithEpoch.map { case (tp, epochCacheOpt) => tp -> epochCacheOpt.get.latestEpoch() }
   }
 
   override def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {

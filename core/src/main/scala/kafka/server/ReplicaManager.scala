@@ -1349,6 +1349,11 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
+  // Used only by test
+  def markPartitionOffline(tp: TopicPartition) {
+    allPartitions.put(tp, ReplicaManager.OfflinePartition)
+  }
+
   // logDir should be an absolute path
   def handleLogDirFailure(dir: String) {
     if (!logManager.isLogDirOnline(dir))
