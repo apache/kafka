@@ -40,6 +40,7 @@ public interface WrappedStateStore extends StateStore {
 
     abstract class AbstractStateStore implements WrappedStateStore {
         final StateStore innerState;
+        private Object previous;
 
         AbstractStateStore(StateStore inner) {
             this.innerState = inner;
@@ -92,6 +93,18 @@ public interface WrappedStateStore extends StateStore {
         @Override
         public StateStore wrappedStore() {
             return innerState;
+        }
+
+        public synchronized void setPrevious(Object previous) {
+            this.previous = previous;
+
+            if (innerState instanceof AbstractStateStore) {
+                ((AbstractStateStore) innerState).setPrevious(previous);
+            }
+        }
+
+        public synchronized Object getPrevious() {
+            return this.previous;
         }
     }
 }
