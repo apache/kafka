@@ -126,7 +126,7 @@ class TransactionsTest(Test):
                 input_topic=input_topic,
                 output_topic=output_topic,
                 input_partition=i,
-                transactional_id="trasactional-copier-" + str(i)
+                transactional_id="transactional-copier-" + str(i)
             ))
         return copiers
 
