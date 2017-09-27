@@ -375,7 +375,7 @@ public class ConsumerNetworkClient implements Closeable {
                     if (authenticationException != null)
                         handler.onFailure(authenticationException);
                     else
-                        handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().desiredOrLatestVersion()),
+                        handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().latestAllowedVersion()),
                             request.callback(), request.destination(), request.createdTimeMs(), now, true,
                             null, null));
                 }

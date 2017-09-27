@@ -67,6 +67,7 @@ public class Worker {
     private final Time time;
     private final String workerId;
     private final Plugins plugins;
+    private final ConnectMetrics metrics;
     private final WorkerConfig config;
     private final Converter internalKeyConverter;
     private final Converter internalValueConverter;
@@ -84,6 +85,7 @@ public class Worker {
             WorkerConfig config,
             OffsetBackingStore offsetBackingStore
     ) {
+        this.metrics = new ConnectMetrics(workerId, config, time);
         this.executor = Executors.newCachedThreadPool();
         this.workerId = workerId;
         this.time = time;
@@ -159,6 +161,7 @@ public class Worker {
         sourceTaskOffsetCommitter.close(timeoutMs);
 
         offsetBackingStore.stop();
+        metrics.stop();
 
         log.info("Worker stopped");
     }
@@ -190,7 +193,7 @@ public class Worker {
             final String connClass = connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
             log.info("Creating connector {} of type {}", connName, connClass);
             final Connector connector = plugins.newConnector(connClass);
-            workerConnector = new WorkerConnector(connName, connector, ctx, statusListener);
+            workerConnector = new WorkerConnector(connName, connector, ctx, metrics,  statusListener);
             log.info("Instantiated connector {} with version {} of type {}", connName, connector.version(), connector.getClass());
             savedLoader = plugins.compareAndSwapLoaders(connector);
             workerConnector.initialize(connConfig);
@@ -534,6 +537,14 @@ public class Worker {
 
     public String workerId() {
         return workerId;
+    }
+
+    /**
+     * Get the {@link ConnectMetrics} that uses Kafka Metrics and manages the JMX reporter.
+     * @return the Connect-specific metrics; never null
+     */
+    public ConnectMetrics metrics() {
+        return metrics;
     }
 
     public void setTargetState(String connName, TargetState state) {

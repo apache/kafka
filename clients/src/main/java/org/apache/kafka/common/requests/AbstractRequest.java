@@ -27,31 +27,37 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
 
     public static abstract class Builder<T extends AbstractRequest> {
         private final ApiKeys apiKey;
-        private final Short desiredVersion;
+        private final short oldestAllowedVersion;
+        private final short latestAllowedVersion;
 
         public Builder(ApiKeys apiKey) {
-            this(apiKey, null);
+            this(apiKey, apiKey.oldestVersion(), apiKey.latestVersion());
         }
 
-        public Builder(ApiKeys apiKey, Short desiredVersion) {
+        public Builder(ApiKeys apiKey, short desiredVersion) {
+            this(apiKey, desiredVersion, desiredVersion);
+        }
+
+        public Builder(ApiKeys apiKey, short oldestAllowedVersion, short latestAllowedVersion) {
             this.apiKey = apiKey;
-            this.desiredVersion = desiredVersion;
+            this.oldestAllowedVersion = oldestAllowedVersion;
+            this.latestAllowedVersion = latestAllowedVersion;
         }
 
         public ApiKeys apiKey() {
             return apiKey;
         }
 
-        public short desiredOrLatestVersion() {
-            return desiredVersion == null ? apiKey.latestVersion() : desiredVersion;
+        public short oldestAllowedVersion() {
+            return oldestAllowedVersion;
         }
 
-        public Short desiredVersion() {
-            return desiredVersion;
+        public short latestAllowedVersion() {
+            return latestAllowedVersion;
         }
 
         public T build() {
-            return build(desiredOrLatestVersion());
+            return build(latestAllowedVersion());
         }
 
         public abstract T build(short version);

@@ -59,7 +59,7 @@ public class StreamsBuilder {
     final InternalTopologyBuilder internalTopologyBuilder = topology.internalTopologyBuilder;
 
     private final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
-
+    
     /**
      * Create a {@link KStream} from the specified topics.
      * The default {@code "auto.offset.reset"} strategy, default {@link TimestampExtractor}, and default key and value
@@ -301,8 +301,10 @@ public class StreamsBuilder {
                                                   final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
+        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
         return internalStreamsBuilder.table(topic,
-                                            new ConsumedInternal<K, V>(),
+                                            new ConsumedInternal<>(Consumed.with(materializedInternal.keySerde(),
+                                                                                 materializedInternal.valueSerde())),
                                             new MaterializedInternal<>(materialized));
     }
 
@@ -429,9 +431,11 @@ public class StreamsBuilder {
                                                               final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
+        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
         return internalStreamsBuilder.globalTable(topic,
-                                                  new ConsumedInternal<K, V>(),
-                                                  new MaterializedInternal<>(materialized));
+                                                  new ConsumedInternal<>(Consumed.with(materializedInternal.keySerde(),
+                                                                                       materializedInternal.valueSerde())),
+                                                  materializedInternal);
     }
 
 
@@ -486,18 +490,6 @@ public class StreamsBuilder {
                                               processorName,
                                               stateUpdateSupplier);
         return this;
-    }
-
-    /**
-     * Create a new instance of {@link KStream} by merging the given {@link KStream}s.
-     * <p>
-     * There is no ordering guarantee for records from different {@link KStream}s.
-     *
-     * @param streams the {@link KStream}s to be merged
-     * @return a {@link KStream} containing all records of the given streams
-     */
-    public synchronized <K, V> KStream<K, V> merge(final KStream<K, V>... streams) {
-        return internalStreamsBuilder.merge(streams);
     }
 
     /**
