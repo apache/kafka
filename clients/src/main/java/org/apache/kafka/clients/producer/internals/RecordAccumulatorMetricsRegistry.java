@@ -49,11 +49,16 @@ public class RecordAccumulatorMetricsRegistry {
 
         this.bufferPoolMetrics = new BufferPoolMetricsRegistry(metrics);
         
-        this.waitingThreads = createMetricName("waiting-threads", "The number of user threads blocked waiting for buffer memory to enqueue their records");
-        this.bufferTotalBytes = createMetricName("buffer-total-bytes", "The maximum amount of buffer memory the client can use (whether or not it is currently used).");
-        this.bufferAvailableBytes = createMetricName("buffer-available-bytes", "The total amount of buffer memory that is not being used (either unallocated or in the free list).");
-        this.bufferExhaustedRate = createMetricName("buffer-exhausted-rate", "The average per-second number of record sends that are dropped due to buffer exhaustion");
-        this.bufferExhaustedTotal = createMetricName("buffer-exhausted-total", "The total number of record sends that are dropped due to buffer exhaustion");
+        this.waitingThreads = createMetricName("waiting-threads",
+                "The number of user threads blocked waiting for buffer memory to enqueue their records");
+        this.bufferTotalBytes = createMetricName("buffer-total-bytes",
+                "The maximum amount of buffer memory the client can use (whether or not it is currently used).");
+        this.bufferAvailableBytes = createMetricName("buffer-available-bytes",
+                "The total amount of buffer memory that is not being used (either unallocated or in the free list).");
+        this.bufferExhaustedRate = createMetricName("buffer-exhausted-rate",
+                "The average per-second number of record sends that are dropped due to buffer exhaustion");
+        this.bufferExhaustedTotal = createMetricName("buffer-exhausted-total",
+                "The total number of record sends that are dropped due to buffer exhaustion");
 
     }
     
