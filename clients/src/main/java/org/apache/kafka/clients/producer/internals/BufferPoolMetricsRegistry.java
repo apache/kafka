@@ -28,9 +28,9 @@ import org.apache.kafka.common.metrics.Sensor;
 
 public class BufferPoolMetricsRegistry {
 
-    protected final Metrics metrics;
-    protected final Set<String> tags;
-    protected final List<MetricNameTemplate> allTemplates;
+    private final Metrics metrics;
+    private final Set<String> tags;
+    private final List<MetricNameTemplate> allTemplates;
 
     private final static String METRIC_GROUP_NAME = "producer-metrics";
     
