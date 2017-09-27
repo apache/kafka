@@ -188,6 +188,11 @@ public class ConnectMetricsTest {
     public void testMetricGroupIdWithWorkerId() {
         MetricGroupId id1 = metrics.groupId("name", true);
         assertNotNull(metrics.workerId(), id1.tags().get(ConnectMetrics.WORKER_ID_TAG_NAME));
+        assertEquals("name;worker-id=worker1", id1.toString());
+
+        id1 = metrics.groupId("name", true, "k1", "v1", "k2", "v2");
+        assertNotNull(metrics.workerId(), id1.tags().get(ConnectMetrics.WORKER_ID_TAG_NAME));
+        assertEquals("name;worker-id=worker1;k1=v1;k2=v2", id1.toString()); // maintain order of tags
     }
 
 }

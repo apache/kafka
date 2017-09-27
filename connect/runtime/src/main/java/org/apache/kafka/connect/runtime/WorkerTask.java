@@ -334,28 +334,6 @@ abstract class WorkerTask implements Runnable {
                     "The average time in milliseconds taken by this task to commit offsets"),
                     new Avg());
 
-//            int buckets = 100;
-//            MetricName p99 = metricGroup.metricName("offset-commit-99p-time-ms",
-//                    "The 99th percentile time in milliseconds spent by this task to commit offsets to Kafka");
-//            MetricName p95 = metricGroup.metricName("offset-commit-95p-time-ms",
-//                    "The 95th percentile time in milliseconds spent by this task to commit offsets to Kafka");
-//            MetricName p90 = metricGroup.metricName("offset-commit-90p-time-ms",
-//                    "The 90th percentile time in milliseconds spent by this task to commit offsets to Kafka");
-//            MetricName p75 = metricGroup.metricName("offset-commit-75p-time-ms",
-//                    "The 75th percentile time in milliseconds spent by this task to commit offsets to Kafka");
-//            MetricName p50 = metricGroup.metricName("offset-commit-50p-time-ms",
-//                    "The 50th percentile (median) time in milliseconds spent by this task to commit offsets to Kafka");
-//            Percentiles commitPercentiles = new Percentiles(4 * buckets,
-//                                                            0.0,
-//                                                            10*1000.0,
-//                                                            BucketSizing.LINEAR,
-//                                                            new Percentile(p50, 50),
-//                                                            new Percentile(p75, 75),
-//                                                            new Percentile(p90, 90),
-//                                                            new Percentile(p95, 95),
-//                                                            new Percentile(p99, 99));
-//            commitTime.add(commitPercentiles);
-
             batchSize = metricGroup.sensor("batch-size");
             batchSize.add(metricGroup.metricName("batch-size-max",
                     "The maximum size of the batches processed by the connector"),

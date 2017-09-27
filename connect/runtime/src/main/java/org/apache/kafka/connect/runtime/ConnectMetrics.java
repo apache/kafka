@@ -30,8 +30,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -177,7 +177,7 @@ public class ConnectMetrics {
             assert groupName != null;
             assert tags != null;
             this.groupName = groupName;
-            this.tags = Collections.unmodifiableMap(new HashMap<>(tags));
+            this.tags = Collections.unmodifiableMap(new LinkedHashMap<>(tags));
             this.hc = Objects.hash(this.groupName, this.tags);
             StringBuilder sb = new StringBuilder(this.groupName);
             for (Map.Entry<String, String> entry : this.tags.entrySet()) {
@@ -379,18 +379,6 @@ public class ConnectMetrics {
         }
 
         /**
-         * Remove the sensors (if they exist), associated metrics, and their children.
-         *
-         * @param sensors The sensors to be removed
-         */
-        public synchronized void removeSensors(Sensor... sensors) {
-            for (Sensor sensor : sensors) {
-                metrics.removeSensor(sensor.name());
-                sensorNames.remove(sensor.name());
-            }
-        }
-
-        /**
          * Remove all sensors and metrics associated with this group.
          */
         public synchronized void close() {
@@ -421,7 +409,7 @@ public class ConnectMetrics {
 
     /**
      * Create a set of tags using the supplied key and value pairs. Every tag name and value will be
-     * {@link #makeValidName(String) made valid} before it is used.
+     * {@link #makeValidName(String) made valid} before it is used. The order of the tags will be kept.
      *
      * @param workerId the worker ID that should be included first in the tags; may be null if not to be included
      * @param keyValue the key and value pairs for the tags; must be an even number
@@ -430,7 +418,7 @@ public class ConnectMetrics {
     static Map<String, String> tags(String workerId, String... keyValue) {
         if ((keyValue.length % 2) != 0)
             throw new IllegalArgumentException("keyValue needs to be specified in pairs");
-        Map<String, String> tags = new HashMap<>();
+        Map<String, String> tags = new LinkedHashMap<>();
         if (workerId != null && !workerId.trim().isEmpty()) {
             tags.put(WORKER_ID_TAG_NAME, makeValidName(workerId));
         }
