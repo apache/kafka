@@ -57,7 +57,7 @@ import static org.junit.Assert.fail;
 public class StoreChangelogReaderTest {
 
     @Mock(type = MockType.NICE)
-    private AssignedTasks active;
+    private RestoringTasks active;
     @Mock(type = MockType.NICE)
     private Task task;
 

@@ -33,7 +33,7 @@ public class MockChangelogReader implements ChangelogReader {
     }
 
     @Override
-    public Collection<TopicPartition> restore(final RestoringTaskGetter active) {
+    public Collection<TopicPartition> restore(final RestoringTasks active) {
         return registered;
     }
 

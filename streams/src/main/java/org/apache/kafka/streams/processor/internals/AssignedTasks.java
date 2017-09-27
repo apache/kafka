@@ -37,7 +37,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
-class AssignedTasks implements RestoringTaskGetter {
+class AssignedTasks implements RestoringTasks {
     private final Logger log;
     private final String taskTypeName;
     private final TaskAction maybeCommitAction;

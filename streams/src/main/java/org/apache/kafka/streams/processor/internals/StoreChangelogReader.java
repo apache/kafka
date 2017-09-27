@@ -67,7 +67,7 @@ public class StoreChangelogReader implements ChangelogReader {
     /**
      * @throws TaskMigratedException if another thread wrote to the changelog topic that is currently restored
      */
-    public Collection<TopicPartition> restore(final RestoringTaskGetter active) {
+    public Collection<TopicPartition> restore(final RestoringTasks active) {
         if (!needsInitializing.isEmpty()) {
             initialize();
         }
