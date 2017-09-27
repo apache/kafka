@@ -25,6 +25,12 @@ import org.apache.kafka.common.internals.FatalExitError
 abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean = true)
         extends Thread(name) with Logging {
   this.setDaemon(false)
+  setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+      override def uncaughtException(thread: Thread, exception: Throwable) {
+        error("Exiting due to uncaught exception", exception)
+        Exit.exit(-2)
+      }
+  })
   this.logIdent = "[" + name + "]: "
   val isRunning: AtomicBoolean = new AtomicBoolean(true)
   private val shutdownLatch = new CountDownLatch(1)
