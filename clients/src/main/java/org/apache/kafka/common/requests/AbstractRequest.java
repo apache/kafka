@@ -30,14 +30,23 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
         private final short oldestAllowedVersion;
         private final short latestAllowedVersion;
 
+        /**
+         * Construct a new builder which allows any supported version
+         */
         public Builder(ApiKeys apiKey) {
             this(apiKey, apiKey.oldestVersion(), apiKey.latestVersion());
         }
 
-        public Builder(ApiKeys apiKey, short desiredVersion) {
-            this(apiKey, desiredVersion, desiredVersion);
+        /**
+         * Construct a new builder which allows only a specific version
+         */
+        public Builder(ApiKeys apiKey, short allowedVersion) {
+            this(apiKey, allowedVersion, allowedVersion);
         }
 
+        /**
+         * Construct a new builder which allows an inclusive range of versions
+         */
         public Builder(ApiKeys apiKey, short oldestAllowedVersion, short latestAllowedVersion) {
             this.apiKey = apiKey;
             this.oldestAllowedVersion = oldestAllowedVersion;
