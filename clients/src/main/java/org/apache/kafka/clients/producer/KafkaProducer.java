@@ -1080,11 +1080,15 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId, metrics);
         log.debug("Kafka producer has been closed");
         Throwable exception = firstException.get();
-        if (exception != null && !swallowException) {
-            if (exception instanceof InterruptedException) {
-                throw new InterruptException((InterruptedException) exception);
+        if (exception != null) {
+            if (!swallowException) {
+                if (exception instanceof InterruptedException) {
+                    throw new InterruptException((InterruptedException) exception);
+                }
+                throw new KafkaException("Failed to close kafka producer", exception);
+            } else {
+                Thread.currentThread().interrupt();
             }
-            throw new KafkaException("Failed to close kafka producer", exception);
         }
     }
 

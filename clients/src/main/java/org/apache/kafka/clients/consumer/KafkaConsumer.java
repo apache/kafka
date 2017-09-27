@@ -1750,11 +1750,15 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId, metrics);
         log.debug("Kafka consumer has been closed");
         Throwable exception = firstException.get();
-        if (exception != null && !swallowException) {
-            if (exception instanceof InterruptException) {
-                throw (InterruptException) exception;
+        if (exception != null) {
+            if (!swallowException) {
+                if (exception instanceof InterruptException) {
+                    throw (InterruptException) exception;
+                }
+                throw new KafkaException("Failed to close kafka consumer", exception);
+            } else {
+                Thread.currentThread().interrupt();
             }
-            throw new KafkaException("Failed to close kafka consumer", exception);
         }
     }
 
