@@ -30,10 +30,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
@@ -51,7 +53,7 @@ public class ConnectMetrics {
     private final Metrics metrics;
     private final Time time;
     private final String workerId;
-    private final ConcurrentMap<String, MetricGroup> groupsByName = new ConcurrentHashMap<>();
+    private final ConcurrentMap<MetricGroupId, MetricGroup> groupsByName = new ConcurrentHashMap<>();
 
     /**
      * Create an instance.
@@ -107,6 +109,7 @@ public class ConnectMetrics {
 
     /**
      * Get or create a {@link MetricGroup} with the specified group name and the given tags.
+     * Each group is uniquely identified by the name and tags.
      *
      * @param groupName    the name of the metric group; may not be null and must be a
      *                     {@link #checkNameIsValid(String) valid name}
@@ -120,6 +123,7 @@ public class ConnectMetrics {
 
     /**
      * Get or create a {@link MetricGroup} with the specified group name and the given tags.
+     * Each group is uniquely identified by the name and tags.
      *
      * @param groupName       the name of the metric group; may not be null and must be a
      *                        {@link #checkNameIsValid(String) valid name}
@@ -129,14 +133,20 @@ public class ConnectMetrics {
      * @throws IllegalArgumentException if the group name is not valid
      */
     public MetricGroup group(String groupName, boolean includeWorkerId, String... tagKeyValues) {
-        MetricGroup group = groupsByName.get(groupName);
+        MetricGroupId groupId = groupId(groupName, includeWorkerId, tagKeyValues);
+        MetricGroup group = groupsByName.get(groupId);
         if (group == null) {
-            Map<String, String> tags = tags(includeWorkerId ? workerId : null, tagKeyValues);
-            group = new MetricGroup(groupName, tags);
-            MetricGroup previous = groupsByName.putIfAbsent(groupName, group);
+            group = new MetricGroup(groupId);
+            MetricGroup previous = groupsByName.putIfAbsent(groupId, group);
             if (previous != null) group = previous;
         }
         return group;
+    }
+
+    protected MetricGroupId groupId(String groupName, boolean includeWorkerId, String... tagKeyValues) {
+        checkNameIsValid(groupName);
+        Map<String, String> tags = tags(includeWorkerId ? workerId : null, tagKeyValues);
+        return new MetricGroupId(groupName, tags);
     }
 
     /**
@@ -157,24 +167,94 @@ public class ConnectMetrics {
         AppInfoParser.unregisterAppInfo(JMX_PREFIX, workerId);
     }
 
-    /**
-     * A group of metrics. Each group maps to a JMX MBean and each metric maps to an MBean attribute.
-     */
-    public class MetricGroup {
+    public static class MetricGroupId {
         private final String groupName;
         private final Map<String, String> tags;
+        private final int hc;
+        private final String str;
+
+        public MetricGroupId(String groupName, Map<String, String> tags) {
+            assert groupName != null;
+            assert tags != null;
+            this.groupName = groupName;
+            this.tags = Collections.unmodifiableMap(new LinkedHashMap<>(tags));
+            this.hc = Objects.hash(this.groupName, this.tags);
+            StringBuilder sb = new StringBuilder(this.groupName);
+            for (Map.Entry<String, String> entry : this.tags.entrySet()) {
+                sb.append(";").append(entry.getKey()).append('=').append(entry.getValue());
+            }
+            this.str = sb.toString();
+        }
+
+        /**
+         * Get the group name.
+         *
+         * @return the group name; never null
+         */
+        public String groupName() {
+            return groupName;
+        }
+
+        /**
+         * Get the immutable map of tag names and values.
+         *
+         * @return the tags; never null
+         */
+        public Map<String, String> tags() {
+            return tags;
+        }
+
+        /**
+         * Determine if the supplied metric name is part of this group identifier.
+         *
+         * @param metricName the metric name
+         * @return true if the metric name's group and tags match this group identifier, or false otherwise
+         */
+        public boolean includes(MetricName metricName) {
+            return metricName != null && groupName.equals(metricName.group()) && tags.equals(metricName.tags());
+        }
+
+        @Override
+        public int hashCode() {
+            return hc;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj == this) return true;
+            if (obj instanceof MetricGroupId) {
+                MetricGroupId that = (MetricGroupId) obj;
+                return this.groupName.equals(that.groupName) && this.tags.equals(that.tags);
+            }
+            return false;
+        }
+
+        @Override
+        public String toString() {
+            return str;
+        }
+    }
+
+    /**
+     * A group of metrics. Each group maps to a JMX MBean and each metric maps to an MBean attribute.
+     * <p>
+     * Sensors should be added via the {@code sensor} methods on this class, rather than directly through
+     * the {@link Metrics} class, so that the sensor names are made to be unique (based on the group name)
+     * and so the sensors are removed when this group is {@link #close() closed}.
+     */
+    public class MetricGroup {
+        private final MetricGroupId groupId;
+        private final Set<String> sensorNames = new HashSet<>();
+        private final String sensorPrefix;
 
         /**
          * Create a group of Connect metrics.
          *
-         * @param groupName the name of the group; may not be null and must be valid
-         * @param tags      the tags; may not be null but may be empty
-         * @throws IllegalArgumentException if the name is not valid
+         * @param groupId the identifier of the group; may not be null and must be valid
          */
-        protected MetricGroup(String groupName, Map<String, String> tags) {
-            checkNameIsValid(groupName);
-            this.groupName = groupName;
-            this.tags = Collections.unmodifiableMap(new HashMap<>(tags));
+        protected MetricGroup(MetricGroupId groupId) {
+            this.groupId = groupId;
+            sensorPrefix = "connect-sensor-group: " + groupId.toString() + ";";
         }
 
         /**
@@ -187,11 +267,15 @@ public class ConnectMetrics {
          */
         public MetricName metricName(String name, String desc) {
             checkNameIsValid(name);
-            return metrics.metricName(name, groupName, desc, tags);
+            return metrics.metricName(name, groupId.groupName(), desc, groupId.tags());
         }
 
         /**
          * The {@link Metrics} that this group belongs to.
+         * <p>
+         * Do not use this to add {@link Sensor Sensors}, since they will not be removed when this group is
+         * {@link #close() closed}. Metrics can be added directly, as long as the metric names are obtained from
+         * this group via the {@link #metricName(String, String)} method.
          *
          * @return the metrics; never null
          */
@@ -205,7 +289,7 @@ public class ConnectMetrics {
          * @return the unmodifiable tags; never null but may be empty
          */
         Map<String, String> tags() {
-            return tags;
+            return groupId.tags();
         }
 
         /**
@@ -228,6 +312,86 @@ public class ConnectMetrics {
                 });
             }
         }
+
+        /**
+         * Get or create a sensor with the given unique name and no parent sensors. This uses
+         * a default recording level of INFO.
+         *
+         * @param name The sensor name
+         * @return The sensor
+         */
+        public Sensor sensor(String name) {
+            return sensor(name, null, Sensor.RecordingLevel.INFO);
+        }
+
+        /**
+         * Get or create a sensor with the given unique name and no parent sensors. This uses
+         * a default recording level of INFO.
+         *
+         * @param name The sensor name
+         * @return The sensor
+         */
+        public Sensor sensor(String name, Sensor... parents) {
+            return sensor(name, null, Sensor.RecordingLevel.INFO, parents);
+        }
+
+        /**
+         * Get or create a sensor with the given unique name and zero or more parent sensors. All parent sensors will
+         * receive every value recorded with this sensor.
+         *
+         * @param name           The name of the sensor
+         * @param recordingLevel The recording level.
+         * @param parents        The parent sensors
+         * @return The sensor that is created
+         */
+        public Sensor sensor(String name, Sensor.RecordingLevel recordingLevel, Sensor... parents) {
+            return sensor(name, null, recordingLevel, parents);
+        }
+
+        /**
+         * Get or create a sensor with the given unique name and zero or more parent sensors. All parent sensors will
+         * receive every value recorded with this sensor.
+         *
+         * @param name    The name of the sensor
+         * @param config  A default configuration to use for this sensor for metrics that don't have their own config
+         * @param parents The parent sensors
+         * @return The sensor that is created
+         */
+        public Sensor sensor(String name, MetricConfig config, Sensor... parents) {
+            return sensor(name, config, Sensor.RecordingLevel.INFO, parents);
+        }
+
+        /**
+         * Get or create a sensor with the given unique name and zero or more parent sensors. All parent sensors will
+         * receive every value recorded with this sensor.
+         *
+         * @param name           The name of the sensor
+         * @param config         A default configuration to use for this sensor for metrics that don't have their own config
+         * @param recordingLevel The recording level.
+         * @param parents        The parent sensors
+         * @return The sensor that is created
+         */
+        public synchronized Sensor sensor(String name, MetricConfig config, Sensor.RecordingLevel recordingLevel, Sensor... parents) {
+            // We need to make sure that all sensor names are unique across all groups, so use the sensor prefix
+            Sensor result = metrics.sensor(sensorPrefix + name, config, Long.MAX_VALUE, recordingLevel, parents);
+            if (result != null) sensorNames.add(result.name());
+            return result;
+        }
+
+        /**
+         * Remove all sensors and metrics associated with this group.
+         */
+        public synchronized void close() {
+            for (String sensorName : sensorNames) {
+                metrics.removeSensor(sensorName);
+            }
+            sensorNames.clear();
+            for (MetricName metricName : new HashSet<>(metrics.metrics().keySet())) {
+                if (groupId.includes(metricName)) {
+                    metrics.removeMetric(metricName);
+                }
+            }
+        }
     }
 
     /**
@@ -245,7 +409,7 @@ public class ConnectMetrics {
 
     /**
      * Create a set of tags using the supplied key and value pairs. Every tag name and value will be
-     * {@link #makeValidName(String) made valid} before it is used.
+     * {@link #makeValidName(String) made valid} before it is used. The order of the tags will be kept.
      *
      * @param workerId the worker ID that should be included first in the tags; may be null if not to be included
      * @param keyValue the key and value pairs for the tags; must be an even number
@@ -254,7 +418,7 @@ public class ConnectMetrics {
     static Map<String, String> tags(String workerId, String... keyValue) {
         if ((keyValue.length % 2) != 0)
             throw new IllegalArgumentException("keyValue needs to be specified in pairs");
-        Map<String, String> tags = new HashMap<>();
+        Map<String, String> tags = new LinkedHashMap<>();
         if (workerId != null && !workerId.trim().isEmpty()) {
             tags.put(WORKER_ID_TAG_NAME, makeValidName(workerId));
         }

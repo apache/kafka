@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
+import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroupId;
 import org.apache.kafka.connect.util.MockTime;
 import org.junit.After;
 import org.junit.Before;
@@ -26,6 +27,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
@@ -141,6 +143,56 @@ public class ConnectMetricsTest {
         MetricGroup group3 = metrics.group("other");
         assertNotNull(group3);
         assertNotSame(group1, group3);
+
+        // Now with tags
+        MetricGroup group4 = metrics.group("name", "k1", "v1");
+        assertNotNull(group4);
+        assertNotSame(group1, group4);
+        assertNotSame(group2, group4);
+        assertNotSame(group3, group4);
+        MetricGroup group5 = metrics.group("name", "k1", "v1");
+        assertSame(group4, group5);
+    }
+
+    @Test
+    public void testMetricGroupIdIdentity() {
+        MetricGroupId id1 = metrics.groupId("name", false, "k1", "v1");
+        MetricGroupId id2 = metrics.groupId("name", false, "k1", "v1");
+        MetricGroupId id3 = metrics.groupId("name", false, "k1", "v1", "k2", "v2");
+
+        assertEquals(id1.hashCode(), id2.hashCode());
+        assertEquals(id1, id2);
+        assertEquals(id1.toString(), id2.toString());
+        assertEquals(id1.groupName(), id2.groupName());
+        assertEquals(id1.tags(), id2.tags());
+        assertNotNull(id1.tags());
+
+        assertNotEquals(id1, id3);
+    }
+
+    @Test
+    public void testMetricGroupIdWithoutTags() {
+        MetricGroupId id1 = metrics.groupId("name", false);
+        MetricGroupId id2 = metrics.groupId("name", false);
+
+        assertEquals(id1.hashCode(), id2.hashCode());
+        assertEquals(id1, id2);
+        assertEquals(id1.toString(), id2.toString());
+        assertEquals(id1.groupName(), id2.groupName());
+        assertEquals(id1.tags(), id2.tags());
+        assertNotNull(id1.tags());
+        assertNotNull(id2.tags());
+    }
+
+    @Test
+    public void testMetricGroupIdWithWorkerId() {
+        MetricGroupId id1 = metrics.groupId("name", true);
+        assertNotNull(metrics.workerId(), id1.tags().get(ConnectMetrics.WORKER_ID_TAG_NAME));
+        assertEquals("name;worker-id=worker1", id1.toString());
+
+        id1 = metrics.groupId("name", true, "k1", "v1", "k2", "v2");
+        assertNotNull(metrics.workerId(), id1.tags().get(ConnectMetrics.WORKER_ID_TAG_NAME));
+        assertEquals("name;worker-id=worker1;k1=v1;k2=v2", id1.toString()); // maintain order of tags
     }
 
 }
