@@ -1225,8 +1225,16 @@ public class KStreamBuilder extends org.apache.kafka.streams.processor.TopologyB
      * @return a {@link KStream} containing all records of the given streams
      */
     public <K, V> KStream<K, V> merge(final KStream<K, V>... streams) {
+        Objects.requireNonNull(streams, "streams can't be null");
+        if (streams.length <= 1) {
+            throw new IllegalArgumentException("Number of arguments required needs to be greater than one.");
+        }
         try {
-            return KStreamImpl.merge(internalStreamsBuilder, streams);
+            KStream<K, V> mergedStream = streams[0];
+            for (int i = 1; i < streams.length; i++) {
+                mergedStream = mergedStream.merge(streams[i]);
+            }
+            return mergedStream;
         } catch (final org.apache.kafka.streams.errors.TopologyException e) {
             throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
         }

@@ -84,7 +84,9 @@ public interface KGroupedStream<K, V> {
      * alphanumerics, '.', '_' and '-'. If {@code null} then this will be equivalent to {@link KGroupedStream#count()}.
      * @return a {@link KTable} that contains "update" records with unmodified keys and {@link Long} values that
      * represent the latest (rolling) count (i.e., number of records) for each key
+     * @deprecated use {@link #count(Materialized)
      */
+    @Deprecated
     KTable<K, Long> count(final String queryableStoreName);
 
     /**
@@ -143,7 +145,9 @@ public interface KGroupedStream<K, V> {
      * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a {@link KTable} that contains "update" records with unmodified keys and {@link Long} values that
      * represent the latest (rolling) count (i.e., number of records) for each key
+     * @deprecated use {@link #count(Materialized)}
      */
+    @Deprecated
     KTable<K, Long> count(final StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
@@ -222,8 +226,10 @@ public interface KGroupedStream<K, V> {
      * @param queryableStoreName the name of the underlying {@link KTable} state store; valid characters are ASCII
      * alphanumerics, '.', '_' and '-'. If {@code null} then this will be equivalent to {@link KGroupedStream#count(Windows)}.
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys and {@link Long} values
-     * that represent the latest (rolling) count (i.e., number of records) for each key within a window
+     * that represent the latest (rolling) count (i.e., number of records) for each key within a window.
+     * @deprecated use {@link #windowedBy(Windows)}
      */
+    @Deprecated
     <W extends Window> KTable<Windowed<K>, Long> count(final Windows<W> windows,
                                                        final String queryableStoreName);
 
@@ -298,7 +304,9 @@ public interface KGroupedStream<K, V> {
      * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys and {@link Long} values
      * that represent the latest (rolling) count (i.e., number of records) for each key within a window
+     * @deprecated use {@link #windowedBy(Windows)}
      */
+    @Deprecated
     <W extends Window> KTable<Windowed<K>, Long> count(final Windows<W> windows,
                                                        final StateStoreSupplier<WindowStore> storeSupplier);
 
@@ -337,7 +345,9 @@ public interface KGroupedStream<K, V> {
      * alphanumerics, '.', '_' and '-. If {@code null} then this will be equivalent to {@link KGroupedStream#count(SessionWindows)} ()}.
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys and {@link Long} values
      * that represent the latest (rolling) count (i.e., number of records) for each key within a window
+     * @deprecated use {@link #windowedBy(SessionWindows)}
      */
+    @Deprecated
     KTable<Windowed<K>, Long> count(final SessionWindows sessionWindows, final String queryableStoreName);
 
     /**
@@ -359,7 +369,9 @@ public interface KGroupedStream<K, V> {
      * @param sessionWindows the specification of the aggregation {@link SessionWindows}
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys and {@link Long} values
      * that represent the latest (rolling) count (i.e., number of records) for each key within a window
+     * @deprecated use {@link #windowedBy(SessionWindows)}
      */
+    @Deprecated
     KTable<Windowed<K>, Long> count(final SessionWindows sessionWindows);
 
     /**
@@ -395,7 +407,9 @@ public interface KGroupedStream<K, V> {
      * @param storeSupplier  user defined state store supplier. Cannot be {@code null}.
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys and {@link Long} values
      * that represent the latest (rolling) count (i.e., number of records) for each key within a window
+     * @deprecated use {@link #windowedBy(SessionWindows)}
      */
+    @Deprecated
     KTable<Windowed<K>, Long> count(final SessionWindows sessionWindows,
                                     final StateStoreSupplier<SessionStore> storeSupplier);
 
@@ -842,7 +856,9 @@ public interface KGroupedStream<K, V> {
      * alphanumerics, '.', '_' and '-'. If {@code null} then this will be equivalent to {@link KGroupedStream#reduce(Reducer, SessionWindows)} ()}.
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
+     * @deprecated use {@link #windowedBy(SessionWindows)}
      */
+    @Deprecated
     KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
                                   final SessionWindows sessionWindows,
                                   final String queryableStoreName);
@@ -875,7 +891,9 @@ public interface KGroupedStream<K, V> {
      * @param sessionWindows    the specification of the aggregation {@link SessionWindows}
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
+     * @deprecated use {@link #windowedBy(SessionWindows)}
      */
+    @Deprecated
     KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
                                   final SessionWindows sessionWindows);
 
@@ -939,7 +957,9 @@ public interface KGroupedStream<K, V> {
      * @param storeSupplier     user defined state store supplier. Cannot be {@code null}.
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
+     * @deprecated use {@link #windowedBy(SessionWindows)}
      */
+    @Deprecated
     KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
                                   final SessionWindows sessionWindows,
                                   final StateStoreSupplier<SessionStore> storeSupplier);
@@ -1433,7 +1453,9 @@ public interface KGroupedStream<K, V> {
      * alphanumerics, '.', '_' and '-'. If {@code null} then this will be equivalent to {@link KGroupedStream#aggregate(Initializer, Aggregator, Merger, SessionWindows, Serde)} ()} ()}.
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
+     * @deprecated use {@link #windowedBy(SessionWindows)}
      */
+    @Deprecated
     <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
                                          final Aggregator<? super K, ? super V, T> aggregator,
                                          final Merger<? super K, T> sessionMerger,
@@ -1476,7 +1498,9 @@ public interface KGroupedStream<K, V> {
      * @param <T>           the value type of the resulting {@link KTable}
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
+     * @deprecated use {@link #windowedBy(SessionWindows)}
      */
+    @Deprecated
     <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
                                          final Aggregator<? super K, ? super V, T> aggregator,
                                          final Merger<? super K, T> sessionMerger,
@@ -1533,7 +1557,9 @@ public interface KGroupedStream<K, V> {
      * @param <T>           the value type of the resulting {@link KTable}
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
+     * @deprecated use {@link #windowedBy(SessionWindows)}
      */
+    @Deprecated
     <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
                                          final Aggregator<? super K, ? super V, T> aggregator,
                                          final Merger<? super K, T> sessionMerger,
@@ -1542,11 +1568,18 @@ public interface KGroupedStream<K, V> {
                                          final StateStoreSupplier<SessionStore> storeSupplier);
 
     /**
-     * Create a new {@link WindowedKStream} instance that can be used to perform windowed aggregations.
+     * Create a new {@link TimeWindowedKStream} instance that can be used to perform windowed aggregations.
      * @param windows the specification of the aggregation {@link Windows}
      * @param <W>     the window type
-     * @return an instance of {@link WindowedKStream}
+     * @return an instance of {@link TimeWindowedKStream}
      */
-    <W extends Window> WindowedKStream<K, V> windowedBy(final Windows<W> windows);
+    <W extends Window> TimeWindowedKStream<K, V> windowedBy(final Windows<W> windows);
+
+    /**
+     * Create a new {@link SessionWindowedKStream} instance that can be used to perform session windowed aggregations.
+     * @param windows the specification of the aggregation {@link SessionWindows}
+     * @return an instance of {@link TimeWindowedKStream}
+     */
+    SessionWindowedKStream<K, V> windowedBy(final SessionWindows windows);
 
 }

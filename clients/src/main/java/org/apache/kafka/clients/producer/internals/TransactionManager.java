@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.protocol.Errors;
@@ -464,7 +465,7 @@ public class TransactionManager {
     synchronized long lastAckedOffset(TopicPartition topicPartition) {
         Long offset = lastAckedOffset.get(topicPartition);
         if (offset == null)
-            return -1;
+            return ProduceResponse.INVALID_OFFSET;
         return offset;
     }
 
@@ -472,8 +473,11 @@ public class TransactionManager {
         if (response.baseOffset == ProduceResponse.INVALID_OFFSET)
             return;
         long lastOffset = response.baseOffset + batch.recordCount - 1;
-        if (lastOffset > lastAckedOffset(batch.topicPartition))
+        if (lastOffset > lastAckedOffset(batch.topicPartition)) {
             lastAckedOffset.put(batch.topicPartition, lastOffset);
+        } else {
+            log.trace("Partition {} keeps lastOffset at {}", batch.topicPartition, lastOffset);
+        }
     }
 
     // If a batch is failed fatally, the sequence numbers for future batches bound for the partition must be adjusted
@@ -613,6 +617,11 @@ public class TransactionManager {
     synchronized void retry(TxnRequestHandler request) {
         request.setRetry();
         enqueueRequest(request);
+    }
+
+    synchronized void authenticationFailed(AuthenticationException e) {
+        for (TxnRequestHandler request : pendingRequests)
+            request.fatalError(e);
     }
 
     Node coordinator(FindCoordinatorRequest.CoordinatorType type) {

@@ -14,18 +14,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.errors;
 
-public class AuthenticationFailedException extends AuthenticationException {
+package org.apache.kafka.common.utils;
 
-    private static final long serialVersionUID = 1L;
+import org.apache.kafka.test.TestUtils;
+import org.junit.Test;
 
-    public AuthenticationFailedException(String message) {
-        super(message);
-    }
+import java.io.File;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
 
-    public AuthenticationFailedException(String message, Throwable cause) {
-        super(message, cause);
+public class MappedByteBuffersTest {
+
+    /**
+     * Checks that unmap doesn't throw exceptions.
+     */
+    @Test
+    public void testUnmap() throws Exception {
+        File file = TestUtils.tempFile();
+        try (FileChannel channel = FileChannel.open(file.toPath())) {
+            MappedByteBuffer map = channel.map(FileChannel.MapMode.READ_ONLY, 0, 0);
+            MappedByteBuffers.unmap(file.getAbsolutePath(), map);
+        }
     }
 
 }

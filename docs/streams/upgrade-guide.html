@@ -84,7 +84,13 @@
         and can be obtained by calling <code>Topology#describe()</code>.
         An example using this new API is shown in the <a href="/{{version}}/documentation/streams/quickstart">quickstart section</a>.
     </p>
-
+    
+    <p>
+        With the introduction of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-202+Move+merge%28%29+from+StreamsBuilder+to+KStream">KIP-202</a>
+        a new method <code>merge()</code> has been created in <code>KStream</code> as the StreamsBuilder class's <code>StreamsBuilder#merge()</code> has been removed. 
+        The method signature was also changed, too: instead of providing multiple <code>KStream</code>s into the method at the once, only a single <code>KStream</code> is accepted.
+    </p>
+    
     <p>
         New methods in <code>KafkaStreams</code>:
     </p>
@@ -118,7 +124,6 @@
             Note: the previous aggregate functions on <code>KGroupedStream</code> still work, but have been deprecated.
         </li>
     </ul>
-
     <p>
         Modified methods in <code>Processor</code>:
     </p>
@@ -147,6 +152,16 @@
         The task ids, store names and processor names are no longer in the sensor metrics names, but instead are added as tags of the sensors to achieve consistent metrics hierarchy.
         As a result you may need to make corresponding code changes on your metrics reporting and monitoring tools when upgrading to 1.0.0.
         Detailed metrics sensor can be found in the <a href="#kafka_streams_monitoring">Streams Monitoring</a> section.
+    </p>
+
+    <p>
+        The introduction of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-173%3A+Add+prefix+to+StreamsConfig+to+enable+setting+default+internal+topic+configs">KIP-173</a>
+        enables you to provide topic configuration parameters for any topics created by Kafka Streams.
+        This includes repartition and changelog topics.
+        You can provide the configs via the <code>StreamsConfig</code> by adding the configs with the prefix as defined by <code>StreamsConfig#topicPrefix(String)</code>.
+        Any properties in the <code>StreamsConfig</code> with the prefix will be applied when creating internal topics.
+        Any configs that aren't topic configs will be ignored.
+        If you already use <code>StateStoreSupplier</code> or <code>Materialized</code> to provide configs for changelogs, then they will take precedence over those supplied in the config.
     </p>
 
     <h3><a id="streams_api_changes_0110" href="#streams_api_changes_0110">Streams API changes in 0.11.0.0</a></h3>
@@ -205,7 +220,9 @@
         If exactly-once processing is enabled via the <code>processing.guarantees</code> parameter, internally Streams switches from a producer per thread to a producer per task runtime model.
         In order to distinguish the different producers, the producer's <code>client.id</code> additionally encodes the task-ID for this case.
         Because the producer's <code>client.id</code> is used to report JMX metrics, it might be required to update tools that receive those metrics.
+    
     </p>
+
     <p> Producer's <code>client.id</code> naming schema: </p>
     <ul>
         <li> at-least-once (default): <code>[client.Id]-StreamThread-[sequence-number]</code> </li>

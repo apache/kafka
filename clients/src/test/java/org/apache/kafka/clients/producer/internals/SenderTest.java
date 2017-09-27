@@ -33,6 +33,7 @@ import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -258,7 +259,7 @@ public class SenderTest {
 
         for (int i = 1; i <= 3; i++) {
             int throttleTimeMs = 100 * i;
-            ProduceRequest.Builder builder = new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, (short) 1, 1000,
+            ProduceRequest.Builder builder = ProduceRequest.Builder.forCurrentMagic((short) 1, 1000,
                             Collections.<TopicPartition, MemoryRecords>emptyMap());
             ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true, null);
             client.send(request, time.milliseconds());
@@ -302,7 +303,7 @@ public class SenderTest {
             if (!n.group().equals("kafka-metrics-count"))
                 allMetrics.add(new MetricNameTemplate(n.name(), n.group(), "", n.tags().keySet()));
         }
-        TestUtils.checkEquals(allMetrics, new HashSet<>(metricsRegistry.getAllTemplates()), "metrics", "templates");
+        TestUtils.checkEquals(allMetrics, new HashSet<>(metricsRegistry.allTemplates()), "metrics", "templates");
     }
 
     @Test
@@ -504,6 +505,35 @@ public class SenderTest {
         assertSendFailure(ClusterAuthorizationException.class);
     }
 
+    @Test
+    public void testCanRetryWithoutIdempotence() throws Exception {
+        // do a successful retry
+        Future<RecordMetadata> future = accumulator.append(tp0, 0L, "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
+        sender.run(time.milliseconds()); // connect
+        sender.run(time.milliseconds()); // send produce request
+        String id = client.requests().peek().destination();
+        Node node = new Node(Integer.parseInt(id), "localhost", 0);
+        assertEquals(1, client.inFlightRequestCount());
+        assertTrue(client.hasInFlightRequests());
+        assertTrue("Client ready status should be true", client.isReady(node, 0L));
+        assertFalse(future.isDone());
+
+        client.respond(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(AbstractRequest body) {
+                ProduceRequest request = (ProduceRequest) body;
+                assertFalse(request.isIdempotent());
+                return true;
+            }
+        }, produceResponse(tp0, -1L, Errors.TOPIC_AUTHORIZATION_FAILED, 0));
+        sender.run(time.milliseconds());
+        assertTrue(future.isDone());
+        try {
+            future.get();
+        } catch (Exception e) {
+            assertTrue(e.getCause() instanceof TopicAuthorizationException);
+        }
+    }
 
     @Test
     public void testIdempotenceWithMultipleInflights() throws Exception {
@@ -1158,7 +1188,7 @@ public class SenderTest {
         assertEquals(1000, transactionManager.lastAckedOffset(tp0));
         assertEquals(1, transactionManager.lastAckedSequence(tp0));
 
-        client.respondToRequest(firstClientRequest, produceResponse(tp0, -1, Errors.DUPLICATE_SEQUENCE_NUMBER, -1));
+        client.respondToRequest(firstClientRequest, produceResponse(tp0, ProduceResponse.INVALID_OFFSET, Errors.DUPLICATE_SEQUENCE_NUMBER, 0));
 
         sender.run(time.milliseconds()); // receive response 0
 
@@ -1166,6 +1196,10 @@ public class SenderTest {
         assertEquals(1, transactionManager.lastAckedSequence(tp0));
         assertEquals(1000, transactionManager.lastAckedOffset(tp0));
         assertFalse(client.hasInFlightRequests());
+
+        RecordMetadata unknownMetadata = request1.get();
+        assertFalse(unknownMetadata.hasOffset());
+        assertEquals(-1L, unknownMetadata.offset());
     }
 
     @Test

@@ -544,7 +544,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
   @Test
   def testResetOffsetsExportImportPlan() {
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--to-earliest", "--export")
+    val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--to-offset","2", "--export")
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
     val consumerGroupCommand = createConsumerGroupService(opts)
 
@@ -559,18 +559,18 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
       val bw = new BufferedWriter(new FileWriter(file))
       bw.write(consumerGroupCommand.exportOffsetsToReset(assignmentsToReset))
       bw.close()
-      assignmentsToReset.exists { assignment => assignment._2.offset() == 0 } && file.exists()
+      assignmentsToReset.exists { assignment => assignment._2.offset() == 2 } && file.exists()
     }, "Expected the consume all messages and save reset offsets plan to file")
 
 
-    val cgcArgsExec = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--to-earliest", "--from-file", file.getCanonicalPath)
+    val cgcArgsExec = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--from-file", file.getCanonicalPath)
     val optsExec = new ConsumerGroupCommandOptions(cgcArgsExec)
     val consumerGroupCommandExec = createConsumerGroupService(optsExec)
 
     TestUtils.waitUntilTrue(() => {
         val assignmentsToReset = consumerGroupCommandExec.resetOffsets()
-        assignmentsToReset.exists { assignment => assignment._2.offset() == 0 }
-    }, "Expected the consumer group to reset to offset 0 (earliest) by file.")
+        assignmentsToReset.exists { assignment => assignment._2.offset() == 2 }
+    }, "Expected the consumer group to reset to offset 2 according to the plan in the file.")
 
     file.deleteOnExit()
 

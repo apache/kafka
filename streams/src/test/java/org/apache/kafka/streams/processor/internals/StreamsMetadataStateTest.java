@@ -83,7 +83,7 @@ public class StreamsMetadataStateTest {
                 .groupByKey()
                 .count("table-three");
 
-        builder.merge(one, two).groupByKey().count("merged-table");
+        one.merge(two).groupByKey().count("merged-table");
 
         builder.stream("topic-four").mapValues(new ValueMapper<Object, Object>() {
             @Override

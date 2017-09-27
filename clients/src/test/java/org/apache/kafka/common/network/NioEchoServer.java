@@ -85,12 +85,14 @@ public class NioEchoServer extends Thread {
             acceptorThread.start();
             while (serverSocketChannel.isOpen()) {
                 selector.poll(1000);
-                for (SocketChannel socketChannel : newChannels) {
-                    String id = id(socketChannel);
-                    selector.register(id, socketChannel);
-                    socketChannels.add(socketChannel);
+                synchronized (newChannels) {
+                    for (SocketChannel socketChannel : newChannels) {
+                        String id = id(socketChannel);
+                        selector.register(id, socketChannel);
+                        socketChannels.add(socketChannel);
+                    }
+                    newChannels.clear();
                 }
-                newChannels.clear();
 
                 List<NetworkReceive> completedReceives = selector.completedReceives();
                 for (NetworkReceive rcv : completedReceives) {

@@ -20,8 +20,8 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
+import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.network.Mode;
@@ -104,8 +104,6 @@ public class SaslClientAuthenticator implements Authenticator {
     private RequestHeader currentRequestHeader;
     // Version of SaslAuthenticate request/responses
     private short saslAuthenticateVersion;
-    // Sasl authentication error which may be one of NONE, UNSUPPORTED_SASL_MECHANISM, ILLEGAL_SASL_STATE, AUTHENTICATION_FAILED or NETWORK_EXCEPTION
-    private Errors error;
 
     public SaslClientAuthenticator(Map<String, ?> configs,
                                    String node,
@@ -124,7 +122,6 @@ public class SaslClientAuthenticator implements Authenticator {
         this.transportLayer = transportLayer;
         this.configs = configs;
         this.saslAuthenticateVersion = DISABLE_KAFKA_SASL_AUTHENTICATE_HEADER;
-        this.error = Errors.NONE;
 
         try {
             setSaslState(handshakeRequestEnable ? SaslState.SEND_APIVERSIONS_REQUEST : SaslState.INITIAL);
@@ -142,7 +139,7 @@ public class SaslClientAuthenticator implements Authenticator {
 
             saslClient = createSaslClient();
         } catch (Exception e) {
-            throw new KafkaException("Failed to configure SaslClientAuthenticator", e);
+            throw new SaslAuthenticationException("Failed to configure SaslClientAuthenticator", e);
         }
     }
 
@@ -157,7 +154,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 }
             });
         } catch (PrivilegedActionException e) {
-            throw new KafkaException("Failed to create SaslClient with mechanism " + mechanism, e.getCause());
+            throw new SaslAuthenticationException("Failed to create SaslClient with mechanism " + mechanism, e.getCause());
         }
     }
 
@@ -233,11 +230,6 @@ public class SaslClientAuthenticator implements Authenticator {
                 // Should never get here since exception would have been propagated earlier
                 throw new IllegalStateException("SASL handshake has already failed");
         }
-    }
-
-    @Override
-    public Errors error() {
-        return error;
     }
 
     private RequestHeader nextRequestHeader(ApiKeys apiKey, short version) {
@@ -344,8 +336,8 @@ public class SaslClientAuthenticator implements Authenticator {
         } else {
             SaslAuthenticateResponse response = (SaslAuthenticateResponse) receiveKafkaResponse();
             if (response != null) {
-                this.error = response.error();
-                if (this.error != Errors.NONE) {
+                Errors error = response.error();
+                if (error != Errors.NONE) {
                     setSaslState(SaslState.FAILED);
                     String errMsg = response.errorMessage();
                     throw errMsg == null ? error.exception() : error.exception(errMsg);
@@ -359,7 +351,7 @@ public class SaslClientAuthenticator implements Authenticator {
 
     private byte[] createSaslToken(final byte[] saslToken, boolean isInitial) throws SaslException {
         if (saslToken == null)
-            throw new SaslException("Error authenticating with the Kafka Broker: received a `null` saslToken.");
+            throw new IllegalSaslStateException("Error authenticating with the Kafka Broker: received a `null` saslToken.");
 
         try {
             if (isInitial && !saslClient.hasInitialResponse())
@@ -383,9 +375,9 @@ public class SaslClientAuthenticator implements Authenticator {
                     " Users must configure FQDN of kafka brokers when authenticating using SASL and" +
                     " `socketChannel.socket().getInetAddress().getHostName()` must match the hostname in `principal/hostname@realm`";
             }
-            error += " Kafka Client will go to AUTH_FAILED state.";
+            error += " Kafka Client will go to AUTHENTICATION_FAILED state.";
             //Unwrap the SaslException inside `PrivilegedActionException`
-            throw new SaslException(error, e.getCause());
+            throw new SaslAuthenticationException(error, e.getCause());
         }
     }
 
@@ -409,12 +401,12 @@ public class SaslClientAuthenticator implements Authenticator {
         } catch (SchemaException | IllegalArgumentException e) {
             LOG.debug("Invalid SASL mechanism response, server may be expecting only GSSAPI tokens");
             setSaslState(SaslState.FAILED);
-            throw new AuthenticationException("Invalid SASL mechanism response", e);
+            throw new IllegalSaslStateException("Invalid SASL mechanism response, server may be expecting a different protocol", e);
         }
     }
 
     private void handleSaslHandshakeResponse(SaslHandshakeResponse response) {
-        this.error = response.error();
+        Errors error = response.error();
         if (error != Errors.NONE)
             setSaslState(SaslState.FAILED);
         switch (error) {
@@ -427,7 +419,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 throw new IllegalSaslStateException(String.format("Unexpected handshake request with client mechanism %s, enabled mechanisms are %s",
                     mechanism, response.enabledMechanisms()));
             default:
-                throw new AuthenticationException(String.format("Unknown error code %s, client mechanism is %s, enabled mechanisms are %s",
+                throw new IllegalSaslStateException(String.format("Unknown error code %s, client mechanism is %s, enabled mechanisms are %s",
                     response.error(), mechanism, response.enabledMechanisms()));
         }
     }

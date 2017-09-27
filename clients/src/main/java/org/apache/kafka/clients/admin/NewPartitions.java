@@ -43,7 +43,7 @@ public class NewPartitions {
      * Increase the partition count for a topic to the given {@code totalCount}.
      * The assignment of new replicas to brokers will be decided by the broker.
      *
-     * @param totalCount The total partitions count after the operation succeeds.
+     * @param totalCount The total number of partitions after the operation succeeds.
      */
     public static NewPartitions increaseTo(int totalCount) {
         return new NewPartitions(totalCount, null);
@@ -70,7 +70,7 @@ public class NewPartitions {
      * <p>In this example partition 3's preferred leader will be broker 1, partition 4's preferred leader will be
      * broker 2 and partition 5's preferred leader will be broker 3.</p>
      *
-     * @param totalCount The total partitions count after the operation succeeds.
+     * @param totalCount The total number of partitions after the operation succeeds.
      * @param newAssignments The replica assignments for the new partitions.
      */
     public static NewPartitions increaseTo(int totalCount, List<List<Integer>> newAssignments) {
@@ -78,15 +78,14 @@ public class NewPartitions {
     }
 
     /**
-     * The new total partition count (not the number of new partitions).
+     * The total number of partitions after the operation succeeds.
      */
     public int totalCount() {
         return totalCount;
     }
 
     /**
-     * The replica assignments for the new partitions, or null if the assignment of
-     * replicas to brokers will be done by the controller.
+     * The replica assignments for the new partitions, or null if the assignment will be done by the controller.
      */
     public List<List<Integer>> assignments() {
         return newAssignments;

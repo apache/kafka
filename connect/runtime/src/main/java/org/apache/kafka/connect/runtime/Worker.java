@@ -67,9 +67,8 @@ public class Worker {
     private final Time time;
     private final String workerId;
     private final Plugins plugins;
+    private final ConnectMetrics metrics;
     private final WorkerConfig config;
-    private final Converter defaultKeyConverter;
-    private final Converter defaultValueConverter;
     private final Converter internalKeyConverter;
     private final Converter internalValueConverter;
     private final OffsetBackingStore offsetBackingStore;
@@ -86,23 +85,13 @@ public class Worker {
             WorkerConfig config,
             OffsetBackingStore offsetBackingStore
     ) {
+        this.metrics = new ConnectMetrics(workerId, config, time);
         this.executor = Executors.newCachedThreadPool();
         this.workerId = workerId;
         this.time = time;
         this.plugins = plugins;
         this.config = config;
-        // Converters are required properties, thus getClass won't return null.
-        this.defaultKeyConverter = plugins.newConverter(
-                config.getClass(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG).getName(),
-                config
-        );
-        this.defaultKeyConverter.configure(config.originalsWithPrefix("key.converter."), true);
-        this.defaultValueConverter = plugins.newConverter(
-                config.getClass(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG).getName(),
-                config
-        );
-        this.defaultValueConverter.configure(config.originalsWithPrefix("value.converter."), false);
-        // Same, internal converters are required properties, thus getClass won't return null.
+        // Internal converters are required properties, thus getClass won't return null.
         this.internalKeyConverter = plugins.newConverter(
                 config.getClass(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG).getName(),
                 config
@@ -172,6 +161,7 @@ public class Worker {
         sourceTaskOffsetCommitter.close(timeoutMs);
 
         offsetBackingStore.stop();
+        metrics.stop();
 
         log.info("Worker stopped");
     }
@@ -203,7 +193,7 @@ public class Worker {
             final String connClass = connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
             log.info("Creating connector {} of type {}", connName, connClass);
             final Connector connector = plugins.newConnector(connClass);
-            workerConnector = new WorkerConnector(connName, connector, ctx, statusListener);
+            workerConnector = new WorkerConnector(connName, connector, ctx, metrics,  statusListener);
             log.info("Instantiated connector {} with version {} of type {}", connName, connector.version(), connector.getClass());
             savedLoader = plugins.compareAndSwapLoaders(connector);
             workerConnector.initialize(connConfig);
@@ -378,13 +368,25 @@ public class Worker {
             Converter keyConverter = connConfig.getConfiguredInstance(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, Converter.class);
             if (keyConverter != null)
                 keyConverter.configure(connConfig.originalsWithPrefix("key.converter."), true);
-            else
+            else {
+                Converter defaultKeyConverter = plugins.newConverter(
+                        config.getClass(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG).getName(),
+                        config
+                );
+                defaultKeyConverter.configure(config.originalsWithPrefix("key.converter."), true);
                 keyConverter = defaultKeyConverter;
+            }
             Converter valueConverter = connConfig.getConfiguredInstance(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, Converter.class);
             if (valueConverter != null)
                 valueConverter.configure(connConfig.originalsWithPrefix("value.converter."), false);
-            else
+            else {
+                Converter defaultValueConverter = plugins.newConverter(
+                        config.getClass(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG).getName(),
+                        config
+                );
+                defaultValueConverter.configure(config.originalsWithPrefix("value.converter."), false);
                 valueConverter = defaultValueConverter;
+            }
 
             workerTask = buildWorkerTask(connConfig, id, task, statusListener, initialState, keyConverter, valueConverter, connectorLoader);
             workerTask.initialize(taskConfig);
@@ -535,6 +537,14 @@ public class Worker {
 
     public String workerId() {
         return workerId;
+    }
+
+    /**
+     * Get the {@link ConnectMetrics} that uses Kafka Metrics and manages the JMX reporter.
+     * @return the Connect-specific metrics; never null
+     */
+    public ConnectMetrics metrics() {
+        return metrics;
     }
 
     public void setTargetState(String connName, TargetState state) {
