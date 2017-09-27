@@ -28,6 +28,8 @@ import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch, Reassigne
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.ConfigType
 import kafka.utils.ZkUtils._
+
+import com.yammer.metrics.core.MetricName
 import org.I0Itec.zkclient.exception.{ZkBadVersionException, ZkException, ZkMarshallingError, ZkNoNodeException, ZkNodeExistsException}
 import org.I0Itec.zkclient.serialize.ZkSerializer
 import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener, ZkClient, ZkConnection}
@@ -231,6 +233,10 @@ class ZooKeeperClientWrapper(val zkClient: ZkClient) {
 class ZooKeeperClientMetrics(zkClient: ZkClient, val time: Time)
     extends ZooKeeperClientWrapper(zkClient) with KafkaMetricsGroup {
   val latencyMetric = newHistogram("ZooKeeperLatency")
+
+  override protected def metricName(name: String, metricTags: scala.collection.Map[String, String]): MetricName = {
+    explicitMetricName("kafka.server", "ZooKeeperClientMetrics", name, metricTags)
+  }
 
   override def apply[T](method: ZkClient => T): T = {
     val startNs = time.nanoseconds

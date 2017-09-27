@@ -34,8 +34,16 @@ public class RecordsProcessingStats {
         this.conversionTimeNanos = conversionTimeNanos;
     }
 
+
     /**
-     * Return uncompressed memory.
+     * Returns the number of temporary memory bytes allocated to process the records.
+     * This size depends on whether the records need decompression and/or conversion:
+     * <ul>
+     *   <li>Non compressed, no conversion: the size of the buffer</li>
+     *   <li>Non compressed, with conversion: the size of the original buffer + size of the converted buffer</li>
+     *   <li>Compressed, no conversion: size of the original buffer after decompression</li>
+     *   <li>Compressed, with conversion: size of the original buffer after decompression + size of the converted buffer uncompressed</li>
+     * </ul>
      */
     public long temporaryMemoryBytes() {
         return temporaryMemoryBytes;

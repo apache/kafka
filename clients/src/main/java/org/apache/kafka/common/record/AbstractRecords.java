@@ -18,7 +18,6 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.AbstractIterator;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -61,14 +60,12 @@ public abstract class AbstractRecords implements Records {
      * correctness.
      */
     protected ConvertedRecords<MemoryRecords> downConvert(Iterable<? extends RecordBatch> batches, byte toMagic,
-            long firstOffset, Time time) {
+            long firstOffset) {
         // maintain the batch along with the decompressed records to avoid the need to decompress again
         List<RecordBatchAndRecords> recordBatchAndRecordsList = new ArrayList<>();
         int totalSizeEstimate = 0;
         long conversionCount = 0;
-        long conversionTimeNanos = 0;
 
-        long startNanos = time.nanoseconds();
         for (RecordBatch batch : batches) {
             if (toMagic < RecordBatch.MAGIC_VALUE_V2 && batch.isControlBatch())
                 continue;
@@ -96,27 +93,30 @@ public abstract class AbstractRecords implements Records {
         }
 
         ByteBuffer buffer = ByteBuffer.allocate(totalSizeEstimate);
+        long temporaryMemoryBytes = 0;
         for (RecordBatchAndRecords recordBatchAndRecords : recordBatchAndRecordsList) {
             if (recordBatchAndRecords.batch.magic() <= toMagic)
                 recordBatchAndRecords.batch.writeTo(buffer);
             else {
-                conversionCount += recordBatchAndRecords.records.size();
-                buffer = convertRecordBatch(toMagic, buffer, recordBatchAndRecords);
+                MemoryRecordsBuilder builder = convertRecordBatch(toMagic, buffer, recordBatchAndRecords);
+                buffer = builder.buffer();
+                RecordsProcessingStats stats = builder.recordsProcessingStats();
+                temporaryMemoryBytes += stats.temporaryMemoryBytes();
+                conversionCount += stats.conversionCount();
             }
         }
 
         buffer.flip();
-        if (conversionCount > 0)
-            conversionTimeNanos = time.nanoseconds() - startNanos;
-        return new ConvertedRecords<>(MemoryRecords.readableRecords(buffer), buffer.remaining(),
-                conversionCount, conversionTimeNanos);
+        temporaryMemoryBytes += buffer.remaining();
+        RecordsProcessingStats stats = new RecordsProcessingStats(temporaryMemoryBytes, conversionCount);
+        return new ConvertedRecords<>(MemoryRecords.readableRecords(buffer), stats);
     }
 
     /**
      * Return a buffer containing the converted record batches. The returned buffer may not be the same as the received
      * one (e.g. it may require expansion).
      */
-    private ByteBuffer convertRecordBatch(byte magic, ByteBuffer buffer, RecordBatchAndRecords recordBatchAndRecords) {
+    private MemoryRecordsBuilder convertRecordBatch(byte magic, ByteBuffer buffer, RecordBatchAndRecords recordBatchAndRecords) {
         RecordBatch batch = recordBatchAndRecords.batch;
         final TimestampType timestampType = batch.timestampType();
         long logAppendTime = timestampType == TimestampType.LOG_APPEND_TIME ? batch.maxTimestamp() : RecordBatch.NO_TIMESTAMP;
@@ -127,7 +127,7 @@ public abstract class AbstractRecords implements Records {
             builder.append(record);
 
         builder.close();
-        return builder.buffer();
+        return builder;
     }
 
     /**

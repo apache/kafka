@@ -191,26 +191,28 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
   }
 
   private def verifyBrokerMessageConversionMetrics(server: KafkaServer, recordSize: Int): Unit = {
-    val requestBytes = verifyYammerMetricRecorded(s"RequestBytes,request=Produce")
-    val tempBytes = verifyYammerMetricRecorded(s"TemporaryMemoryBytes,request=Produce")
+    val requestMetricsPrefix = "kafka.network:type=RequestMetrics"
+    val requestBytes = verifyYammerMetricRecorded(s"$requestMetricsPrefix,name=RequestBytes,request=Produce")
+    val tempBytes = verifyYammerMetricRecorded(s"$requestMetricsPrefix,name=TemporaryMemoryBytes,request=Produce")
     assertTrue(s"Unexpected temporary memory size requestBytes $requestBytes tempBytes $tempBytes",
         tempBytes >= recordSize)
 
-    verifyYammerMetricRecorded(s"ProduceMessageConversionsPerSec")
-    verifyYammerMetricRecorded(s"MessageConversionsTimeMs,request=Produce", value => value > 0.0)
+    verifyYammerMetricRecorded(s"kafka.server:type=BrokerTopicMetrics,name=ProduceMessageConversionsPerSec")
+    verifyYammerMetricRecorded(s"$requestMetricsPrefix,name=MessageConversionsTimeMs,request=Produce", value => value > 0.0)
 
-    verifyYammerMetricRecorded(s"RequestBytes,request=Fetch")
+    verifyYammerMetricRecorded(s"$requestMetricsPrefix,name=RequestBytes,request=Fetch")
     // Temporary size for fetch should be zero after KAFKA-5968 is fixed
-    verifyYammerMetricRecorded(s"TemporaryMemoryBytes,request=Fetch", value => value >= 0.0)
+    verifyYammerMetricRecorded(s"$requestMetricsPrefix,name=TemporaryMemoryBytes,request=Fetch", value => value >= 0.0)
 
-    verifyYammerMetricRecorded(s"RequestBytes,request=Metadata") // request size recorded for all request types, check one
+     // request size recorded for all request types, check one
+    verifyYammerMetricRecorded(s"$requestMetricsPrefix,name=RequestBytes,request=Metadata")
   }
 
   private def verifyBrokerZkMetrics(server: KafkaServer, topic: String): Unit = {
     // Latency is rounded to milliseconds, so we may need to retry some operations to get latency > 0.
     val (_, recorded) = TestUtils.computeUntilTrue({
       servers.head.zkUtils.getLeaderAndIsrForPartition(topic, 0)
-      yammerMetricValue("ZooKeeperLatency").asInstanceOf[Double]
+      yammerMetricValue("kafka.server:type=ZooKeeperClientMetrics,name=ZooKeeperLatency").asInstanceOf[Double]
     })(latency => latency > 0.0)
     assertTrue("ZooKeeper latency not recorded", recorded)
 
@@ -223,14 +225,15 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     def errorMetricCount = Metrics.defaultRegistry.allMetrics.keySet.asScala.filter(_.getName == "ErrorsPerSec").size
 
     val startErrorMetricCount = errorMetricCount
-    verifyYammerMetricRecorded("name=ErrorsPerSec,request=Metadata,error=NONE")
+    val errorMetricPrefix = "kafka.network:type=RequestMetrics,name=ErrorsPerSec"
+    verifyYammerMetricRecorded(s"$errorMetricPrefix,request=Metadata,error=NONE")
 
     try {
       consumers.head.partitionsFor("12{}!")
     } catch {
       case _: InvalidTopicException => // expected
     }
-    verifyYammerMetricRecorded("name=ErrorsPerSec,request=Metadata,error=INVALID_TOPIC_EXCEPTION")
+    verifyYammerMetricRecorded(s"$errorMetricPrefix,request=Metadata,error=INVALID_TOPIC_EXCEPTION")
 
     // Check that error metrics are registered dynamically
     val currentErrorMetricCount = errorMetricCount
@@ -239,7 +242,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
 
     // Verify that error metric is updated with producer acks=0 when no response is sent
     sendRecords(producers.head, 1, 100, new TopicPartition("non-existent", 0))
-    verifyYammerMetricRecorded("name=ErrorsPerSec,request=Metadata,error=LEADER_NOT_AVAILABLE")
+    verifyYammerMetricRecorded(s"$errorMetricPrefix,request=Metadata,error=LEADER_NOT_AVAILABLE")
   }
 
   private def verifyKafkaMetric[T](name: String, metrics: java.util.Map[MetricName, _ <: Metric], entity: String,

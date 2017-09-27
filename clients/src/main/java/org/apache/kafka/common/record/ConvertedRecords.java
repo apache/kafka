@@ -21,9 +21,9 @@ public class ConvertedRecords<T extends Records> {
     private final T records;
     private final RecordsProcessingStats recordsProcessingStats;
 
-    public ConvertedRecords(T records, long temporaryMemoryBytes, long conversionCount, long conversionTimeNanos) {
+    public ConvertedRecords(T records, RecordsProcessingStats recordsProcessingStats) {
         this.records = records;
-        this.recordsProcessingStats = new RecordsProcessingStats(temporaryMemoryBytes, conversionCount, conversionTimeNanos);
+        this.recordsProcessingStats = recordsProcessingStats;
     }
 
     public T records() {

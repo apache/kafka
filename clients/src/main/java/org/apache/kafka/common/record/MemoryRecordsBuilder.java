@@ -65,6 +65,8 @@ public class MemoryRecordsBuilder {
     private short producerEpoch;
     private int baseSequence;
     private int writtenUncompressed = 0; // Number of bytes (excluding the header) written before compression
+    private int temporaryMemoryBytes;
+    private int conversionCount;
     private int batchHeaderSize;
     private int numRecords = 0;
     private float actualCompressionRatio = 1;
@@ -75,7 +77,6 @@ public class MemoryRecordsBuilder {
 
     private MemoryRecords builtRecords;
     private boolean aborted = false;
-    private RecordsProcessingStats recordsProcessingStats;
 
     public MemoryRecordsBuilder(ByteBufferOutputStream bufferStream,
                                 byte magic,
@@ -130,7 +131,7 @@ public class MemoryRecordsBuilder {
         bufferStream.position(initialPosition + batchHeaderSize);
         this.bufferStream = bufferStream;
         this.appendStream = new DataOutputStream(compressionType.wrapForOutput(this.bufferStream, magic));
-        this.recordsProcessingStats = RecordsProcessingStats.EMPTY;
+        this.temporaryMemoryBytes = batchHeaderSize;
     }
 
     /**
@@ -241,7 +242,7 @@ public class MemoryRecordsBuilder {
     }
 
     public RecordsProcessingStats recordsProcessingStats() {
-        return recordsProcessingStats;
+        return new RecordsProcessingStats(temporaryMemoryBytes, conversionCount);
     }
 
     public void setProducerState(long producerId, short producerEpoch, int baseSequence, boolean isTransactional) {
@@ -321,8 +322,6 @@ public class MemoryRecordsBuilder {
             buffer.position(initialPosition);
             builtRecords = MemoryRecords.readableRecords(buffer.slice());
         }
-
-        recordsProcessingStats = new RecordsProcessingStats(writtenUncompressed, numRecords);
     }
 
     private void validateProducerState() {
@@ -571,6 +570,7 @@ public class MemoryRecordsBuilder {
      */
     public void appendUncheckedWithOffset(long offset, LegacyRecord record) {
         ensureOpenForRecordAppend();
+        updateConversionStats(record.sizeInBytes());
         try {
             int size = record.sizeInBytes();
             AbstractLegacyRecordBatch.writeHeader(appendStream, toInnerOffset(offset), size);
@@ -589,6 +589,7 @@ public class MemoryRecordsBuilder {
      * @param record the record to add
      */
     public void append(Record record) {
+        updateConversionStats(record.sizeInBytes());
         appendWithOffset(record.offset(), isControlBatch, record.timestamp(), record.key(), record.value(), record.headers());
     }
 
@@ -598,6 +599,7 @@ public class MemoryRecordsBuilder {
      * @param record The record to add
      */
     public void appendWithOffset(long offset, Record record) {
+        updateConversionStats(record.sizeInBytes());
         appendWithOffset(offset, record.timestamp(), record.key(), record.value(), record.headers());
     }
 
@@ -608,6 +610,7 @@ public class MemoryRecordsBuilder {
      * @param record The record to add
      */
     public void appendWithOffset(long offset, LegacyRecord record) {
+        updateConversionStats(record.sizeInBytes());
         appendWithOffset(offset, record.timestamp(), record.key(), record.value());
     }
 
@@ -618,6 +621,14 @@ public class MemoryRecordsBuilder {
      */
     public void append(LegacyRecord record) {
         appendWithOffset(nextSequentialOffset(), record);
+    }
+
+    // Add original unconverted buffer size now, final uncompressed size is added later for all scenarios
+    private void updateConversionStats(int recordSize) {
+        if (magic != RecordBatch.MAGIC_VALUE_V2) {
+            temporaryMemoryBytes += recordSize;
+            conversionCount++;
+        }
     }
 
     private void appendDefaultRecord(long offset, long timestamp, ByteBuffer key, ByteBuffer value,
@@ -660,6 +671,7 @@ public class MemoryRecordsBuilder {
 
         numRecords += 1;
         writtenUncompressed += size;
+        temporaryMemoryBytes += size;
         lastOffset = offset;
 
         if (magic > RecordBatch.MAGIC_VALUE_V0 && timestamp > maxTimestamp) {

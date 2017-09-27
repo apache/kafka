@@ -17,8 +17,6 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
@@ -43,7 +41,6 @@ import static org.junit.Assert.fail;
 
 public class FileRecordsTest {
 
-    private final Time time = new MockTime();
     private byte[][] values = new byte[][] {
             "abcd".getBytes(),
             "efgh".getBytes(),
@@ -313,7 +310,7 @@ public class FileRecordsTest {
         int start = fileRecords.searchForOffsetWithSize(1, 0).position;
         int size = batch.sizeInBytes();
         FileRecords slice = fileRecords.read(start, size - 1);
-        Records messageV0 = slice.downConvert(RecordBatch.MAGIC_VALUE_V0, 0, time).records();
+        Records messageV0 = slice.downConvert(RecordBatch.MAGIC_VALUE_V0, 0).records();
         assertTrue("No message should be there", batches(messageV0).isEmpty());
         assertEquals("There should be " + (size - 1) + " bytes", size - 1, messageV0.sizeInBytes());
     }
@@ -365,7 +362,7 @@ public class FileRecordsTest {
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
             fileRecords.append(MemoryRecords.readableRecords(buffer));
             fileRecords.flush();
-            Records convertedRecords = fileRecords.downConvert(toMagic, 0L, time).records();
+            Records convertedRecords = fileRecords.downConvert(toMagic, 0L).records();
             verifyConvertedRecords(records, offsets, convertedRecords, compressionType, toMagic);
 
             if (toMagic <= RecordBatch.MAGIC_VALUE_V1 && compressionType == CompressionType.NONE) {
@@ -374,7 +371,7 @@ public class FileRecordsTest {
                     firstOffset = 11L; // v1 record
                 else
                     firstOffset = 17; // v2 record
-                Records convertedRecords2 = fileRecords.downConvert(toMagic, firstOffset, time).records();
+                Records convertedRecords2 = fileRecords.downConvert(toMagic, firstOffset).records();
                 List<Long> filteredOffsets = new ArrayList<>(offsets);
                 List<SimpleRecord> filteredRecords = new ArrayList<>(records);
                 int index = filteredOffsets.indexOf(firstOffset) - 1;
@@ -383,7 +380,7 @@ public class FileRecordsTest {
                 verifyConvertedRecords(filteredRecords, filteredOffsets, convertedRecords2, compressionType, toMagic);
             } else {
                 // firstOffset doesn't have any effect in this case
-                Records convertedRecords2 = fileRecords.downConvert(toMagic, 10L, time).records();
+                Records convertedRecords2 = fileRecords.downConvert(toMagic, 10L).records();
                 verifyConvertedRecords(records, offsets, convertedRecords2, compressionType, toMagic);
             }
         }
