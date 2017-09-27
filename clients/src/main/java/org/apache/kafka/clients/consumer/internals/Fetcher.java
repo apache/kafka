@@ -1282,10 +1282,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 Map<String, String> metricTags = Collections.singletonMap("topic", topic.replace('.', '_'));
 
                 bytesFetched = this.metrics.sensor(name);
-                bytesFetched.add(metrics.getTopicFetchSizeAvg(metricTags), new Avg());
-                bytesFetched.add(metrics.getTopicFetchSizeMax(metricTags), new Max());
-                bytesFetched.add(new Meter(metrics.getTopicBytesConsumedRate(metricTags),
-                        metrics.getTopicBytesConsumedTotal(metricTags)));
+                bytesFetched.add(metrics.topicFetchSizeAvg(metricTags), new Avg());
+                bytesFetched.add(metrics.topicFetchSizeMax(metricTags), new Max());
+                bytesFetched.add(new Meter(metrics.topicBytesConsumedRate(metricTags),
+                        metrics.topicBytesConsumedTotal(metricTags)));
             }
             bytesFetched.record(bytes);
 
@@ -1297,9 +1297,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 metricTags.put("topic", topic.replace('.', '_'));
 
                 recordsFetched = this.metrics.sensor(name);
-                recordsFetched.add(metrics.getTopicRecordsPerRequestAvg(metricTags), new Avg());
-                recordsFetched.add(new Meter(metrics.getTopicRecordsConsumedRate(metricTags),
-                        metrics.getTopicRecordsConsumedTotal(metricTags)));
+                recordsFetched.add(metrics.topicRecordsPerRequestAvg(metricTags), new Avg());
+                recordsFetched.add(new Meter(metrics.topicRecordsConsumedRate(metricTags),
+                        metrics.topicRecordsConsumedTotal(metricTags)));
             }
             recordsFetched.record(records);
         }
@@ -1321,9 +1321,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             Sensor recordsLag = this.metrics.getSensor(name);
             if (recordsLag == null) {
                 recordsLag = this.metrics.sensor(name);
-                recordsLag.add(metrics.getPartitionRecordsLag(name), new Value());
-                recordsLag.add(metrics.getPartitionRecordsLagMax(name), new Max());
-                recordsLag.add(metrics.getPartitionRecordsLagAvg(name), new Avg());
+                recordsLag.add(metrics.partitionRecordsLag(name), new Value());
+                recordsLag.add(metrics.partitionRecordsLagMax(name), new Max());
+                recordsLag.add(metrics.partitionRecordsLagAvg(name), new Avg());
             }
             recordsLag.record(lag);
         }

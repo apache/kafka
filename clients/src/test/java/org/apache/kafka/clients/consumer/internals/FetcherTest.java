@@ -1168,7 +1168,7 @@ public class FetcherTest {
         subscriptions.seek(tp0, 0);
 
         MetricName maxLagMetric = metricsRegistry.recordsLagMax;
-        MetricName partitionLagMetric = metricsRegistry.getPartitionRecordsLag(tp0 + ".records-lag");
+        MetricName partitionLagMetric = metricsRegistry.partitionRecordsLag(tp0 + ".records-lag");
 
         Map<MetricName, KafkaMetric> allMetrics = metrics.metrics();
         KafkaMetric recordsFetchLagMax = allMetrics.get(maxLagMetric);
@@ -1207,7 +1207,7 @@ public class FetcherTest {
         subscriptions.seek(tp0, 0);
 
         MetricName maxLagMetric = metricsRegistry.recordsLagMax;
-        MetricName partitionLagMetric = metricsRegistry.getPartitionRecordsLag(tp0 + ".records-lag");
+        MetricName partitionLagMetric = metricsRegistry.partitionRecordsLag(tp0 + ".records-lag");
 
         Map<MetricName, KafkaMetric> allMetrics = metrics.metrics();
         KafkaMetric recordsFetchLagMax = allMetrics.get(maxLagMetric);

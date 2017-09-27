@@ -48,20 +48,20 @@ public class FetcherMetricsRegistry {
     public final MetricName fetchThrottleTimeAvg;
     public final MetricName fetchThrottleTimeMax;
 
-    private MetricNameTemplate topicFetchSizeAvg;
-    private MetricNameTemplate topicFetchSizeMax;
-    private MetricNameTemplate topicBytesConsumedRate;
-    private MetricNameTemplate topicBytesConsumedTotal;
-    private MetricNameTemplate topicRecordsPerRequestAvg;
-    private MetricNameTemplate topicRecordsConsumedRate;
-    private MetricNameTemplate topicRecordsConsumedTotal;
-    private MetricNameTemplate partitionRecordsLag;
-    private MetricNameTemplate partitionRecordsLagMax;
-    private MetricNameTemplate partitionRecordsLagAvg;
+    private final MetricNameTemplate topicFetchSizeAvg;
+    private final MetricNameTemplate topicFetchSizeMax;
+    private final MetricNameTemplate topicBytesConsumedRate;
+    private final MetricNameTemplate topicBytesConsumedTotal;
+    private final MetricNameTemplate topicRecordsPerRequestAvg;
+    private final MetricNameTemplate topicRecordsConsumedRate;
+    private final MetricNameTemplate topicRecordsConsumedTotal;
+    private final MetricNameTemplate partitionRecordsLag;
+    private final MetricNameTemplate partitionRecordsLagMax;
+    private final MetricNameTemplate partitionRecordsLagAvg;
 
-    private Metrics metrics;
-    private Set<String> tags;
-    private HashSet<String> topicTags;
+    private final Metrics metrics;
+    private final Set<String> tags;
+    private final HashSet<String> topicTags;
 
     public FetcherMetricsRegistry(Metrics metrics) {
         this.metrics = metrics;
@@ -129,47 +129,47 @@ public class FetcherMetricsRegistry {
         
     }
     
-    public MetricName getTopicFetchSizeAvg(Map<String, String> metricTags) {
-        return metrics.metricInstance(this.topicFetchSizeAvg, metricTags);
+    public MetricName topicFetchSizeAvg(Map<String, String> tags) {
+        return metrics.metricInstance(this.topicFetchSizeAvg, tags);
     }
 
-    public MetricName getTopicFetchSizeMax(Map<String, String> metricTags) {
-        return metrics.metricInstance(this.topicFetchSizeMax, metricTags);
+    public MetricName topicFetchSizeMax(Map<String, String> tags) {
+        return metrics.metricInstance(this.topicFetchSizeMax, tags);
     }
 
-    public MetricName getTopicBytesConsumedRate(Map<String, String> metricTags) {
-        return metrics.metricInstance(this.topicBytesConsumedRate, metricTags);
+    public MetricName topicBytesConsumedRate(Map<String, String> tags) {
+        return metrics.metricInstance(this.topicBytesConsumedRate, tags);
     }
 
-    public MetricName getTopicBytesConsumedTotal(Map<String, String> metricTags) {
-        return metrics.metricInstance(this.topicBytesConsumedTotal, metricTags);
+    public MetricName topicBytesConsumedTotal(Map<String, String> tags) {
+        return metrics.metricInstance(this.topicBytesConsumedTotal, tags);
     }
 
-    public MetricName getTopicRecordsPerRequestAvg(Map<String, String> metricTags) {
-        return metrics.metricInstance(this.topicRecordsPerRequestAvg, metricTags);
+    public MetricName topicRecordsPerRequestAvg(Map<String, String> tags) {
+        return metrics.metricInstance(this.topicRecordsPerRequestAvg, tags);
     }
 
-    public MetricName getTopicRecordsConsumedRate(Map<String, String> metricTags) {
-        return metrics.metricInstance(this.topicRecordsConsumedRate, metricTags);
+    public MetricName topicRecordsConsumedRate(Map<String, String> tags) {
+        return metrics.metricInstance(this.topicRecordsConsumedRate, tags);
     }
 
-    public MetricName getTopicRecordsConsumedTotal(Map<String, String> metricTags) {
-        return metrics.metricInstance(this.topicRecordsConsumedTotal, metricTags);
+    public MetricName topicRecordsConsumedTotal(Map<String, String> tags) {
+        return metrics.metricInstance(this.topicRecordsConsumedTotal, tags);
     }
 
-    public MetricName getPartitionRecordsLag(String partitionLagMetricName) {
+    public MetricName partitionRecordsLag(String partitionLagMetricName) {
         return metrics.metricName(partitionLagMetricName,
                 partitionRecordsLag.group(),
                 partitionRecordsLag.description());
     }
 
-    public MetricName getPartitionRecordsLagMax(String partitionLagMetricName) {
+    public MetricName partitionRecordsLagMax(String partitionLagMetricName) {
         return metrics.metricName(partitionLagMetricName + "-max",
                 partitionRecordsLagMax.group(),
                 partitionRecordsLagMax.description());
     }
 
-    public MetricName getPartitionRecordsLagAvg(String partitionLagMetricName) {
+    public MetricName partitionRecordsLagAvg(String partitionLagMetricName) {
         return metrics.metricName(partitionLagMetricName + "-avg",
                 partitionRecordsLagAvg.group(),
                 partitionRecordsLagAvg.description());
