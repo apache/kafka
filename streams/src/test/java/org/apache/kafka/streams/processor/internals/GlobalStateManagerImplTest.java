@@ -50,6 +50,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_BATCH;
+import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_END;
+import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_START;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -203,6 +206,24 @@ public class GlobalStateManagerImplTest {
         final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
         stateManager.register(store1, false, stateRestoreCallback);
         assertEquals(2, stateRestoreCallback.restored.size());
+    }
+
+    @Test
+    public void shouldListenForRestoreEvents() {
+        initializeConsumer(5, 1, t1);
+        stateManager.initialize(context);
+
+        final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
+        stateManager.register(store1, false, stateRestoreCallback);
+
+        assertThat(stateRestoreListener.restoreStartOffset, equalTo(1L));
+        assertThat(stateRestoreListener.restoreEndOffset, equalTo(5L));
+        assertThat(stateRestoreListener.totalNumRestored, equalTo(5L));
+
+
+        assertThat(stateRestoreListener.storeNameCalledStates.get(RESTORE_START), equalTo(store1.name()));
+        assertThat(stateRestoreListener.storeNameCalledStates.get(RESTORE_BATCH), equalTo(store1.name()));
+        assertThat(stateRestoreListener.storeNameCalledStates.get(RESTORE_END), equalTo(store1.name()));
     }
 
     @Test
