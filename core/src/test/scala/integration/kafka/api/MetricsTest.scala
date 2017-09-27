@@ -12,9 +12,7 @@
   */
 package kafka.api
 
-import java.io.File
 import java.util.{Locale, Properties}
-import java.util.concurrent.TimeUnit
 
 import kafka.log.LogConfig
 import kafka.network.RequestMetrics
@@ -23,7 +21,6 @@ import kafka.utils.{JaasTestUtils, TestUtils}
 
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.{Gauge, Histogram, Meter}
-import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{Metric, MetricName, TopicPartition}
 import org.apache.kafka.common.config.SaslConfigs
@@ -77,10 +74,8 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     TestUtils.createTopic(this.zkUtils, topic, numPartitions = 1, replicationFactor = 1, this.servers, props)
     val tp = new TopicPartition(topic, 0)
 
-    // Clear all error metrics to test new errors since RequestMetrics is a static object
-    RequestMetrics.metricsMap.values.foreach { requestMetrics =>
-      requestMetrics.errorMeters.values.foreach(_.removeMeter())
-    }
+    // Clear static state
+    RequestMetrics.clearErrorMeters()
 
     // Produce and consume some records
     val numRecords = 10
@@ -91,7 +86,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     val consumer = this.consumers.head
     consumer.assign(List(tp).asJava)
     consumer.seek(tp, 0)
-    consumeRecords(consumer, numRecords)
+    TestUtils.consumeRecords(consumer, numRecords)
 
     verifyKafkaRateMetricsHaveCumulativeCount()
     verifyClientVersionMetrics(consumer.metrics, "Consumer")
@@ -110,20 +105,9 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
       recordSize: Int, tp: TopicPartition) = {
     val bytes = new Array[Byte](recordSize)
     (0 until numRecords).map { i =>
-      producer.send(new ProducerRecord(tp.topic(), tp.partition(), i.toLong, s"key $i".getBytes, bytes))
+      producer.send(new ProducerRecord(tp.topic, tp.partition, i.toLong, s"key $i".getBytes, bytes))
     }
     producer.flush()
-  }
-
-  protected def consumeRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int): Unit = {
-    val maxIters = numRecords * 300
-    var iters = 0
-    var received = 0
-    while (received < numRecords && iters < maxIters) {
-      received += consumer.poll(50).count
-      iters += 1
-    }
-    assertEquals(numRecords, received)
   }
 
   // Create a producer that fails authentication to verify authentication failure metrics
@@ -244,7 +228,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     try {
       consumers.head.partitionsFor("12{}!")
     } catch {
-      case e: InvalidTopicException => // expected
+      case _: InvalidTopicException => // expected
     }
     verifyYammerMetricRecorded("name=ErrorsPerSec,request=Metadata,error=INVALID_TOPIC_EXCEPTION")
 
@@ -268,7 +252,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
   }
 
   private def maxKafkaMetricValue(name: String, metrics: java.util.Map[MetricName, _ <: Metric], entity: String,
-      group: Option[String] = None): Double = {
+      group: Option[String]): Double = {
     // Use max value of all matching metrics since Selector metrics are recorded for each Processor
     verifyKafkaMetric(name, metrics, entity, group) { matchingMetrics =>
       matchingMetrics.foldLeft(0.0)((max, metric) => Math.max(max, metric.value))
@@ -283,8 +267,8 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
 
   private def yammerMetricValue(name: String): Any = {
     val allMetrics = Metrics.defaultRegistry.allMetrics.asScala
-    val (metricName, metric) = allMetrics.find { case (n, _) => n.getMBeanName.endsWith(name) }
-      .getOrElse(fail(s"Unable to find broker metric $name: allMetrics: ${allMetrics.keySet.map(n => n.getMBeanName)}"))
+    val (_, metric) = allMetrics.find { case (n, _) => n.getMBeanName.endsWith(name) }
+      .getOrElse(fail(s"Unable to find broker metric $name: allMetrics: ${allMetrics.keySet.map(_.getMBeanName)}"))
     metric match {
       case m: Meter => m.count.toDouble
       case m: Histogram => m.max

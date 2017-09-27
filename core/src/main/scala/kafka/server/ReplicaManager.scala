@@ -448,8 +448,8 @@ class ReplicaManager(val config: KafkaConfig,
                   result.info.lastOffset + 1, // required offset
                   new PartitionResponse(result.error, result.info.firstOffset, result.info.logAppendTime, result.info.logStartOffset)) // response status
       }
-      if (isFromClient)
-        processingStatsCallback(localProduceResults.mapValues(_.info.recordsProcessingStats))
+
+      processingStatsCallback(localProduceResults.mapValues(_.info.recordsProcessingStats))
 
       if (delayedProduceRequestRequired(requiredAcks, entriesPerPartition, localProduceResults)) {
         // create delayed produce operation

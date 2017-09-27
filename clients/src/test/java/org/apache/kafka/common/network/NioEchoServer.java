@@ -91,6 +91,7 @@ public class NioEchoServer extends Thread {
         return credentialCache;
     }
 
+    @SuppressWarnings("deprecation")
     public double metricValue(String name) {
         for (Map.Entry<MetricName, KafkaMetric> entry : metrics.metrics().entrySet()) {
             if (entry.getKey().name().equals(name))

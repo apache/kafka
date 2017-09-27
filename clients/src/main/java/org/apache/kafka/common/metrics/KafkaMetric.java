@@ -48,6 +48,9 @@ public final class KafkaMetric implements Metric {
         return this.metricName;
     }
 
+    /**
+     * See {@link Metric#value()} for the details on why this is deprecated.
+     */
     @Override
     @Deprecated
     public double value() {

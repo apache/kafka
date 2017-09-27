@@ -277,7 +277,7 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
 
   def defaultAcls(path: String): java.util.List[ACL] = ZkUtils.defaultAcls(isSecure, path)
 
-  def zkClient: ZkClient = zkClientWrap.client
+  def zkClient: ZkClient = zkClientWrap.zkClient
 
   def getController(): Int = {
     readDataMaybeNull(ControllerPath)._1 match {

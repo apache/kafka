@@ -465,14 +465,14 @@ public class Metrics implements Closeable {
      * This is a way to expose existing values as metrics.
      *
      * This method is kept for binary compatibility purposes, it has the same behaviour as
-     * {@link #addMetric(MetricName, MetricConfig, MetricValue)}.
+     * {@link #addMetric(MetricName, MetricConfig, MetricValueProvider)}.
      *
      * @param metricName The name of the metric
      * @param config The configuration to use when measuring this measurable
      * @param measurable The measurable that will be measured by this metric
      */
     public void addMetric(MetricName metricName, MetricConfig config, Measurable measurable) {
-        addMetric(metricName, config, (MetricValue<?>) measurable);
+        addMetric(metricName, config, (MetricValueProvider<?>) measurable);
     }
 
     /**
@@ -482,7 +482,7 @@ public class Metrics implements Closeable {
      * @param metricName The name of the metric
      * @param metricValueProvider The metric value provider associated with this metric
      */
-    public void addMetric(MetricName metricName, MetricConfig config, MetricValue<?> metricValueProvider) {
+    public void addMetric(MetricName metricName, MetricConfig config, MetricValueProvider<?> metricValueProvider) {
         KafkaMetric m = new KafkaMetric(new Object(),
                                         Utils.notNull(metricName),
                                         Utils.notNull(metricValueProvider),
@@ -498,7 +498,7 @@ public class Metrics implements Closeable {
      * @param metricName The name of the metric
      * @param metricValueProvider The metric value provider associated with this metric
      */
-    public void addMetric(MetricName metricName, MetricValue<?> metricValueProvider) {
+    public void addMetric(MetricName metricName, MetricValueProvider<?> metricValueProvider) {
         addMetric(metricName, null, metricValueProvider);
     }
 
