@@ -27,7 +27,7 @@ import org.junit.{Before, Test}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{ArrayBuffer, Buffer}
 import org.apache.kafka.clients.producer.KafkaProducer
-import org.apache.kafka.common.errors.{InconsistentGroupProtocolException, WakeupException}
+import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.internals.Topic
 
 /**
@@ -120,19 +120,6 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
     // the failover should not cause a rebalance
     assertEquals(1, listener.callsToAssigned)
     assertEquals(1, listener.callsToRevoked)
-  }
-
-  @Test(expected = classOf[InconsistentGroupProtocolException])
-  def testWithEmptyPartitionAssignment() {
-    val listener = new TestConsumerReassignmentListener()
-    this.consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "")
-    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
-    consumers += consumer0
-
-    consumer0.subscribe(List(topic).asJava, listener)
-
-    // the initial subscription should cause a callback execution
-    consumer0.poll(2000)
   }
 
   protected class TestConsumerReassignmentListener extends ConsumerRebalanceListener {
