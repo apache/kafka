@@ -17,10 +17,10 @@
 package org.apache.kafka.common.metrics;
 
 /**
- * A non-measurable gauge value that can be registered as a metric.
+ * A non-measurable value that can be registered as a metric.
  * This is separate from {@link Measurable} to avoid breaking the public API.
  */
-public interface Gauge<T> extends MetricValue<T> {
+public interface Gauge<T> extends MetricValueProvider<T> {
 
     /**
      * Returns the current value associated with this gauge.

@@ -29,7 +29,7 @@ public interface Metric {
     /**
      * The value of the metric as double if the metric is measurable
      * @throws IllegalStateException if this metric does not have a measurable double value
-     * @deprecated As of 1.0.0, use {@link #currentValue()} instead. This will be removed in a future major release.
+     * @deprecated As of 1.0.0, use {@link #metricValue()} instead. This will be removed in a future major release.
      */
     @Deprecated
     public double value();
@@ -37,6 +37,6 @@ public interface Metric {
     /**
      * The value of the metric, which may be measurable or a non-measurable gauge
      */
-    public Object currentValue();
+    public Object metricValue();
 
 }

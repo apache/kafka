@@ -476,12 +476,12 @@ public class Metrics implements Closeable {
      * Add a metric to monitor the value of an object as a gauge. This metric won't be associated with any sensor.
      * This is a way to expose existing values as metrics.
      * @param metricName The name of the metric
-     * @param gauge The gauge associated with this metric
+     * @param metricValueProvider The {@link MetricValueProvider} that provides value of the metric
      */
-    public void addMetric(MetricName metricName, MetricValue<?> metricValue) {
+    public void addMetric(MetricName metricName, MetricValueProvider<?> metricValueProvider) {
         KafkaMetric m = new KafkaMetric(new Object(),
                                         Utils.notNull(metricName),
-                                        Utils.notNull(metricValue),
+                                        Utils.notNull(metricValueProvider),
                                         this.config,
                                         this.time);
         registerMetric(m);

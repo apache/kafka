@@ -186,7 +186,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
       verifyKafkaMetric(name, metrics, entity) { matchingMetrics =>
         assertEquals(1, matchingMetrics.size)
         val metric = matchingMetrics.head
-        val value = metric.currentValue
+        val value = metric.metricValue
         assertNotNull(s"$entity metric not recorded $name", value)
         assertNotNull(s"$entity metric $name should be a non-empty String",
             value.isInstanceOf[String] && !value.asInstanceOf[String].isEmpty)
