@@ -186,7 +186,7 @@ public class StreamsResetter {
         }
     }
 
-    private void maybeResetInputAndSeekToEndIntermediateTopicOffsets(final HashMap consumerConfig) {
+    private void maybeResetInputAndSeekToEndIntermediateTopicOffsets(final Map consumerConfig) {
         final List<String> inputTopics = options.valuesOf(inputTopicsOption);
         final List<String> intermediateTopics = options.valuesOf(intermediateTopicsOption);
 
