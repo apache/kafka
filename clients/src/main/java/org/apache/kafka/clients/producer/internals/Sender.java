@@ -40,7 +40,6 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
@@ -129,7 +128,6 @@ public class Sender implements Runnable {
                   int maxRequestSize,
                   short acks,
                   int retries,
-                  Metrics metrics,
                   SenderMetricsRegistry metricsRegistry,
                   Time time,
                   int requestTimeout,
@@ -146,7 +144,7 @@ public class Sender implements Runnable {
         this.acks = acks;
         this.retries = retries;
         this.time = time;
-        this.sensors = new SenderMetrics(metrics, metricsRegistry);
+        this.sensors = new SenderMetrics(metricsRegistry);
         this.requestTimeout = requestTimeout;
         this.retryBackoffMs = retryBackoffMs;
         this.apiVersions = apiVersions;
@@ -707,12 +705,10 @@ public class Sender implements Runnable {
         this.client.wakeup();
     }
 
-    public static Sensor throttleTimeSensor(Metrics metrics, SenderMetricsRegistry metricsRegistry) {
+    public static Sensor throttleTimeSensor(SenderMetricsRegistry metrics) {
         Sensor produceThrottleTimeSensor = metrics.sensor("produce-throttle-time");
-        MetricName m = metrics.metricInstance(metricsRegistry.produceThrottleTimeAvg);
-        produceThrottleTimeSensor.add(m, new Avg());
-        m = metrics.metricInstance(metricsRegistry.produceThrottleTimeMax);
-        produceThrottleTimeSensor.add(m, new Max());
+        produceThrottleTimeSensor.add(metrics.produceThrottleTimeAvg, new Avg());
+        produceThrottleTimeSensor.add(metrics.produceThrottleTimeMax, new Max());
         return produceThrottleTimeSensor;
     }
 
@@ -720,7 +716,6 @@ public class Sender implements Runnable {
      * A collection of sensors for the sender
      */
     private class SenderMetrics {
-        private final Metrics metrics;
         public final Sensor retrySensor;
         public final Sensor errorSensor;
         public final Sensor queueTimeSensor;
@@ -730,74 +725,53 @@ public class Sender implements Runnable {
         public final Sensor compressionRateSensor;
         public final Sensor maxRecordSizeSensor;
         public final Sensor batchSplitSensor;
-        private SenderMetricsRegistry metricsRegistry;
+        private final SenderMetricsRegistry metrics;
 
-        public SenderMetrics(Metrics metrics, SenderMetricsRegistry metricsRegistry) {
+        public SenderMetrics(SenderMetricsRegistry metrics) {
             this.metrics = metrics;
-            this.metricsRegistry = metricsRegistry;
 
             this.batchSizeSensor = metrics.sensor("batch-size");
-            MetricName m = metrics.metricInstance(metricsRegistry.batchSizeAvg);
-            this.batchSizeSensor.add(m, new Avg());
-            m = metrics.metricInstance(metricsRegistry.batchSizeMax);
-            this.batchSizeSensor.add(m, new Max());
+            this.batchSizeSensor.add(metrics.batchSizeAvg, new Avg());
+            this.batchSizeSensor.add(metrics.batchSizeMax, new Max());
 
             this.compressionRateSensor = metrics.sensor("compression-rate");
-            m = metrics.metricInstance(metricsRegistry.compressionRateAvg);
-            this.compressionRateSensor.add(m, new Avg());
+            this.compressionRateSensor.add(metrics.compressionRateAvg, new Avg());
 
             this.queueTimeSensor = metrics.sensor("queue-time");
-            m = metrics.metricInstance(metricsRegistry.recordQueueTimeAvg);
-            this.queueTimeSensor.add(m, new Avg());
-            m = metrics.metricInstance(metricsRegistry.recordQueueTimeMax);
-            this.queueTimeSensor.add(m, new Max());
+            this.queueTimeSensor.add(metrics.recordQueueTimeAvg, new Avg());
+            this.queueTimeSensor.add(metrics.recordQueueTimeMax, new Max());
 
             this.requestTimeSensor = metrics.sensor("request-time");
-            m = metrics.metricInstance(metricsRegistry.requestLatencyAvg);
-            this.requestTimeSensor.add(m, new Avg());
-            m = metrics.metricInstance(metricsRegistry.requestLatencyMax);
-            this.requestTimeSensor.add(m, new Max());
+            this.requestTimeSensor.add(metrics.requestLatencyAvg, new Avg());
+            this.requestTimeSensor.add(metrics.requestLatencyMax, new Max());
 
             this.recordsPerRequestSensor = metrics.sensor("records-per-request");
-            MetricName rateMetricName = metrics.metricInstance(metricsRegistry.recordSendRate);
-            MetricName totalMetricName = metrics.metricInstance(metricsRegistry.recordSendTotal);
-            this.recordsPerRequestSensor.add(new Meter(rateMetricName, totalMetricName));
-            m = metrics.metricInstance(metricsRegistry.recordsPerRequestAvg);
-            this.recordsPerRequestSensor.add(m, new Avg());
+            this.recordsPerRequestSensor.add(new Meter(metrics.recordSendRate, metrics.recordSendTotal));
+            this.recordsPerRequestSensor.add(metrics.recordsPerRequestAvg, new Avg());
 
             this.retrySensor = metrics.sensor("record-retries");
-            rateMetricName = metrics.metricInstance(metricsRegistry.recordRetryRate);
-            totalMetricName = metrics.metricInstance(metricsRegistry.recordRetryTotal);
-            this.retrySensor.add(new Meter(rateMetricName, totalMetricName));
+            this.retrySensor.add(new Meter(metrics.recordRetryRate, metrics.recordRetryTotal));
 
             this.errorSensor = metrics.sensor("errors");
-            rateMetricName = metrics.metricInstance(metricsRegistry.recordErrorRate);
-            totalMetricName = metrics.metricInstance(metricsRegistry.recordErrorTotal);
-            this.errorSensor.add(new Meter(rateMetricName, totalMetricName));
+            this.errorSensor.add(new Meter(metrics.recordErrorRate, metrics.recordErrorTotal));
 
             this.maxRecordSizeSensor = metrics.sensor("record-size");
-            m = metrics.metricInstance(metricsRegistry.recordSizeMax);
-            this.maxRecordSizeSensor.add(m, new Max());
-            m = metrics.metricInstance(metricsRegistry.recordSizeAvg);
-            this.maxRecordSizeSensor.add(m, new Avg());
+            this.maxRecordSizeSensor.add(metrics.recordSizeMax, new Max());
+            this.maxRecordSizeSensor.add(metrics.recordSizeAvg, new Avg());
 
-            m = metrics.metricInstance(metricsRegistry.requestsInFlight);
-            this.metrics.addMetric(m, new Measurable() {
+            this.metrics.addMetric(metrics.requestsInFlight, new Measurable() {
                 public double measure(MetricConfig config, long now) {
                     return client.inFlightRequestCount();
                 }
             });
-            m = metrics.metricInstance(metricsRegistry.metadataAge);
-            metrics.addMetric(m, new Measurable() {
+            metrics.addMetric(metrics.metadataAge, new Measurable() {
                 public double measure(MetricConfig config, long now) {
                     return (now - metadata.lastSuccessfulUpdate()) / 1000.0;
                 }
             });
 
             this.batchSplitSensor = metrics.sensor("batch-split-rate");
-            rateMetricName = metrics.metricInstance(metricsRegistry.batchSplitRate);
-            totalMetricName = metrics.metricInstance(metricsRegistry.batchSplitTotal);
-            this.batchSplitSensor.add(new Meter(rateMetricName, totalMetricName));
+            this.batchSplitSensor.add(new Meter(metrics.batchSplitRate, metrics.batchSplitTotal));
         }
 
         private void maybeRegisterTopicMetrics(String topic) {
@@ -809,31 +783,31 @@ public class Sender implements Runnable {
                 Map<String, String> metricTags = Collections.singletonMap("topic", topic);
 
                 topicRecordCount = this.metrics.sensor(topicRecordsCountName);
-                MetricName rateMetricName = this.metrics.metricInstance(metricsRegistry.topicRecordSendRate, metricTags);
-                MetricName totalMetricName = this.metrics.metricInstance(metricsRegistry.topicRecordSendTotal, metricTags);
+                MetricName rateMetricName = this.metrics.topicRecordSendRate(metricTags);
+                MetricName totalMetricName = this.metrics.topicRecordSendTotal(metricTags);
                 topicRecordCount.add(new Meter(rateMetricName, totalMetricName));
 
                 String topicByteRateName = "topic." + topic + ".bytes";
                 Sensor topicByteRate = this.metrics.sensor(topicByteRateName);
-                rateMetricName = this.metrics.metricInstance(metricsRegistry.topicByteRate, metricTags);
-                totalMetricName = this.metrics.metricInstance(metricsRegistry.topicByteTotal, metricTags);
+                rateMetricName = this.metrics.topicByteRate(metricTags);
+                totalMetricName = this.metrics.topicByteTotal(metricTags);
                 topicByteRate.add(new Meter(rateMetricName, totalMetricName));
 
                 String topicCompressionRateName = "topic." + topic + ".compression-rate";
                 Sensor topicCompressionRate = this.metrics.sensor(topicCompressionRateName);
-                MetricName m = this.metrics.metricInstance(metricsRegistry.topicCompressionRate, metricTags);
+                MetricName m = this.metrics.topicCompressionRate(metricTags);
                 topicCompressionRate.add(m, new Avg());
 
                 String topicRetryName = "topic." + topic + ".record-retries";
                 Sensor topicRetrySensor = this.metrics.sensor(topicRetryName);
-                rateMetricName = this.metrics.metricInstance(metricsRegistry.topicRecordRetryRate, metricTags);
-                totalMetricName = this.metrics.metricInstance(metricsRegistry.topicRecordRetryTotal, metricTags);
+                rateMetricName = this.metrics.topicRecordRetryRate(metricTags);
+                totalMetricName = this.metrics.topicRecordRetryTotal(metricTags);
                 topicRetrySensor.add(new Meter(rateMetricName, totalMetricName));
 
                 String topicErrorName = "topic." + topic + ".record-errors";
                 Sensor topicErrorSensor = this.metrics.sensor(topicErrorName);
-                rateMetricName = this.metrics.metricInstance(metricsRegistry.topicRecordErrorRate, metricTags);
-                totalMetricName = this.metrics.metricInstance(metricsRegistry.topicRecordErrorTotal, metricTags);
+                rateMetricName = this.metrics.topicRecordErrorRate(metricTags);
+                totalMetricName = this.metrics.topicRecordErrorTotal(metricTags);
                 topicErrorSensor.add(new Meter(rateMetricName, totalMetricName));
             }
         }
