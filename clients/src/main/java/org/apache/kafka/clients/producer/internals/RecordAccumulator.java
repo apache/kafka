@@ -19,7 +19,6 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -132,34 +131,30 @@ public final class RecordAccumulator {
     }
 
     private void registerMetrics(RecordAccumulatorMetricsRegistry metrics) {
-        MetricName metricName = metrics.waitingThreads;
         Measurable waitingThreads = new Measurable() {
             public double measure(MetricConfig config, long now) {
                 return free.queued();
             }
         };
-        metrics.addMetric(metricName, waitingThreads);
+        metrics.addMetric(metrics.waitingThreads, waitingThreads);
 
-        metricName = metrics.bufferTotalBytes;
         Measurable totalBytes = new Measurable() {
             public double measure(MetricConfig config, long now) {
                 return free.totalMemory();
             }
         };
-        metrics.addMetric(metricName, totalBytes);
+        metrics.addMetric(metrics.bufferTotalBytes, totalBytes);
 
-        metricName = metrics.bufferAvailableBytes;
         Measurable availableBytes = new Measurable() {
             public double measure(MetricConfig config, long now) {
                 return free.availableMemory();
             }
         };
-        metrics.addMetric(metricName, availableBytes);
+        metrics.addMetric(metrics.bufferAvailableBytes, availableBytes);
 
         Sensor bufferExhaustedRecordSensor = metrics.sensor("buffer-exhausted-records");
-        MetricName rateMetricName = metrics.bufferExhaustedRate;
-        MetricName totalMetricName = metrics.bufferExhaustedTotal;
-        bufferExhaustedRecordSensor.add(new Meter(rateMetricName, totalMetricName));
+        bufferExhaustedRecordSensor.add(new Meter(metrics.bufferExhaustedRate, 
+                metrics.bufferExhaustedTotal));
     }
 
     /**

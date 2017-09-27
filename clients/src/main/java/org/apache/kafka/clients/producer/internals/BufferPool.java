@@ -23,7 +23,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Meter;
@@ -71,9 +70,8 @@ public class BufferPool {
         this.nonPooledAvailableMemory = memory;
         this.time = time;
         this.waitTime = metricsRegistry.sensor(WAIT_TIME_SENSOR_NAME);
-        MetricName rateMetricName = metricsRegistry.bufferPoolWaitRatio;
-        MetricName totalMetricName = metricsRegistry.bufferPoolWaitTimeTotal;
-        this.waitTime.add(new Meter(TimeUnit.NANOSECONDS, rateMetricName, totalMetricName));
+        this.waitTime.add(new Meter(TimeUnit.NANOSECONDS, metricsRegistry.bufferPoolWaitRatio,
+                metricsRegistry.bufferPoolWaitTimeTotal));
     }
 
     /**
