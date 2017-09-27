@@ -40,9 +40,6 @@ class TransactionsTest(Test):
         self.input_topic = "input-topic"
         self.output_topic = "output-topic"
 
-        self.input_topic_single_part = "input-topic-single-part"
-        self.output_topic_single_part = "output-topic-single-part"
-
         self.num_brokers = 3
 
         # Test parameters
@@ -55,37 +52,7 @@ class TransactionsTest(Test):
         self.zk = ZookeeperService(test_context, num_nodes=1)
         self.kafka = KafkaService(test_context,
                                   num_nodes=self.num_brokers,
-                                  zk=self.zk,
-                                  topics = {
-                                      self.input_topic: {
-                                          "partitions": self.num_input_partitions,
-                                          "replication-factor": 3,
-                                          "configs": {
-                                              "min.insync.replicas": 2
-                                          }
-                                      },
-                                      self.output_topic: {
-                                          "partitions": self.num_output_partitions,
-                                          "replication-factor": 3,
-                                          "configs": {
-                                              "min.insync.replicas": 2
-                                          }
-                                      },
-                                      self.input_topic_single_part: {
-                                          "partitions": 1,
-                                          "replication-factor": 3,
-                                          "configs": {
-                                              "min.insync.replicas": 2
-                                          }
-                                      },
-                                      self.output_topic_single_part: {
-                                          "partitions": 1,
-                                          "replication-factor": 3,
-                                          "configs": {
-                                              "min.insync.replicas": 2
-                                          }
-                                      }
-                                  })
+                                  zk=self.zk)
 
     def setUp(self):
         self.zk.start()
@@ -152,9 +119,9 @@ class TransactionsTest(Test):
                                                         str(copier.progress_percent())))
                 copier.restart(clean_shutdown)
 
-    def create_and_start_copiers(self, input_topic, output_topic, num_input_partitions):
+    def create_and_start_copiers(self, input_topic, output_topic, num_copiers):
         copiers = []
-        for i in range(0, num_input_partitions):
+        for i in range(0, num_copiers):
             copiers.append(self.create_and_start_message_copier(
                 input_topic=input_topic,
                 output_topic=output_topic,
@@ -198,7 +165,7 @@ class TransactionsTest(Test):
 
     def copy_messages_transactionally(self, failure_mode, bounce_target,
                                       input_topic, output_topic,
-                                      num_input_partitions, num_messages_to_copy):
+                                      num_copiers, num_messages_to_copy):
         """Copies messages transactionally from the seeded input topic to the
         output topic, either bouncing brokers or clients in a hard and soft
         way as it goes.
@@ -210,7 +177,7 @@ class TransactionsTest(Test):
         """
         copiers = self.create_and_start_copiers(input_topic=input_topic,
                                                 output_topic=output_topic,
-                                                num_input_partitions=num_input_partitions)
+                                                num_copiers=num_copiers)
         concurrent_consumer = self.start_consumer(output_topic,
                                                   group_id="concurrent_consumer")
         clean_shutdown = False
@@ -228,23 +195,55 @@ class TransactionsTest(Test):
                        err_msg="%s - Failed to copy all messages in  %ds." %\
                        (copier.transactional_id, 120))
         self.logger.info("finished copying messages")
+
         return self.drain_consumer(concurrent_consumer, num_messages_to_copy)
+
+    def setup_topics(self):
+        self.kafka.topics = {
+            self.input_topic: {
+                "partitions": self.num_input_partitions,
+                "replication-factor": 3,
+                "configs": {
+                    "min.insync.replicas": 2
+                }
+            },
+            self.output_topic: {
+                "partitions": self.num_output_partitions,
+                "replication-factor": 3,
+                "configs": {
+                    "min.insync.replicas": 2
+                }
+            }
+        }
 
     @cluster(num_nodes=9)
     @matrix(failure_mode=["hard_bounce", "clean_bounce"],
-            bounce_target=["brokers", "clients"])
-    def test_transactions(self, failure_mode, bounce_target):
+            bounce_target=["brokers", "clients"],
+            check_order=[True, False])
+    def test_transactions(self, failure_mode, bounce_target, check_order):
         security_protocol = 'PLAINTEXT'
         self.kafka.security_protocol = security_protocol
         self.kafka.interbroker_security_protocol = security_protocol
         self.kafka.logs["kafka_data_1"]["collect_default"] = True
         self.kafka.logs["kafka_data_2"]["collect_default"] = True
         self.kafka.logs["kafka_operational_logs_debug"]["collect_default"] = True
+        if check_order is True:
+            # To check ordering, we simply create input and output partitions
+            # with a single topic.
+            # We reduce the number of seed messages to copy to account for the fewer output
+            # partitions, and thus lower parallelism. This helps keep the test
+            # time shorter.
+            self.num_seed_messages = self.num_seed_messages / 3
+            self.num_input_partitions = 1
+            self.num_output_partitions = 1
+
+        self.setup_topics()
         self.kafka.start()
+
         input_messages = self.seed_messages(self.input_topic, self.num_seed_messages)
         concurrently_consumed_messages = self.copy_messages_transactionally(
             failure_mode, bounce_target, input_topic=self.input_topic,
-            output_topic=self.output_topic, num_input_partitions=self.num_input_partitions,
+            output_topic=self.output_topic, num_copiers=self.num_input_partitions,
             num_messages_to_copy=self.num_seed_messages)
         output_messages = self.get_messages_from_topic(self.output_topic, self.num_seed_messages)
 
@@ -263,46 +262,7 @@ class TransactionsTest(Test):
         assert input_message_set == concurrently_consumed_message_set, \
             "Input and concurrently consumed output message sets are not equal. Num input messages: %d. Num concurrently_consumed_messages: %d" %\
             (len(input_message_set), len(concurrently_consumed_message_set))
-
-    @cluster(num_nodes=9)
-    @matrix(failure_mode=["hard_bounce", "clean_bounce"],
-            bounce_target=["brokers", "clients"])
-    def test_transactions_verify_order(self, failure_mode, bounce_target):
-        security_protocol = 'PLAINTEXT'
-        self.kafka.security_protocol = security_protocol
-        self.kafka.interbroker_security_protocol = security_protocol
-        self.kafka.logs["kafka_data_1"]["collect_default"] = True
-        self.kafka.logs["kafka_data_2"]["collect_default"] = True
-        self.kafka.logs["kafka_operational_logs_debug"]["collect_default"] = True
-        self.kafka.start()
-        # We reduce the number of seed to account for the fewer output
-        # partitions, and thus lower parallelism. This helps keep the test
-        # time shorter.
-        num_seed_messages = self.num_seed_messages / 3
-        input_messages = self.seed_messages(self.input_topic_single_part,
-                                            num_seed_messages)
-        concurrently_consumed_messages = self.copy_messages_transactionally(
-            failure_mode, bounce_target, input_topic=self.input_topic_single_part,
-            output_topic=self.output_topic_single_part, num_input_partitions=1,
-            num_messages_to_copy=num_seed_messages)
-        output_messages = self.get_messages_from_topic(self.output_topic_single_part,
-                                                       num_seed_messages)
-
-        concurrently_consumed_message_set = set(concurrently_consumed_messages)
-        output_message_set = set(output_messages)
-        input_message_set = set(input_messages)
-
-        num_dups = abs(len(output_messages) - len(output_message_set))
-        num_dups_in_concurrent_consumer = abs(len(concurrently_consumed_messages)
-                                              - len(concurrently_consumed_message_set))
-        assert num_dups == 0, "Detected %d duplicates in the output stream" % num_dups
-        assert input_message_set == output_message_set, "Input and output message sets are not equal. Num input messages %d. Num output messages %d" %\
-            (len(input_message_set), len(output_message_set))
-
-        assert num_dups_in_concurrent_consumer == 0, "Detected %d dups in concurrently consumed messages" % num_dups_in_concurrent_consumer
-        assert input_message_set == concurrently_consumed_message_set, \
-            "Input and concurrently consumed output message sets are not equal. Num input messages: %d. Num concurrently_consumed_messages: %d" %\
-            (len(input_message_set), len(concurrently_consumed_message_set))
-        assert input_messages == sorted(input_messages), "The seed messages themselves were not in order"
-        assert output_messages == input_messages, "Output messages are not in order"
-        assert concurrently_consumed_messages == output_messages, "Concurrently consumed messages are not in order"
+        if check_order is True:
+            assert input_messages == sorted(input_messages), "The seed messages themselves were not in order"
+            assert output_messages == input_messages, "Output messages are not in order"
+            assert concurrently_consumed_messages == output_messages, "Concurrently consumed messages are not in order"
