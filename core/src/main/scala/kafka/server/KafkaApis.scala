@@ -1932,26 +1932,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       new AlterConfigsResponse(requestThrottleMs, (authorizedResult ++ unauthorizedResult).asJava))
   }
 
-  def handleElectPreferredReplicaLeader(request: RequestChannel.Request): Unit = {
-
-    val electionRequest = request.body[ElectPreferredLeadersRequest]
-    val partitions =
-    if (electionRequest.topicPartitions() == null) {
-      zkUtils.getAllPartitions()
-    } else {
-      electionRequest.topicPartitions().asScala.map(t => new TopicAndPartition(t))
-    }
-    def sendResponseCallback(result: Map[TopicAndPartition, ApiError]): Unit = {
-      sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new ElectPreferredLeadersResponse(requestThrottleMs, result.map(entry => entry._1.asTopicPartition -> entry._2).asJava))
-    }
-    if (!authorize(request.session, Alter, Resource.ClusterResource)) {
-      sendResponseCallback(partitions.map(partition => partition -> new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, null)).toMap)
-    } else {
-      replicaManager.electPreferredLeaders(controller, partitions, sendResponseCallback, electionRequest.timeout)
-    }
-  }
-
   private def configsAuthorizationApiError(session: RequestChannel.Session, resource: RResource): ApiError = {
     val error = resource.`type` match {
       case RResourceType.BROKER => Errors.CLUSTER_AUTHORIZATION_FAILED
@@ -2010,6 +1990,26 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
     sendResponseMaybeThrottle(request, throttleTimeMs => new DescribeLogDirsResponse(throttleTimeMs, logDirInfos.asJava))
+  }
+
+  def handleElectPreferredReplicaLeader(request: RequestChannel.Request): Unit = {
+
+    val electionRequest = request.body[ElectPreferredLeadersRequest]
+    val partitions =
+      if (electionRequest.topicPartitions() == null) {
+        zkUtils.getAllPartitions()
+      } else {
+        electionRequest.topicPartitions().asScala.map(t => new TopicAndPartition(t))
+      }
+    def sendResponseCallback(result: Map[TopicAndPartition, ApiError]): Unit = {
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        new ElectPreferredLeadersResponse(requestThrottleMs, result.map(entry => entry._1.asTopicPartition -> entry._2).asJava))
+    }
+    if (!authorize(request.session, Alter, Resource.ClusterResource)) {
+      sendResponseCallback(partitions.map(partition => partition -> new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, null)).toMap)
+    } else {
+      replicaManager.electPreferredLeaders(controller, partitions, sendResponseCallback, electionRequest.timeout)
+    }
   }
 
   def authorizeClusterAction(request: RequestChannel.Request): Unit = {
