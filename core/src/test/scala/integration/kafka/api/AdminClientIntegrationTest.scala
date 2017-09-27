@@ -44,6 +44,7 @@ import org.junit.Assert._
 
 import scala.util.Random
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 
 /**
  * An integration test of the KafkaAdminClient.
@@ -752,37 +753,54 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     val partition2 = new TopicPartition("elect-preferred-leaders-topic-2", 0)
     TestUtils.createTopic(zkUtils, partition2.topic, Map[Int, Seq[Int]](partition2.partition -> prefer0), servers)
 
-    def getLeader(topicPartition: TopicPartition) =
+    def currentLeader(topicPartition: TopicPartition) =
       client.describeTopics(asList(topicPartition.topic)).values.get(topicPartition.topic).
         get.partitions.get(topicPartition.partition).leader.id
 
-    def changePreferredLeader(newAssignment: Seq[Int]) = {
-      val prior1 = getLeader(partition1)
-      val prior2 = getLeader(partition2)
+    def preferredLeader(topicPartition: TopicPartition) =
+      client.describeTopics(asList(topicPartition.topic)).values.get(topicPartition.topic).
+        get.partitions.get(topicPartition.partition).replicas.get(0).id
 
-      zkUtils.updatePartitionReassignmentData(Map(
-        new TopicAndPartition(partition1) -> newAssignment,
-        new TopicAndPartition(partition2) -> newAssignment))
+    def waitForLeaderToBecome(topicPartition: TopicPartition, leader: Int) =
+      TestUtils.waitUntilTrue(() => currentLeader(topicPartition) == leader, s"Expected leader to become $leader", 10000)
+
+    /** Changes the <i>preferred</i> leader without changing the <i>current</i> leader. */
+    def changePreferredLeader(newAssignment: Seq[Int]) = {
+      var preferred = newAssignment.head
+      val prior1 = currentLeader(partition1)
+      val prior2 = currentLeader(partition2)
+
+      val m = mutable.Map.empty[TopicAndPartition, Seq[Int]];
+
+      if (prior1 != preferred)
+        m += new TopicAndPartition(partition1) -> newAssignment
+      if (prior2 != preferred)
+        m += new TopicAndPartition(partition2) -> newAssignment
+
+      zkUtils.updatePartitionReassignmentData(m)
+      TestUtils.waitUntilTrue(
+        () => preferredLeader(partition1) == preferred && preferredLeader(partition2) == preferred,
+        s"Expected preferred leader to become $preferred, but is ${preferredLeader(partition1)} and ${preferredLeader(partition2)}", 10000)
       // Check the leader hasn't moved
-      assertEquals(prior1, getLeader(partition1))
-      assertEquals(prior1, getLeader(partition2))
+      assertEquals(prior1, currentLeader(partition1))
+      assertEquals(prior2, currentLeader(partition2))
     }
 
     // Check current leaders are 0
-    assertEquals(0, getLeader(partition1))
-    assertEquals(0, getLeader(partition2))
+    assertEquals(0, currentLeader(partition1))
+    assertEquals(0, currentLeader(partition2))
 
     // Noop election
     var electResult = client.electPreferredLeaders(asList(partition1))
     electResult.partitionResult(partition1).get()
-    assertEquals(0, getLeader(partition1))
+    assertEquals(0, currentLeader(partition1))
 
     // Noop election with null partitions
     electResult = client.electPreferredLeaders(null)
     electResult.partitionResult(partition1).get()
-    assertEquals(0, getLeader(partition1))
+    assertEquals(0, currentLeader(partition1))
     electResult.partitionResult(partition2).get()
-    assertEquals(0, getLeader(partition2))
+    assertEquals(0, currentLeader(partition2))
 
     // Now change the preferred leader to 1
     changePreferredLeader(prefer1)
@@ -791,7 +809,8 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     electResult = client.electPreferredLeaders(asList(partition1))
     assertEquals(Set(partition1).asJava, electResult.partitions.get)
     electResult.partitionResult(partition1).get()
-    assertEquals(1, getLeader(partition1))
+    waitForLeaderToBecome(partition1, 1)
+
     // topic 2 unchanged
     try {
       electResult.partitionResult(partition2).get()
@@ -802,16 +821,16 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
         assertTrue(cause.isInstanceOf[IllegalArgumentException])
         assertEquals("Preferred leader election for partition \"elect-preferred-leaders-topic-2-0\" was not attempted",
           cause.getMessage)
-        assertEquals(0, getLeader(partition2))
+        assertEquals(0, currentLeader(partition2))
     }
 
     // meaningful election with null partitions
     electResult = client.electPreferredLeaders(null)
     assertEquals(Set(partition1, partition2).asJava, electResult.partitions.get)
     electResult.partitionResult(partition1).get()
-    assertEquals(1, getLeader(partition1))
+    waitForLeaderToBecome(partition1, 1)
     electResult.partitionResult(partition2).get()
-    assertEquals(1, getLeader(partition2))
+    waitForLeaderToBecome(partition2, 1)
 
     // unknown topic
     val unknownPartition = new TopicPartition("topic-does-not-exist", 0)
@@ -825,8 +844,8 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
         assertTrue(cause.isInstanceOf[UnknownTopicOrPartitionException])
         assertEquals("The partition 'topic-does-not-exist-0' does not exist.",
           cause.getMessage)
-        assertEquals(1, getLeader(partition1))
-        assertEquals(1, getLeader(partition2))
+        assertEquals(1, currentLeader(partition1))
+        assertEquals(1, currentLeader(partition2))
     }
 
     // Now change the preferred leader to 2
@@ -835,8 +854,8 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     // mixed results
     electResult = client.electPreferredLeaders(asList(unknownPartition, partition1))
     assertEquals(Set(unknownPartition, partition1).asJava, electResult.partitions.get)
-    assertEquals(2, getLeader(partition1))
-    assertEquals(1, getLeader(partition2))
+    waitForLeaderToBecome(partition1, 2)
+    assertEquals(1, currentLeader(partition2))
     try {
       electResult.partitionResult(unknownPartition).get()
     } catch {
@@ -851,7 +870,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     electResult = client.electPreferredLeaders(asList(partition2, partition2))
     assertEquals(Set(partition2).asJava, electResult.partitions.get)
     electResult.partitionResult(partition2).get()
-    assertEquals(2, getLeader(partition2))
+    waitForLeaderToBecome(partition2, 2)
 
     // Now change the preferred leader to 1
     changePreferredLeader(prefer1)
@@ -875,7 +894,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
         assertTrue(s"Wrong message ${cause.getMessage}", cause.getMessage.contains(
           "Preferred replica 1 for partition elect-preferred-leaders-topic-1-0 is either not alive or not in the isr."))
     }
-    assertEquals(2, getLeader(partition1))
+    assertEquals(2, currentLeader(partition1))
 
     // preferred leader unavailable with null argument
     electResult = client.electPreferredLeaders(null, shortTimeout)
@@ -903,8 +922,8 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
           "Preferred replica 1 for partition elect-preferred-leaders-topic-2-0 is either not alive or not in the isr."))
     }
 
-    assertEquals(2, getLeader(partition1))
-    assertEquals(2, getLeader(partition2))
+    assertEquals(2, currentLeader(partition1))
+    assertEquals(2, currentLeader(partition2))
 
 
     // TODO authz failure
