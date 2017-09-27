@@ -101,7 +101,7 @@ public interface Records {
      * @param firstOffset The starting offset for returned records. This only impacts some cases. See
      *                    {@link AbstractRecords#downConvert(Iterable, byte, long, Time) for an explanation.
      * @param time The instance of time used to calculate conversion time
-     * @return A Records instance (which may or may not be the same instance)
+     * @return A ConvertedRecords instance which may or may not contain the same instance in its records field.
      */
     ConvertedRecords<? extends Records> downConvert(byte toMagic, long firstOffset, Time time);
 

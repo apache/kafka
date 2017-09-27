@@ -2010,7 +2010,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       throw new ClusterAuthorizationException(s"Request $request is not authorized.")
   }
 
-  private def updateRecordsProcessingStats(request: RequestChannel.Request, tp: TopicPartition, processingStats: RecordsProcessingStats): Unit = {
+  private def updateRecordsProcessingStats(request: RequestChannel.Request, tp: TopicPartition,
+                                           processingStats: RecordsProcessingStats): Unit = {
     val conversionCount = processingStats.conversionCount
     request.header.apiKey match {
       case ApiKeys.PRODUCE =>

@@ -17,8 +17,7 @@
 package org.apache.kafka.common.metrics;
 
 /**
- * A non-measurable value that can be registered as a metric.
- * This is separate from {@link Measurable} to avoid breaking the public API.
+ * A gauge metric is an instantaneous reading of a particular value.
  */
 public interface Gauge<T> extends MetricValueProvider<T> {
 
@@ -27,6 +26,6 @@ public interface Gauge<T> extends MetricValueProvider<T> {
      * @param config The configuration for this metric
      * @param now The POSIX time in milliseconds the measurement is being taken
      */
-    public T value(MetricConfig config, long now);
+    T value(MetricConfig config, long now);
 
 }

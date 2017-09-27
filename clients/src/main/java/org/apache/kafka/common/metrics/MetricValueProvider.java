@@ -25,5 +25,4 @@ package org.apache.kafka.common.metrics;
  * {@link Measurable#measure(MetricConfig, long)}.
  * </p>
  */
-public interface MetricValueProvider<T> {
-}
+public interface MetricValueProvider<T> {}

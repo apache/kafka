@@ -34,6 +34,9 @@ public class RecordsProcessingStats {
         this.conversionTimeNanos = conversionTimeNanos;
     }
 
+    /**
+     * Return uncompressed memory.
+     */
     public long temporaryMemoryBytes() {
         return temporaryMemoryBytes;
     }

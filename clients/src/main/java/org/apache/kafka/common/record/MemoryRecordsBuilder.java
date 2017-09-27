@@ -320,9 +320,9 @@ public class MemoryRecordsBuilder {
             buffer.flip();
             buffer.position(initialPosition);
             builtRecords = MemoryRecords.readableRecords(buffer.slice());
-
-            recordsProcessingStats = new RecordsProcessingStats(builtRecords.sizeInBytes(), numRecords);
         }
+
+        recordsProcessingStats = new RecordsProcessingStats(writtenUncompressed, numRecords);
     }
 
     private void validateProducerState() {

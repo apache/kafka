@@ -28,7 +28,6 @@ import kafka.utils._
 import com.yammer.metrics.core.Gauge
 import org.I0Itec.zkclient.IZkStateListener
 import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.zookeeper.ZooKeeper.States
 import org.apache.zookeeper.Watcher.Event.KeeperState
 
 import scala.collection.mutable.Set
@@ -47,7 +46,7 @@ class KafkaHealthcheck(brokerId: Int,
                        rack: Option[String],
                        interBrokerProtocolVersion: ApiVersion) extends Logging {
 
-  private[server] val sessionExpireListener = new SessionExpireListener(() => zkUtils.zkConnection.getZookeeperState)
+  private[server] val sessionExpireListener = new SessionExpireListener
 
   def startup() {
     zkUtils.subscribeStateChanges(sessionExpireListener)
@@ -75,18 +74,17 @@ class KafkaHealthcheck(brokerId: Int,
       interBrokerProtocolVersion)
   }
 
-  def shutdown(): Unit = {
-    sessionExpireListener.shutdown()
-  }
+  def shutdown(): Unit = sessionExpireListener.shutdown()
 
   /**
    *  When we get a SessionExpired event, it means that we have lost all ephemeral nodes and ZKClient has re-established
    *  a connection for us. We need to re-register this broker in the broker registry. We rely on `handleStateChanged`
    *  to record ZooKeeper connection state metrics.
    */
-  class SessionExpireListener(val state: () => States) extends IZkStateListener with KafkaMetricsGroup {
+  class SessionExpireListener extends IZkStateListener with KafkaMetricsGroup {
 
     private val metricNames = Set[String]()
+
     private[server] val stateToMeterMap = {
       import KeeperState._
       val stateToEventTypeMap = Map(
@@ -103,14 +101,13 @@ class KafkaHealthcheck(brokerId: Int,
         state -> newMeter(name, eventType.toLowerCase(Locale.ROOT), TimeUnit.SECONDS)
       }
     }
+
     private[server] val sessionStateGauge =
-      newGauge("SessionState",
-        new Gauge[String] {
-          override def value: String = {
-            val currentState = state()
-            if (currentState != null) currentState.toString else "DISCONNECTED"
-          }
-        })
+      newGauge("SessionState", new Gauge[String] {
+        override def value: String =
+          Option(zkUtils.zkConnection.getZookeeperState.toString).getOrElse("DISCONNECTED")
+      })
+
     metricNames += "SessionState"
 
     @throws[Exception]
@@ -130,9 +127,8 @@ class KafkaHealthcheck(brokerId: Int,
       fatal("Could not establish session with zookeeper", error)
     }
 
-    def shutdown(): Unit = {
-      metricNames.foreach(removeMetric(_))
-    }
+    def shutdown(): Unit = metricNames.foreach(removeMetric(_))
+
   }
 
 }

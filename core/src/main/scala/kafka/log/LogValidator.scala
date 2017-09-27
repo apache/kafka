@@ -127,7 +127,7 @@ private[kafka] object LogValidator extends Logging {
     }
 
     val newBuffer = ByteBuffer.allocate(sizeInBytesAfterConversion)
-    var builder = MemoryRecords.builder(newBuffer, toMagicValue, CompressionType.NONE, timestampType,
+    val builder = MemoryRecords.builder(newBuffer, toMagicValue, CompressionType.NONE, timestampType,
       offsetCounter.value, now, producerId, producerEpoch, sequence, isTransactional, partitionLeaderEpoch)
 
     for (batch <- records.batches.asScala) {
@@ -321,7 +321,7 @@ private[kafka] object LogValidator extends Logging {
     val estimatedSize = AbstractRecords.estimateSizeInBytes(magic, offsetCounter.value, compressionType,
       validatedRecords.asJava)
     val buffer = ByteBuffer.allocate(estimatedSize)
-    var builder = MemoryRecords.builder(buffer, magic, compressionType, timestampType, offsetCounter.value,
+    val builder = MemoryRecords.builder(buffer, magic, compressionType, timestampType, offsetCounter.value,
       logAppendTime, producerId, producerEpoch, baseSequence, isTransactional, partitionLeaderEpoch)
 
     validatedRecords.foreach { record =>

@@ -226,11 +226,10 @@ public class MemoryRecordsBuilderTest {
         }
 
         MemoryRecords built = builder.build();
-        int compressedSize = 0;
         if (compressionType == CompressionType.NONE) {
             assertEquals(1.0, builder.compressionRatio(), 0.00001);
         } else {
-            compressedSize = built.sizeInBytes() - Records.LOG_OVERHEAD - LegacyRecord.RECORD_OVERHEAD_V0;
+            int compressedSize = built.sizeInBytes() - Records.LOG_OVERHEAD - LegacyRecord.RECORD_OVERHEAD_V0;
             double computedCompressionRate = (double) compressedSize / uncompressedSize;
             assertEquals(computedCompressionRate, builder.compressionRatio(), 0.00001);
         }

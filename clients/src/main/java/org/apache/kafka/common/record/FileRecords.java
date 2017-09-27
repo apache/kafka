@@ -242,12 +242,12 @@ public class FileRecords extends AbstractRecords implements Closeable {
         List<? extends RecordBatch> batches = Utils.toList(batches().iterator());
         if (batches.isEmpty()) {
             // This indicates that the message is too large, which means that the buffer is not large
-            // enough to hold a full record batch. We just return all the bytes in the file message set.
-            // Even though the message set does not have the right format version, we expect old clients
-            // to raise an error to the user after reading the message size and seeing that there
-            // are not enough available bytes in the response to read the full message. Note that this is
+            // enough to hold a full record batch. We just return all the bytes in this instance.
+            // Even though the record batch does not have the right format version, we expect old clients
+            // to raise an error to the user after reading the record batch size and seeing that there
+            // are not enough available bytes in the response to read it fully. Note that this is
             // only possible prior to KIP-74, after which the broker was changed to always return at least
-            // one full message, even if it requires exceeding the max fetch size requested by the client.
+            // one full record batch, even if it requires exceeding the max fetch size requested by the client.
             return new ConvertedRecords<>(this, 0L, 0L, 0L);
         } else {
             return downConvert(batches, toMagic, firstOffset, time);

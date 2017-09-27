@@ -27,6 +27,6 @@ public interface Measurable extends MetricValueProvider<Double> {
      * @param now The POSIX time in milliseconds the measurement is being taken
      * @return The measured value
      */
-    public double measure(MetricConfig config, long now);
+    double measure(MetricConfig config, long now);
 
 }
