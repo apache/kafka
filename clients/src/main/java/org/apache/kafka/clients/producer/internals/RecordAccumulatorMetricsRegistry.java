@@ -18,12 +18,19 @@ package org.apache.kafka.clients.producer.internals;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
+import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 
-public class RecordAccumulatorMetricsRegistry extends MetricsRegistry {
+public class RecordAccumulatorMetricsRegistry {
+
+    protected final Metrics metrics;
+    protected final Set<String> tags;
+    protected final List<MetricNameTemplate> allTemplates;
 
     final static String METRIC_GROUP_NAME = "producer-metrics";
 
@@ -36,23 +43,39 @@ public class RecordAccumulatorMetricsRegistry extends MetricsRegistry {
     public final BufferPoolMetricsRegistry bufferPoolMetrics;
 
     public RecordAccumulatorMetricsRegistry(Metrics metrics) {
-        super(metrics);
+        this.metrics = metrics;
+        this.tags = this.metrics.config().tags().keySet();
+        this.allTemplates = new ArrayList<MetricNameTemplate>();
 
         this.bufferPoolMetrics = new BufferPoolMetricsRegistry(metrics);
         
-        this.waitingThreads = createMetricName("waiting-threads", METRIC_GROUP_NAME, "The number of user threads blocked waiting for buffer memory to enqueue their records", this.tags);
-        this.bufferTotalBytes = createMetricName("buffer-total-bytes", METRIC_GROUP_NAME, "The maximum amount of buffer memory the client can use (whether or not it is currently used).", tags);
-        this.bufferAvailableBytes = createMetricName("buffer-available-bytes", METRIC_GROUP_NAME, "The total amount of buffer memory that is not being used (either unallocated or in the free list).", tags);
-        this.bufferExhaustedRate = createMetricName("buffer-exhausted-rate", METRIC_GROUP_NAME, "The average per-second number of record sends that are dropped due to buffer exhaustion", tags);
-        this.bufferExhaustedTotal = createMetricName("buffer-exhausted-total", METRIC_GROUP_NAME, "The total number of record sends that are dropped due to buffer exhaustion", tags);
-    }
+        this.waitingThreads = createMetricName("waiting-threads", "The number of user threads blocked waiting for buffer memory to enqueue their records");
+        this.bufferTotalBytes = createMetricName("buffer-total-bytes", "The maximum amount of buffer memory the client can use (whether or not it is currently used).");
+        this.bufferAvailableBytes = createMetricName("buffer-available-bytes", "The total amount of buffer memory that is not being used (either unallocated or in the free list).");
+        this.bufferExhaustedRate = createMetricName("buffer-exhausted-rate", "The average per-second number of record sends that are dropped due to buffer exhaustion");
+        this.bufferExhaustedTotal = createMetricName("buffer-exhausted-total", "The total number of record sends that are dropped due to buffer exhaustion");
 
+    }
     
     public List<MetricNameTemplate> allTemplates() {
         List<MetricNameTemplate> l = new ArrayList<>();
         l.addAll(this.bufferPoolMetrics.allTemplates());
         l.addAll(this.allTemplates);
         return l;
+    }
+
+    protected MetricName createMetricName(String name, String description) {
+        MetricNameTemplate template = new MetricNameTemplate(name, METRIC_GROUP_NAME, description, this.tags);
+        this.allTemplates.add(template);
+        return this.metrics.metricInstance(template);
+    }
+
+    public Sensor sensor(String name) {
+        return this.metrics.sensor(name);
+    }
+
+    public void addMetric(MetricName m, Measurable measurable) {
+        this.metrics.addMetric(m, measurable);
     }
 
 }

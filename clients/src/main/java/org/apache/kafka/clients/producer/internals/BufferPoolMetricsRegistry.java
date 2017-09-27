@@ -16,25 +16,54 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.metrics.Metrics;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 
-public class BufferPoolMetricsRegistry extends MetricsRegistry {
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.MetricNameTemplate;
+import org.apache.kafka.common.metrics.Measurable;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
+
+public class BufferPoolMetricsRegistry {
+
+    protected final Metrics metrics;
+    protected final Set<String> tags;
+    protected final List<MetricNameTemplate> allTemplates;
 
     private final static String METRIC_GROUP_NAME = "producer-metrics";
+    
     public final MetricName bufferPoolWaitRatio;
     public final MetricName bufferPoolWaitTimeTotal;
 
     public BufferPoolMetricsRegistry(Metrics metrics) {
-        super(metrics);
+        this.metrics = metrics;
+        this.tags = this.metrics.config().tags().keySet();
+        this.allTemplates = new ArrayList<MetricNameTemplate>();
 
         this.bufferPoolWaitRatio = createMetricName("bufferpool-wait-ratio",
-                METRIC_GROUP_NAME,
-                "The fraction of time an appender waits for space allocation.", tags);
+                "The fraction of time an appender waits for space allocation.");
         this.bufferPoolWaitTimeTotal = createMetricName("bufferpool-wait-time-total",
-                METRIC_GROUP_NAME,
-                "The total time an appender waits for space allocation.", tags);
+                "The total time an appender waits for space allocation.");
+    }
 
+    protected MetricName createMetricName(String name, String description) {
+        MetricNameTemplate template = new MetricNameTemplate(name, METRIC_GROUP_NAME, description, this.tags);
+        this.allTemplates.add(template);
+        return this.metrics.metricInstance(template);
+    }
+
+    public List<MetricNameTemplate> allTemplates() {
+        return allTemplates;
+    }
+
+    public Sensor sensor(String name) {
+        return this.metrics.sensor(name);
+    }
+
+    public void addMetric(MetricName m, Measurable measurable) {
+        this.metrics.addMetric(m, measurable);
     }
 
 }
