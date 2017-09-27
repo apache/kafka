@@ -17,6 +17,7 @@
 package kafka.api
 
 import java.util.Collections
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{ExecutionException, TimeUnit}
 
 import kafka.controller.{OfflineReplica, PartitionAndReplica}
@@ -30,6 +31,8 @@ import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderForPartit
 import org.junit.{Before, Test}
 import org.junit.Assert.assertTrue
 
+import scala.collection.JavaConverters._
+
 /**
   * Test whether clients can producer and consume when there is log directory failure
   */
@@ -42,7 +45,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
   val serverCount: Int = 2
   private val topic = "topic"
 
-  this.logDirCount = 2
+  this.logDirCount = 3
   this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
   this.producerConfig.setProperty(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, "100")
   this.serverConfig.setProperty(KafkaConfig.ReplicaHighWatermarkCheckpointIntervalMsProp, "60000")
@@ -51,27 +54,81 @@ class LogDirFailureTest extends IntegrationTestHarness {
   @Before
   override def setUp() {
     super.setUp()
-    TestUtils.createTopic(zkUtils, topic, 1, 2, servers = servers)
+    TestUtils.createTopic(zkUtils, topic, 12, serverCount, servers = servers)
   }
 
   @Test
   def testIOExceptionDuringLogRoll() {
-    testProduceAfterLogDirFailure(Roll)
+    testProduceAfterLogDirFailureOnLeader(Roll)
   }
 
   @Test
   def testIOExceptionDuringCheckpoint() {
-    testProduceAfterLogDirFailure(Checkpoint)
+    testProduceAfterLogDirFailureOnLeader(Checkpoint)
   }
 
-  def testProduceAfterLogDirFailure(failureType: LogDirFailureType) {
+  @Test
+  def testReplicaFetcherThreadAfterLogDirFailureOnFollower() {
+    val consumer = consumers.head
+    subscribeAndWaitForAssignment(topic, consumer)
+    val producer = producers.head
+    val partition = new TopicPartition(topic, 0)
+
+    val partitionInfo = producer.partitionsFor(topic).asScala.find(_.partition() == 0).get
+    val leaderServerId = partitionInfo.leader().id()
+    val followerId = partitionInfo.replicas().map(_.id()).find(_ != leaderServerId).get
+    val followerServer = servers.find(_.config.brokerId == followerId).get
+
+
+    val running = new AtomicBoolean(true)
+    @volatile var numMessages = 0
+    val thread = new Thread() {
+      override def run(): Unit = {
+        val producer = TestUtils.createNewProducer(
+          TestUtils.getBrokerListStrFromServers(servers, protocol = securityProtocol),
+          securityProtocol = securityProtocol,
+          trustStoreFile = trustStoreFile,
+          retries = 5,
+          requestTimeoutMs = 2000,
+          acks = 1
+        )
+
+        while (running.get()) {
+          producer.send(new ProducerRecord(topic, s"xxxxxxxxxxxxxxxxxxxx-$numMessages".getBytes))
+          numMessages += 1
+        }
+        producer.close()
+      }
+    }
+
+    thread.start()
+    // Wait for some messages to be produced
+    Thread.sleep(1000)
+
+    // Make log directory of the partition on the follower broker offline
+    val replica = followerServer.replicaManager.getReplicaOrException(partition)
+    val logDir = replica.log.get.dir.getParentFile
+    followerServer.replicaManager.handleLogDirFailure(logDir.getAbsolutePath)
+
+    try {
+      followerServer.replicaManager.replicaFetcherManager.fetcherThreadMap.values.foreach { thread =>
+        assertTrue("ReplicaFetcherThread should still be working if its partition count > 0", thread.shutdownLatch.getCount > 0)
+      }
+    } finally {
+      running.set(false)
+      thread.join()
+    }
+
+  }
+
+  def testProduceAfterLogDirFailureOnLeader(failureType: LogDirFailureType) {
     val consumer = consumers.head
     subscribeAndWaitForAssignment(topic, consumer)
     val producer = producers.head
     val partition = new TopicPartition(topic, 0)
     val record = new ProducerRecord(topic, 0, s"key".getBytes, s"value".getBytes)
 
-    val leaderServerId = producer.partitionsFor(topic).get(0).leader().id()
+    val leaderServerId = producer.partitionsFor(topic).asScala.find(_.partition() == 0).get.leader().id()
     val leaderServer = servers.find(_.config.brokerId == leaderServerId).get
 
     // The first send() should succeed
@@ -81,8 +138,8 @@ class LogDirFailureTest extends IntegrationTestHarness {
     }, "Expected the first message", 3000L)
 
     // Make log directory of the partition on the leader broker inaccessible by replacing it with a file
-    val replica = leaderServer.replicaManager.getReplica(partition)
-    val logDir = replica.get.log.get.dir.getParentFile
+    val replica = leaderServer.replicaManager.getReplicaOrException(partition)
+    val logDir = replica.log.get.dir.getParentFile
     CoreUtils.swallow(Utils.delete(logDir))
     logDir.createNewFile()
     assertTrue(logDir.isFile)
@@ -99,7 +156,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
     }
 
     // Wait for ReplicaHighWatermarkCheckpoint to happen so that the log directory of the topic will be offline
-    TestUtils.waitUntilTrue(() => !leaderServer.logManager.liveLogDirs.contains(logDir), "Expected log directory offline", 3000L)
+    TestUtils.waitUntilTrue(() => !leaderServer.logManager.isLogDirOnline(logDir.getAbsolutePath), "Expected log directory offline", 3000L)
     assertTrue(leaderServer.replicaManager.getReplica(partition).isEmpty)
 
     // The second send() should fail due to either KafkaStorageException or NotLeaderForPartitionException
@@ -120,7 +177,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
     TestUtils.waitUntilTrue(() => {
       // ProduceResponse may contain KafkaStorageException and trigger metadata update
       producer.send(record)
-      producer.partitionsFor(topic).get(0).leader().id() != leaderServerId
+      producer.partitionsFor(topic).asScala.find(_.partition() == 0).get.leader().id() != leaderServerId
     }, "Expected new leader for the partition", 6000L)
 
     // Consumer should receive some messages
