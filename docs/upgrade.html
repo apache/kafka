@@ -76,6 +76,8 @@
         <code>org.apache.kafka.common.Metric#metricValue()</code> can be used to retrieve numeric and non-numeric metric values.</li>
     <li>Mx4j will only be enabled if the system property <code>kafka_mx4jenable</code> is set to <code>true</code>. Due to a logic
         inversion bug, it was previously enabled by default and disabled if <code>kafka_mx4jenable</code> was set to <code>true</code>.</li>
+    <li>The client package <code>org.apache.kafka.common.security.auth</code> has been made public and added to the javadocs.
+        Internal classes which had previously been located in this package have been moved elsewhere.</li>
 </ul>
 
 <h5><a id="upgrade_100_new_protocols" href="#upgrade_100_new_protocols">New Protocol Versions</a></h5>
