@@ -16,145 +16,194 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 
 public class FetcherMetricsRegistry {
 
-    public MetricNameTemplate fetchSizeAvg;
-    public MetricNameTemplate fetchSizeMax;
-    public MetricNameTemplate bytesConsumedRate;
-    public MetricNameTemplate bytesConsumedTotal;
-    public MetricNameTemplate recordsPerRequestAvg;
-    public MetricNameTemplate recordsConsumedRate;
-    public MetricNameTemplate recordsConsumedTotal;
-    public MetricNameTemplate fetchLatencyAvg;
-    public MetricNameTemplate fetchLatencyMax;
-    public MetricNameTemplate fetchRequestRate;
-    public MetricNameTemplate fetchRequestTotal;
-    public MetricNameTemplate recordsLagMax;
-    public MetricNameTemplate fetchThrottleTimeAvg;
-    public MetricNameTemplate fetchThrottleTimeMax;
-    public MetricNameTemplate topicFetchSizeAvg;
-    public MetricNameTemplate topicFetchSizeMax;
-    public MetricNameTemplate topicBytesConsumedRate;
-    public MetricNameTemplate topicBytesConsumedTotal;
-    public MetricNameTemplate topicRecordsPerRequestAvg;
-    public MetricNameTemplate topicRecordsConsumedRate;
-    public MetricNameTemplate topicRecordsConsumedTotal;
-    public MetricNameTemplate partitionRecordsLag;
-    public MetricNameTemplate partitionRecordsLagMax;
-    public MetricNameTemplate partitionRecordsLagAvg;
+    final static String METRIC_GROUP_NAME = "consumer-fetch-manager-metrics";
+    
+    private final List<MetricNameTemplate> allTemplates;
 
-    public FetcherMetricsRegistry() {
-        this(new HashSet<String>(), "");
-    }
+    public final MetricName fetchSizeAvg;
+    public final MetricName fetchSizeMax;
+    public final MetricName bytesConsumedRate;
+    public final MetricName bytesConsumedTotal;
+    public final MetricName recordsPerRequestAvg;
+    public final MetricName recordsConsumedRate;
+    public final MetricName recordsConsumedTotal;
+    public final MetricName fetchLatencyAvg;
+    public final MetricName fetchLatencyMax;
+    public final MetricName fetchRequestRate;
+    public final MetricName fetchRequestTotal;
+    public final MetricName recordsLagMax;
+    public final MetricName fetchThrottleTimeAvg;
+    public final MetricName fetchThrottleTimeMax;
 
-    public FetcherMetricsRegistry(String metricGrpPrefix) {
-        this(new HashSet<String>(), metricGrpPrefix);
-    }
+    private MetricNameTemplate topicFetchSizeAvg;
+    private MetricNameTemplate topicFetchSizeMax;
+    private MetricNameTemplate topicBytesConsumedRate;
+    private MetricNameTemplate topicBytesConsumedTotal;
+    private MetricNameTemplate topicRecordsPerRequestAvg;
+    private MetricNameTemplate topicRecordsConsumedRate;
+    private MetricNameTemplate topicRecordsConsumedTotal;
+    private MetricNameTemplate partitionRecordsLag;
+    private MetricNameTemplate partitionRecordsLagMax;
+    private MetricNameTemplate partitionRecordsLagAvg;
 
-    public FetcherMetricsRegistry(Set<String> tags, String metricGrpPrefix) {
-        
+    private Metrics metrics;
+    private Set<String> tags;
+    private HashSet<String> topicTags;
+
+    public FetcherMetricsRegistry(Metrics metrics) {
+        this.metrics = metrics;
+        this.tags = this.metrics.config().tags().keySet();
+        this.allTemplates = new ArrayList<MetricNameTemplate>();
+
         /***** Client level *****/
-        String groupName = metricGrpPrefix + "-fetch-manager-metrics";
-                
-        this.fetchSizeAvg = new MetricNameTemplate("fetch-size-avg", groupName, 
-                "The average number of bytes fetched per request", tags);
-
-        this.fetchSizeMax = new MetricNameTemplate("fetch-size-max", groupName, 
-                "The maximum number of bytes fetched per request", tags);
-        this.bytesConsumedRate = new MetricNameTemplate("bytes-consumed-rate", groupName, 
-                "The average number of bytes consumed per second", tags);
-        this.bytesConsumedTotal = new MetricNameTemplate("bytes-consumed-total", groupName,
-                "The total number of bytes consumed", tags);
-
-        this.recordsPerRequestAvg = new MetricNameTemplate("records-per-request-avg", groupName, 
-                "The average number of records in each request", tags);
-        this.recordsConsumedRate = new MetricNameTemplate("records-consumed-rate", groupName, 
-                "The average number of records consumed per second", tags);
-        this.recordsConsumedTotal = new MetricNameTemplate("records-consumed-total", groupName,
-                "The total number of records consumed", tags);
-
-        this.fetchLatencyAvg = new MetricNameTemplate("fetch-latency-avg", groupName, 
-                "The average time taken for a fetch request.", tags);
-        this.fetchLatencyMax = new MetricNameTemplate("fetch-latency-max", groupName, 
-                "The max time taken for any fetch request.", tags);
-        this.fetchRequestRate = new MetricNameTemplate("fetch-rate", groupName, 
-                "The number of fetch requests per second.", tags);
-        this.fetchRequestTotal = new MetricNameTemplate("fetch-total", groupName,
-                "The total number of fetch requests.", tags);
-
-        this.recordsLagMax = new MetricNameTemplate("records-lag-max", groupName, 
-                "The maximum lag in terms of number of records for any partition in this window", tags);
-
-        this.fetchThrottleTimeAvg = new MetricNameTemplate("fetch-throttle-time-avg", groupName, 
-                "The average throttle time in ms", tags);
-        this.fetchThrottleTimeMax = new MetricNameTemplate("fetch-throttle-time-max", groupName, 
-                "The maximum throttle time in ms", tags);
+        this.fetchSizeAvg = createMetricName("fetch-size-avg",
+                "The average number of bytes fetched per request");
+        this.fetchSizeMax = createMetricName("fetch-size-max",
+                "The maximum number of bytes fetched per request");
+        this.bytesConsumedRate = createMetricName("bytes-consumed-rate",
+                "The average number of bytes consumed per second");
+        this.bytesConsumedTotal = createMetricName("bytes-consumed-total",
+                "The total number of bytes consumed");
+        this.recordsPerRequestAvg = createMetricName("records-per-request-avg",
+                "The average number of records in each request");
+        this.recordsConsumedRate = createMetricName("records-consumed-rate",
+                "The average number of records consumed per second");
+        this.recordsConsumedTotal = createMetricName("records-consumed-total",
+                "The total number of records consumed");
+        this.fetchLatencyAvg = createMetricName("fetch-latency-avg",
+                "The average time taken for a fetch request.");
+        this.fetchLatencyMax = createMetricName("fetch-latency-max",
+                "The max time taken for any fetch request.");
+        this.fetchRequestRate = createMetricName("fetch-rate",
+                "The number of fetch requests per second.");
+        this.fetchRequestTotal = createMetricName("fetch-total",
+                "The total number of fetch requests.");
+        this.recordsLagMax = createMetricName("records-lag-max",
+                "The maximum lag in terms of number of records for any partition in this window");
+        this.fetchThrottleTimeAvg = createMetricName("fetch-throttle-time-avg", 
+                "The average throttle time in ms");
+        this.fetchThrottleTimeMax = createMetricName("fetch-throttle-time-max", 
+                "The maximum throttle time in ms");
 
         /***** Topic level *****/
-        Set<String> topicTags = new HashSet<>(tags);
-        topicTags.add("topic");
+        this.topicTags = new HashSet<>(tags);
+        this.topicTags.add("topic");
 
-        this.topicFetchSizeAvg = new MetricNameTemplate("fetch-size-avg", groupName, 
-                "The average number of bytes fetched per request for a topic", topicTags);
-        this.topicFetchSizeMax = new MetricNameTemplate("fetch-size-max", groupName, 
-                "The maximum number of bytes fetched per request for a topic", topicTags);
-        this.topicBytesConsumedRate = new MetricNameTemplate("bytes-consumed-rate", groupName, 
-                "The average number of bytes consumed per second for a topic", topicTags);
-        this.topicBytesConsumedTotal = new MetricNameTemplate("bytes-consumed-total", groupName,
-                "The total number of bytes consumed for a topic", topicTags);
-
-        this.topicRecordsPerRequestAvg = new MetricNameTemplate("records-per-request-avg", groupName, 
-                "The average number of records in each request for a topic", topicTags);
-        this.topicRecordsConsumedRate = new MetricNameTemplate("records-consumed-rate", groupName, 
-                "The average number of records consumed per second for a topic", topicTags);
-        this.topicRecordsConsumedTotal = new MetricNameTemplate("records-consumed-total", groupName,
-                "The total number of records consumed for a topic", topicTags);
+        // We can't create the MetricName up front for these, because we don't know the topic name yet.
+        this.topicFetchSizeAvg = createTopicTemplate("fetch-size-avg",
+                "The average number of bytes fetched per request for a topic");
+        this.topicFetchSizeMax = createTopicTemplate("fetch-size-max",
+                "The maximum number of bytes fetched per request for a topic");
+        this.topicBytesConsumedRate = createTopicTemplate("bytes-consumed-rate",
+                "The average number of bytes consumed per second for a topic");
+        this.topicBytesConsumedTotal = createTopicTemplate("bytes-consumed-total",
+                "The total number of bytes consumed for a topic");
+        this.topicRecordsPerRequestAvg = createTopicTemplate("records-per-request-avg",
+                "The average number of records in each request for a topic");
+        this.topicRecordsConsumedRate = createTopicTemplate("records-consumed-rate",
+                "The average number of records consumed per second for a topic");
+        this.topicRecordsConsumedTotal = createTopicTemplate("records-consumed-total",
+                "The total number of records consumed for a topic");
         
         /***** Partition level *****/
-        this.partitionRecordsLag = new MetricNameTemplate("{topic}-{partition}.records-lag", groupName, 
-                "The latest lag of the partition", tags);
-        this.partitionRecordsLagMax = new MetricNameTemplate("{topic}-{partition}.records-lag-max", groupName, 
-                "The max lag of the partition", tags);
-        this.partitionRecordsLagAvg = new MetricNameTemplate("{topic}-{partition}.records-lag-avg", groupName, 
-                "The average lag of the partition", tags);
+        // We can't create the MetricName up front for these, because we don't know the topic and partition name.
+        this.partitionRecordsLag = createTemplate("{topic}-{partition}.records-lag", "The latest lag of the partition", 
+                tags);
+        this.partitionRecordsLagMax = createTemplate("{topic}-{partition}.records-lag-max", "The max lag of the partition", 
+                tags);
+        this.partitionRecordsLagAvg = createTemplate("{topic}-{partition}.records-lag-avg", "The average lag of the partition", 
+                tags);
         
-    
     }
     
-    public List<MetricNameTemplate> getAllTemplates() {
-        return Arrays.asList(
-            fetchSizeAvg,
-            fetchSizeMax,
-            bytesConsumedRate,
-            bytesConsumedTotal,
-            recordsPerRequestAvg,
-            recordsConsumedRate,
-            recordsConsumedTotal,
-            fetchLatencyAvg,
-            fetchLatencyMax,
-            fetchRequestRate,
-            fetchRequestTotal,
-            recordsLagMax,
-            fetchThrottleTimeAvg,
-            fetchThrottleTimeMax,
-            topicFetchSizeAvg,
-            topicFetchSizeMax,
-            topicBytesConsumedRate,
-            topicBytesConsumedTotal,
-            topicRecordsPerRequestAvg,
-            topicRecordsConsumedRate,
-            topicRecordsConsumedTotal,
-            partitionRecordsLag,
-            partitionRecordsLagAvg,
-            partitionRecordsLagMax
-        );
+    public MetricName getTopicFetchSizeAvg(Map<String, String> metricTags) {
+        return metrics.metricInstance(this.topicFetchSizeAvg, metricTags);
+    }
+
+    public MetricName getTopicFetchSizeMax(Map<String, String> metricTags) {
+        return metrics.metricInstance(this.topicFetchSizeMax, metricTags);
+    }
+
+    public MetricName getTopicBytesConsumedRate(Map<String, String> metricTags) {
+        return metrics.metricInstance(this.topicBytesConsumedRate, metricTags);
+    }
+
+    public MetricName getTopicBytesConsumedTotal(Map<String, String> metricTags) {
+        return metrics.metricInstance(this.topicBytesConsumedTotal, metricTags);
+    }
+
+    public MetricName getTopicRecordsPerRequestAvg(Map<String, String> metricTags) {
+        return metrics.metricInstance(this.topicRecordsPerRequestAvg, metricTags);
+    }
+
+    public MetricName getTopicRecordsConsumedRate(Map<String, String> metricTags) {
+        return metrics.metricInstance(this.topicRecordsConsumedRate, metricTags);
+    }
+
+    public MetricName getTopicRecordsConsumedTotal(Map<String, String> metricTags) {
+        return metrics.metricInstance(this.topicRecordsConsumedTotal, metricTags);
+    }
+
+    public MetricName getPartitionRecordsLag(String partitionLagMetricName) {
+        return metrics.metricName(partitionLagMetricName,
+                partitionRecordsLag.group(),
+                partitionRecordsLag.description());
+    }
+
+    public MetricName getPartitionRecordsLagMax(String partitionLagMetricName) {
+        return metrics.metricName(partitionLagMetricName + "-max",
+                partitionRecordsLagMax.group(),
+                partitionRecordsLagMax.description());
+    }
+
+    public MetricName getPartitionRecordsLagAvg(String partitionLagMetricName) {
+        return metrics.metricName(partitionLagMetricName + "-avg",
+                partitionRecordsLagAvg.group(),
+                partitionRecordsLagAvg.description());
+    }
+
+    public List<MetricNameTemplate> allTemplates() {
+        return allTemplates;
+    }
+    
+    public Sensor sensor(String name) {
+        return this.metrics.sensor(name);
+    }
+
+    public Sensor getSensor(String name) {
+        return this.metrics.getSensor(name);
+    }
+
+    public void removeSensor(String name) {
+        this.metrics.removeSensor(name);
+    }
+
+    private MetricName createMetricName(String name, String description) {
+        return this.metrics.metricInstance(createTemplate(name, description, this.tags));
+    }
+
+    private MetricNameTemplate createTopicTemplate(String name, String description) {
+        return createTemplate(name, description, this.topicTags);
+    }
+
+    
+    private MetricNameTemplate createTemplate(String name, String description, Set<String> tags) {
+        MetricNameTemplate template = new MetricNameTemplate(name, METRIC_GROUP_NAME, description, tags);
+        this.allTemplates.add(template);
+        return template;
     }
 
 }

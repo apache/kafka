@@ -1619,7 +1619,7 @@ public class KafkaConsumerTest {
         ConsumerInterceptors<String, String> interceptors = null;
 
         Metrics metrics = new Metrics();
-        ConsumerMetrics metricsRegistry = new ConsumerMetrics(metricGroupPrefix);
+        ConsumerMetrics metricsRegistry = new ConsumerMetrics(metrics);
 
         SubscriptionState subscriptions = new SubscriptionState(autoResetStrategy);
         LogContext loggerFactory = new LogContext();
@@ -1658,7 +1658,6 @@ public class KafkaConsumerTest {
                 valueDeserializer,
                 metadata,
                 subscriptions,
-                metrics,
                 metricsRegistry.fetcherMetrics,
                 time,
                 retryBackoffMs,
