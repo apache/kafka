@@ -111,9 +111,9 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
             final RecordContext current = context.recordContext();
             context.setRecordContext(entry.recordContext());
             try {
-                V previous = sendOldValues ? fetchPrevious(key, windowedKey.window().start()) : null;
+                V oldValue = sendOldValues ? fetchPrevious(key, windowedKey.window().start()) : null;
                 flushListener.apply(windowedKey,
-                                    serdes.valueFrom(entry.newValue()), previous);
+                                    serdes.valueFrom(entry.newValue()), oldValue);
             } finally {
                 context.setRecordContext(current);
             }
