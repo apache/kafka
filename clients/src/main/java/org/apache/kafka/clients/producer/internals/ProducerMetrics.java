@@ -37,7 +37,7 @@ public class ProducerMetrics {
         this.recordAccumulatorMetrics = new RecordAccumulatorMetricsRegistry(this.metrics);
     }
 
-    private List<MetricNameTemplate> getAllTemplates() {
+    private List<MetricNameTemplate> allTemplates() {
         List<MetricNameTemplate> l = new ArrayList<>();
         l.addAll(this.recordAccumulatorMetrics.allTemplates());
         l.addAll(this.senderMetrics.allTemplates());
@@ -50,7 +50,7 @@ public class ProducerMetrics {
         Metrics metrics = new Metrics(metricConfig);
 
         ProducerMetrics metricsRegistry = new ProducerMetrics(metrics);
-        System.out.println(Metrics.toHtmlTable("kafka.producer", metricsRegistry.getAllTemplates()));
+        System.out.println(Metrics.toHtmlTable("kafka.producer", metricsRegistry.allTemplates()));
     }
 
 }
