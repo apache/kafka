@@ -74,7 +74,7 @@ public class MockConnectMetrics extends ConnectMetrics {
      * @return the current value of the metric
      */
     public double currentMetricValue(MetricGroup metricGroup, String name) {
-        MetricName metricName = metricGroup.metricName(name, "desc");
+        MetricName metricName = metricGroup.metricName(name);
         for (MetricsReporter reporter : metrics().reporters()) {
             if (reporter instanceof MockMetricsReporter) {
                 return ((MockMetricsReporter) reporter).currentMetricValue(metricName);
@@ -92,7 +92,7 @@ public class MockConnectMetrics extends ConnectMetrics {
      * @return true if the metric is still register, or false if it has been removed
      */
     public boolean metricExists(MetricGroup metricGroup, String name) {
-        MetricName metricName = metricGroup.metricName(name, "desc");
+        MetricName metricName = metricGroup.metricName(name);
         KafkaMetric metric = metricGroup.metrics().metric(metricName);
         return metric != null;
     }
