@@ -1875,4 +1875,11 @@ public class KafkaAdminClient extends AdminClient {
         return new CreatePartitionsResult(new HashMap<String, KafkaFuture<Void>>(futures));
     }
 
+    public DeleteRecordsResult deleteRecords(Map<TopicPartition, Long> partitionsAndOffsets,
+                                             final DeleteRecordsOptions options) {
+
+        // TODO
+        return null;
+    }
+
 }
