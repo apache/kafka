@@ -17,7 +17,7 @@
 package org.apache.kafka.clients.producer.internals;
 
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -70,12 +70,12 @@ public class SenderMetricsRegistry {
     
     private final Metrics metrics;
     private final Set<String> tags;
-    private final HashSet<String> topicTags;
+    private final LinkedHashSet<String> topicTags;
 
     public SenderMetricsRegistry(Metrics metrics) {
         this.metrics = metrics;
         this.tags = this.metrics.config().tags().keySet();
-        this.allTemplates = new ArrayList<MetricNameTemplate>();
+        this.allTemplates = new ArrayList<>();
         
         /***** Client level *****/
         
@@ -126,7 +126,7 @@ public class SenderMetricsRegistry {
                 "The maximum time in ms a request was throttled by a broker");
 
         /***** Topic level *****/
-        this.topicTags = new HashSet<String>(tags);
+        this.topicTags = new LinkedHashSet<>(tags);
         this.topicTags.add("topic");
 
         // We can't create the MetricName up front for these, because we don't know the topic name yet.

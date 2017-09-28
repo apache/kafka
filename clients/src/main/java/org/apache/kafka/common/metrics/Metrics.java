@@ -237,7 +237,7 @@ public class Metrics implements Closeable {
     
         try (Metrics metrics = new Metrics()) {
             for (MetricNameTemplate template : allMetrics) {
-                Map<String, String> tags = new TreeMap<String, String>();
+                Map<String, String> tags = new LinkedHashMap<>();
                 for (String s : template.tags()) {
                     tags.put(s, "{" + s + "}");
                 }
