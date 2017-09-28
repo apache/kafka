@@ -17,10 +17,12 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 
 import java.util.Collection;
@@ -46,6 +48,8 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * @param props The configuration.
      * @return The new KafkaAdminClient.
+     * @throws ConfigException
+     * @throws KafkaException
      */
     public static AdminClient create(Properties props) {
         return KafkaAdminClient.createInternal(new AdminClientConfig(props), null);
@@ -56,6 +60,8 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * @param conf The configuration.
      * @return The new KafkaAdminClient.
+     * @throws ConfigException
+     * @throws KafkaException
      */
     public static AdminClient create(Map<String, Object> conf) {
         return KafkaAdminClient.createInternal(new AdminClientConfig(conf), null);
@@ -109,6 +115,31 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * This operation is supported by brokers with version 0.10.1.0 or higher. The validateOnly option is supported
      * from version 0.10.2.0.
+     *
+     *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link CreatePartitionsResult#values() values()} method of the  returned {@code CreatePartitionsResult}</p>
+     * <ul>
+     *     <li>{@link org.apache.kafka.common.errors.InvalidRequestException}
+     *     if duplicate topics were present in the request</li>
+     *     <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
+     *     if cluster authorization failed for create operation</li>
+     *     <li>{@link org.apache.kafka.common.errors.InvalidPartitionsException}
+     *     if number of partitions is less than 1</li>
+     *     <li>{@link org.apache.kafka.common.errors.InvalidReplicationFactorException}
+     *     if replication factor is less than 1 or large than number of available brokers</li>
+     *     <li>{@link org.apache.kafka.common.errors.TopicExistsException}
+     *     if topic name already exists</li>
+     *     <li>{@link org.apache.kafka.common.errors.InvalidTopicException}
+     *     if topic name collides with other topic name</li>
+     *     <li>{@link org.apache.kafka.common.errors.InvalidReplicaAssignmentException}
+     *     if some of the partitions have different number of replicas or duplicate replica assignment found</li>
+     *     <li>{@link org.apache.kafka.common.errors.PolicyViolationException}
+     *     if the request parameters do not satisfy the user defined policy</li>
+     *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *     if the request was not completed in within the given {@link CreatePartitionsOptions#timeoutMs()}.
+     *     </li>
+     * </ul>
      *
      * @param newTopics         The new topics to create.
      * @param options           The options to use when creating the new topics.
