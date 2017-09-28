@@ -158,7 +158,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         initTopology();
         processorContext.initialized();
         taskInitialized = true;
-        return topology.stateStores().isEmpty();
+        return changelogPartitions().isEmpty();
     }
 
 
