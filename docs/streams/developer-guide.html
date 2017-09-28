@@ -1718,14 +1718,21 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
     </p>
     <pre class="brush: java;">
         // Key: word, value: count
+        Properties streamsProperties == ...;
+
+        // specify the default serdes so we don't need to elsewhere.
+        streamsProperties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsProperties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
+        StreamsConfig config = new StreamsConfig(streamsProperties);
+
         KStream&lt;String, Integer&gt; wordCounts = ...;
 
         KGroupedStream&lt;String, Integer&gt; groupedStream = wordCounts
-            .groupByKey(Serialized.with(Serdes.String(), Serdes.Integer()));
+            .groupByKey();
 
         KTable&lt;String, Integer&gt; aggregated = groupedStream.aggregate(
             () -> 0, /* initializer */
-            (aggKey, newValue, aggValue) -> aggValue + newValue, /* adder */
+            (aggKey, newValue, aggValue) -> aggValue + newValue /* adder */
         );
     </pre>
 
@@ -1830,7 +1837,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
             () -> 0, /* initializer */
             (aggKey, newValue, aggValue) -> aggValue + newValue, /* adder */
             (aggKey, oldValue, aggValue) -> aggValue - oldValue, /* subtractor */
-            Materialized.&lt;String, Integer, KeyValueStore&ltBytes, byte[]&gt;&gt;as("aggregated-table-store")
+            Materialized.&lt;String, Integer, KeyValueStore&lt;Bytes, byte[]&gt;&gt;as("aggregated-table-store")
                 .withKeySerde(Serdes.String() /* serde for aggregate key */)
                 .withValueSerde(Serdes.Long() /* serde for aggregate value */)
         );
