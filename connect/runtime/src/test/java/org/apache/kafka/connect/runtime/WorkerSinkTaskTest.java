@@ -42,6 +42,7 @@ import org.easymock.Capture;
 import org.easymock.CaptureType;
 import org.easymock.EasyMock;
 import org.easymock.IAnswer;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -112,6 +113,7 @@ public class WorkerSinkTaskTest {
     private SinkTask sinkTask;
     private Capture<WorkerSinkTaskContext> sinkTaskContext = EasyMock.newCapture();
     private WorkerConfig workerConfig;
+    private ConnectMetrics metrics;
     @Mock
     private PluginClassLoader pluginLoader;
     @Mock
@@ -142,19 +144,25 @@ public class WorkerSinkTaskTest {
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
         workerConfig = new StandaloneConfig(workerProps);
         pluginLoader = PowerMock.createMock(PluginClassLoader.class);
-        workerTask = PowerMock.createPartialMock(
-                WorkerSinkTask.class, new String[]{"createConsumer"},
-                taskId, sinkTask, statusListener, initialState, workerConfig, keyConverter, valueConverter, transformationChain, pluginLoader, time);
-
+        metrics = new MockConnectMetrics();
         recordsReturnedTp1 = 0;
         recordsReturnedTp3 = 0;
     }
 
-    @Test
-    public void testStartPaused() throws Exception {
+    private void createTask(TargetState initialState) {
         workerTask = PowerMock.createPartialMock(
                 WorkerSinkTask.class, new String[]{"createConsumer"},
-                taskId, sinkTask, statusListener, TargetState.PAUSED, workerConfig, keyConverter, valueConverter, transformationChain, pluginLoader, time);
+                taskId, sinkTask, statusListener, initialState, workerConfig, metrics, keyConverter, valueConverter, transformationChain, pluginLoader, time);
+    }
+
+    @After
+    public void tearDown() {
+        if (metrics != null) metrics.stop();
+    }
+
+    @Test
+    public void testStartPaused() throws Exception {
+        createTask(TargetState.PAUSED);
 
         expectInitializeTask();
         expectPollInitialAssignment();
@@ -175,6 +183,8 @@ public class WorkerSinkTaskTest {
 
     @Test
     public void testPause() throws Exception {
+        createTask(initialState);
+
         expectInitializeTask();
         expectPollInitialAssignment();
 
@@ -233,6 +243,8 @@ public class WorkerSinkTaskTest {
 
     @Test
     public void testPollRedelivery() throws Exception {
+        createTask(initialState);
+
         expectInitializeTask();
         expectPollInitialAssignment();
 
@@ -274,6 +286,8 @@ public class WorkerSinkTaskTest {
     public void testErrorInRebalancePartitionRevocation() throws Exception {
         RuntimeException exception = new RuntimeException("Revocation error");
 
+        createTask(initialState);
+
         expectInitializeTask();
         expectPollInitialAssignment();
         expectRebalanceRevocationError(exception);
@@ -297,6 +311,8 @@ public class WorkerSinkTaskTest {
     public void testErrorInRebalancePartitionAssignment() throws Exception {
         RuntimeException exception = new RuntimeException("Assignment error");
 
+        createTask(initialState);
+
         expectInitializeTask();
         expectPollInitialAssignment();
         expectRebalanceAssignmentError(exception);
@@ -318,6 +334,8 @@ public class WorkerSinkTaskTest {
 
     @Test
     public void testWakeupInCommitSyncCausesRetry() throws Exception {
+        createTask(initialState);
+
         expectInitializeTask();
 
         expectPollInitialAssignment();
@@ -386,6 +404,8 @@ public class WorkerSinkTaskTest {
 
     @Test
     public void testRequestCommit() throws Exception {
+        createTask(initialState);
+
         expectInitializeTask();
 
         expectPollInitialAssignment();
@@ -437,6 +457,8 @@ public class WorkerSinkTaskTest {
 
     @Test
     public void testPreCommit() throws Exception {
+        createTask(initialState);
+
         expectInitializeTask();
 
         // iter 1
@@ -502,6 +524,8 @@ public class WorkerSinkTaskTest {
 
     @Test
     public void testIgnoredCommit() throws Exception {
+        createTask(initialState);
+
         expectInitializeTask();
 
         // iter 1
@@ -550,6 +574,8 @@ public class WorkerSinkTaskTest {
     // when there is a long running commit in process. See KAFKA-4942 for more information.
     @Test
     public void testLongRunningCommitWithoutTimeout() throws Exception {
+        createTask(initialState);
+
         expectInitializeTask();
 
         // iter 1
@@ -647,6 +673,8 @@ public class WorkerSinkTaskTest {
     // See KAFKA-5731 for more information.
     @Test
     public void testCommitWithOutOfOrderCallback() throws Exception {
+        createTask(initialState);
+
         expectInitializeTask();
 
         // iter 1
@@ -827,6 +855,8 @@ public class WorkerSinkTaskTest {
 
     @Test
     public void testDeliveryWithMutatingTransform() throws Exception {
+        createTask(initialState);
+
         expectInitializeTask();
 
         expectPollInitialAssignment();
@@ -872,12 +902,15 @@ public class WorkerSinkTaskTest {
         assertFalse(sinkTaskContext.getValue().isCommitRequested()); // should have been cleared
         assertEquals(offsets, Whitebox.<Map<TopicPartition, OffsetAndMetadata>>getInternalState(workerTask, "lastCommittedOffsets"));
         assertEquals(0, workerTask.commitFailures());
+        assertEquals(1.0, workerTask.taskMetricsGroup().currentMetricValue("batch-size-max"), 0.0001);
 
         PowerMock.verifyAll();
     }
 
     @Test
     public void testMissingTimestampPropagation() throws Exception {
+        createTask(initialState);
+
         expectInitializeTask();
         expectConsumerPoll(1, RecordBatch.NO_TIMESTAMP, TimestampType.CREATE_TIME);
         expectConversionAndTransformation(1);
@@ -905,6 +938,8 @@ public class WorkerSinkTaskTest {
     public void testTimestampPropagation() throws Exception {
         final Long timestamp = System.currentTimeMillis();
         final TimestampType timestampType = TimestampType.CREATE_TIME;
+
+        createTask(initialState);
 
         expectInitializeTask();
         expectConsumerPoll(1, timestamp, timestampType);

@@ -93,13 +93,13 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
 
     @Override
     public void register(final StateStore store,
-                         final boolean loggingEnabled,
+                         final boolean deprecatedAndIgnoredLoggingEnabled,
                          final StateRestoreCallback stateRestoreCallback) {
         if (initialized) {
             throw new IllegalStateException("Can only create state stores during initialization.");
         }
         Objects.requireNonNull(store, "store must not be null");
-        stateManager.register(store, loggingEnabled, stateRestoreCallback);
+        stateManager.register(store, stateRestoreCallback);
     }
 
     /**

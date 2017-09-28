@@ -641,7 +641,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                                       final StreamsMetadataState streamsMetadataState,
                                       final long cacheSizeBytes,
                                       final StateDirectory stateDirectory,
-                                      final StateRestoreListener stateRestoreListener) {
+                                      final StateRestoreListener userStateRestoreListener) {
 
         final String threadClientId = clientId + "-StreamThread-" + STREAM_THREAD_ID_SEQUENCE.getAndIncrement();
         final StreamsMetricsThreadImpl streamsMetrics = new StreamsMetricsThreadImpl(metrics,
@@ -666,8 +666,8 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         final Consumer<byte[], byte[]> restoreConsumer = clientSupplier.getRestoreConsumer(consumerConfigs);
         final StoreChangelogReader changelogReader = new StoreChangelogReader(threadClientId,
                                                                               restoreConsumer,
-                                                                              stateRestoreListener,
-                                                                                logContext);
+                                                                              userStateRestoreListener,
+                                                                              logContext);
 
         Producer<byte[], byte[]> threadProducer = null;
         if (!eosEnabled) {
@@ -757,6 +757,8 @@ public class StreamThread extends Thread implements ThreadDataProvider {
 
     /**
      * Main event loop for polling, and processing records through topologies.
+     * @throws IllegalStateException If store gets registered after initialized is already finished
+     * @throws StreamsException if the store's change log does not contain the partition
      */
     private void runLoop() {
         long recordsProcessedBeforeCommit = UNLIMITED_RECORDS;
@@ -767,6 +769,10 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         }
     }
 
+    /**
+     * @throws IllegalStateException If store gets registered after initialized is already finished
+     * @throws StreamsException if the store's change log does not contain the partition
+     */
     // Visible for testing
     long runOnce(final long recordsProcessedBeforeCommit) {
         long processedBeforeCommit = recordsProcessedBeforeCommit;

@@ -613,7 +613,8 @@ public class KafkaStreams {
                                                         stateDirectory,
                                                         metrics,
                                                         Time.SYSTEM,
-                                                        globalThreadId);
+                                                        globalThreadId,
+                                                        delegatingStateRestoreListener);
             globalThreadState = globalStreamThread.state();
         }
 

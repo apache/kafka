@@ -43,6 +43,7 @@ import org.apache.kafka.connect.util.MockTime;
 import org.apache.kafka.connect.util.ThreadedTest;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -75,6 +76,7 @@ public class WorkerTest extends ThreadedTest {
 
     private WorkerConfig config;
     private Worker worker;
+    private ConnectMetrics metrics;
 
     @Mock
     private Plugins plugins;
@@ -102,8 +104,14 @@ public class WorkerTest extends ThreadedTest {
         workerProps.put("internal.value.converter.schemas.enable", "false");
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
         config = new StandaloneConfig(workerProps);
+        metrics = new MockConnectMetrics();
 
         PowerMock.mockStatic(Plugins.class);
+    }
+
+    @After
+    public void tearDown() {
+        if (metrics != null) metrics.stop();
     }
 
     @Test
@@ -450,6 +458,7 @@ public class WorkerTest extends ThreadedTest {
                 EasyMock.anyObject(OffsetStorageReader.class),
                 EasyMock.anyObject(OffsetStorageWriter.class),
                 EasyMock.eq(config),
+                EasyMock.anyObject(ConnectMetrics.class),
                 EasyMock.anyObject(ClassLoader.class),
                 EasyMock.anyObject(Time.class))
                 .andReturn(workerTask);
@@ -572,6 +581,7 @@ public class WorkerTest extends ThreadedTest {
                 EasyMock.anyObject(OffsetStorageReader.class),
                 EasyMock.anyObject(OffsetStorageWriter.class),
                 EasyMock.anyObject(WorkerConfig.class),
+                EasyMock.anyObject(ConnectMetrics.class),
                 EasyMock.eq(pluginLoader),
                 EasyMock.anyObject(Time.class))
                 .andReturn(workerTask);
@@ -653,6 +663,7 @@ public class WorkerTest extends ThreadedTest {
                 EasyMock.anyObject(OffsetStorageReader.class),
                 EasyMock.anyObject(OffsetStorageWriter.class),
                 EasyMock.anyObject(WorkerConfig.class),
+                EasyMock.anyObject(ConnectMetrics.class),
                 EasyMock.eq(pluginLoader),
                 EasyMock.anyObject(Time.class))
                 .andReturn(workerTask);

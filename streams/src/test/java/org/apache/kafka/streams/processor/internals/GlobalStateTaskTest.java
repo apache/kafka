@@ -23,6 +23,7 @@ import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
@@ -51,6 +52,7 @@ import static org.junit.Assert.fail;
 
 public class GlobalStateTaskTest {
 
+    private final LogContext logContext = new LogContext();
     private Map<TopicPartition, Long> offsets;
     private GlobalStateUpdateTask globalStateTask;
     private GlobalStateManagerStub stateMgr;
@@ -92,7 +94,7 @@ public class GlobalStateTaskTest {
         offsets.put(t1, 50L);
         offsets.put(t2, 100L);
         stateMgr = new GlobalStateManagerStub(storeNames, offsets);
-        globalStateTask = new GlobalStateUpdateTask(topology, context, stateMgr, new LogAndFailExceptionHandler());
+        globalStateTask = new GlobalStateUpdateTask(topology, context, stateMgr, new LogAndFailExceptionHandler(), logContext);
     }
 
     @Test
@@ -175,8 +177,12 @@ public class GlobalStateTaskTest {
 
     @Test
     public void shouldNotThrowStreamsExceptionWhenKeyDeserializationFailsWithSkipHandler() throws Exception {
-        final GlobalStateUpdateTask globalStateTask2 = new GlobalStateUpdateTask(topology, context, stateMgr,
-            new LogAndContinueExceptionHandler());
+        final GlobalStateUpdateTask globalStateTask2 = new GlobalStateUpdateTask(
+            topology,
+            context,
+            stateMgr,
+            new LogAndContinueExceptionHandler(),
+            logContext);
         final byte[] key = new LongSerializer().serialize("t2", 1L);
         final byte[] recordValue = new IntegerSerializer().serialize("t2", 10);
 
@@ -185,8 +191,12 @@ public class GlobalStateTaskTest {
 
     @Test
     public void shouldNotThrowStreamsExceptionWhenValueDeserializationFails() throws Exception {
-        final GlobalStateUpdateTask globalStateTask2 = new GlobalStateUpdateTask(topology, context, stateMgr,
-            new LogAndContinueExceptionHandler());
+        final GlobalStateUpdateTask globalStateTask2 = new GlobalStateUpdateTask(
+            topology,
+            context,
+            stateMgr,
+            new LogAndContinueExceptionHandler(),
+            logContext);
         final byte[] key = new IntegerSerializer().serialize("t2", 1);
         final byte[] recordValue = new LongSerializer().serialize("t2", 10L);
 
