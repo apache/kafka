@@ -213,9 +213,9 @@ public class FetchRequest extends AbstractRequest {
                     maxWait, minBytes, fetchData, isolationLevel);
         }
 
-        public static Builder forReplica(short desiredVersion, int replicaId, int maxWait, int minBytes,
+        public static Builder forReplica(short allowedVersion, int replicaId, int maxWait, int minBytes,
                                          LinkedHashMap<TopicPartition, PartitionData> fetchData) {
-            return new Builder(desiredVersion, desiredVersion, replicaId, maxWait, minBytes, fetchData,
+            return new Builder(allowedVersion, allowedVersion, replicaId, maxWait, minBytes, fetchData,
                     IsolationLevel.READ_UNCOMMITTED);
         }
 
