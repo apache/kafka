@@ -55,15 +55,7 @@ public class CompositeRestoreListener implements BatchingStateRestoreCallback, S
                                final String storeName,
                                final long startingOffset,
                                final long endingOffset) {
-        try {
-            userRestoreListener.onRestoreStart(topicPartition, storeName, startingOffset, endingOffset);
-        } catch (final Exception fatalUserException) {
-            throw new StreamsException(
-                String.format("Fatal user code error in store restore listener for store %s, partition %s.",
-                              storeName,
-                              topicPartition),
-                fatalUserException);
-        }
+        userRestoreListener.onRestoreStart(topicPartition, storeName, startingOffset, endingOffset);
         storeRestoreListener.onRestoreStart(topicPartition, storeName, startingOffset, endingOffset);
     }
 
@@ -76,15 +68,7 @@ public class CompositeRestoreListener implements BatchingStateRestoreCallback, S
                                 final String storeName,
                                 final long batchEndOffset,
                                 final long numRestored) {
-        try {
-            userRestoreListener.onBatchRestored(topicPartition, storeName, batchEndOffset, numRestored);
-        } catch (final Exception fatalUserException) {
-            throw new StreamsException(
-                String.format("Fatal user code error in store restore listener for store %s, partition %s.",
-                    storeName,
-                    topicPartition),
-                fatalUserException);
-        }
+        userRestoreListener.onBatchRestored(topicPartition, storeName, batchEndOffset, numRestored);
         storeRestoreListener.onBatchRestored(topicPartition, storeName, batchEndOffset, numRestored);
     }
 
@@ -96,15 +80,7 @@ public class CompositeRestoreListener implements BatchingStateRestoreCallback, S
     public void onRestoreEnd(final TopicPartition topicPartition,
                              final String storeName,
                              final long totalRestored) {
-        try {
-            userRestoreListener.onRestoreEnd(topicPartition, storeName, totalRestored);
-        } catch (final Exception fatalUserException) {
-            throw new StreamsException(
-                String.format("Fatal user code error in store restore listener for store %s, partition %s.",
-                    storeName,
-                    topicPartition),
-                fatalUserException);
-        }
+        userRestoreListener.onRestoreEnd(topicPartition, storeName, totalRestored);
         storeRestoreListener.onRestoreEnd(topicPartition, storeName, totalRestored);
     }
 
