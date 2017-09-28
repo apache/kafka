@@ -357,7 +357,8 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
       Some(newHistogram("MessageConversionsTimeMs", biased = true, tags))
     else
       None
-  // temporary memory allocated for processing request (only populated for fetch and produce requests)
+  // Temporary memory allocated for processing request (only populated for fetch and produce requests)
+  // This shows the memory allocated for compression/conversions excluding the actual request size
   val tempMemoryBytesHist =
     if (name == ApiKeys.FETCH.name || name == ApiKeys.PRODUCE.name)
       Some(newHistogram("TemporaryMemoryBytes", biased = true, tags))

@@ -206,13 +206,12 @@ private[kafka] object LogValidator extends Logging {
         offsetOfMaxTimestamp = initialOffset
     }
 
-    val recordsProcessingStats = new RecordsProcessingStats(records.sizeInBytes, 0, -1)
     ValidationAndOffsetAssignResult(
       validatedRecords = records,
       maxTimestamp = maxTimestamp,
       shallowOffsetOfMaxTimestamp = offsetOfMaxTimestamp,
       messageSizeMaybeChanged = false,
-      recordsProcessingStats = recordsProcessingStats)
+      recordsProcessingStats = RecordsProcessingStats.EMPTY)
   }
 
   /**
