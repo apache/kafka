@@ -38,7 +38,7 @@ object Exit {
     JExit.setExitProcedure(functionToProcedure(exitProcedure))
 
   def setHaltProcedure(haltProcedure: (Int, Option[String]) => Nothing): Unit =
-    JExit.setExitProcedure(functionToProcedure(haltProcedure))
+    JExit.setHaltProcedure(functionToProcedure(haltProcedure))
 
   def resetExitProcedure(): Unit =
     JExit.resetExitProcedure()

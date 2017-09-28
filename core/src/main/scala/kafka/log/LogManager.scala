@@ -154,6 +154,9 @@ class LogManager(logDirs: Array[File],
       Exit.halt(1)
     }
 
+    // If IBP < 1.0, controller will send LeaderAndIsrRequest V0 which does not include isNew field.
+    // In this case broker can not determine whether it is safe to create partition when there is log directory failure.
+    // Thus we choose to have broker halt on log diretory failure if IBP < 1.0
     if (interBrokerProtocolVersion < KAFKA_1_0_IV0 && liveLogDirs.size() < dirs.size) {
       fatal(s"Halting broker because log dirs ${dirs.filterNot(liveLogDirs.contains(_)).mkString(",")} are offline")
       Exit.halt(1)

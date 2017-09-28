@@ -16,12 +16,13 @@
  */
 package kafka.api
 
+import java.io.File
 import java.util.Collections
 import java.util.concurrent.{ExecutionException, TimeUnit}
 
 import kafka.controller.{OfflineReplica, PartitionAndReplica}
-import kafka.server.KafkaConfig
-import kafka.utils.{CoreUtils, TestUtils, ZkUtils}
+import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.utils.{CoreUtils, Exit, TestUtils, ZkUtils}
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
@@ -61,6 +62,37 @@ class LogDirFailureTest extends IntegrationTestHarness {
   @Test
   def testIOExceptionDuringLogRoll() {
     testProduceAfterLogDirFailureOnLeader(Roll)
+  }
+
+  @Test
+  def brokerWithOldIBPShouldHaltOnLogDirFailure() {
+    @volatile var statusCodeOption: Option[Int] = None
+    Exit.setHaltProcedure { (statusCode, _) =>
+      statusCodeOption = Some(statusCode)
+      throw new IllegalArgumentException
+    }
+
+    var server: KafkaServer = null
+    try {
+      val props = TestUtils.createBrokerConfig(serverCount, zkConnect, logDirCount = 3)
+      props.put(KafkaConfig.InterBrokerProtocolVersionProp, "0.11.0")
+      props.put(KafkaConfig.LogMessageFormatVersionProp, "0.11.0")
+      val kafkaConfig = KafkaConfig.fromProps(props)
+      val logDir = new File(kafkaConfig.logDirs.head)
+      // Make log directory of the partition on the leader broker inaccessible by replacing it with a file
+      CoreUtils.swallow(Utils.delete(logDir))
+      logDir.createNewFile()
+      assertTrue(logDir.isFile)
+
+      server = TestUtils.createServer(kafkaConfig)
+      fail("broker with IBP < 1.0 should halt if there is log dir failure ")
+    } catch {
+      case e: IllegalArgumentException => assertTrue(statusCodeOption.contains(1))
+    } finally {
+      Exit.resetHaltProcedure()
+      if (server != null)
+        TestUtils.shutdownServers(List(server))
+    }
   }
 
   @Test
