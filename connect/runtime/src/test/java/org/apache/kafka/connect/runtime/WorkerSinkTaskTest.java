@@ -113,7 +113,7 @@ public class WorkerSinkTaskTest {
     private SinkTask sinkTask;
     private Capture<WorkerSinkTaskContext> sinkTaskContext = EasyMock.newCapture();
     private WorkerConfig workerConfig;
-    private ConnectMetrics metrics;
+    private MockConnectMetrics metrics;
     @Mock
     private PluginClassLoader pluginLoader;
     @Mock
@@ -902,7 +902,7 @@ public class WorkerSinkTaskTest {
         assertFalse(sinkTaskContext.getValue().isCommitRequested()); // should have been cleared
         assertEquals(offsets, Whitebox.<Map<TopicPartition, OffsetAndMetadata>>getInternalState(workerTask, "lastCommittedOffsets"));
         assertEquals(0, workerTask.commitFailures());
-        assertEquals(1.0, workerTask.taskMetricsGroup().currentMetricValue("batch-size-max"), 0.0001);
+        assertEquals(1.0, metrics.currentMetricValue(workerTask.taskMetricsGroup().metricGroup(), "batch-size-max"), 0.0001);
 
         PowerMock.verifyAll();
     }
