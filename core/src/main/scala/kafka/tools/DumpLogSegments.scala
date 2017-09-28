@@ -337,8 +337,8 @@ object DumpLogSegments {
       val keyString = Json.encode(Map("metadata" -> groupId))
       val valueString = Json.encode(Map(
           "protocolType" -> protocolType,
-          "groupMetadata.protocol" -> group.protocol,
-          "groupMetadata.generationId" -> group.generationId,
+          "protocol" -> group.protocol,
+          "generationId" -> group.generationId,
           "assignment" -> assignment))
 
       (Some(keyString), Some(valueString))
