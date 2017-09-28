@@ -14,29 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common;
+package org.apache.kafka.common.metrics;
 
 /**
- * A metric tracked for monitoring purposes.
+ * A gauge metric is an instantaneous reading of a particular value.
  */
-public interface Metric {
+public interface Gauge<T> extends MetricValueProvider<T> {
 
     /**
-     * A name for this metric
+     * Returns the current value associated with this gauge.
+     * @param config The configuration for this metric
+     * @param now The POSIX time in milliseconds the measurement is being taken
      */
-    public MetricName metricName();
-
-    /**
-     * The value of the metric as double if the metric is measurable
-     * @throws IllegalStateException if this metric does not have a measurable double value
-     * @deprecated As of 1.0.0, use {@link #metricValue()} instead. This will be removed in a future major release.
-     */
-    @Deprecated
-    public double value();
-
-    /**
-     * The value of the metric, which may be measurable or a non-measurable gauge
-     */
-    public Object metricValue();
+    T value(MetricConfig config, long now);
 
 }

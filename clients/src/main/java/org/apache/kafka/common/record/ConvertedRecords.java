@@ -14,29 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common;
+package org.apache.kafka.common.record;
 
-/**
- * A metric tracked for monitoring purposes.
- */
-public interface Metric {
+public class ConvertedRecords<T extends Records> {
 
-    /**
-     * A name for this metric
-     */
-    public MetricName metricName();
+    private final T records;
+    private final RecordsProcessingStats recordsProcessingStats;
 
-    /**
-     * The value of the metric as double if the metric is measurable
-     * @throws IllegalStateException if this metric does not have a measurable double value
-     * @deprecated As of 1.0.0, use {@link #metricValue()} instead. This will be removed in a future major release.
-     */
-    @Deprecated
-    public double value();
+    public ConvertedRecords(T records, RecordsProcessingStats recordsProcessingStats) {
+        this.records = records;
+        this.recordsProcessingStats = recordsProcessingStats;
+    }
 
-    /**
-     * The value of the metric, which may be measurable or a non-measurable gauge
-     */
-    public Object metricValue();
+    public T records() {
+        return records;
+    }
 
+    public RecordsProcessingStats recordsProcessingStats() {
+        return recordsProcessingStats;
+    }
 }

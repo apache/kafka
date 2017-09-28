@@ -110,6 +110,11 @@ public class DeleteTopicsResponse extends AbstractResponse {
         return errors;
     }
 
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        return errorCounts(errors);
+    }
+
     public static DeleteTopicsResponse parse(ByteBuffer buffer, short version) {
         return new DeleteTopicsResponse(ApiKeys.DELETE_TOPICS.responseSchema(version).read(buffer));
     }

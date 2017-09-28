@@ -21,19 +21,20 @@ import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util.concurrent._
 
-import com.yammer.metrics.core.Gauge
+import com.yammer.metrics.core.{Gauge, Meter}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.network.RequestChannel.{BaseRequest, SendAction, ShutdownRequest, NoOpAction, CloseConnectionAction}
 import kafka.utils.{Logging, NotNothing}
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.Sanitizer
 import org.apache.kafka.common.network.Send
-import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Time
 import org.apache.log4j.Logger
 
+import scala.collection.mutable
 import scala.reflect.ClassTag
 
 object RequestChannel extends Logging {
@@ -60,6 +61,8 @@ object RequestChannel extends Logging {
     @volatile var responseCompleteTimeNanos = -1L
     @volatile var responseDequeueTimeNanos = -1L
     @volatile var apiRemoteCompleteTimeNanos = -1L
+    @volatile var messageConversionsTimeNanos = 0L
+    @volatile var temporaryMemoryBytes = 0L
     @volatile var recordNetworkThreadTimeCallback: Option[Long => Unit] = None
 
     val session = Session(context.principal, context.clientAddress)
@@ -121,6 +124,7 @@ object RequestChannel extends Logging {
       val apiThrottleTimeMs = nanosToMs(responseCompleteTimeNanos - apiRemoteCompleteTimeNanos)
       val responseQueueTimeMs = nanosToMs(responseDequeueTimeNanos - responseCompleteTimeNanos)
       val responseSendTimeMs = nanosToMs(endTimeNanos - responseDequeueTimeNanos)
+      val messageConversionsTimeMs = nanosToMs(messageConversionsTimeNanos)
       val totalTimeMs = nanosToMs(endTimeNanos - startTimeNanos)
       val fetchMetricNames =
         if (header.apiKey == ApiKeys.FETCH) {
@@ -133,7 +137,7 @@ object RequestChannel extends Logging {
         else Seq.empty
       val metricNames = fetchMetricNames :+ header.apiKey.name
       metricNames.foreach { metricName =>
-        val m = RequestMetrics.metricsMap(metricName)
+        val m = RequestMetrics(metricName)
         m.requestRate.mark()
         m.requestQueueTimeHist.update(Math.round(requestQueueTimeMs))
         m.localTimeHist.update(Math.round(apiLocalTimeMs))
@@ -142,6 +146,9 @@ object RequestChannel extends Logging {
         m.responseQueueTimeHist.update(Math.round(responseQueueTimeMs))
         m.responseSendTimeHist.update(Math.round(responseSendTimeMs))
         m.totalTimeHist.update(Math.round(totalTimeMs))
+        m.requestBytesHist.update(sizeOfBodyInBytes)
+        m.messageConversionsTimeHist.foreach(_.update(Math.round(messageConversionsTimeMs)))
+        m.tempMemoryBytesHist.foreach(_.update(temporaryMemoryBytes))
       }
 
       // Records network handler thread usage. This is included towards the request quota for the
@@ -171,6 +178,10 @@ object RequestChannel extends Logging {
           .append(",securityProtocol:").append(context.securityProtocol)
           .append(",principal:").append(session.principal)
           .append(",listener:").append(context.listenerName.value)
+        if (temporaryMemoryBytes > 0)
+          builder.append(",temporaryMemoryBytes:").append(temporaryMemoryBytes)
+        if (messageConversionsTimeMs > 0)
+          builder.append(",messageConversionsTime:").append(messageConversionsTimeMs)
         requestLogger.debug(builder.toString)
       }
     }
@@ -281,6 +292,12 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
     responseListeners ::= onResponse
   }
 
+  def updateErrorMetrics(apiKey: ApiKeys, errors: collection.Map[Errors, Integer]) {
+    errors.foreach { case (error, count) =>
+      RequestMetrics.markErrorMeter(apiKey.name, error, count)
+    }
+  }
+
   def shutdown() {
     requestQueue.clear()
   }
@@ -290,11 +307,30 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
 }
 
 object RequestMetrics {
-  val metricsMap = new scala.collection.mutable.HashMap[String, RequestMetrics]
+
+  private val metricsMap = mutable.Map[String, RequestMetrics]()
+
   val consumerFetchMetricName = ApiKeys.FETCH.name + "Consumer"
   val followFetchMetricName = ApiKeys.FETCH.name + "Follower"
-  (ApiKeys.values().toList.map(e => e.name)
-    ++ List(consumerFetchMetricName, followFetchMetricName)).foreach(name => metricsMap.put(name, new RequestMetrics(name)))
+
+  (ApiKeys.values.toSeq.map(_.name) ++ Seq(consumerFetchMetricName, followFetchMetricName)).foreach { name =>
+    metricsMap.put(name, new RequestMetrics(name))
+  }
+
+  def apply(metricName: String) = metricsMap(metricName)
+
+  def markErrorMeter(name: String, error: Errors, count: Int) {
+      val errorMeter = metricsMap(name).errorMeters(error)
+      errorMeter.getOrCreateMeter().mark(count.toLong)
+  }
+
+  // Used for testing until these metrics are moved to a class
+  private[kafka] def clearErrorMeters(): Unit = {
+    metricsMap.values.foreach { requestMetrics =>
+      requestMetrics.errorMeters.values.foreach(_.removeMeter())
+    }
+  }
+
 }
 
 class RequestMetrics(name: String) extends KafkaMetricsGroup {
@@ -306,11 +342,58 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
   val localTimeHist = newHistogram("LocalTimeMs", biased = true, tags)
   // time a request takes to wait on remote brokers (currently only relevant to fetch and produce requests)
   val remoteTimeHist = newHistogram("RemoteTimeMs", biased = true, tags)
-  // time a request is throttled (only relevant to fetch and produce requests)
+  // time a request is throttled
   val throttleTimeHist = newHistogram("ThrottleTimeMs", biased = true, tags)
   // time a response spent in a response queue
   val responseQueueTimeHist = newHistogram("ResponseQueueTimeMs", biased = true, tags)
   // time to send the response to the requester
   val responseSendTimeHist = newHistogram("ResponseSendTimeMs", biased = true, tags)
   val totalTimeHist = newHistogram("TotalTimeMs", biased = true, tags)
+  // request size in bytes
+  val requestBytesHist = newHistogram("RequestBytes", biased = true, tags)
+  // time for message conversions (only relevant to fetch and produce requests)
+  val messageConversionsTimeHist =
+    if (name == ApiKeys.FETCH.name || name == ApiKeys.PRODUCE.name)
+      Some(newHistogram("MessageConversionsTimeMs", biased = true, tags))
+    else
+      None
+  // Temporary memory allocated for processing request (only populated for fetch and produce requests)
+  // This shows the memory allocated for compression/conversions excluding the actual request size
+  val tempMemoryBytesHist =
+    if (name == ApiKeys.FETCH.name || name == ApiKeys.PRODUCE.name)
+      Some(newHistogram("TemporaryMemoryBytes", biased = true, tags))
+    else
+      None
+
+  private val errorMeters = mutable.Map[Errors, ErrorMeter]()
+  Errors.values.foreach(error => errorMeters.put(error, new ErrorMeter(name, error)))
+
+  class ErrorMeter(name: String, error: Errors) {
+    private val tags = Map("request" -> name, "error" -> error.name)
+
+    @volatile private var meter: Meter = null
+
+    def getOrCreateMeter(): Meter = {
+      if (meter != null)
+        meter
+      else {
+        synchronized {
+          if (meter == null)
+             meter = newMeter("ErrorsPerSec", "requests", TimeUnit.SECONDS, tags)
+          meter
+        }
+      }
+    }
+
+    // This is currently used only in tests.
+    def removeMeter(): Unit = {
+      synchronized {
+        if (meter != null) {
+          removeMetric("ErrorsPerSec", tags)
+          meter = null
+        }
+      }
+    }
+
+  }
 }

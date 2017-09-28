@@ -19,9 +19,11 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
+import java.util.Map;
 
 public abstract class AbstractRequest extends AbstractRequestResponse {
 
@@ -118,6 +120,18 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
      * Get an error response for a request with specified throttle time in the response if applicable
      */
     public abstract AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e);
+
+    /**
+     * Get the error counts corresponding to an error response. This is overridden for requests
+     * where response may be null (e.g produce with acks=0).
+     */
+    public Map<Errors, Integer> errorCounts(Throwable e) {
+        AbstractResponse response = getErrorResponse(0, e);
+        if (response == null)
+            throw new IllegalStateException("Error counts could not be obtained for request " + this);
+        else
+            return response.errorCounts();
+    }
 
     /**
      * Factory method for getting a request object based on ApiKey ID and a version

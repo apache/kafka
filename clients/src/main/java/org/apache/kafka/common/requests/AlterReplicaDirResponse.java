@@ -124,6 +124,11 @@ public class AlterReplicaDirResponse extends AbstractResponse {
         return this.responses;
     }
 
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        return errorCounts(responses);
+    }
+
     public static AlterReplicaDirResponse parse(ByteBuffer buffer, short version) {
         return new AlterReplicaDirResponse(ApiKeys.ALTER_REPLICA_DIR.responseSchema(version).read(buffer));
     }

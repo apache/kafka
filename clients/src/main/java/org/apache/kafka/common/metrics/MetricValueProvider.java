@@ -14,29 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common;
+package org.apache.kafka.common.metrics;
 
 /**
- * A metric tracked for monitoring purposes.
+ * Super-interface for {@link Measurable} or {@link Gauge} that provides
+ * metric values.
+ * <p>
+ * In the future for Java8 and above, {@link Gauge#value(MetricConfig, long)} will be
+ * moved to this interface with a default implementation in {@link Measurable} that returns
+ * {@link Measurable#measure(MetricConfig, long)}.
+ * </p>
  */
-public interface Metric {
-
-    /**
-     * A name for this metric
-     */
-    public MetricName metricName();
-
-    /**
-     * The value of the metric as double if the metric is measurable
-     * @throws IllegalStateException if this metric does not have a measurable double value
-     * @deprecated As of 1.0.0, use {@link #metricValue()} instead. This will be removed in a future major release.
-     */
-    @Deprecated
-    public double value();
-
-    /**
-     * The value of the metric, which may be measurable or a non-measurable gauge
-     */
-    public Object metricValue();
-
-}
+public interface MetricValueProvider<T> { }

@@ -145,6 +145,11 @@ public class OffsetCommitResponse extends AbstractResponse {
         return responseData;
     }
 
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        return errorCounts(responseData);
+    }
+
     public static OffsetCommitResponse parse(ByteBuffer buffer, short version) {
         return new OffsetCommitResponse(ApiKeys.OFFSET_COMMIT.parseResponse(version, buffer));
     }

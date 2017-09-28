@@ -233,6 +233,14 @@ public class ProduceResponse extends AbstractResponse {
         return this.throttleTime;
     }
 
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        Map<Errors, Integer> errorCounts = new HashMap<>();
+        for (PartitionResponse response : responses.values())
+            updateErrorCounts(errorCounts, response.error);
+        return errorCounts;
+    }
+
     public static final class PartitionResponse {
         public Errors error;
         public long baseOffset;

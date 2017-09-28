@@ -122,7 +122,7 @@ public class CreatePartitionsRequest extends AbstractRequest {
             Object[] assignmentsArray = partitionCountStruct.getArray(ASSIGNMENT_KEY_NAME);
             NewPartitions newPartition;
             if (assignmentsArray != null) {
-                List<List<Integer>> assignments = new ArrayList(assignmentsArray.length);
+                List<List<Integer>> assignments = new ArrayList<>(assignmentsArray.length);
                 for (Object replicas : assignmentsArray) {
                     Object[] replicasArray = (Object[]) replicas;
                     List<Integer> replicasList = new ArrayList<>(replicasArray.length);

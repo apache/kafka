@@ -126,6 +126,7 @@ public class SaslAuthenticatorTest {
 
         server = createEchoServer(securityProtocol);
         createAndCheckClientConnection(securityProtocol, node);
+        server.verifyAuthenticationMetrics(1, 0);
     }
 
     /**
@@ -139,6 +140,7 @@ public class SaslAuthenticatorTest {
 
         server = createEchoServer(securityProtocol);
         createAndCheckClientConnection(securityProtocol, node);
+        server.verifyAuthenticationMetrics(1, 0);
     }
 
     /**
@@ -153,6 +155,7 @@ public class SaslAuthenticatorTest {
 
         server = createEchoServer(securityProtocol);
         createAndCheckClientConnectionFailure(securityProtocol, node);
+        server.verifyAuthenticationMetrics(0, 1);
     }
 
     /**
@@ -167,6 +170,7 @@ public class SaslAuthenticatorTest {
 
         server = createEchoServer(securityProtocol);
         createAndCheckClientConnectionFailure(securityProtocol, node);
+        server.verifyAuthenticationMetrics(0, 1);
     }
 
     /**
@@ -268,6 +272,7 @@ public class SaslAuthenticatorTest {
         server = createEchoServer(securityProtocol);
         updateScramCredentialCache(TestJaasConfig.USERNAME, TestJaasConfig.PASSWORD);
         createAndCheckClientConnection(securityProtocol, "0");
+        server.verifyAuthenticationMetrics(1, 0);
     }
 
     /**
@@ -303,6 +308,7 @@ public class SaslAuthenticatorTest {
         server = createEchoServer(securityProtocol);
         updateScramCredentialCache(TestJaasConfig.USERNAME, TestJaasConfig.PASSWORD);
         createAndCheckClientConnectionFailure(securityProtocol, node);
+        server.verifyAuthenticationMetrics(0, 1);
     }
 
     /**
@@ -321,6 +327,7 @@ public class SaslAuthenticatorTest {
         server = createEchoServer(securityProtocol);
         updateScramCredentialCache(TestJaasConfig.USERNAME, TestJaasConfig.PASSWORD);
         createAndCheckClientConnectionFailure(securityProtocol, node);
+        server.verifyAuthenticationMetrics(0, 1);
     }
 
     /**
@@ -338,9 +345,11 @@ public class SaslAuthenticatorTest {
         String node = "1";
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "SCRAM-SHA-256");
         createAndCheckClientConnectionFailure(securityProtocol, node);
+        server.verifyAuthenticationMetrics(0, 1);
 
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "SCRAM-SHA-512");
         createAndCheckClientConnection(securityProtocol, "2");
+        server.verifyAuthenticationMetrics(1, 1);
     }
 
     /**
@@ -643,6 +652,7 @@ public class SaslAuthenticatorTest {
 
         server = createEchoServer(securityProtocol);
         createAndCheckClientConnectionFailure(securityProtocol, node);
+        server.verifyAuthenticationMetrics(0, 1);
     }
 
     /**
@@ -657,6 +667,7 @@ public class SaslAuthenticatorTest {
 
         server = createEchoServer(securityProtocol);
         createAndCheckClientConnectionFailure(securityProtocol, node);
+        server.verifyAuthenticationMetrics(0, 1);
     }
 
     /**

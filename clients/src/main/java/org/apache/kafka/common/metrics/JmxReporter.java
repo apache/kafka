@@ -184,7 +184,7 @@ public class JmxReporter implements MetricsReporter {
         @Override
         public Object getAttribute(String name) throws AttributeNotFoundException, MBeanException, ReflectionException {
             if (this.metrics.containsKey(name))
-                return this.metrics.get(name).value();
+                return this.metrics.get(name).metricValue();
             else
                 throw new AttributeNotFoundException("Could not find attribute " + name);
         }

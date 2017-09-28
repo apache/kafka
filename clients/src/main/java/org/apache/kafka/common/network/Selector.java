@@ -456,7 +456,14 @@ public class Selector implements Selectable, AutoCloseable {
 
                 /* if channel is not ready finish prepare */
                 if (channel.isConnected() && !channel.ready()) {
-                    channel.prepare();
+                    try {
+                        channel.prepare();
+                    } catch (AuthenticationException e) {
+                        sensors.failedAuthentication.record();
+                        throw e;
+                    }
+                    if (channel.ready())
+                        sensors.successfulAuthentication.record();
                 }
 
                 attemptRead(key, channel);
@@ -839,6 +846,8 @@ public class Selector implements Selectable, AutoCloseable {
 
         public final Sensor connectionClosed;
         public final Sensor connectionCreated;
+        public final Sensor successfulAuthentication;
+        public final Sensor failedAuthentication;
         public final Sensor bytesTransferred;
         public final Sensor bytesSent;
         public final Sensor bytesReceived;
@@ -863,19 +872,27 @@ public class Selector implements Selectable, AutoCloseable {
                 tagsSuffix.append(tag.getValue());
             }
 
-            this.connectionClosed = sensor("connections-closed:" + tagsSuffix.toString());
+            this.connectionClosed = sensor("connections-closed:" + tagsSuffix);
             this.connectionClosed.add(createMeter(metrics, metricGrpName, metricTags,
                     "connection-close", "connections closed"));
 
-            this.connectionCreated = sensor("connections-created:" + tagsSuffix.toString());
+            this.connectionCreated = sensor("connections-created:" + tagsSuffix);
             this.connectionCreated.add(createMeter(metrics, metricGrpName, metricTags,
                     "connection-creation", "new connections established"));
 
-            this.bytesTransferred = sensor("bytes-sent-received:" + tagsSuffix.toString());
+            this.successfulAuthentication = sensor("successful-authentication:" + tagsSuffix);
+            this.successfulAuthentication.add(createMeter(metrics, metricGrpName, metricTags,
+                    "successful-authentication", "connections with successful authentication"));
+
+            this.failedAuthentication = sensor("failed-authentication:" + tagsSuffix);
+            this.failedAuthentication.add(createMeter(metrics, metricGrpName, metricTags,
+                    "failed-authentication", "connections with failed authentication"));
+
+            this.bytesTransferred = sensor("bytes-sent-received:" + tagsSuffix);
             bytesTransferred.add(createMeter(metrics, metricGrpName, metricTags, new Count(),
                     "network-io", "network operations (reads or writes) on all connections"));
 
-            this.bytesSent = sensor("bytes-sent:" + tagsSuffix.toString(), bytesTransferred);
+            this.bytesSent = sensor("bytes-sent:" + tagsSuffix, bytesTransferred);
             this.bytesSent.add(createMeter(metrics, metricGrpName, metricTags,
                     "outgoing-byte", "outgoing bytes sent to all servers"));
             this.bytesSent.add(createMeter(metrics, metricGrpName, metricTags, new Count(),
@@ -885,20 +902,20 @@ public class Selector implements Selectable, AutoCloseable {
             metricName = metrics.metricName("request-size-max", metricGrpName, "The maximum size of any request sent.", metricTags);
             this.bytesSent.add(metricName, new Max());
 
-            this.bytesReceived = sensor("bytes-received:" + tagsSuffix.toString(), bytesTransferred);
+            this.bytesReceived = sensor("bytes-received:" + tagsSuffix, bytesTransferred);
             this.bytesReceived.add(createMeter(metrics, metricGrpName, metricTags,
                     "incoming-byte", "bytes read off all sockets"));
             this.bytesReceived.add(createMeter(metrics, metricGrpName, metricTags,
                     new Count(), "response", "responses received"));
 
-            this.selectTime = sensor("select-time:" + tagsSuffix.toString());
+            this.selectTime = sensor("select-time:" + tagsSuffix);
             this.selectTime.add(createMeter(metrics, metricGrpName, metricTags,
                     new Count(), "select", "times the I/O layer checked for new I/O to perform"));
             metricName = metrics.metricName("io-wait-time-ns-avg", metricGrpName, "The average length of time the I/O thread spent waiting for a socket ready for reads or writes in nanoseconds.", metricTags);
             this.selectTime.add(metricName, new Avg());
             this.selectTime.add(createIOThreadRatioMeter(metrics, metricGrpName, metricTags, "io-wait", "waiting"));
 
-            this.ioTime = sensor("io-time:" + tagsSuffix.toString());
+            this.ioTime = sensor("io-time:" + tagsSuffix);
             metricName = metrics.metricName("io-time-ns-avg", metricGrpName, "The average length of time for I/O per select call in nanoseconds.", metricTags);
             this.ioTime.add(metricName, new Avg());
             this.ioTime.add(createIOThreadRatioMeter(metrics, metricGrpName, metricTags, "io", "doing I/O"));
