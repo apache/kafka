@@ -142,7 +142,7 @@ private[kafka] object LogValidator extends Logging {
     val convertedRecords = builder.build()
 
     val info = builder.info
-    val recordsProcessingStats = new RecordsProcessingStats(records.sizeInBytes + builder.uncompressedBytesWritten,
+    val recordsProcessingStats = new RecordsProcessingStats(builder.uncompressedBytesWritten,
       builder.numRecords, time.nanoseconds - now)
     ValidationAndOffsetAssignResult(
       validatedRecords = convertedRecords,
