@@ -52,8 +52,7 @@ public class MetricNameTemplate {
     }
 
     /**
-     * Create a new template. Note that the order of the tags will be preserved if the supplied
-     * {@code tags} set has an order.
+     * Create a new template. Note that the order of the tags will be preserved.
      *
      * @param name the name of the metric; may not be null
      * @param group the name of the group; may not be null
