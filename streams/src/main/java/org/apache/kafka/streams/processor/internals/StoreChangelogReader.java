@@ -41,7 +41,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
     private final Logger log;
     private final Consumer<byte[], byte[]> consumer;
-    private final StateRestoreListener stateRestoreListener;
+    private final StateRestoreListener userStateRestoreListener;
     private final Map<TopicPartition, Long> endOffsets = new HashMap<>();
     private final Map<String, List<PartitionInfo>> partitionInfo = new HashMap<>();
     private final Map<TopicPartition, StateRestorer> stateRestorers = new HashMap<>();
@@ -50,11 +50,11 @@ public class StoreChangelogReader implements ChangelogReader {
 
     public StoreChangelogReader(final String threadId,
                                 final Consumer<byte[], byte[]> consumer,
-                                final StateRestoreListener stateRestoreListener,
+                                final StateRestoreListener userStateRestoreListener,
                                 final LogContext logContext) {
         this.consumer = consumer;
         this.log = logContext.logger(getClass());
-        this.stateRestoreListener = stateRestoreListener;
+        this.userStateRestoreListener = userStateRestoreListener;
     }
 
     public StoreChangelogReader(final Consumer<byte[], byte[]> consumer,
@@ -65,7 +65,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
     @Override
     public void register(final StateRestorer restorer) {
-        restorer.setGlobalRestoreListener(stateRestoreListener);
+        restorer.setUserRestoreListener(userStateRestoreListener);
         stateRestorers.put(restorer.partition(), restorer);
         needsInitializing.put(restorer.partition(), restorer);
     }

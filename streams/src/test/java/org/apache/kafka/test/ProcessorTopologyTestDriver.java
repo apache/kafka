@@ -227,8 +227,9 @@ public class ProcessorTopologyTestDriver {
                                                                                    stateRestoreListener);
             globalStateTask = new GlobalStateUpdateTask(globalTopology,
                                                         new GlobalProcessorContextImpl(config, stateManager, streamsMetrics, cache),
-                                                        stateManager, new LogAndContinueExceptionHandler()
-            );
+                                                        stateManager,
+                                                        new LogAndContinueExceptionHandler(),
+                                                        new LogContext());
             globalStateTask.initialize();
         }
 

@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.TimestampType;
@@ -47,6 +44,9 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
 public class RecordQueueTest {
     private final Serializer<Integer> intSerializer = new IntegerSerializer();
     private final Deserializer<Integer> intDeserializer = new IntegerDeserializer();
@@ -56,12 +56,20 @@ public class RecordQueueTest {
     final MockProcessorContext context = new MockProcessorContext(StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class),
             new RecordCollectorImpl(null, null,  new LogContext("record-queue-test ")));
     private final MockSourceNode mockSourceNodeWithMetrics = new MockSourceNode<>(topics, intDeserializer, intDeserializer);
-    private final RecordQueue queue = new RecordQueue(new TopicPartition(topics[0], 1),
-            mockSourceNodeWithMetrics,
-            timestampExtractor, new LogAndFailExceptionHandler(), context);
-    private final RecordQueue queueThatSkipsDeserializeErrors = new RecordQueue(new TopicPartition(topics[0], 1),
-            mockSourceNodeWithMetrics,
-            timestampExtractor, new LogAndContinueExceptionHandler(), context);
+    private final RecordQueue queue = new RecordQueue(
+        new TopicPartition(topics[0], 1),
+        mockSourceNodeWithMetrics,
+        timestampExtractor,
+        new LogAndFailExceptionHandler(),
+        context,
+        new LogContext());
+    private final RecordQueue queueThatSkipsDeserializeErrors = new RecordQueue(
+        new TopicPartition(topics[0], 1),
+        mockSourceNodeWithMetrics,
+        timestampExtractor,
+        new LogAndContinueExceptionHandler(),
+        context,
+        new LogContext());
 
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
@@ -196,7 +204,8 @@ public class RecordQueueTest {
                                                   new MockSourceNode<>(topics, intDeserializer, intDeserializer),
                                                   new FailOnInvalidTimestamp(),
                                                   new LogAndContinueExceptionHandler(),
-                                  null);
+                                                  null,
+                                                  new LogContext());
         queue.addRawRecords(records);
     }
 
@@ -209,7 +218,8 @@ public class RecordQueueTest {
                                                   new MockSourceNode<>(topics, intDeserializer, intDeserializer),
                                                   new LogAndSkipOnInvalidTimestamp(),
                                                   new LogAndContinueExceptionHandler(),
-                                  null);
+                                                  null,
+                                                  new LogContext());
         queue.addRawRecords(records);
 
         assertEquals(0, queue.size());

@@ -58,7 +58,7 @@ public class StoreChangelogReaderTest {
 
     @Before
     public void setUp() {
-        restoreListener.setGlobalRestoreListener(stateRestoreListener);
+        restoreListener.setUserRestoreListener(stateRestoreListener);
     }
 
     @Test

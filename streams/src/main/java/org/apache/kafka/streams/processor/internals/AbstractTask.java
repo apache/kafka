@@ -90,7 +90,7 @@ public abstract class AbstractTask implements Task {
                 topology.storeToChangelogTopic(),
                 changelogReader,
                 eosEnabled,
-                    logContext);
+                logContext);
         } catch (final IOException e) {
             throw new ProcessorStateException(String.format("%sError while creating the state manager", logPrefix), e);
         }
@@ -196,6 +196,10 @@ public abstract class AbstractTask implements Task {
         stateMgr.flush();
     }
 
+    /**
+     * @throws IllegalStateException If store gets registered after initialized is already finished
+     * @throws StreamsException if the store's change log does not contain the partition
+     */
     void initializeStateStores() {
         if (topology.stateStores().isEmpty()) {
             return;

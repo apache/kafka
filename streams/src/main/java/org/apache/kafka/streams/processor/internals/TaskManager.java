@@ -239,7 +239,10 @@ class TaskManager {
         this.consumer = consumer;
     }
 
-
+    /**
+     * @throws IllegalStateException If store gets registered after initialized is already finished
+     * @throws StreamsException if the store's change log does not contain the partition
+     */
     boolean updateNewAndRestoringTasks() {
         active.initializeNewTasks();
         standby.initializeNewTasks();

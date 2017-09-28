@@ -573,7 +573,7 @@ public class StreamTaskTest {
         final InMemoryKeyValueStore inMemoryStore = new InMemoryKeyValueStore(storeName, null, null) {
             @Override
             public void init(final ProcessorContext context, final StateStore root) {
-                context.register(root, true, null);
+                context.register(root, false, null);
             }
 
             @Override
@@ -639,7 +639,7 @@ public class StreamTaskTest {
         final InMemoryKeyValueStore inMemoryStore = new InMemoryKeyValueStore(storeName, null, null) {
             @Override
             public void init(final ProcessorContext context, final StateStore root) {
-                context.register(root, true, null);
+                context.register(root, false, null);
             }
 
             @Override

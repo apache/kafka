@@ -120,7 +120,6 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     }
 
     public void register(final StateStore store,
-                         final boolean ignored,
                          final StateRestoreCallback stateRestoreCallback) {
 
         if (stores.containsKey(store.name())) {

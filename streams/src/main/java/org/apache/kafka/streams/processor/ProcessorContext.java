@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.errors.StreamsException;
 
 import java.io.File;
 import java.util.Map;
@@ -75,8 +76,14 @@ public interface ProcessorContext {
      * Registers and possibly restores the specified storage engine.
      *
      * @param store the storage engine
+     * @param loggingEnabledIsDeprecatedAndIgnored deprecated parameter {@code loggingEnabled} is ignored:
+     *                                             if you want to enable logging on a state stores call
+     *                                             {@link org.apache.kafka.streams.state.StoreBuilder#withLoggingEnabled(Map)}
+     *                                             when creating the store
+     * @throws IllegalStateException If store gets registered after initialized is already finished
+     * @throws StreamsException if the store's change log does not contain the partition
      */
-    void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback);
+    void register(StateStore store, boolean loggingEnabledIsDeprecatedAndIgnored, StateRestoreCallback stateRestoreCallback);
 
     /**
      * Get the state store given the store name.
