@@ -245,7 +245,7 @@ public class WorkerSinkTaskTest {
         assertSinkMetricValue("partition-count", 2);
         assertSinkMetricValue("sink-record-read-total", 1.0);
         assertSinkMetricValue("sink-record-send-total", 1.0);
-        assertSinkMetricValue("sink-record-lag-max", 1.0);
+        assertSinkMetricValue("sink-record-lag-max", 0.0);
         assertSinkMetricValue("offset-commit-seq-no", 0.0);
         assertSinkMetricValue("offset-commit-completion-rate", 0.0);
         assertSinkMetricValue("offset-commit-completion-total", 0.0);
@@ -345,7 +345,7 @@ public class WorkerSinkTaskTest {
 
         assertSinkMetricValue("sink-record-read-total", 1.0);
         assertSinkMetricValue("sink-record-send-total", 1.0);
-        assertSinkMetricValue("sink-record-lag-max", 1.0);
+        assertSinkMetricValue("sink-record-lag-max", 0.0);
         assertTaskMetricValue("status-running", 1.0);
         assertTaskMetricValue("status-paused", 0.0);
         assertTaskMetricValue("running-ratio", 1.0);
@@ -480,7 +480,7 @@ public class WorkerSinkTaskTest {
         assertSinkMetricValue("partition-count", 2);
         assertSinkMetricValue("sink-record-read-total", 1.0);
         assertSinkMetricValue("sink-record-send-total", 1.0);
-        assertSinkMetricValue("sink-record-lag-max", 1.0);
+        assertSinkMetricValue("sink-record-lag-max", 0.0);
         assertSinkMetricValue("offset-commit-seq-no", 1.0);
         assertSinkMetricValue("offset-commit-completion-total", 1.0);
         assertSinkMetricValue("offset-commit-completion-skip-total", 0.0);
@@ -546,7 +546,7 @@ public class WorkerSinkTaskTest {
         assertSinkMetricValue("partition-count", 2);
         assertSinkMetricValue("sink-record-read-total", 1.0);
         assertSinkMetricValue("sink-record-send-total", 1.0);
-        assertSinkMetricValue("sink-record-lag-max", 1.0);
+        assertSinkMetricValue("sink-record-lag-max", 0.0);
         assertSinkMetricValue("offset-commit-seq-no", 0.0);
         assertSinkMetricValue("offset-commit-completion-total", 0.0);
         assertSinkMetricValue("offset-commit-completion-skip-total", 0.0);
@@ -572,7 +572,7 @@ public class WorkerSinkTaskTest {
         assertSinkMetricValue("partition-count", 2);
         assertSinkMetricValue("sink-record-read-total", 1.0);
         assertSinkMetricValue("sink-record-send-total", 1.0);
-        assertSinkMetricValue("sink-record-lag-max", 1.0);
+        assertSinkMetricValue("sink-record-lag-max", 0.0);
         assertSinkMetricValue("offset-commit-seq-no", 1.0);
         assertSinkMetricValue("offset-commit-completion-total", 1.0);
         assertSinkMetricValue("offset-commit-completion-skip-total", 0.0);
@@ -970,6 +970,24 @@ public class WorkerSinkTaskTest {
         sinkTaskContext.getValue().requestCommit();
         workerTask.iteration(); // iter 3 -- commit in progress
 
+        assertSinkMetricValue("partition-count", 3);
+        assertSinkMetricValue("sink-record-read-total", 3.0);
+        assertSinkMetricValue("sink-record-send-total", 3.0);
+        assertSinkMetricValue("sink-record-lag-max", 2.0);
+        assertSinkMetricValue("offset-commit-seq-no", 2.0);
+        assertSinkMetricValue("offset-commit-completion-total", 1.0);
+        assertSinkMetricValue("offset-commit-completion-skip-total", 1.0);
+        assertTaskMetricValue("status-running", 1.0);
+        assertTaskMetricValue("status-paused", 0.0);
+        assertTaskMetricValue("running-ratio", 1.0);
+        assertTaskMetricValue("pause-ratio", 0.0);
+        assertTaskMetricValue("batch-size-max", 2.0);
+        assertTaskMetricValue("batch-size-avg", 1.0);
+        assertTaskMetricValue("offset-commit-max-time-ms", 0.0);
+        assertTaskMetricValue("offset-commit-avg-time-ms", 0.0);
+        assertTaskMetricValue("offset-commit-failure-percentage", 0.0);
+        assertTaskMetricValue("offset-commit-success-percentage", 1.0);
+
         assertTrue(asyncCallbackRan.get());
         assertTrue(rebalanced.get());
 
@@ -984,6 +1002,24 @@ public class WorkerSinkTaskTest {
         // Check that the offsets were not reset by the out-of-order async commit callback
         assertEquals(postRebalanceCurrentOffsets, Whitebox.getInternalState(workerTask, "currentOffsets"));
         assertEquals(postRebalanceCurrentOffsets, Whitebox.getInternalState(workerTask, "lastCommittedOffsets"));
+
+        assertSinkMetricValue("partition-count", 3);
+        assertSinkMetricValue("sink-record-read-total", 4.0);
+        assertSinkMetricValue("sink-record-send-total", 4.0);
+        assertSinkMetricValue("sink-record-lag-max", 2.0);
+        assertSinkMetricValue("offset-commit-seq-no", 3.0);
+        assertSinkMetricValue("offset-commit-completion-total", 2.0);
+        assertSinkMetricValue("offset-commit-completion-skip-total", 1.0);
+        assertTaskMetricValue("status-running", 1.0);
+        assertTaskMetricValue("status-paused", 0.0);
+        assertTaskMetricValue("running-ratio", 1.0);
+        assertTaskMetricValue("pause-ratio", 0.0);
+        assertTaskMetricValue("batch-size-max", 2.0);
+        assertTaskMetricValue("batch-size-avg", 1.0);
+        assertTaskMetricValue("offset-commit-max-time-ms", 0.0);
+        assertTaskMetricValue("offset-commit-avg-time-ms", 0.0);
+        assertTaskMetricValue("offset-commit-failure-percentage", 0.0);
+        assertTaskMetricValue("offset-commit-success-percentage", 1.0);
 
         PowerMock.verifyAll();
     }

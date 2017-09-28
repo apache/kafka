@@ -53,7 +53,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static java.util.Collections.singleton;
 
@@ -241,7 +240,6 @@ class WorkerSinkTask extends WorkerTask {
                 if (committedOffsets != null) {
                     log.debug("{} Setting last committed offsets to {}", this, committedOffsets);
                     lastCommittedOffsets = committedOffsets;
-                    sinkTaskMetricsGroup.recordCommittedOffsets(committedOffsets);
                 }
                 commitFailures = 0;
                 recordCommitSuccess(durationMillis);
@@ -492,6 +490,7 @@ class WorkerSinkTask extends WorkerTask {
             log.trace("{} Delivering batch of {} messages to task", this, messageBatch.size());
             long start = time.milliseconds();
             task.put(new ArrayList<>(messageBatch));
+            sinkTaskMetricsGroup.recordProcessedOffsets(origOffsets);
             recordBatch(messageBatch.size());
             sinkTaskMetricsGroup.recordPut(time.milliseconds() - start);
             currentOffsets.putAll(origOffsets);
@@ -637,13 +636,11 @@ class WorkerSinkTask extends WorkerTask {
         private final Sensor offsetCompletion;
         private final Sensor offsetCompletionSkip;
         private final Sensor putBatchTime;
-        private final AtomicReference<Map<TopicPartition, OffsetAndMetadata>> consumedOffsets = new AtomicReference<>();
-        private final AtomicReference<Map<TopicPartition, OffsetAndMetadata>> committedOffsets = new AtomicReference<>();
+        private Map<TopicPartition, OffsetAndMetadata> consumedOffsets = new HashMap<>();
+        private Map<TopicPartition, OffsetAndMetadata> processedOffsets = new HashMap<>();
 
         public SinkTaskMetricsGroup(ConnectorTaskId id, ConnectMetrics connectMetrics) {
-            consumedOffsets.set(new HashMap<TopicPartition, OffsetAndMetadata>());
-            committedOffsets.set(new HashMap<TopicPartition, OffsetAndMetadata>());
-            metricGroup = connectMetrics.group("sink-tasks-metrics",
+            metricGroup = connectMetrics.group("sink-task-metrics",
                     "connector", id.connector(), "task", Integer.toString(id.task()));
 
             sinkRecordRead = metricGroup.metrics().sensor("sink-record-read");
@@ -669,8 +666,8 @@ class WorkerSinkTask extends WorkerTask {
 
             sinkRecordLag = metricGroup.metrics().sensor("sink-record-lag");
             sinkRecordLag.add(metricGroup.metricName("sink-record-lag-max",
-                    "The maximum lag in terms of number of records behind the consumer the offset commits " +
-                            "are for any topic partitions."),
+                    "The maximum lag in terms of number of records that the sink task is behind the consumer's position for any " +
+                            "topic partitions."),
                     new Max());
 
             partitionCount = metricGroup.metrics().sensor("partition-count");
@@ -709,17 +706,17 @@ class WorkerSinkTask extends WorkerTask {
         }
 
         void computeSinkRecordLag() {
-            Map<TopicPartition, OffsetAndMetadata> consumed = this.consumedOffsets.get();
-            Map<TopicPartition, OffsetAndMetadata> committed = this.committedOffsets.get();
+            Map<TopicPartition, OffsetAndMetadata> consumed = this.consumedOffsets;
+            Map<TopicPartition, OffsetAndMetadata> processed = this.processedOffsets;
             long maxLag = 0L;
-            for (Map.Entry<TopicPartition, OffsetAndMetadata> committedOffsetEntry : committed.entrySet()) {
-                final TopicPartition partition = committedOffsetEntry.getKey();
+            for (Map.Entry<TopicPartition, OffsetAndMetadata> processedOffsetEntry : processed.entrySet()) {
+                final TopicPartition partition = processedOffsetEntry.getKey();
                 final OffsetAndMetadata consumedOffsetMeta = consumed.get(partition);
                 if (consumedOffsetMeta != null) {
-                    final OffsetAndMetadata committedOffsetMeta = committedOffsetEntry.getValue();
+                    final OffsetAndMetadata processedOffsetMeta = processedOffsetEntry.getValue();
                     long consumedOffset = consumedOffsetMeta.offset();
-                    long committedOffset = committedOffsetMeta.offset();
-                    maxLag = Math.max(maxLag, consumedOffset - committedOffset);
+                    long processedOffset = processedOffsetMeta.offset();
+                    maxLag = Math.max(maxLag, consumedOffset - processedOffset);
                 }
             }
             this.sinkRecordLag.record(maxLag);
@@ -750,25 +747,25 @@ class WorkerSinkTask extends WorkerTask {
         }
 
         void recordConsumedOffsets(Map<TopicPartition, OffsetAndMetadata> offsets) {
-            consumedOffsets.get().putAll(offsets);
+            consumedOffsets.putAll(offsets);
             computeSinkRecordLag();
         }
 
-        void recordCommittedOffsets(Map<TopicPartition, OffsetAndMetadata> offsets) {
-            committedOffsets.set(offsets);
+        void recordProcessedOffsets(Map<TopicPartition, OffsetAndMetadata> offsets) {
+            processedOffsets = offsets;
             computeSinkRecordLag();
         }
 
         void assignedOffsets(Map<TopicPartition, OffsetAndMetadata> offsets) {
-            consumedOffsets.set(new HashMap<>(offsets));
-            committedOffsets.set(offsets);
-            this.sinkRecordLag.record(0.0);
+            consumedOffsets = new HashMap<>(offsets);
+            processedOffsets = offsets;
+            sinkRecordLag.record(0.0);
         }
 
         void clearOffsets() {
-            consumedOffsets.get().clear();
-            committedOffsets.get().clear();
-            this.sinkRecordLag.record(0.0);
+            consumedOffsets.clear();
+            processedOffsets.clear();
+            sinkRecordLag.record(0.0);
         }
 
         void recordOffsetCommitSuccess() {
