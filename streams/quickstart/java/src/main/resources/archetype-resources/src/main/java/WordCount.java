@@ -17,12 +17,16 @@
 package ${package};
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Arrays;
 import java.util.Locale;
@@ -59,8 +63,9 @@ public class WordCount {
                        return value;
                    }
                 })
-               .count("Counts")
-               .to(Serdes.String(), Serdes.Long(), "streams-wordcount-output");
+               .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("Counts"))
+               .toStream()
+               .to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long()));
 
 
         /* ------- use the code below for Java 8 and uncomment the above ----
@@ -68,8 +73,9 @@ public class WordCount {
         builder.stream("streams-plaintext-input")
                .flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
                .groupBy((key, value) -> value)
-               .count("Counts")
-               .to(Serdes.String(), Serdes.Long(), "streams-wordcount-output");
+               .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("Counts"))
+               .toStream()
+               .to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long()));
 
            ----------------------------------------------------------------- */
 
