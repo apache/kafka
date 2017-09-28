@@ -49,6 +49,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
   this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
   this.producerConfig.setProperty(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, "100")
   this.serverConfig.setProperty(KafkaConfig.ReplicaHighWatermarkCheckpointIntervalMsProp, "60000")
+  this.serverConfig.setProperty(KafkaConfig.NumReplicaFetchersProp, "1")
 
 
   @Before
@@ -69,18 +70,24 @@ class LogDirFailureTest extends IntegrationTestHarness {
 
   @Test
   def testReplicaFetcherThreadAfterLogDirFailureOnFollower() {
-    val consumer = consumers.head
-    subscribeAndWaitForAssignment(topic, consumer)
     val producer = producers.head
     val partition = new TopicPartition(topic, 0)
 
     val partitionInfo = producer.partitionsFor(topic).asScala.find(_.partition() == 0).get
     val leaderServerId = partitionInfo.leader().id()
-    val followerId = partitionInfo.replicas().map(_.id()).find(_ != leaderServerId).get
-    val followerServer = servers.find(_.config.brokerId == followerId).get
+    val leaderServer = servers.find(_.config.brokerId == leaderServerId).get
+    val followerServerId = partitionInfo.replicas().map(_.id()).find(_ != leaderServerId).get
+    val followerServer = servers.find(_.config.brokerId == followerServerId).get
 
     followerServer.replicaManager.markPartitionOffline(partition)
-    TestUtils.produceMessage(servers, topic, 0, "message")
+    // Send a message to another partition whose leader is the same as partition 0
+    // so that ReplicaFetcherThread on the follower will get response from leader immediately
+    val anotherPartitionWithTheSameLeader = (1 until partitionNum).find { i =>
+      leaderServer.replicaManager.getPartition(new TopicPartition(topic, i)).flatMap(_.leaderReplicaIfLocal).isDefined
+    }.get
+    val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, anotherPartitionWithTheSameLeader, topic.getBytes, "message".getBytes)
+    producer.send(record).get
+
     followerServer.replicaManager.replicaFetcherManager.fetcherThreadMap.values.foreach { thread =>
       assertTrue("ReplicaFetcherThread should still be working if its partition count > 0", thread.shutdownLatch.getCount > 0)
     }

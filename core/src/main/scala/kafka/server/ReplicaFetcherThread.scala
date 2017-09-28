@@ -291,7 +291,8 @@ class ReplicaFetcherThread(name: String,
     }
 
     // For partitions that encountered an error, delay them a bit before retrying the leader epoch request
-    delayPartitions(partitionsWithError, brokerConfig.replicaFetchBackoffMs.toLong)
+    if (partitionsWithError.nonEmpty)
+      handlePartitionsWithErrors(partitionsWithError)
 
     truncationPoints
   }

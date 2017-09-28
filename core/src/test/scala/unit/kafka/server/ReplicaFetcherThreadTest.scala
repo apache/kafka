@@ -122,7 +122,7 @@ class ReplicaFetcherThreadTest {
 
 
     //Expectations
-    expect(logManager.truncateTo(anyObject())).anyTimes()
+    expect(logManager.truncateTo(anyObject())).times(2)
 
     replay(leaderEpochs, replicaManager, logManager, quota, replica)
 

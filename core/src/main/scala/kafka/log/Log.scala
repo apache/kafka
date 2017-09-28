@@ -1420,7 +1420,7 @@ class Log(@volatile var dir: File,
         throw new IllegalArgumentException("Cannot truncate to a negative offset (%d).".format(targetOffset))
       if (targetOffset >= logEndOffset) {
         info("Truncating %s to %d has no effect as the largest offset in the log is %d.".format(name, targetOffset, logEndOffset - 1))
-        true
+        false
       } else {
         info("Truncating log %s to offset %d.".format(name, targetOffset))
         lock synchronized {
@@ -1436,7 +1436,7 @@ class Log(@volatile var dir: File,
             leaderEpochCache.clearAndFlushLatest(targetOffset)
             loadProducerState(targetOffset, reloadFromCleanShutdown = false)
           }
-          false
+          true
         }
       }
     }
