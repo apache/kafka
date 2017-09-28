@@ -23,8 +23,7 @@ import java.util.concurrent._
 
 import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaMetricsGroup
-import kafka.network.RequestChannel.{ShutdownRequest, BaseRequest}
-import kafka.server.QuotaId
+import kafka.network.RequestChannel.{BaseRequest, SendAction, ShutdownRequest, NoOpAction, CloseConnectionAction}
 import kafka.utils.{Logging, NotNothing}
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.Sanitizer
@@ -204,7 +203,7 @@ object RequestChannel extends Logging {
       s"Response(request=$request, responseSend=$responseSend, responseAction=$responseAction), responseAsString=$responseAsString"
   }
 
-  trait ResponseAction
+  sealed trait ResponseAction
   case object SendAction extends ResponseAction
   case object NoOpAction extends ResponseAction
   case object CloseConnectionAction extends ResponseAction
@@ -245,9 +244,17 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
   /** Send a response back to the socket server to be sent over the network */
   def sendResponse(response: RequestChannel.Response) {
     if (isTraceEnabled) {
-      val requestHeader = response.request.header
-      trace(s"Sending ${requestHeader.apiKey} response to client ${requestHeader.clientId} of " +
-        s"${response.responseSend.size} bytes.")
+      val message = response.responseAction match {
+        case SendAction =>
+          val requestHeader = response.request.header
+          s"Sending ${requestHeader.apiKey} response to client ${requestHeader.clientId} of ${response.responseSend.get.size} bytes."
+        case NoOpAction =>
+          val requestHeader = response.request.header
+          s"No need to send ${requestHeader.apiKey} response to client ${requestHeader.clientId}."
+        case CloseConnectionAction =>
+          "The connection is being closed since request handler encountered an error."
+      }
+      trace(message)
     }
 
     responseQueues(response.processor).put(response)
