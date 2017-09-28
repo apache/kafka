@@ -100,9 +100,9 @@ class KafkaHealthcheck(brokerId: Int,
 
     @throws[Exception]
     override def handleNewSession() {
-      info("re-registering broker info in ZK for broker " + brokerId)
+      info("Re-registering broker info in ZK for broker " + brokerId)
       register()
-      info("done re-registering broker")
+      info("Done re-registering broker")
       info("Subscribing to %s path to watch for new topics".format(ZkUtils.BrokerTopicsPath))
     }
 

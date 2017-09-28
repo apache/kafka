@@ -476,7 +476,7 @@ class ZkUtils(val zkClient: ZkClient,
           case _: ZkNoNodeException => // the node disappeared; treat as if node existed and let caller handles this
         }
         if (storedData == null || storedData != data) {
-          info("conflict in " + path + " data: " + data + " stored data: " + storedData)
+          info("Conflict in " + path + " data: " + data + " stored data: " + storedData)
           throw e
         } else {
           // otherwise, the creation succeeded, return normally

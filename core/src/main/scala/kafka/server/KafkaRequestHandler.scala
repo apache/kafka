@@ -100,12 +100,12 @@ class KafkaRequestHandlerPool(val brokerId: Int,
   }
 
   def shutdown() {
-    info("shutting down")
+    info("Shutting down")
     for (handler <- runnables)
       handler.initiateShutdown()
     for (handler <- runnables)
       handler.awaitShutdown()
-    info("shut down completely")
+    info("Shut down completely")
   }
 }
 

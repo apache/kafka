@@ -171,7 +171,7 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
     zkConsumerConnector1.shutdown
     zkConsumerConnector2.shutdown
     zkConsumerConnector3.shutdown
-    info("all consumer connectors stopped")
+    info("All consumer connectors stopped")
     requestHandlerLogger.setLevel(Level.ERROR)
   }
 
@@ -251,7 +251,7 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
     zkConsumerConnector1.shutdown
     zkConsumerConnector2.shutdown
     zkConsumerConnector3.shutdown
-    info("all consumer connectors stopped")
+    info("All consumer connectors stopped")
     requestHandlerLogger.setLevel(Level.ERROR)
   }
 

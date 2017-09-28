@@ -145,7 +145,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
   if (config.autoCommitEnable) {
     scheduler.startup
-    info("starting auto committer every " + config.autoCommitIntervalMs + " ms")
+    info("Starting auto committer every " + config.autoCommitIntervalMs + " ms")
     scheduler.schedule("kafka-consumer-autocommit",
                        autoCommit _,
                        delay = config.autoCommitIntervalMs,
@@ -270,7 +270,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   def getTopicRegistry: Pool[String, Pool[Int, PartitionTopicInfo]] = topicRegistry
 
   private def registerConsumerInZK(dirs: ZKGroupDirs, consumerIdString: String, topicCount: TopicCount) {
-    info("begin registering consumer " + consumerIdString + " in ZK")
+    info("Begin registering consumer " + consumerIdString + " in ZK")
     val timestamp = Time.SYSTEM.milliseconds.toString
     val consumerRegistrationInfo = Json.encode(Map("version" -> 1, "subscription" -> topicCount.getTopicCountMap, "pattern" -> topicCount.pattern,
                                                   "timestamp" -> timestamp))
@@ -281,7 +281,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                                                     false)
     zkWatchedEphemeral.create()
 
-    info("end registering consumer " + consumerIdString + " in ZK")
+    info("End registering consumer " + consumerIdString + " in ZK")
   }
 
   private def sendShutdownToAllQueues() = {
@@ -572,7 +572,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
     private val watcherExecutorThread = new Thread(consumerIdString + "_watcher_executor") {
       override def run() {
-        info("starting watcher executor thread for consumer " + consumerIdString)
+        info("Starting watcher executor thread for consumer " + consumerIdString)
         var doRebalance = false
         while (!isShuttingDown.get) {
           try {
@@ -591,7 +591,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
             case t: Throwable => error("error during syncedRebalance", t)
           }
         }
-        info("stopping watcher executor thread for consumer " + consumerIdString)
+        info("Stopping watcher executor thread for consumer " + consumerIdString)
       }
     }
     watcherExecutorThread.start()
@@ -638,7 +638,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
             if(isShuttingDown.get())  {
               return
             }
-            info("begin rebalancing consumer " + consumerIdString + " try #" + i)
+            info("Begin rebalancing consumer " + consumerIdString + " try #" + i)
             var done = false
             var cluster: Cluster = null
             try {
@@ -650,9 +650,9 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                   * For example, a ZK node can disappear between the time we get all children and the time we try to get
                   * the value of a child. Just let this go since another rebalance will be triggered.
                   **/
-                info("exception during rebalance ", e)
+                info("Exception during rebalance ", e)
             }
-            info("end rebalancing consumer " + consumerIdString + " try #" + i)
+            info("End rebalancing consumer " + consumerIdString + " try #" + i)
             if (done) {
               return
             } else {
@@ -846,7 +846,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
         } catch {
           case _: ZkNodeExistsException =>
             // The node hasn't been deleted by the original owner. So wait a bit and retry.
-            info("waiting for the partition ownership to be deleted: " + partition + " for topic " + topic)
+            info("Waiting for the partition ownership to be deleted: " + partition + " for topic " + topic)
             false
         }
       }

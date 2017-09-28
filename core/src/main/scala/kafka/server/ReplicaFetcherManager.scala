@@ -33,8 +33,8 @@ class ReplicaFetcherManager(brokerConfig: KafkaConfig, protected val replicaMana
   }
 
   def shutdown() {
-    info("shutting down")
+    info("Shutting down")
     closeAllFetchers()
-    info("shutdown completed")
+    info("Shutdown completed")
   }
 }
