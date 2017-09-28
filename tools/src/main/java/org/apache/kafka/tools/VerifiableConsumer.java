@@ -569,6 +569,14 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 .metavar("CONFIG_FILE")
                 .help("Consumer config properties file (config options shared with command line parameters will be overridden).");
 
+        parser.addArgument("--isolation-level")
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .setDefault("read_uncommitted")
+                .dest("isolationLevel")
+                .help("Set the isolation level to either read_committed to filter out uncommitted transactional messages, or read_uncommitted to read everything");
+
         return parser;
     }
 
@@ -580,7 +588,6 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         int maxMessages = res.getInt("maxMessages");
         boolean verbose = res.getBoolean("verbose");
         String configFile = res.getString("consumer.config");
-
         Properties consumerProps = new Properties();
         if (configFile != null) {
             try {
@@ -596,6 +603,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, res.getString("resetPolicy"));
         consumerProps.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(res.getInt("sessionTimeout")));
         consumerProps.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, res.getString("assignmentStrategy"));
+        consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, res.get("isolationLevel"));
 
         StringDeserializer deserializer = new StringDeserializer();
         KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProps, deserializer, deserializer);

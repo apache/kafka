@@ -22,7 +22,7 @@ from ducktape.services.background_thread import BackgroundThreadService
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka import TopicPartition
 from kafkatest.services.verifiable_client import VerifiableClientMixin
-from kafkatest.version import DEV_BRANCH
+from kafkatest.version import DEV_BRANCH, V_0_11_0_0
 
 
 class ConsumerState:
@@ -42,6 +42,7 @@ class ConsumerEventHandler(object):
         self.assignment = []
         self.position = {}
         self.committed = {}
+        self.record_data = {}
         self.total_consumed = 0
 
     def handle_shutdown_complete(self):
@@ -69,7 +70,7 @@ class ConsumerEventHandler(object):
                 assert tp in self.position, "No previous position for %s: %s" % (str(tp), event)
                 assert self.position[tp] >= offset, \
                     "The committed offset %d was greater than the current position %d for partition %s" % \
-                    (offset, self.position[t], str(tp))
+                    (offset, self.position[tp], str(tp))
                 self.committed[tp] = offset
 
     def handle_records_consumed(self, event):
@@ -88,8 +89,7 @@ class ConsumerEventHandler(object):
             assert tp not in self.position or self.position[tp] == min_offset, \
                 "Consumed from an unexpected offset (%d, %d) for partition %s" % \
                 (self.position[tp], min_offset, str(tp))
-            self.position[tp] = max_offset + 1 
-
+            self.position[tp] = max_offset + 1
         self.total_consumed += event["count"]
 
     def handle_partitions_revoked(self, event):
@@ -113,6 +113,15 @@ class ConsumerEventHandler(object):
         if not clean_shutdown:
             self.handle_shutdown_complete()
 
+    def handle_record_data(self, record):
+        if not record['partition'] in self.record_data:
+            self.record_data[record['partition']] = {}
+        self.record_data[record['partition']].update({
+            record['offset'] : {
+                record['key'] : record['value']
+            }
+        })
+
     def current_assignment(self):
         return list(self.assignment)
 
@@ -131,10 +140,10 @@ class ConsumerEventHandler(object):
 
 class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, BackgroundThreadService):
     """This service wraps org.apache.kafka.tools.VerifiableConsumer for use in
-    system testing. 
-    
+    system testing.
+
     NOTE: this class should be treated as a PUBLIC API. Downstream users use
-    this service both directly and through class extension, so care must be 
+    this service both directly and through class extension, so care must be
     taken to ensure compatibility.
     """
 
@@ -161,10 +170,11 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
     def __init__(self, context, num_nodes, kafka, topic, group_id,
                  max_messages=-1, session_timeout_sec=30, enable_autocommit=False,
                  assignment_strategy="org.apache.kafka.clients.consumer.RangeAssignor",
-                 version=DEV_BRANCH, stop_timeout_sec=30, log_level="INFO"):
+                 version=DEV_BRANCH, stop_timeout_sec=30, log_level="INFO",
+                 collect_records=False, isolation_level="read_uncommitted"):
         super(VerifiableConsumer, self).__init__(context, num_nodes)
         self.log_level = log_level
-        
+
         self.kafka = kafka
         self.topic = topic
         self.group_id = group_id
@@ -174,6 +184,8 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         self.assignment_strategy = assignment_strategy
         self.prop_file = ""
         self.stop_timeout_sec = stop_timeout_sec
+        self.collect_records = collect_records
+        self.isolation_level = isolation_level
 
         self.event_handlers = {}
         self.global_position = {}
@@ -221,12 +233,15 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                         handler.handle_offsets_committed(event, node, self.logger)
                         self._update_global_committed(event)
                     elif name == "records_consumed":
+                        self.logger.debug("%s: got records consumed : %s" % (str(node.account), event))
                         handler.handle_records_consumed(event)
                         self._update_global_position(event, node)
                     elif name == "partitions_revoked":
                         handler.handle_partitions_revoked(event)
                     elif name == "partitions_assigned":
                         handler.handle_partitions_assigned(event)
+                    elif name == "record_data":
+                        handler.handle_record_data(event)
                     else:
                         self.logger.debug("%s: ignoring unknown event: %s" % (str(node.account), event))
 
@@ -266,9 +281,15 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         cmd += " --group-id %s --topic %s --broker-list %s --session-timeout %s --assignment-strategy %s %s" % \
                (self.group_id, self.topic, self.kafka.bootstrap_servers(self.security_config.security_protocol),
                self.session_timeout_sec*1000, self.assignment_strategy, "--enable-autocommit" if self.enable_autocommit else "")
-               
+
         if self.max_messages > 0:
             cmd += " --max-messages %s" % str(self.max_messages)
+
+        if self.collect_records:
+            cmd += " --verbose"
+
+        if node.version >= V_0_11_0_0:
+            cmd += " --isolation-level %s" % self.isolation_level
 
         cmd += " --consumer.config %s" % VerifiableConsumer.CONFIG_FILE
         cmd += " 2>> %s | tee -a %s &" % (VerifiableConsumer.STDOUT_CAPTURE, VerifiableConsumer.STDOUT_CAPTURE)
@@ -356,6 +377,15 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         with self.lock:
             return [handler.node for handler in self.event_handlers.itervalues()
                     if handler.state == ConsumerState.Dead]
+
+    def records(self):
+        consumed_records = {}
+        with self.lock:
+            for handler in self.event_handlers.itervalues():
+                for partition in handler.record_data.keys():
+                    for offset in handler.record_data[partition]:
+                        consumed_records.update(offset)
+        return consumed_records
 
     def alive_nodes(self):
         with self.lock:
