@@ -232,7 +232,7 @@ class ZooKeeperClientWrapper(val zkClient: ZkClient) {
 
 class ZooKeeperClientMetrics(zkClient: ZkClient, val time: Time)
     extends ZooKeeperClientWrapper(zkClient) with KafkaMetricsGroup {
-  val latencyMetric = newHistogram("ZooKeeperLatency")
+  val latencyMetric = newHistogram("ZooKeeperRequestLatencyMs")
 
   override protected def metricName(name: String, metricTags: scala.collection.Map[String, String]): MetricName = {
     explicitMetricName("kafka.server", "ZooKeeperClientMetrics", name, metricTags)
@@ -248,7 +248,7 @@ class ZooKeeperClientMetrics(zkClient: ZkClient, val time: Time)
 
   override def close(): Unit = {
     if (latencyMetric != null)
-      removeMetric("ZooKeeperLatency")
+      removeMetric("ZooKeeperRequestLatencyMs")
     super.close()
   }
 }

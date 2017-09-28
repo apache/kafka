@@ -212,7 +212,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     // Latency is rounded to milliseconds, so we may need to retry some operations to get latency > 0.
     val (_, recorded) = TestUtils.computeUntilTrue({
       servers.head.zkUtils.getLeaderAndIsrForPartition(topic, 0)
-      yammerMetricValue("kafka.server:type=ZooKeeperClientMetrics,name=ZooKeeperLatency").asInstanceOf[Double]
+      yammerMetricValue("kafka.server:type=ZooKeeperClientMetrics,name=ZooKeeperRequestLatencyMs").asInstanceOf[Double]
     })(latency => latency > 0.0)
     assertTrue("ZooKeeper latency not recorded", recorded)
 

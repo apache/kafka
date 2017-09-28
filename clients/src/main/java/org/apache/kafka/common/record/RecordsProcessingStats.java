@@ -18,22 +18,17 @@ package org.apache.kafka.common.record;
 
 public class RecordsProcessingStats {
 
-    public static final RecordsProcessingStats EMPTY = new RecordsProcessingStats(0L, 0L);
+    public static final RecordsProcessingStats EMPTY = new RecordsProcessingStats(0L, 0L, -1);
 
     private final long temporaryMemoryBytes;
     private final long conversionCount;
-    private long conversionTimeNanos;
-
-    public RecordsProcessingStats(long temporaryMemoryBytes, long conversionCount) {
-        this(temporaryMemoryBytes, conversionCount, -1);
-    }
+    private final long conversionTimeNanos;
 
     public RecordsProcessingStats(long temporaryMemoryBytes, long conversionCount, long conversionTimeNanos) {
         this.temporaryMemoryBytes = temporaryMemoryBytes;
         this.conversionCount = conversionCount;
         this.conversionTimeNanos = conversionTimeNanos;
     }
-
 
     /**
      * Returns the number of temporary memory bytes allocated to process the records.
@@ -55,10 +50,6 @@ public class RecordsProcessingStats {
 
     public long conversionTimeNanos() {
         return conversionTimeNanos;
-    }
-
-    public void conversionTimeNanos(long nanos) {
-        this.conversionTimeNanos = nanos;
     }
 
     @Override

@@ -519,8 +519,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         downConvertMagic.map { magic =>
           trace(s"Down converting records from partition $tp to message format version $magic for fetch request from $clientId")
           val startNanos = time.nanoseconds
-          val converted = data.records.downConvert(magic, fetchRequest.fetchData.get(tp).fetchOffset)
-          converted.recordsProcessingStats.conversionTimeNanos(time.nanoseconds - startNanos)
+          val converted = data.records.downConvert(magic, fetchRequest.fetchData.get(tp).fetchOffset, time)
           updateRecordsProcessingStats(request, tp, converted.recordsProcessingStats)
           new FetchResponse.PartitionData(data.error, data.highWatermark, FetchResponse.INVALID_LAST_STABLE_OFFSET,
             data.logStartOffset, data.abortedTransactions, converted.records)
@@ -2015,19 +2014,20 @@ class KafkaApis(val requestChannel: RequestChannel,
   private def updateRecordsProcessingStats(request: RequestChannel.Request, tp: TopicPartition,
                                            processingStats: RecordsProcessingStats): Unit = {
     val conversionCount = processingStats.conversionCount
-    request.header.apiKey match {
-      case ApiKeys.PRODUCE =>
-        brokerTopicStats.topicStats(tp.topic).produceMessageConversionsRate.mark(conversionCount)
-        brokerTopicStats.allTopicsStats.produceMessageConversionsRate.mark(conversionCount)
-      case ApiKeys.FETCH =>
-        brokerTopicStats.topicStats(tp.topic).fetchMessageConversionsRate.mark(conversionCount)
-        brokerTopicStats.allTopicsStats.fetchMessageConversionsRate.mark(conversionCount)
-      case _ =>
-        throw new IllegalStateException("Message conversion info is recorded only for Produce/Fetch requests")
+    if (conversionCount > 0) {
+      request.header.apiKey match {
+        case ApiKeys.PRODUCE =>
+          brokerTopicStats.topicStats(tp.topic).produceMessageConversionsRate.mark(conversionCount)
+          brokerTopicStats.allTopicsStats.produceMessageConversionsRate.mark(conversionCount)
+        case ApiKeys.FETCH =>
+          brokerTopicStats.topicStats(tp.topic).fetchMessageConversionsRate.mark(conversionCount)
+          brokerTopicStats.allTopicsStats.fetchMessageConversionsRate.mark(conversionCount)
+        case _ =>
+          throw new IllegalStateException("Message conversion info is recorded only for Produce/Fetch requests")
+      }
+      request.messageConversionsTimeNanos = processingStats.conversionTimeNanos
     }
     request.temporaryMemoryBytes = processingStats.temporaryMemoryBytes
-    if (conversionCount > 0)
-      request.messageConversionsTimeNanos = processingStats.conversionTimeNanos
   }
 
   private def handleError(request: RequestChannel.Request, e: Throwable) {

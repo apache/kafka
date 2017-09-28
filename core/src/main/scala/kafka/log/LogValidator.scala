@@ -130,19 +130,21 @@ private[kafka] object LogValidator extends Logging {
     val builder = MemoryRecords.builder(newBuffer, toMagicValue, CompressionType.NONE, timestampType,
       offsetCounter.value, now, producerId, producerEpoch, sequence, isTransactional, partitionLeaderEpoch)
 
+    var recordCount = 0
     for (batch <- records.batches.asScala) {
       validateBatch(batch, isFromClient, toMagicValue)
 
       for (record <- batch.asScala) {
         validateRecord(batch, record, now, timestampType, timestampDiffMaxMs, compactedTopic)
         builder.appendWithOffset(offsetCounter.getAndIncrement(), record)
+        recordCount += 1
       }
     }
 
     val convertedRecords = builder.build()
     val info = builder.info
-    val recordsProcessingStats = builder.recordsProcessingStats
-    recordsProcessingStats.conversionTimeNanos(time.nanoseconds - now)
+    val recordsProcessingStats = new RecordsProcessingStats(records.sizeInBytes + builder.writtenUncompressed,
+        recordCount, time.nanoseconds - now)
 
     ValidationAndOffsetAssignResult(
       validatedRecords = convertedRecords,
@@ -324,14 +326,16 @@ private[kafka] object LogValidator extends Logging {
     val builder = MemoryRecords.builder(buffer, magic, compressionType, timestampType, offsetCounter.value,
       logAppendTime, producerId, producerEpoch, baseSequence, isTransactional, partitionLeaderEpoch)
 
+    var recordCount = 0
     validatedRecords.foreach { record =>
       builder.appendWithOffset(offsetCounter.getAndIncrement(), record)
+      recordCount += 1
     }
 
     val records = builder.build()
     val info = builder.info
-    val recordsProcessingStats = builder.recordsProcessingStats
-    recordsProcessingStats.conversionTimeNanos(time.nanoseconds - startNanos)
+    val recordsProcessingStats = new RecordsProcessingStats(records.sizeInBytes + builder.writtenUncompressed,
+        recordCount, time.nanoseconds - startNanos)
 
     ValidationAndOffsetAssignResult(
       validatedRecords = records,

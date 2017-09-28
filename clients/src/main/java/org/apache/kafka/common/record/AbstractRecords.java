@@ -18,6 +18,7 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.AbstractIterator;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -60,11 +61,11 @@ public abstract class AbstractRecords implements Records {
      * correctness.
      */
     protected ConvertedRecords<MemoryRecords> downConvert(Iterable<? extends RecordBatch> batches, byte toMagic,
-            long firstOffset) {
+            long firstOffset, Time time) {
         // maintain the batch along with the decompressed records to avoid the need to decompress again
         List<RecordBatchAndRecords> recordBatchAndRecordsList = new ArrayList<>();
         int totalSizeEstimate = 0;
-        long conversionCount = 0;
+        long startNanos = time.nanoseconds();
 
         for (RecordBatch batch : batches) {
             if (toMagic < RecordBatch.MAGIC_VALUE_V2 && batch.isControlBatch())
@@ -94,21 +95,22 @@ public abstract class AbstractRecords implements Records {
 
         ByteBuffer buffer = ByteBuffer.allocate(totalSizeEstimate);
         long temporaryMemoryBytes = 0;
+        long conversionCount = 0;
         for (RecordBatchAndRecords recordBatchAndRecords : recordBatchAndRecordsList) {
-            if (recordBatchAndRecords.batch.magic() <= toMagic)
+            temporaryMemoryBytes += recordBatchAndRecords.batch.sizeInBytes();
+            if (recordBatchAndRecords.batch.magic() <= toMagic) {
                 recordBatchAndRecords.batch.writeTo(buffer);
-            else {
+            } else {
                 MemoryRecordsBuilder builder = convertRecordBatch(toMagic, buffer, recordBatchAndRecords);
                 buffer = builder.buffer();
-                RecordsProcessingStats stats = builder.recordsProcessingStats();
-                temporaryMemoryBytes += stats.temporaryMemoryBytes();
-                conversionCount += stats.conversionCount();
+                temporaryMemoryBytes += builder.writtenUncompressed();
+                conversionCount++;
             }
         }
 
         buffer.flip();
-        temporaryMemoryBytes += buffer.remaining();
-        RecordsProcessingStats stats = new RecordsProcessingStats(temporaryMemoryBytes, conversionCount);
+        RecordsProcessingStats stats = new RecordsProcessingStats(temporaryMemoryBytes, conversionCount,
+                time.nanoseconds() - startNanos);
         return new ConvertedRecords<>(MemoryRecords.readableRecords(buffer), stats);
     }
 
