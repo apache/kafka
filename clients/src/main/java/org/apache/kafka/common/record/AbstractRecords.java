@@ -103,7 +103,7 @@ public abstract class AbstractRecords implements Records {
             } else {
                 MemoryRecordsBuilder builder = convertRecordBatch(toMagic, buffer, recordBatchAndRecords);
                 buffer = builder.buffer();
-                temporaryMemoryBytes += builder.writtenUncompressed();
+                temporaryMemoryBytes += builder.uncompressedBytesWritten();
                 conversionCount++;
             }
         }
@@ -204,13 +204,31 @@ public abstract class AbstractRecords implements Records {
      * Get an upper bound estimate on the batch size needed to hold a record with the given fields. This is only
      * an estimate because it does not take into account overhead from the compression algorithm.
      */
-    public static int estimateSizeInBytesUpperBound(byte magic, CompressionType compressionType, ByteBuffer key, ByteBuffer value, Header[] headers) {
+    public static int estimateSizeInBytesUpperBound(byte magic, CompressionType compressionType, ByteBuffer key,
+                                                    ByteBuffer value, Header[] headers) {
         if (magic >= RecordBatch.MAGIC_VALUE_V2)
             return DefaultRecordBatch.estimateBatchSizeUpperBound(key, value, headers);
         else if (compressionType != CompressionType.NONE)
             return Records.LOG_OVERHEAD + LegacyRecord.recordOverhead(magic) + LegacyRecord.recordSize(magic, key, value);
         else
             return Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, key, value);
+    }
+
+    /**
+     * Return the size of the record batch header.
+     *
+     * For V0 and V1 with no compression, it's unclear if Records.LOG_OVERHEAD or 0 should be chosen. There is no header
+     * per batch, but a sequence of batches is preceded by the offset and size. This method returns `0` as it's what
+     * `MemoryRecordsBuilder` requires.
+     */
+    public static int recordBatchHeaderSizeInBytes(byte magic, CompressionType compressionType) {
+        if (magic > RecordBatch.MAGIC_VALUE_V1) {
+            return DefaultRecordBatch.RECORD_BATCH_OVERHEAD;
+        } else if (compressionType != CompressionType.NONE) {
+            return Records.LOG_OVERHEAD + LegacyRecord.recordOverhead(magic);
+        } else {
+            return 0;
+        }
     }
 
     private static class RecordBatchAndRecords {
