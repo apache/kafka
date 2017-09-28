@@ -254,7 +254,7 @@ public class CachingSessionStoreTest {
     }
 
     @Test
-    public void shouldNotForwardChangedValuesDuringFlushWhenSendOldValuesDisabled() {
+    public void shouldForwardChangedValuesDuringFlushWhenSendOldValuesDisabledNewRecordIsNull() {
         final Windowed<Bytes> a = new Windowed<>(keyA, new SessionWindow(0, 0));
         final Windowed<String> aDeserialized = new Windowed<>("a", new SessionWindow(0, 0));
         final List<KeyValue<Windowed<String>, Change<String>>> flushed = new ArrayList<>();
@@ -273,6 +273,30 @@ public class CachingSessionStoreTest {
 
         cachingStore.remove(a);
         cachingStore.flush();
+
+        assertEquals(flushed, Arrays.asList(KeyValue.pair(aDeserialized, new Change<>("1", null)),
+                                            KeyValue.pair(aDeserialized, new Change<>("2", null)),
+                                            KeyValue.pair(aDeserialized, new Change<>(null, "2"))));
+    }
+
+    @Test
+    public void shouldNotForwardChangedValuesDuringFlushWhenSendOldValuesDisabled() {
+        final Windowed<Bytes> a = new Windowed<>(keyA, new SessionWindow(0, 0));
+        final Windowed<String> aDeserialized = new Windowed<>("a", new SessionWindow(0, 0));
+        final List<KeyValue<Windowed<String>, Change<String>>> flushed = new ArrayList<>();
+        cachingStore.setFlushListener(new CacheFlushListener<Windowed<String>, String>() {
+            @Override
+            public void apply(final Windowed<String> key, final String newValue, final String oldValue) {
+                flushed.add(KeyValue.pair(key, new Change<>(newValue, oldValue)));
+            }
+        }, false);
+
+        cachingStore.put(a, "1".getBytes());
+        cachingStore.flush();
+
+        cachingStore.put(a, "2".getBytes());
+        cachingStore.flush();
+
 
         assertEquals(flushed, Arrays.asList(KeyValue.pair(aDeserialized, new Change<>("1", null)),
                                             KeyValue.pair(aDeserialized, new Change<>("2", null))));
