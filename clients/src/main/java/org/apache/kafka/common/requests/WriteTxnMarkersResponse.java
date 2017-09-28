@@ -150,6 +150,16 @@ public class WriteTxnMarkersResponse extends AbstractResponse {
         return errors.get(producerId);
     }
 
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        Map<Errors, Integer> errorCounts = new HashMap<>();
+        for (Map<TopicPartition, Errors> allErrors : errors.values()) {
+            for (Errors error : allErrors.values())
+                updateErrorCounts(errorCounts, error);
+        }
+        return errorCounts;
+    }
+
     public static WriteTxnMarkersResponse parse(ByteBuffer buffer, short version) {
         return new WriteTxnMarkersResponse(ApiKeys.WRITE_TXN_MARKERS.parseResponse(version, buffer));
     }

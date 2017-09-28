@@ -113,7 +113,7 @@ public class SaslServerAuthenticator implements Authenticator {
     // Next SASL state to be set when outgoing writes associated with the current SASL state complete
     private SaslState pendingSaslState = null;
     // Exception that will be thrown by `authenticate()` when SaslState is set to FAILED after outbound writes complete
-    private IOException pendingException = null;
+    private AuthenticationException pendingException = null;
     private SaslServer saslServer;
     private String saslMechanism;
     private AuthCallbackHandler callbackHandler;
@@ -272,8 +272,15 @@ public class SaslServerAuthenticator implements Authenticator {
                     default:
                         break;
                 }
+            } catch (SaslException | AuthenticationException e) {
+                // Exception will be propagated after response is sent to client
+                AuthenticationException authException = (e instanceof AuthenticationException) ?
+                        (AuthenticationException) e : new AuthenticationException("SASL authentication failed", e);
+                setSaslState(SaslState.FAILED, authException);
             } catch (Exception e) {
-                setSaslState(SaslState.FAILED, new IOException(e));
+                // In the case of IOExceptions and other unexpected exceptions, fail immediately
+                saslState = SaslState.FAILED;
+                throw e;
             }
         }
     }
@@ -303,7 +310,7 @@ public class SaslServerAuthenticator implements Authenticator {
         setSaslState(saslState, null);
     }
 
-    private void setSaslState(SaslState saslState, IOException exception) throws IOException {
+    private void setSaslState(SaslState saslState, AuthenticationException exception) throws IOException {
         if (netOutBuffer != null && !netOutBuffer.completed()) {
             pendingSaslState = saslState;
             pendingException = exception;

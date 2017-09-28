@@ -40,19 +40,22 @@ trait KafkaMetricsGroup extends Logging {
    * @param tags Additional attributes which mBean will have.
    * @return Sanitized metric name object.
    */
-  private def metricName(name: String, tags: scala.collection.Map[String, String]) = {
+  protected def metricName(name: String, tags: scala.collection.Map[String, String]): MetricName = {
     val klass = this.getClass
     val pkg = if (klass.getPackage == null) "" else klass.getPackage.getName
     val simpleName = klass.getSimpleName.replaceAll("\\$$", "")
+
+    explicitMetricName(pkg, simpleName, name, tags)
+  }
+
+
+  protected def explicitMetricName(group: String, typeName: String, name: String,
+      tags: scala.collection.Map[String, String]): MetricName = {
+
     // Tags may contain ipv6 address with ':', which is not valid in JMX ObjectName
     def quoteIfRequired(value: String) = if (value.contains(':')) ObjectName.quote(value) else value
     val metricTags = tags.map(kv => (kv._1, quoteIfRequired(kv._2)))
 
-    explicitMetricName(pkg, simpleName, name, metricTags)
-  }
-
-
-  private def explicitMetricName(group: String, typeName: String, name: String, tags: scala.collection.Map[String, String]) = {
     val nameBuilder: StringBuilder = new StringBuilder
 
     nameBuilder.append(group)

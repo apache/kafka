@@ -1508,55 +1508,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     servers.foreach(assertNoExemptRequestMetric(_))
   }
 
-  // Rate metrics of both Producer and Consumer are verified by this test
-  @Test
-  def testRateMetricsHaveCumulativeCount() {
-    val numRecords = 100
-    sendRecords(numRecords)
-
-    val consumer = this.consumers.head
-    consumer.assign(List(tp).asJava)
-    consumer.seek(tp, 0)
-    consumeAndVerifyRecords(consumer, numRecords = numRecords, startingOffset = 0)
-
-    def exists(name: String, rateMetricName: MetricName, allMetricNames: Set[MetricName]): Boolean = {
-      allMetricNames.contains(new MetricName(name, rateMetricName.group, "", rateMetricName.tags))
-    }
-
-    def verify(rateMetricName: MetricName, allMetricNames: Set[MetricName]): Unit = {
-      val name = rateMetricName.name
-      val totalExists = exists(name.replace("-rate", "-total"), rateMetricName, allMetricNames)
-      val totalTimeExists = exists(name.replace("-rate", "-time"), rateMetricName, allMetricNames)
-      assertTrue(s"No cumulative count/time metric for rate metric $rateMetricName",
-          totalExists || totalTimeExists)
-    }
-
-    val consumerMetricNames = consumer.metrics.keySet.asScala.toSet
-    consumerMetricNames.filter(_.name.endsWith("-rate"))
-        .foreach(verify(_, consumerMetricNames))
-
-    val producer = this.producers.head
-    val producerMetricNames = producer.metrics.keySet.asScala.toSet
-    val producerExclusions = Set("compression-rate") // compression-rate is an Average metric, not Rate
-    producerMetricNames.filter(_.name.endsWith("-rate"))
-        .filterNot(metricName => producerExclusions.contains(metricName.name))
-        .foreach(verify(_, producerMetricNames))
-
-    def verifyMetric(name: String, metrics: java.util.Map[MetricName, _ <: Metric], entity: String): Unit = {
-      val entry = metrics.asScala.find { case (metricName, _) => metricName.name == name }
-      assertTrue(s"$entity metric not defined $name", entry.nonEmpty)
-      entry.foreach { case (metricName, metric) =>
-        assertTrue(s"$entity metric not recorded $metricName", metric.value > 0.0)
-      }
-    }
-
-    // Check a couple of metrics of consumer and producer to ensure that values are set
-    verifyMetric("records-consumed-rate", consumer.metrics, "Consumer")
-    verifyMetric("records-consumed-total", consumer.metrics, "Consumer")
-    verifyMetric("record-send-rate", producer.metrics, "Producer")
-    verifyMetric("record-send-total", producer.metrics, "Producer")
-  }
-
   def runMultiConsumerSessionTimeoutTest(closeConsumer: Boolean): Unit = {
     // use consumers defined in this class plus one additional consumer
     // Use topic defined in this class + one additional topic
