@@ -257,6 +257,19 @@ public class CompositeReadOnlyKeyValueStoreTest {
         assertEquals(Long.MAX_VALUE, theStore.approximateNumEntries());
     }
 
+    @Test
+    public void shouldReturnLongMaxValueOnUnderflow() {
+        stubProviderTwo.addStore(storeName, new NoOpReadOnlyStore<Object, Object>() {
+            @Override
+            public long approximateNumEntries() {
+                return Long.MIN_VALUE;
+            }
+        });
+
+        stubOneUnderlying.put("underflow", "me");
+        assertEquals(Long.MAX_VALUE, theStore.approximateNumEntries());
+    }
+
     private CompositeReadOnlyKeyValueStore<Object, Object> rebalancing() {
         return new CompositeReadOnlyKeyValueStore<>(new WrappingStoreProvider(Collections.<StateStoreProvider>singletonList(new StateStoreProviderStub(true))),
                 QueryableStoreTypes.keyValueStore(), storeName);
