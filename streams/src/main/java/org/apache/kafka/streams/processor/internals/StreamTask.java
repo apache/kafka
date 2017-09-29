@@ -146,6 +146,16 @@ public class StreamTask extends AbstractTask implements Punctuator {
         }
     }
 
+    @Override
+    public boolean initialize() {
+        log.trace("Initializing");
+        initializeStateStores();
+        initTopology();
+        processorContext.initialized();
+        taskInitialized = true;
+        return changelogPartitions().isEmpty();
+    }
+
     /**
      * <pre>
      * - re-initialize the task
@@ -559,14 +569,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
     // visible for testing only
     RecordCollector createRecordCollector() {
         return new RecordCollectorImpl(producer, id.toString());
-    }
-
-    public boolean initialize() {
-        log.debug("{} Initializing", logPrefix);
-        initializeStateStores();
-        initTopology();
-        processorContext.initialized();
-        return topology.stateStores().isEmpty();
     }
 
 }
