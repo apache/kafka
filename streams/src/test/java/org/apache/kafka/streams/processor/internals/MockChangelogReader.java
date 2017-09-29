@@ -14,11 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.test;
+package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.processor.internals.ChangelogReader;
-import org.apache.kafka.streams.processor.internals.StateRestorer;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -35,7 +33,7 @@ public class MockChangelogReader implements ChangelogReader {
     }
 
     @Override
-    public Collection<TopicPartition> restore() {
+    public Collection<TopicPartition> restore(final RestoringTasks active) {
         return registered;
     }
 
