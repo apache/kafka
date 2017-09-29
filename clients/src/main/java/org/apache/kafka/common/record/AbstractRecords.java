@@ -59,6 +59,11 @@ public abstract class AbstractRecords implements Records {
      * If a client requests records in v1 format starting from the middle of an uncompressed batch in v2 format, we
      * need to drop records from the batch during the conversion. Some versions of librdkafka rely on this for
      * correctness.
+     *
+     * The temporaryMemoryBytes computation assumes that the batches are not loaded into the heap
+     * (via classes like FileChannelRecordBatch) before this method is called. This is the case in the broker (we
+     * only load records into the heap when down converting), but it's not for the producer. However, down converting
+     * in the producer is very uncommon and the extra complexity to handle that case is not worth it.
      */
     protected ConvertedRecords<MemoryRecords> downConvert(Iterable<? extends RecordBatch> batches, byte toMagic,
             long firstOffset, Time time) {
@@ -95,7 +100,7 @@ public abstract class AbstractRecords implements Records {
 
         ByteBuffer buffer = ByteBuffer.allocate(totalSizeEstimate);
         long temporaryMemoryBytes = 0;
-        long conversionCount = 0;
+        int numRecordsConverted = 0;
         for (RecordBatchAndRecords recordBatchAndRecords : recordBatchAndRecordsList) {
             temporaryMemoryBytes += recordBatchAndRecords.batch.sizeInBytes();
             if (recordBatchAndRecords.batch.magic() <= toMagic) {
@@ -104,12 +109,12 @@ public abstract class AbstractRecords implements Records {
                 MemoryRecordsBuilder builder = convertRecordBatch(toMagic, buffer, recordBatchAndRecords);
                 buffer = builder.buffer();
                 temporaryMemoryBytes += builder.uncompressedBytesWritten();
-                conversionCount++;
+                numRecordsConverted += builder.numRecords();
             }
         }
 
         buffer.flip();
-        RecordsProcessingStats stats = new RecordsProcessingStats(temporaryMemoryBytes, conversionCount,
+        RecordsProcessingStats stats = new RecordsProcessingStats(temporaryMemoryBytes, numRecordsConverted,
                 time.nanoseconds() - startNanos);
         return new ConvertedRecords<>(MemoryRecords.readableRecords(buffer), stats);
     }

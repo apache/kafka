@@ -61,7 +61,8 @@ class LogValidatorTest {
     assertEquals(s"The offset of max timestamp should be 0", 0, validatedResults.shallowOffsetOfMaxTimestamp)
     assertFalse("Message size should not have been changed", validatedResults.messageSizeMaybeChanged)
 
-    verifyRecordsProcessingStats(validatedResults.recordsProcessingStats, 0, records, compressed = false)
+    verifyRecordsProcessingStats(validatedResults.recordsProcessingStats, numConvertedRecords = 0, records,
+      compressed = false)
   }
 
   def testLogAppendTimeNonCompressedV2() {
@@ -101,7 +102,7 @@ class LogValidatorTest {
     assertTrue("Message size may have been changed", validatedResults.messageSizeMaybeChanged)
 
     val stats = validatedResults.recordsProcessingStats
-    verifyRecordsProcessingStats(stats, 3, records, compressed = true)
+    verifyRecordsProcessingStats(stats, numConvertedRecords = 3, records, compressed = true)
   }
 
   @Test
@@ -142,7 +143,8 @@ class LogValidatorTest {
       records.records.asScala.size - 1, validatedResults.shallowOffsetOfMaxTimestamp)
     assertFalse("Message size should not have been changed", validatedResults.messageSizeMaybeChanged)
 
-    verifyRecordsProcessingStats(validatedResults.recordsProcessingStats, 0, records, compressed = true)
+    verifyRecordsProcessingStats(validatedResults.recordsProcessingStats, numConvertedRecords = 0, records,
+      compressed = true)
   }
 
   @Test
@@ -207,7 +209,8 @@ class LogValidatorTest {
     assertEquals(s"Offset of max timestamp should be 1", 1, validatingResults.shallowOffsetOfMaxTimestamp)
     assertFalse("Message size should not have been changed", validatingResults.messageSizeMaybeChanged)
 
-    verifyRecordsProcessingStats(validatingResults.recordsProcessingStats, 0, records, compressed = false)
+    verifyRecordsProcessingStats(validatingResults.recordsProcessingStats, numConvertedRecords = 0, records,
+      compressed = false)
   }
 
   @Test
@@ -271,7 +274,8 @@ class LogValidatorTest {
     assertEquals("Offset of max timestamp should be 2", 2, validatingResults.shallowOffsetOfMaxTimestamp)
     assertTrue("Message size should have been changed", validatingResults.messageSizeMaybeChanged)
 
-    verifyRecordsProcessingStats(validatingResults.recordsProcessingStats, 3, records, compressed = true)
+    verifyRecordsProcessingStats(validatingResults.recordsProcessingStats, numConvertedRecords = 3, records,
+      compressed = true)
   }
 
   @Test
@@ -314,7 +318,8 @@ class LogValidatorTest {
       validatedRecords.records.asScala.size - 1, validatedResults.shallowOffsetOfMaxTimestamp)
     assertTrue("Message size should have been changed", validatedResults.messageSizeMaybeChanged)
 
-    verifyRecordsProcessingStats(validatedResults.recordsProcessingStats, 3, records, compressed = true)
+    verifyRecordsProcessingStats(validatedResults.recordsProcessingStats, numConvertedRecords = 3, records,
+      compressed = true)
   }
 
   @Test
@@ -354,7 +359,8 @@ class LogValidatorTest {
       validatedRecords.records.asScala.size - 1, validatedResults.shallowOffsetOfMaxTimestamp)
     assertTrue("Message size should have been changed", validatedResults.messageSizeMaybeChanged)
 
-    verifyRecordsProcessingStats(validatedResults.recordsProcessingStats, 3, records, compressed = true)
+    verifyRecordsProcessingStats(validatedResults.recordsProcessingStats, numConvertedRecords = 3, records,
+      compressed = true)
   }
 
   @Test
@@ -414,7 +420,8 @@ class LogValidatorTest {
       validatedRecords.records.asScala.size - 1, validatedResults.shallowOffsetOfMaxTimestamp)
     assertFalse("Message size should not have been changed", validatedResults.messageSizeMaybeChanged)
 
-    verifyRecordsProcessingStats(validatedResults.recordsProcessingStats, 0, records, compressed = true)
+    verifyRecordsProcessingStats(validatedResults.recordsProcessingStats, numConvertedRecords = 0, records,
+      compressed = true)
   }
 
   @Test
@@ -1066,17 +1073,17 @@ class LogValidatorTest {
     }
   }
 
-  def verifyRecordsProcessingStats(stats: RecordsProcessingStats, convertedCount: Int,
-            records: MemoryRecords, compressed: Boolean): Unit = {
+  def verifyRecordsProcessingStats(stats: RecordsProcessingStats, numConvertedRecords: Int, records: MemoryRecords,
+                                   compressed: Boolean): Unit = {
     assertNotNull("Records processing info is null", stats)
-    assertEquals(convertedCount, stats.conversionCount)
-    if (stats.conversionCount > 0)
+    assertEquals(numConvertedRecords, stats.numRecordsConverted)
+    if (numConvertedRecords > 0)
       assertTrue(s"Conversion time not recorded $stats", stats.conversionTimeNanos > 0)
     val originalSize = records.sizeInBytes
     val tempBytes = stats.temporaryMemoryBytes
-    if (convertedCount > 0)
+    if (numConvertedRecords > 0 && compressed)
       assertTrue(s"Temp bytes too small, orig=$originalSize actual=$tempBytes", tempBytes > originalSize)
-    else if (compressed)
+    else if (numConvertedRecords > 0 || compressed)
       assertTrue("Temp bytes not updated", tempBytes > 0)
     else
       assertEquals(0, tempBytes)
