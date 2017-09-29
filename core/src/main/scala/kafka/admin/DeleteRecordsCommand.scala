@@ -51,7 +51,7 @@ object DeleteRecordsCommand {
 
         parseJsonData(version, js)
       }
-      case None => throw new AdminOperationException("Delete records data is empty")
+      case None => throw new AdminOperationException("The input string is not a valid JSON")
     }
   }
 
