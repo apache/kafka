@@ -181,6 +181,7 @@ public class Sender implements Runnable {
         if (forceClose) {
             // We need to fail all the incomplete batches and wake up the threads waiting on
             // the futures.
+            log.debug("Aborting incomplete batches due to forced shutdown");
             this.accumulator.abortIncompleteBatches();
         }
         try {
@@ -587,8 +588,8 @@ public class Sender implements Runnable {
             transactionManager.removeInFlightBatch(batch);
         }
 
-        batch.done(response.baseOffset, response.logAppendTime, null);
-        this.accumulator.deallocate(batch);
+        if (batch.done(response.baseOffset, response.logAppendTime, null))
+            this.accumulator.deallocate(batch);
     }
 
     private void failBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response, RuntimeException exception, boolean adjustSequenceNumbers) {
@@ -623,8 +624,8 @@ public class Sender implements Runnable {
 
         this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
 
-        batch.done(baseOffset, logAppendTime, exception);
-        this.accumulator.deallocate(batch);
+        if (batch.done(baseOffset, logAppendTime, exception))
+            this.accumulator.deallocate(batch);
     }
 
     /**
