@@ -63,17 +63,17 @@ public class WordCount {
                        return value;
                    }
                 })
-               .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("Counts"))
+               .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("counts-store"))
                .toStream()
                .to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long()));
 
 
-        /* ------- use the code below for Java 8 and uncomment the above ----
+        /* ------- use the code below for Java 8 and comment the above ----
 
-        builder.stream("streams-plaintext-input")
+        builder.<String, String>stream("streams-plaintext-input")
                .flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
                .groupBy((key, value) -> value)
-               .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("Counts"))
+               .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("counts-store"))
                .toStream()
                .to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long()));
 
