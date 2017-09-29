@@ -343,34 +343,36 @@ object RequestMetrics {
 }
 
 class RequestMetrics(name: String) extends KafkaMetricsGroup {
+  import RequestMetrics._
+
   val tags = Map("request" -> name)
-  val requestRate = newMeter(RequestMetrics.RequestsPerSec, "requests", TimeUnit.SECONDS, tags)
+  val requestRate = newMeter(RequestsPerSec, "requests", TimeUnit.SECONDS, tags)
   // time a request spent in a request queue
-  val requestQueueTimeHist = newHistogram(RequestMetrics.RequestQueueTimeMs, biased = true, tags)
+  val requestQueueTimeHist = newHistogram(RequestQueueTimeMs, biased = true, tags)
   // time a request takes to be processed at the local broker
-  val localTimeHist = newHistogram(RequestMetrics.LocalTimeMs, biased = true, tags)
+  val localTimeHist = newHistogram(LocalTimeMs, biased = true, tags)
   // time a request takes to wait on remote brokers (currently only relevant to fetch and produce requests)
-  val remoteTimeHist = newHistogram(RequestMetrics.RemoteTimeMs, biased = true, tags)
+  val remoteTimeHist = newHistogram(RemoteTimeMs, biased = true, tags)
   // time a request is throttled
-  val throttleTimeHist = newHistogram(RequestMetrics.ThrottleTimeMs, biased = true, tags)
+  val throttleTimeHist = newHistogram(ThrottleTimeMs, biased = true, tags)
   // time a response spent in a response queue
-  val responseQueueTimeHist = newHistogram(RequestMetrics.ResponseQueueTimeMs, biased = true, tags)
+  val responseQueueTimeHist = newHistogram(ResponseQueueTimeMs, biased = true, tags)
   // time to send the response to the requester
-  val responseSendTimeHist = newHistogram(RequestMetrics.ResponseSendTimeMs, biased = true, tags)
-  val totalTimeHist = newHistogram(RequestMetrics.TotalTimeMs, biased = true, tags)
+  val responseSendTimeHist = newHistogram(ResponseSendTimeMs, biased = true, tags)
+  val totalTimeHist = newHistogram(TotalTimeMs, biased = true, tags)
   // request size in bytes
-  val requestBytesHist = newHistogram(RequestMetrics.RequestBytes, biased = true, tags)
+  val requestBytesHist = newHistogram(RequestBytes, biased = true, tags)
   // time for message conversions (only relevant to fetch and produce requests)
   val messageConversionsTimeHist =
     if (name == ApiKeys.FETCH.name || name == ApiKeys.PRODUCE.name)
-      Some(newHistogram(RequestMetrics.MessageConversionsTimeMs, biased = true, tags))
+      Some(newHistogram(MessageConversionsTimeMs, biased = true, tags))
     else
       None
   // Temporary memory allocated for processing request (only populated for fetch and produce requests)
   // This shows the memory allocated for compression/conversions excluding the actual request size
   val tempMemoryBytesHist =
     if (name == ApiKeys.FETCH.name || name == ApiKeys.PRODUCE.name)
-      Some(newHistogram(RequestMetrics.TemporaryMemoryBytes, biased = true, tags))
+      Some(newHistogram(TemporaryMemoryBytes, biased = true, tags))
     else
       None
 
@@ -388,7 +390,7 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
       else {
         synchronized {
           if (meter == null)
-             meter = newMeter(RequestMetrics.ErrorsPerSec, "requests", TimeUnit.SECONDS, tags)
+             meter = newMeter(ErrorsPerSec, "requests", TimeUnit.SECONDS, tags)
           meter
         }
       }
@@ -397,7 +399,7 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
     def removeMeter(): Unit = {
       synchronized {
         if (meter != null) {
-          removeMetric(RequestMetrics.ErrorsPerSec, tags)
+          removeMetric(ErrorsPerSec, tags)
           meter = null
         }
       }
@@ -409,20 +411,20 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
   }
 
   def removeMetrics(): Unit = {
-    removeMetric(RequestMetrics.RequestsPerSec, tags)
-    removeMetric(RequestMetrics.RequestQueueTimeMs, tags)
-    removeMetric(RequestMetrics.LocalTimeMs, tags)
-    removeMetric(RequestMetrics.RemoteTimeMs, tags)
-    removeMetric(RequestMetrics.RequestsPerSec, tags)
-    removeMetric(RequestMetrics.ThrottleTimeMs, tags)
-    removeMetric(RequestMetrics.ResponseQueueTimeMs, tags)
-    removeMetric(RequestMetrics.TotalTimeMs, tags)
-    removeMetric(RequestMetrics.ResponseSendTimeMs, tags)
-    removeMetric(RequestMetrics.RequestBytes, tags)
-    removeMetric(RequestMetrics.ResponseSendTimeMs, tags)
+    removeMetric(RequestsPerSec, tags)
+    removeMetric(RequestQueueTimeMs, tags)
+    removeMetric(LocalTimeMs, tags)
+    removeMetric(RemoteTimeMs, tags)
+    removeMetric(RequestsPerSec, tags)
+    removeMetric(ThrottleTimeMs, tags)
+    removeMetric(ResponseQueueTimeMs, tags)
+    removeMetric(TotalTimeMs, tags)
+    removeMetric(ResponseSendTimeMs, tags)
+    removeMetric(RequestBytes, tags)
+    removeMetric(ResponseSendTimeMs, tags)
     if (name == ApiKeys.FETCH.name || name == ApiKeys.PRODUCE.name) {
-      removeMetric(RequestMetrics.MessageConversionsTimeMs, tags)
-      removeMetric(RequestMetrics.TemporaryMemoryBytes, tags)
+      removeMetric(MessageConversionsTimeMs, tags)
+      removeMetric(TemporaryMemoryBytes, tags)
     }
     errorMeters.values.foreach(_.removeMeter())
     errorMeters.clear()
