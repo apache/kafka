@@ -18,7 +18,6 @@ import kafka.log.LogConfig
 import kafka.network.RequestMetrics
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{JaasTestUtils, TestUtils}
-
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.{Gauge, Histogram, Meter}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
@@ -27,7 +26,7 @@ import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.errors.InvalidTopicException
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.SecurityProtocol
-import org.junit.{After, Before, Test}
+import org.junit.{After, Before, Ignore, Test}
 import org.junit.Assert._
 
 import scala.collection.JavaConverters._
@@ -67,6 +66,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
    * Verifies some of the metrics of producer, consumer as well as server.
    */
   @Test
+  @Ignore
   def testMetrics(): Unit = {
     val topic = "topicWithOldMessageFormat"
     val props = new Properties
