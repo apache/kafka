@@ -33,22 +33,23 @@ import org.apache.zookeeper.Watcher.Event.KeeperState
 import scala.collection.mutable.Set
 
 /**
- * This class registers the broker in zookeeper to allow 
- * other brokers and consumers to detect failures. It uses an ephemeral znode with the path:
- *   /brokers/ids/[0...N] --> advertisedHost:advertisedPort
- *   
- * Right now our definition of health is fairly naive. If we register in zk we are healthy, otherwise
- * we retry for the connectionRetryMs, then log and die.
+  * This class registers the broker in zookeeper to allow
+  * other brokers and consumers to detect failures. It uses an ephemeral znode with the path:
+  *   /brokers/ids/[0...N] --> advertisedHost:advertisedPort
+  *
+  * Right now our definition of health is fairly naive. If we register in zk we are healthy, otherwise
+  * we retry for the connectionRetryMs, then log and die.
+  *
+  * The callback for disconnect allows the upstream services to handle disconnects gracefully
  */
 class KafkaHealthcheck(brokerId: Int,
                        advertisedEndpoints: Seq[EndPoint],
                        zkUtils: ZkUtils,
                        rack: Option[String],
                        interBrokerProtocolVersion: ApiVersion,
-                       connectionRetryMs: Int) extends Logging {
+                       stateChangeCallback: (ZKState.Value, Throwable)=> Unit) extends Logging {
 
   private[server] val sessionExpireListener = new SessionExpireListener
-  var reconnectingMs = -1L
 
   def startup() {
     zkUtils.subscribeStateChanges(sessionExpireListener)
@@ -117,29 +118,30 @@ class KafkaHealthcheck(brokerId: Int,
     @throws[Exception]
     override def handleStateChanged(state: KeeperState) {
       stateToMeterMap.get(state).foreach(_.mark())
+      if (stateChangeCallback != null){
+        stateChangeCallback(ZKState.withName(state.toString), null)
+      }
     }
 
     @throws[Exception]
     override def handleNewSession() {
-      if (reconnectingMs != -1){
-        reconnectingMs = -1
-      }
       info("re-registering broker info in ZK for broker " + brokerId)
       register()
+      if (stateChangeCallback != null){
+        stateChangeCallback(ZKState.NewSession, null)
+      }
       info("done re-registering broker")
       info("Subscribing to %s path to watch for new topics".format(ZkUtils.BrokerTopicsPath))
     }
 
     override def handleSessionEstablishmentError(error: Throwable) {
-      this.error("Session Establishment Error: %s, waiting for %d ms before exiting".format(error, connectionRetryMs))
-      if (reconnectingMs == -1){
-        reconnectingMs = Calendar.getInstance().getTimeInMillis()
-      }else {
-        if (reconnectingMs >= connectionRetryMs){
-          fatal("Could not establish session with zookeeper", error)
-        }
-
+      this.error("Session Establishment Error: %s".format(error))
+      if (stateChangeCallback == null){
+        // this is a check for the callers (library writers)
+        // ideally should never see it any errors
+        this.fatal("Session Establishment Error: No callback configured to cleanly exit, exiting without a callback")
       }
+      stateChangeCallback(ZKState.SessionEstablishmentError, error)
     }
 
     def shutdown(): Unit = metricNames.foreach(removeMetric(_))

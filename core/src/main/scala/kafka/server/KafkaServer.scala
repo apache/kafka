@@ -95,6 +95,9 @@ object KafkaServer {
 class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNamePrefix: Option[String] = None, kafkaMetricsReporters: Seq[KafkaMetricsReporter] = List()) extends Logging with KafkaMetricsGroup {
   private val startupComplete = new AtomicBoolean(false)
   private val isShuttingDown = new AtomicBoolean(false)
+  // this is set to true if the zookeeper client dies
+  private val isWaitingForZKReconnect = new AtomicBoolean(false)
+  private var zkState = ZKState.Unknown
   private val isStartingUp = new AtomicBoolean(false)
 
   private var shutdownLatch = new CountDownLatch(1)
@@ -283,7 +286,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
             endpoint
         }
         kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, listeners, zkUtils, config.rack,
-          config.interBrokerProtocolVersion, config.zkConnectionRetryTimeoutMs)
+          config.interBrokerProtocolVersion, this.handleZKStateChanges)
         kafkaHealthcheck.startup()
 
         // Now that the broker id is successfully registered via KafkaHealthcheck, checkpoint it
@@ -565,6 +568,61 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         isShuttingDown.set(false)
         throw e
     }
+  }
+
+  // ZKStateChecker ins tarted
+  class ZKStateChecker extends Thread {
+
+    override def run(): Unit = {
+      val startTimeMillis = System.currentTimeMillis()
+      val endTimeMillis = startTimeMillis + config.zkConnectionRetryTimeoutMs;
+      while(true) {
+        var currentTimeMillis = System.currentTimeMillis()
+        if (zkState != null && zkState != "SessionEstablishmentError"){
+          info("Zookeeper session set to %s, exiting the ZKStateChecker".format(zkState))
+          isWaitingForZKReconnect.set(false)
+          return
+        }
+        if (currentTimeMillis >= endTimeMillis){
+          error("Timed out waiting for zookeeper session to be re-established. Shutting down.")
+          shutdown()
+          return
+        }
+        // watch it frequently but not too frequently
+        // I don't want to run an executorService too frequently and all the time
+        // without enough gain.
+        // if the server is already saturated without CPU that led to the ZK Disconnects
+        // and there's no hope,
+        Thread.sleep(100L);
+      }
+    }
+  }
+
+  var zKStateChecker: ZKStateChecker= null
+
+
+  private def handleZKStateChanges(state: ZKState.Value, error: Throwable): Unit = {
+    if (isShuttingDown.get()){ // if already shutting down, let it continue
+      this.error("received zookeeper session error: %s, but already shutting down".format(error))
+      return
+    }
+    state match {
+      case ZKState.SessionEstablishmentError => {
+        if (isWaitingForZKReconnect.get()){
+          // already waiting for zkReconnect
+        }
+        if (zKStateChecker == null){
+          isWaitingForZKReconnect.set(true)
+          zKStateChecker = new ZKStateChecker()
+          zKStateChecker.start()
+        }
+      }
+      case _ => {
+        zkState = state
+      }
+    }
+    // TODO: set the state to reconnecting and recreate the ZKUtils
+    // TODO: upon running into a session timeout, give it time to recover
   }
 
   /**

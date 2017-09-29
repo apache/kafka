@@ -28,7 +28,6 @@ import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch, Reassigne
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.ConfigType
 import kafka.utils.ZkUtils._
-
 import com.yammer.metrics.core.MetricName
 import org.I0Itec.zkclient.exception.{ZkBadVersionException, ZkException, ZkMarshallingError, ZkNoNodeException, ZkNodeExistsException}
 import org.I0Itec.zkclient.serialize.ZkSerializer
@@ -40,11 +39,29 @@ import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException, ZooDefs, ZooKeeper}
 import kafka.utils.Json._
+import org.apache.zookeeper.Watcher.Event.KeeperState
 
 import scala.collection._
 import scala.collection.JavaConverters._
 
+// This is copy of the KeeperState with addition
+// of SessionEstablishmentError and NewSession
+object ZKState extends Enumeration{
+  type String = Value;
+  val Unknown = Value("Unknown")
+  val SessionEstablishmentError = Value("SessionEstablishmentError")
+  val NewSession = Value("NewSession")
+  val Disconnected = Value("Disconnected")
+  val SyncConnected = Value("SyncConnected")
+  val AuthFailed = Value("AuthFailed")
+  val ConnectedReadOnly = Value("ConnectedReadOnly")
+  val SaslAuthenticated = Value("SaslAuthenticated")
+  val Expired = Value("Expired")
+}
+
 object ZkUtils {
+
+
 
   private val UseDefaultAcls = new java.util.ArrayList[ACL]
 
@@ -253,7 +270,7 @@ class ZooKeeperClientMetrics(zkClient: ZkClient, val time: Time)
   }
 }
 
-class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
+class   ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
               val zkConnection: ZkConnection,
               val isSecure: Boolean) extends Logging {
   // These are persistent ZK paths that should exist on kafka broker startup.
