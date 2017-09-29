@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.TaskMigratedException;
@@ -153,7 +154,7 @@ public class AssignedTasksTest {
         mockRunningTaskSuspension();
         EasyMock.replay(t1);
 
-        assertThat(suspendTask(), nullValue());
+        suspendTask();
 
         assertThat(assignedTasks.previousTaskIds(), equalTo(Collections.singleton(taskId1)));
         EasyMock.verify(t1);
@@ -168,7 +169,8 @@ public class AssignedTasksTest {
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
 
-        assertThat(suspendTask(), nullValue());
+        suspendTask();
+
         EasyMock.verify(t1);
     }
 
@@ -179,7 +181,7 @@ public class AssignedTasksTest {
         EasyMock.replay(t1);
 
         assignedTasks.addNewTask(t1);
-        assertThat(assignedTasks.suspend(), nullValue());
+        assignedTasks.suspend();
 
         EasyMock.verify(t1);
     }
@@ -189,8 +191,9 @@ public class AssignedTasksTest {
         mockRunningTaskSuspension();
         EasyMock.replay(t1);
 
-        assertThat(suspendTask(), nullValue());
-        assertThat(assignedTasks.suspend(), nullValue());
+        suspendTask();
+        assignedTasks.suspend();
+
         EasyMock.verify(t1);
     }
 
@@ -204,6 +207,7 @@ public class AssignedTasksTest {
         EasyMock.replay(t1);
 
         suspendTask();
+
         assertTrue(assignedTasks.previousTaskIds().isEmpty());
         EasyMock.verify(t1);
     }
@@ -262,7 +266,7 @@ public class AssignedTasksTest {
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
 
-        assertThat(suspendTask(), nullValue());
+        suspendTask();
 
         assertTrue(assignedTasks.maybeResumeSuspendedTask(taskId1, Collections.singleton(tp1)));
         assertThat(assignedTasks.runningTaskIds(), equalTo(Collections.singleton(taskId1)));
@@ -278,7 +282,7 @@ public class AssignedTasksTest {
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
 
-        assertThat(suspendTask(), nullValue());
+        suspendTask();
 
         try {
             assignedTasks.maybeResumeSuspendedTask(taskId1, Collections.singleton(tp1));
