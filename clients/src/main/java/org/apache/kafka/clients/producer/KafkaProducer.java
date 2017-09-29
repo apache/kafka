@@ -292,7 +292,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public KafkaProducer(Properties properties) {
         for (final String name: properties.stringPropertyNames()) {
             if (properties.get(name) == null) {
-                map.put(name, properties.getProperty(name));
+                properties.put(name, properties.getProperty(name));
             }
         }
         this(new ProducerConfig(properties), null, null);
@@ -310,7 +310,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public KafkaProducer(Properties properties, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
         for (final String name: properties.stringPropertyNames()) {
             if (properties.get(name) == null) {
-                map.put(name, properties.getProperty(name));
+                properties.put(name, properties.getProperty(name));
             }
         }
         this(new ProducerConfig(ProducerConfig.addSerializerToConfig(properties, keySerializer, valueSerializer)),
