@@ -23,13 +23,13 @@ import java.util.Map;
 
 
 /**
- * The result of {@link AdminClient#alterReplicaDir(Map, AlterReplicaDirOptions)}.
+ * The result of {@link AdminClient#alterReplicaDirs(Map, AlterReplicaDirsOptions)}.
  */
 @InterfaceStability.Evolving
-public class AlterReplicaDirResult {
+public class AlterReplicaDirsResult {
     private final Map<TopicPartitionReplica, KafkaFuture<Void>> futures;
 
-    AlterReplicaDirResult(Map<TopicPartitionReplica, KafkaFuture<Void>> futures) {
+    AlterReplicaDirsResult(Map<TopicPartitionReplica, KafkaFuture<Void>> futures) {
         this.futures = futures;
     }
 

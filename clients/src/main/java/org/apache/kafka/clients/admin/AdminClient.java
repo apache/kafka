@@ -373,16 +373,16 @@ public abstract class AdminClient implements AutoCloseable {
      * before the replica has been created on the broker. It will support moving replicas that have already been created after
      * KIP-113 is fully implemented.
      *
-     * This is a convenience method for #{@link AdminClient#alterReplicaDir(Map, AlterReplicaDirOptions)} with default options.
+     * This is a convenience method for #{@link AdminClient#alterReplicaDirs(Map, AlterReplicaDirsOptions)} with default options.
      * See the overload for more details.
      *
      * This operation is supported by brokers with version 1.0.0 or higher.
      *
      * @param replicaAssignment  The replicas with their log directory absolute path
-     * @return                   The AlterReplicaDirResult
+     * @return                   The AlterReplicaDirsResult
      */
-    public AlterReplicaDirResult alterReplicaDir(Map<TopicPartitionReplica, String> replicaAssignment) {
-        return alterReplicaDir(replicaAssignment, new AlterReplicaDirOptions());
+    public AlterReplicaDirsResult alterReplicaDirs(Map<TopicPartitionReplica, String> replicaAssignment) {
+        return alterReplicaDirs(replicaAssignment, new AlterReplicaDirsOptions());
     }
 
     /**
@@ -396,9 +396,9 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * @param replicaAssignment  The replicas with their log directory absolute path
      * @param options            The options to use when changing replica dir
-     * @return                   The AlterReplicaDirResult
+     * @return                   The AlterReplicaDirsResult
      */
-    public abstract AlterReplicaDirResult alterReplicaDir(Map<TopicPartitionReplica, String> replicaAssignment, AlterReplicaDirOptions options);
+    public abstract AlterReplicaDirsResult alterReplicaDirs(Map<TopicPartitionReplica, String> replicaAssignment, AlterReplicaDirsOptions options);
 
     /**
      * Query the information of all log directories on the given set of brokers
@@ -429,16 +429,16 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * Query the replica log directory information for the specified replicas.
      *
-     * This is a convenience method for #{@link AdminClient#describeReplicaLogDir(Collection, DescribeReplicaLogDirOptions)}
+     * This is a convenience method for #{@link AdminClient#describeReplicaLogDirs(Collection, DescribeReplicaLogDirsOptions)}
      * with default options. See the overload for more details.
      *
      * This operation is supported by brokers with version 1.0.0 or higher.
      *
      * @param replicas      The replicas to query
-     * @return              The DescribeReplicaLogDirResult
+     * @return              The DescribeReplicaLogDirsResult
      */
-    public DescribeReplicaLogDirResult describeReplicaLogDir(Collection<TopicPartitionReplica> replicas) {
-        return describeReplicaLogDir(replicas, new DescribeReplicaLogDirOptions());
+    public DescribeReplicaLogDirsResult describeReplicaLogDirs(Collection<TopicPartitionReplica> replicas) {
+        return describeReplicaLogDirs(replicas, new DescribeReplicaLogDirsOptions());
     }
 
     /**
@@ -448,9 +448,9 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * @param replicas      The replicas to query
      * @param options       The options to use when querying replica log dir info
-     * @return              The DescribeReplicaLogDirResult
+     * @return              The DescribeReplicaLogDirsResult
      */
-    public abstract DescribeReplicaLogDirResult describeReplicaLogDir(Collection<TopicPartitionReplica> replicas, DescribeReplicaLogDirOptions options);
+    public abstract DescribeReplicaLogDirsResult describeReplicaLogDirs(Collection<TopicPartitionReplica> replicas, DescribeReplicaLogDirsOptions options);
 
     /**
      * Increase the number of partitions of the topics given as the keys of {@code newPartitions}

@@ -28,15 +28,15 @@ import java.util.concurrent.ExecutionException;
 
 
 /**
- * The result of {@link AdminClient#describeReplicaLogDir(Collection)}.
+ * The result of {@link AdminClient#describeReplicaLogDirs(Collection)}.
  *
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
 @InterfaceStability.Evolving
-public class DescribeReplicaLogDirResult {
+public class DescribeReplicaLogDirsResult {
     private final Map<TopicPartitionReplica, KafkaFuture<ReplicaLogDirInfo>> futures;
 
-    DescribeReplicaLogDirResult(Map<TopicPartitionReplica, KafkaFuture<ReplicaLogDirInfo>> futures) {
+    DescribeReplicaLogDirsResult(Map<TopicPartitionReplica, KafkaFuture<ReplicaLogDirInfo>> futures) {
         this.futures = futures;
     }
 
