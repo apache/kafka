@@ -509,8 +509,7 @@ public class KGroupedStreamImplTest {
     @Test
     public void shouldCountAndMaterializeResults() {
         groupedStream.count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count")
-                                    .withKeySerde(Serdes.String())
-                                    .withValueSerde(Serdes.Long()));
+                                    .withKeySerde(Serdes.String()));
 
         processData();
 
