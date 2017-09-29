@@ -38,16 +38,20 @@ object DeleteRecordsCommand {
   }
 
   def parseOffsetJsonStringWithoutDedup(jsonData: String): Seq[(TopicPartition, Long)] = {
-    Json.parseFull(jsonData).toSeq.flatMap { js =>
-      js.asJsonObject.get("partitions").toSeq.flatMap { partitionsJs =>
-        partitionsJs.asJsonArray.iterator.map(_.asJsonObject).map { partitionJs =>
-          val topic = partitionJs("topic").to[String]
-          val partition = partitionJs("partition").to[Int]
-          val offset = partitionJs("offset").to[Long]
-          new TopicPartition(topic, partition) -> offset
-        }.toBuffer
+    val offsetData = Json.parseFull(jsonData)
+    if (offsetData != None) {
+      offsetData.toSeq.flatMap { js =>
+        js.asJsonObject.get("partitions").toSeq.flatMap { partitionsJs =>
+          partitionsJs.asJsonArray.iterator.map(_.asJsonObject).map { partitionJs =>
+            val topic = partitionJs("topic").to[String]
+            val partition = partitionJs("partition").to[Int]
+            val offset = partitionJs("offset").to[Long]
+            new TopicPartition(topic, partition) -> offset
+          }.toBuffer
+        }
       }
     }
+    else throw new AdminCommandFailedException("Offset json file doesn't contain valid JSON data.")
   }
 
   def execute(args: Array[String], out: PrintStream): Unit = {
