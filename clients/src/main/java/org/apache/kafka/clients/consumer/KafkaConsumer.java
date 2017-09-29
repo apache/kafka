@@ -1798,7 +1798,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             currentThread.set(NO_CURRENT_THREAD);
     }
     
-    /**
+     /**
       * Returns a flattened Properties object
       * @param properties - Java Properties object
       */
