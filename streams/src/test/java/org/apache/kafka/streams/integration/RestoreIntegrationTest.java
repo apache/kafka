@@ -181,9 +181,8 @@ public class RestoreIntegrationTest {
         kafkaStreams.start();
 
         assertTrue(startupLatch.await(30, TimeUnit.SECONDS));
-
-
     }
+    
     private void createStateForRestoration()
             throws ExecutionException, InterruptedException {
         final Properties producerConfig = new Properties();
