@@ -1808,6 +1808,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 properties.put(name, properties.getProperty(name));
             }
         }
+        return properties;         
      }
     
 }
