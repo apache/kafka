@@ -29,7 +29,6 @@ import kafka.utils.ZkUtils;
 import org.I0Itec.zkclient.ZkClient;
 import org.I0Itec.zkclient.ZkConnection;
 import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -111,26 +110,8 @@ public class KafkaEmbedded {
      */
     public String brokerList() {
         Object listenerConfig = effectiveConfig.get(KafkaConfig$.MODULE$.InterBrokerListenerNameProp());
-        SecurityProtocol securityProtocol = SecurityProtocol.PLAINTEXT;
-        if (listenerConfig != null) {
-            switch (listenerConfig.toString()) {
-                case "PLAINTEXT":
-                    securityProtocol = SecurityProtocol.PLAINTEXT;
-                    break;
-                case "SSL":
-                    securityProtocol = SecurityProtocol.SSL;
-                    break;
-                case "SASL_PLAINTEXT":
-                    securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
-                    break;
-                case "SASL_SSL":
-                    securityProtocol = SecurityProtocol.SASL_SSL;
-                    break;
-                default:
-                    throw new IllegalArgumentException("Unknown security protocol: " + listenerConfig.toString());
-            }
-        }
-        return kafka.config().hostName() + ":" + kafka.boundPort(ListenerName.forSecurityProtocol(securityProtocol));
+        return kafka.config().hostName() + ":" + kafka.boundPort(
+            new ListenerName(listenerConfig != null ? listenerConfig.toString() : "PLAINTEXT"));
     }
 
 
