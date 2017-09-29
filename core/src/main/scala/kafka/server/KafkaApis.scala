@@ -518,7 +518,6 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         downConvertMagic.map { magic =>
           trace(s"Down converting records from partition $tp to message format version $magic for fetch request from $clientId")
-          val startNanos = time.nanoseconds
           val converted = data.records.downConvert(magic, fetchRequest.fetchData.get(tp).fetchOffset, time)
           updateRecordsProcessingStats(request, tp, converted.recordsProcessingStats)
           new FetchResponse.PartitionData(data.error, data.highWatermark, FetchResponse.INVALID_LAST_STABLE_OFFSET,
@@ -2013,7 +2012,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private def updateRecordsProcessingStats(request: RequestChannel.Request, tp: TopicPartition,
                                            processingStats: RecordsProcessingStats): Unit = {
-    val conversionCount = processingStats.conversionCount
+    val conversionCount = processingStats.numRecordsConverted
     if (conversionCount > 0) {
       request.header.apiKey match {
         case ApiKeys.PRODUCE =>

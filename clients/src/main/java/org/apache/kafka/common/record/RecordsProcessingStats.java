@@ -18,15 +18,15 @@ package org.apache.kafka.common.record;
 
 public class RecordsProcessingStats {
 
-    public static final RecordsProcessingStats EMPTY = new RecordsProcessingStats(0L, 0L, -1);
+    public static final RecordsProcessingStats EMPTY = new RecordsProcessingStats(0L, 0, -1);
 
     private final long temporaryMemoryBytes;
-    private final long conversionCount;
+    private final int numRecordsConverted;
     private final long conversionTimeNanos;
 
-    public RecordsProcessingStats(long temporaryMemoryBytes, long conversionCount, long conversionTimeNanos) {
+    public RecordsProcessingStats(long temporaryMemoryBytes, int numRecordsConverted, long conversionTimeNanos) {
         this.temporaryMemoryBytes = temporaryMemoryBytes;
-        this.conversionCount = conversionCount;
+        this.numRecordsConverted = numRecordsConverted;
         this.conversionTimeNanos = conversionTimeNanos;
     }
 
@@ -44,8 +44,8 @@ public class RecordsProcessingStats {
         return temporaryMemoryBytes;
     }
 
-    public long conversionCount() {
-        return conversionCount;
+    public int numRecordsConverted() {
+        return numRecordsConverted;
     }
 
     public long conversionTimeNanos() {
@@ -54,7 +54,7 @@ public class RecordsProcessingStats {
 
     @Override
     public String toString() {
-        return String.format("RecordsProcessingStats(temporaryMemoryBytes=%d, conversionCount=%d, conversionTimeNanos=%d)",
-                temporaryMemoryBytes, conversionCount, conversionTimeNanos);
+        return String.format("RecordsProcessingStats(temporaryMemoryBytes=%d, numRecordsConverted=%d, conversionTimeNanos=%d)",
+                temporaryMemoryBytes, numRecordsConverted, conversionTimeNanos);
     }
 }

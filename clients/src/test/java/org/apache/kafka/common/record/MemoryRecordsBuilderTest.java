@@ -446,14 +446,20 @@ public class MemoryRecordsBuilderTest {
         builder.append(10L, "1".getBytes(), "a".getBytes());
         builder.close();
 
+        int sizeExcludingTxnMarkers = buffer.position();
+
         MemoryRecords.writeEndTransactionalMarker(buffer, 1L, System.currentTimeMillis(), 0, 15L, (short) 0,
                 new EndTransactionMarker(ControlRecordType.ABORT, 0));
+
+        int position = buffer.position();
 
         builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, compressionType,
                 TimestampType.CREATE_TIME, 1L);
         builder.append(12L, "2".getBytes(), "b".getBytes());
         builder.append(13L, "3".getBytes(), "c".getBytes());
         builder.close();
+
+        sizeExcludingTxnMarkers += buffer.position() - position;
 
         MemoryRecords.writeEndTransactionalMarker(buffer, 14L, System.currentTimeMillis(), 0, 1L, (short) 0,
                 new EndTransactionMarker(ControlRecordType.COMMIT, 0));
@@ -463,8 +469,10 @@ public class MemoryRecordsBuilderTest {
         ConvertedRecords<MemoryRecords> convertedRecords = MemoryRecords.readableRecords(buffer)
                 .downConvert(RecordBatch.MAGIC_VALUE_V1, 0, time);
         MemoryRecords records = convertedRecords.records();
+
+        // Transactional markers are skipped when down converting to V1, so exclude them from size
         verifyRecordsProcessingStats(convertedRecords.recordsProcessingStats(),
-                3, 2, records.sizeInBytes(), buffer.limit());
+                3, 3, records.sizeInBytes(), sizeExcludingTxnMarkers);
 
         List<? extends RecordBatch> batches = Utils.toList(records.batches().iterator());
         if (compressionType != CompressionType.NONE) {
@@ -504,7 +512,7 @@ public class MemoryRecordsBuilderTest {
         ConvertedRecords<MemoryRecords> convertedRecords = MemoryRecords.readableRecords(buffer)
                 .downConvert(RecordBatch.MAGIC_VALUE_V1, 0, time);
         MemoryRecords records = convertedRecords.records();
-        verifyRecordsProcessingStats(convertedRecords.recordsProcessingStats(), 3, 1,
+        verifyRecordsProcessingStats(convertedRecords.recordsProcessingStats(), 3, 2,
                 records.sizeInBytes(), buffer.limit());
 
         List<? extends RecordBatch> batches = Utils.toList(records.batches().iterator());
@@ -531,8 +539,6 @@ public class MemoryRecordsBuilderTest {
 
         convertedRecords = MemoryRecords.readableRecords(buffer).downConvert(RecordBatch.MAGIC_VALUE_V1, 2L, time);
         records = convertedRecords.records();
-        verifyRecordsProcessingStats(convertedRecords.recordsProcessingStats(), 3, 1,
-                records.sizeInBytes(), buffer.limit());
 
         batches = Utils.toList(records.batches().iterator());
         logRecords = Utils.toList(records.records().iterator());
@@ -546,6 +552,8 @@ public class MemoryRecordsBuilderTest {
             assertEquals("1", utf8(logRecords.get(0).key()));
             assertEquals("2", utf8(logRecords.get(1).key()));
             assertEquals("3", utf8(logRecords.get(2).key()));
+            verifyRecordsProcessingStats(convertedRecords.recordsProcessingStats(), 3, 2,
+                    records.sizeInBytes(), buffer.limit());
         } else {
             assertEquals(2, batches.size());
             assertEquals(RecordBatch.MAGIC_VALUE_V0, batches.get(0).magic());
@@ -554,6 +562,8 @@ public class MemoryRecordsBuilderTest {
             assertEquals(2, batches.get(1).baseOffset());
             assertEquals("1", utf8(logRecords.get(0).key()));
             assertEquals("3", utf8(logRecords.get(1).key()));
+            verifyRecordsProcessingStats(convertedRecords.recordsProcessingStats(), 3, 1,
+                    records.sizeInBytes(), buffer.limit());
         }
     }
 
@@ -634,16 +644,16 @@ public class MemoryRecordsBuilderTest {
         return values;
     }
 
-    private void verifyRecordsProcessingStats(RecordsProcessingStats processingStats, int recordCount, int convertedCount,
-            long finalBytes, long preConvertedBytes) {
+    private void verifyRecordsProcessingStats(RecordsProcessingStats processingStats, int numRecords,
+            int numRecordsConverted, long finalBytes, long preConvertedBytes) {
         assertNotNull("Records processing info is null", processingStats);
-        assertEquals(convertedCount, processingStats.conversionCount());
+        assertEquals(numRecordsConverted, processingStats.numRecordsConverted());
         assertTrue("Processing time not recorded", processingStats.conversionTimeNanos() > 0);
         long tempBytes = processingStats.temporaryMemoryBytes();
         if (compressionType == CompressionType.NONE) {
-            if (convertedCount == 0)
+            if (numRecordsConverted == 0)
                 assertEquals(finalBytes, tempBytes);
-            else if (convertedCount == recordCount)
+            else if (numRecordsConverted == numRecords)
                 assertEquals(preConvertedBytes + finalBytes, tempBytes);
             else {
                 assertTrue(String.format("Unexpected temp bytes %d final %d pre %d", tempBytes, finalBytes, preConvertedBytes),
