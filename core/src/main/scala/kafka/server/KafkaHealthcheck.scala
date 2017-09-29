@@ -18,7 +18,7 @@
 package kafka.server
 
 import java.net.InetAddress
-import java.util.Locale
+import java.util.{Calendar, Locale}
 import java.util.concurrent.TimeUnit
 
 import kafka.api.ApiVersion
@@ -38,15 +38,17 @@ import scala.collection.mutable.Set
  *   /brokers/ids/[0...N] --> advertisedHost:advertisedPort
  *   
  * Right now our definition of health is fairly naive. If we register in zk we are healthy, otherwise
- * we are dead.
+ * we retry for the connectionRetryMs, then log and die.
  */
 class KafkaHealthcheck(brokerId: Int,
                        advertisedEndpoints: Seq[EndPoint],
                        zkUtils: ZkUtils,
                        rack: Option[String],
-                       interBrokerProtocolVersion: ApiVersion) extends Logging {
+                       interBrokerProtocolVersion: ApiVersion,
+                       connectionRetryMs: Int) extends Logging {
 
   private[server] val sessionExpireListener = new SessionExpireListener
+  var reconnectingMs = -1L
 
   def startup() {
     zkUtils.subscribeStateChanges(sessionExpireListener)
@@ -85,6 +87,8 @@ class KafkaHealthcheck(brokerId: Int,
 
     private val metricNames = Set[String]()
 
+    private var zkReconnectStartMs = null
+
     private[server] val stateToMeterMap = {
       import KeeperState._
       val stateToEventTypeMap = Map(
@@ -117,6 +121,9 @@ class KafkaHealthcheck(brokerId: Int,
 
     @throws[Exception]
     override def handleNewSession() {
+      if (reconnectingMs != -1){
+        reconnectingMs = -1
+      }
       info("re-registering broker info in ZK for broker " + brokerId)
       register()
       info("done re-registering broker")
@@ -124,7 +131,15 @@ class KafkaHealthcheck(brokerId: Int,
     }
 
     override def handleSessionEstablishmentError(error: Throwable) {
-      fatal("Could not establish session with zookeeper", error)
+      this.error("Session Establishment Error: %s, waiting for %d ms before exiting".format(error, connectionRetryMs))
+      if (reconnectingMs == -1){
+        reconnectingMs = Calendar.getInstance().getTimeInMillis()
+      }else {
+        if (reconnectingMs >= connectionRetryMs){
+          fatal("Could not establish session with zookeeper", error)
+        }
+
+      }
     }
 
     def shutdown(): Unit = metricNames.foreach(removeMetric(_))
