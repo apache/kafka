@@ -1799,14 +1799,15 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
     
     /**
-     * Returns a flattened Properties object
-     */
-    private Properties getFlattenedProperties(Properties properties) {
+      * Returns a flattened Properties object
+      * @param properties - Java Properties object
+      */
+     private Properties getFlattenedProperties(Properties properties) {
         for (final String name: properties.stringPropertyNames()) {
             if (properties.get(name) == null) {
                 properties.put(name, properties.getProperty(name));
             }
         }
-    }
-     
+     }
+    
 }
