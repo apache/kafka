@@ -61,14 +61,21 @@ object DeleteRecordsCommand {
   def parseJsonData(version: Int, js: JsonValue): Seq[(TopicPartition, Long)] = {
     version match {
       case EarliestVersion => {
-        js.asJsonObject.get("partitions").toSeq.flatMap { partitionsJs =>
-          partitionsJs.asJsonArray.iterator.map(_.asJsonObject).map { partitionJs =>
-            val topic = partitionJs("topic").to[String]
-            val partition = partitionJs("partition").to[Int]
-            val offset = partitionJs("offset").to[Long]
-            new TopicPartition(topic, partition) -> offset
-          }.toBuffer
+
+        js.asJsonObject.get("partitions") match {
+          case Some(partitions) => {
+
+            partitions.asJsonArray.iterator.map(_.asJsonObject).map { partitionJs =>
+              val topic = partitionJs("topic").to[String]
+              val partition = partitionJs("partition").to[Int]
+              val offset = partitionJs("offset").to[Long]
+              new TopicPartition(topic, partition) -> offset
+            }.toBuffer
+
+          }
+          case _ => throw new AdminOperationException("Missing partitions field");
         }
+
       }
       case _ => throw new AdminOperationException("Not supported version")
     }
