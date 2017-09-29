@@ -110,7 +110,7 @@ object DeleteRecordsCommand {
   class DeleteRecordsCommandOptions(args: Array[String]) {
     val BootstrapServerDoc = "REQUIRED: The server to connect to."
     val offsetJsonFileDoc = "REQUIRED: The JSON file with offset per partition. The format to use is:\n" +
-                                 "{\"partitions\":\n  [{\"topic\": \"foo\", \"partition\": 1, \"offset\": 1}]}"
+                                 "{\"partitions\":\n  [{\"topic\": \"foo\", \"partition\": 1, \"offset\": 1}],\n \"version\":1\n}"
     val CommandConfigDoc = "A property file containing configs to be passed to Admin Client."
 
     val parser = new OptionParser(false)
