@@ -614,6 +614,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param properties The consumer configuration properties
      */
     public KafkaConsumer(Properties properties) {
+        for (final String name: properties.stringPropertyNames()) {
+            if (properties.get(name) == null) {
+                map.put(name, properties.getProperty(name));
+            }
+        }
         this(properties, null, null);
     }
 
@@ -632,6 +637,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public KafkaConsumer(Properties properties,
                          Deserializer<K> keyDeserializer,
                          Deserializer<V> valueDeserializer) {
+        for (final String name: properties.stringPropertyNames()) {
+            if (properties.get(name) == null) {
+                map.put(name, properties.getProperty(name));
+            }
+        }
         this(new ConsumerConfig(ConsumerConfig.addDeserializerToConfig(properties, keyDeserializer, valueDeserializer)),
              keyDeserializer,
              valueDeserializer);
