@@ -290,6 +290,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @param properties   The producer configs
      */
     public KafkaProducer(Properties properties) {
+        for (final String name: properties.stringPropertyNames()) {            
+            map.put(name, properties.getProperty(name));
+        }
         this(new ProducerConfig(properties), null, null);
     }
 
@@ -303,6 +306,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *                         be called in the producer when the serializer is passed in directly.
      */
     public KafkaProducer(Properties properties, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
+        for (final String name: properties.stringPropertyNames()) {            
+            map.put(name, properties.getProperty(name));
+        }
         this(new ProducerConfig(ProducerConfig.addSerializerToConfig(properties, keySerializer, valueSerializer)),
                 keySerializer, valueSerializer);
     }
