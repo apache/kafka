@@ -317,6 +317,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 properties.put(name, properties.getProperty(name));
             }
         }
+        return properties;
     }
 
     @SuppressWarnings("unchecked")
