@@ -35,7 +35,6 @@ import kafka.utils.json.JsonValue
 object DeleteRecordsCommand {
 
   private[admin] val EarliestVersion = 1
-  private[admin] val supportedVersions = List(EarliestVersion)
 
   def main(args: Array[String]): Unit = {
     execute(args, System.out)
@@ -49,8 +48,6 @@ object DeleteRecordsCommand {
           case Some(jsonValue) => jsonValue.to[Int]
           case None => EarliestVersion
         }
-        if (!supportedVersions.contains(version))
-          throw new AdminOperationException(s"Not supported version field value $version")
 
         parseJsonData(version, js)
       }
@@ -60,7 +57,7 @@ object DeleteRecordsCommand {
 
   def parseJsonData(version: Int, js: JsonValue): Seq[(TopicPartition, Long)] = {
     version match {
-      case EarliestVersion => {
+      case 1 => {
 
         js.asJsonObject.get("partitions") match {
           case Some(partitions) => {
@@ -77,7 +74,7 @@ object DeleteRecordsCommand {
         }
 
       }
-      case _ => throw new AdminOperationException("Not supported version")
+      case _ => throw new AdminOperationException(s"Not supported version field value $version")
     }
   }
 
