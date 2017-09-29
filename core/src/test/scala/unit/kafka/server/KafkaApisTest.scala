@@ -27,7 +27,7 @@ import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.{Log, TimestampOffset}
-import kafka.network.RequestChannel
+import kafka.network.{RequestChannel, RequestChannelMetrics}
 import kafka.security.auth.Authorizer
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server._
@@ -54,6 +54,7 @@ import scala.collection.Map
 class KafkaApisTest {
 
   private val requestChannel = EasyMock.createNiceMock(classOf[RequestChannel])
+  private val requestChannelMetrics = EasyMock.createNiceMock(classOf[RequestChannelMetrics])
   private val replicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
   private val groupCoordinator = EasyMock.createNiceMock(classOf[GroupCoordinator])
   private val adminManager = EasyMock.createNiceMock(classOf[AdminManager])
@@ -402,7 +403,7 @@ class KafkaApisTest {
     val context = new RequestContext(header, "1", InetAddress.getLocalHost, KafkaPrincipal.ANONYMOUS,
       new ListenerName(""), SecurityProtocol.PLAINTEXT)
     (request, new RequestChannel.Request(processor = 1, context = context, startTimeNanos =  0,
-      MemoryPool.NONE, buffer))
+      MemoryPool.NONE, buffer, requestChannelMetrics))
   }
 
   private def readResponse(api: ApiKeys, request: AbstractRequest, capturedResponse: Capture[RequestChannel.Response]): AbstractResponse = {

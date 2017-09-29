@@ -53,7 +53,8 @@ object RequestChannel extends Logging {
                 val context: RequestContext,
                 val startTimeNanos: Long,
                 memoryPool: MemoryPool,
-                @volatile private var buffer: ByteBuffer) extends BaseRequest {
+                @volatile private var buffer: ByteBuffer,
+                requestChannelMetrics: RequestChannelMetrics) extends BaseRequest {
     // These need to be volatile because the readers are in the network thread and the writers are in the request
     // handler threads or the purgatory threads
     @volatile var requestDequeueTimeNanos = -1L
@@ -137,7 +138,7 @@ object RequestChannel extends Logging {
         else Seq.empty
       val metricNames = fetchMetricNames :+ header.apiKey.name
       metricNames.foreach { metricName =>
-        val m = RequestMetrics(metricName)
+        val m = requestChannelMetrics.requestMetrics(metricName)
         m.requestRate.mark()
         m.requestQueueTimeHist.update(Math.round(requestQueueTimeMs))
         m.localTimeHist.update(Math.round(apiLocalTimeMs))
@@ -221,6 +222,7 @@ object RequestChannel extends Logging {
 }
 
 class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMetricsGroup {
+  val requestChannelMetrics = new RequestChannelMetrics
   private var responseListeners: List[(Int) => Unit] = Nil
   private val requestQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
   private val responseQueues = new Array[BlockingQueue[RequestChannel.Response]](numProcessors)
@@ -246,6 +248,8 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
       Map("processor" -> i.toString)
     )
   }
+
+  def requestMetrics(name: String): RequestMetrics = requestChannelMetrics.requestMetrics(name)
 
   /** Send a request to be handled, potentially blocking until there is room in the queue for the request */
   def sendRequest(request: RequestChannel.Request) {
@@ -294,43 +298,43 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
 
   def updateErrorMetrics(apiKey: ApiKeys, errors: collection.Map[Errors, Integer]) {
     errors.foreach { case (error, count) =>
-      RequestMetrics.markErrorMeter(apiKey.name, error, count)
+      requestChannelMetrics.markErrorMeter(apiKey.name, error, count)
     }
   }
 
   def shutdown() {
     requestQueue.clear()
+    requestChannelMetrics.shutdown()
   }
 
   def sendShutdownRequest(): Unit = requestQueue.put(ShutdownRequest)
 
 }
 
-object RequestMetrics {
+class RequestChannelMetrics {
 
   private val metricsMap = mutable.Map[String, RequestMetrics]()
 
-  val consumerFetchMetricName = ApiKeys.FETCH.name + "Consumer"
-  val followFetchMetricName = ApiKeys.FETCH.name + "Follower"
-
-  (ApiKeys.values.toSeq.map(_.name) ++ Seq(consumerFetchMetricName, followFetchMetricName)).foreach { name =>
+  (ApiKeys.values.toSeq.map(_.name) ++
+      Seq(RequestMetrics.consumerFetchMetricName, RequestMetrics.followFetchMetricName)).foreach { name =>
     metricsMap.put(name, new RequestMetrics(name))
   }
 
-  def apply(metricName: String) = metricsMap(metricName)
+  def requestMetrics(metricName: String) = metricsMap(metricName)
 
   def markErrorMeter(name: String, error: Errors, count: Int) {
       val errorMeter = metricsMap(name).errorMeters(error)
       errorMeter.getOrCreateMeter().mark(count.toLong)
   }
 
-  // Used for testing until these metrics are moved to a class
-  private[kafka] def clearErrorMeters(): Unit = {
-    metricsMap.values.foreach { requestMetrics =>
-      requestMetrics.errorMeters.values.foreach(_.removeMeter())
-    }
+  def shutdown(): Unit = {
+     metricsMap.values.foreach(_.removeMetrics())
   }
+}
 
+object RequestMetrics {
+  val consumerFetchMetricName = ApiKeys.FETCH.name + "Consumer"
+  val followFetchMetricName = ApiKeys.FETCH.name + "Follower"
 }
 
 class RequestMetrics(name: String) extends KafkaMetricsGroup {
@@ -365,7 +369,7 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
     else
       None
 
-  private val errorMeters = mutable.Map[Errors, ErrorMeter]()
+  val errorMeters = mutable.Map[Errors, ErrorMeter]()
   Errors.values.foreach(error => errorMeters.put(error, new ErrorMeter(name, error)))
 
   class ErrorMeter(name: String, error: Errors) {
@@ -394,6 +398,25 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
         }
       }
     }
+  }
 
+  def removeMetrics(): Unit = {
+    removeMetric("RequestsPerSec", tags)
+    removeMetric("RequestQueueTimeMs", tags)
+    removeMetric("LocalTimeMs", tags)
+    removeMetric("RemoteTimeMs", tags)
+    removeMetric("RequestsPerSec", tags)
+    removeMetric("ThrottleTimeMs", tags)
+    removeMetric("ResponseQueueTimeMs", tags)
+    removeMetric("TotalTimeMs", tags)
+    removeMetric("ResponseSendTimeMs", tags)
+    removeMetric("RequestBytes", tags)
+    removeMetric("ResponseSendTimeMs", tags)
+    if (name == ApiKeys.FETCH.name || name == ApiKeys.PRODUCE.name) {
+      removeMetric("MessageConversionsTimeMs", tags)
+      removeMetric("TemporaryMemoryBytes", tags)
+    }
+    errorMeters.values.foreach(_.removeMeter())
+    errorMeters.clear()
   }
 }
