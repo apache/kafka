@@ -616,7 +616,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public KafkaConsumer(Properties properties) {
         for (final String name: properties.stringPropertyNames()) {
             if (properties.get(name) == null) {
-                map.put(name, properties.getProperty(name));
+                properties.put(name, properties.getProperty(name));
             }
         }
         this(properties, null, null);
@@ -639,7 +639,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                          Deserializer<V> valueDeserializer) {
         for (final String name: properties.stringPropertyNames()) {
             if (properties.get(name) == null) {
-                map.put(name, properties.getProperty(name));
+                properties.put(name, properties.getProperty(name));
             }
         }
         this(new ConsumerConfig(ConsumerConfig.addDeserializerToConfig(properties, keyDeserializer, valueDeserializer)),
