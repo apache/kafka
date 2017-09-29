@@ -185,7 +185,7 @@
         <li>In the <code>init</code> method, schedule the punctuation every 1 second and retrieve the local state store by its name "Counts".</li>
         <li>In the <code>process</code> method, upon each received record, split the value string into words, and update their counts into the state store (we will talk about this feature later in the section).</li>
         <li>In the scheduled <code>punctuate</code> method, iterate the local state store and send the aggregated counts to the downstream processor, and commit the current stream state.</li>
-        <li>When done with the <code>KeyValueIterator&lt;String, Long&gt;</code> we <em>MUST</em> close the iterator, as show above or using the try-with-resources statement (available since JDK7).</li>
+        <li>When done with the <code>KeyValueIterator&lt;String, Long&gt;</code> you <em>must</em> close the iterator, as show above or using the try-with-resources statement.</li>
     </ul>
 
 
@@ -255,9 +255,9 @@ The default retention setting is <code>Windows#maintainMs()</code> + 1 day. This
 </p>
 
 <p>
-One additional note regarding the use of state stores.  Any time you open an <code>Iterator</code> from a state store you <em>MUST</em> call <code>close</code> on the iterator
-when you are done working with it to reclaim resources.  Or you can use the iterator from within a try-with-resources statement (available since JDK7).
-    By Not closing an iterator, you may likely encounter an OOM error.
+One additional note regarding the use of state stores.  Any time you open an <code>Iterator</code> from a state store you <em>must</em> call <code>close()</code> on the iterator
+when you are done working with it to reclaim resources.  Or you can use the iterator from within a try-with-resources statement.
+    By not closing an iterator, you may likely encounter an OOM error.
 </p>
 
 

@@ -31,7 +31,7 @@ public interface ReadOnlySessionStore<K, AGG> {
 
     /**
      * Retrieve all aggregated sessions for the provided key.
-     * This iterator MUST be closed after use.
+     * This iterator must be closed after use.
      *
      * For each key, the iterator guarantees ordering of sessions, starting from the oldest/earliest
      * available session to the newest/latest session.
@@ -45,7 +45,7 @@ public interface ReadOnlySessionStore<K, AGG> {
 
     /**
      * Retrieve all aggregated sessions for the given range of keys.
-     * This iterator MUST be closed after use.
+     * This iterator must be closed after use.
      *
      * For each key, the iterator guarantees ordering of sessions, starting from the oldest/earliest
      * available session to the newest/latest session.
