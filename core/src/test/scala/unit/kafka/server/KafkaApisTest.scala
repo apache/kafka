@@ -27,7 +27,7 @@ import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.{Log, TimestampOffset}
-import kafka.network.{RequestChannel, RequestChannelMetrics}
+import kafka.network.RequestChannel
 import kafka.security.auth.Authorizer
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server._
@@ -54,7 +54,7 @@ import scala.collection.Map
 class KafkaApisTest {
 
   private val requestChannel = EasyMock.createNiceMock(classOf[RequestChannel])
-  private val requestChannelMetrics = EasyMock.createNiceMock(classOf[RequestChannelMetrics])
+  private val requestChannelMetrics = EasyMock.createNiceMock(classOf[RequestChannel.Metrics])
   private val replicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
   private val groupCoordinator = EasyMock.createNiceMock(classOf[GroupCoordinator])
   private val adminManager = EasyMock.createNiceMock(classOf[AdminManager])

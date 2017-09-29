@@ -550,7 +550,7 @@ private[kafka] class Processor(val id: Int,
             val context = new RequestContext(header, receive.source, channel.socketAddress,
               channel.principal, listenerName, securityProtocol)
             val req = new RequestChannel.Request(processor = id, context = context,
-              startTimeNanos = time.nanoseconds, memoryPool, receive.payload, requestChannel.requestChannelMetrics)
+              startTimeNanos = time.nanoseconds, memoryPool, receive.payload, requestChannel.metrics)
             requestChannel.sendRequest(req)
             selector.mute(receive.source)
           case None =>
