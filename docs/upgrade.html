@@ -71,7 +71,7 @@
     <li>The <code>app-info</code> mbean registered with JMX to provide version and commit id will be deprecated and replaced with
         metrics providing these attributes.</li>
     <li>Kafka metrics may now contain non-numeric values. <code>org.apache.kafka.common.Metric#value()</code> has been deprecated and
-        may throw an <code>IllegalStateException</code> when iterating over metrics of <code>KafkaProducer/KafkaConsumer/KafkaAdminClient</code>.
+        will return <code>0.0</code> when iterating over metrics of <code>KafkaProducer/KafkaConsumer/KafkaAdminClient</code>.
         <code>org.apache.kafka.common.Metric#metricValue()</code> can be used to safely iterate over any metric value.</code>
 
 </ul>

@@ -83,7 +83,7 @@ public final class KafkaMetric implements Metric {
         if (this.metricValueProvider instanceof Measurable)
             return ((Measurable) metricValueProvider).measure(config, timeMs);
         else
-            throw new IllegalStateException("Not a measurable metric");
+            return 0;
     }
 
     public void config(MetricConfig config) {
