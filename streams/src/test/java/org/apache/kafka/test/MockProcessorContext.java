@@ -164,14 +164,10 @@ public class MockProcessorContext extends AbstractProcessorContext implements Re
     }
 
     @Override
-    public void schedule(final long interval) {
-        throw new UnsupportedOperationException("schedule() not supported.");
-    }
+    public void schedule(final long interval) { }
 
     @Override
-    public void commit() {
-        throw new UnsupportedOperationException("commit() not supported.");
-    }
+    public void commit() { }
 
     @Override
     @SuppressWarnings("unchecked")
