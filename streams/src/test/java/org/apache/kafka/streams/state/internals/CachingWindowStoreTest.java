@@ -77,7 +77,7 @@ public class CachingWindowStoreTest {
                                                 Serdes.String(),
                                                 WINDOW_SIZE,
                                                 Segments.segmentInterval(retention, numSegments));
-        cachingStore.setFlushListener(cacheListener);
+        cachingStore.setFlushListener(cacheListener, false);
         cache = new ThreadCache(new LogContext("testCache "), MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
         topic = "topic";
         context = new MockProcessorContext(TestUtils.tempDirectory(), null, null, (RecordCollector) null, cache);
@@ -154,6 +154,7 @@ public class CachingWindowStoreTest {
 
     @Test
     public void shouldForwardOldValuesWhenEnabled() {
+        cachingStore.setFlushListener(cacheListener, true);
         final Windowed<String> windowedKey = new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
         cachingStore.put(bytesKey("1"), bytesValue("a"));
         cachingStore.flush();
@@ -161,6 +162,17 @@ public class CachingWindowStoreTest {
         cachingStore.flush();
         assertEquals("b", cacheListener.forwarded.get(windowedKey).newValue);
         assertEquals("a", cacheListener.forwarded.get(windowedKey).oldValue);
+    }
+
+    @Test
+    public void shouldForwardOldValuesWhenDisabled() {
+        final Windowed<String> windowedKey = new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
+        cachingStore.put(bytesKey("1"), bytesValue("a"));
+        cachingStore.flush();
+        cachingStore.put(bytesKey("1"), bytesValue("b"));
+        cachingStore.flush();
+        assertEquals("b", cacheListener.forwarded.get(windowedKey).newValue);
+        assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
     }
 
     @Test
