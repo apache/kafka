@@ -410,17 +410,13 @@ public class MetadataTest {
     }
 
     private Thread asyncFetch(final String topic, final long maxWaitMs) {
-        Thread thread = new Thread() {
-            public void run() {
-                while (metadata.fetch().partitionsForTopic(topic).isEmpty()) {
+        Thread thread = ()-> { while (metadata.fetch().partitionsForTopic(topic).isEmpty()) {
                     try {
                         metadata.awaitUpdate(metadata.requestUpdate(), maxWaitMs);
                     } catch (Exception e) {
                         backgroundError.set(e.toString());
                     }
-                }
-            }
-        };
+                }};
         thread.start();
         return thread;
     }

@@ -47,9 +47,7 @@ public class KStreamTransformValuesTest {
         StreamsBuilder builder = new StreamsBuilder();
 
         ValueTransformerSupplier<Number, Integer> valueTransformerSupplier =
-            new ValueTransformerSupplier<Number, Integer>() {
-                public ValueTransformer<Number, Integer> get() {
-                    return new ValueTransformer<Number, Integer>() {
+            ()-> { return new ValueTransformer<Number, Integer>() {
 
                         private int total = 0;
 
@@ -71,9 +69,7 @@ public class KStreamTransformValuesTest {
                         @Override
                         public void close() {
                         }
-                    };
-                }
-            };
+                    };};
 
         final int[] expectedKeys = {1, 10, 100, 1000};
 

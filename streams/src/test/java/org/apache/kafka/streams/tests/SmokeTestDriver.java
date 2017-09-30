@@ -82,16 +82,12 @@ public class SmokeTestDriver extends SmokeTestUtil {
         final int numKeys = 20;
         final int maxRecordsPerKey = 1000;
 
-        Thread driver = new Thread() {
-            public void run() {
-                try {
+        Thread driver = ()-> { try {
                     Map<String, Set<Integer>> allData = generate(kafka, numKeys, maxRecordsPerKey);
                     verify(kafka, allData, maxRecordsPerKey);
                 } catch (Exception ex) {
                     ex.printStackTrace();
-                }
-            }
-        };
+                }};
 
         SmokeTestClient streams1 = new SmokeTestClient(createDir(stateDir, "1"), kafka);
         SmokeTestClient streams2 = new SmokeTestClient(createDir(stateDir, "2"), kafka);

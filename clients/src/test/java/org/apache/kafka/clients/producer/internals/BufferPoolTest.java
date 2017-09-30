@@ -149,17 +149,13 @@ public class BufferPoolTest {
 
     private CountDownLatch asyncAllocate(final BufferPool pool, final int size) {
         final CountDownLatch completed = new CountDownLatch(1);
-        Thread thread = new Thread() {
-            public void run() {
-                try {
+        Thread thread = ()-> { try {
                     pool.allocate(size, maxBlockTimeMs);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 } finally {
                     completed.countDown();
-                }
-            }
-        };
+                }};
         thread.start();
         return completed;
     }
