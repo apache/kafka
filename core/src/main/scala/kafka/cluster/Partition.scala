@@ -415,8 +415,10 @@ class Partition(val topic: String,
   def lowWatermarkIfLeader: Long = {
     if (!isLeaderReplicaLocal)
       throw new NotLeaderForPartitionException("Leader not local for partition %s on broker %d".format(topicPartition, localBrokerId))
-    assignedReplicas.filter(replica =>
-      replicaManager.metadataCache.isBrokerAlive(replica.brokerId)).map(_.logStartOffset).reduceOption(_ min _).getOrElse(0L)
+    val logStartOffsets = assignedReplicas.collect {
+      case replica if replicaManager.metadataCache.isBrokerAlive(replica.brokerId) => replica.logStartOffset
+    }
+    CoreUtils.min(logStartOffsets, 0L)
   }
 
   /**
