@@ -778,9 +778,9 @@ class ReplicaManager(val config: KafkaConfig,
                     quota: ReplicaQuota = UnboundedQuota,
                     responseCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit,
                     isolationLevel: IsolationLevel) {
-    val isFromFollower = replicaId >= 0
-    val fetchOnlyFromLeader: Boolean = replicaId != Request.DebuggingConsumerId
-    val fetchOnlyCommitted: Boolean = ! Request.isValidBrokerId(replicaId)
+    val isFromFollower = Request.isValidBrokerId(replicaId)
+    val fetchOnlyFromLeader = replicaId != Request.DebuggingConsumerId
+    val fetchOnlyCommitted = !isFromFollower
 
     def readFromLog(): Seq[(TopicPartition, LogReadResult)] = {
       val result = readFromLocalLog(
@@ -792,11 +792,10 @@ class ReplicaManager(val config: KafkaConfig,
         readPartitionInfo = fetchInfos,
         quota = quota,
         isolationLevel = isolationLevel)
-      if (Request.isValidBrokerId(replicaId)) updateFollowerLogReadResults(replicaId, result)
+      if (isFromFollower) updateFollowerLogEndOffsets(replicaId, result)
       else result
     }
 
-    // if the fetch comes from a follower, update its log end offset for each partition
     val logReadResults = readFromLog()
 
     // check if this fetch request can be satisfied right away
@@ -1295,9 +1294,9 @@ class ReplicaManager(val config: KafkaConfig,
     nonOfflinePartitionsIterator.foreach(_.maybeShrinkIsr(config.replicaLagTimeMaxMs))
   }
 
-  private def updateFollowerLogReadResults(replicaId: Int,
+  private def updateFollowerLogEndOffsets(replicaId: Int,
                                            readResults: Seq[(TopicPartition, LogReadResult)]): Seq[(TopicPartition, LogReadResult)] = {
-    debug(s"Recording follower broker $replicaId log read results: $readResults")
+    debug(s"Recording follower broker $replicaId log end offsets: $readResults")
     readResults.map { case (topicPartition, readResult) =>
       var updatedReadResult = readResult
       nonOfflinePartition(topicPartition) match {
