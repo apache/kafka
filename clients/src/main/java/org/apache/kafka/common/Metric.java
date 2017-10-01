@@ -24,19 +24,19 @@ public interface Metric {
     /**
      * A name for this metric
      */
-    public MetricName metricName();
+    MetricName metricName();
 
     /**
-     * The value of the metric as double if the metric is measurable
-     * @throws IllegalStateException if this metric does not have a measurable double value
+     * The value of the metric as double if the metric is measurable and `0.0` otherwise.
+     *
      * @deprecated As of 1.0.0, use {@link #metricValue()} instead. This will be removed in a future major release.
      */
     @Deprecated
-    public double value();
+    double value();
 
     /**
      * The value of the metric, which may be measurable or a non-measurable gauge
      */
-    public Object metricValue();
+    Object metricValue();
 
 }
