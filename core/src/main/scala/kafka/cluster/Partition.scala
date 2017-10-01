@@ -263,7 +263,8 @@ class Partition(val topic: String,
   }
 
   /**
-   * Update the log end offset of a certain replica of this partition
+   * Update the the follower's state in the leader based on the last fetch request. See
+   * [[kafka.cluster.Replica#updateLogReadResult]] for details.
    *
    * @return true if the leader's log start offset or high watermark have been updated
    */

@@ -89,10 +89,13 @@ case class LogReadResult(info: FetchDataInfo,
     case Some(e) => Errors.forException(e)
   }
 
-  def update(leaderReplica: Replica): LogReadResult =
+  def updateLeaderReplicaInfo(leaderReplica: Replica): LogReadResult =
     copy(highWatermark = leaderReplica.highWatermark.messageOffset,
       leaderLogStartOffset = leaderReplica.logStartOffset,
       leaderLogEndOffset = leaderReplica.logEndOffset.messageOffset)
+
+  def withEmptyFetchInfo: LogReadResult =
+    copy(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY))
 
   override def toString =
     s"Fetch Data: [$info], HW: [$highWatermark], leaderLogStartOffset: [$leaderLogStartOffset], leaderLogEndOffset: [$leaderLogEndOffset], " +
@@ -792,7 +795,7 @@ class ReplicaManager(val config: KafkaConfig,
         readPartitionInfo = fetchInfos,
         quota = quota,
         isolationLevel = isolationLevel)
-      if (isFromFollower) updateFollowerLogEndOffsets(replicaId, result)
+      if (isFromFollower) updateFollowerLogReadResults(replicaId, result)
       else result
     }
 
@@ -956,11 +959,11 @@ class ReplicaManager(val config: KafkaConfig,
     var minOneMessage = !hardMaxBytesLimit
     readPartitionInfo.foreach { case (tp, fetchInfo) =>
       val readResult = read(tp, fetchInfo, limitBytes, minOneMessage)
-      val messageSetSize = readResult.info.records.sizeInBytes
+      val recordBatchSize = readResult.info.records.sizeInBytes
       // Once we read from a non-empty partition, we stop ignoring request and partition level size limits
-      if (messageSetSize > 0)
+      if (recordBatchSize > 0)
         minOneMessage = false
-      limitBytes = math.max(0, limitBytes - messageSetSize)
+      limitBytes = math.max(0, limitBytes - recordBatchSize)
       result += (tp -> readResult)
     }
     result
@@ -1294,7 +1297,11 @@ class ReplicaManager(val config: KafkaConfig,
     nonOfflinePartitionsIterator.foreach(_.maybeShrinkIsr(config.replicaLagTimeMaxMs))
   }
 
-  private def updateFollowerLogEndOffsets(replicaId: Int,
+  /**
+   * Update the follower's fetch state in the leader based on the last fetch request and update `readResult`,
+   * if necessary.
+   */
+  private def updateFollowerLogReadResults(replicaId: Int,
                                            readResults: Seq[(TopicPartition, LogReadResult)]): Seq[(TopicPartition, LogReadResult)] = {
     debug(s"Recording follower broker $replicaId log end offsets: $readResults")
     readResults.map { case (topicPartition, readResult) =>
@@ -1305,16 +1312,17 @@ class ReplicaManager(val config: KafkaConfig,
             case Some(replica) =>
               if (partition.updateReplicaLogReadResult(replica, readResult))
                 partition.leaderReplicaIfLocal.foreach { leaderReplica =>
-                  updatedReadResult = readResult.update(leaderReplica)
+                  updatedReadResult = readResult.updateLeaderReplicaInfo(leaderReplica)
                 }
             case None =>
               warn(s"Leader $localBrokerId failed to record follower $replicaId's position " +
                 s"${readResult.info.fetchOffsetMetadata.messageOffset} since the replica is not recognized to be " +
                 s"one of the assigned replicas ${partition.assignedReplicas.map(_.brokerId).mkString(",")} " +
-                s"for partition $topicPartition.")
+                s"for partition $topicPartition. Empty records will be returned for this partition.")
+              updatedReadResult = readResult.withEmptyFetchInfo
           }
         case None =>
-          warn("While recording the replica LEO, the partition %s hasn't been created.".format(topicPartition))
+          warn(s"While recording the replica LEO, the partition $topicPartition hasn't been created.")
       }
       topicPartition -> updatedReadResult
     }
