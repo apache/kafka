@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
@@ -125,7 +124,7 @@ public interface KGroupedTable<K, V> {
      * @return a {@link KTable} that contains "update" records with unmodified keys and {@link Long} values that
      * represent the latest (rolling) count (i.e., number of records) for each key
      */
-    KTable<K, Long> count(final Materialized<K, Long, KeyValueStore<Bytes, byte[]>> materialized);
+    KTable<K, Long> count(final Materialized<K, Long, KeyValueStore> materialized);
 
     /**
      * Count number of records of the original {@link KTable} that got {@link KTable#groupBy(KeyValueMapper) mapped} to
@@ -340,7 +339,7 @@ public interface KGroupedTable<K, V> {
      */
     KTable<K, V> reduce(final Reducer<V> adder,
                         final Reducer<V> subtractor,
-                        final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized);
+                        final Materialized<K, V, KeyValueStore> materialized);
     /**
      * Combine the value of records of the original {@link KTable} that got {@link KTable#groupBy(KeyValueMapper)
      * mapped} to the same key into a new instance of {@link KTable}.
@@ -633,7 +632,7 @@ public interface KGroupedTable<K, V> {
     <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
                                  final Aggregator<? super K, ? super V, VR> adder,
                                  final Aggregator<? super K, ? super V, VR> subtractor,
-                                 final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
+                                 final Materialized<K, VR, KeyValueStore> materialized);
 
     /**
      * Aggregate the value of records of the original {@link KTable} that got {@link KTable#groupBy(KeyValueMapper)

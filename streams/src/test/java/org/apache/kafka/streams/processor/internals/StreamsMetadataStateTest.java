@@ -22,7 +22,6 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -94,7 +93,7 @@ public class StreamsMetadataStateTest {
 
         builder.globalTable("global-topic",
                             Consumed.with(null, null),
-                            Materialized.<Object, Object, KeyValueStore<Bytes, byte[]>>as(globalTable));
+                            Materialized.<Object, Object, KeyValueStore>as(globalTable));
 
         StreamsBuilderTest.internalTopologyBuilder(builder).setApplicationId("appId");
 

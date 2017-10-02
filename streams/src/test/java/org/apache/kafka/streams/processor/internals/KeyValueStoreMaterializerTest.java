@@ -44,8 +44,8 @@ public class KeyValueStoreMaterializerTest {
 
     @Test
     public void shouldCreateBuilderThatBuildsMeteredStoreWithCachingAndLoggingEnabled() {
-        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized
-                = new MaterializedInternal<>(Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store"));
+        final MaterializedInternal<String, String, KeyValueStore> materialized
+                = new MaterializedInternal<>(Materialized.<String, String, KeyValueStore>as("store"));
         final KeyValueStoreMaterializer<String, String> materializer = new KeyValueStoreMaterializer<>(materialized);
         final StoreBuilder<KeyValueStore<String, String>> builder = materializer.materialize();
         final KeyValueStore<String, String> store = builder.build();
@@ -58,8 +58,8 @@ public class KeyValueStoreMaterializerTest {
 
     @Test
     public void shouldCreateBuilderThatBuildsStoreWithCachingDisabled() {
-        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized
-                = new MaterializedInternal<>(Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store")
+        final MaterializedInternal<String, String, KeyValueStore> materialized
+                = new MaterializedInternal<>(Materialized.<String, String, KeyValueStore>as("store")
                                                      .withCachingDisabled());
         final KeyValueStoreMaterializer<String, String> materializer = new KeyValueStoreMaterializer<>(materialized);
         final StoreBuilder<KeyValueStore<String, String>> builder = materializer.materialize();
@@ -70,8 +70,8 @@ public class KeyValueStoreMaterializerTest {
 
     @Test
     public void shouldCreateBuilderThatBuildsStoreWithLoggingDisabled() {
-        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized
-                = new MaterializedInternal<>(Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store")
+        final MaterializedInternal<String, String, KeyValueStore> materialized
+                = new MaterializedInternal<>(Materialized.<String, String, KeyValueStore>as("store")
                                                      .withLoggingDisabled());
         final KeyValueStoreMaterializer<String, String> materializer = new KeyValueStoreMaterializer<>(materialized);
         final StoreBuilder<KeyValueStore<String, String>> builder = materializer.materialize();
@@ -83,8 +83,8 @@ public class KeyValueStoreMaterializerTest {
 
     @Test
     public void shouldCreateBuilderThatBuildsStoreWithCachingAndLoggingDisabled() {
-        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized
-                = new MaterializedInternal<>(Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store")
+        final MaterializedInternal<String, String, KeyValueStore> materialized
+                = new MaterializedInternal<>(Materialized.<String, String, KeyValueStore>as("store")
                                                      .withCachingDisabled()
                                                      .withLoggingDisabled());
         final KeyValueStoreMaterializer<String, String> materializer = new KeyValueStoreMaterializer<>(materialized);
@@ -103,9 +103,10 @@ public class KeyValueStoreMaterializerTest {
         EasyMock.expect(supplier.get()).andReturn(store);
         EasyMock.replay(supplier);
 
-        final MaterializedInternal<String, Integer, KeyValueStore<Bytes, byte[]>> materialized
-                = new MaterializedInternal<>(Materialized.<String, Integer>as(supplier));
-        final KeyValueStoreMaterializer<String, Integer> materializer = new KeyValueStoreMaterializer<>(materialized);
+        final Materialized<String, Integer, KeyValueStore> materialized = Materialized.as(supplier);
+        final MaterializedInternal<String, Integer, KeyValueStore> materializedInternal
+                = new MaterializedInternal<>(materialized);
+        final KeyValueStoreMaterializer<String, Integer> materializer = new KeyValueStoreMaterializer<>(materializedInternal);
         final StoreBuilder<KeyValueStore<String, Integer>> builder = materializer.materialize();
         final KeyValueStore<String, Integer> built = builder.build();
         final StateStore inner = ((WrappedStateStore) built).inner();

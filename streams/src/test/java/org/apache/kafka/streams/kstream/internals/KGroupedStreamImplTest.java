@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -508,7 +507,7 @@ public class KGroupedStreamImplTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldCountAndMaterializeResults() {
-        groupedStream.count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count")
+        groupedStream.count(Materialized.<String, Long, KeyValueStore>as("count")
                                     .withKeySerde(Serdes.String()));
 
         processData();
@@ -526,7 +525,7 @@ public class KGroupedStreamImplTest {
     @Test
     public void shouldReduceAndMaterializeResults() {
         groupedStream.reduce(MockReducer.STRING_ADDER,
-                             Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("reduce")
+                             Materialized.<String, String, KeyValueStore>as("reduce")
                                     .withKeySerde(Serdes.String())
                                     .withValueSerde(Serdes.String()));
 
@@ -544,7 +543,7 @@ public class KGroupedStreamImplTest {
     public void shouldAggregateAndMaterializeResults() {
         groupedStream.aggregate(MockInitializer.STRING_INIT,
                                 MockAggregator.TOSTRING_ADDER,
-                                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("aggregate")
+                                Materialized.<String, String, KeyValueStore>as("aggregate")
                                         .withKeySerde(Serdes.String())
                                         .withValueSerde(Serdes.String()));
 

@@ -18,7 +18,6 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -123,7 +122,7 @@ public class TimeWindowedKStreamImplTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldMaterializeCount() {
-        windowedStream.count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("count-store")
+        windowedStream.count(Materialized.<String, Long, WindowStore>as("count-store")
                                      .withKeySerde(Serdes.String())
                                      .withValueSerde(Serdes.Long()));
 
@@ -140,7 +139,7 @@ public class TimeWindowedKStreamImplTest {
     @Test
     public void shouldMaterializeReduced() {
         windowedStream.reduce(MockReducer.STRING_ADDER,
-                              Materialized.<String, String, WindowStore<Bytes, byte[]>>as("reduced")
+                              Materialized.<String, String, WindowStore>as("reduced")
                                       .withKeySerde(Serdes.String())
                                       .withValueSerde(Serdes.String()));
 
@@ -159,7 +158,7 @@ public class TimeWindowedKStreamImplTest {
     public void shouldMaterializeAggregated() {
         windowedStream.aggregate(MockInitializer.STRING_INIT,
                                  MockAggregator.TOSTRING_ADDER,
-                                 Materialized.<String, String, WindowStore<Bytes, byte[]>>as("aggregated")
+                                 Materialized.<String, String, WindowStore>as("aggregated")
                                          .withKeySerde(Serdes.String())
                                          .withValueSerde(Serdes.String()));
 
@@ -191,14 +190,14 @@ public class TimeWindowedKStreamImplTest {
     public void shouldThrowNullPointerOnMaterializedAggregateIfInitializerIsNull() {
         windowedStream.aggregate(null,
                                  MockAggregator.TOSTRING_ADDER,
-                                 Materialized.<String, String, WindowStore<Bytes, byte[]>>as("store"));
+                                 Materialized.<String, String, WindowStore>as("store"));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnMaterializedAggregateIfAggregatorIsNull() {
         windowedStream.aggregate(MockInitializer.STRING_INIT,
                                  null,
-                                 Materialized.<String, String, WindowStore<Bytes, byte[]>>as("store"));
+                                 Materialized.<String, String, WindowStore>as("store"));
     }
 
     @SuppressWarnings("unchecked")
@@ -212,7 +211,7 @@ public class TimeWindowedKStreamImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnMaterializedReduceIfReducerIsNull() {
         windowedStream.reduce(null,
-                              Materialized.<String, String, WindowStore<Bytes, byte[]>>as("store"));
+                              Materialized.<String, String, WindowStore>as("store"));
     }
 
     @Test(expected = NullPointerException.class)

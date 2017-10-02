@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -97,7 +96,7 @@ public class KTableMapValuesTest {
             public Integer apply(CharSequence value) {
                 return value.charAt(0) - 48;
             }
-        }, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("anyName").withValueSerde(Serdes.Integer()));
+        }, Materialized.<String, Integer, KeyValueStore>as("anyName").withValueSerde(Serdes.Integer()));
 
         MockProcessorSupplier<String, Integer> proc2 = new MockProcessorSupplier<>();
         table2.toStream().process(proc2);
@@ -252,14 +251,14 @@ public class KTableMapValuesTest {
                 public Integer apply(String value) {
                     return new Integer(value);
                 }
-            }, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("anyMapName").withValueSerde(Serdes.Integer()));
+            }, Materialized.<String, Integer, KeyValueStore>as("anyMapName").withValueSerde(Serdes.Integer()));
         KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table2.filter(
             new Predicate<String, Integer>() {
                 @Override
                 public boolean test(String key, Integer value) {
                     return (value % 2) == 0;
                 }
-            }, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("anyFilterName").withValueSerde(Serdes.Integer()));
+            }, Materialized.<String, Integer, KeyValueStore>as("anyFilterName").withValueSerde(Serdes.Integer()));
         KTableImpl<String, String, String> table4 = (KTableImpl<String, String, String>)
             table1.through(stringSerde, stringSerde, topic2, storeName2);
 

@@ -27,7 +27,6 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreamsTest;
@@ -449,8 +448,8 @@ public class QueryableStateIntegrationTest {
             }
         };
         final KTable<String, Long> t1 = builder.table(streamOne);
-        final KTable<String, Long> t2 = t1.filter(filterPredicate, Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("queryFilter"));
-        t1.filterNot(filterPredicate, Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("queryFilterNot"));
+        final KTable<String, Long> t2 = t1.filter(filterPredicate, Materialized.<String, Long, KeyValueStore>as("queryFilter"));
+        t1.filterNot(filterPredicate, Materialized.<String, Long, KeyValueStore>as("queryFilterNot"));
         t2.to(outputTopic);
 
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
@@ -512,7 +511,7 @@ public class QueryableStateIntegrationTest {
             public Long apply(final String value) {
                 return Long.valueOf(value);
             }
-        }, Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("queryMapValues").withValueSerde(Serdes.Long()));
+        }, Materialized.<String, Long, KeyValueStore>as("queryMapValues").withValueSerde(Serdes.Long()));
         t2.to(Serdes.String(), Serdes.Long(), outputTopic);
 
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
@@ -562,13 +561,13 @@ public class QueryableStateIntegrationTest {
             }
         };
         final KTable<String, String> t1 = builder.table(streamOne);
-        final KTable<String, String> t2 = t1.filter(filterPredicate, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("queryFilter"));
+        final KTable<String, String> t2 = t1.filter(filterPredicate, Materialized.<String, String, KeyValueStore>as("queryFilter"));
         final KTable<String, Long> t3 = t2.mapValues(new ValueMapper<String, Long>() {
             @Override
             public Long apply(final String value) {
                 return Long.valueOf(value);
             }
-        }, Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("queryMapValues").withValueSerde(Serdes.Long()));
+        }, Materialized.<String, Long, KeyValueStore>as("queryMapValues").withValueSerde(Serdes.Long()));
         t3.to(Serdes.String(), Serdes.Long(), outputTopic);
 
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);

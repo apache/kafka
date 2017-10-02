@@ -17,7 +17,6 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.ForeachAction;
@@ -128,7 +127,7 @@ public class StreamsBuilderTest {
                 results.put(key, value);
             }
         };
-        builder.table(topic, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("store")
+        builder.table(topic, Materialized.<Long, String, KeyValueStore>as("store")
                 .withKeySerde(Serdes.Long())
                 .withValueSerde(Serdes.String()))
                 .toStream().foreach(action);
@@ -148,7 +147,7 @@ public class StreamsBuilderTest {
     @Test
     public void shouldUseSerdesDefinedInMaterializedToConsumeGlobalTable() {
         final String topic = "topic";
-        builder.globalTable(topic, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("store")
+        builder.globalTable(topic, Materialized.<Long, String, KeyValueStore>as("store")
                 .withKeySerde(Serdes.Long())
                 .withValueSerde(Serdes.String()));
         driver.setUp(builder, TestUtils.tempDirectory());

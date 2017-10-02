@@ -23,7 +23,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -792,7 +791,7 @@ public class StreamPartitionAssignorTest {
 
             // Task 2 (should get created):
             // create repartioning and changelog topic as task 1 exists
-            .count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("count"))
+            .count(Materialized.<Object, Long, KeyValueStore>as("count"))
 
             // force repartitioning for join, but second join input topic unknown
             // -> internal repartitioning topic should not get created

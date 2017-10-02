@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -96,7 +95,7 @@ public interface SessionWindowedKStream<K, V> {
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys and {@link Long} values
      * that represent the latest (rolling) count (i.e., number of records) for each key within a window
      */
-    KTable<Windowed<K>, Long> count(final Materialized<K, Long, SessionStore<Bytes, byte[]>> materialized);
+    KTable<Windowed<K>, Long> count(final Materialized<K, Long, SessionStore> materialized);
 
     /**
      * Aggregate the values of records in this stream by the grouped key and defined {@link SessionWindows}.
@@ -168,18 +167,18 @@ public interface SessionWindowedKStream<K, V> {
      * String key = "some-key";
      * KeyValueIterator<Windowed<String>, Long> aggForKeyForSession = localWindowStore.fetch(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
+     * @param <VR>           the value type of the resulting {@link KTable}
      * @param initializer    the instance of {@link Initializer}
      * @param aggregator     the instance of {@link Aggregator}
      * @param sessionMerger  the instance of {@link Merger}
      * @param materialized   an instance of {@link Materialized} used to materialize a state store. Cannot be {@code null}
-     * @param <VR>           the value type of the resulting {@link KTable}
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
      */
     <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
                                            final Aggregator<? super K, ? super V, VR> aggregator,
                                            final Merger<? super K, VR> sessionMerger,
-                                           final Materialized<K, VR, SessionStore<Bytes, byte[]>> materialized);
+                                           final Materialized<K, VR, SessionStore> materialized);
 
     /**
      * Combine values of this stream by the grouped key into {@link SessionWindows}.
@@ -266,5 +265,5 @@ public interface SessionWindowedKStream<K, V> {
      * the latest (rolling) aggregate for each key within a window
      */
     KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
-                                  final Materialized<K, V, SessionStore<Bytes, byte[]>> materializedAs);
+                                  final Materialized<K, V, SessionStore> materializedAs);
 }
