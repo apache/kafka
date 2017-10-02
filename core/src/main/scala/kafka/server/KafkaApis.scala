@@ -130,7 +130,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DELETE_ACLS => handleDeleteAcls(request)
         case ApiKeys.ALTER_CONFIGS => handleAlterConfigsRequest(request)
         case ApiKeys.DESCRIBE_CONFIGS => handleDescribeConfigsRequest(request)
-        case ApiKeys.ALTER_REPLICA_DIRS => handleAlterReplicaDirsRequest(request)
+        case ApiKeys.ALTER_REPLICA_LOG_DIRS => handleAlterReplicaLogDirsRequest(request)
         case ApiKeys.DESCRIBE_LOG_DIRS => handleDescribeLogDirsRequest(request)
         case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
         case ApiKeys.CREATE_PARTITIONS => handleCreatePartitionsRequest(request)
@@ -1966,15 +1966,15 @@ class KafkaApis(val requestChannel: RequestChannel,
       new DescribeConfigsResponse(requestThrottleMs, (authorizedConfigs ++ unauthorizedConfigs).asJava))
   }
 
-  def handleAlterReplicaDirsRequest(request: RequestChannel.Request): Unit = {
-    val alterReplicaDirsRequest = request.body[AlterReplicaDirsRequest]
+  def handleAlterReplicaLogDirsRequest(request: RequestChannel.Request): Unit = {
+    val alterReplicaDirsRequest = request.body[AlterReplicaLogDirsRequest]
     val responseMap = {
       if (authorize(request.session, Alter, Resource.ClusterResource))
-        replicaManager.alterReplicaDirs(alterReplicaDirsRequest.partitionDirs.asScala)
+        replicaManager.alterReplicaLogDirs(alterReplicaDirsRequest.partitionDirs.asScala)
       else
         alterReplicaDirsRequest.partitionDirs.asScala.keys.map((_, Errors.CLUSTER_AUTHORIZATION_FAILED)).toMap
     }
-    sendResponseMaybeThrottle(request, requestThrottleMs => new AlterReplicaDirsResponse(requestThrottleMs, responseMap.asJava))
+    sendResponseMaybeThrottle(request, requestThrottleMs => new AlterReplicaLogDirsResponse(requestThrottleMs, responseMap.asJava))
   }
 
   def handleDescribeLogDirsRequest(request: RequestChannel.Request): Unit = {

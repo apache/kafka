@@ -272,7 +272,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
       new TopicPartitionReplica(topic, 0, server.config.brokerId) -> logDir
     }.toMap
 
-    adminClient.alterReplicaDirs(replicaAssignment.asJava, new AlterReplicaDirsOptions()).values().asScala.values.foreach { future =>
+    adminClient.alterReplicaLogDirs(replicaAssignment.asJava, new AlterReplicaLogDirsOptions()).values().asScala.values.foreach { future =>
       try {
         future.get()
         fail("Future should fail with ReplicaNotAvailableException")

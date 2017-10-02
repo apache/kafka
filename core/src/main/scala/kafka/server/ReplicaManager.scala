@@ -569,14 +569,14 @@ class ReplicaManager(val config: KafkaConfig,
    * that are already created to the user-specified log directory after KIP-113 is fully implemented
    *
    */
-  def alterReplicaDirs(partitionDirs: Map[TopicPartition, String]): Map[TopicPartition, Errors] = {
+  def alterReplicaLogDirs(partitionDirs: Map[TopicPartition, String]): Map[TopicPartition, Errors] = {
     partitionDirs.map { case (topicPartition, destinationDir) =>
       try {
         if (!logManager.isLogDirOnline(destinationDir))
           throw new KafkaStorageException(s"Log directory $destinationDir is offline")
 
         // If the log for this partition has not been created yet:
-        // 1) Respond with ReplicaNotAvailableException for this partition in the AlterReplicaDirsResponse
+        // 1) Respond with ReplicaNotAvailableException for this partition in the AlterReplicaLogDirsResponse
         // 2) Record the destination log directory in the memory so that the partition will be created in this log directory
         //    when broker receives LeaderAndIsrRequest for this partition later.
         getReplica(topicPartition) match {

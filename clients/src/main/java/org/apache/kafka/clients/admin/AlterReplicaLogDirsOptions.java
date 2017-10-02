@@ -21,9 +21,9 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import java.util.Map;
 
 /**
- * Options for {@link AdminClient#alterReplicaDirs(Map, AlterReplicaDirsOptions)}.
+ * Options for {@link AdminClient#alterReplicaLogDirs(Map, AlterReplicaLogDirsOptions)}.
  */
 @InterfaceStability.Evolving
-public class AlterReplicaDirsOptions extends AbstractOptions<AlterReplicaDirsOptions> {
+public class AlterReplicaLogDirsOptions extends AbstractOptions<AlterReplicaLogDirsOptions> {
 
 }
