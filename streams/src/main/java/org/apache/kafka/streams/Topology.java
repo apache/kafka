@@ -32,7 +32,6 @@ import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 
 import java.util.regex.Pattern;
 
@@ -49,6 +48,7 @@ import java.util.regex.Pattern;
  * {@link KafkaStreams} instance that will then {@link KafkaStreams#start() begin consuming, processing, and producing
  * records}.
  */
+@SuppressWarnings("unchecked")
 public class Topology {
 
     final InternalTopologyBuilder internalTopologyBuilder = new InternalTopologyBuilder();
@@ -476,7 +476,7 @@ public class Topology {
      * @see #addSink(String, String, Serializer, Serializer, StreamPartitioner, String...)
      */
     public synchronized Topology addSink(final String name,
-                                         final String topic,
+                                             final String topic,
                                          final Serializer keySerializer,
                                          final Serializer valueSerializer,
                                          final String... parentNames) {
@@ -607,7 +607,7 @@ public class Topology {
      * @return itself
      * @throws TopologyException if the processor of state is already registered
      */
-    public synchronized Topology addGlobalStore(final KeyValueStoreBuilder storeBuilder,
+    public synchronized Topology addGlobalStore(final StoreBuilder storeBuilder,
                                                 final String sourceName,
                                                 final TimestampExtractor timestampExtractor,
                                                 final Deserializer keyDeserializer,

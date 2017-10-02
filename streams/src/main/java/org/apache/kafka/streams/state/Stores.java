@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryLRUCacheStoreSupplier;
@@ -237,7 +236,7 @@ public class Stores {
                                     }
 
                                     @Override
-                                    public StateStoreSupplier build() {
+                                    public org.apache.kafka.streams.processor.StateStoreSupplier build() {
                                         log.trace("Defining InMemory Store name={} capacity={} logged={}", name, capacity, logged);
                                         if (capacity < Integer.MAX_VALUE) {
                                             return new InMemoryLRUCacheStoreSupplier<>(name, capacity, keySerde, valueSerde, logged, logConfig);
@@ -301,7 +300,7 @@ public class Stores {
                                     }
 
                                     @Override
-                                    public StateStoreSupplier build() {
+                                    public org.apache.kafka.streams.processor.StateStoreSupplier build() {
                                         log.trace("Defining RocksDb Store name={} numSegments={} logged={}", name, numSegments, logged);
                                         if (sessionWindows) {
                                             return new RocksDBSessionStoreSupplier<>(name, retentionPeriod, keySerde, valueSerde, logged, logConfig, cachingEnabled);
@@ -501,6 +500,7 @@ public class Stores {
      * @param <K> the type of keys
      * @param <V> the type of values
      */
+    @Deprecated
     public interface InMemoryKeyValueFactory<K, V> {
         /**
          * Limits the in-memory key-value store to hold a maximum number of entries. The default is {@link Integer#MAX_VALUE}, which is
@@ -533,7 +533,7 @@ public class Stores {
          * Return the instance of StateStoreSupplier of new key-value store.
          * @return the state store supplier; never null
          */
-        StateStoreSupplier build();
+        org.apache.kafka.streams.processor.StateStoreSupplier build();
     }
 
     /**
@@ -542,6 +542,7 @@ public class Stores {
      * @param <K> the type of keys
      * @param <V> the type of values
      */
+    @Deprecated
     public interface PersistentKeyValueFactory<K, V> {
 
         /**
@@ -580,11 +581,12 @@ public class Stores {
          * @return the factory to create a persistent key-value store
          */
         PersistentKeyValueFactory<K, V> enableCaching();
+
         /**
          * Return the instance of StateStoreSupplier of new key-value store.
          * @return the key-value store; never null
          */
-        StateStoreSupplier build();
+        org.apache.kafka.streams.processor.StateStoreSupplier build();
 
     }
 }
