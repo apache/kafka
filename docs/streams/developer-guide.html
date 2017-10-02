@@ -2849,7 +2849,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
         Map&lt;String, String&gt; topicConfig = new HashMap&lt;&gt;();
         topicConfig.put(TopicConfig.SEGMENT_MS_CONFIG, "10000");
 
-        final Materialized&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt; materialized = Materialized.&lt;&gt;as("store")
+        final Materialized&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt; materialized = Materialized.as("store")
             .withKeySerde(Serdes.String())
             .withValueSerde(Serdes.String())
             .withLoggingEnabled(topicConfig); // pass in the config overrides
