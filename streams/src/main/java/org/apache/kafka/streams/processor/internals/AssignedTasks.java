@@ -112,7 +112,8 @@ class AssignedTasks implements RestoringTasks {
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
      */
-    void initializeNewTasks() {
+    Set<TopicPartition> initializeNewTasks() {
+        final Set<TopicPartition> readyPartitions = new HashSet<>();
         if (!created.isEmpty()) {
             log.debug("Initializing {}s {}", taskTypeName, created.keySet());
         }
@@ -123,7 +124,7 @@ class AssignedTasks implements RestoringTasks {
                     log.debug("transitioning {} {} to restoring", taskTypeName, entry.getKey());
                     addToRestoring(entry.getValue());
                 } else {
-                    transitionToRunning(entry.getValue());
+                    readyPartitions.addAll(transitionToRunning(entry.getValue()));
                 }
                 it.remove();
             } catch (final LockException e) {
@@ -131,6 +132,7 @@ class AssignedTasks implements RestoringTasks {
                 log.trace("Could not create {} {} due to {}; will retry", taskTypeName, entry.getKey(), e.getMessage());
             }
         }
+        return readyPartitions;
     }
 
     Set<TopicPartition> updateRestored(final Collection<TopicPartition> restored) {
@@ -282,15 +284,24 @@ class AssignedTasks implements RestoringTasks {
         }
     }
 
-    private void transitionToRunning(final Task task) {
+    private Set<TopicPartition> transitionToRunning(final Task task) {
+        final Set<TopicPartition> ready = new HashSet<>();
         log.debug("transitioning {} {} to running", taskTypeName, task.id());
         running.put(task.id(), task);
         for (TopicPartition topicPartition : task.partitions()) {
             runningByPartition.put(topicPartition, task);
+            if (task.hasStateStores()) {
+                ready.add(topicPartition);
+            }
         }
         for (TopicPartition topicPartition : task.changelogPartitions()) {
             runningByPartition.put(topicPartition, task);
+            if (task.hasStateStores()) {
+                ready.add(topicPartition);
+            }
         }
+        return ready;
+
     }
 
     @Override
