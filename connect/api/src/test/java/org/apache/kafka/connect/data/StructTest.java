@@ -28,6 +28,7 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNull;
 
 public class StructTest {
 
@@ -158,6 +159,20 @@ public class StructTest {
         Schema schema = SchemaBuilder.struct().field("field", DEFAULT_FIELD_SCHEMA).build();
         Struct struct = new Struct(schema);
         struct.validate();
+    }
+
+    @Test
+    public void testMissingFieldWithDefaultValue() {
+        Schema schema = SchemaBuilder.struct().field("field", DEFAULT_FIELD_SCHEMA).build();
+        Struct struct = new Struct(schema);
+        assertEquals((byte) 0, struct.get("field"));
+    }
+
+    @Test
+    public void testMissingFieldWithoutDefaultValue() {
+        Schema schema = SchemaBuilder.struct().field("field", REQUIRED_FIELD_SCHEMA).build();
+        Struct struct = new Struct(schema);
+        assertNull(struct.get("field"));
     }
 
 

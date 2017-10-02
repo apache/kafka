@@ -293,6 +293,60 @@ public class WorkerSinkTaskTest {
         PowerMock.verifyAll();
     }
 
+    @Test
+    public void testWakeupInCommitSyncCausesRetry() throws Exception {
+        expectInitializeTask();
+        expectPollInitialAssignment();
+
+        final List<TopicPartition> partitions = asList(TOPIC_PARTITION, TOPIC_PARTITION2);
+
+        sinkTask.close(new HashSet<>(partitions));
+        EasyMock.expectLastCall();
+
+        sinkTask.flush(EasyMock.<Map<TopicPartition, OffsetAndMetadata>>anyObject());
+        EasyMock.expectLastCall();
+
+        // first one raises wakeup
+        consumer.commitSync(EasyMock.<Map<TopicPartition, OffsetAndMetadata>>anyObject());
+        EasyMock.expectLastCall().andThrow(new WakeupException());
+
+        // we should retry and complete the commit
+        consumer.commitSync(EasyMock.<Map<TopicPartition, OffsetAndMetadata>>anyObject());
+        EasyMock.expectLastCall();
+
+        EasyMock.expect(consumer.position(TOPIC_PARTITION)).andReturn(FIRST_OFFSET);
+        EasyMock.expect(consumer.position(TOPIC_PARTITION2)).andReturn(FIRST_OFFSET);
+
+        sinkTask.open(partitions);
+        EasyMock.expectLastCall();
+
+        EasyMock.expect(consumer.poll(EasyMock.anyLong())).andAnswer(
+                new IAnswer<ConsumerRecords<byte[], byte[]>>() {
+                    @Override
+                    public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
+                        rebalanceListener.getValue().onPartitionsRevoked(partitions);
+                        rebalanceListener.getValue().onPartitionsAssigned(partitions);
+                        return ConsumerRecords.empty();
+                    }
+                });
+
+        EasyMock.expect(consumer.assignment()).andReturn(new HashSet<>(partitions));
+
+        consumer.resume(Collections.singleton(TOPIC_PARTITION));
+        EasyMock.expectLastCall();
+
+        consumer.resume(Collections.singleton(TOPIC_PARTITION2));
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        workerTask.poll(Long.MAX_VALUE); // poll for initial assignment
+        workerTask.poll(Long.MAX_VALUE); // now rebalance with the wakeup triggered
+
+        PowerMock.verifyAll();
+    }
 
     private void expectInitializeTask() throws Exception {
         PowerMock.expectPrivate(workerTask, "createConsumer").andReturn(consumer);

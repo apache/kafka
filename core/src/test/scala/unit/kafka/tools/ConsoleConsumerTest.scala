@@ -114,6 +114,49 @@ class ConsoleConsumerTest extends JUnitSuite {
     assertEquals(true, config.fromBeginning)
   }
 
+  @Test
+  def shouldParseValidNewSimpleConsumerValidConfigWithNumericOffset() {
+    //Given
+    val args: Array[String] = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--partition", "0",
+      "--offset", "3",
+      "--new-consumer") //new
+
+    //When
+    val config = new ConsoleConsumer.ConsumerConfig(args)
+
+    //Then
+    assertTrue(config.useNewConsumer)
+    assertEquals("localhost:9092", config.bootstrapServer)
+    assertEquals("test", config.topicArg)
+    assertEquals(0, config.partitionArg.get)
+    assertEquals(3, config.offsetArg)
+    assertEquals(false, config.fromBeginning)
+  }
+
+  @Test
+  def shouldParseValidNewSimpleConsumerValidConfigWithStringOffset() {
+    //Given
+    val args: Array[String] = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--partition", "0",
+      "--offset", "LatEst",
+      "--new-consumer") //new
+
+    //When
+    val config = new ConsoleConsumer.ConsumerConfig(args)
+
+    //Then
+    assertTrue(config.useNewConsumer)
+    assertEquals("localhost:9092", config.bootstrapServer)
+    assertEquals("test", config.topicArg)
+    assertEquals(0, config.partitionArg.get)
+    assertEquals(-1, config.offsetArg)
+    assertEquals(false, config.fromBeginning)
+  }
 
   @Test
   def shouldParseConfigsFromFile() {

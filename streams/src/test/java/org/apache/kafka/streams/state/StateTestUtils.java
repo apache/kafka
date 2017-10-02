@@ -38,7 +38,7 @@ public class StateTestUtils {
      */
     public static File tempDir() {
         try {
-            final File dir = Files.createTempDirectory("test").toFile();
+            final File dir = Files.createTempDirectory(new File("/tmp").toPath(), "test").toFile();
             dir.mkdirs();
             dir.deleteOnExit();
 

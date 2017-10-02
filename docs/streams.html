@@ -298,10 +298,11 @@ based on them.
 
 <pre>
     // written in Java 8+, using lambda expressions
-    KTable<Windowed<String>, Long> counts = source1.aggregateByKey(
+    KTable<Windowed<String>, Long> counts = source1.groupBykey().aggregate(
         () -> 0L,  // initial value
         (aggKey, value, aggregate) -> aggregate + 1L,   // aggregating value
-        HoppingWindows.of("counts").with(5000L).every(1000L), // intervals in milliseconds
+        TimeWindows.of("counts", 5000L).advanceBy(1000L), // intervals in milliseconds
+        Serdes.Long() // serde for aggregated value
     );
 
     KStream<String, String> joined = source1.leftJoin(source2,

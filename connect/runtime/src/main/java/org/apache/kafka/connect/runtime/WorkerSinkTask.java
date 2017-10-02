@@ -228,11 +228,28 @@ class WorkerSinkTask extends WorkerTask {
         } catch (WakeupException we) {
             log.trace("{} consumer woken up", id);
 
+            if (isStopping())
+                return;
+
             if (shouldPause()) {
                 pauseAll();
             } else if (!pausedForRedelivery) {
                 resumeAll();
             }
+        }
+    }
+
+    private void doCommitSync(Map<TopicPartition, OffsetAndMetadata> offsets, int seqno) {
+        try {
+            consumer.commitSync(offsets);
+            lastCommittedOffsets = offsets;
+            onCommitCompleted(null, seqno);
+        } catch (WakeupException e) {
+            // retry the commit to ensure offsets get pushed, then propagate the wakeup up to poll
+            doCommitSync(offsets, seqno);
+            throw e;
+        } catch (KafkaException e) {
+            onCommitCompleted(e, seqno);
         }
     }
 
@@ -243,13 +260,7 @@ class WorkerSinkTask extends WorkerTask {
     private void doCommit(Map<TopicPartition, OffsetAndMetadata> offsets, boolean closing, final int seqno) {
         log.info("{} Committing offsets", this);
         if (closing) {
-            try {
-                consumer.commitSync(offsets);
-                lastCommittedOffsets = offsets;
-                onCommitCompleted(null, seqno);
-            } catch (KafkaException e) {
-                onCommitCompleted(e, seqno);
-            }
+            doCommitSync(offsets, seqno);
         } else {
             OffsetCommitCallback cb = new OffsetCommitCallback() {
                 @Override
@@ -448,7 +459,7 @@ class WorkerSinkTask extends WorkerTask {
             // Instead of invoking the assignment callback on initialization, we guarantee the consumer is ready upon
             // task start. Since this callback gets invoked during that initial setup before we've started the task, we
             // need to guard against invoking the user's callback method during that period.
-            if (rebalanceException == null) {
+            if (rebalanceException == null || rebalanceException instanceof WakeupException) {
                 try {
                     openPartitions(partitions);
                 } catch (RuntimeException e) {
