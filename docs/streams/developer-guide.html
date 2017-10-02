@@ -185,6 +185,7 @@
         <li>In the <code>init</code> method, schedule the punctuation every 1 second and retrieve the local state store by its name "Counts".</li>
         <li>In the <code>process</code> method, upon each received record, split the value string into words, and update their counts into the state store (we will talk about this feature later in the section).</li>
         <li>In the scheduled <code>punctuate</code> method, iterate the local state store and send the aggregated counts to the downstream processor, and commit the current stream state.</li>
+        <li>When done with the <code>KeyValueIterator&lt;String, Long&gt;</code> you <em>must</em> close the iterator, as shown above or use the try-with-resources statement.</li>
     </ul>
 
 
@@ -252,6 +253,13 @@ For such composite keys it would not be sufficient to enable just compaction in 
 With deletion enabled, old windows that have expired will be cleaned up by Kafka's log cleaner as the log segments expire. 
 The default retention setting is <code>Windows#maintainMs()</code> + 1 day. This setting can be overriden by specifying <code>StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG</code> in the <code>StreamsConfig</code>.
 </p>
+
+<p>
+One additional note regarding the use of state stores.  Any time you open an <code>Iterator</code> from a state store you <em>must</em> call <code>close()</code> on the iterator
+when you are done working with it to reclaim resources.  Or you can use the iterator from within a try-with-resources statement.
+    By not closing an iterator, you may likely encounter an OOM error.
+</p>
+
 
 <h4><a id="restoration_progress" href="#restoration_progress">Monitoring the Restoration Progress of Fault-tolerant State Stores</a></h4>
 
