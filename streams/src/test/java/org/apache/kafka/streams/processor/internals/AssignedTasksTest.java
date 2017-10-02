@@ -145,7 +145,7 @@ public class AssignedTasksTest {
         EasyMock.expect(t1.initialize()).andReturn(false);
         EasyMock.expect(t1.partitions()).andReturn(task1Partitions).anyTimes();
         EasyMock.expect(t1.changelogPartitions()).andReturn(Utils.mkSet(changeLog1, changeLog2)).anyTimes();
-        EasyMock.expect(t1.hasStateStores()).andReturn(false).anyTimes();
+        EasyMock.expect(t1.hasStateStores()).andReturn(true).anyTimes();
         EasyMock.replay(t1);
 
         addAndInitTask();
