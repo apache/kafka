@@ -68,6 +68,12 @@
     <li>The Java clients and tools now accept any string as a client-id.</li>
     <li>The deprecated tool <code>kafka-consumer-offset-checker.sh</code> has been removed. Use <code>kafka-consumer-groups.sh</code> to get consumer group details.</li>
     <li>SimpleAclAuthorizer now logs access denials to the authorizer log by default.</li>
+    <li>The <code>app-info</code> mbean registered with JMX to provide version and commit id will be deprecated and replaced with
+        metrics providing these attributes.</li>
+    <li>Kafka metrics may now contain non-numeric values. <code>org.apache.kafka.common.Metric#value()</code> has been deprecated and
+        will return <code>0.0</code> in such cases to minimise the probability of breaking users who read the value of every client
+        metric (via a <code>MetricsReporter</code> implementation or by calling the <code>metrics()</code> method).
+        <code>org.apache.kafka.common.Metric#metricValue()</code> can be used to retrieve numeric and non-numeric metric values.</li>
 </ul>
 
 <h5><a id="upgrade_100_new_protocols" href="#upgrade_100_new_protocols">New Protocol Versions</a></h5>

@@ -562,21 +562,45 @@ public class KafkaStreams {
             @Override
             public void onRestoreStart(final TopicPartition topicPartition, final String storeName, final long startingOffset, final long endingOffset) {
                 if (globalStateRestoreListener != null) {
-                    globalStateRestoreListener.onRestoreStart(topicPartition, storeName, startingOffset, endingOffset);
+                    try {
+                        globalStateRestoreListener.onRestoreStart(topicPartition, storeName, startingOffset, endingOffset);
+                    } catch (final Exception fatalUserException) {
+                        throw new StreamsException(
+                            String.format("Fatal user code error in store restore listener for store %s, partition %s.",
+                                storeName,
+                                topicPartition),
+                            fatalUserException);
+                    }
                 }
             }
 
             @Override
             public void onBatchRestored(final TopicPartition topicPartition, final String storeName, final long batchEndOffset, final long numRestored) {
                 if (globalStateRestoreListener != null) {
-                    globalStateRestoreListener.onBatchRestored(topicPartition, storeName, batchEndOffset, numRestored);
+                    try {
+                        globalStateRestoreListener.onBatchRestored(topicPartition, storeName, batchEndOffset, numRestored);
+                    } catch (final Exception fatalUserException) {
+                        throw new StreamsException(
+                            String.format("Fatal user code error in store restore listener for store %s, partition %s.",
+                                storeName,
+                                topicPartition),
+                            fatalUserException);
+                    }
                 }
             }
 
             @Override
             public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {
                 if (globalStateRestoreListener != null) {
-                    globalStateRestoreListener.onRestoreEnd(topicPartition, storeName, totalRestored);
+                    try {
+                        globalStateRestoreListener.onRestoreEnd(topicPartition, storeName, totalRestored);
+                    } catch (final Exception fatalUserException) {
+                        throw new StreamsException(
+                            String.format("Fatal user code error in store restore listener for store %s, partition %s.",
+                                storeName,
+                                topicPartition),
+                            fatalUserException);
+                    }
                 }
             }
         };
@@ -613,7 +637,8 @@ public class KafkaStreams {
                                                         stateDirectory,
                                                         metrics,
                                                         Time.SYSTEM,
-                                                        globalThreadId);
+                                                        globalThreadId,
+                                                        delegatingStateRestoreListener);
             globalThreadState = globalStreamThread.state();
         }
 

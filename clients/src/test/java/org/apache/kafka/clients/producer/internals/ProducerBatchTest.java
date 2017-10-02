@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -33,7 +34,6 @@ import org.junit.Test;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Deque;
-import java.util.Iterator;
 import java.util.concurrent.ExecutionException;
 
 import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V0;
@@ -64,15 +64,20 @@ public class ProducerBatchTest {
     @Test
     public void testBatchAbort() throws Exception {
         ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
-        FutureRecordMetadata future = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, null, now);
+        MockCallback callback = new MockCallback();
+        FutureRecordMetadata future = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, callback, now);
 
         KafkaException exception = new KafkaException();
         batch.abort(exception);
         assertTrue(future.isDone());
+        assertEquals(1, callback.invocations);
+        assertEquals(exception, callback.exception);
+        assertNull(callback.metadata);
 
         // subsequent completion should be ignored
-        batch.done(500L, 2342342341L, null);
-        batch.done(-1, -1, new KafkaException());
+        assertFalse(batch.done(500L, 2342342341L, null));
+        assertFalse(batch.done(-1, -1, new KafkaException()));
+        assertEquals(1, callback.invocations);
 
         assertTrue(future.isDone());
         try {
@@ -86,9 +91,13 @@ public class ProducerBatchTest {
     @Test
     public void testBatchCannotAbortTwice() throws Exception {
         ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
-        FutureRecordMetadata future = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, null, now);
+        MockCallback callback = new MockCallback();
+        FutureRecordMetadata future = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, callback, now);
         KafkaException exception = new KafkaException();
         batch.abort(exception);
+        assertEquals(1, callback.invocations);
+        assertEquals(exception, callback.exception);
+        assertNull(callback.metadata);
 
         try {
             batch.abort(new KafkaException());
@@ -97,6 +106,7 @@ public class ProducerBatchTest {
             // expected
         }
 
+        assertEquals(1, callback.invocations);
         assertTrue(future.isDone());
         try {
             future.get();
@@ -109,8 +119,12 @@ public class ProducerBatchTest {
     @Test
     public void testBatchCannotCompleteTwice() throws Exception {
         ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
-        FutureRecordMetadata future = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, null, now);
+        MockCallback callback = new MockCallback();
+        FutureRecordMetadata future = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, callback, now);
         batch.done(500L, 10L, null);
+        assertEquals(1, callback.invocations);
+        assertNull(callback.exception);
+        assertNotNull(callback.metadata);
 
         try {
             batch.done(1000L, 20L, null);
@@ -166,9 +180,7 @@ public class ProducerBatchTest {
 
             for (ProducerBatch splitProducerBatch : batches) {
                 for (RecordBatch splitBatch : splitProducerBatch.records().batches()) {
-                    Iterator<Record> iter = splitBatch.iterator();
-                    while (iter.hasNext()) {
-                        Record record = iter.next();
+                    for (Record record : splitBatch) {
                         assertTrue("Header size should be 1.", record.headers().length == 1);
                         assertTrue("Header key should be 'header-key'.", record.headers()[0].key().equals("header-key"));
                         assertTrue("Header value should be 'header-value'.", new String(record.headers()[0].value()).equals("header-value"));
@@ -260,4 +272,18 @@ public class ProducerBatchTest {
         assertFalse(memoryRecordsBuilder.hasRoomFor(now, null, new byte[10], Record.EMPTY_HEADERS));
         assertEquals(null, batch.tryAppend(now + 1, null, new byte[10], Record.EMPTY_HEADERS, null, now + 1));
     }
+
+    private static class MockCallback implements Callback {
+        private int invocations = 0;
+        private RecordMetadata metadata;
+        private Exception exception;
+
+        @Override
+        public void onCompletion(RecordMetadata metadata, Exception exception) {
+            invocations++;
+            this.metadata = metadata;
+            this.exception = exception;
+        }
+    }
+
 }

@@ -159,7 +159,7 @@ public class InternalStreamsBuilder {
         return new GlobalKTableImpl<>(new KTableSourceValueGetterSupplier<K, V>(storeBuilder.name()));
     }
 
-    String newName(final String prefix) {
+    public String newName(final String prefix) {
         return prefix + String.format("%010d", index.getAndIncrement());
     }
 

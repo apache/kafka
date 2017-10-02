@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.LockException;
+import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 
@@ -37,7 +37,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
-class AssignedTasks {
+class AssignedTasks implements RestoringTasks {
     private final Logger log;
     private final String taskTypeName;
     private final TaskAction maybeCommitAction;
@@ -50,6 +50,7 @@ class AssignedTasks {
     // IQ may access this map.
     private Map<TaskId, Task> running = new ConcurrentHashMap<>();
     private Map<TopicPartition, Task> runningByPartition = new HashMap<>();
+    private Map<TopicPartition, Task> restoringByPartition = new HashMap<>();
     private int committed = 0;
 
 
@@ -107,6 +108,10 @@ class AssignedTasks {
         return partitions;
     }
 
+    /**
+     * @throws IllegalStateException If store gets registered after initialized is already finished
+     * @throws StreamsException if the store's change log does not contain the partition
+     */
     void initializeNewTasks() {
         if (!created.isEmpty()) {
             log.debug("Initializing {}s {}", taskTypeName, created.keySet());
@@ -116,7 +121,7 @@ class AssignedTasks {
             try {
                 if (!entry.getValue().initialize()) {
                     log.debug("transitioning {} {} to restoring", taskTypeName, entry.getKey());
-                    restoring.put(entry.getKey(), entry.getValue());
+                    addToRestoring(entry.getValue());
                 } else {
                     transitionToRunning(entry.getValue());
                 }
@@ -183,6 +188,7 @@ class AssignedTasks {
         restoring.clear();
         created.clear();
         runningByPartition.clear();
+        restoringByPartition.clear();
         return firstException.get();
     }
 
@@ -208,11 +214,8 @@ class AssignedTasks {
             try {
                 task.suspend();
                 suspended.put(task.id(), task);
-            } catch (final CommitFailedException e) {
-                suspended.put(task.id(), task);
-                // commit failed during suspension. Just log it.
-                log.warn("Failed to commit {} {} state when suspending due to CommitFailedException", taskTypeName, task.id());
-            } catch (final ProducerFencedException e) {
+            } catch (final TaskMigratedException closeAsZombieAndSwallow) {
+                // as we suspend a task, we are either shutting down or rebalancing, thus, we swallow and move on
                 closeZombieTask(task);
                 it.remove();
             } catch (final RuntimeException e) {
@@ -231,11 +234,11 @@ class AssignedTasks {
     }
 
     private void closeZombieTask(final Task task) {
-        log.warn("Producer of task {} fenced; closing zombie task", task.id());
+        log.warn("{} {} got migrated to another thread already. Closing it as zombie.", taskTypeName, task.id());
         try {
             task.close(false, true);
         } catch (final Exception e) {
-            log.warn("{} Failed to close zombie due to {}, ignore and proceed", taskTypeName, e);
+            log.warn("Failed to close zombie {} {} due to {}; ignore and proceed.", taskTypeName, task.id(), e.getMessage());
         }
     }
 
@@ -243,13 +246,22 @@ class AssignedTasks {
         return !running.isEmpty();
     }
 
+    /**
+     * @throws TaskMigratedException if the task producer got fenced (EOS only)
+     */
     boolean maybeResumeSuspendedTask(final TaskId taskId, final Set<TopicPartition> partitions) {
         if (suspended.containsKey(taskId)) {
             final Task task = suspended.get(taskId);
             log.trace("found suspended {} {}", taskTypeName, taskId);
             if (task.partitions().equals(partitions)) {
                 suspended.remove(taskId);
-                task.resume();
+                try {
+                    task.resume();
+                } catch (final TaskMigratedException e) {
+                    closeZombieTask(task);
+                    suspended.remove(taskId);
+                    throw e;
+                }
                 transitionToRunning(task);
                 log.trace("resuming suspended {} {}", taskTypeName, task.id());
                 return true;
@@ -258,6 +270,16 @@ class AssignedTasks {
             }
         }
         return false;
+    }
+
+    private void addToRestoring(final Task task) {
+        restoring.put(task.id(), task);
+        for (TopicPartition topicPartition : task.partitions()) {
+            restoringByPartition.put(topicPartition, task);
+        }
+        for (TopicPartition topicPartition : task.changelogPartitions()) {
+            restoringByPartition.put(topicPartition, task);
+        }
     }
 
     private void transitionToRunning(final Task task) {
@@ -269,6 +291,11 @@ class AssignedTasks {
         for (TopicPartition topicPartition : task.changelogPartitions()) {
             runningByPartition.put(topicPartition, task);
         }
+    }
+
+    @Override
+    public Task restoringTaskFor(final TopicPartition partition) {
+        return restoringByPartition.get(partition);
     }
 
     Task runningTaskFor(final TopicPartition partition) {
@@ -327,6 +354,7 @@ class AssignedTasks {
 
     void clear() {
         runningByPartition.clear();
+        restoringByPartition.clear();
         running.clear();
         created.clear();
         suspended.clear();
@@ -337,25 +365,42 @@ class AssignedTasks {
         return previousActiveTasks;
     }
 
+    /**
+     * @throws TaskMigratedException if committing offsets failed (non-EOS)
+     *                               or if the task producer got fenced (EOS)
+     */
     int commit() {
         applyToRunningTasks(commitAction);
         return running.size();
     }
 
+    /**
+     * @throws TaskMigratedException if committing offsets failed (non-EOS)
+     *                               or if the task producer got fenced (EOS)
+     */
     int maybeCommit() {
         committed = 0;
         applyToRunningTasks(maybeCommitAction);
         return committed;
     }
 
+    /**
+     * @throws TaskMigratedException if the task producer got fenced (EOS only)
+     */
     int process() {
         int processed = 0;
-        for (final Task task : running.values()) {
+        final Iterator<Map.Entry<TaskId, Task>> it = running.entrySet().iterator();
+        while (it.hasNext()) {
+            final Task task = it.next().getValue();
             try {
                 if (task.process()) {
                     processed++;
                 }
-            } catch (RuntimeException e) {
+            } catch (final TaskMigratedException e) {
+                closeZombieTask(task);
+                it.remove();
+                throw e;
+            } catch (final RuntimeException e) {
                 log.error("Failed to process {} {} due to the following error:", taskTypeName, task.id(), e);
                 throw e;
             }
@@ -363,9 +408,14 @@ class AssignedTasks {
         return processed;
     }
 
+    /**
+     * @throws TaskMigratedException if the task producer got fenced (EOS only)
+     */
     int punctuate() {
         int punctuated = 0;
-        for (Task task : running.values()) {
+        final Iterator<Map.Entry<TaskId, Task>> it = running.entrySet().iterator();
+        while (it.hasNext()) {
+            final Task task = it.next().getValue();
             try {
                 if (task.maybePunctuateStreamTime()) {
                     punctuated++;
@@ -373,7 +423,11 @@ class AssignedTasks {
                 if (task.maybePunctuateSystemTime()) {
                     punctuated++;
                 }
-            } catch (KafkaException e) {
+            } catch (final TaskMigratedException e) {
+                closeZombieTask(task);
+                it.remove();
+                throw e;
+            } catch (final KafkaException e) {
                 log.error("Failed to punctuate {} {} due to the following error:", taskTypeName, task.id(), e);
                 throw e;
             }
@@ -388,12 +442,12 @@ class AssignedTasks {
             final Task task = it.next();
             try {
                 action.apply(task);
-            } catch (final CommitFailedException e) {
-                // commit failed. This is already logged inside the task as WARN and we can just log it again here.
-                log.warn("Failed to commit {} {} during {} state due to CommitFailedException; this task may be no longer owned by the thread", taskTypeName, task.id(), action.name());
-            } catch (final ProducerFencedException e) {
+            } catch (final TaskMigratedException e) {
                 closeZombieTask(task);
                 it.remove();
+                if (firstException == null) {
+                    firstException = e;
+                }
             } catch (final RuntimeException t) {
                 log.error("Failed to {} {} {} due to the following error:",
                           action.name(),

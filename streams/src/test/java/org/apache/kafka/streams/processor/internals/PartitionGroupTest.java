@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.test.MockSourceNode;
@@ -35,14 +36,27 @@ import java.util.List;
 import static org.junit.Assert.assertEquals;
 
 public class PartitionGroupTest {
+    private final LogContext logContext = new LogContext();
     private final Serializer<Integer> intSerializer = new IntegerSerializer();
     private final Deserializer<Integer> intDeserializer = new IntegerDeserializer();
     private final TimestampExtractor timestampExtractor = new MockTimestampExtractor();
     private final String[] topics = {"topic"};
     private final TopicPartition partition1 = new TopicPartition(topics[0], 1);
     private final TopicPartition partition2 = new TopicPartition(topics[0], 2);
-    private final RecordQueue queue1 = new RecordQueue(partition1, new MockSourceNode<>(topics, intDeserializer, intDeserializer), timestampExtractor, new LogAndContinueExceptionHandler(), null);
-    private final RecordQueue queue2 = new RecordQueue(partition2, new MockSourceNode<>(topics, intDeserializer, intDeserializer), timestampExtractor, new LogAndContinueExceptionHandler(), null);
+    private final RecordQueue queue1 = new RecordQueue(
+        partition1,
+        new MockSourceNode<>(topics, intDeserializer, intDeserializer),
+        timestampExtractor,
+        new LogAndContinueExceptionHandler(),
+        null,
+        logContext);
+    private final RecordQueue queue2 = new RecordQueue(
+        partition2,
+        new MockSourceNode<>(topics, intDeserializer, intDeserializer),
+        timestampExtractor,
+        new LogAndContinueExceptionHandler(),
+        null,
+        logContext);
 
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);

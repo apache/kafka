@@ -211,6 +211,7 @@ public class ProcessorTopologyTestDriver {
 
         if (globalTopology != null) {
             final MockConsumer<byte[], byte[]> globalConsumer = createGlobalConsumer();
+            final MockStateRestoreListener stateRestoreListener = new MockStateRestoreListener();
             for (final String topicName : globalTopology.sourceTopics()) {
                 final List<PartitionInfo> partitionInfos = new ArrayList<>();
                 partitionInfos.add(new PartitionInfo(topicName, 1, null, null, null));
@@ -220,11 +221,15 @@ public class ProcessorTopologyTestDriver {
                 globalPartitionsByTopic.put(topicName, partition);
                 offsetsByTopicPartition.put(partition, new AtomicLong());
             }
-            final GlobalStateManagerImpl stateManager = new GlobalStateManagerImpl(globalTopology, globalConsumer, stateDirectory);
+            final GlobalStateManagerImpl stateManager = new GlobalStateManagerImpl(globalTopology,
+                                                                                   globalConsumer,
+                                                                                   stateDirectory,
+                                                                                   stateRestoreListener);
             globalStateTask = new GlobalStateUpdateTask(globalTopology,
                                                         new GlobalProcessorContextImpl(config, stateManager, streamsMetrics, cache),
-                                                        stateManager, new LogAndContinueExceptionHandler()
-            );
+                                                        stateManager,
+                                                        new LogAndContinueExceptionHandler(),
+                                                        new LogContext());
             globalStateTask.initialize();
         }
 

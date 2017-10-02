@@ -82,6 +82,14 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
         return epochEndOffsetsByPartition;
     }
 
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        Map<Errors, Integer> errorCounts = new HashMap<>();
+        for (EpochEndOffset response : epochEndOffsetsByPartition.values())
+            updateErrorCounts(errorCounts, response.error());
+        return errorCounts;
+    }
+
     public static OffsetsForLeaderEpochResponse parse(ByteBuffer buffer, short versionId) {
         return new OffsetsForLeaderEpochResponse(ApiKeys.OFFSET_FOR_LEADER_EPOCH.responseSchema(versionId).read(buffer));
     }

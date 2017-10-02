@@ -199,7 +199,7 @@ public final class Sensor {
             if (config != null) {
                 Quota quota = config.quota();
                 if (quota != null) {
-                    double value = metric.value(timeMs);
+                    double value = metric.measurableValue(timeMs);
                     if (!quota.acceptable(value)) {
                         throw new QuotaViolationException(metric.metricName(), value,
                             quota.bound());

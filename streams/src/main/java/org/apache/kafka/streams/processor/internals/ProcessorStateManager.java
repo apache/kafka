@@ -21,7 +21,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -41,8 +40,7 @@ import java.util.Map;
 
 public class ProcessorStateManager implements StateManager {
 
-
-    public static final String STATE_CHANGELOG_TOPIC_SUFFIX = "-changelog";
+    private static final String STATE_CHANGELOG_TOPIC_SUFFIX = "-changelog";
     static final String CHECKPOINT_FILE_NAME = ".checkpoint";
 
     private final Logger log;
@@ -119,17 +117,8 @@ public class ProcessorStateManager implements StateManager {
         return baseDir;
     }
 
-    /**
-     * @throws IllegalArgumentException if the store name has already been registered or if it is not a valid name
-     * (e.g., when it conflicts with the names of internal topics, like the checkpoint file name)
-     *
-     * // TODO: parameter loggingEnabled can be removed now
-     *
-     * @throws StreamsException if the store's change log does not contain the partition
-     */
     @Override
     public void register(final StateStore store,
-                         final boolean loggingEnabled,
                          final StateRestoreCallback stateRestoreCallback) {
         log.debug("Registering state store {} to its state manager", store.name());
 

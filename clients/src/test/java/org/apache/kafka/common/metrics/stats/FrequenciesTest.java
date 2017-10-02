@@ -102,6 +102,7 @@ public class FrequenciesTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testUseWithMetrics() {
         MetricName name1 = name("1");
         MetricName name2 = name("2");

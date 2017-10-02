@@ -24,6 +24,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.slf4j.Logger;
 
@@ -41,36 +42,32 @@ public class StoreChangelogReader implements ChangelogReader {
 
     private final Logger log;
     private final Consumer<byte[], byte[]> consumer;
-    private final StateRestoreListener stateRestoreListener;
+    private final StateRestoreListener userStateRestoreListener;
     private final Map<TopicPartition, Long> endOffsets = new HashMap<>();
     private final Map<String, List<PartitionInfo>> partitionInfo = new HashMap<>();
     private final Map<TopicPartition, StateRestorer> stateRestorers = new HashMap<>();
     private final Map<TopicPartition, StateRestorer> needsRestoring = new HashMap<>();
     private final Map<TopicPartition, StateRestorer> needsInitializing = new HashMap<>();
 
-    public StoreChangelogReader(final String threadId,
-                                final Consumer<byte[], byte[]> consumer,
-                                final StateRestoreListener stateRestoreListener,
+    public StoreChangelogReader(final Consumer<byte[], byte[]> consumer,
+                                final StateRestoreListener userStateRestoreListener,
                                 final LogContext logContext) {
         this.consumer = consumer;
         this.log = logContext.logger(getClass());
-        this.stateRestoreListener = stateRestoreListener;
-    }
-
-    public StoreChangelogReader(final Consumer<byte[], byte[]> consumer,
-                                final StateRestoreListener stateRestoreListener,
-                                final LogContext logContext) {
-        this("", consumer, stateRestoreListener, logContext);
+        this.userStateRestoreListener = userStateRestoreListener;
     }
 
     @Override
     public void register(final StateRestorer restorer) {
-        restorer.setGlobalRestoreListener(stateRestoreListener);
+        restorer.setUserRestoreListener(userStateRestoreListener);
         stateRestorers.put(restorer.partition(), restorer);
         needsInitializing.put(restorer.partition(), restorer);
     }
 
-    public Collection<TopicPartition> restore() {
+    /**
+     * @throws TaskMigratedException if another thread wrote to the changelog topic that is currently restored
+     */
+    public Collection<TopicPartition> restore(final RestoringTasks active) {
         if (!needsInitializing.isEmpty()) {
             initialize();
         }
@@ -83,7 +80,7 @@ public class StoreChangelogReader implements ChangelogReader {
         final Set<TopicPartition> partitions = new HashSet<>(needsRestoring.keySet());
         final ConsumerRecords<byte[], byte[]> allRecords = consumer.poll(10);
         for (final TopicPartition partition : partitions) {
-            restorePartition(allRecords, partition);
+            restorePartition(allRecords, partition, active.restoringTaskFor(partition));
         }
 
         if (needsRestoring.isEmpty()) {
@@ -230,19 +227,19 @@ public class StoreChangelogReader implements ChangelogReader {
         needsInitializing.clear();
     }
 
+    /**
+     * @throws TaskMigratedException if another thread wrote to the changelog topic that is currently restored
+     */
     private void restorePartition(final ConsumerRecords<byte[], byte[]> allRecords,
-                                  final TopicPartition topicPartition) {
+                                  final TopicPartition topicPartition,
+                                  final Task task) {
         final StateRestorer restorer = stateRestorers.get(topicPartition);
         final Long endOffset = endOffsets.get(topicPartition);
         final long pos = processNext(allRecords.records(topicPartition), restorer, endOffset);
         restorer.setRestoredOffset(pos);
         if (restorer.hasCompleted(pos, endOffset)) {
             if (pos > endOffset + 1) {
-                throw new IllegalStateException(
-                        String.format("Log end offset of %s should not change while restoring: old end offset %d, current offset %d",
-                                      topicPartition,
-                                      endOffset,
-                                      pos));
+                throw new TaskMigratedException(task, topicPartition, endOffset, pos);
             }
 
             log.debug("Completed restoring state from changelog {} with {} records ranging from offset {} to {}",
@@ -260,12 +257,11 @@ public class StoreChangelogReader implements ChangelogReader {
                              final StateRestorer restorer,
                              final Long endOffset) {
         final List<KeyValue<byte[], byte[]>> restoreRecords = new ArrayList<>();
-        long nextPosition = -1;
+        long offset = -1;
 
         for (final ConsumerRecord<byte[], byte[]> record : records) {
-            final long offset = record.offset();
+            offset = record.offset();
             if (restorer.hasCompleted(offset, endOffset)) {
-                nextPosition = record.offset();
                 break;
             }
             if (record.key() != null) {
@@ -273,17 +269,16 @@ public class StoreChangelogReader implements ChangelogReader {
             }
         }
 
-        if (nextPosition == -1) {
-            nextPosition = consumer.position(restorer.partition());
+        if (offset == -1) {
+            offset = consumer.position(restorer.partition());
         }
 
         if (!restoreRecords.isEmpty()) {
             restorer.restore(restoreRecords);
-            restorer.restoreBatchCompleted(nextPosition, records.size());
-
+            restorer.restoreBatchCompleted(offset + 1, records.size());
         }
 
-        return nextPosition;
+        return consumer.position(restorer.partition());
     }
 
     private boolean hasPartition(final TopicPartition topicPartition) {

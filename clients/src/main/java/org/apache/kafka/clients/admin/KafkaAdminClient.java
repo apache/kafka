@@ -377,7 +377,7 @@ public class KafkaAdminClient extends AdminClient {
             new TimeoutProcessorFactory() : timeoutProcessorFactory;
         this.maxRetries = config.getInt(AdminClientConfig.RETRIES_CONFIG);
         config.logUnused();
-        AppInfoParser.registerAppInfo(JMX_PREFIX, sanitizedClientId);
+        AppInfoParser.registerAppInfo(JMX_PREFIX, sanitizedClientId, metrics);
         log.debug("Kafka admin client initialized");
         thread.start();
     }
@@ -418,7 +418,7 @@ public class KafkaAdminClient extends AdminClient {
             // Wait for the thread to be joined.
             thread.join();
 
-            AppInfoParser.unregisterAppInfo(JMX_PREFIX, Sanitizer.sanitize(clientId));
+            AppInfoParser.unregisterAppInfo(JMX_PREFIX, Sanitizer.sanitize(clientId), metrics);
 
             log.debug("Kafka admin client closed.");
         } catch (InterruptedException e) {
