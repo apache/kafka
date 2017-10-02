@@ -34,14 +34,11 @@ public class ConnectMetricsRegistry {
     public static final String SINK_TASK_GROUP_NAME = "sink-task-metrics";
 
     private final List<MetricNameTemplate> allTemplates = new ArrayList<>();
-    public final MetricNameTemplate connectorStatusRunning;
-    public final MetricNameTemplate connectorStatusPaused;
-    public final MetricNameTemplate connectorStatusFailed;
-    public final MetricNameTemplate taskStatusUnassigned;
-    public final MetricNameTemplate taskStatusRunning;
-    public final MetricNameTemplate taskStatusPaused;
-    public final MetricNameTemplate taskStatusFailed;
-    public final MetricNameTemplate taskStatusDestroyed;
+    public final MetricNameTemplate connectorStatus;
+    public final MetricNameTemplate connectorType;
+    public final MetricNameTemplate connectorClass;
+    public final MetricNameTemplate connectorVersion;
+    public final MetricNameTemplate taskStatus;
     public final MetricNameTemplate taskRunningRatio;
     public final MetricNameTemplate taskPauseRatio;
     public final MetricNameTemplate taskCommitTimeMax;
@@ -85,28 +82,20 @@ public class ConnectMetricsRegistry {
         Set<String> connectorTags = new LinkedHashSet<>(tags);
         connectorTags.add(CONNECTOR_TAG_NAME);
 
-        connectorStatusRunning = createTemplate("status-running", CONNECTOR_GROUP_NAME,
-                                                "Signals whether the connector is in the running state.", connectorTags);
-        connectorStatusPaused = createTemplate("status-paused", CONNECTOR_GROUP_NAME,
-                                               "Signals whether the connector is in the paused state.", connectorTags);
-        connectorStatusFailed = createTemplate("status-failed", CONNECTOR_GROUP_NAME,
-                                               "Signals whether the connector is in the failed state.", connectorTags);
+        connectorStatus = createTemplate("status", CONNECTOR_GROUP_NAME, "The status of the connector. One of 'unassigned', " +
+                                                                         "'running', 'paused', 'failed', or 'destroyed'.", connectorTags);
+        connectorType = createTemplate("connector-type", CONNECTOR_GROUP_NAME, "The type of the connector. One of 'source' or " +
+                                                                               "'sink'.", connectorTags);
+        connectorClass = createTemplate("connector-class", CONNECTOR_GROUP_NAME, "The name of the connector class.", connectorTags);
+        connectorVersion = createTemplate("connector-version", CONNECTOR_GROUP_NAME, "The version of the connector class, as reported by the connector.", connectorTags);
 
         /***** Worker task level *****/
         Set<String> workerTaskTags = new LinkedHashSet<>(tags);
         workerTaskTags.add(CONNECTOR_TAG_NAME);
         workerTaskTags.add(TASK_TAG_NAME);
 
-        taskStatusUnassigned = createTemplate("status-unassigned", TASK_GROUP_NAME, "Signals whether this task is in the unassigned state.",
-                                              workerTaskTags);
-        taskStatusRunning = createTemplate("status-running", TASK_GROUP_NAME, "Signals whether this task is in the running state.",
-                                           workerTaskTags);
-        taskStatusPaused = createTemplate("status-paused", TASK_GROUP_NAME, "Signals whether this task is in the paused state.",
-                                          workerTaskTags);
-        taskStatusFailed = createTemplate("status-failed", TASK_GROUP_NAME, "Signals whether this task is in the failed state.",
-                                          workerTaskTags);
-        taskStatusDestroyed = createTemplate("status-destroyed", TASK_GROUP_NAME, "Signals whether this task is in the destroyed state.",
-                                             workerTaskTags);
+        taskStatus = createTemplate("status", TASK_GROUP_NAME, "The status of the connector task. One of 'unassigned', " +
+                                                               "'running', 'paused', 'failed', or 'destroyed'.", workerTaskTags);
         taskRunningRatio = createTemplate("running-ratio", TASK_GROUP_NAME,
                                           "The fraction of time this task has spent in the running state.", workerTaskTags);
         taskPauseRatio = createTemplate("pause-ratio", TASK_GROUP_NAME, "The fraction of time this task has spent in the pause state.",

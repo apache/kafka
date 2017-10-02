@@ -180,8 +180,7 @@ public class WorkerSinkTaskTest {
         time.sleep(10000L);
 
         assertSinkMetricValue("partition-count", 2);
-        assertTaskMetricValue("status-running", 0.0);
-        assertTaskMetricValue("status-paused", 1.0);
+        assertTaskMetricValue("status", "paused");
         assertTaskMetricValue("running-ratio", 0.0);
         assertTaskMetricValue("pause-ratio", 1.0);
         assertTaskMetricValue("offset-commit-max-time-ms", Double.NEGATIVE_INFINITY);
@@ -253,8 +252,7 @@ public class WorkerSinkTaskTest {
         assertSinkMetricValue("offset-commit-completion-total", 0.0);
         assertSinkMetricValue("offset-commit-skip-rate", 0.0);
         assertSinkMetricValue("offset-commit-skip-total", 0.0);
-        assertTaskMetricValue("status-running", 1.0);
-        assertTaskMetricValue("status-paused", 0.0);
+        assertTaskMetricValue("status", "running");
         assertTaskMetricValue("running-ratio", 1.0);
         assertTaskMetricValue("pause-ratio", 0.0);
         assertTaskMetricValue("batch-size-max", 1.0);
@@ -272,8 +270,7 @@ public class WorkerSinkTaskTest {
         assertSinkMetricValue("offset-commit-completion-total", 1.0);
         assertSinkMetricValue("offset-commit-skip-rate", 0.0);
         assertSinkMetricValue("offset-commit-skip-total", 0.0);
-        assertTaskMetricValue("status-running", 0.0);
-        assertTaskMetricValue("status-paused", 1.0);
+        assertTaskMetricValue("status", "paused");
         assertTaskMetricValue("running-ratio", 0.25);
         assertTaskMetricValue("pause-ratio", 0.75);
 
@@ -333,8 +330,7 @@ public class WorkerSinkTaskTest {
         assertSinkMetricValue("offset-commit-completion-total", 0.0);
         assertSinkMetricValue("offset-commit-skip-rate", 0.0);
         assertSinkMetricValue("offset-commit-skip-total", 0.0);
-        assertTaskMetricValue("status-running", 1.0);
-        assertTaskMetricValue("status-paused", 0.0);
+        assertTaskMetricValue("status", "running");
         assertTaskMetricValue("running-ratio", 1.0);
         assertTaskMetricValue("pause-ratio", 0.0);
         assertTaskMetricValue("batch-size-max", 0.0);
@@ -352,8 +348,7 @@ public class WorkerSinkTaskTest {
         assertSinkMetricValue("sink-record-active-count", 1.0);
         assertSinkMetricValue("sink-record-active-count-max", 1.0);
         assertSinkMetricValue("sink-record-active-count-avg", 0.5);
-        assertTaskMetricValue("status-running", 1.0);
-        assertTaskMetricValue("status-paused", 0.0);
+        assertTaskMetricValue("status", "running");
         assertTaskMetricValue("running-ratio", 1.0);
         assertTaskMetricValue("batch-size-max", 1.0);
         assertTaskMetricValue("batch-size-avg", 0.5);
@@ -492,8 +487,7 @@ public class WorkerSinkTaskTest {
         assertSinkMetricValue("offset-commit-seq-no", 1.0);
         assertSinkMetricValue("offset-commit-completion-total", 1.0);
         assertSinkMetricValue("offset-commit-skip-total", 0.0);
-        assertTaskMetricValue("status-running", 1.0);
-        assertTaskMetricValue("status-paused", 0.0);
+        assertTaskMetricValue("status", "running");
         assertTaskMetricValue("running-ratio", 1.0);
         assertTaskMetricValue("pause-ratio", 0.0);
         assertTaskMetricValue("batch-size-max", 1.0);
@@ -560,8 +554,7 @@ public class WorkerSinkTaskTest {
         assertSinkMetricValue("offset-commit-seq-no", 0.0);
         assertSinkMetricValue("offset-commit-completion-total", 0.0);
         assertSinkMetricValue("offset-commit-skip-total", 0.0);
-        assertTaskMetricValue("status-running", 1.0);
-        assertTaskMetricValue("status-paused", 0.0);
+        assertTaskMetricValue("status", "running");
         assertTaskMetricValue("running-ratio", 1.0);
         assertTaskMetricValue("pause-ratio", 0.0);
         assertTaskMetricValue("batch-size-max", 1.0);
@@ -588,8 +581,7 @@ public class WorkerSinkTaskTest {
         assertSinkMetricValue("offset-commit-seq-no", 1.0);
         assertSinkMetricValue("offset-commit-completion-total", 1.0);
         assertSinkMetricValue("offset-commit-skip-total", 0.0);
-        assertTaskMetricValue("status-running", 1.0);
-        assertTaskMetricValue("status-paused", 0.0);
+        assertTaskMetricValue("status", "running");
         assertTaskMetricValue("running-ratio", 1.0);
         assertTaskMetricValue("pause-ratio", 0.0);
         assertTaskMetricValue("batch-size-max", 1.0);
@@ -991,8 +983,7 @@ public class WorkerSinkTaskTest {
         assertSinkMetricValue("offset-commit-seq-no", 2.0);
         assertSinkMetricValue("offset-commit-completion-total", 1.0);
         assertSinkMetricValue("offset-commit-skip-total", 1.0);
-        assertTaskMetricValue("status-running", 1.0);
-        assertTaskMetricValue("status-paused", 0.0);
+        assertTaskMetricValue("status", "running");
         assertTaskMetricValue("running-ratio", 1.0);
         assertTaskMetricValue("pause-ratio", 0.0);
         assertTaskMetricValue("batch-size-max", 2.0);
@@ -1026,8 +1017,7 @@ public class WorkerSinkTaskTest {
         assertSinkMetricValue("offset-commit-seq-no", 3.0);
         assertSinkMetricValue("offset-commit-completion-total", 2.0);
         assertSinkMetricValue("offset-commit-skip-total", 1.0);
-        assertTaskMetricValue("status-running", 1.0);
-        assertTaskMetricValue("status-paused", 0.0);
+        assertTaskMetricValue("status", "running");
         assertTaskMetricValue("running-ratio", 1.0);
         assertTaskMetricValue("pause-ratio", 0.0);
         assertTaskMetricValue("batch-size-max", 2.0);
@@ -1089,7 +1079,7 @@ public class WorkerSinkTaskTest {
         assertFalse(sinkTaskContext.getValue().isCommitRequested()); // should have been cleared
         assertEquals(offsets, Whitebox.<Map<TopicPartition, OffsetAndMetadata>>getInternalState(workerTask, "lastCommittedOffsets"));
         assertEquals(0, workerTask.commitFailures());
-        assertEquals(1.0, metrics.currentMetricValue(workerTask.taskMetricsGroup().metricGroup(), "batch-size-max"), 0.0001);
+        assertEquals(1.0, metrics.currentMetricValueAsDouble(workerTask.taskMetricsGroup().metricGroup(), "batch-size-max"), 0.0001);
 
         PowerMock.verifyAll();
     }
@@ -1289,14 +1279,20 @@ public class WorkerSinkTaskTest {
 
     private void assertSinkMetricValue(String name, double expected) {
         MetricGroup sinkTaskGroup = workerTask.sinkTaskMetricsGroup().metricGroup();
-        double measured = metrics.currentMetricValue(sinkTaskGroup, name);
+        double measured = metrics.currentMetricValueAsDouble(sinkTaskGroup, name);
         assertEquals(expected, measured, 0.001d);
     }
 
     private void assertTaskMetricValue(String name, double expected) {
         MetricGroup taskGroup = workerTask.taskMetricsGroup().metricGroup();
-        double measured = metrics.currentMetricValue(taskGroup, name);
+        double measured = metrics.currentMetricValueAsDouble(taskGroup, name);
         assertEquals(expected, measured, 0.001d);
+    }
+
+    private void assertTaskMetricValue(String name, String expected) {
+        MetricGroup taskGroup = workerTask.taskMetricsGroup().metricGroup();
+        String measured = metrics.currentMetricValueAsString(taskGroup, name);
+        assertEquals(expected, measured);
     }
 
     private void printMetrics() {
@@ -1334,14 +1330,14 @@ public class WorkerSinkTaskTest {
 
     private double sinkMetricValue(String metricName) {
         MetricGroup sinkTaskGroup = workerTask.sinkTaskMetricsGroup().metricGroup();
-        double value = metrics.currentMetricValue(sinkTaskGroup, metricName);
+        double value = metrics.currentMetricValueAsDouble(sinkTaskGroup, metricName);
         System.out.println("** " + metricName + "=" + value);
         return value;
     }
 
     private double taskMetricValue(String metricName) {
         MetricGroup taskGroup = workerTask.taskMetricsGroup().metricGroup();
-        double value = metrics.currentMetricValue(taskGroup, metricName);
+        double value = metrics.currentMetricValueAsDouble(taskGroup, metricName);
         System.out.println("** " + metricName + "=" + value);
         return value;
     }
@@ -1350,10 +1346,10 @@ public class WorkerSinkTaskTest {
     private void assertMetrics(int minimumPollCountExpected) {
         MetricGroup sinkTaskGroup = workerTask.sinkTaskMetricsGroup().metricGroup();
         MetricGroup taskGroup = workerTask.taskMetricsGroup().metricGroup();
-        double readRate = metrics.currentMetricValue(sinkTaskGroup, "sink-record-read-rate");
-        double readTotal = metrics.currentMetricValue(sinkTaskGroup, "sink-record-read-total");
-        double sendRate = metrics.currentMetricValue(sinkTaskGroup, "sink-record-send-rate");
-        double sendTotal = metrics.currentMetricValue(sinkTaskGroup, "sink-record-send-total");
+        double readRate = metrics.currentMetricValueAsDouble(sinkTaskGroup, "sink-record-read-rate");
+        double readTotal = metrics.currentMetricValueAsDouble(sinkTaskGroup, "sink-record-read-total");
+        double sendRate = metrics.currentMetricValueAsDouble(sinkTaskGroup, "sink-record-send-rate");
+        double sendTotal = metrics.currentMetricValueAsDouble(sinkTaskGroup, "sink-record-send-total");
     }
 
     private abstract static class TestSinkTask extends SinkTask  {
