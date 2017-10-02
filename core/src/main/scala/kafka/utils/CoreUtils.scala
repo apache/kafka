@@ -47,6 +47,12 @@ import org.apache.kafka.common.utils.{Base64, KafkaThread, Utils}
 object CoreUtils extends Logging {
 
   /**
+   * Return the smallest element in `traversable` if it is not empty. Otherwise return `ifEmpty`.
+   */
+  def min[A, B >: A](traversable: TraversableOnce[A], ifEmpty: A)(implicit cmp: Ordering[B]): A =
+    if (traversable.isEmpty) ifEmpty else traversable.min(cmp)
+
+  /**
    * Wrap the given function in a java.lang.Runnable
    * @param fun A function
    * @return A Runnable that just executes the function

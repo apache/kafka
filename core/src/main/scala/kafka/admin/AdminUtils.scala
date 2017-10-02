@@ -639,7 +639,7 @@ object AdminUtils extends Logging with AdminUtilities {
   def fetchEntityConfig(zkUtils: ZkUtils, rootEntityType: String, sanitizedEntityName: String): Properties = {
     val entityConfigPath = getEntityConfigPath(rootEntityType, sanitizedEntityName)
     // readDataMaybeNull returns Some(null) if the path exists, but there is no data
-    val str: String = zkUtils.readDataMaybeNull(entityConfigPath)._1.orNull
+    val str = zkUtils.readDataMaybeNull(entityConfigPath)._1.orNull
     val props = new Properties()
     if (str != null) {
       Json.parseFull(str).foreach { jsValue =>
