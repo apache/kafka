@@ -158,8 +158,7 @@ class ReplicaFetcherThreadTest {
   def shouldTruncateToOffsetSpecifiedInEpochOffsetResponse(): Unit = {
 
     //Create a capture to track what partitions/offsets are truncated
-    val truncateToCapture1: Capture[Map[TopicPartition, Long]] = newCapture(CaptureType.ALL)
-    val truncateToCapture2: Capture[Map[TopicPartition, Long]] = newCapture(CaptureType.ALL)
+    val truncateToCapture: Capture[Map[TopicPartition, Long]] = newCapture(CaptureType.ALL)
 
     // Setup all the dependencies
     val configs = TestUtils.createBrokerConfigs(1, "localhost:1234").map(KafkaConfig.fromProps)
@@ -172,8 +171,7 @@ class ReplicaFetcherThreadTest {
     val initialLEO = 200
 
     //Stubs
-    expect(logManager.truncateTo(capture(truncateToCapture1))).once()
-    expect(logManager.truncateTo(capture(truncateToCapture2))).once()
+    expect(logManager.truncateTo(capture(truncateToCapture))).times(2)
     expect(replica.epochs).andReturn(Some(leaderEpochs)).anyTimes()
     expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(initialLEO)).anyTimes()
     expect(leaderEpochs.latestEpoch).andReturn(5).anyTimes()
@@ -196,8 +194,9 @@ class ReplicaFetcherThreadTest {
     thread.doWork()
 
     //We should have truncated to the offsets in the response
-    assertEquals(156, truncateToCapture1.getValue.get(t1p0).get)
-    assertEquals(172, truncateToCapture2.getValue.get(t2p1).get)
+    val truncationPoints = truncateToCapture.getValues.asScala.flatMap(_.toSeq).toMap
+    assertEquals(156, truncationPoints(t1p0))
+    assertEquals(172, truncationPoints(t2p1))
   }
 
   @Test

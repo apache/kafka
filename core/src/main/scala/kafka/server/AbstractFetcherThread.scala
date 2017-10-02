@@ -71,13 +71,15 @@ abstract class AbstractFetcherThread(name: String,
   // deal with partitions with errors, potentially due to leadership changes
   protected def handlePartitionsWithErrors(partitions: Iterable[TopicPartition])
 
-  protected def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): Map[TopicPartition, Int]
+  protected def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[Map[TopicPartition, Int]]
 
   protected def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset]
 
-  protected def maybeTruncate(fetchedEpochs: Map[TopicPartition, EpochEndOffset]): Map[TopicPartition, Long]
+  protected def maybeTruncate(fetchedEpochs: Map[TopicPartition, EpochEndOffset]): ResultWithPartitions[Map[TopicPartition, Long]]
 
-  protected def buildFetchRequest(partitionMap: Seq[(TopicPartition, PartitionFetchState)]): REQ
+  protected def buildFetchRequest(partitionMap: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[REQ]
+
+  case class ResultWithPartitions[R](result: R, partitionsWithError: Set[TopicPartition])
 
   protected def fetch(fetchRequest: REQ): Seq[(TopicPartition, PD)]
 
@@ -98,12 +100,15 @@ abstract class AbstractFetcherThread(name: String,
   override def doWork() {
     maybeTruncate()
     val fetchRequest = inLock(partitionMapLock) {
-      val fetchRequest = buildFetchRequest(states)
-      if (fetchRequest.isEmpty) {
-        trace("There are no active partitions. Back off for %d ms before sending a fetch request".format(fetchBackOffMs))
-        partitionMapCond.await(fetchBackOffMs, TimeUnit.MILLISECONDS)
+      buildFetchRequest(states) match {
+        case ResultWithPartitions(fetchRequest, partitionsWithError) =>
+          if (fetchRequest.isEmpty) {
+            trace("There are no active partitions. Back off for %d ms before sending a fetch request".format(fetchBackOffMs))
+            partitionMapCond.await(fetchBackOffMs, TimeUnit.MILLISECONDS)
+          }
+          handlePartitionsWithErrors(partitionsWithError)
+          fetchRequest
       }
-      fetchRequest
     }
     if (!fetchRequest.isEmpty)
       processFetchRequest(fetchRequest)
@@ -119,7 +124,13 @@ abstract class AbstractFetcherThread(name: String,
     *   occur during truncation.
     */
   def maybeTruncate(): Unit = {
-    val epochRequests = inLock(partitionMapLock) { buildLeaderEpochRequest(states) }
+    val epochRequests = inLock(partitionMapLock) {
+      buildLeaderEpochRequest(states) match {
+        case ResultWithPartitions(epochRequests, partitionsWithError) =>
+          handlePartitionsWithErrors(partitionsWithError)
+          epochRequests
+      }
+    }
 
     if (epochRequests.nonEmpty) {
       val fetchedEpochs = fetchEpochsFromLeader(epochRequests)
@@ -127,8 +138,11 @@ abstract class AbstractFetcherThread(name: String,
       inLock(partitionMapLock) {
         //Check no leadership changes happened whilst we were unlocked, fetching epochs
         val leaderEpochs = fetchedEpochs.filter { case (tp, _) => partitionStates.contains(tp) }
-        val truncationPoints = maybeTruncate(leaderEpochs)
-        markTruncationComplete(truncationPoints)
+        maybeTruncate(leaderEpochs) match {
+          case ResultWithPartitions(truncationPoints, partitionsWithError) =>
+            handlePartitionsWithErrors(partitionsWithError)
+            markTruncationComplete(truncationPoints)
+        }
       }
     }
   }
@@ -225,10 +239,9 @@ abstract class AbstractFetcherThread(name: String,
       }
     }
 
-    if (partitionsWithError.nonEmpty) {
+    if (partitionsWithError.nonEmpty)
       debug("handling partitions with error for %s".format(partitionsWithError))
-      handlePartitionsWithErrors(partitionsWithError)
-    }
+    handlePartitionsWithErrors(partitionsWithError)
   }
 
   def addPartitions(partitionAndOffsets: Map[TopicPartition, Long]) {
@@ -253,6 +266,7 @@ abstract class AbstractFetcherThread(name: String,
 
   /**
     * Loop through all partitions, marking them as truncation complete and applying the correct offset
+ *
     * @param partitions the partitions to mark truncation complete
     */
   private def markTruncationComplete(partitions: Map[TopicPartition, Long]) {

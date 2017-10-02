@@ -196,7 +196,8 @@ class ReplicaFetcherThread(name: String,
 
   // any logic for partitions whose leader has changed
   def handlePartitionsWithErrors(partitions: Iterable[TopicPartition]) {
-    delayPartitions(partitions, brokerConfig.replicaFetchBackoffMs.toLong)
+    if (partitions.nonEmpty)
+      delayPartitions(partitions, brokerConfig.replicaFetchBackoffMs.toLong)
   }
 
   protected def fetch(fetchRequest: FetchRequest): Seq[(TopicPartition, PartitionData)] = {
@@ -228,7 +229,7 @@ class ReplicaFetcherThread(name: String,
     }
   }
 
-  override def buildFetchRequest(partitionMap: Seq[(TopicPartition, PartitionFetchState)]): FetchRequest = {
+  override def buildFetchRequest(partitionMap: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[FetchRequest] = {
     val requestMap = new util.LinkedHashMap[TopicPartition, JFetchRequest.PartitionData]
     val partitionsWithError = mutable.Set[TopicPartition]()
 
@@ -246,12 +247,9 @@ class ReplicaFetcherThread(name: String,
       }
     }
 
-    if (partitionsWithError.nonEmpty)
-      handlePartitionsWithErrors(partitionsWithError)
-
     val requestBuilder = JFetchRequest.Builder.forReplica(fetchRequestVersion, replicaId, maxWait, minBytes, requestMap)
       .setMaxBytes(maxBytes)
-    new FetchRequest(requestBuilder)
+    ResultWithPartitions(new FetchRequest(requestBuilder), partitionsWithError)
   }
 
   /**
@@ -260,7 +258,7 @@ class ReplicaFetcherThread(name: String,
     *   otherwise we truncate to the leaders offset.
     * - If the leader replied with undefined epoch offset we must use the high watermark
     */
-  override def maybeTruncate(fetchedEpochs: Map[TopicPartition, EpochEndOffset]): Map[TopicPartition, Long] = {
+  override def maybeTruncate(fetchedEpochs: Map[TopicPartition, EpochEndOffset]): ResultWithPartitions[Map[TopicPartition, Long]] = {
     val truncationPoints = scala.collection.mutable.HashMap.empty[TopicPartition, Long]
     val partitionsWithError = mutable.Set[TopicPartition]()
 
@@ -290,24 +288,19 @@ class ReplicaFetcherThread(name: String,
       }
     }
 
-    // For partitions that encountered an error, delay them a bit before retrying the leader epoch request
-    if (partitionsWithError.nonEmpty)
-      handlePartitionsWithErrors(partitionsWithError)
-
-    truncationPoints
+    ResultWithPartitions(truncationPoints, partitionsWithError)
   }
 
-  override def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): Map[TopicPartition, Int] = {
+  override def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[Map[TopicPartition, Int]] = {
     val partitionEpochOpts = allPartitions
       .filter { case (_, state) => state.isTruncatingLog }
       .map { case (tp, _) => tp -> epochCacheOpt(tp) }.toMap
 
     val (partitionsWithEpoch, partitionsWithoutEpoch) = partitionEpochOpts.partition { case (tp, epochCacheOpt) => epochCacheOpt.nonEmpty }
-    if (partitionsWithoutEpoch.nonEmpty)
-      handlePartitionsWithErrors(partitionsWithoutEpoch.keys)
 
     debug(s"Build leaderEpoch request $partitionsWithEpoch")
-    partitionsWithEpoch.map { case (tp, epochCacheOpt) => tp -> epochCacheOpt.get.latestEpoch() }
+    val result = partitionsWithEpoch.map { case (tp, epochCacheOpt) => tp -> epochCacheOpt.get.latestEpoch() }
+    ResultWithPartitions(result, partitionsWithoutEpoch.keys.toSet)
   }
 
   override def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {

@@ -84,9 +84,12 @@ class LogDirFailureTest extends IntegrationTestHarness {
     // so that ReplicaFetcherThread on the follower will get response from leader immediately
     val anotherPartitionWithTheSameLeader = (1 until partitionNum).find { i =>
       leaderServer.replicaManager.getPartition(new TopicPartition(topic, i)).flatMap(_.leaderReplicaIfLocal).isDefined
-    }.get
-    val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, anotherPartitionWithTheSameLeader, topic.getBytes, "message".getBytes)
-    producer.send(record).get
+    }.map(new TopicPartition(topic, _)).get
+
+    val startTimeMs = System.currentTimeMillis()
+    TestUtils.waitUntilTrue(() => {
+      startTimeMs < leaderServer.replicaManager.getPartition(anotherPartitionWithTheSameLeader).get.getReplica(followerServerId).get.lastCaughtUpTimeMs
+    }, "timed out waiting for follower to fetch from leader")
 
     followerServer.replicaManager.replicaFetcherManager.fetcherThreadMap.values.foreach { thread =>
       assertTrue("ReplicaFetcherThread should still be working if its partition count > 0", thread.shutdownLatch.getCount > 0)
