@@ -456,7 +456,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldResumeConsumptionOfInitializedPartitions() {
-        final Set<TopicPartition> resumed = Utils.mkSet(new TopicPartition("topic", 0));
+        final Set<TopicPartition> resumed = Collections.singleton(new TopicPartition("topic", 0));
         EasyMock.expect(active.initializeNewTasks()).andReturn(resumed);
         EasyMock.expect(active.updateRestored(EasyMock.<Collection<TopicPartition>>anyObject())).
                 andReturn(Collections.<TopicPartition>emptySet());
