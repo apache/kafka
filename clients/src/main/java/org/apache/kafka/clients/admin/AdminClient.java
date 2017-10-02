@@ -116,9 +116,8 @@ public abstract class AdminClient implements AutoCloseable {
      * This operation is supported by brokers with version 0.10.1.0 or higher. The validateOnly option is supported
      * from version 0.10.2.0.
      *
-     *
      * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
-     * {@link CreatePartitionsResult#values() values()} method of the  returned {@code CreatePartitionsResult}</p>
+     * {@link CreateTopicsResult#values() values()} method of the  returned {@code CreateTopicsResult}</p>
      * <ul>
      *     <li>{@link org.apache.kafka.common.errors.InvalidRequestException}
      *     if duplicate topics were present in the request</li>
@@ -137,7 +136,7 @@ public abstract class AdminClient implements AutoCloseable {
      *     <li>{@link org.apache.kafka.common.errors.PolicyViolationException}
      *     if the request parameters do not satisfy the user defined policy</li>
      *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
-     *     if the request was not completed in within the given {@link CreatePartitionsOptions#timeoutMs()}.
+     *     if the request was not completed in within the given {@link CreateTopicsOptions#timeoutMs()}.
      *     </li>
      * </ul>
      *
@@ -175,6 +174,20 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * This operation is supported by brokers with version 0.10.1.0 or higher.
      *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link DeleteTopicsResult#values() values()} method of the  returned {@code DeleteTopicsResult}</p>
+     * <ul>
+     *     <li>{@link org.apache.kafka.common.errors.UnknownTopicOrPartitionException}
+     *     if the topic does not exist</li>
+     *     <li>{@link org.apache.kafka.common.errors.TopicAuthorizationException}
+     *     if the authenticated user is not authorized to alter the topic</li>
+     *     <li>{@link org.apache.kafka.common.errors.NotControllerException}
+     *     if this is not the correct controller for the cluster</li>
+     *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *     if the request was not completed in within the given {@link DeleteTopicsOptions#timeoutMs()}.
+     *     </li>
+     * </ul>
+     *
      * @param topics            The topic names to delete.
      * @param options           The options to use when deleting the topics.
      * @return                  The DeleteTopicsResult.
@@ -192,6 +205,24 @@ public abstract class AdminClient implements AutoCloseable {
 
     /**
      * List the topics available in the cluster.
+     *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link ListTopicsResult#namesToListings() namesToListings()}, {@link ListTopicsResult#listings() listings()},
+     * {@link ListTopicsResult#names() names()} methods of the  returned {@code ListTopicsResult}</p>
+     *
+     * <ul>
+     *     <li>{@link org.apache.kafka.common.errors.UnknownTopicOrPartitionException}
+     *     if the authorized topic was in metadata first, but was not found during later look up</li>
+     *     <li>{@link org.apache.kafka.common.errors.LeaderNotAvailableException}
+     *     if leader is unavailable</li>
+     *     <li>{@link org.apache.kafka.common.errors.ReplicaNotAvailableException}
+     *     if the replica is not available</li>
+     *     <li>{@link org.apache.kafka.common.errors.TopicAuthorizationException}
+     *     if the authenticated user is not authorized to alter the topic</li>
+     *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *     if the request was not completed in within the given {@link ListTopicsOptions#timeoutMs()}.
+     *     </li>
+     * </ul>
      *
      * @param options           The options to use when listing the topics.
      * @return                  The ListTopicsResult.
@@ -214,6 +245,22 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * Describe some topics in the cluster.
      *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link DescribeTopicsResult#values() values()} method of the  returned {@code DescribeTopicsResult}</p>
+     * <ul>
+     *     <li>{@link org.apache.kafka.common.errors.UnknownTopicOrPartitionException}
+     *     if the authorized topic was in metadata first, but was not found during later look up</li>
+     *     <li>{@link org.apache.kafka.common.errors.LeaderNotAvailableException}
+     *     if leader is unavailable</li>
+     *     <li>{@link org.apache.kafka.common.errors.ReplicaNotAvailableException}
+     *     if the replica is not available</li>
+     *     <li>{@link org.apache.kafka.common.errors.TopicAuthorizationException}
+     *     if the authenticated user is not authorized to alter the topic</li>
+     *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *     if the request was not completed in within the given {@link DescribeTopicsOptions#timeoutMs()}.
+     *     </li>
+     * </ul>
+     *
      * @param topicNames        The names of the topics to describe.
      * @param options           The options to use when describing the topic.
      *
@@ -233,6 +280,16 @@ public abstract class AdminClient implements AutoCloseable {
 
     /**
      * Get information about the nodes in the cluster.
+     *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link DescribeClusterResult#clusterId() clusterId()}, {@link DescribeClusterResult#controller() controller()},
+     * {@link DescribeClusterResult#nodes() nodes()} methods of the  returned {@code DescribeClusterResult}</p>
+     *
+     * <ul>
+     *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *     if the request was not completed in within the given {@link DescribeClusterOptions#timeoutMs()}.
+     *     </li>
+     * </ul>
      *
      * @param options           The options to use when getting information about the cluster.
      * @return                  The DescribeClusterResult.
@@ -259,6 +316,18 @@ public abstract class AdminClient implements AutoCloseable {
      * in the output of describeAcls.
      *
      * This operation is supported by brokers with version 0.11.0.0 or higher.
+     *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link DescribeAclsResult#values() values()} method of the  returned {@code DescribeAclsResult}</p>
+     * <ul>
+     *     <li>{@link org.apache.kafka.common.errors.SecurityDisabledException}
+     *     if security features are disabled</li>
+     *     <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
+     *     if cluster authorization failed</li>
+     *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *     if the request was not completed in within the given {@link DescribeAclsOptions#timeoutMs()}.
+     *     </li>
+     * </ul>
      *
      * @param filter            The filter to use.
      * @param options           The options to use when listing the ACLs.
@@ -287,6 +356,21 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link CreateAclsResult#values() values()} and {@link CreateAclsResult#all() all()} methods of the  returned
+     * {@code CreateAclsResult}</p>
+     * <ul>
+     *     <li>{@link org.apache.kafka.common.errors.SecurityDisabledException}
+     *     if security features are disabled</li>
+     *     <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
+     *     if cluster authorization failed</li>
+     *     <li>{@link org.apache.kafka.common.errors.InvalidRequestException}
+     *     if invalid resource name was provided</li>
+     *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *     if the request was not completed in within the given {@link CreateAclsOptions#timeoutMs()}.
+     *     </li>
+     * </ul>
+     *
      * @param acls              The ACLs to create
      * @param options           The options to use when creating the ACLs.
      * @return                  The CreateAclsResult.
@@ -310,6 +394,21 @@ public abstract class AdminClient implements AutoCloseable {
      * Deletes access control lists (ACLs) according to the supplied filters.
      *
      * This operation is supported by brokers with version 0.11.0.0 or higher.
+     *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link DeleteAclsResult#values() values()} and {@link DeleteAclsResult#all() all()} methods of the  returned
+     * {@code DeleteAclsResult}</p>
+     * <ul>
+     *     <li>{@link org.apache.kafka.common.errors.SecurityDisabledException}
+     *     if security features are disabled</li>
+     *     <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
+     *     if cluster authorization failed</li>
+     *     <li>{@link org.apache.kafka.common.errors.InvalidRequestException}
+     *     if invalid resource name was provided</li>
+     *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *     if the request was not completed in within the given {@link DeleteAclsOptions#timeoutMs()}.
+     *     </li>
+     * </ul>
      *
      * @param filters           The filters to use.
      * @param options           The options to use when deleting the ACLs.
@@ -345,6 +444,25 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link DescribeConfigsResult#values() values()} and {@link DescribeConfigsResult#all() all()} methods of the  returned
+     * {@code DescribeConfigsResult}</p>
+     * <ul>
+     *     <li>{@link org.apache.kafka.common.errors.SecurityDisabledException}
+     *     if security features are disabled</li>
+     *     <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
+     *     if cluster authorization failed</li>
+     *     <li>{@link org.apache.kafka.common.errors.InvalidRequestException}
+     *     if unsupported resource type or unexpected broker id</li>
+     *     <li>{@link org.apache.kafka.common.errors.InvalidTopicException}
+     *     if topic name is illegal</li>
+     *     <li>{@link org.apache.kafka.common.errors.UnknownServerException}
+     *     if unexpected value in config</li>
+     *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *     if the request was not completed in within the given {@link DescribeConfigsOptions#timeoutMs()}.
+     *     </li>
+     * </ul>
+     *
      * @param resources         The resources (topic and broker resource types are currently supported)
      * @param options           The options to use when describing configs
      * @return                  The DescribeConfigsResult
@@ -371,6 +489,25 @@ public abstract class AdminClient implements AutoCloseable {
      * Update the configuration for the specified resources with the default options.
      *
      * This operation is supported by brokers with version 0.11.0.0 or higher.
+     *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link AlterConfigsResult#values() values()} and {@link AlterConfigsResult#all() all()} methods of the  returned
+     * {@code AlterConfigsResult}</p>
+     * <ul>
+     *     <li>{@link org.apache.kafka.common.errors.SecurityDisabledException}
+     *     if security features are disabled</li>
+     *     <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
+     *     if cluster authorization failed</li>
+     *     <li>{@link org.apache.kafka.common.errors.InvalidRequestException}
+     *     if unsupported resource type or unexpected broker id</li>
+     *     <li>{@link org.apache.kafka.common.errors.InvalidTopicException}
+     *     if topic name is illegal</li>
+     *     <li>{@link org.apache.kafka.common.errors.UnknownServerException}
+     *     if unexpected value in config</li>
+     *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *     if the request was not completed in within the given {@link AlterConfigsOptions#timeoutMs()}.
+     *     </li>
+     * </ul>
      *
      * @param configs         The resources with their configs (topic is the only resource type with configs that can
      *                        be updated currently)
@@ -400,6 +537,23 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * This operation is supported by brokers with version 1.0.0 or higher.
      *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link AlterReplicaDirResult#values() values()} and {@link AlterReplicaDirResult#all() all()} methods of the  returned
+     * {@code AlterReplicaDirResult}</p>
+     * <ul>
+     *     <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
+     *     if cluster authorization failed</li>
+     *     <li>{@link org.apache.kafka.common.errors.LogDirNotFoundException}
+     *     if log dir is not found in the config.</li>
+     *     <li>{@link org.apache.kafka.common.errors.KafkaStorageException}
+     *     if log directory is offline</li>
+     *     <li>{@link org.apache.kafka.common.errors.ReplicaNotAvailableException}
+     *     if replice is not available for partition</li>
+     *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *     if the request was not completed in within the given {@link AlterReplicaDirOptions#timeoutMs()}.
+     *     </li>
+     * </ul>
+     *
      * @param replicaAssignment  The replicas with their log directory absolute path
      * @param options            The options to use when changing replica dir
      * @return                   The AlterReplicaDirResult
@@ -423,6 +577,19 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * This operation is supported by brokers with version 1.0.0 or higher.
      *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link DescribeLogDirsResult#values() values()} and {@link DescribeLogDirsResult#all() all()} methods of the  returned
+     * {@code DescribeLogDirsResult}</p>
+     * <ul>
+     *     <li>{@link org.apache.kafka.common.errors.LogDirNotFoundException}
+     *     if log dir is not found in the config.</li>
+     *     <li>{@link org.apache.kafka.common.errors.KafkaStorageException}
+     *     if log directory is offline</li>
+     *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *     if the request was not completed in within the given {@link DescribeLogDirsOptions#timeoutMs()}.
+     *     </li>
+     * </ul>
+     *
      * @param brokers     A list of brokers
      * @param options     The options to use when querying log dir info
      * @return            The DescribeLogDirsResult
@@ -445,6 +612,19 @@ public abstract class AdminClient implements AutoCloseable {
      * Query the replica log directory information for the specified replicas.
      *
      * This operation is supported by brokers with version 1.0.0 or higher.
+     *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link DescribeReplicaLogDirResult#values() values()} and {@link DescribeReplicaLogDirResult#all() all()} methods of the  returned
+     * {@code DescribeLogDirsResult}</p>
+     * <ul>
+     *     <li>{@link org.apache.kafka.common.errors.LogDirNotFoundException}
+     *     if log dir is not found in the config.</li>
+     *     <li>{@link org.apache.kafka.common.errors.KafkaStorageException}
+     *     if log directory is offline</li>
+     *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *     if the request was not completed in within the given {@link DescribeReplicaLogDirOptions#timeoutMs()}.
+     *     </li>
+     * </ul>
      *
      * @param replicas      The replicas to query
      * @param options       The options to use when querying replica log dir info
@@ -479,6 +659,38 @@ public abstract class AdminClient implements AutoCloseable {
      * may not return information about the new partitions.
      *
      * This operation is supported by brokers with version 1.0.0 or higher.
+     *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link CreatePartitionsResult#values() values()} method of the  returned {@code CreatePartitionsResult}</p>
+     * <ul>
+     *     <li>{@link org.apache.kafka.common.errors.InvalidRequestException}
+     *     if duplicate topics were present in the request</li>
+     *     <li>{@link org.apache.kafka.common.errors.TopicAuthorizationException}
+     *     if the authenticated user is not authorized to alter the topic</li>
+     *     <li>{@link org.apache.kafka.common.errors.InvalidTopicException}
+     *     if the topic is queue for deletion</li>
+     *     <li>{@link org.apache.kafka.common.errors.ReassignmentInProgressException}
+     *     if a partition reassignment is currently in progress</li>
+     *     <li>{@link org.apache.kafka.common.errors.UnknownTopicOrPartitionException}
+     *     if the topic does not exist</li>
+     *     <li>{@link org.apache.kafka.common.errors.InvalidPartitionsException}
+     *     if the requested {@link NewPartitions#totalCount()} is less than the current number of partitions</li>
+     *     <li>{@link org.apache.kafka.common.errors.InvalidReplicaAssignmentException}
+     *     if the requested {@link NewPartitions#assignments()} contain an unknown broker id,
+     *     or contain duplicate broker ids,
+     *     or are incompatible with the increase in the number of partitions or the topic replication factor
+     *     </li>
+     *     <li>{@link org.apache.kafka.common.errors.BrokerNotAvailableException}
+     *     if the requested {@link NewPartitions#assignments()} contain a broker that is currently unavailable
+     *     </li>
+     *     <li>{@link org.apache.kafka.common.errors.InvalidReplicationFactorException}
+     *     if no {@link NewPartitions#assignments()} are given and it is impossible for the broker to assign
+     *     replicas with the topics replication factor
+     *     </li>
+     *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *     if the request was not completed in within the given {@link CreatePartitionsOptions#timeoutMs()}.
+     *     </li>
+     * </ul>
      *
      * @param newPartitions The topics which should have new partitions created, and corresponding parameters
      *                      for the created partitions.
