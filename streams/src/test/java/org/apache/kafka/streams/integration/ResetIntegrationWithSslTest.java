@@ -17,21 +17,37 @@
 package org.apache.kafka.streams.integration;
 
 import kafka.server.KafkaConfig$;
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.test.IntegrationTest;
+import org.apache.kafka.test.TestSslUtils;
+import org.apache.kafka.test.TestUtils;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import java.util.Map;
 import java.util.Properties;
 
 /**
- * Tests local state store and global application cleanup.
+ * Tests command line SSL setup for reset tool.
  */
 @Category({IntegrationTest.class})
-public class ResetIntegrationTest extends AbstractResetIntegrationTest {
+public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
+
+    private static Map<String, Object> sslConfig;
+    static {
+        try {
+            sslConfig = TestSslUtils.createSslConfig(false, true, Mode.SERVER, TestUtils.tempFile(), "testCert");
+        } catch (final Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER;
@@ -41,6 +57,9 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         // expiration of connections by the brokers to avoid errors when `AdminClient` sends requests after potentially
         // very long sleep times
         props.put(KafkaConfig$.MODULE$.ConnectionsMaxIdleMsProp(), -1L);
+        props.put(KafkaConfig$.MODULE$.ListenersProp(), "SSL://localhost:9092");
+        props.put(KafkaConfig$.MODULE$.InterBrokerListenerNameProp(), "SSL");
+        props.putAll(sslConfig);
         // we align time to seconds to get clean window boundaries and thus ensure the same result for each run
         // otherwise, input records could fall into different windows for different runs depending on the initial mock time
         final long alignedTime = (System.currentTimeMillis() / 1000) * 1000;
@@ -58,13 +77,20 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         beforePrepareTest();
     }
 
-    @Test
-    public void testReprocessingFromScratchAfterResetWithIntermediateUserTopic() throws Exception {
-        super.testReprocessingFromScratchAfterResetWithIntermediateUserTopic();
+    Properties getClientSslConfig() {
+        final Properties props = new Properties();
+
+        props.put("bootstrap.servers", CLUSTER.bootstrapServers());
+        props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, sslConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
+        props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, ((Password) sslConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)).value());
+        props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL");
+
+        return props;
     }
 
     @Test
     public void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic() throws Exception {
         super.testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic();
     }
+
 }
