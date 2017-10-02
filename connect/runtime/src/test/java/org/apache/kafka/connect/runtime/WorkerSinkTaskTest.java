@@ -245,7 +245,9 @@ public class WorkerSinkTaskTest {
         assertSinkMetricValue("partition-count", 2);
         assertSinkMetricValue("sink-record-read-total", 1.0);
         assertSinkMetricValue("sink-record-send-total", 1.0);
-        assertSinkMetricValue("sink-record-lag-max", 0.0);
+        assertSinkMetricValue("sink-record-active-count", 1.0);
+        assertSinkMetricValue("sink-record-active-count-max", 1.0);
+        assertSinkMetricValue("sink-record-active-count-avg", 0.333333);
         assertSinkMetricValue("offset-commit-seq-no", 0.0);
         assertSinkMetricValue("offset-commit-completion-rate", 0.0);
         assertSinkMetricValue("offset-commit-completion-total", 0.0);
@@ -323,7 +325,9 @@ public class WorkerSinkTaskTest {
         assertSinkMetricValue("partition-count", 2);
         assertSinkMetricValue("sink-record-read-total", 0.0);
         assertSinkMetricValue("sink-record-send-total", 0.0);
-        assertSinkMetricValue("sink-record-lag-max", 0.0);
+        assertSinkMetricValue("sink-record-active-count", 0.0);
+        assertSinkMetricValue("sink-record-active-count-max", 0.0);
+        assertSinkMetricValue("sink-record-active-count-avg", 0.0);
         assertSinkMetricValue("offset-commit-seq-no", 0.0);
         assertSinkMetricValue("offset-commit-completion-rate", 0.0);
         assertSinkMetricValue("offset-commit-completion-total", 0.0);
@@ -345,7 +349,9 @@ public class WorkerSinkTaskTest {
 
         assertSinkMetricValue("sink-record-read-total", 1.0);
         assertSinkMetricValue("sink-record-send-total", 1.0);
-        assertSinkMetricValue("sink-record-lag-max", 0.0);
+        assertSinkMetricValue("sink-record-active-count", 1.0);
+        assertSinkMetricValue("sink-record-active-count-max", 1.0);
+        assertSinkMetricValue("sink-record-active-count-avg", 0.5);
         assertTaskMetricValue("status-running", 1.0);
         assertTaskMetricValue("status-paused", 0.0);
         assertTaskMetricValue("running-ratio", 1.0);
@@ -480,7 +486,9 @@ public class WorkerSinkTaskTest {
         assertSinkMetricValue("partition-count", 2);
         assertSinkMetricValue("sink-record-read-total", 1.0);
         assertSinkMetricValue("sink-record-send-total", 1.0);
-        assertSinkMetricValue("sink-record-lag-max", 0.0);
+        assertSinkMetricValue("sink-record-active-count", 0.0);
+        assertSinkMetricValue("sink-record-active-count-max", 1.0);
+        assertSinkMetricValue("sink-record-active-count-avg", 0.33333);
         assertSinkMetricValue("offset-commit-seq-no", 1.0);
         assertSinkMetricValue("offset-commit-completion-total", 1.0);
         assertSinkMetricValue("offset-commit-completion-skip-total", 0.0);
@@ -546,7 +554,9 @@ public class WorkerSinkTaskTest {
         assertSinkMetricValue("partition-count", 2);
         assertSinkMetricValue("sink-record-read-total", 1.0);
         assertSinkMetricValue("sink-record-send-total", 1.0);
-        assertSinkMetricValue("sink-record-lag-max", 0.0);
+        assertSinkMetricValue("sink-record-active-count", 1.0);
+        assertSinkMetricValue("sink-record-active-count-max", 1.0);
+        assertSinkMetricValue("sink-record-active-count-avg", 0.333333);
         assertSinkMetricValue("offset-commit-seq-no", 0.0);
         assertSinkMetricValue("offset-commit-completion-total", 0.0);
         assertSinkMetricValue("offset-commit-completion-skip-total", 0.0);
@@ -572,7 +582,9 @@ public class WorkerSinkTaskTest {
         assertSinkMetricValue("partition-count", 2);
         assertSinkMetricValue("sink-record-read-total", 1.0);
         assertSinkMetricValue("sink-record-send-total", 1.0);
-        assertSinkMetricValue("sink-record-lag-max", 0.0);
+        assertSinkMetricValue("sink-record-active-count", 0.0);
+        assertSinkMetricValue("sink-record-active-count-max", 1.0);
+        assertSinkMetricValue("sink-record-active-count-avg", 0.2);
         assertSinkMetricValue("offset-commit-seq-no", 1.0);
         assertSinkMetricValue("offset-commit-completion-total", 1.0);
         assertSinkMetricValue("offset-commit-completion-skip-total", 0.0);
@@ -973,7 +985,9 @@ public class WorkerSinkTaskTest {
         assertSinkMetricValue("partition-count", 3);
         assertSinkMetricValue("sink-record-read-total", 3.0);
         assertSinkMetricValue("sink-record-send-total", 3.0);
-        assertSinkMetricValue("sink-record-lag-max", 2.0);
+        assertSinkMetricValue("sink-record-active-count", 4.0);
+        assertSinkMetricValue("sink-record-active-count-max", 4.0);
+        assertSinkMetricValue("sink-record-active-count-avg", 0.71429);
         assertSinkMetricValue("offset-commit-seq-no", 2.0);
         assertSinkMetricValue("offset-commit-completion-total", 1.0);
         assertSinkMetricValue("offset-commit-completion-skip-total", 1.0);
@@ -1006,7 +1020,9 @@ public class WorkerSinkTaskTest {
         assertSinkMetricValue("partition-count", 3);
         assertSinkMetricValue("sink-record-read-total", 4.0);
         assertSinkMetricValue("sink-record-send-total", 4.0);
-        assertSinkMetricValue("sink-record-lag-max", 2.0);
+        assertSinkMetricValue("sink-record-active-count", 0.0);
+        assertSinkMetricValue("sink-record-active-count-max", 4.0);
+        assertSinkMetricValue("sink-record-active-count-avg", 0.5555555);
         assertSinkMetricValue("offset-commit-seq-no", 3.0);
         assertSinkMetricValue("offset-commit-completion-total", 2.0);
         assertSinkMetricValue("offset-commit-completion-skip-total", 1.0);
@@ -1286,7 +1302,9 @@ public class WorkerSinkTaskTest {
         sinkMetricValue("sink-record-read-total");
         sinkMetricValue("sink-record-send-rate");
         sinkMetricValue("sink-record-send-total");
-        sinkMetricValue("sink-record-lag-max");
+        sinkMetricValue("sink-record-active-count");
+        sinkMetricValue("sink-record-active-count-max");
+        sinkMetricValue("sink-record-active-count-avg");
         sinkMetricValue("partition-count");
         sinkMetricValue("offset-commit-seq-no");
         sinkMetricValue("offset-commit-completion-rate");

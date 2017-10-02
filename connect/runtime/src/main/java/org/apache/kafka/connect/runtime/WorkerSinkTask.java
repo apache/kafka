@@ -240,6 +240,7 @@ class WorkerSinkTask extends WorkerTask {
                 if (committedOffsets != null) {
                     log.debug("{} Setting last committed offsets to {}", this, committedOffsets);
                     lastCommittedOffsets = committedOffsets;
+                    sinkTaskMetricsGroup.recordCommittedOffsets(committedOffsets);
                 }
                 commitFailures = 0;
                 recordCommitSuccess(durationMillis);
@@ -490,7 +491,6 @@ class WorkerSinkTask extends WorkerTask {
             log.trace("{} Delivering batch of {} messages to task", this, messageBatch.size());
             long start = time.milliseconds();
             task.put(new ArrayList<>(messageBatch));
-            sinkTaskMetricsGroup.recordProcessedOffsets(origOffsets);
             recordBatch(messageBatch.size());
             sinkTaskMetricsGroup.recordPut(time.milliseconds() - start);
             currentOffsets.putAll(origOffsets);
@@ -630,14 +630,15 @@ class WorkerSinkTask extends WorkerTask {
         private final MetricGroup metricGroup;
         private final Sensor sinkRecordRead;
         private final Sensor sinkRecordSend;
-        private final Sensor sinkRecordLag;
         private final Sensor partitionCount;
         private final Sensor offsetSeqNum;
         private final Sensor offsetCompletion;
         private final Sensor offsetCompletionSkip;
         private final Sensor putBatchTime;
+        private final Sensor sinkRecordActiveCount;
+        private long activeRecords;
         private Map<TopicPartition, OffsetAndMetadata> consumedOffsets = new HashMap<>();
-        private Map<TopicPartition, OffsetAndMetadata> processedOffsets = new HashMap<>();
+        private Map<TopicPartition, OffsetAndMetadata> committedOffsets = new HashMap<>();
 
         public SinkTaskMetricsGroup(ConnectorTaskId id, ConnectMetrics connectMetrics) {
             metricGroup = connectMetrics.group("sink-task-metrics",
@@ -664,11 +665,19 @@ class WorkerSinkTask extends WorkerTask {
                             "belonging to the named sink connector in this worker, since the task was last restarted."),
                     new Total());
 
-            sinkRecordLag = metricGroup.metrics().sensor("sink-record-lag");
-            sinkRecordLag.add(metricGroup.metricName("sink-record-lag-max",
-                    "The maximum lag in terms of number of records that the sink task is behind the consumer's position for any " +
-                            "topic partitions."),
+            sinkRecordActiveCount = metricGroup.metrics().sensor("sink-record-active-count");
+            sinkRecordActiveCount.add(metricGroup.metricName("sink-record-active-count",
+                    "The number of records that have been read from Kafka but not yet completely committed/flushed/acknowledged" +
+                        "by the sink task"),
+                    new Value());
+            sinkRecordActiveCount.add(metricGroup.metricName("sink-record-active-count-max",
+                    "The maximum number of records that have been read from Kafka but not yet completely committed/flushed/acknowledged" +
+                        "by the sink task"),
                     new Max());
+            sinkRecordActiveCount.add(metricGroup.metricName("sink-record-active-count-avg",
+                    "The average number of records that have been read from Kafka but not yet completely committed/flushed/acknowledged" +
+                        "by the sink task"),
+                    new Avg());
 
             partitionCount = metricGroup.metrics().sensor("partition-count");
             partitionCount.add(metricGroup.metricName("partition-count",
@@ -707,19 +716,21 @@ class WorkerSinkTask extends WorkerTask {
 
         void computeSinkRecordLag() {
             Map<TopicPartition, OffsetAndMetadata> consumed = this.consumedOffsets;
-            Map<TopicPartition, OffsetAndMetadata> processed = this.processedOffsets;
-            long maxLag = 0L;
-            for (Map.Entry<TopicPartition, OffsetAndMetadata> processedOffsetEntry : processed.entrySet()) {
-                final TopicPartition partition = processedOffsetEntry.getKey();
+            Map<TopicPartition, OffsetAndMetadata> committed = this.committedOffsets;
+            activeRecords = 0L;
+            for (Map.Entry<TopicPartition, OffsetAndMetadata> committedOffsetEntry : committed.entrySet()) {
+                final TopicPartition partition = committedOffsetEntry.getKey();
                 final OffsetAndMetadata consumedOffsetMeta = consumed.get(partition);
                 if (consumedOffsetMeta != null) {
-                    final OffsetAndMetadata processedOffsetMeta = processedOffsetEntry.getValue();
+                    final OffsetAndMetadata committedOffsetMeta = committedOffsetEntry.getValue();
                     long consumedOffset = consumedOffsetMeta.offset();
-                    long processedOffset = processedOffsetMeta.offset();
-                    maxLag = Math.max(maxLag, consumedOffset - processedOffset);
+                    long committedOffset = committedOffsetMeta.offset();
+                    long diff = consumedOffset - committedOffset;
+                    activeRecords += diff;
                 }
             }
-            this.sinkRecordLag.record(maxLag);
+            activeRecords = Math.max(activeRecords, 0L);
+            sinkRecordActiveCount.record(activeRecords);
         }
 
         void close() {
@@ -751,21 +762,21 @@ class WorkerSinkTask extends WorkerTask {
             computeSinkRecordLag();
         }
 
-        void recordProcessedOffsets(Map<TopicPartition, OffsetAndMetadata> offsets) {
-            processedOffsets = offsets;
+        void recordCommittedOffsets(Map<TopicPartition, OffsetAndMetadata> offsets) {
+            committedOffsets = offsets;
             computeSinkRecordLag();
         }
 
         void assignedOffsets(Map<TopicPartition, OffsetAndMetadata> offsets) {
             consumedOffsets = new HashMap<>(offsets);
-            processedOffsets = offsets;
-            sinkRecordLag.record(0.0);
+            committedOffsets = offsets;
+            sinkRecordActiveCount.record(0.0);
         }
 
         void clearOffsets() {
             consumedOffsets.clear();
-            processedOffsets.clear();
-            sinkRecordLag.record(0.0);
+            committedOffsets.clear();
+            sinkRecordActiveCount.record(0.0);
         }
 
         void recordOffsetCommitSuccess() {
