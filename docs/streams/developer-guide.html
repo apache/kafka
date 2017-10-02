@@ -94,7 +94,7 @@
         The <code>Processor</code> interface provides the <code>process</code> method API, which is performed on each record that is received.
         The processor can maintain the current <code>ProcessorContext</code> instance variable initialized in the <code>init</code> method
         and use the context to schedule a periodically called punctuation function (<code>context().schedule</code>),
-        to forward the modified or new key-value pair to downstream processors (<code>context().forward</code>),
+        to forward the new or modified key-value pair to downstream processors (<code>context().forward</code>),
         to commit the current processing progress (<code>context().commit</code>), and so on.
     </p>
 
