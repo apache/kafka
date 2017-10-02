@@ -895,9 +895,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         throw new IllegalArgumentException("Topic collection to subscribe to cannot contain null or empty topic");
                 }
 
-                if (assignors.isEmpty())
-                    throw new IllegalStateException("Must configure at least one partition assigner class name to" +
-                        " partition.assignment.strategy config");
+                throwIfNoAssignorsConfigured();
 
                 log.debug("Subscribed to topic(s): {}", Utils.join(topics, ", "));
                 this.subscriptions.subscribe(new HashSet<>(topics), listener);
@@ -963,9 +961,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (pattern == null)
                 throw new IllegalArgumentException("Topic pattern to subscribe to cannot be null");
 
-            if (assignors.isEmpty())
-                throw new IllegalStateException("Must configure at least one partition assigner class name to" +
-                    " partition.assignment.strategy config");
+            throwIfNoAssignorsConfigured();
 
             log.debug("Subscribed to pattern: {}", pattern);
             this.subscriptions.subscribe(pattern, listener);
@@ -1813,5 +1809,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private void release() {
         if (refcount.decrementAndGet() == 0)
             currentThread.set(NO_CURRENT_THREAD);
+    }
+
+    private void throwIfNoAssignorsConfigured() {
+        if (assignors.isEmpty())
+            throw new IllegalStateException("Must configure at least one partition assigner class name to"
+                + ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG +" configuration property");
     }
 }
