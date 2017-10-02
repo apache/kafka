@@ -857,7 +857,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     log.debug("Failed to fetch offset for partition {}: {}", tp, error.message());
 
                     if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
-                        future.raise(new KafkaException("Partition " + tp + " may not exist"));
+                        future.raise(new KafkaException("Partition " + tp + " not exists"));
                     } else {
                         future.raise(new KafkaException("Unexpected error in fetch offset response: " + error.message()));
                     }
