@@ -28,6 +28,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.junit.Test;
@@ -42,6 +43,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.Assert.assertEquals;
 
 public class RecordCollectorTest {
+
+    private final LogContext logContext = new LogContext("test ");
 
     private final List<PartitionInfo> infos = Arrays.asList(
             new PartitionInfo("topic1", 0, Node.noNode(), new Node[0], new Node[0]),
@@ -68,7 +71,7 @@ public class RecordCollectorTest {
 
         final RecordCollectorImpl collector = new RecordCollectorImpl(
                 new MockProducer<>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer),
-                "RecordCollectorTest-TestSpecificPartition");
+                "RecordCollectorTest-TestSpecificPartition", new LogContext("RecordCollectorTest-TestSpecificPartition "));
 
         collector.send("topic1", "999", "0", 0, null, stringSerializer, stringSerializer);
         collector.send("topic1", "999", "0", 0, null, stringSerializer, stringSerializer);
@@ -100,7 +103,7 @@ public class RecordCollectorTest {
 
         final RecordCollectorImpl collector = new RecordCollectorImpl(
                 new MockProducer<>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer),
-                "RecordCollectorTest-TestStreamPartitioner");
+                "RecordCollectorTest-TestStreamPartitioner", new LogContext("RecordCollectorTest-TestStreamPartitioner "));
 
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
         collector.send("topic1", "9", "0", null, stringSerializer, stringSerializer, streamPartitioner);
@@ -135,7 +138,8 @@ public class RecordCollectorTest {
                         return super.send(record, callback);
                     }
                 },
-                "test");
+                "test",
+                logContext);
 
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
         final Long offset = collector.offsets().get(new TopicPartition("topic1", 0));
@@ -152,7 +156,8 @@ public class RecordCollectorTest {
                         throw new TimeoutException();
                     }
                 },
-                "test");
+                "test",
+                logContext);
 
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
 
@@ -169,7 +174,8 @@ public class RecordCollectorTest {
                         return null;
                     }
                 },
-                "test");
+                "test",
+                logContext);
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
     }
@@ -185,7 +191,8 @@ public class RecordCollectorTest {
                         return null;
                     }
                 },
-                "test");
+                "test",
+                logContext);
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
         collector.flush();
     }
@@ -201,7 +208,8 @@ public class RecordCollectorTest {
                         return null;
                     }
                 },
-                "test");
+                "test",
+                logContext);
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
         collector.close();
     }
@@ -217,7 +225,8 @@ public class RecordCollectorTest {
                 }
 
             },
-            "test");
+            "test",
+                logContext);
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
     }
 }

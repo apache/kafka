@@ -16,14 +16,17 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.clients.admin.NewPartitions;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
@@ -36,12 +39,9 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.SimpleRecord;
-import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation;
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclDeletionResult;
@@ -241,6 +241,10 @@ public class RequestResponseTest {
         checkRequest(createDescribeConfigsRequestWithConfigEntries());
         checkErrorResponse(createDescribeConfigsRequest(), new UnknownServerException());
         checkResponse(createDescribeConfigsResponse(), 0);
+        checkRequest(createCreatePartitionsRequest());
+        checkRequest(createCreatePartitionsRequestWithAssignments());
+        checkErrorResponse(createCreatePartitionsRequest(), new InvalidTopicException());
+        checkResponse(createCreatePartitionsResponse(), 0);
     }
 
     @Test
@@ -340,10 +344,39 @@ public class RequestResponseTest {
     }
 
     @Test
+    public void produceResponseV5Test() {
+        Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
+        TopicPartition tp0 = new TopicPartition("test", 0);
+        responseData.put(tp0, new ProduceResponse.PartitionResponse(Errors.NONE,
+                10000, RecordBatch.NO_TIMESTAMP, 100));
+
+        ProduceResponse v5Response = new ProduceResponse(responseData, 10);
+        short version = 5;
+
+        ByteBuffer buffer = v5Response.serialize(version, new ResponseHeader(0));
+        buffer.rewind();
+
+        ResponseHeader.parse(buffer); // throw away.
+
+        Struct deserializedStruct = ApiKeys.PRODUCE.parseResponse(version, buffer);
+
+        ProduceResponse v5FromBytes = (ProduceResponse) AbstractResponse.parseResponse(ApiKeys.PRODUCE,
+                deserializedStruct);
+
+        assertEquals(1, v5FromBytes.responses().size());
+        assertTrue(v5FromBytes.responses().containsKey(tp0));
+        ProduceResponse.PartitionResponse partitionResponse = v5FromBytes.responses().get(tp0);
+        assertEquals(100, partitionResponse.logStartOffset);
+        assertEquals(10000, partitionResponse.baseOffset);
+        assertEquals(10, v5FromBytes.getThrottleTime());
+        assertEquals(responseData, v5Response.responses());
+    }
+
+    @Test
     public void produceResponseVersionTest() {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE,
-                10000, RecordBatch.NO_TIMESTAMP));
+                10000, RecordBatch.NO_TIMESTAMP, 100));
         ProduceResponse v0Response = new ProduceResponse(responseData);
         ProduceResponse v1Response = new ProduceResponse(responseData, 10);
         ProduceResponse v2Response = new ProduceResponse(responseData, 10);
@@ -359,56 +392,6 @@ public class RequestResponseTest {
         assertEquals("Response data does not match", responseData, v0Response.responses());
         assertEquals("Response data does not match", responseData, v1Response.responses());
         assertEquals("Response data does not match", responseData, v2Response.responses());
-    }
-
-    @Test(expected = InvalidRecordException.class)
-    public void produceRequestV3ShouldContainOnlyOneRecordBatch() {
-        ByteBuffer buffer = ByteBuffer.allocate(256);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
-        builder.append(10L, null, "a".getBytes());
-        builder.close();
-
-        builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 1L);
-        builder.append(11L, "1".getBytes(), "b".getBytes());
-        builder.append(12L, null, "c".getBytes());
-        builder.close();
-
-        buffer.flip();
-
-        Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
-        produceData.put(new TopicPartition("test", 0), MemoryRecords.readableRecords(buffer));
-        new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, (short) 1, 5000, produceData).build().toStruct();
-    }
-
-    @Test(expected = InvalidRecordException.class)
-    public void produceRequestV3CannotHaveNoRecordBatches() {
-        Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
-        produceData.put(new TopicPartition("test", 0), MemoryRecords.EMPTY);
-        new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, (short) 1, 5000, produceData).build().toStruct();
-    }
-
-    @Test(expected = InvalidRecordException.class)
-    public void produceRequestV3CannotUseMagicV0() {
-        ByteBuffer buffer = ByteBuffer.allocate(256);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V0, CompressionType.NONE,
-                TimestampType.NO_TIMESTAMP_TYPE, 0L);
-        builder.append(10L, null, "a".getBytes());
-
-        Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
-        produceData.put(new TopicPartition("test", 0), builder.build());
-        new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, (short) 1, 5000, produceData).build().toStruct();
-    }
-
-    @Test(expected = InvalidRecordException.class)
-    public void produceRequestV3CannotUseMagicV1() {
-        ByteBuffer buffer = ByteBuffer.allocate(256);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, CompressionType.NONE,
-                TimestampType.CREATE_TIME, 0L);
-        builder.append(10L, null, "a".getBytes());
-
-        Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
-        produceData.put(new TopicPartition("test", 0), builder.build());
-        new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, (short) 1, 5000, produceData).build().toStruct();
     }
 
     @Test
@@ -484,7 +467,7 @@ public class RequestResponseTest {
     @Test
     public void testControlledShutdownResponse() {
         ControlledShutdownResponse response = createControlledShutdownResponse();
-        short version = ApiKeys.CONTROLLED_SHUTDOWN_KEY.latestVersion();
+        short version = ApiKeys.CONTROLLED_SHUTDOWN.latestVersion();
         Struct struct = response.toStruct(version);
         ByteBuffer buffer = toBuffer(struct);
         ControlledShutdownResponse deserialized = ControlledShutdownResponse.parse(buffer, version);
@@ -738,13 +721,14 @@ public class RequestResponseTest {
         byte magic = version == 2 ? RecordBatch.MAGIC_VALUE_V1 : RecordBatch.MAGIC_VALUE_V2;
         MemoryRecords records = MemoryRecords.withRecords(magic, CompressionType.NONE, new SimpleRecord("woot".getBytes()));
         Map<TopicPartition, MemoryRecords> produceData = Collections.singletonMap(new TopicPartition("test", 0), records);
-        return new ProduceRequest.Builder(magic, (short) 1, 5000, produceData).build((short) version);
+        return ProduceRequest.Builder.forMagic(magic, (short) 1, 5000, produceData, "transactionalId")
+                .build((short) version);
     }
 
     private ProduceResponse createProduceResponse() {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE,
-                10000, RecordBatch.NO_TIMESTAMP));
+                10000, RecordBatch.NO_TIMESTAMP, 100));
         return new ProduceResponse(responseData, 0);
     }
 
@@ -760,11 +744,11 @@ public class RequestResponseTest {
     }
 
     private ControlledShutdownRequest createControlledShutdownRequest() {
-        return new ControlledShutdownRequest.Builder(10).build();
+        return new ControlledShutdownRequest.Builder(10, ApiKeys.CONTROLLED_SHUTDOWN.latestVersion()).build();
     }
 
     private ControlledShutdownRequest createControlledShutdownRequest(int version) {
-        return new ControlledShutdownRequest.Builder(10).build((short) version);
+        return new ControlledShutdownRequest.Builder(10, ApiKeys.CONTROLLED_SHUTDOWN.latestVersion()).build((short) version);
     }
 
     private ControlledShutdownResponse createControlledShutdownResponse() {
@@ -1075,4 +1059,27 @@ public class RequestResponseTest {
         errors.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.TOPIC, "topic"), new ApiError(Errors.INVALID_REQUEST, "This request is invalid"));
         return new AlterConfigsResponse(20, errors);
     }
+
+    private CreatePartitionsRequest createCreatePartitionsRequest() {
+        Map<String, NewPartitions> assignments = new HashMap<>();
+        assignments.put("my_topic", NewPartitions.increaseTo(3));
+        assignments.put("my_other_topic", NewPartitions.increaseTo(3));
+        return new CreatePartitionsRequest(assignments, 0, false, (short) 0);
+    }
+
+    private CreatePartitionsRequest createCreatePartitionsRequestWithAssignments() {
+        Map<String, NewPartitions> assignments = new HashMap<>();
+        assignments.put("my_topic", NewPartitions.increaseTo(3, asList(asList(2))));
+        assignments.put("my_other_topic", NewPartitions.increaseTo(3, asList(asList(2, 3), asList(3, 1))));
+        return new CreatePartitionsRequest(assignments, 0, false, (short) 0);
+    }
+
+    private CreatePartitionsResponse createCreatePartitionsResponse() {
+        Map<String, ApiError> results = new HashMap<>();
+        results.put("my_topic", ApiError.fromThrowable(
+                new InvalidReplicaAssignmentException("The assigned brokers included an unknown broker")));
+        results.put("my_topic", ApiError.NONE);
+        return new CreatePartitionsResponse(42, results);
+    }
+
 }

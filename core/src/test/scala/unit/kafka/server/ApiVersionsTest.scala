@@ -18,7 +18,7 @@
 package kafka.server
 
 import org.apache.kafka.common.requests.ApiVersionsResponse
-import org.apache.kafka.common.protocol.{ApiKeys, Protocol}
+import org.apache.kafka.common.protocol.ApiKeys
 import org.junit.Assert._
 import org.junit.Test
 
@@ -26,25 +26,25 @@ class ApiVersionsTest {
 
   @Test
   def testApiVersions(): Unit = {
-    val apiVersions = ApiVersionsResponse.API_VERSIONS_RESPONSE.apiVersions
+    val apiVersions = ApiVersionsResponse.defaultApiVersionsResponse().apiVersions
     assertEquals("API versions for all API keys must be maintained.", apiVersions.size, ApiKeys.values().length)
 
     for (key <- ApiKeys.values) {
-      val version = ApiVersionsResponse.API_VERSIONS_RESPONSE.apiVersion(key.id)
+      val version = ApiVersionsResponse.defaultApiVersionsResponse().apiVersion(key.id)
       assertNotNull(s"Could not find ApiVersion for API ${key.name}", version)
       assertEquals(s"Incorrect min version for Api ${key.name}.", version.minVersion, key.oldestVersion)
       assertEquals(s"Incorrect max version for Api ${key.name}.", version.maxVersion, key.latestVersion)
 
       // Check if versions less than min version are indeed set as null, i.e., deprecated.
       for (i <- 0 until version.minVersion) {
-        assertNull(s"Request version $i for API ${version.apiKey} must be null.", Protocol.REQUESTS(version.apiKey)(i))
-        assertNull(s"Response version $i for API ${version.apiKey} must be null.", Protocol.RESPONSES(version.apiKey)(i))
+        assertNull(s"Request version $i for API ${version.apiKey} must be null.", key.requestSchemas(i))
+        assertNull(s"Response version $i for API ${version.apiKey} must be null.", key.responseSchemas(i))
       }
 
       // Check if versions between min and max versions are non null, i.e., valid.
       for (i <- version.minVersion.toInt to version.maxVersion) {
-        assertNotNull(s"Request version $i for API ${version.apiKey} must not be null.", Protocol.REQUESTS(version.apiKey)(i))
-        assertNotNull(s"Response version $i for API ${version.apiKey} must not be null.", Protocol.RESPONSES(version.apiKey)(i))
+        assertNotNull(s"Request version $i for API ${version.apiKey} must not be null.", key.requestSchemas(i))
+        assertNotNull(s"Response version $i for API ${version.apiKey} must not be null.", key.responseSchemas(i))
       }
     }
   }

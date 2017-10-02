@@ -108,7 +108,7 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
             valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
         // register the store
-        context.register(root, true, new StateRestoreCallback() {
+        context.register(root, false, new StateRestoreCallback() {
             @Override
             public void restore(byte[] key, byte[] value) {
                 restoring = true;

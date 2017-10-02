@@ -18,6 +18,7 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
@@ -135,13 +136,18 @@ public class MockClient implements KafkaClient {
     }
 
     @Override
+    public AuthenticationException authenticationException(Node node) {
+        return null;
+    }
+
+    @Override
     public void disconnect(String node) {
         long now = time.milliseconds();
         Iterator<ClientRequest> iter = requests.iterator();
         while (iter.hasNext()) {
             ClientRequest request = iter.next();
             if (request.destination().equals(node)) {
-                short version = request.requestBuilder().desiredOrLatestVersion();
+                short version = request.requestBuilder().latestAllowedVersion();
                 responses.add(new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
                         request.createdTimeMs(), now, true, null, null));
                 iter.remove();
@@ -159,7 +165,8 @@ public class MockClient implements KafkaClient {
                 continue;
 
             AbstractRequest.Builder<?> builder = request.requestBuilder();
-            short version = nodeApiVersions.usableVersion(request.apiKey(), builder.desiredVersion());
+            short version = nodeApiVersions.latestUsableVersion(request.apiKey(), builder.oldestAllowedVersion(),
+                    builder.latestAllowedVersion());
             AbstractRequest abstractRequest = request.requestBuilder().build(version);
             if (!futureResp.requestMatcher.matches(abstractRequest))
                 throw new IllegalStateException("Request matcher did not match next-in-line request " + abstractRequest);
@@ -224,9 +231,19 @@ public class MockClient implements KafkaClient {
         respond(response);
     }
 
+    // Utility method to enable out of order responses
+    public void respondToRequest(ClientRequest clientRequest, AbstractResponse response) {
+        AbstractRequest request = clientRequest.requestBuilder().build();
+        requests.remove(clientRequest);
+        short version = clientRequest.requestBuilder().latestAllowedVersion();
+        responses.add(new ClientResponse(clientRequest.makeHeader(version), clientRequest.callback(), clientRequest.destination(),
+                clientRequest.createdTimeMs(), time.milliseconds(), false, null, response));
+    }
+
+
     public void respond(AbstractResponse response, boolean disconnected) {
         ClientRequest request = requests.remove();
-        short version = request.requestBuilder().desiredOrLatestVersion();
+        short version = request.requestBuilder().latestAllowedVersion();
         responses.add(new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
                 request.createdTimeMs(), time.milliseconds(), disconnected, null, response));
     }
@@ -241,7 +258,7 @@ public class MockClient implements KafkaClient {
             ClientRequest request = iterator.next();
             if (request.destination().equals(node.idString())) {
                 iterator.remove();
-                short version = request.requestBuilder().desiredOrLatestVersion();
+                short version = request.requestBuilder().latestAllowedVersion();
                 responses.add(new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
                         request.createdTimeMs(), time.milliseconds(), disconnected, null, response));
                 return;

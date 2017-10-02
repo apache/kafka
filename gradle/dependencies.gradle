@@ -61,9 +61,8 @@ versions += [
   junit: "4.12",
   lz4: "1.4",
   metrics: "2.2.0",
-  // A few connect tests fail with powermock 1.6.5 due to https://github.com/powermock/powermock/issues/828, which
-  // is easy to workaround. However, WorkerTest also fails and it seems to be for a different reason.
-  powermock: "1.6.4",
+  // PowerMock 1.x doesn't support Java 9, so use PowerMock 2.0.0 beta
+  powermock: "2.0.0-beta.5",
   reflections: "0.9.11",
   rocksDB: "5.3.6",
   scalatest: "3.0.4",
@@ -103,7 +102,7 @@ libs += [
   joptSimple: "net.sf.jopt-simple:jopt-simple:$versions.jopt",
   lz4: "org.lz4:lz4-java:$versions.lz4",
   metrics: "com.yammer.metrics:metrics-core:$versions.metrics",
-  powermock: "org.powermock:powermock-module-junit4:$versions.powermock",
+  powermockJunit4: "org.powermock:powermock-module-junit4:$versions.powermock",
   powermockEasymock: "org.powermock:powermock-api-easymock:$versions.powermock",
   reflections: "org.reflections:reflections:$versions.reflections",
   rocksDBJni: "org.rocksdb:rocksdbjni:$versions.rocksDB",

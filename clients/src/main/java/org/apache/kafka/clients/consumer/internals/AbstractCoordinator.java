@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
@@ -33,7 +34,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
@@ -813,6 +814,14 @@ public abstract class AbstractCoordinator implements Closeable {
 
     }
 
+    protected Meter createMeter(Metrics metrics, String groupName, String baseName, String descriptiveName) {
+        return new Meter(new Count(),
+                metrics.metricName(baseName + "-rate", groupName,
+                        String.format("The number of %s per second", descriptiveName)),
+                metrics.metricName(baseName + "-total", groupName,
+                        String.format("The total number of %s", descriptiveName)));
+    }
+
     private class GroupCoordinatorMetrics {
         public final String metricGrpName;
 
@@ -827,9 +836,7 @@ public abstract class AbstractCoordinator implements Closeable {
             this.heartbeatLatency.add(metrics.metricName("heartbeat-response-time-max",
                 this.metricGrpName,
                 "The max time taken to receive a response to a heartbeat request"), new Max());
-            this.heartbeatLatency.add(metrics.metricName("heartbeat-rate",
-                this.metricGrpName,
-                "The average number of heartbeats per second"), new Rate(new Count()));
+            this.heartbeatLatency.add(createMeter(metrics, metricGrpName, "heartbeat", "heartbeats"));
 
             this.joinLatency = metrics.sensor("join-latency");
             this.joinLatency.add(metrics.metricName("join-time-avg",
@@ -838,9 +845,8 @@ public abstract class AbstractCoordinator implements Closeable {
             this.joinLatency.add(metrics.metricName("join-time-max",
                     this.metricGrpName,
                     "The max time taken for a group rejoin"), new Max());
-            this.joinLatency.add(metrics.metricName("join-rate",
-                    this.metricGrpName,
-                    "The number of group joins per second"), new Rate(new Count()));
+            this.joinLatency.add(createMeter(metrics, metricGrpName, "join", "group joins"));
+
 
             this.syncLatency = metrics.sensor("sync-latency");
             this.syncLatency.add(metrics.metricName("sync-time-avg",
@@ -849,9 +855,7 @@ public abstract class AbstractCoordinator implements Closeable {
             this.syncLatency.add(metrics.metricName("sync-time-max",
                     this.metricGrpName,
                     "The max time taken for a group sync"), new Max());
-            this.syncLatency.add(metrics.metricName("sync-rate",
-                    this.metricGrpName,
-                    "The number of group syncs per second"), new Rate(new Count()));
+            this.syncLatency.add(createMeter(metrics, metricGrpName, "sync", "group syncs"));
 
             Measurable lastHeartbeat =
                 new Measurable() {
@@ -979,6 +983,12 @@ public abstract class AbstractCoordinator implements Closeable {
                         }
                     }
                 }
+            } catch (AuthenticationException e) {
+                log.error("An authentication error occurred in the heartbeat thread", e);
+                this.failed.set(e);
+            } catch (GroupAuthorizationException e) {
+                log.error("A group authorization error occurred in the heartbeat thread for group {}", groupId, e);
+                this.failed.set(e);
             } catch (InterruptedException | InterruptException e) {
                 Thread.interrupted();
                 log.error("Unexpected interrupt received in heartbeat thread for group {}", groupId, e);

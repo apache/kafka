@@ -29,7 +29,6 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor.SubscriptionUpdates;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreSupplier;
 import org.slf4j.Logger;
@@ -179,8 +178,10 @@ public class InternalTopologyBuilder {
     }
 
     private static class StateStoreSupplierFactory extends AbstractStateStoreFactory {
+        @SuppressWarnings("deprecation")
         private final StateStoreSupplier supplier;
 
+        @SuppressWarnings("deprecation")
         StateStoreSupplierFactory(final StateStoreSupplier<?> supplier) {
             super(supplier.name(),
                   supplier.loggingEnabled(),
@@ -496,6 +497,7 @@ public class InternalTopologyBuilder {
         nodeGrouper.unite(name, predecessorNames);
     }
 
+    @SuppressWarnings("deprecation")
     public final void addStateStore(final StateStoreSupplier supplier,
                                     final String... processorNames) {
         Objects.requireNonNull(supplier, "supplier can't be null");
@@ -528,6 +530,7 @@ public class InternalTopologyBuilder {
         }
     }
 
+    @SuppressWarnings("deprecation")
     public final void addGlobalStore(final StateStoreSupplier<KeyValueStore> storeSupplier,
                                      final String sourceName,
                                      final TimestampExtractor timestampExtractor,
@@ -557,7 +560,7 @@ public class InternalTopologyBuilder {
     }
 
 
-    public final void addGlobalStore(final KeyValueStoreBuilder storeBuilder,
+    public final void addGlobalStore(final StoreBuilder<KeyValueStore> storeBuilder,
                                      final String sourceName,
                                      final TimestampExtractor timestampExtractor,
                                      final Deserializer keyDeserializer,
@@ -1613,8 +1616,8 @@ public class InternalTopologyBuilder {
             return Collections.unmodifiableSet(nodes);
         }
 
-        // only for testing
-        public Iterator<TopologyDescription.Node> nodesInOrder() {
+        // visible for testing
+        Iterator<TopologyDescription.Node> nodesInOrder() {
             return nodes.iterator();
         }
 
@@ -1745,7 +1748,7 @@ public class InternalTopologyBuilder {
 
         private String subtopologiesAsString() {
             final StringBuilder sb = new StringBuilder();
-            sb.append("Sub-topologies: \n");
+            sb.append("Sub-topologies:\n");
             if (subtopologies.isEmpty()) {
                 sb.append("  none\n");
             } else {

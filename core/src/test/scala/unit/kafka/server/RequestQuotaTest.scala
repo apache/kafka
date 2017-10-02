@@ -24,6 +24,7 @@ import kafka.log.LogConfig
 import kafka.network.RequestChannel.Session
 import kafka.security.auth._
 import kafka.utils.TestUtils
+import org.apache.kafka.clients.admin.NewPartitions
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.resource.{ResourceFilter, Resource => AdminResource, ResourceType => AdminResourceType}
 import org.apache.kafka.common.{Node, TopicPartition}
@@ -164,7 +165,7 @@ class RequestQuotaTest extends BaseRequestTest {
   private def requestBuilder(apiKey: ApiKeys): AbstractRequest.Builder[_ <: AbstractRequest] = {
     apiKey match {
         case ApiKeys.PRODUCE =>
-          new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, 1, 5000,
+          ProduceRequest.Builder.forCurrentMagic(1, 5000,
             collection.mutable.Map(tp -> MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("test".getBytes))).asJava)
 
         case ApiKeys.FETCH =>
@@ -187,17 +188,17 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.STOP_REPLICA =>
           new StopReplicaRequest.Builder(brokerId, Int.MaxValue, true, Set(tp).asJava)
 
-        case ApiKeys.UPDATE_METADATA_KEY =>
+        case ApiKeys.UPDATE_METADATA =>
           val partitionState = Map(tp -> new UpdateMetadataRequest.PartitionState(
             Int.MaxValue, brokerId, Int.MaxValue, List(brokerId).asJava, 2, Seq(brokerId).asJava, Seq.empty[Integer].asJava)).asJava
           val securityProtocol = SecurityProtocol.PLAINTEXT
           val brokers = Set(new UpdateMetadataRequest.Broker(brokerId,
             Seq(new UpdateMetadataRequest.EndPoint("localhost", 0, securityProtocol,
             ListenerName.forSecurityProtocol(securityProtocol))).asJava, null)).asJava
-          new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA_KEY.latestVersion, brokerId, Int.MaxValue, partitionState, brokers)
+          new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, brokerId, Int.MaxValue, partitionState, brokers)
 
-        case ApiKeys.CONTROLLED_SHUTDOWN_KEY =>
-          new ControlledShutdownRequest.Builder(brokerId)
+        case ApiKeys.CONTROLLED_SHUTDOWN =>
+          new ControlledShutdownRequest.Builder(brokerId, ApiKeys.CONTROLLED_SHUTDOWN.latestVersion)
 
         case ApiKeys.OFFSET_COMMIT =>
           new OffsetCommitRequest.Builder("test-group",
@@ -232,6 +233,9 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.SASL_HANDSHAKE =>
           new SaslHandshakeRequest.Builder("PLAIN")
+
+        case ApiKeys.SASL_AUTHENTICATE =>
+          new SaslAuthenticateRequest.Builder(ByteBuffer.wrap(new Array[Byte](0)))
 
         case ApiKeys.API_VERSIONS =>
           new ApiVersionsRequest.Builder
@@ -295,6 +299,11 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.DESCRIBE_LOG_DIRS =>
           new DescribeLogDirsRequest.Builder(Collections.singleton(tp))
+
+        case ApiKeys.CREATE_PARTITIONS =>
+          new CreatePartitionsRequest.Builder(
+            Collections.singletonMap("topic-2", NewPartitions.increaseTo(1)), 0, false
+          )
 
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
@@ -389,6 +398,7 @@ class RequestQuotaTest extends BaseRequestTest {
       case ApiKeys.ALTER_CONFIGS => new AlterConfigsResponse(response).throttleTimeMs
       case ApiKeys.ALTER_REPLICA_DIR => new AlterReplicaDirResponse(response).throttleTimeMs
       case ApiKeys.DESCRIBE_LOG_DIRS => new DescribeLogDirsResponse(response).throttleTimeMs
+      case ApiKeys.CREATE_PARTITIONS => new CreatePartitionsResponse(response).throttleTimeMs
       case requestId => throw new IllegalArgumentException(s"No throttle time for $requestId")
     }
   }
@@ -433,7 +443,8 @@ class RequestQuotaTest extends BaseRequestTest {
 
 object RequestQuotaTest {
   val ClusterActions = ApiKeys.values.toSet.filter(apiKey => apiKey.clusterAction)
-  val ClientActions = ApiKeys.values.toSet -- ClusterActions - ApiKeys.SASL_HANDSHAKE
+  val SaslActions = Set(ApiKeys.SASL_HANDSHAKE, ApiKeys.SASL_AUTHENTICATE)
+  val ClientActions = ApiKeys.values.toSet -- ClusterActions -- SaslActions
 
   val UnauthorizedPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Unauthorized")
   // Principal used for all client connections. This is modified by tests which

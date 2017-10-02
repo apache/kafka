@@ -49,7 +49,7 @@
 
     <p>
         With 1.0 a major API refactoring was accomplished and the new API is cleaner and easier to use.
-        This change includes the five main classes <code>KafkaStreams<code>, <code>KStreamBuilder</code>,
+        This change includes the five main classes <code>KafkaStreams</code>, <code>KStreamBuilder</code>,
         <code>KStream</code>, <code>KTable</code>, and <code>TopologyBuilder</code> (and some more others).
         All changes are fully backward compatible as old API is only deprecated but not removed.
         We recommend to move to the new API as soon as you can.
@@ -59,7 +59,7 @@
     <p>
         The two main classes to specify a topology via the DSL (<code>KStreamBuilder</code>)
         or the Processor API (<code>TopologyBuilder</code>) were deprecated and replaced by
-        <code>StreamsBuilder</code> and <code>Topology<code> (both new classes are located in
+        <code>StreamsBuilder</code> and <code>Topology</code> (both new classes are located in
         package <code>org.apache.kafka.streams</code>).
         Note, that <code>StreamsBuilder</code> does not extend <code>Topology</code>, i.e.,
         the class hierarchy is different now.
@@ -74,7 +74,7 @@
     </p>
 
     <p>
-        Changing how a topology is specified also affects <code>KafkaStreams<code> constructors,
+        Changing how a topology is specified also affects <code>KafkaStreams</code> constructors,
         that now only accept a <code>Topology</code>.
         Using the DSL builder class <code>StreamsBuilder</code> one can get the constructed
         <code>Topology</code> via <code>StreamsBuilder#build()</code>.
@@ -84,41 +84,84 @@
         and can be obtained by calling <code>Topology#describe()</code>.
         An example using this new API is shown in the <a href="/{{version}}/documentation/streams/quickstart">quickstart section</a>.
     </p>
-
+    
     <p>
-        With the introduction of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-182%3A+Reduce+Streams+DSL+overloads+and+allow+easier+use+of+custom+storage+engines">KIP-182</a>
-        you should no longer pass in <code>Serde</code> to <code>KStream#print</code> operations.
-        If you can't rely on using <code>toString</code> to print your keys an values, you should instead you provide a custom <code>KeyValueMapper</code> via the <code>Printed#withKeyValueMapper</code> call.
+        With the introduction of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-202+Move+merge%28%29+from+StreamsBuilder+to+KStream">KIP-202</a>
+        a new method <code>merge()</code> has been created in <code>KStream</code> as the StreamsBuilder class's <code>StreamsBuilder#merge()</code> has been removed. 
+        The method signature was also changed, too: instead of providing multiple <code>KStream</code>s into the method at the once, only a single <code>KStream</code> is accepted.
+    </p>
+    
+    <p>
+        New methods in <code>KafkaStreams</code>:
+    </p>
+    <ul>
+        <li> retrieve the current runtime information about the local threads via <code>#localThreadsMetadata()</code> </li>
+    </ul>
+    <p>
+        Deprecated methods in <code>KafkaStreams</code>:
+    </p>
+    <ul>
+        <li><code>toString()</code></li>
+        <li><code>toString(final String indent)</code></li>
+    </ul>
+    <p>
+        Previously the above methods were used to return static and runtime information.
+        They have been deprecated in favor of using the new classes/methods <code>#localThreadsMetadata()</code> / <code>ThreadMetadata</code> (returning runtime information) and
+        <code>TopologyDescription</code> / <code>Topology#describe()</code> (returning static information).
     </p>
 
     <p>
-        Windowed aggregations have moved from <code>KGroupedStream</code> to <code>WindowedKStream</code>.
-        You can now perform a windowed aggregation by, for example, using <code>KGroupedStream#windowedBy(Windows)#reduce(Reducer)</code>.
-        Note: the previous aggregate functions on <code>KGroupedStream</code> still work, but have been deprecated.
+        More deprecated methods in <code>KafkaStreams</code>:
     </p>
-
+    <ul>
+        <li>With the introduction of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-182%3A+Reduce+Streams+DSL+overloads+and+allow+easier+use+of+custom+storage+engines">KIP-182</a>
+            you should no longer pass in <code>Serde</code> to <code>KStream#print</code> operations.
+            If you can't rely on using <code>toString</code> to print your keys an values, you should instead you provide a custom <code>KeyValueMapper</code> via the <code>Printed#withKeyValueMapper</code> call.
+        </li>
+        <li>
+            Windowed aggregations have moved from <code>KGroupedStream</code> to <code>WindowedKStream</code>.
+            You can now perform a windowed aggregation by, for example, using <code>KGroupedStream#windowedBy(Windows)#reduce(Reducer)</code>.
+            Note: the previous aggregate functions on <code>KGroupedStream</code> still work, but have been deprecated.
+        </li>
+    </ul>
     <p>
-        The Processor API was extended to allow users to schedule <code>punctuate</code> functions either based on data-driven <b>stream time</b> or wall-clock time.
-        As a result, the original <code>ProcessorContext#schedule</code> is deprecated with a new overloaded function that accepts a user customizable <code>Punctuator</code> callback interface, which triggers its <code>punctuate</code> API method periodically based on the <code>PunctuationType</code>.
-        The <code>PunctuationType</code> determines what notion of time is used for the punctuation scheduling: either <a href="/{{version}}/documentation/streams/core-concepts#streams_time">stream time</a> or wall-clock time (by default, <b>stream time</b> is configured to represent event time via <code>TimestampExtractor</code>).
-        In addition, the <code>punctuate</code> function inside <code>Processor</code> is also deprecated.
+        Modified methods in <code>Processor</code>:
     </p>
-
-    <p>
-        Before this, users could only schedule based on stream time (i.e. <code>PunctuationType.STREAM_TIME</code>) and hence the <code>punctuate</code> function was data-driven only because stream time is determined (and advanced forward) by the timestamps derived from the input data.
-        If there is no data arriving at the processor, the stream time would not advance and hence punctuation will not be triggered.
-        On the other hand, When wall-clock time (i.e. <code>PunctuationType.WALL_CLOCK_TIME</code>) is used, <code>punctuate</code> will be triggered purely based on wall-clock time.
-        So for example if the <code>Punctuator</code> function is scheduled based on <code>PunctuationType.WALL_CLOCK_TIME</code>, if these 60 records were processed within 20 seconds,
-        <code>punctuate</code> would be called 2 times (one time every 10 seconds);
-        if these 60 records were processed within 5 seconds, then no <code>punctuate</code> would be called at all.
-        Users can schedule multiple <code>Punctuator</code> callbacks with different <code>PunctuationType</code>s within the same processor by simply calling <code>ProcessorContext#schedule</code> multiple times inside processor's <code>init()</code> method.
-    </p>
+    <ul>
+        <li>
+            <p>
+                The Processor API was extended to allow users to schedule <code>punctuate</code> functions either based on data-driven <b>stream time</b> or wall-clock time.
+                As a result, the original <code>ProcessorContext#schedule</code> is deprecated with a new overloaded function that accepts a user customizable <code>Punctuator</code> callback interface, which triggers its <code>punctuate</code> API method periodically based on the <code>PunctuationType</code>.
+                The <code>PunctuationType</code> determines what notion of time is used for the punctuation scheduling: either <a href="/{{version}}/documentation/streams/core-concepts#streams_time">stream time</a> or wall-clock time (by default, <b>stream time</b> is configured to represent event time via <code>TimestampExtractor</code>).
+                In addition, the <code>punctuate</code> function inside <code>Processor</code> is also deprecated.
+            </p>
+            <p>
+                Before this, users could only schedule based on stream time (i.e. <code>PunctuationType.STREAM_TIME</code>) and hence the <code>punctuate</code> function was data-driven only because stream time is determined (and advanced forward) by the timestamps derived from the input data.
+                If there is no data arriving at the processor, the stream time would not advance and hence punctuation will not be triggered.
+                On the other hand, When wall-clock time (i.e. <code>PunctuationType.WALL_CLOCK_TIME</code>) is used, <code>punctuate</code> will be triggered purely based on wall-clock time.
+                So for example if the <code>Punctuator</code> function is scheduled based on <code>PunctuationType.WALL_CLOCK_TIME</code>, if these 60 records were processed within 20 seconds,
+                <code>punctuate</code> would be called 2 times (one time every 10 seconds);
+                if these 60 records were processed within 5 seconds, then no <code>punctuate</code> would be called at all.
+                Users can schedule multiple <code>Punctuator</code> callbacks with different <code>PunctuationType</code>s within the same processor by simply calling <code>ProcessorContext#schedule</code> multiple times inside processor's <code>init()</code> method.
+            </p>
+        </li>
+    </ul>
 
     <p>
         If you are monitoring on task level or processor-node / state store level Streams metrics, please note that the metrics sensor name and hierarchy was changed:
         The task ids, store names and processor names are no longer in the sensor metrics names, but instead are added as tags of the sensors to achieve consistent metrics hierarchy.
         As a result you may need to make corresponding code changes on your metrics reporting and monitoring tools when upgrading to 1.0.0.
         Detailed metrics sensor can be found in the <a href="#kafka_streams_monitoring">Streams Monitoring</a> section.
+    </p>
+
+    <p>
+        The introduction of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-173%3A+Add+prefix+to+StreamsConfig+to+enable+setting+default+internal+topic+configs">KIP-173</a>
+        enables you to provide topic configuration parameters for any topics created by Kafka Streams.
+        This includes repartition and changelog topics.
+        You can provide the configs via the <code>StreamsConfig</code> by adding the configs with the prefix as defined by <code>StreamsConfig#topicPrefix(String)</code>.
+        Any properties in the <code>StreamsConfig</code> with the prefix will be applied when creating internal topics.
+        Any configs that aren't topic configs will be ignored.
+        If you already use <code>StateStoreSupplier</code> or <code>Materialized</code> to provide configs for changelogs, then they will take precedence over those supplied in the config.
     </p>
 
     <h3><a id="streams_api_changes_0110" href="#streams_api_changes_0110">Streams API changes in 0.11.0.0</a></h3>
@@ -177,7 +220,9 @@
         If exactly-once processing is enabled via the <code>processing.guarantees</code> parameter, internally Streams switches from a producer per thread to a producer per task runtime model.
         In order to distinguish the different producers, the producer's <code>client.id</code> additionally encodes the task-ID for this case.
         Because the producer's <code>client.id</code> is used to report JMX metrics, it might be required to update tools that receive those metrics.
+    
     </p>
+
     <p> Producer's <code>client.id</code> naming schema: </p>
     <ul>
         <li> at-least-once (default): <code>[client.Id]-StreamThread-[sequence-number]</code> </li>

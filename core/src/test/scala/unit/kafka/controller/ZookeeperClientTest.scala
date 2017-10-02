@@ -41,7 +41,7 @@ class ZookeeperClientTest extends ZooKeeperTestHarness {
 
   @Test(expected = classOf[UnknownHostException])
   def testUnresolvableConnectString(): Unit = {
-    new ZookeeperClient("-1", -1, -1, null)
+    new ZookeeperClient("some.invalid.hostname.foo.bar.local", -1, -1, null)
   }
 
   @Test(expected = classOf[ZookeeperClientTimeoutException])

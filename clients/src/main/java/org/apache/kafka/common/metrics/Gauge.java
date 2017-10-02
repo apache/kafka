@@ -14,14 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.protocol;
+package org.apache.kafka.common.metrics;
 
-import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Schema;
-import org.apache.kafka.common.protocol.types.Type;
+/**
+ * A gauge metric is an instantaneous reading of a particular value.
+ */
+public interface Gauge<T> extends MetricValueProvider<T> {
 
-public interface SchemaVisitor {
-    void visit(Schema schema);
-    void visit(ArrayOf array);
-    void visit(Type field);
+    /**
+     * Returns the current value associated with this gauge.
+     * @param config The configuration for this metric
+     * @param now The POSIX time in milliseconds the measurement is being taken
+     */
+    T value(MetricConfig config, long now);
+
 }

@@ -47,8 +47,12 @@ import java.lang.{Long => JLong}
 import java.util.regex.Pattern
 
 object LogAppendInfo {
-  val UnknownLogAppendInfo = LogAppendInfo(-1, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP,
-    NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false)
+  val UnknownLogAppendInfo = LogAppendInfo(-1, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, -1L,
+    RecordsProcessingStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false)
+
+  def unknownLogAppendInfoWithLogStartOffset(logStartOffset: Long): LogAppendInfo =
+    LogAppendInfo(-1, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, logStartOffset,
+      RecordsProcessingStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false)
 }
 
 /**
@@ -60,6 +64,8 @@ object LogAppendInfo {
  * @param maxTimestamp The maximum timestamp of the message set.
  * @param offsetOfMaxTimestamp The offset of the message with the maximum timestamp.
  * @param logAppendTime The log append time (if used) of the message set, otherwise Message.NoTimestamp
+ * @param logStartOffset The start offset of the log at the time of this append.
+ * @param recordsProcessingStats Statistics collected during record processing, `null` if `assignOffsets` is `false`
  * @param sourceCodec The source codec used in the message set (send by the producer)
  * @param targetCodec The target codec of the message set(after applying the broker compression configuration if any)
  * @param shallowCount The number of shallow messages
@@ -71,6 +77,8 @@ case class LogAppendInfo(var firstOffset: Long,
                          var maxTimestamp: Long,
                          var offsetOfMaxTimestamp: Long,
                          var logAppendTime: Long,
+                         var logStartOffset: Long,
+                         var recordsProcessingStats: RecordsProcessingStats,
                          sourceCodec: CompressionCodec,
                          targetCodec: CompressionCodec,
                          shallowCount: Int,
@@ -514,8 +522,10 @@ class Log(@volatile var dir: File,
     completedTxns.foreach(producerStateManager.completeTxn)
   }
 
-  private[log] def activeProducers: Map[Long, ProducerIdEntry] = lock synchronized {
-    producerStateManager.activeProducers
+  private[log] def activeProducersWithLastSequence: Map[Long, Int] = lock synchronized {
+    producerStateManager.activeProducers.map { case (producerId, producerIdEntry) =>
+      (producerId, producerIdEntry.lastSeq)
+    }
   }
 
   /**
@@ -609,6 +619,7 @@ class Log(@volatile var dir: File,
           val validateAndOffsetAssignResult = try {
             LogValidator.validateMessagesAndAssignOffsets(validRecords,
               offset,
+              time,
               now,
               appendInfo.sourceCodec,
               appendInfo.targetCodec,
@@ -625,6 +636,7 @@ class Log(@volatile var dir: File,
           appendInfo.maxTimestamp = validateAndOffsetAssignResult.maxTimestamp
           appendInfo.offsetOfMaxTimestamp = validateAndOffsetAssignResult.shallowOffsetOfMaxTimestamp
           appendInfo.lastOffset = offset.value - 1
+          appendInfo.recordsProcessingStats = validateAndOffsetAssignResult.recordsProcessingStats
           if (config.messageTimestampType == TimestampType.LOG_APPEND_TIME)
             appendInfo.logAppendTime = now
 
@@ -667,6 +679,7 @@ class Log(@volatile var dir: File,
           appendInfo.firstOffset = duplicate.firstOffset
           appendInfo.lastOffset = duplicate.lastOffset
           appendInfo.logAppendTime = duplicate.timestamp
+          appendInfo.logStartOffset = logStartOffset
           return appendInfo
         }
 
@@ -765,17 +778,18 @@ class Log(@volatile var dir: File,
   }
 
   private def analyzeAndValidateProducerState(records: MemoryRecords, isFromClient: Boolean):
-  (mutable.Map[Long, ProducerAppendInfo], List[CompletedTxn], Option[ProducerIdEntry]) = {
+  (mutable.Map[Long, ProducerAppendInfo], List[CompletedTxn], Option[BatchMetadata]) = {
     val updatedProducers = mutable.Map.empty[Long, ProducerAppendInfo]
     val completedTxns = ListBuffer.empty[CompletedTxn]
     for (batch <- records.batches.asScala if batch.hasProducerId) {
       val maybeLastEntry = producerStateManager.lastEntry(batch.producerId)
 
-      // if this is a client produce request, there will be only one batch. If that batch matches
-      // the last appended entry for that producer, then this request is a duplicate and we return
-      // the last appended entry to the client.
-      if (isFromClient && maybeLastEntry.exists(_.isDuplicate(batch)))
-        return (updatedProducers, completedTxns.toList, maybeLastEntry)
+      // if this is a client produce request, there will be upto 5 batches which could have been duplicated.
+      // If we find a duplicate, we return the metadata of the appended batch to the client.
+      if (isFromClient)
+        maybeLastEntry.flatMap(_.duplicateOf(batch)).foreach { duplicate =>
+          return (updatedProducers, completedTxns.toList, Some(duplicate))
+        }
 
       val maybeCompletedTxn = updateProducers(batch, updatedProducers, loadingFromLog = false)
       maybeCompletedTxn.foreach(completedTxns += _)
@@ -858,8 +872,8 @@ class Log(@volatile var dir: File,
 
     // Apply broker-side compression if any
     val targetCodec = BrokerCompressionCodec.getTargetCompressionCodec(config.compressionType, sourceCodec)
-    LogAppendInfo(firstOffset, lastOffset, maxTimestamp, offsetOfMaxTimestamp, RecordBatch.NO_TIMESTAMP, sourceCodec,
-      targetCodec, shallowMessageCount, validBytesCount, monotonic)
+    LogAppendInfo(firstOffset, lastOffset, maxTimestamp, offsetOfMaxTimestamp, RecordBatch.NO_TIMESTAMP, logStartOffset,
+      RecordsProcessingStats.EMPTY, sourceCodec, targetCodec, shallowMessageCount, validBytesCount, monotonic)
   }
 
   private def updateProducers(batch: RecordBatch,

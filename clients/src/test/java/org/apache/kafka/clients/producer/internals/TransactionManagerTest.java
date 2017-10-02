@@ -123,9 +123,11 @@ public class TransactionManagerTest {
         this.transactionManager = new TransactionManager(logContext, transactionalId, transactionTimeoutMs,
                 DEFAULT_RETRY_BACKOFF_MS);
         Metrics metrics = new Metrics(metricConfig, time);
+        SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(metrics);
+
         this.accumulator = new RecordAccumulator(logContext, batchSize, 1024 * 1024, CompressionType.NONE, 0L, 0L, metrics, time, apiVersions, transactionManager);
         this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL,
-                MAX_RETRIES, metrics, new SenderMetricsRegistry(metricTags.keySet()), this.time, REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
+                MAX_RETRIES, senderMetrics, this.time, REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
         this.metadata.update(this.cluster, Collections.<String>emptySet(), time.milliseconds());
         client.setNode(brokerNode);
     }
@@ -1171,6 +1173,7 @@ public class TransactionManagerTest {
         assertFutureFailed(unauthorizedTopicProduceFuture);
         assertTrue(authorizedTopicProduceFuture.isDone());
         assertNotNull(authorizedTopicProduceFuture.get());
+        assertTrue(authorizedTopicProduceFuture.isDone());
 
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, pid, epoch);
         transactionManager.beginAbort();
@@ -1481,14 +1484,14 @@ public class TransactionManagerTest {
         sender.run(time.milliseconds());
         assertFalse(accumulator.hasUndrained());
         assertTrue(accumulator.hasIncomplete());
-        assertFalse(transactionManager.hasInFlightRequest());
+        assertFalse(transactionManager.hasInFlightTransactionalRequest());
         assertFalse(responseFuture.isDone());
 
         // until the produce future returns, we will not send EndTxn
         sender.run(time.milliseconds());
         assertFalse(accumulator.hasUndrained());
         assertTrue(accumulator.hasIncomplete());
-        assertFalse(transactionManager.hasInFlightRequest());
+        assertFalse(transactionManager.hasInFlightTransactionalRequest());
         assertFalse(responseFuture.isDone());
 
         // now the produce response returns
@@ -1497,14 +1500,14 @@ public class TransactionManagerTest {
         assertTrue(responseFuture.isDone());
         assertFalse(accumulator.hasUndrained());
         assertFalse(accumulator.hasIncomplete());
-        assertFalse(transactionManager.hasInFlightRequest());
+        assertFalse(transactionManager.hasInFlightTransactionalRequest());
 
         // now we send EndTxn
         sender.run(time.milliseconds());
-        assertTrue(transactionManager.hasInFlightRequest());
+        assertTrue(transactionManager.hasInFlightTransactionalRequest());
         sendEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, pid, epoch);
         sender.run(time.milliseconds());
-        assertFalse(transactionManager.hasInFlightRequest());
+        assertFalse(transactionManager.hasInFlightTransactionalRequest());
         assertTrue(transactionManager.isReady());
     }
 
@@ -1529,21 +1532,21 @@ public class TransactionManagerTest {
         sender.run(time.milliseconds());
         assertFalse(accumulator.hasUndrained());
         assertTrue(accumulator.hasIncomplete());
-        assertFalse(transactionManager.hasInFlightRequest());
+        assertFalse(transactionManager.hasInFlightTransactionalRequest());
 
         // now we begin the commit with the produce request still pending
         transactionManager.beginCommit();
         sender.run(time.milliseconds());
         assertFalse(accumulator.hasUndrained());
         assertTrue(accumulator.hasIncomplete());
-        assertFalse(transactionManager.hasInFlightRequest());
+        assertFalse(transactionManager.hasInFlightTransactionalRequest());
         assertFalse(responseFuture.isDone());
 
         // until the produce future returns, we will not send EndTxn
         sender.run(time.milliseconds());
         assertFalse(accumulator.hasUndrained());
         assertTrue(accumulator.hasIncomplete());
-        assertFalse(transactionManager.hasInFlightRequest());
+        assertFalse(transactionManager.hasInFlightTransactionalRequest());
         assertFalse(responseFuture.isDone());
 
         // now the produce response returns
@@ -1552,14 +1555,14 @@ public class TransactionManagerTest {
         assertTrue(responseFuture.isDone());
         assertFalse(accumulator.hasUndrained());
         assertFalse(accumulator.hasIncomplete());
-        assertFalse(transactionManager.hasInFlightRequest());
+        assertFalse(transactionManager.hasInFlightTransactionalRequest());
 
         // now we send EndTxn
         sender.run(time.milliseconds());
-        assertTrue(transactionManager.hasInFlightRequest());
+        assertTrue(transactionManager.hasInFlightTransactionalRequest());
         sendEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, pid, epoch);
         sender.run(time.milliseconds());
-        assertFalse(transactionManager.hasInFlightRequest());
+        assertFalse(transactionManager.hasInFlightTransactionalRequest());
         assertTrue(transactionManager.isReady());
     }
 
@@ -1960,17 +1963,17 @@ public class TransactionManagerTest {
 
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
         prepareProduceResponse(Errors.NOT_LEADER_FOR_PARTITION, pid, epoch);
-        sender.run(time.milliseconds()); // AddPartitions
+        sender.run(time.milliseconds()); // Add partitions
         sender.run(time.milliseconds()); // Produce
 
         assertFalse(responseFuture.isDone());
 
         transactionManager.transitionToAbortableError(new KafkaException());
         prepareProduceResponse(Errors.NONE, pid, epoch);
-
         sender.run(time.milliseconds());
+
         assertTrue(responseFuture.isDone());
-        assertNotNull(responseFuture.get());
+        assertNotNull(responseFuture.get()); // should throw the exception which caused the transaction to be aborted.
     }
 
     @Test
@@ -2151,6 +2154,65 @@ public class TransactionManagerTest {
         assertFalse(transactionManager.transactionContainsPartition(tp0));
     }
 
+    @Test
+    public void testTransitionToFatalErrorWhenRetriedBatchIsExpired() throws InterruptedException, ExecutionException {
+        final long pid = 13131L;
+        final short epoch = 1;
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+
+        assertFalse(responseFuture.isDone());
+
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
+
+        assertFalse(transactionManager.transactionContainsPartition(tp0));
+        assertFalse(transactionManager.isSendToPartitionAllowed(tp0));
+        sender.run(time.milliseconds());  // send addPartitions.
+        // Check that only addPartitions was sent.
+        assertTrue(transactionManager.transactionContainsPartition(tp0));
+        assertTrue(transactionManager.isSendToPartitionAllowed(tp0));
+
+        prepareProduceResponse(Errors.NOT_LEADER_FOR_PARTITION, pid, epoch);
+        sender.run(time.milliseconds());  // send the produce request.
+
+        assertFalse(responseFuture.isDone());
+
+        TransactionalRequestResult commitResult = transactionManager.beginCommit();
+
+        // Sleep 10 seconds to make sure that the batches in the queue would be expired if they can't be drained.
+        time.sleep(10000);
+        // Disconnect the target node for the pending produce request. This will ensure that sender will try to
+        // expire the batch.
+        Node clusterNode = this.cluster.nodes().get(0);
+        client.disconnect(clusterNode.idString());
+        client.blackout(clusterNode, 100);
+
+        sender.run(time.milliseconds());  // We should try to flush the produce, but expire it instead without sending anything.
+        assertTrue(responseFuture.isDone());
+
+        try {
+            // make sure the produce was expired.
+            responseFuture.get();
+            fail("Expected to get a TimeoutException since the queued ProducerBatch should have been expired");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof  TimeoutException);
+        }
+        sender.run(time.milliseconds());  // Transition to fatal error since we have unresolved batches.
+        sender.run(time.milliseconds());  // Fail the queued transactional requests
+
+        assertTrue(commitResult.isCompleted());
+        assertFalse(commitResult.isSuccessful());  // the commit should have been dropped.
+
+        assertTrue(transactionManager.hasFatalError());
+        assertFalse(transactionManager.hasOngoingTransaction());
+    }
+
     private void verifyAddPartitionsFailsWithPartitionLevelError(final Errors error) throws InterruptedException {
         final long pid = 1L;
         final short epoch = 1;
@@ -2317,7 +2379,7 @@ public class TransactionManagerTest {
     }
 
     private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs) {
-        ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(error, offset, RecordBatch.NO_TIMESTAMP);
+        ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(error, offset, RecordBatch.NO_TIMESTAMP, 10);
         Map<TopicPartition, ProduceResponse.PartitionResponse> partResp = singletonMap(tp, resp);
         return new ProduceResponse(partResp, throttleTimeMs);
     }

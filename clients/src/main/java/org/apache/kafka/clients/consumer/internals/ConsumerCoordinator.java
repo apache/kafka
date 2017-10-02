@@ -38,9 +38,7 @@ import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.JoinGroupRequest.ProtocolMetadata;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
@@ -576,7 +574,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * or an unrecoverable error is encountered.
      * @param offsets The offsets to be committed
      * @throws org.apache.kafka.common.errors.AuthorizationException if the consumer is not authorized to the group
-     *             or to any of the specified partitions
+     *             or to any of the specified partitions. See the exception for more details
      * @throws CommitFailedException if an unrecoverable error occurs before the commit can be completed
      * @return If the offset commit was successfully sent and a successful response was received from
      *         the coordinator
@@ -891,9 +889,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             this.commitLatency.add(metrics.metricName("commit-latency-max",
                 this.metricGrpName,
                 "The max time taken for a commit request"), new Max());
-            this.commitLatency.add(metrics.metricName("commit-rate",
-                this.metricGrpName,
-                "The number of commit calls per second"), new Rate(new Count()));
+            this.commitLatency.add(createMeter(metrics, metricGrpName, "commit", "commit calls"));
 
             Measurable numParts =
                 new Measurable() {

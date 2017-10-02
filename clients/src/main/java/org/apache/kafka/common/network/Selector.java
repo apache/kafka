@@ -42,12 +42,14 @@ import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.Meter;
+import org.apache.kafka.common.metrics.stats.SampledStat;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
@@ -454,7 +456,14 @@ public class Selector implements Selectable, AutoCloseable {
 
                 /* if channel is not ready finish prepare */
                 if (channel.isConnected() && !channel.ready()) {
-                    channel.prepare();
+                    try {
+                        channel.prepare();
+                    } catch (AuthenticationException e) {
+                        sensors.failedAuthentication.record();
+                        throw e;
+                    }
+                    if (channel.ready())
+                        sensors.successfulAuthentication.record();
                 }
 
                 attemptRead(key, channel);
@@ -484,6 +493,8 @@ public class Selector implements Selectable, AutoCloseable {
                 String desc = channel.socketDescription();
                 if (e instanceof IOException)
                     log.debug("Connection with {} disconnected", desc, e);
+                else if (e instanceof AuthenticationException) // will be logged later as error by clients
+                    log.debug("Connection with {} disconnected due to authentication exception", desc, e);
                 else
                     log.warn("Unexpected error from {}; closing connection", desc, e);
                 close(channel, true);
@@ -835,6 +846,8 @@ public class Selector implements Selectable, AutoCloseable {
 
         public final Sensor connectionClosed;
         public final Sensor connectionCreated;
+        public final Sensor successfulAuthentication;
+        public final Sensor failedAuthentication;
         public final Sensor bytesTransferred;
         public final Sensor bytesSent;
         public final Sensor bytesReceived;
@@ -859,47 +872,53 @@ public class Selector implements Selectable, AutoCloseable {
                 tagsSuffix.append(tag.getValue());
             }
 
-            this.connectionClosed = sensor("connections-closed:" + tagsSuffix.toString());
-            MetricName metricName = metrics.metricName("connection-close-rate", metricGrpName, "Connections closed per second in the window.", metricTags);
-            this.connectionClosed.add(metricName, new Rate());
+            this.connectionClosed = sensor("connections-closed:" + tagsSuffix);
+            this.connectionClosed.add(createMeter(metrics, metricGrpName, metricTags,
+                    "connection-close", "connections closed"));
 
-            this.connectionCreated = sensor("connections-created:" + tagsSuffix.toString());
-            metricName = metrics.metricName("connection-creation-rate", metricGrpName, "New connections established per second in the window.", metricTags);
-            this.connectionCreated.add(metricName, new Rate());
+            this.connectionCreated = sensor("connections-created:" + tagsSuffix);
+            this.connectionCreated.add(createMeter(metrics, metricGrpName, metricTags,
+                    "connection-creation", "new connections established"));
 
-            this.bytesTransferred = sensor("bytes-sent-received:" + tagsSuffix.toString());
-            metricName = metrics.metricName("network-io-rate", metricGrpName, "The average number of network operations (reads or writes) on all connections per second.", metricTags);
-            bytesTransferred.add(metricName, new Rate(new Count()));
+            this.successfulAuthentication = sensor("successful-authentication:" + tagsSuffix);
+            this.successfulAuthentication.add(createMeter(metrics, metricGrpName, metricTags,
+                    "successful-authentication", "connections with successful authentication"));
 
-            this.bytesSent = sensor("bytes-sent:" + tagsSuffix.toString(), bytesTransferred);
-            metricName = metrics.metricName("outgoing-byte-rate", metricGrpName, "The average number of outgoing bytes sent per second to all servers.", metricTags);
-            this.bytesSent.add(metricName, new Rate());
-            metricName = metrics.metricName("request-rate", metricGrpName, "The average number of requests sent per second.", metricTags);
-            this.bytesSent.add(metricName, new Rate(new Count()));
-            metricName = metrics.metricName("request-size-avg", metricGrpName, "The average size of all requests in the window..", metricTags);
+            this.failedAuthentication = sensor("failed-authentication:" + tagsSuffix);
+            this.failedAuthentication.add(createMeter(metrics, metricGrpName, metricTags,
+                    "failed-authentication", "connections with failed authentication"));
+
+            this.bytesTransferred = sensor("bytes-sent-received:" + tagsSuffix);
+            bytesTransferred.add(createMeter(metrics, metricGrpName, metricTags, new Count(),
+                    "network-io", "network operations (reads or writes) on all connections"));
+
+            this.bytesSent = sensor("bytes-sent:" + tagsSuffix, bytesTransferred);
+            this.bytesSent.add(createMeter(metrics, metricGrpName, metricTags,
+                    "outgoing-byte", "outgoing bytes sent to all servers"));
+            this.bytesSent.add(createMeter(metrics, metricGrpName, metricTags, new Count(),
+                    "request", "requests sent"));
+            MetricName metricName = metrics.metricName("request-size-avg", metricGrpName, "The average size of requests sent.", metricTags);
             this.bytesSent.add(metricName, new Avg());
-            metricName = metrics.metricName("request-size-max", metricGrpName, "The maximum size of any request sent in the window.", metricTags);
+            metricName = metrics.metricName("request-size-max", metricGrpName, "The maximum size of any request sent.", metricTags);
             this.bytesSent.add(metricName, new Max());
 
-            this.bytesReceived = sensor("bytes-received:" + tagsSuffix.toString(), bytesTransferred);
-            metricName = metrics.metricName("incoming-byte-rate", metricGrpName, "Bytes/second read off all sockets", metricTags);
-            this.bytesReceived.add(metricName, new Rate());
-            metricName = metrics.metricName("response-rate", metricGrpName, "Responses received sent per second.", metricTags);
-            this.bytesReceived.add(metricName, new Rate(new Count()));
+            this.bytesReceived = sensor("bytes-received:" + tagsSuffix, bytesTransferred);
+            this.bytesReceived.add(createMeter(metrics, metricGrpName, metricTags,
+                    "incoming-byte", "bytes read off all sockets"));
+            this.bytesReceived.add(createMeter(metrics, metricGrpName, metricTags,
+                    new Count(), "response", "responses received"));
 
-            this.selectTime = sensor("select-time:" + tagsSuffix.toString());
-            metricName = metrics.metricName("select-rate", metricGrpName, "Number of times the I/O layer checked for new I/O to perform per second", metricTags);
-            this.selectTime.add(metricName, new Rate(new Count()));
+            this.selectTime = sensor("select-time:" + tagsSuffix);
+            this.selectTime.add(createMeter(metrics, metricGrpName, metricTags,
+                    new Count(), "select", "times the I/O layer checked for new I/O to perform"));
             metricName = metrics.metricName("io-wait-time-ns-avg", metricGrpName, "The average length of time the I/O thread spent waiting for a socket ready for reads or writes in nanoseconds.", metricTags);
             this.selectTime.add(metricName, new Avg());
-            metricName = metrics.metricName("io-wait-ratio", metricGrpName, "The fraction of time the I/O thread spent waiting.", metricTags);
-            this.selectTime.add(metricName, new Rate(TimeUnit.NANOSECONDS));
+            this.selectTime.add(createIOThreadRatioMeter(metrics, metricGrpName, metricTags, "io-wait", "waiting"));
 
-            this.ioTime = sensor("io-time:" + tagsSuffix.toString());
+            this.ioTime = sensor("io-time:" + tagsSuffix);
             metricName = metrics.metricName("io-time-ns-avg", metricGrpName, "The average length of time for I/O per select call in nanoseconds.", metricTags);
             this.ioTime.add(metricName, new Avg());
-            metricName = metrics.metricName("io-ratio", metricGrpName, "The fraction of time the I/O thread spent doing I/O", metricTags);
-            this.ioTime.add(metricName, new Rate(TimeUnit.NANOSECONDS));
+            this.ioTime.add(createIOThreadRatioMeter(metrics, metricGrpName, metricTags, "io", "doing I/O"));
 
             metricName = metrics.metricName("connection-count", metricGrpName, "The current number of active connections.", metricTags);
             topLevelMetricNames.add(metricName);
@@ -908,6 +927,32 @@ public class Selector implements Selectable, AutoCloseable {
                     return channels.size();
                 }
             });
+        }
+
+        private Meter createMeter(Metrics metrics, String groupName, Map<String, String> metricTags,
+                SampledStat stat, String baseName, String descriptiveName) {
+            MetricName rateMetricName = metrics.metricName(baseName + "-rate", groupName,
+                            String.format("The number of %s per second", descriptiveName), metricTags);
+            MetricName totalMetricName = metrics.metricName(baseName + "-total", groupName,
+                            String.format("The total number of %s", descriptiveName), metricTags);
+            if (stat == null)
+                return new Meter(rateMetricName, totalMetricName);
+            else
+                return new Meter(stat, rateMetricName, totalMetricName);
+        }
+
+        private Meter createMeter(Metrics metrics, String groupName,  Map<String, String> metricTags,
+                String baseName, String descriptiveName) {
+            return createMeter(metrics, groupName, metricTags, null, baseName, descriptiveName);
+        }
+
+        private Meter createIOThreadRatioMeter(Metrics metrics, String groupName,  Map<String, String> metricTags,
+                String baseName, String action) {
+            MetricName rateMetricName = metrics.metricName(baseName + "-ratio", groupName,
+                    String.format("The fraction of time the I/O thread spent %s", action), metricTags);
+            MetricName totalMetricName = metrics.metricName(baseName + "time-total", groupName,
+                    String.format("The total time the I/O thread spent %s", action), metricTags);
+            return new Meter(TimeUnit.NANOSECONDS, rateMetricName, totalMetricName);
         }
 
         private Sensor sensor(String name, Sensor... parents) {
@@ -929,21 +974,17 @@ public class Selector implements Selectable, AutoCloseable {
                     tags.put("node-id", "node-" + connectionId);
 
                     nodeRequest = sensor(nodeRequestName);
-                    MetricName metricName = metrics.metricName("outgoing-byte-rate", metricGrpName, tags);
-                    nodeRequest.add(metricName, new Rate());
-                    metricName = metrics.metricName("request-rate", metricGrpName, "The average number of requests sent per second.", tags);
-                    nodeRequest.add(metricName, new Rate(new Count()));
-                    metricName = metrics.metricName("request-size-avg", metricGrpName, "The average size of all requests in the window..", tags);
+                    nodeRequest.add(createMeter(metrics, metricGrpName, tags, "outgoing-byte", "outgoing bytes"));
+                    nodeRequest.add(createMeter(metrics, metricGrpName, tags, new Count(), "request", "requests sent"));
+                    MetricName metricName = metrics.metricName("request-size-avg", metricGrpName, "The average size of requests sent.", tags);
                     nodeRequest.add(metricName, new Avg());
-                    metricName = metrics.metricName("request-size-max", metricGrpName, "The maximum size of any request sent in the window.", tags);
+                    metricName = metrics.metricName("request-size-max", metricGrpName, "The maximum size of any request sent.", tags);
                     nodeRequest.add(metricName, new Max());
 
                     String nodeResponseName = "node-" + connectionId + ".bytes-received";
                     Sensor nodeResponse = sensor(nodeResponseName);
-                    metricName = metrics.metricName("incoming-byte-rate", metricGrpName, tags);
-                    nodeResponse.add(metricName, new Rate());
-                    metricName = metrics.metricName("response-rate", metricGrpName, "The average number of responses received per second.", tags);
-                    nodeResponse.add(metricName, new Rate(new Count()));
+                    nodeResponse.add(createMeter(metrics, metricGrpName, tags, "incoming-byte", "incoming bytes"));
+                    nodeResponse.add(createMeter(metrics, metricGrpName, tags, new Count(), "response", "responses received"));
 
                     String nodeTimeName = "node-" + connectionId + ".latency";
                     Sensor nodeRequestTime = sensor(nodeTimeName);

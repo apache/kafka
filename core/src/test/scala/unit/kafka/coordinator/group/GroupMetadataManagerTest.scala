@@ -837,7 +837,7 @@ class GroupMetadataManagerTest {
     assertTrue(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
     capturedResponseCallback.getValue.apply(Map(groupTopicPartition ->
-      new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP)))
+      new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
 
     assertTrue(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
@@ -877,7 +877,7 @@ class GroupMetadataManagerTest {
     assertTrue(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
     capturedResponseCallback.getValue.apply(Map(groupTopicPartition ->
-      new PartitionResponse(Errors.NOT_ENOUGH_REPLICAS, 0L, RecordBatch.NO_TIMESTAMP)))
+      new PartitionResponse(Errors.NOT_ENOUGH_REPLICAS, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
 
     assertFalse(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
@@ -916,7 +916,7 @@ class GroupMetadataManagerTest {
     assertTrue(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
     capturedResponseCallback.getValue.apply(Map(groupTopicPartition ->
-      new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP)))
+      new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
 
     assertTrue(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
@@ -995,7 +995,7 @@ class GroupMetadataManagerTest {
     groupMetadataManager.storeOffsets(group, memberId, offsets, callback)
     assertTrue(group.hasOffsets)
     capturedResponseCallback.getValue.apply(Map(groupTopicPartition ->
-      new PartitionResponse(appendError, 0L, RecordBatch.NO_TIMESTAMP)))
+      new PartitionResponse(appendError, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
 
     assertFalse(commitErrors.isEmpty)
     val maybeError = commitErrors.get.get(topicPartition)
@@ -1306,7 +1306,8 @@ class GroupMetadataManagerTest {
       isFromClient = EasyMock.eq(false),
       EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
       EasyMock.capture(capturedArgument),
-      EasyMock.anyObject().asInstanceOf[Option[Object]])
+      EasyMock.anyObject().asInstanceOf[Option[Object]],
+      EasyMock.anyObject())
     )
     EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
     capturedArgument
@@ -1320,11 +1321,12 @@ class GroupMetadataManagerTest {
       isFromClient = EasyMock.eq(false),
       EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
       EasyMock.capture(capturedArgument),
-      EasyMock.anyObject().asInstanceOf[Option[Object]])
+      EasyMock.anyObject().asInstanceOf[Option[Object]],
+      EasyMock.anyObject())
     ).andAnswer(new IAnswer[Unit] {
       override def answer = capturedArgument.getValue.apply(
         Map(groupTopicPartition ->
-          new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP)
+          new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)
         )
       )})
     EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))

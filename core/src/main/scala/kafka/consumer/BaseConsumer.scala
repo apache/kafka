@@ -23,7 +23,6 @@ import java.util.regex.Pattern
 import kafka.api.OffsetRequest
 import kafka.common.StreamEndException
 import kafka.message.Message
-import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.header.Headers

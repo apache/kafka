@@ -38,9 +38,10 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.WindowStore;
 
 import java.lang.reflect.Array;
 import java.util.Collections;
@@ -182,7 +183,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired);
     }
-
+    
     @Override
     public void print() {
         print(defaultKeyValueMapper, null, null, this.name);
@@ -345,24 +346,22 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         return branchChildren;
     }
 
-    public static <K, V> KStream<K, V> merge(final InternalStreamsBuilder builder,
-                                             final KStream<K, V>[] streams) {
-        if (streams == null || streams.length == 0) {
-            throw new IllegalArgumentException("Parameter <streams> must not be null or has length zero");
-        }
-
+    @Override 
+    public KStream<K, V> merge(final KStream<K, V> stream) {
+        Objects.requireNonNull(stream);
+        return merge(builder, stream);
+    }
+    
+    private KStream<K, V> merge(final InternalStreamsBuilder builder,
+                                final KStream<K, V> stream) {
+        KStreamImpl<K, V> streamImpl = (KStreamImpl<K, V>) stream;
         String name = builder.newName(MERGE_NAME);
-        String[] parentNames = new String[streams.length];
+        String[] parentNames = {this.name, streamImpl.name};
         Set<String> allSourceNodes = new HashSet<>();
-        boolean requireRepartitioning = false;
 
-        for (int i = 0; i < streams.length; i++) {
-            KStreamImpl<K, V> stream = (KStreamImpl<K, V>) streams[i];
-
-            parentNames[i] = stream.name;
-            requireRepartitioning |= stream.repartitionRequired;
-            allSourceNodes.addAll(stream.sourceNodes);
-        }
+        boolean requireRepartitioning = streamImpl.repartitionRequired || repartitionRequired;
+        allSourceNodes.addAll(sourceNodes);
+        allSourceNodes.addAll(streamImpl.sourceNodes);
 
         builder.internalTopologyBuilder.addProcessor(name, new KStreamPassThrough<>(), parentNames);
 
@@ -605,37 +604,38 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
      */
     private KStreamImpl<K, V> repartitionForJoin(final Serde<K> keySerde,
                                                  final Serde<V> valSerde) {
-        String repartitionedSourceName = createReparitionedSource(this, keySerde, valSerde, null);
+        String repartitionedSourceName = createReparitionedSource(builder, keySerde, valSerde, null, name);
         return new KStreamImpl<>(builder, repartitionedSourceName, Collections
             .singleton(repartitionedSourceName), false);
     }
 
-    static <K1, V1> String createReparitionedSource(final AbstractStream<K1> stream,
+    static <K1, V1> String createReparitionedSource(final InternalStreamsBuilder builder,
                                                     final Serde<K1> keySerde,
                                                     final Serde<V1> valSerde,
-                                                    final String topicNamePrefix) {
+                                                    final String topicNamePrefix,
+                                                    final String name) {
         Serializer<K1> keySerializer = keySerde != null ? keySerde.serializer() : null;
         Serializer<V1> valSerializer = valSerde != null ? valSerde.serializer() : null;
         Deserializer<K1> keyDeserializer = keySerde != null ? keySerde.deserializer() : null;
         Deserializer<V1> valDeserializer = valSerde != null ? valSerde.deserializer() : null;
-        String baseName = topicNamePrefix != null ? topicNamePrefix : stream.name;
+        String baseName = topicNamePrefix != null ? topicNamePrefix : name;
 
         String repartitionTopic = baseName + REPARTITION_TOPIC_SUFFIX;
-        String sinkName = stream.builder.newName(SINK_NAME);
-        String filterName = stream.builder.newName(FILTER_NAME);
-        String sourceName = stream.builder.newName(SOURCE_NAME);
+        String sinkName = builder.newName(SINK_NAME);
+        String filterName = builder.newName(FILTER_NAME);
+        String sourceName = builder.newName(SOURCE_NAME);
 
-        stream.builder.internalTopologyBuilder.addInternalTopic(repartitionTopic);
-        stream.builder.internalTopologyBuilder.addProcessor(filterName, new KStreamFilter<>(new Predicate<K1, V1>() {
+        builder.internalTopologyBuilder.addInternalTopic(repartitionTopic);
+        builder.internalTopologyBuilder.addProcessor(filterName, new KStreamFilter<>(new Predicate<K1, V1>() {
             @Override
             public boolean test(final K1 key, final V1 value) {
                 return key != null;
             }
-        }, false), stream.name);
+        }, false), name);
 
-        stream.builder.internalTopologyBuilder.addSink(sinkName, repartitionTopic, keySerializer, valSerializer,
+        builder.internalTopologyBuilder.addSink(sinkName, repartitionTopic, keySerializer, valSerializer,
             null, filterName);
-        stream.builder.internalTopologyBuilder.addSource(null, sourceName, new FailOnInvalidTimestamp(),
+        builder.internalTopologyBuilder.addSource(null, sourceName, new FailOnInvalidTimestamp(),
             keyDeserializer, valDeserializer, repartitionTopic);
 
         return sourceName;
@@ -826,16 +826,16 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         return groupByKey(Serialized.with(keySerde, valSerde));
     }
 
-    private static <K, V> StateStoreSupplier createWindowedStateStore(final JoinWindows windows,
-                                                                      final Serde<K> keySerde,
-                                                                      final Serde<V> valueSerde,
-                                                                      final String storeName) {
-        return Stores.create(storeName)
-            .withKeys(keySerde)
-            .withValues(valueSerde)
-            .persistent()
-            .windowed(windows.size(), windows.maintainMs(), windows.segments, true)
-            .build();
+    private static <K, V> StoreBuilder<WindowStore<K, V>> createWindowedStateStore(final JoinWindows windows,
+                                                                                   final Serde<K> keySerde,
+                                                                                   final Serde<V> valueSerde,
+                                                                                   final String storeName) {
+        return Stores.windowStoreBuilder(Stores.persistentWindowStore(storeName,
+                                                                      windows.maintainMs(),
+                                                                      windows.segments,
+                                                                      windows.size(),
+                                                                      true), keySerde, valueSerde);
+
     }
 
     private class KStreamImplJoin {
@@ -853,17 +853,17 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                    final KStream<K1, V2> other,
                                                    final ValueJoiner<? super V1, ? super V2, ? extends R> joiner,
                                                    final JoinWindows windows,
-                                                   final Joined joined) {
+                                                   final Joined<K1, V1, V2> joined) {
             String thisWindowStreamName = builder.newName(WINDOWED_NAME);
             String otherWindowStreamName = builder.newName(WINDOWED_NAME);
             String joinThisName = rightOuter ? builder.newName(OUTERTHIS_NAME) : builder.newName(JOINTHIS_NAME);
             String joinOtherName = leftOuter ? builder.newName(OUTEROTHER_NAME) : builder.newName(JOINOTHER_NAME);
             String joinMergeName = builder.newName(MERGE_NAME);
 
-            StateStoreSupplier thisWindow =
+            final StoreBuilder<WindowStore<K1, V1>> thisWindow =
                 createWindowedStateStore(windows, joined.keySerde(), joined.valueSerde(), joinThisName + "-store");
 
-            StateStoreSupplier otherWindow =
+            final StoreBuilder<WindowStore<K1, V2>> otherWindow =
                 createWindowedStateStore(windows, joined.keySerde(), joined.otherValueSerde(), joinOtherName + "-store");
 
 

@@ -51,7 +51,7 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     }
 
     @Override
-    public void register(final StateStore store, final boolean loggingEnabled, final StateRestoreCallback stateRestoreCallback) {
+    public void register(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
 
     }
 

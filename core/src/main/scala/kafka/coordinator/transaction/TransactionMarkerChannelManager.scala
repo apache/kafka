@@ -35,7 +35,7 @@ import java.util
 import java.util.concurrent.{BlockingQueue, ConcurrentHashMap, LinkedBlockingQueue}
 
 import collection.JavaConverters._
-import scala.collection.{concurrent, immutable, mutable}
+import scala.collection.{concurrent, immutable}
 
 object TransactionMarkerChannelManager {
   def apply(config: KafkaConfig,

@@ -14,25 +14,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.protocol;
 
-import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Schema;
-import org.apache.kafka.common.protocol.types.Type;
+package org.apache.kafka.common.utils;
 
-public abstract class SchemaVisitorAdapter implements SchemaVisitor {
-    @Override
-    public void visit(Schema schema) {
-        //nop
+import org.apache.kafka.test.TestUtils;
+import org.junit.Test;
+
+import java.io.File;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
+
+public class MappedByteBuffersTest {
+
+    /**
+     * Checks that unmap doesn't throw exceptions.
+     */
+    @Test
+    public void testUnmap() throws Exception {
+        File file = TestUtils.tempFile();
+        try (FileChannel channel = FileChannel.open(file.toPath())) {
+            MappedByteBuffer map = channel.map(FileChannel.MapMode.READ_ONLY, 0, 0);
+            MappedByteBuffers.unmap(file.getAbsolutePath(), map);
+        }
     }
 
-    @Override
-    public void visit(ArrayOf array) {
-        //nop
-    }
-
-    @Override
-    public void visit(Type field) {
-        //nop
-    }
 }

@@ -50,7 +50,7 @@ import scala.util.control.ControlThrowable
 
 class SocketServerTest extends JUnitSuite {
   val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
-  props.put("listeners", "PLAINTEXT://localhost:0,TRACE://localhost:0")
+  props.put("listeners", "PLAINTEXT://localhost:0")
   props.put("num.network.threads", "1")
   props.put("socket.send.buffer.bytes", "300000")
   props.put("socket.receive.buffer.bytes", "300000")
@@ -147,7 +147,7 @@ class SocketServerTest extends JUnitSuite {
     val ackTimeoutMs = 10000
     val ack = 0: Short
 
-    val emptyRequest = new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, ack, ackTimeoutMs,
+    val emptyRequest = ProduceRequest.Builder.forCurrentMagic(ack, ackTimeoutMs,
       new HashMap[TopicPartition, MemoryRecords]()).build()
     val emptyHeader = new RequestHeader(ApiKeys.PRODUCE, emptyRequest.version, clientId, correlationId)
     val byteBuffer = emptyRequest.serialize(emptyHeader)
@@ -161,18 +161,12 @@ class SocketServerTest extends JUnitSuite {
   @Test
   def simpleRequest() {
     val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
-    val traceSocket = connect(protocol = SecurityProtocol.TRACE)
     val serializedBytes = producerRequestBytes
 
     // Test PLAINTEXT socket
     sendRequest(plainSocket, serializedBytes)
     processRequest(server.requestChannel)
     assertEquals(serializedBytes.toSeq, receiveResponse(plainSocket).toSeq)
-
-    // Test TRACE socket
-    sendRequest(traceSocket, serializedBytes)
-    processRequest(server.requestChannel)
-    assertEquals(serializedBytes.toSeq, receiveResponse(traceSocket).toSeq)
   }
 
   @Test
@@ -377,12 +371,9 @@ class SocketServerTest extends JUnitSuite {
     // open a connection
     val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
     plainSocket.setTcpNoDelay(true)
-    val traceSocket = connect(protocol = SecurityProtocol.TRACE)
-    traceSocket.setTcpNoDelay(true)
     val bytes = new Array[Byte](40)
     // send a request first to make sure the connection has been picked up by the socket server
     sendRequest(plainSocket, bytes, Some(0))
-    sendRequest(traceSocket, bytes, Some(0))
     processRequest(server.requestChannel)
     // the following sleep is necessary to reliably detect the connection close when we send data below
     Thread.sleep(200L)
@@ -397,13 +388,6 @@ class SocketServerTest extends JUnitSuite {
     try {
       sendRequest(plainSocket, largeChunkOfBytes, Some(0))
       fail("expected exception when writing to closed plain socket")
-    } catch {
-      case _: IOException => // expected
-    }
-
-    try {
-      sendRequest(traceSocket, largeChunkOfBytes, Some(0))
-      fail("expected exception when writing to closed trace socket")
     } catch {
       case _: IOException => // expected
     }
@@ -481,7 +465,7 @@ class SocketServerTest extends JUnitSuite {
       val clientId = ""
       val ackTimeoutMs = 10000
       val ack = 0: Short
-      val emptyRequest = new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, ack, ackTimeoutMs,
+      val emptyRequest = ProduceRequest.Builder.forCurrentMagic(ack, ackTimeoutMs,
         new HashMap[TopicPartition, MemoryRecords]()).build()
       val emptyHeader = new RequestHeader(ApiKeys.PRODUCE, emptyRequest.version, clientId, correlationId)
 
@@ -535,7 +519,7 @@ class SocketServerTest extends JUnitSuite {
       val channel = overrideServer.requestChannel
       val request = receiveRequest(channel)
 
-      val requestMetrics = RequestMetrics.metricsMap(request.header.apiKey.name)
+      val requestMetrics = channel.metrics(request.header.apiKey.name)
       def totalTimeHistCount(): Long = requestMetrics.totalTimeHist.count
       val expectedTotalTimeCount = totalTimeHistCount() + 1
 
@@ -577,7 +561,7 @@ class SocketServerTest extends JUnitSuite {
       TestUtils.waitUntilTrue(() => overrideServer.processor(request.processor).channel(request.context.connectionId).isEmpty,
         s"Idle connection `${request.context.connectionId}` was not closed by selector")
 
-      val requestMetrics = RequestMetrics.metricsMap(request.header.apiKey.name)
+      val requestMetrics = channel.metrics(request.header.apiKey.name)
       def totalTimeHistCount(): Long = requestMetrics.totalTimeHist.count
       val expectedTotalTimeCount = totalTimeHistCount() + 1
 
@@ -841,7 +825,7 @@ class SocketServerTest extends JUnitSuite {
   @Test
   def controlThrowable(): Unit = {
     withTestableServer { testableServer =>
-      val (socket, _) = connectAndProcessRequest(testableServer)
+      connectAndProcessRequest(testableServer)
       val testableSelector = testableServer.testableSelector
 
       testableSelector.operationCounts.clear()
@@ -990,8 +974,7 @@ class SocketServerTest extends JUnitSuite {
         exception.getOrElse(new IllegalStateException(s"Test exception during $operation"))
     }
 
-    private def onOperation(operation: SelectorOperation,
-        connectionId: Option[String] = None, onFailure: => Unit = {}): Unit = {
+    private def onOperation(operation: SelectorOperation, connectionId: Option[String], onFailure: => Unit): Unit = {
       operationCounts(operation) += 1
       failures.remove(operation).foreach { e =>
         connectionId.foreach(allFailedChannels.add)

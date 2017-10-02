@@ -33,6 +33,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
@@ -52,6 +53,7 @@ import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockProcessorNode;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockStateRestoreListener;
+import org.apache.kafka.test.MockStateStoreSupplier;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.NoOpProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
@@ -114,7 +116,7 @@ public class StreamTaskTest {
     private final MockProducer<byte[], byte[]> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer);
     private final MockConsumer<byte[], byte[]> restoreStateConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final StateRestoreListener stateRestoreListener = new MockStateRestoreListener();
-    private final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreStateConsumer, stateRestoreListener);
+    private final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreStateConsumer, stateRestoreListener, new LogContext("stream-task-test "));
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
     private final String applicationId = "applicationId";
@@ -124,7 +126,6 @@ public class StreamTaskTest {
     private final MockTime time = new MockTime();
     private File baseDir = TestUtils.tempDirectory();
     private StateDirectory stateDirectory;
-    private final RecordCollectorImpl recordCollector = new RecordCollectorImpl(producer, "taskId");
     private StreamsConfig config;
     private StreamsConfig eosConfig;
     private StreamTask task;
@@ -551,7 +552,7 @@ public class StreamTaskTest {
             changelogReader, config, streamsMetrics, stateDirectory, null, time, producer) {
 
             @Override
-            RecordCollector createRecordCollector() {
+            RecordCollector createRecordCollector(final LogContext logContext) {
                 return new NoOpRecordCollector() {
                     @Override
                     public void flush() {
@@ -572,7 +573,7 @@ public class StreamTaskTest {
         final InMemoryKeyValueStore inMemoryStore = new InMemoryKeyValueStore(storeName, null, null) {
             @Override
             public void init(final ProcessorContext context, final StateStore root) {
-                context.register(root, true, null);
+                context.register(root, false, null);
             }
 
             @Override
@@ -605,7 +606,7 @@ public class StreamTaskTest {
             changelogReader, config, streamsMetrics, stateDirectory, null, time, producer) {
 
             @Override
-            RecordCollector createRecordCollector() {
+            RecordCollector createRecordCollector(final LogContext logContext) {
                 return new NoOpRecordCollector() {
                     @Override
                     public Map<TopicPartition, Long> offsets() {
@@ -638,7 +639,7 @@ public class StreamTaskTest {
         final InMemoryKeyValueStore inMemoryStore = new InMemoryKeyValueStore(storeName, null, null) {
             @Override
             public void init(final ProcessorContext context, final StateStore root) {
-                context.register(root, true, null);
+                context.register(root, false, null);
             }
 
             @Override
@@ -672,7 +673,7 @@ public class StreamTaskTest {
             changelogReader, testConfig, streamsMetrics, stateDirectory, null, time, producer) {
 
             @Override
-            RecordCollector createRecordCollector() {
+            RecordCollector createRecordCollector(final LogContext logContext) {
                 return new NoOpRecordCollector() {
                     @Override
                     public Map<TopicPartition, Long> offsets() {
@@ -1015,6 +1016,62 @@ public class StreamTaskTest {
         } catch (Exception e) {
             fail("should have not closed unitialized topology");
         }
+    }
+
+    @Test
+    public void shouldBeInitializedIfChangelogPartitionsIsEmpty() {
+        final ProcessorTopology topology = new ProcessorTopology(Collections.<ProcessorNode>singletonList(source1),
+                                                                 Collections.<String, SourceNode>singletonMap(topic1[0], source1),
+                                                                 Collections.<String, SinkNode>emptyMap(),
+                                                                 Collections.<StateStore>singletonList(
+                                                                         new MockStateStoreSupplier.MockStateStore("store",
+                                                                                                                   false)),
+                                                                 Collections.<String, String>emptyMap(),
+                                                                 Collections.<StateStore>emptyList());
+
+
+        final StreamTask task = new StreamTask(taskId00,
+                                               applicationId,
+                                               Utils.mkSet(partition1),
+                                               topology,
+                                               consumer,
+                                               changelogReader,
+                                               config,
+                                               streamsMetrics,
+                                               stateDirectory,
+                                               null,
+                                               time,
+                                               producer);
+
+        assertTrue(task.initialize());
+    }
+
+    @Test
+    public void shouldNotBeInitializedIfChangelogPartitionsIsNonEmpty() {
+        final ProcessorTopology topology = new ProcessorTopology(Collections.<ProcessorNode>singletonList(source1),
+                                                                 Collections.<String, SourceNode>singletonMap(topic1[0], source1),
+                                                                 Collections.<String, SinkNode>emptyMap(),
+                                                                 Collections.<StateStore>singletonList(
+                                                                         new MockStateStoreSupplier.MockStateStore("store",
+                                                                                                                   false)),
+                                                                 Collections.singletonMap("store", "changelog"),
+                                                                 Collections.<StateStore>emptyList());
+
+
+        final StreamTask task = new StreamTask(taskId00,
+                                               applicationId,
+                                               Utils.mkSet(partition1),
+                                               topology,
+                                               consumer,
+                                               changelogReader,
+                                               config,
+                                               streamsMetrics,
+                                               stateDirectory,
+                                               null,
+                                               time,
+                                               producer);
+
+        assertFalse(task.initialize());
     }
 
     @SuppressWarnings("unchecked")

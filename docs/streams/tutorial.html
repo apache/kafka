@@ -186,7 +186,7 @@
     </pre>
 
     <p>
-        As shown above, it illustrate that the constructed topology has two processor nodes, a source node <code>KSTREAM-SOURCE-0000000000</code> and a sink node <code>KSTREAM-SINK-0000000001</code>.
+        As shown above, it illustrates that the constructed topology has two processor nodes, a source node <code>KSTREAM-SOURCE-0000000000</code> and a sink node <code>KSTREAM-SINK-0000000001</code>.
         <code>KSTREAM-SOURCE-0000000000</code> continuously read records from Kafka topic <code>streams-plaintext-input</code> and pipe them to its downstream node <code>KSTREAM-SINK-0000000001</code>;
         <code>KSTREAM-SINK-0000000001</code> will write each of its received record in order to another Kafka topic <code>streams-pipe-output</code>
         (the <code>--&gt;</code> and <code>&lt;--</code> arrows dictates the downstream and upstream processor nodes of this node, i.e. "children" and "parents" within the topology graph).
@@ -320,7 +320,7 @@
     </p>
 
     <pre class="brush: java;">
-        public class Pipe {
+        public class LineSplit {
 
             public static void main(String[] args) throws Exception {
                 Properties props = new Properties();
@@ -405,6 +405,7 @@
         import org.apache.kafka.streams.StreamsBuilder;
         import org.apache.kafka.streams.StreamsConfig;
         import org.apache.kafka.streams.Topology;
+        import org.apache.kafka.streams.kstream.KStream;
 
         import java.util.Arrays;
         import java.util.Properties;
@@ -429,7 +430,7 @@
                 final KafkaStreams streams = new KafkaStreams(topology, props);
                 final CountDownLatch latch = new CountDownLatch(1);
 
-                // ... same as Pipe.java below
+                // ... same as Pipe.java above
             }
         }
     </pre>
@@ -495,6 +496,7 @@
 
     <p>
         We can also write the <code>counts</code> KTable's changelog stream back into another Kafka topic, say <code>streams-wordcount-output</code>.
+        Because the result is a changelog stream, the output topic <code>streams-wordcount-output</code> should be configured with log compaction enabled.
         Note that this time the value type is no longer <code>String</code> but <code>Long</code>, so the default serialization classes are not viable for writing it to Kafka anymore.
         We need to provide overridden serialization methods for <code>Long</code> types, otherwise a runtime exception will be thrown:
     </p>
@@ -566,6 +568,7 @@
         import org.apache.kafka.streams.StreamsBuilder;
         import org.apache.kafka.streams.StreamsConfig;
         import org.apache.kafka.streams.Topology;
+        import org.apache.kafka.streams.kstream.KStream;
 
         import java.util.Arrays;
         import java.util.Locale;
@@ -593,7 +596,7 @@
                 final KafkaStreams streams = new KafkaStreams(topology, props);
                 final CountDownLatch latch = new CountDownLatch(1);
 
-                // ... same as Pipe.java below
+                // ... same as Pipe.java above
             }
         }
     </pre>

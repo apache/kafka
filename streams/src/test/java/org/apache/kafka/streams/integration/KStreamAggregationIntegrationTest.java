@@ -110,6 +110,8 @@ public class KStreamAggregationIntegrationTest {
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfiguration.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
 
         final KeyValueMapper<Integer, String, String> mapper = MockKeyValueMapper.SelectValueMapper();
         stream = builder.stream(streamOneInput, Consumed.with(Serdes.Integer(), Serdes.String()));
@@ -306,8 +308,8 @@ public class KStreamAggregationIntegrationTest {
         groupedStream.windowedBy(TimeWindows.of(500L))
                 .aggregate(
                         initializer,
-                        aggregator,
-                        Serdes.Integer())
+                        aggregator
+                )
                 .toStream(new KeyValueMapper<Windowed<String>, Integer, String>() {
                     @Override
                     public String apply(final Windowed<String> windowedKey, final Integer value) {
@@ -519,7 +521,7 @@ public class KStreamAggregationIntegrationTest {
 
         builder.stream(userSessionsStream, Consumed.with(Serdes.String(), Serdes.String()))
                 .groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
-                .count(SessionWindows.with(sessionGap).until(maintainMillis), "UserSessionsStore")
+                .count(SessionWindows.with(sessionGap).until(maintainMillis))
                 .toStream()
                 .foreach(new ForeachAction<Windowed<String>, Long>() {
                     @Override

@@ -29,6 +29,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
@@ -145,8 +146,8 @@ public class PageViewTypedDemo {
 
         KStream<String, PageView> views = builder.stream("streams-pageview-input", Consumed.with(Serdes.String(), pageViewSerde));
 
-        KTable<String, UserProfile> users = builder.table(Serdes.String(), userProfileSerde,
-            "streams-userprofile-input", "streams-userprofile-store-name");
+        KTable<String, UserProfile> users = builder.table("streams-userprofile-input",
+                                                          Consumed.with(Serdes.String(), userProfileSerde));
 
         KStream<WindowedPageViewByRegion, RegionCount> regionCount = views
                 .leftJoin(users, new ValueJoiner<PageView, UserProfile, PageViewByRegion>() {
@@ -190,7 +191,7 @@ public class PageViewTypedDemo {
                 });
 
         // write to the result topic
-        regionCount.to(wPageViewByRegionSerde, regionCountSerde, "streams-pageviewstats-typed-output");
+        regionCount.to("streams-pageviewstats-typed-output", Produced.with(wPageViewByRegionSerde, regionCountSerde));
 
         KafkaStreams streams = new KafkaStreams(builder.build(), props);
         streams.start();

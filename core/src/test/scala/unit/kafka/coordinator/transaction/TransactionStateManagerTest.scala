@@ -498,12 +498,13 @@ class TransactionStateManagerTest {
           EasyMock.eq(false),
           EasyMock.eq(recordsByPartition),
           EasyMock.capture(capturedArgument),
-          EasyMock.eq(None)
+          EasyMock.eq(None),
+          EasyMock.anyObject()
         )).andAnswer(new IAnswer[Unit] {
           override def answer(): Unit = {
             capturedArgument.getValue.apply(
               Map(partition ->
-                new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP)
+                new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)
               )
             )
           }
@@ -598,11 +599,12 @@ class TransactionStateManagerTest {
       isFromClient = EasyMock.eq(false),
       EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
       EasyMock.capture(capturedArgument),
+      EasyMock.anyObject(),
       EasyMock.anyObject())
     ).andAnswer(new IAnswer[Unit] {
         override def answer(): Unit = capturedArgument.getValue.apply(
           Map(new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, partitionId) ->
-            new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP)
+            new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)
           )
         )
       }

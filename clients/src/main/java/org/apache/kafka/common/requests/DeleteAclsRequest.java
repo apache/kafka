@@ -19,6 +19,9 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.ResourceFilter;
 import org.apache.kafka.common.utils.Utils;
@@ -29,9 +32,28 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.apache.kafka.common.protocol.ApiKeys.DELETE_ACLS;
+import static org.apache.kafka.common.protocol.CommonFields.HOST_FILTER;
+import static org.apache.kafka.common.protocol.CommonFields.OPERATION;
+import static org.apache.kafka.common.protocol.CommonFields.PERMISSION_TYPE;
+import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL_FILTER;
+import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME_FILTER;
+import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_TYPE;
 
 public class DeleteAclsRequest extends AbstractRequest {
     private final static String FILTERS = "filters";
+
+    private static final Schema DELETE_ACLS_REQUEST_V0 = new Schema(
+            new Field(FILTERS, new ArrayOf(new Schema(
+                    RESOURCE_TYPE,
+                    RESOURCE_NAME_FILTER,
+                    PRINCIPAL_FILTER,
+                    HOST_FILTER,
+                    OPERATION,
+                    PERMISSION_TYPE))));
+
+    public static Schema[] schemaVersions() {
+        return new Schema[]{DELETE_ACLS_REQUEST_V0};
+    }
 
     public static class Builder extends AbstractRequest.Builder<DeleteAclsRequest> {
         private final List<AclBindingFilter> filters;

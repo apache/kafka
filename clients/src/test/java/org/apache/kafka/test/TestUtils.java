@@ -35,6 +35,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -317,6 +318,16 @@ public class TestUtils {
         assertEquals(Utils.toList(it1), Utils.toList(it2));
     }
 
+    public static <T> void checkEquals(Set<T> c1, Set<T> c2, String firstDesc, String secondDesc) {
+        if (!c1.equals(c2)) {
+            Set<T> missing1 = new HashSet<>(c2);
+            missing1.removeAll(c1);
+            Set<T> missing2 = new HashSet<>(c1);
+            missing2.removeAll(c2);
+            fail(String.format("Sets not equal, missing %s=%s, missing %s=%s", firstDesc, missing1, secondDesc, missing2));
+        }
+    }
+
     public static <T> List<T> toList(Iterable<? extends T> iterable) {
         List<T> list = new ArrayList<>();
         for (T item : iterable)
@@ -330,5 +341,4 @@ public class TestUtils {
         buffer.rewind();
         return buffer;
     }
-
 }

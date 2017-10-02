@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.ForeachAction;
@@ -401,7 +402,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
         return builder.table(topic,
                              new ConsumedInternal<>(keySerde, valSerde, new FailOnInvalidTimestamp(), null),
-                             internalStoreName);
+                             new MaterializedInternal<>(Materialized.<K, V, KeyValueStore<Bytes, byte[]>>as(internalStoreName)
+                                     .withKeySerde(keySerde)
+                                     .withValueSerde(valSerde),
+                                     queryableStoreName != null));
     }
 
     @Override
@@ -413,7 +417,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
         to(keySerde, valSerde, partitioner, topic);
 
-        return builder.table(null, new FailOnInvalidTimestamp(), keySerde, valSerde, topic, storeSupplier);
+        final ConsumedInternal<K, V> consumed = new ConsumedInternal<>(Consumed.with(keySerde, valSerde, new FailOnInvalidTimestamp(), null));
+        return builder.table(topic, consumed, storeSupplier);
     }
 
     @Override

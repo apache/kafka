@@ -157,6 +157,5 @@ public class SslChannelBuilder implements ChannelBuilder {
         public boolean complete() {
             return true;
         }
-
     }
 }

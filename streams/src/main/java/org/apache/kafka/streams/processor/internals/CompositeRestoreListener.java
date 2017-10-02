@@ -20,6 +20,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.AbstractNotifyingBatchingRestoreCallback;
 import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -32,7 +33,7 @@ public class CompositeRestoreListener implements BatchingStateRestoreCallback, S
     public static final NoOpStateRestoreListener NO_OP_STATE_RESTORE_LISTENER = new NoOpStateRestoreListener();
     private final BatchingStateRestoreCallback internalBatchingRestoreCallback;
     private final StateRestoreListener storeRestoreListener;
-    private StateRestoreListener globalRestoreListener = NO_OP_STATE_RESTORE_LISTENER;
+    private StateRestoreListener userRestoreListener = NO_OP_STATE_RESTORE_LISTENER;
 
     CompositeRestoreListener(final StateRestoreCallback stateRestoreCallback) {
 
@@ -45,31 +46,42 @@ public class CompositeRestoreListener implements BatchingStateRestoreCallback, S
         internalBatchingRestoreCallback = getBatchingRestoreCallback(stateRestoreCallback);
     }
 
+    /**
+     * @throws StreamsException if user provided {@link StateRestoreListener} raises an exception in
+     * {@link StateRestoreListener#onRestoreStart(TopicPartition, String, long, long)}
+     */
     @Override
     public void onRestoreStart(final TopicPartition topicPartition,
                                final String storeName,
                                final long startingOffset,
                                final long endingOffset) {
-        globalRestoreListener.onRestoreStart(topicPartition, storeName, startingOffset, endingOffset);
+        userRestoreListener.onRestoreStart(topicPartition, storeName, startingOffset, endingOffset);
         storeRestoreListener.onRestoreStart(topicPartition, storeName, startingOffset, endingOffset);
     }
 
+    /**
+     * @throws StreamsException if user provided {@link StateRestoreListener} raises an exception in
+     * {@link StateRestoreListener#onBatchRestored(TopicPartition, String, long, long)}
+     */
     @Override
     public void onBatchRestored(final TopicPartition topicPartition,
                                 final String storeName,
                                 final long batchEndOffset,
                                 final long numRestored) {
-        globalRestoreListener.onBatchRestored(topicPartition, storeName, batchEndOffset, numRestored);
+        userRestoreListener.onBatchRestored(topicPartition, storeName, batchEndOffset, numRestored);
         storeRestoreListener.onBatchRestored(topicPartition, storeName, batchEndOffset, numRestored);
     }
 
+    /**
+     * @throws StreamsException if user provided {@link StateRestoreListener} raises an exception in
+     * {@link StateRestoreListener#onRestoreEnd(TopicPartition, String, long)}
+     */
     @Override
     public void onRestoreEnd(final TopicPartition topicPartition,
                              final String storeName,
                              final long totalRestored) {
-        globalRestoreListener.onRestoreEnd(topicPartition, storeName, totalRestored);
+        userRestoreListener.onRestoreEnd(topicPartition, storeName, totalRestored);
         storeRestoreListener.onRestoreEnd(topicPartition, storeName, totalRestored);
-
     }
 
     @Override
@@ -77,9 +89,9 @@ public class CompositeRestoreListener implements BatchingStateRestoreCallback, S
         internalBatchingRestoreCallback.restoreAll(records);
     }
 
-    void setGlobalRestoreListener(final StateRestoreListener globalRestoreListener) {
-        if (globalRestoreListener != null) {
-            this.globalRestoreListener = globalRestoreListener;
+    void setUserRestoreListener(final StateRestoreListener userRestoreListener) {
+        if (userRestoreListener != null) {
+            this.userRestoreListener = userRestoreListener;
         }
     }
 

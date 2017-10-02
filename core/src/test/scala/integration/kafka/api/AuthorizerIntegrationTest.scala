@@ -69,6 +69,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   val clientId = "client-Id"
   val tp = new TopicPartition(topic, part)
   val logDir = "logDir"
+  val deleteRecordsPartition = new TopicPartition(deleteTopic, part)
   val topicAndPartition = TopicAndPartition(topic, part)
   val group = "my-group"
   val topicResource = new Resource(Topic, topic)
@@ -117,7 +118,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       ApiKeys.OFFSET_COMMIT -> classOf[requests.OffsetCommitResponse],
       ApiKeys.OFFSET_FETCH -> classOf[requests.OffsetFetchResponse],
       ApiKeys.FIND_COORDINATOR -> classOf[FindCoordinatorResponse],
-      ApiKeys.UPDATE_METADATA_KEY -> classOf[requests.UpdateMetadataResponse],
+      ApiKeys.UPDATE_METADATA -> classOf[requests.UpdateMetadataResponse],
       ApiKeys.JOIN_GROUP -> classOf[JoinGroupResponse],
       ApiKeys.SYNC_GROUP -> classOf[SyncGroupResponse],
       ApiKeys.DESCRIBE_GROUPS -> classOf[DescribeGroupsResponse],
@@ -125,9 +126,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       ApiKeys.LEAVE_GROUP -> classOf[LeaveGroupResponse],
       ApiKeys.LEADER_AND_ISR -> classOf[requests.LeaderAndIsrResponse],
       ApiKeys.STOP_REPLICA -> classOf[requests.StopReplicaResponse],
-      ApiKeys.CONTROLLED_SHUTDOWN_KEY -> classOf[requests.ControlledShutdownResponse],
+      ApiKeys.CONTROLLED_SHUTDOWN -> classOf[requests.ControlledShutdownResponse],
       ApiKeys.CREATE_TOPICS -> classOf[CreateTopicsResponse],
       ApiKeys.DELETE_TOPICS -> classOf[requests.DeleteTopicsResponse],
+      ApiKeys.DELETE_RECORDS -> classOf[requests.DeleteRecordsResponse],
       ApiKeys.OFFSET_FOR_LEADER_EPOCH -> classOf[OffsetsForLeaderEpochResponse],
       ApiKeys.DESCRIBE_CONFIGS -> classOf[DescribeConfigsResponse],
       ApiKeys.ALTER_CONFIGS -> classOf[AlterConfigsResponse],
@@ -152,7 +154,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.OFFSET_COMMIT -> ((resp: requests.OffsetCommitResponse) => resp.responseData.asScala.find(_._1 == tp).get._2),
     ApiKeys.OFFSET_FETCH -> ((resp: requests.OffsetFetchResponse) => resp.error),
     ApiKeys.FIND_COORDINATOR -> ((resp: FindCoordinatorResponse) => resp.error),
-    ApiKeys.UPDATE_METADATA_KEY -> ((resp: requests.UpdateMetadataResponse) => resp.error),
+    ApiKeys.UPDATE_METADATA -> ((resp: requests.UpdateMetadataResponse) => resp.error),
     ApiKeys.JOIN_GROUP -> ((resp: JoinGroupResponse) => resp.error),
     ApiKeys.SYNC_GROUP -> ((resp: SyncGroupResponse) => resp.error),
     ApiKeys.DESCRIBE_GROUPS -> ((resp: DescribeGroupsResponse) => resp.groups.get(group).error),
@@ -160,9 +162,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.LEAVE_GROUP -> ((resp: LeaveGroupResponse) => resp.error),
     ApiKeys.LEADER_AND_ISR -> ((resp: requests.LeaderAndIsrResponse) => resp.responses.asScala.find(_._1 == tp).get._2),
     ApiKeys.STOP_REPLICA -> ((resp: requests.StopReplicaResponse) => resp.responses.asScala.find(_._1 == tp).get._2),
-    ApiKeys.CONTROLLED_SHUTDOWN_KEY -> ((resp: requests.ControlledShutdownResponse) => resp.error),
+    ApiKeys.CONTROLLED_SHUTDOWN -> ((resp: requests.ControlledShutdownResponse) => resp.error),
     ApiKeys.CREATE_TOPICS -> ((resp: CreateTopicsResponse) => resp.errors.asScala.find(_._1 == createTopic).get._2.error),
     ApiKeys.DELETE_TOPICS -> ((resp: requests.DeleteTopicsResponse) => resp.errors.asScala.find(_._1 == deleteTopic).get._2),
+    ApiKeys.DELETE_RECORDS -> ((resp: requests.DeleteRecordsResponse) => resp.responses.get(deleteRecordsPartition).error),
     ApiKeys.OFFSET_FOR_LEADER_EPOCH -> ((resp: OffsetsForLeaderEpochResponse) => resp.responses.get(tp).error),
     ApiKeys.DESCRIBE_CONFIGS -> ((resp: DescribeConfigsResponse) =>
       resp.configs.get(new RResource(RResourceType.TOPIC, tp.topic)).error.error),
@@ -190,7 +193,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.OFFSET_COMMIT -> (topicReadAcl ++ groupReadAcl),
     ApiKeys.OFFSET_FETCH -> (topicReadAcl ++ groupDescribeAcl),
     ApiKeys.FIND_COORDINATOR -> (topicReadAcl ++ groupDescribeAcl ++ transactionalIdDescribeAcl),
-    ApiKeys.UPDATE_METADATA_KEY -> clusterAcl,
+    ApiKeys.UPDATE_METADATA -> clusterAcl,
     ApiKeys.JOIN_GROUP -> groupReadAcl,
     ApiKeys.SYNC_GROUP -> groupReadAcl,
     ApiKeys.DESCRIBE_GROUPS -> groupDescribeAcl,
@@ -198,9 +201,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.LEAVE_GROUP -> groupReadAcl,
     ApiKeys.LEADER_AND_ISR -> clusterAcl,
     ApiKeys.STOP_REPLICA -> clusterAcl,
-    ApiKeys.CONTROLLED_SHUTDOWN_KEY -> clusterAcl,
+    ApiKeys.CONTROLLED_SHUTDOWN -> clusterAcl,
     ApiKeys.CREATE_TOPICS -> clusterCreateAcl,
     ApiKeys.DELETE_TOPICS -> topicDeleteAcl,
+    ApiKeys.DELETE_RECORDS -> topicDeleteAcl,
     ApiKeys.OFFSET_FOR_LEADER_EPOCH -> clusterAcl,
     ApiKeys.DESCRIBE_CONFIGS -> topicDescribeConfigsAcl,
     ApiKeys.ALTER_CONFIGS -> topicAlterConfigsAcl,
@@ -256,7 +260,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createProduceRequest = {
-    new requests.ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, 1, 5000,
+    requests.ProduceRequest.Builder.forCurrentMagic(1, 5000,
       collection.mutable.Map(tp -> MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("test".getBytes))).asJava).
       build()
   }
@@ -293,7 +297,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val brokers = Set(new requests.UpdateMetadataRequest.Broker(brokerId,
       Seq(new requests.UpdateMetadataRequest.EndPoint("localhost", 0, securityProtocol,
         ListenerName.forSecurityProtocol(securityProtocol))).asJava, null)).asJava
-    val version = ApiKeys.UPDATE_METADATA_KEY.latestVersion
+    val version = ApiKeys.UPDATE_METADATA.latestVersion
     new requests.UpdateMetadataRequest.Builder(version, brokerId, Int.MaxValue, partitionState, brokers).build()
   }
 
@@ -330,12 +334,15 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def stopReplicaRequest = new StopReplicaRequest.Builder(brokerId, Int.MaxValue, true, Set(tp).asJava).build()
 
-  private def controlledShutdownRequest = new requests.ControlledShutdownRequest.Builder(brokerId).build()
+  private def controlledShutdownRequest = new requests.ControlledShutdownRequest.Builder(brokerId,
+    ApiKeys.CONTROLLED_SHUTDOWN.latestVersion).build()
 
   private def createTopicsRequest =
     new CreateTopicsRequest.Builder(Map(createTopic -> new TopicDetails(1, 1.toShort)).asJava, 0).build()
 
   private def deleteTopicsRequest = new DeleteTopicsRequest.Builder(Set(deleteTopic).asJava, 5000).build()
+
+  private def deleteRecordsRequest = new DeleteRecordsRequest.Builder(5000, Collections.singletonMap(deleteRecordsPartition, 0L)).build()
 
   private def describeConfigsRequest =
     new DescribeConfigsRequest.Builder(Collections.singleton(new RResource(RResourceType.TOPIC, tp.topic))).build()
@@ -373,7 +380,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       ApiKeys.LIST_OFFSETS -> createListOffsetsRequest,
       ApiKeys.OFFSET_FETCH -> createOffsetFetchRequest,
       ApiKeys.FIND_COORDINATOR -> createFindCoordinatorRequest,
-      ApiKeys.UPDATE_METADATA_KEY -> createUpdateMetadataRequest,
+      ApiKeys.UPDATE_METADATA -> createUpdateMetadataRequest,
       ApiKeys.JOIN_GROUP -> createJoinGroupRequest,
       ApiKeys.SYNC_GROUP -> createSyncGroupRequest,
       ApiKeys.DESCRIBE_GROUPS -> createDescribeGroupsRequest,
@@ -382,9 +389,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       ApiKeys.LEAVE_GROUP -> leaveGroupRequest,
       ApiKeys.LEADER_AND_ISR -> leaderAndIsrRequest,
       ApiKeys.STOP_REPLICA -> stopReplicaRequest,
-      ApiKeys.CONTROLLED_SHUTDOWN_KEY -> controlledShutdownRequest,
+      ApiKeys.CONTROLLED_SHUTDOWN -> controlledShutdownRequest,
       ApiKeys.CREATE_TOPICS -> createTopicsRequest,
       ApiKeys.DELETE_TOPICS -> deleteTopicsRequest,
+      ApiKeys.DELETE_RECORDS -> deleteRecordsRequest,
       ApiKeys.OFFSET_FOR_LEADER_EPOCH -> offsetsForLeaderEpochRequest,
       ApiKeys.DESCRIBE_CONFIGS -> describeConfigsRequest,
       ApiKeys.ALTER_CONFIGS -> alterConfigsRequest,
@@ -433,7 +441,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       ApiKeys.LIST_OFFSETS -> createListOffsetsRequest,
       ApiKeys.OFFSET_COMMIT -> createOffsetCommitRequest,
       ApiKeys.OFFSET_FETCH -> createOffsetFetchRequest,
-      ApiKeys.DELETE_TOPICS -> deleteTopicsRequest
+      ApiKeys.DELETE_TOPICS -> deleteTopicsRequest,
+      ApiKeys.DELETE_RECORDS -> deleteRecordsRequest
     )
 
     for ((key, request) <- requestKeyToRequest) {
@@ -909,7 +918,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testUnauthorizedDeleteWithoutDescribe() {
+  def testUnauthorizedDeleteTopicsWithoutDescribe() {
     val response = connectAndSend(deleteTopicsRequest, ApiKeys.DELETE_TOPICS)
     val version = ApiKeys.DELETE_TOPICS.latestVersion
     val deleteResponse = DeleteTopicsResponse.parse(response, version)
@@ -917,7 +926,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testUnauthorizedDeleteWithDescribe() {
+  def testUnauthorizedDeleteTopicsWithDescribe() {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)), deleteTopicResource)
     val response = connectAndSend(deleteTopicsRequest, ApiKeys.DELETE_TOPICS)
     val version = ApiKeys.DELETE_TOPICS.latestVersion
@@ -927,13 +936,40 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testDeleteWithWildCardAuth() {
+  def testDeleteTopicsWithWildCardAuth() {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Delete)), new Resource(Topic, "*"))
     val response = connectAndSend(deleteTopicsRequest, ApiKeys.DELETE_TOPICS)
     val version = ApiKeys.DELETE_TOPICS.latestVersion
     val deleteResponse = DeleteTopicsResponse.parse(response, version)
 
     assertEquals(Errors.NONE, deleteResponse.errors.asScala.head._2)
+  }
+
+  @Test
+  def testUnauthorizedDeleteRecordsWithoutDescribe() {
+    val response = connectAndSend(deleteRecordsRequest, ApiKeys.DELETE_RECORDS)
+    val version = ApiKeys.DELETE_RECORDS.latestVersion
+    val deleteRecordsResponse = DeleteRecordsResponse.parse(response, version)
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, deleteRecordsResponse.responses.asScala.head._2.error)
+  }
+
+  @Test
+  def testUnauthorizedDeleteRecordsWithDescribe() {
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)), deleteTopicResource)
+    val response = connectAndSend(deleteRecordsRequest, ApiKeys.DELETE_RECORDS)
+    val version = ApiKeys.DELETE_RECORDS.latestVersion
+    val deleteRecordsResponse = DeleteRecordsResponse.parse(response, version)
+    assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED, deleteRecordsResponse.responses.asScala.head._2.error)
+  }
+
+  @Test
+  def testDeleteRecordsWithWildCardAuth() {
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Delete)), new Resource(Topic, "*"))
+    val response = connectAndSend(deleteRecordsRequest, ApiKeys.DELETE_RECORDS)
+    val version = ApiKeys.DELETE_RECORDS.latestVersion
+    val deleteRecordsResponse = DeleteRecordsResponse.parse(response, version)
+
+    assertEquals(Errors.NONE, deleteRecordsResponse.responses.asScala.head._2.error)
   }
 
   @Test(expected = classOf[TransactionalIdAuthorizationException])

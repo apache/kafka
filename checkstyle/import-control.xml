@@ -41,6 +41,7 @@
   <!-- anyone can use public classes -->
   <allow pkg="org.apache.kafka.common" exact-match="true" />
   <allow pkg="org.apache.kafka.common.security" />
+  <allow pkg="org.apache.kafka.common.serialization" />
   <allow pkg="org.apache.kafka.common.utils" />
   <allow pkg="org.apache.kafka.common.errors" exact-match="true" />
   <allow pkg="org.apache.kafka.common.memory" />
@@ -105,6 +106,7 @@
       <allow pkg="org.apache.kafka.common.errors" />
       <allow pkg="org.apache.kafka.common.protocol.types" />
       <allow pkg="org.apache.kafka.common.record" />
+      <allow pkg="org.apache.kafka.common.requests" />
     </subpackage>
 
     <subpackage name="record">
@@ -137,6 +139,10 @@
     <subpackage name="serialization">
       <allow class="org.apache.kafka.common.errors.SerializationException" />
       <allow class="org.apache.kafka.common.header.Headers" />
+    </subpackage>
+
+    <subpackage name="utils">
+      <allow pkg="org.apache.kafka.common.metrics" />
     </subpackage>
   </subpackage>
 

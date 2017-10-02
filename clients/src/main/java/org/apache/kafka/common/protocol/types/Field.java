@@ -16,63 +16,77 @@
  */
 package org.apache.kafka.common.protocol.types;
 
-/**
- * A field in a schema
- */
 public class Field {
-
-    public static final Object NO_DEFAULT = new Object();
-
-    final int index;
     public final String name;
+    public final String docString;
     public final Type type;
+    public final boolean hasDefaultValue;
     public final Object defaultValue;
-    public final String doc;
-    final Schema schema;
 
-    /**
-     * Create the field.
-     *
-     * @throws SchemaException If the default value is not primitive and the validation fails
-     */
-    public Field(int index, String name, Type type, String doc, Object defaultValue, Schema schema) {
-        this.index = index;
+    public Field(String name, Type type, String docString, boolean hasDefaultValue, Object defaultValue) {
         this.name = name;
+        this.docString = docString;
         this.type = type;
-        this.doc = doc;
+        this.hasDefaultValue = hasDefaultValue;
         this.defaultValue = defaultValue;
-        this.schema = schema;
-        if (defaultValue != NO_DEFAULT)
+
+        if (hasDefaultValue)
             type.validate(defaultValue);
     }
 
-    public Field(int index, String name, Type type, String doc, Object defaultValue) {
-        this(index, name, type, doc, defaultValue, null);
+    public Field(String name, Type type, String docString) {
+        this(name, type, docString, false, null);
     }
 
-    public Field(String name, Type type, String doc, Object defaultValue) {
-        this(-1, name, type, doc, defaultValue);
-    }
-
-    public Field(String name, Type type, String doc) {
-        this(name, type, doc, NO_DEFAULT);
+    public Field(String name, Type type, String docString, Object defaultValue) {
+        this(name, type, docString, true, defaultValue);
     }
 
     public Field(String name, Type type) {
-        this(name, type, "");
+        this(name, type, null, false, null);
     }
 
-    public Type type() {
-        return type;
+    public static class Int8 extends Field {
+        public Int8(String name, String docString) {
+            super(name, Type.INT8, docString, false, null);
+        }
     }
 
-    public Schema schema() {
-        return schema;
+    public static class Int32 extends Field {
+        public Int32(String name, String docString) {
+            super(name, Type.INT32, docString, false, null);
+        }
+
+        public Int32(String name, String docString, int defaultValue) {
+            super(name, Type.INT32, docString, true, defaultValue);
+        }
     }
 
+    public static class Int64 extends Field {
+        public Int64(String name, String docString) {
+            super(name, Type.INT64, docString, false, null);
+        }
 
-    @Override
-    public String toString() {
-        return name + ":" + type;
+        public Int64(String name, String docString, long defaultValue) {
+            super(name, Type.INT64, docString, true, defaultValue);
+        }
+    }
+
+    public static class Int16 extends Field {
+        public Int16(String name, String docString) {
+            super(name, Type.INT16, docString, false, null);
+        }
+    }
+
+    public static class Str extends Field {
+        public Str(String name, String docString) {
+            super(name, Type.STRING, docString, false, null);
+        }
+    }
+
+    public static class NullableStr extends Field {
+        public NullableStr(String name, String docString) {
+            super(name, Type.NULLABLE_STRING, docString, false, null);
+        }
     }
 }
