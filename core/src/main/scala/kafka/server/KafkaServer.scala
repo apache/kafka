@@ -610,6 +610,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
       case ZKState.SessionEstablishmentError => {
         if (isWaitingForZKReconnect.get()){
           // already waiting for zkReconnect
+          return
         }
         if (zKStateChecker == null){
           isWaitingForZKReconnect.set(true)
