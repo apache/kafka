@@ -460,22 +460,24 @@ object ConsoleConsumer extends Logging {
       KafkaMetricsReporter.startReporters(verifiableProps)
     }
 
-    // group id must not be provided more than once
-    val groupIdDirectPresent = options.has(groupIdOpt)
-    val groupIdPresentCount = Seq(
-        groupIdDirectPresent,                                          // via --group
-        consumerProps.containsKey(ConsumerConfig.GROUP_ID_CONFIG),     // via --consumer-property
-        extraConsumerProps.containsKey(ConsumerConfig.GROUP_ID_CONFIG) // via --cosumer.config
-    ).count(_ == true)
+    // if the group id is provided in more than place (through different means) all values must be the same
+    val groupIdsProvided = Set(
+        options.valueOf(groupIdOpt),                           // via --group
+        consumerProps.get(ConsumerConfig.GROUP_ID_CONFIG),     // via --consumer-property
+        extraConsumerProps.get(ConsumerConfig.GROUP_ID_CONFIG) // via --cosumer.config
+      ).filter(_ != null)
 
-    if (groupIdPresentCount > 1) {
-      CommandLineUtils.printUsageAndDie(parser, "The group id must be provided in one place only (directly using '--group', "
-                                              + "via '--consumer-property', or via '--consumer.config').")
-    } else if (groupIdDirectPresent)
-      consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, options.valueOf(groupIdOpt))
-    else if (groupIdPresentCount == 0) {
-      consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, s"console-consumer-${new Random().nextInt(100000)}")
-      groupIdPassed = false
+    if (groupIdsProvided.size > 1) {
+      CommandLineUtils.printUsageAndDie(parser, "The group ids provided in different places (directly using '--group', "
+                                              + "via '--consumer-property', or via '--consumer.config') do not match.")
+    }
+
+    groupIdsProvided.headOption match {
+      case Some(group) =>
+        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, group)
+      case None =>
+        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, s"console-consumer-${new Random().nextInt(100000)}")
+        groupIdPassed = false
     }
 
     def tryParse(parser: OptionParser, args: Array[String]): OptionSet = {

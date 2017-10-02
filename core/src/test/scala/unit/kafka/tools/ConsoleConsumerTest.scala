@@ -384,10 +384,10 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldProvideGroupIdInOnePlaceOnly() {
+  def groupIdsProvidedInDifferentPlacesMustMatch() {
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
 
-    // in all three places
+    // different in all three places
     var propsFile = TestUtils.tempFile()
     var propsStream = new FileOutputStream(propsFile)
     propsStream.write("group.id=group-from-file".getBytes())
@@ -402,12 +402,29 @@ class ConsoleConsumerTest {
 
     try {
       new ConsoleConsumer.ConsumerConfig(args)
-      fail("Expected consumer property construction to fail due to provide group id argument in multiple places")
+      fail("Expected groups ids provided in different places to match")
     } catch {
       case e: IllegalArgumentException => //OK
     }
 
-    // via --consumer-property and --consumer.config
+    // the same in all three places
+    propsFile = TestUtils.tempFile()
+    propsStream = new FileOutputStream(propsFile)
+    propsStream.write("group.id=test-group".getBytes())
+    propsStream.close()
+    args = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--group", "test-group",
+      "--consumer-property", "group.id=test-group",
+      "--consumer.config", propsFile.getAbsolutePath
+    )
+
+    var config = new ConsoleConsumer.ConsumerConfig(args)
+    var props = ConsoleConsumer.getNewConsumerProps(config)
+    assertEquals("test-group", props.getProperty("group.id"))
+
+    // different via --consumer-property and --consumer.config
     propsFile = TestUtils.tempFile()
     propsStream = new FileOutputStream(propsFile)
     propsStream.write("group.id=group-from-file".getBytes())
@@ -421,12 +438,12 @@ class ConsoleConsumerTest {
 
     try {
       new ConsoleConsumer.ConsumerConfig(args)
-      fail("Expected consumer property construction to fail due to provide group id argument in multiple places")
+      fail("Expected groups ids provided in different places to match")
     } catch {
       case e: IllegalArgumentException => //OK
     }
 
-    // via --consumer-property and --group
+    // different via --consumer-property and --group
     args = Array(
       "--bootstrap-server", "localhost:9092",
       "--topic", "test",
@@ -436,12 +453,12 @@ class ConsoleConsumerTest {
 
     try {
       new ConsoleConsumer.ConsumerConfig(args)
-      fail("Expected consumer property construction to fail due to provide group id argument in multiple places")
+      fail("Expected groups ids provided in different places to match")
     } catch {
       case e: IllegalArgumentException => //OK
     }
 
-    // via --group and --consumer.config
+    // different via --group and --consumer.config
     propsFile = TestUtils.tempFile()
     propsStream = new FileOutputStream(propsFile)
     propsStream.write("group.id=group-from-file".getBytes())
@@ -455,7 +472,7 @@ class ConsoleConsumerTest {
 
     try {
       new ConsoleConsumer.ConsumerConfig(args)
-      fail("Expected consumer property construction to fail due to provide group id argument in multiple places")
+      fail("Expected groups ids provided in different places to match")
     } catch {
       case e: IllegalArgumentException => //OK
     }
@@ -467,8 +484,8 @@ class ConsoleConsumerTest {
       "--group", "group-from-arguments"
     )
 
-    val config = new ConsoleConsumer.ConsumerConfig(args)
-    val props = ConsoleConsumer.getNewConsumerProps(config)
+    config = new ConsoleConsumer.ConsumerConfig(args)
+    props = ConsoleConsumer.getNewConsumerProps(config)
     assertEquals("group-from-arguments", props.getProperty("group.id"))
 
     Exit.resetExitProcedure()
