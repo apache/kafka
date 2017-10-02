@@ -162,8 +162,6 @@
   my-topic                       2          2               3               1          my-group_consumer-2
   </pre>
 
-  NOTE: Since 0.9.0.0, the old kafka.tools.ConsumerOffsetChecker tool for checking consumer offsets has been deprecated. You should use the kafka.admin.ConsumerGroupCommand (or the bin/kafka-consumer-groups.sh script) to manage consumer groups.
-
   <h4><a id="basic_ops_consumer_group" href="#basic_ops_consumer_group">Managing Consumer Groups</a></h4>
 
   With the ConsumerGroupCommand tool, we can list, describe, or delete consumer groups. Note that deletion is only available when the group metadata is stored in
@@ -173,7 +171,7 @@
   For example, to list all consumer groups across all topics:
 
   <pre class="brush: bash;">
-  &gt; bin/kafka-consumer-groups.sh --bootstrap-server broker1:9092 --list
+  &gt; bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --list
 
   test-consumer-group
   </pre>
@@ -181,7 +179,7 @@
   To view offsets, as mentioned earlier, we "describe" the consumer group like this:
 
   <pre class="brush: bash;">
-  &gt; bin/kafka-consumer-groups.sh --bootstrap-server broker1:9092 --describe --group test-consumer-group
+  &gt; bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group test-consumer-group
 
   TOPIC                          PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG        CONSUMER-ID                                       HOST                           CLIENT-ID
   test-foo                       0          1               3               2          consumer-1-a5d61779-4d04-4c50-a6d6-fb35d942642d   /127.0.0.1                     consumer-1
