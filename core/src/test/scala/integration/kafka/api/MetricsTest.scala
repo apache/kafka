@@ -18,7 +18,6 @@ import kafka.log.LogConfig
 import kafka.network.RequestMetrics
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{JaasTestUtils, TestUtils}
-
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.{Gauge, Histogram, Meter}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
@@ -53,6 +52,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
 
   @Before
   override def setUp(): Unit = {
+    verifyNoRequestMetrics("Request metrics not removed in a previous test")
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), KafkaSasl, kafkaServerJaasEntryName))
     super.setUp()
   }
@@ -61,6 +61,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
   override def tearDown(): Unit = {
     super.tearDown()
     closeSasl()
+    verifyNoRequestMetrics("Request metrics not removed in this test")
   }
 
   /**
@@ -73,9 +74,6 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     props.setProperty(LogConfig.MessageFormatVersionProp, "0.9.0")
     TestUtils.createTopic(this.zkUtils, topic, numPartitions = 1, replicationFactor = 1, this.servers, props)
     val tp = new TopicPartition(topic, 0)
-
-    // Clear static state
-    RequestMetrics.clearErrorMeters()
 
     // Produce and consume some records
     val numRecords = 10
@@ -201,8 +199,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     verifyYammerMetricRecorded(s"$requestMetricsPrefix,name=MessageConversionsTimeMs,request=Produce", value => value > 0.0)
 
     verifyYammerMetricRecorded(s"$requestMetricsPrefix,name=RequestBytes,request=Fetch")
-    // Temporary size for fetch should be zero after KAFKA-5968 is fixed
-    verifyYammerMetricRecorded(s"$requestMetricsPrefix,name=TemporaryMemoryBytes,request=Fetch", value => value >= 0.0)
+    verifyYammerMetricRecorded(s"$requestMetricsPrefix,name=TemporaryMemoryBytes,request=Fetch", value => value == 0.0)
 
      // request size recorded for all request types, check one
     verifyYammerMetricRecorded(s"$requestMetricsPrefix,name=RequestBytes,request=Metadata")
@@ -284,5 +281,12 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     val metricValue = yammerMetricValue(name).asInstanceOf[Double]
     assertTrue(s"Broker metric not recorded correctly for $name value $metricValue", verify(metricValue))
     metricValue
+  }
+
+  private def verifyNoRequestMetrics(errorMessage: String): Unit = {
+    val metrics = Metrics.defaultRegistry.allMetrics.asScala.filter { case (n, _) =>
+      n.getMBeanName.startsWith("kafka.network:type=RequestMetrics")
+    }
+    assertTrue(s"$errorMessage: ${metrics.keys}", metrics.isEmpty)
   }
 }

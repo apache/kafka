@@ -72,6 +72,11 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
     @Override
     public KTable<Windowed<K>, Long> count(final Materialized<K, Long, WindowStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(materialized, "materialized can't be null");
+        final MaterializedInternal<K, Long, WindowStore<Bytes, byte[]>> materializedInternal
+                = new MaterializedInternal<>(materialized);
+        if (materializedInternal.valueSerde() == null) {
+            materialized.withValueSerde(Serdes.Long());
+        }
         return aggregate(aggregateBuilder.countInitializer, aggregateBuilder.countAggregator, materialized);
     }
 

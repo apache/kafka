@@ -14,17 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state.internals;
+package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
+import org.apache.kafka.common.TopicPartition;
 
-public interface CachedStateStore<K, V> {
-    /**
-     * Set the {@link CacheFlushListener} to be notified when entries are flushed from the
-     * cache to the underlying {@link org.apache.kafka.streams.processor.StateStore}
-     * @param listener
-     * @param sendOldValues
-     */
-    void setFlushListener(final CacheFlushListener<K, V> listener,
-                          final boolean sendOldValues);
+public interface RestoringTasks {
+    Task restoringTaskFor(final TopicPartition partition);
 }

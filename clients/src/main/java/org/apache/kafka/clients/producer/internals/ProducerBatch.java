@@ -163,8 +163,9 @@ public final class ProducerBatch {
      * @param baseOffset The base offset of the messages assigned by the server
      * @param logAppendTime The log append time or -1 if CreateTime is being used
      * @param exception The exception that occurred (or null if the request was successful)
+     * @return true if the batch was completed successfully and false if the batch was previously aborted
      */
-    public void done(long baseOffset, long logAppendTime, RuntimeException exception) {
+    public boolean done(long baseOffset, long logAppendTime, RuntimeException exception) {
         final FinalState finalState;
         if (exception == null) {
             log.trace("Successfully produced messages to {} with base offset {}.", topicPartition, baseOffset);
@@ -177,13 +178,14 @@ public final class ProducerBatch {
         if (!this.finalState.compareAndSet(null, finalState)) {
             if (this.finalState.get() == FinalState.ABORTED) {
                 log.debug("ProduceResponse returned for {} after batch had already been aborted.", topicPartition);
-                return;
+                return false;
             } else {
                 throw new IllegalStateException("Batch has already been completed in final state " + this.finalState.get());
             }
         }
 
         completeFutureAndFireCallbacks(baseOffset, logAppendTime, exception);
+        return true;
     }
 
     private void completeFutureAndFireCallbacks(long baseOffset, long logAppendTime, RuntimeException exception) {
