@@ -476,7 +476,7 @@ public class Topology {
      * @see #addSink(String, String, Serializer, Serializer, StreamPartitioner, String...)
      */
     public synchronized Topology addSink(final String name,
-                                             final String topic,
+                                         final String topic,
                                          final Serializer keySerializer,
                                          final Serializer valueSerializer,
                                          final String... parentNames) {
