@@ -18,14 +18,14 @@
 package kafka.tools
 
 import joptsimple.OptionParser
-import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.security._
+import kafka.utils.{CommandLineUtils, Exit, Logging, ZKGroupTopicDirs, ZkUtils}
 
-import kafka.utils.{Logging, ZKGroupTopicDirs, ZkUtils, CommandLineUtils}
-
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 object VerifyConsumerRebalance extends Logging {
   def main(args: Array[String]) {
-    val parser = new OptionParser()
+    val parser = new OptionParser(false)
+    warn("WARNING: VerifyConsumerRebalance is deprecated and will be dropped in a future release following 0.11.0.0.")
 
     val zkConnectOpt = parser.accepts("zookeeper.connect", "ZooKeeper connect string.").
       withRequiredArg().defaultsTo("localhost:2181").ofType(classOf[String])
@@ -40,7 +40,7 @@ object VerifyConsumerRebalance extends Logging {
 
     if (options.has("help")) {
       parser.printHelpOn(System.out)
-      System.exit(0)
+      Exit.exit(0)
     }
 
     CommandLineUtils.checkRequiredArgs(parser, options, groupOpt)
@@ -117,7 +117,7 @@ object VerifyConsumerRebalance extends Logging {
           // check if the owner is a valid consumer id
           consumerIdsForTopic match {
             case Some(consumerIds) =>
-              if(!consumerIds.contains(partitionOwner)) {
+              if(!consumerIds.map(c => c.toString).contains(partitionOwner)) {
                 error(("Owner %s for partition [%s,%d] is not a valid member of consumer " +
                   "group %s").format(partitionOwner, topic, partition, group))
                 rebalanceSucceeded = false

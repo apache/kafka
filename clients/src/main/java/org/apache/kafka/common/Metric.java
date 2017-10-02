@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -17,18 +17,26 @@
 package org.apache.kafka.common;
 
 /**
- * A numerical metric tracked for monitoring purposes
+ * A metric tracked for monitoring purposes.
  */
 public interface Metric {
 
     /**
      * A name for this metric
      */
-    public MetricName metricName();
+    MetricName metricName();
 
     /**
-     * The value of the metric
+     * The value of the metric as double if the metric is measurable and `0.0` otherwise.
+     *
+     * @deprecated As of 1.0.0, use {@link #metricValue()} instead. This will be removed in a future major release.
      */
-    public double value();
+    @Deprecated
+    double value();
+
+    /**
+     * The value of the metric, which may be measurable or a non-measurable gauge
+     */
+    Object metricValue();
 
 }

@@ -17,11 +17,11 @@
 
 package kafka.tools
 
-import java.io.BufferedReader
-import java.io.FileReader
+import java.io.{BufferedReader, FileInputStream, InputStreamReader}
+import java.nio.charset.StandardCharsets
+
 import joptsimple._
-import kafka.utils.{Logging, ZkUtils, CommandLineUtils}
-import org.I0Itec.zkclient.ZkClient
+import kafka.utils.{CommandLineUtils, Exit, Logging, ZkUtils}
 import org.apache.kafka.common.security.JaasUtils
 
 
@@ -43,7 +43,7 @@ import org.apache.kafka.common.security.JaasUtils
 object ImportZkOffsets extends Logging {
 
   def main(args: Array[String]) {
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     
     val zkConnectOpt = parser.accepts("zkconnect", "ZooKeeper connect string.")
                             .withRequiredArg()
@@ -61,7 +61,7 @@ object ImportZkOffsets extends Logging {
     
     if (options.has("help")) {
        parser.printHelpOn(System.out)
-       System.exit(0)
+       Exit.exit(0)
     }
     
     CommandLineUtils.checkRequiredArgs(parser, options, inFileOpt)
@@ -76,21 +76,24 @@ object ImportZkOffsets extends Logging {
   }
 
   private def getPartitionOffsetsFromFile(filename: String):Map[String,String] = {
-    val fr = new FileReader(filename)
-    val br = new BufferedReader(fr)
-    var partOffsetsMap: Map[String,String] = Map()
-    
-    var s: String = br.readLine()
-    while ( s != null && s.length() >= 1) {
-      val tokens = s.split(":")
-      
-      partOffsetsMap += tokens(0) -> tokens(1)
-      debug("adding node path [" + s + "]")
-      
-      s = br.readLine()
+    val br = new BufferedReader(new InputStreamReader(new FileInputStream(filename), StandardCharsets.UTF_8))
+    try {
+      var partOffsetsMap: Map[String,String] = Map()
+
+      var s: String = br.readLine()
+      while ( s != null && s.length() >= 1) {
+        val tokens = s.split(":")
+
+        partOffsetsMap += tokens(0) -> tokens(1)
+        debug("adding node path [" + s + "]")
+
+        s = br.readLine()
+      }
+
+      partOffsetsMap
+    } finally {
+      br.close()
     }
-    
-    partOffsetsMap
   }
   
   private def updateZkOffsets(zkUtils: ZkUtils, partitionOffsets: Map[String,String]): Unit = {

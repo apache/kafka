@@ -56,8 +56,8 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
       }
     val partitionMetadata = metadata.partitionsMetadata
     if(partitionMetadata.isEmpty) {
-      if(metadata.errorCode != Errors.NONE.code) {
-        throw new KafkaException(Errors.forCode(metadata.errorCode).exception)
+      if(metadata.error != Errors.NONE) {
+        throw new KafkaException(metadata.error.exception)
       } else {
         throw new KafkaException("Topic metadata %s has empty partition metadata and no error code".format(metadata))
       }
@@ -85,14 +85,14 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
     // throw partition specific exception
     topicsMetadata.foreach(tmd =>{
       trace("Metadata for topic %s is %s".format(tmd.topic, tmd))
-      if(tmd.errorCode == Errors.NONE.code) {
+      if(tmd.error == Errors.NONE) {
         topicPartitionInfo.put(tmd.topic, tmd)
       } else
-        warn("Error while fetching metadata [%s] for topic [%s]: %s ".format(tmd, tmd.topic, Errors.forCode(tmd.errorCode).exception.getClass))
+        warn("Error while fetching metadata [%s] for topic [%s]: %s ".format(tmd, tmd.topic, tmd.error.exception.getClass))
       tmd.partitionsMetadata.foreach(pmd =>{
-        if (pmd.errorCode != Errors.NONE.code && pmd.errorCode == Errors.LEADER_NOT_AVAILABLE.code) {
+        if (pmd.error != Errors.NONE && pmd.error == Errors.LEADER_NOT_AVAILABLE) {
           warn("Error while fetching metadata %s for topic partition [%s,%d]: [%s]".format(pmd, tmd.topic, pmd.partitionId,
-            Errors.forCode(pmd.errorCode).exception.getClass))
+            pmd.error.exception.getClass))
         } // any other error code (e.g. ReplicaNotAvailable) can be ignored since the producer does not need to access the replica and isr metadata
       })
     })

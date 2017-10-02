@@ -18,9 +18,7 @@
 package kafka.javaapi
 
 import kafka.common.TopicAndPartition
-import scala.collection.mutable
-import collection.JavaConversions
-import java.nio.ByteBuffer
+import collection.JavaConverters._
 
 class OffsetFetchRequest(groupId: String,
                          requestInfo: java.util.List[TopicAndPartition],
@@ -37,34 +35,26 @@ class OffsetFetchRequest(groupId: String,
   }
 
   val underlying = {
-    val scalaSeq = {
-      import JavaConversions._
-      requestInfo: mutable.Buffer[TopicAndPartition]
-    }
     kafka.api.OffsetFetchRequest(
       groupId = groupId,
-      requestInfo = scalaSeq,
+      requestInfo = requestInfo.asScala,
       versionId = versionId,
       correlationId = correlationId,
       clientId = clientId
     )
   }
 
-
   override def toString = underlying.toString
 
-
-  override def equals(other: Any) = canEqual(other) && {
-    val otherOffsetRequest = other.asInstanceOf[kafka.javaapi.OffsetFetchRequest]
-    this.underlying.equals(otherOffsetRequest.underlying)
+  override def equals(obj: Any): Boolean = {
+    obj match {
+      case null => false
+      case other: OffsetFetchRequest => this.underlying.equals(other.underlying)
+      case _ => false
+    }
   }
 
-
-  def canEqual(other: Any) = other.isInstanceOf[kafka.javaapi.OffsetFetchRequest]
-
-
   override def hashCode = underlying.hashCode
-
 }
 
 

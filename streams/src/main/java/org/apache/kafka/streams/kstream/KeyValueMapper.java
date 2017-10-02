@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,24 +14,44 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.streams.KeyValue;
+
 /**
- * The {@link KeyValueMapper} interface for mapping a key-value pair to a new value (could be another key-value pair).
+ * The {@code KeyValueMapper} interface for mapping a {@link KeyValue key-value pair} to a new value of arbitrary type.
+ * For example, it can be used to
+ * <ul>
+ * <li>map from an input {@link KeyValue} pair to an output {@link KeyValue} pair with different key and/or value type
+ *     (for this case output type {@code VR == }{@link KeyValue KeyValue&lt;NewKeyType,NewValueType&gt;})</li>
+ * <li>map from an input record to a new key (with arbitrary key type as specified by {@code VR})</li>
+ * </ul>
+ * This is a stateless record-by-record operation, i.e, {@link #apply(Object, Object)} is invoked individually for each
+ * record of a stream (cf. {@link Transformer} for stateful record transformation).
+ * {@code KeyValueMapper} is a generalization of {@link ValueMapper}.
  *
- * @param <K>   original key type
- * @param <V>   original value type
- * @param <R>   mapped value type
+ * @param <K>  key type
+ * @param <V>  value type
+ * @param <VR> mapped value type
+ * @see ValueMapper
+ * @see Transformer
+ * @see KStream#map(KeyValueMapper)
+ * @see KStream#flatMap(KeyValueMapper)
+ * @see KStream#selectKey(KeyValueMapper)
+ * @see KStream#groupBy(KeyValueMapper)
+ * @see KStream#groupBy(KeyValueMapper, Serialized)
+ * @see KTable#groupBy(KeyValueMapper)
+ * @see KTable#groupBy(KeyValueMapper, Serialized)
+ * @see KTable#toStream(KeyValueMapper)
  */
-public interface KeyValueMapper<K, V, R> {
+public interface KeyValueMapper<K, V, VR> {
 
     /**
      * Map a record with the given key and value to a new value.
      *
-     * @param key    the key of the record
-     * @param value  the value of the record
-     * @return       the new value
+     * @param key   the key of the record
+     * @param value the value of the record
+     * @return the new value
      */
-    R apply(K key, V value);
+    VR apply(final K key, final V value);
 }

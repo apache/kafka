@@ -23,7 +23,7 @@ import scala.collection.mutable
 class MockTimer extends Timer {
 
   val time = new MockTime
-  private val taskQueue = mutable.PriorityQueue[TimerTaskEntry]()
+  private val taskQueue = mutable.PriorityQueue[TimerTaskEntry]()(Ordering[TimerTaskEntry].reverse)
 
   def add(timerTask: TimerTask) {
     if (timerTask.delayMs <= 0)

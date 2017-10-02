@@ -42,6 +42,6 @@ abstract class RequestOrResponse(val requestId: Option[Short] = None) extends Lo
   *  This API has no meaning for a Response object.
    * @param details If this is false, omit the parts of the request description that are proportional to the number of
    *                topics or partitions. This is mainly to control the amount of request logging. */
-  def describe(details: Boolean):String
+  def describe(details: Boolean): String
 }
 

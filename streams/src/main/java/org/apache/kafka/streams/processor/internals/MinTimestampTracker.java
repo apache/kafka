@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
 
 import java.util.LinkedList;
@@ -25,7 +24,8 @@ import java.util.LinkedList;
  */
 public class MinTimestampTracker<E> implements TimestampTracker<E> {
 
-    private final LinkedList<Stamped<E>> descendingSubsequence = new LinkedList<>();
+    // first element has the lowest timestamp and last element the highest
+    private final LinkedList<Stamped<E>> ascendingSubsequence = new LinkedList<>();
 
     // in the case that incoming traffic is very small, the records maybe put and polled
     // within a single iteration, in this case we need to remember the last polled
@@ -35,31 +35,41 @@ public class MinTimestampTracker<E> implements TimestampTracker<E> {
     /**
      * @throws NullPointerException if the element is null
      */
-    public void addElement(Stamped<E> elem) {
+    public void addElement(final Stamped<E> elem) {
         if (elem == null) throw new NullPointerException();
 
-        Stamped<E> minElem = descendingSubsequence.peekLast();
-        while (minElem != null && minElem.timestamp >= elem.timestamp) {
-            descendingSubsequence.removeLast();
-            minElem = descendingSubsequence.peekLast();
+        Stamped<E> maxElem = ascendingSubsequence.peekLast();
+        while (maxElem != null && maxElem.timestamp >= elem.timestamp) {
+            ascendingSubsequence.removeLast();
+            maxElem = ascendingSubsequence.peekLast();
         }
-        descendingSubsequence.offerLast(elem);
+        ascendingSubsequence.offerLast(elem); //lower timestamps have been retained and all greater/equal removed
     }
 
-    public void removeElement(Stamped<E> elem) {
-        if (elem != null && descendingSubsequence.peekFirst() == elem)
-            descendingSubsequence.removeFirst();
+    public void removeElement(final Stamped<E> elem) {
+        if (elem == null) {
+            return;
+        }
 
-        if (descendingSubsequence.isEmpty())
+        if (ascendingSubsequence.peekFirst() == elem) {
+            ascendingSubsequence.removeFirst();
+        }
+
+        if (ascendingSubsequence.isEmpty()) {
             lastKnownTime = elem.timestamp;
+        }
+
     }
 
     public int size() {
-        return descendingSubsequence.size();
+        return ascendingSubsequence.size();
     }
 
+    /**
+     * @return the lowest tracked timestamp
+     */
     public long get() {
-        Stamped<E> stamped = descendingSubsequence.peekFirst();
+        Stamped<E> stamped = ascendingSubsequence.peekFirst();
 
         if (stamped == null)
             return lastKnownTime;

@@ -104,7 +104,7 @@ class Producer[K,V](val config: ProducerConfig,
             }
           }
           catch {
-            case e: InterruptedException =>
+            case _: InterruptedException =>
               false
           }
       }
@@ -132,7 +132,7 @@ class Producer[K,V](val config: ProducerConfig,
         KafkaMetricsGroup.removeAllProducerMetrics(config.clientId)
         if (producerSendThread != null)
           producerSendThread.shutdown
-        eventHandler.close
+        eventHandler.close()
         info("Producer shutdown completed in " + (System.nanoTime() - startTime) / 1000000 + " ms")
       }
     }

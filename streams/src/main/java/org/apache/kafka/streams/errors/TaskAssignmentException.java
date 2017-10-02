@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -17,21 +17,23 @@
 package org.apache.kafka.streams.errors;
 
 /**
- * Indicates a run time error incurred while trying to assign stream tasks to threads
+ * Indicates a run time error incurred while trying to assign
+ * {@link org.apache.kafka.streams.processor.internals.StreamTask stream tasks} to
+ * {@link org.apache.kafka.streams.processor.internals.StreamThread threads}.
  */
 public class TaskAssignmentException extends StreamsException {
 
     private final static long serialVersionUID = 1L;
 
-    public TaskAssignmentException(String s) {
-        super(s);
+    public TaskAssignmentException(final String message) {
+        super(message);
     }
 
-    public TaskAssignmentException(String s, Throwable throwable) {
-        super(s, throwable);
+    public TaskAssignmentException(final String message, final Throwable throwable) {
+        super(message, throwable);
     }
 
-    public TaskAssignmentException(Throwable throwable) {
+    public TaskAssignmentException(final Throwable throwable) {
         super(throwable);
     }
 }

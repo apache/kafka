@@ -25,9 +25,10 @@ import java.util.Properties
 import kafka.integration.KafkaServerTestHarness
 import kafka.network.SocketServer
 import kafka.utils._
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.protocol.types.Struct
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
-import org.apache.kafka.common.requests.{AbstractRequest, RequestHeader, ResponseHeader}
-import org.junit.Before
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractRequestResponse, RequestHeader, ResponseHeader}
 
 abstract class BaseRequestTest extends KafkaServerTestHarness {
   private var correlationId = 0
@@ -35,32 +36,47 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
   // If required, set number of brokers
   protected def numBrokers: Int = 3
 
+  protected def logDirCount: Int = 1
+
   // If required, override properties by mutating the passed Properties object
   protected def propertyOverrides(properties: Properties) {}
 
-  def generateConfigs() = {
-    val props = TestUtils.createBrokerConfigs(numBrokers, zkConnect, enableControlledShutdown = false,
+  def generateConfigs = {
+    val props = TestUtils.createBrokerConfigs(numBrokers, zkConnect,
+      enableControlledShutdown = false, enableDeleteTopic = true,
       interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile, saslProperties = saslProperties)
+      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = logDirCount)
     props.foreach(propertyOverrides)
     props.map(KafkaConfig.fromProps)
   }
 
-  @Before
-  override def setUp() {
-    super.setUp()
-    TestUtils.waitUntilTrue(() => servers.head.metadataCache.getAliveBrokers.size == numBrokers, "Wait for cache to update")
-  }
-
-  def socketServer = {
+  def anySocketServer = {
     servers.find { server =>
       val state = server.brokerState.currentState
       state != NotRunning.state && state != BrokerShuttingDown.state
     }.map(_.socketServer).getOrElse(throw new IllegalStateException("No live broker is available"))
   }
 
-  def connect(s: SocketServer = socketServer, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Socket = {
-    new Socket("localhost", s.boundPort(protocol))
+  def controllerSocketServer = {
+    servers.find { server =>
+      server.kafkaController.isActive
+    }.map(_.socketServer).getOrElse(throw new IllegalStateException("No controller broker is available"))
+  }
+
+  def notControllerSocketServer = {
+    servers.find { server =>
+      !server.kafkaController.isActive
+    }.map(_.socketServer).getOrElse(throw new IllegalStateException("No non-controller broker is available"))
+  }
+
+  def brokerSocketServer(brokerId: Int) = {
+    servers.find { server =>
+      server.config.brokerId == brokerId
+    }.map(_.socketServer).getOrElse(throw new IllegalStateException(s"Could not find broker with id $brokerId"))
+  }
+
+  def connect(s: SocketServer = anySocketServer, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Socket = {
+    new Socket("localhost", s.boundPort(ListenerName.forSecurityProtocol(protocol)))
   }
 
   private def sendRequest(socket: Socket, request: Array[Byte]) {
@@ -83,32 +99,65 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
     receiveResponse(socket)
   }
 
-  def send(request: AbstractRequest, apiKey: ApiKeys, version: Short): ByteBuffer = {
-    val socket = connect()
-    try {
-      send(socket, request, apiKey, version)
-    } finally {
-      socket.close()
-    }
+  /**
+    * @param destination An optional SocketServer ot send the request to. If not set, any available server is used.
+    * @param protocol An optional SecurityProtocol to use. If not set, PLAINTEXT is used.
+    * @return A ByteBuffer containing the response (without the response header)
+    */
+  def connectAndSend(request: AbstractRequest, apiKey: ApiKeys,
+                     destination: SocketServer = anySocketServer,
+                     apiVersion: Option[Short] = None,
+                     protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): ByteBuffer = {
+    val socket = connect(destination, protocol)
+    try send(request, apiKey, socket, apiVersion)
+    finally socket.close()
   }
 
   /**
-    * Serializes and send the request to the given api. A ByteBuffer containing the response is returned.
+    * @param destination An optional SocketServer ot send the request to. If not set, any available server is used.
+    * @param protocol An optional SecurityProtocol to use. If not set, PLAINTEXT is used.
+    * @return A ByteBuffer containing the response (without the response header).
     */
-  def send(socket: Socket, request: AbstractRequest, apiKey: ApiKeys, version: Short): ByteBuffer = {
-    correlationId += 1
-    val serializedBytes = {
-      val header = new RequestHeader(apiKey.id, version, "", correlationId)
-      val byteBuffer = ByteBuffer.allocate(header.sizeOf() + request.sizeOf)
-      header.writeTo(byteBuffer)
-      request.writeTo(byteBuffer)
-      byteBuffer.array()
-    }
+  def connectAndSendStruct(requestStruct: Struct, apiKey: ApiKeys, apiVersion: Short,
+                           destination: SocketServer = anySocketServer,
+                           protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): ByteBuffer = {
+    val socket = connect(destination, protocol)
+    try sendStruct(requestStruct, apiKey, socket, apiVersion)
+    finally socket.close()
+  }
 
+  /**
+    * Serializes and sends the request to the given api.
+    * A ByteBuffer containing the response is returned.
+    */
+  def send(request: AbstractRequest, apiKey: ApiKeys, socket: Socket, apiVersion: Option[Short] = None): ByteBuffer = {
+    val header = nextRequestHeader(apiKey, apiVersion.getOrElse(request.version))
+    val serializedBytes = request.serialize(header).array
     val response = requestAndReceive(socket, serializedBytes)
+    skipResponseHeader(response)
+  }
 
+  /**
+    * Serializes and sends the requestStruct to the given api.
+    * A ByteBuffer containing the response (without the response header) is returned.
+    */
+  def sendStruct(requestStruct: Struct, apiKey: ApiKeys, socket: Socket, apiVersion: Short): ByteBuffer = {
+    val header = nextRequestHeader(apiKey, apiVersion)
+    val serializedBytes = AbstractRequestResponse.serialize(header.toStruct, requestStruct).array
+    val response = requestAndReceive(socket, serializedBytes)
+    skipResponseHeader(response)
+  }
+
+  protected def skipResponseHeader(response: Array[Byte]): ByteBuffer = {
     val responseBuffer = ByteBuffer.wrap(response)
-    ResponseHeader.parse(responseBuffer) // Parse the header to ensure its valid and move the buffer forward
+    // Parse the header to ensure its valid and move the buffer forward
+    ResponseHeader.parse(responseBuffer)
     responseBuffer
   }
+
+  def nextRequestHeader(apiKey: ApiKeys, apiVersion: Short): RequestHeader = {
+    correlationId += 1
+    new RequestHeader(apiKey, apiVersion, "client-id", correlationId)
+  }
+
 }

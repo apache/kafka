@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import org.apache.kafka.common.utils.Time
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
 
@@ -54,16 +55,16 @@ class DelayedOperationTest {
   @Test
   def testRequestExpiry() {
     val expiration = 20L
-    val start = System.currentTimeMillis
+    val start = Time.SYSTEM.hiResClockMs
     val r1 = new MockDelayedOperation(expiration)
     val r2 = new MockDelayedOperation(200000L)
     assertFalse("r1 not satisfied and hence watched", purgatory.tryCompleteElseWatch(r1, Array("test1")))
     assertFalse("r2 not satisfied and hence watched", purgatory.tryCompleteElseWatch(r2, Array("test2")))
     r1.awaitExpiration()
-    val elapsed = System.currentTimeMillis - start
-    assertTrue("r1 completed due to expiration", r1.isCompleted())
-    assertFalse("r2 hasn't completed", r2.isCompleted())
-    assertTrue("Time for expiration %d should at least %d".format(elapsed, expiration), elapsed >= expiration)
+    val elapsed = Time.SYSTEM.hiResClockMs - start
+    assertTrue("r1 completed due to expiration", r1.isCompleted)
+    assertFalse("r2 hasn't completed", r2.isCompleted)
+    assertTrue(s"Time for expiration $elapsed should at least $expiration", elapsed >= expiration)
   }
 
   @Test
@@ -75,28 +76,48 @@ class DelayedOperationTest {
     purgatory.tryCompleteElseWatch(r2, Array("test1", "test2"))
     purgatory.tryCompleteElseWatch(r3, Array("test1", "test2", "test3"))
 
-    assertEquals("Purgatory should have 3 total delayed operations", 3, purgatory.delayed())
-    assertEquals("Purgatory should have 6 watched elements", 6, purgatory.watched())
+    assertEquals("Purgatory should have 3 total delayed operations", 3, purgatory.delayed)
+    assertEquals("Purgatory should have 6 watched elements", 6, purgatory.watched)
 
     // complete the operations, it should immediately be purged from the delayed operation
     r2.completable = true
     r2.tryComplete()
-    assertEquals("Purgatory should have 2 total delayed operations instead of " + purgatory.delayed(), 2, purgatory.delayed())
+    assertEquals("Purgatory should have 2 total delayed operations instead of " + purgatory.delayed, 2, purgatory.delayed)
 
     r3.completable = true
     r3.tryComplete()
-    assertEquals("Purgatory should have 1 total delayed operations instead of " + purgatory.delayed(), 1, purgatory.delayed())
+    assertEquals("Purgatory should have 1 total delayed operations instead of " + purgatory.delayed, 1, purgatory.delayed)
 
     // checking a watch should purge the watch list
     purgatory.checkAndComplete("test1")
-    assertEquals("Purgatory should have 4 watched elements instead of " + purgatory.watched(), 4, purgatory.watched())
+    assertEquals("Purgatory should have 4 watched elements instead of " + purgatory.watched, 4, purgatory.watched)
 
     purgatory.checkAndComplete("test2")
-    assertEquals("Purgatory should have 2 watched elements instead of " + purgatory.watched(), 2, purgatory.watched())
+    assertEquals("Purgatory should have 2 watched elements instead of " + purgatory.watched, 2, purgatory.watched)
 
     purgatory.checkAndComplete("test3")
-    assertEquals("Purgatory should have 1 watched elements instead of " + purgatory.watched(), 1, purgatory.watched())
+    assertEquals("Purgatory should have 1 watched elements instead of " + purgatory.watched, 1, purgatory.watched)
   }
+
+  @Test
+  def shouldCancelForKeyReturningCancelledOperations() {
+    purgatory.tryCompleteElseWatch(new MockDelayedOperation(10000L), Seq("key"))
+    purgatory.tryCompleteElseWatch(new MockDelayedOperation(10000L), Seq("key"))
+    purgatory.tryCompleteElseWatch(new MockDelayedOperation(10000L), Seq("key2"))
+
+    val cancelledOperations = purgatory.cancelForKey("key")
+    assertEquals(2, cancelledOperations.size)
+    assertEquals(1, purgatory.delayed)
+    assertEquals(1, purgatory.watched)
+  }
+
+  @Test
+  def shouldReturnNilOperationsOnCancelForKeyWhenKeyDoesntExist() {
+    val cancelledOperations = purgatory.cancelForKey("key")
+    assertEquals(Nil, cancelledOperations)
+  }
+
+
 
   class MockDelayedOperation(delayMs: Long) extends DelayedOperation(delayMs) {
     var completable = false

@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -13,8 +13,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
+ */
 package org.apache.kafka.connect.data;
 
 import org.apache.kafka.connect.errors.DataException;
@@ -22,6 +21,7 @@ import org.apache.kafka.connect.errors.DataException;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -106,12 +106,13 @@ public class ConnectSchema implements Schema {
         this.doc = doc;
         this.parameters = parameters;
 
-        this.fields = fields;
-        if (this.fields != null && this.type == Type.STRUCT) {
-            this.fieldsByName = new HashMap<>();
-            for (Field field : fields)
+        if (this.type == Type.STRUCT) {
+            this.fields = fields == null ? Collections.<Field>emptyList() : fields;
+            this.fieldsByName = new HashMap<>(this.fields.size());
+            for (Field field : this.fields)
                 fieldsByName.put(field.name(), field);
         } else {
+            this.fields = null;
             this.fieldsByName = null;
         }
 
@@ -205,9 +206,14 @@ public class ConnectSchema implements Schema {
      * @param value value to test
      */
     public static void validateValue(Schema schema, Object value) {
+        validateValue(null, schema, value);
+    }
+
+    public static void validateValue(String name, Schema schema, Object value) {
         if (value == null) {
             if (!schema.isOptional())
-                throw new DataException("Invalid value: null used for required field");
+                throw new DataException("Invalid value: null used for required field: \"" + name
+                        + "\", schema type: " + schema.type());
             else
                 return;
         }
@@ -218,7 +224,9 @@ public class ConnectSchema implements Schema {
                 expectedClasses = SCHEMA_TYPE_CLASSES.get(schema.type());
 
         if (expectedClasses == null)
-            throw new DataException("Invalid Java object for schema type " + schema.type() + ": " + value.getClass());
+            throw new DataException("Invalid Java object for schema type " + schema.type()
+                    + ": " + value.getClass()
+                    + " for field: \"" + name + "\"");
 
         boolean foundMatch = false;
         for (Class<?> expectedClass : expectedClasses) {
@@ -228,7 +236,9 @@ public class ConnectSchema implements Schema {
             }
         }
         if (!foundMatch)
-            throw new DataException("Invalid Java object for schema type " + schema.type() + ": " + value.getClass());
+            throw new DataException("Invalid Java object for schema type " + schema.type()
+                    + ": " + value.getClass()
+                    + " for field: \"" + name + "\"");
 
         switch (schema.type()) {
             case STRUCT:
