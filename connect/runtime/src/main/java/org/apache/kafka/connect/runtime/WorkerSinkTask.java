@@ -726,10 +726,10 @@ class WorkerSinkTask extends WorkerTask {
                     long consumedOffset = consumedOffsetMeta.offset();
                     long committedOffset = committedOffsetMeta.offset();
                     long diff = consumedOffset - committedOffset;
-                    activeRecords += diff;
+                    // Connector tasks can return offsets, so make sure nothing wonky happens
+                    activeRecords += Math.max(diff, 0L);
                 }
             }
-            activeRecords = Math.max(activeRecords, 0L);
             sinkRecordActiveCount.record(activeRecords);
         }
 
