@@ -104,7 +104,7 @@ public class EosTestDriver extends SmokeTestUtil {
                                 // message == org.apache.kafka.common.errors.TimeoutException: Expiring 4 record(s) for data-0: 30004 ms has passed since last attempt plus backoff time
                                 final int expired = Integer.parseInt(exception.getMessage().split(" ")[2]);
                                 updateNumRecordsProduces(-expired);
-                            } catch (Exception ignore) {}
+                            } catch (Exception ignore) { }
                         }
                     }
                 }
@@ -225,7 +225,7 @@ public class EosTestDriver extends SmokeTestUtil {
             final long maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
             while (!adminClient.describeConsumerGroup(EosTestClient.APP_ID, 10000).consumers().get().isEmpty()) {
                 if (System.currentTimeMillis() > maxWaitTime) {
-                    throw new RuntimeException("Streams application not down after 60 seconds.");
+                    throw new RuntimeException("Streams application not down after " + (MAX_IDLE_TIME_MS / 1000) + " seconds.");
                 }
                 sleep(1000);
             }
@@ -312,7 +312,7 @@ public class EosTestDriver extends SmokeTestUtil {
             System.err.println("Pause partitions (ie, received all data): " + consumer.paused());
             System.err.println("Max received offset per partition: " + maxReceivedOffsetPerPartition);
             System.err.println("Max consumer position per partition: " + maxConsumerPositionPerPartition);
-            throw new RuntimeException("FAIL: did not receive all records after 60 sec idle time.");
+            throw new RuntimeException("FAIL: did not receive all records after " + (MAX_IDLE_TIME_MS / 1000) + " sec idle time.");
         }
 
         return recordPerTopicPerPartition;
@@ -612,7 +612,7 @@ public class EosTestDriver extends SmokeTestUtil {
             }
         }
         if (!partitions.isEmpty()) {
-            throw new RuntimeException("Could not read all verification records. Did not receive any new record within the last 30 sec.");
+            throw new RuntimeException("Could not read all verification records. Did not receive any new record within the last " + (MAX_IDLE_TIME_MS / 1000) + " sec.");
         }
     }
 
