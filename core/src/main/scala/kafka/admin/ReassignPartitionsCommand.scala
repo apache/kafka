@@ -88,7 +88,7 @@ object ReassignPartitionsCommand extends Logging {
 
   def verifyAssignment(zkUtils: ZkUtils, adminClientOpt: Option[JAdminClient], jsonString: String): Unit = {
     println("Status of partition reassignment: ")
-    val (partitionsToBeReassigned, replicaAssignment) = parsePartitionReassignmentData(jsonString)
+    val (partitionsToBeReassigned, replicaAssignment) = parsePartitionReassignmentString(jsonString)
     val reassignedPartitionsStatus = checkIfPartitionReassignmentSucceeded(zkUtils, partitionsToBeReassigned.toMap)
     val replicasReassignmentStatus = checkIfReplicaReassignmentSucceeded(adminClientOpt, replicaAssignment)
 
@@ -268,36 +268,58 @@ object ReassignPartitionsCommand extends Logging {
     }
   }
 
-  // Parses without deduplicating keys so the data can be checked before allowing reassignment to proceed
-  def parsePartitionReassignmentData(jsonData: String): (Seq[(TopicAndPartition, Seq[Int])], Map[TopicPartitionReplica, String]) = {
-    val partitionAssignment = mutable.ListBuffer.empty[(TopicAndPartition, Seq[Int])]
-    val replicaAssignment = mutable.Map.empty[TopicPartitionReplica, String]
-    for {
-      js <- Json.parseFull(jsonData).toSeq
-      partitionsSeq <- js.asJsonObject.get("partitions").toSeq
-      p <- partitionsSeq.asJsonArray.iterator
-    } {
-      val partitionFields = p.asJsonObject
-      val topic = partitionFields("topic").to[String]
-      val partition = partitionFields("partition").to[Int]
-      val newReplicas = partitionFields("replicas").to[Seq[Int]]
-      val newLogDirs = partitionFields.get("log_dirs") match {
-        case Some(jsonValue) => jsonValue.to[Seq[String]]
-        case None => newReplicas.map(r => AnyLogDir)
+  def parsePartitionReassignmentString(jsonData: String): (Seq[(TopicAndPartition, Seq[Int])], Map[TopicPartitionReplica, String]) = {
+    Json.parseFull(jsonData) match {
+      case Some(js) => {
+
+        val version = js.asJsonObject.get("version") match {
+          case Some(jsonValue) => jsonValue.to[Int]
+          case None => EarliestVersion
+        }
+
+        parsePartitionReassignmentData(version, js)
       }
-      if (newReplicas.size != newLogDirs.size)
-        throw new AdminCommandFailedException(s"Size of replicas list $newReplicas is different from " +
-          s"size of log dirs list $newLogDirs for partition ${TopicAndPartition(topic, partition)}")
-      partitionAssignment += (TopicAndPartition(topic, partition) -> newReplicas)
-      replicaAssignment ++= newReplicas.zip(newLogDirs).map { case (replica, logDir) =>
-        new TopicPartitionReplica(topic, partition, replica) -> logDir
-      }.filter(_._2 != AnyLogDir)
+      case None => throw new AdminOperationException("The input string is not a valid JSON")
     }
-    (partitionAssignment, replicaAssignment)
+  }
+
+  // Parses without deduplicating keys so the data can be checked before allowing reassignment to proceed
+  def parsePartitionReassignmentData(version: Int, js: JsonValue): (Seq[(TopicAndPartition, Seq[Int])], Map[TopicPartitionReplica, String]) = {
+    version match {
+      case 1 => {
+
+        val partitionAssignment = mutable.ListBuffer.empty[(TopicAndPartition, Seq[Int])]
+        val replicaAssignment = mutable.Map.empty[TopicPartitionReplica, String]
+        for {
+          partitionsSeq <- js.asJsonObject.get("partitions").toSeq
+          p <- partitionsSeq.asJsonArray.iterator
+        } {
+          val partitionFields = p.asJsonObject
+          val topic = partitionFields("topic").to[String]
+          val partition = partitionFields("partition").to[Int]
+          val newReplicas = partitionFields("replicas").to[Seq[Int]]
+          val newLogDirs = partitionFields.get("log_dirs") match {
+            case Some(jsonValue) => jsonValue.to[Seq[String]]
+            case None => newReplicas.map(r => AnyLogDir)
+          }
+          if (newReplicas.size != newLogDirs.size)
+            throw new AdminCommandFailedException(s"Size of replicas list $newReplicas is different from " +
+              s"size of log dirs list $newLogDirs for partition ${TopicAndPartition(topic, partition)}")
+          partitionAssignment += (TopicAndPartition(topic, partition) -> newReplicas)
+          replicaAssignment ++= newReplicas.zip(newLogDirs).map { case (replica, logDir) =>
+            new TopicPartitionReplica(topic, partition, replica) -> logDir
+          }.filter(_._2 != AnyLogDir)
+        }
+        (partitionAssignment, replicaAssignment)
+
+      }
+      case _ => throw new AdminOperationException(s"Not supported version field value $version")
+    }
+
   }
 
   def parseAndValidate(zkUtils: ZkUtils, reassignmentJsonString: String): (Seq[(TopicAndPartition, Seq[Int])], Map[TopicPartitionReplica, String]) = {
-    val (partitionsToBeReassigned, replicaAssignment) = parsePartitionReassignmentData(reassignmentJsonString)
+    val (partitionsToBeReassigned, replicaAssignment) = parsePartitionReassignmentString(reassignmentJsonString)
 
     if (partitionsToBeReassigned.isEmpty)
       throw new AdminCommandFailedException("Partition reassignment data file is empty")
