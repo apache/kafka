@@ -290,7 +290,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @param properties   The producer configs
      */
     public KafkaProducer(Properties properties) {
-        this(new ProducerConfig(properties), null, null);
+        this(new ProducerConfig(getFlattenedProperties(properties)), null, null);
     }
 
     /**
@@ -303,8 +303,21 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *                         be called in the producer when the serializer is passed in directly.
      */
     public KafkaProducer(Properties properties, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
-        this(new ProducerConfig(ProducerConfig.addSerializerToConfig(properties, keySerializer, valueSerializer)),
+        this(new ProducerConfig(ProducerConfig.addSerializerToConfig(getFlattenedProperties(properties), keySerializer, valueSerializer)),
                 keySerializer, valueSerializer);
+    }
+    
+    /**
+     * Returns a flattened Properties object
+     * @param properties - Java Properties object
+     */
+    private static Properties getFlattenedProperties(Properties properties) {
+        for (final String name: properties.stringPropertyNames()) {
+            if (properties.get(name) == null) {
+                properties.put(name, properties.getProperty(name));
+            }
+        }
+        return properties;
     }
 
     @SuppressWarnings("unchecked")

@@ -614,7 +614,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param properties The consumer configuration properties
      */
     public KafkaConsumer(Properties properties) {
-        this(properties, null, null);
+        this(getFlattenedProperties(properties), null, null);
     }
 
     /**
@@ -632,7 +632,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public KafkaConsumer(Properties properties,
                          Deserializer<K> keyDeserializer,
                          Deserializer<V> valueDeserializer) {
-        this(new ConsumerConfig(ConsumerConfig.addDeserializerToConfig(properties, keyDeserializer, valueDeserializer)),
+        this(new ConsumerConfig(ConsumerConfig.addDeserializerToConfig(getFlattenedProperties(properties), keyDeserializer, valueDeserializer)),
              keyDeserializer,
              valueDeserializer);
     }
@@ -1797,4 +1797,18 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         if (refcount.decrementAndGet() == 0)
             currentThread.set(NO_CURRENT_THREAD);
     }
+    
+     /**
+      * Returns a flattened Properties object
+      * @param properties - Java Properties object
+      */
+     private static Properties getFlattenedProperties(Properties properties) {
+        for (final String name: properties.stringPropertyNames()) {
+            if (properties.get(name) == null) {
+                properties.put(name, properties.getProperty(name));
+            }
+        }
+        return properties;         
+     }
+    
 }
