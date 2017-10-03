@@ -74,6 +74,7 @@
         will return <code>0.0</code> in such cases to minimise the probability of breaking users who read the value of every client
         metric (via a <code>MetricsReporter</code> implementation or by calling the <code>metrics()</code> method).
         <code>org.apache.kafka.common.Metric#metricValue()</code> can be used to retrieve numeric and non-numeric metric values.</li>
+    <li>Mx4j will now be enabled only if kafka_mx4jenable is explicitly configured to be true. Otherwise, mx4j will be disabled.</li>
 </ul>
 
 <h5><a id="upgrade_100_new_protocols" href="#upgrade_100_new_protocols">New Protocol Versions</a></h5>
