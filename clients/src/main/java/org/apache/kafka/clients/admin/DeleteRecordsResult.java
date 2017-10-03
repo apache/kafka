@@ -17,10 +17,20 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
+
+import java.util.Map;
 
 @InterfaceStability.Evolving
 public class DeleteRecordsResult {
+
+    private final Map<TopicPartition, KafkaFuture<Long>> futures;
+
+    DeleteRecordsResult(Map<TopicPartition, KafkaFuture<Long>> futures) {
+        this.futures = futures;
+    }
 
     // TODO
 }

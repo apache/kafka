@@ -79,6 +79,8 @@ import org.apache.kafka.common.requests.DeleteAclsRequest;
 import org.apache.kafka.common.requests.DeleteAclsResponse;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclDeletionResult;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
+import org.apache.kafka.common.requests.DeleteRecordsRequest;
+import org.apache.kafka.common.requests.DeleteRecordsResponse;
 import org.apache.kafka.common.requests.DeleteTopicsRequest;
 import org.apache.kafka.common.requests.DeleteTopicsResponse;
 import org.apache.kafka.common.requests.DescribeAclsRequest;
@@ -1878,8 +1880,53 @@ public class KafkaAdminClient extends AdminClient {
     public DeleteRecordsResult deleteRecords(Map<TopicPartition, Long> partitionsAndOffsets,
                                              final DeleteRecordsOptions options) {
 
-        // TODO
-        return null;
+        // requests need to be sent to partitions leader nodes so ...
+        // ... from the provided map it's needed to create more maps grouping topic/partition per leader
+
+        Map<Node, Map<TopicPartition, Long>> leaders = new HashMap<>();
+        for (Map.Entry<TopicPartition, Long> entry: partitionsAndOffsets.entrySet()) {
+
+            Node node = metadata.fetch().leaderFor(entry.getKey());
+            if (!leaders.containsKey(node))
+                leaders.put(node, new HashMap<TopicPartition, Long>());
+            leaders.get(node).put(entry.getKey(), entry.getValue());
+        }
+
+        final Map<TopicPartition, KafkaFutureImpl<Long>> futures = new HashMap<>(partitionsAndOffsets.size());
+        for (TopicPartition topicPartition: partitionsAndOffsets.keySet()) {
+            futures.put(topicPartition, new KafkaFutureImpl<Long>());
+        }
+
+        final long now = time.milliseconds();
+        for (final Map.Entry<Node, Map<TopicPartition, Long>> entry: leaders.entrySet()) {
+
+            final int brokerId = entry.getKey().id();
+            runnable.call(new Call("deleteRecords", calcDeadlineMs(now, options.timeoutMs()),
+                    new ConstantNodeIdProvider(brokerId)) {
+
+                @Override
+                AbstractRequest.Builder createRequest(int timeoutMs) {
+                    return new DeleteRecordsRequest.Builder(timeoutMs, entry.getValue());
+                }
+
+                @Override
+                void handleResponse(AbstractResponse abstractResponse) {
+                    DeleteRecordsResponse response = (DeleteRecordsResponse) abstractResponse;
+                    for (Map.Entry<TopicPartition, DeleteRecordsResponse.PartitionResponse> result: response.responses().entrySet()) {
+
+                        // TODO
+
+                    }
+                }
+
+                @Override
+                void handleFailure(Throwable throwable) {
+                    completeAllExceptionally(futures.values(), throwable);
+                }
+
+            }, now);
+        }
+        return new DeleteRecordsResult(new HashMap<TopicPartition, KafkaFuture<Long>>(futures));
     }
 
 }
