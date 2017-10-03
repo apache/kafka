@@ -1412,28 +1412,31 @@ class Log(@volatile var dir: File,
    * Truncate this log so that it ends with the greatest offset < targetOffset.
    *
    * @param targetOffset The offset to truncate to, an upper bound on all offsets in the log after truncation is complete.
+   * @return True iff targetOffset < logEndOffset
    */
-  private[log] def truncateTo(targetOffset: Long) {
+  private[log] def truncateTo(targetOffset: Long): Boolean = {
     maybeHandleIOException(s"Error while truncating log to offset $targetOffset for $topicPartition in dir ${dir.getParent}") {
       if (targetOffset < 0)
         throw new IllegalArgumentException("Cannot truncate to a negative offset (%d).".format(targetOffset))
       if (targetOffset >= logEndOffset) {
         info("Truncating %s to %d has no effect as the largest offset in the log is %d.".format(name, targetOffset, logEndOffset - 1))
-        return
-      }
-      info("Truncating log %s to offset %d.".format(name, targetOffset))
-      lock synchronized {
-        if (segments.firstEntry.getValue.baseOffset > targetOffset) {
-          truncateFullyAndStartAt(targetOffset)
-        } else {
-          val deletable = logSegments.filter(segment => segment.baseOffset > targetOffset)
-          deletable.foreach(deleteSegment)
-          activeSegment.truncateTo(targetOffset)
-          updateLogEndOffset(targetOffset)
-          this.recoveryPoint = math.min(targetOffset, this.recoveryPoint)
-          this.logStartOffset = math.min(targetOffset, this.logStartOffset)
-          leaderEpochCache.clearAndFlushLatest(targetOffset)
-          loadProducerState(targetOffset, reloadFromCleanShutdown = false)
+        false
+      } else {
+        info("Truncating log %s to offset %d.".format(name, targetOffset))
+        lock synchronized {
+          if (segments.firstEntry.getValue.baseOffset > targetOffset) {
+            truncateFullyAndStartAt(targetOffset)
+          } else {
+            val deletable = logSegments.filter(segment => segment.baseOffset > targetOffset)
+            deletable.foreach(deleteSegment)
+            activeSegment.truncateTo(targetOffset)
+            updateLogEndOffset(targetOffset)
+            this.recoveryPoint = math.min(targetOffset, this.recoveryPoint)
+            this.logStartOffset = math.min(targetOffset, this.logStartOffset)
+            leaderEpochCache.clearAndFlushLatest(targetOffset)
+            loadProducerState(targetOffset, reloadFromCleanShutdown = false)
+          }
+          true
         }
       }
     }
