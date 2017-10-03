@@ -59,38 +59,38 @@ public class JavaTest {
         Java.Version v = Java.parseVersion("9");
         assertEquals(9, v.majorVersion);
         assertEquals(0, v.minorVersion);
-        assertTrue(Java.isJava9Compatible(v));
-        assertTrue(Java.isJava8Compatible(v));
+        assertTrue(v.isJava9Compatible());
+        assertTrue(v.isJava8Compatible());
 
         v = Java.parseVersion("9.0.1");
         assertEquals(9, v.majorVersion);
         assertEquals(0, v.minorVersion);
-        assertTrue(Java.isJava9Compatible(v));
-        assertTrue(Java.isJava8Compatible(v));
+        assertTrue(v.isJava9Compatible());
+        assertTrue(v.isJava8Compatible());
 
         v = Java.parseVersion("9.0.0.15"); // Azul Zulu
         assertEquals(9, v.majorVersion);
         assertEquals(0, v.minorVersion);
-        assertTrue(Java.isJava9Compatible(v));
-        assertTrue(Java.isJava8Compatible(v));
+        assertTrue(v.isJava9Compatible());
+        assertTrue(v.isJava8Compatible());
 
         v = Java.parseVersion("9.1");
         assertEquals(9, v.majorVersion);
         assertEquals(1, v.minorVersion);
-        assertTrue(Java.isJava9Compatible(v));
-        assertTrue(Java.isJava8Compatible(v));
+        assertTrue(v.isJava9Compatible());
+        assertTrue(v.isJava8Compatible());
 
         v = Java.parseVersion("1.8.0_152");
         assertEquals(1, v.majorVersion);
         assertEquals(8, v.minorVersion);
-        assertFalse(Java.isJava9Compatible(v));
-        assertTrue(Java.isJava8Compatible(v));
+        assertFalse(v.isJava9Compatible());
+        assertTrue(v.isJava8Compatible());
 
         v = Java.parseVersion("1.7.0_80");
         assertEquals(1, v.majorVersion);
         assertEquals(7, v.minorVersion);
-        assertFalse(Java.isJava9Compatible(v));
-        assertFalse(Java.isJava8Compatible(v));
+        assertFalse(v.isJava9Compatible());
+        assertFalse(v.isJava8Compatible());
 
     }
 }

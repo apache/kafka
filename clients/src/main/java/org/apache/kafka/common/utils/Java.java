@@ -36,17 +36,9 @@ public final class Java {
         return new Version(majorVersion, minorVersion);
     }
 
-    static boolean isJava9Compatible(Version v) {
-        return v.majorVersion >= 9;
-    }
-
-    static boolean isJava8Compatible(Version v) {
-        return v.majorVersion > 1 || (v.majorVersion == 1 && v.minorVersion >= 8);
-    }
-
     // Having these as static final provides the best opportunity for compilar optimization
-    public static final boolean IS_JAVA9_COMPATIBLE = isJava9Compatible(VERSION);
-    public static final boolean IS_JAVA8_COMPATIBLE = isJava8Compatible(VERSION);
+    public static final boolean IS_JAVA9_COMPATIBLE = VERSION.isJava9Compatible();
+    public static final boolean IS_JAVA8_COMPATIBLE = VERSION.isJava8Compatible();
 
     public static boolean isIbmJdk() {
         return System.getProperty("java.vendor").contains("IBM");
@@ -66,6 +58,16 @@ public final class Java {
         public String toString() {
             return "Version(majorVersion=" + majorVersion +
                     ", minorVersion=" + minorVersion + ")";
+        }
+
+        // Package private for testing
+        boolean isJava9Compatible() {
+            return majorVersion >= 9;
+        }
+
+        // Package private for testing
+        boolean isJava8Compatible() {
+            return majorVersion > 1 || (majorVersion == 1 && minorVersion >= 8);
         }
     }
 
