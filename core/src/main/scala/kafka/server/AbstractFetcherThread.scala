@@ -258,7 +258,7 @@ abstract class AbstractFetcherThread(name: String,
     } finally partitionMapLock.unlock()
   }
 
-def addPartitions(partitionAndOffsets: Map[TopicPartition, Long]) {
+  def addPartitions(partitionAndOffsets: Map[TopicPartition, Long]) {
     partitionMapLock.lockInterruptibly()
     try {
       // If the partitionMap already has the topic/partition, then do not update the map with the old offset

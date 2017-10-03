@@ -517,14 +517,19 @@ class Partition(val topic: String,
     laggingReplicas
   }
 
-  def appendRecordsToFollower(records: MemoryRecords, isFuture: Boolean) {
+  def appendRecordsToFutureReplica(records: MemoryRecords) {
     // The read lock is needed to avoid race condition while ReplicaAlterDirThread is executing
     // maybeDeleteAndSwapFutureReplica() to replace follower replica with the future replica
     inReadLock(leaderIsrUpdateLock) {
-      if (isFuture)
-        getReplica(Request.FutureLocalReplicaId).get.log.get.appendAsFollower(records)
-      else
-        getReplica().get.log.get.appendAsFollower(records)
+      getReplica(Request.FutureLocalReplicaId).get.log.get.appendAsFollower(records)
+    }
+  }
+
+  def appendRecordsToFollower(records: MemoryRecords) {
+    // The read lock is needed to avoid race condition while ReplicaAlterDirThread is executing
+    // maybeDeleteAndSwapFutureReplica() to replace follower replica with the future replica
+    inReadLock(leaderIsrUpdateLock) {
+      getReplica().get.log.get.appendAsFollower(records)
     }
   }
 

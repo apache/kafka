@@ -726,53 +726,34 @@ class LogManager(logDirs: Seq[File],
       val sourceLog = currentLogs.get(topicPartition)
       val destLog = futureLogs.get(topicPartition)
 
-      var destRenamedForSwap = true
-      var sourceRenamedForDelete = true
-      var errorMsgOpt: Option[String] = None
+      if (sourceLog == null)
+        throw new KafkaStorageException(s"The current replica for $topicPartition in ${sourceLog.dir.getParent} is offline")
+      if (destLog == null)
+        throw new KafkaStorageException(s"The future replica for $topicPartition in ${destLog.dir.getParent} is offline")
 
-      if (sourceLog == null) {
-        destRenamedForSwap = false
-        sourceRenamedForDelete = false
-        errorMsgOpt = Some(s"The current replica for $topicPartition in ${sourceLog.dir.getParent} is offline")
-      } else if (destLog == null) {
-        destRenamedForSwap = false
-        sourceRenamedForDelete = false
-        errorMsgOpt = Some(s"The future replica for $topicPartition in ${destLog.dir.getParent} is offline")
-      } else if (!destLog.renameDir(Log.logDirName(topicPartition))) {
-        destRenamedForSwap = false
-        sourceRenamedForDelete = false
-        errorMsgOpt = Some(s"Failed to rename dir for partition $topicPartition in ${destLog.dir.getParent}")
-        logDirFailureChannel.maybeAddOfflineLogDir(destLog.dir.getParent, "", new IOException(errorMsgOpt.get))
-      } else if (!sourceLog.renameDir(Log.logDeleteDirName(topicPartition))) {
-        sourceRenamedForDelete = false
-        errorMsgOpt = Some(s"Failed to rename dir for partition $topicPartition in ${sourceLog.dir.getParent}")
-        logDirFailureChannel.maybeAddOfflineLogDir(sourceLog.dir.getParent, "", new IOException(errorMsgOpt.get))
+      destLog.renameDir(Log.logDirName(topicPartition))
+      // Now that future replica has been successfully renamed to be the current replica
+      // Update the cached map and log cleaner as appropriate.
+      futureLogs.remove(topicPartition)
+      currentLogs.put(topicPartition, destLog)
+      if (cleaner != null) {
+        cleaner.alterCheckpointDir(topicPartition, sourceLog.dir.getParentFile, destLog.dir.getParentFile)
+        cleaner.resumeCleaning(topicPartition)
       }
 
-      if (destRenamedForSwap) {
-        futureLogs.remove(topicPartition)
-        currentLogs.put(topicPartition, destLog)
+      // Close handlers of log files in the source log directory in advance before renaming source log for deletion
+      sourceLog.closeHandlers()
+      sourceLog.removeLogMetrics()
+      sourceLog.renameDir(Log.logDeleteDirName(topicPartition))
 
-        if (cleaner != null) {
-          cleaner.alterCheckpointDir(topicPartition, sourceLog.dir.getParentFile, destLog.dir.getParentFile)
-          cleaner.resumeCleaning(topicPartition)
-        }
+      // Now that replica in source log directory has been successfully renamed for deletion.
+      // Close the log, update checkpoint files, and enqueue this log to be deleted.
+      sourceLog.close()
+      checkpointLogRecoveryOffsetsInDir(sourceLog.dir.getParentFile)
+      checkpointLogStartOffsetsInDir(sourceLog.dir.getParentFile)
+      logsToBeDeleted.add(sourceLog)
 
-        if (sourceRenamedForDelete) {
-          sourceLog.close()
-          checkpointLogRecoveryOffsetsInDir(sourceLog.dir.getParentFile)
-          checkpointLogStartOffsetsInDir(sourceLog.dir.getParentFile)
-          logsToBeDeleted.add(sourceLog)
-        } else {
-          sourceLog.closeHandlers()
-          sourceLog.removeLogMetrics()
-        }
-      }
-
-      errorMsgOpt match {
-        case Some(errorMsg) => throw new KafkaStorageException(errorMsg)
-        case None => info(s"The current replica is successfully replaced with the future replica for $topicPartition")
-      }
+      info(s"The current replica is successfully replaced with the future replica for $topicPartition")
     }
   }
 
@@ -792,26 +773,16 @@ class LogManager(logDirs: Seq[File],
         currentLogs.remove(topicPartition)
     }
     if (removedLog != null) {
-      try {
-        //We need to wait until there is no more cleaning task on the log to be deleted before actually deleting it.
-        if (cleaner != null && !isFuture) {
-          cleaner.abortCleaning(topicPartition)
-          cleaner.updateCheckpoints(removedLog.dir.getParentFile)
-        }
-        if (removedLog.renameDir(Log.logDeleteDirName(topicPartition))) {
-          checkpointLogRecoveryOffsetsInDir(removedLog.dir.getParentFile)
-          checkpointLogStartOffsetsInDir(removedLog.dir.getParentFile)
-          logsToBeDeleted.add(removedLog)
-          info(s"Log for partition ${removedLog.topicPartition} is renamed to ${removedLog.dir.getAbsolutePath} and is scheduled for deletion")
-        } else {
-          throw new IOException(s"Failed to rename log directory from ${removedLog.dir.getAbsolutePath} to ${Log.logDeleteDirName(topicPartition)}")
-        }
-      } catch {
-        case e: IOException =>
-          val msg = s"Error while deleting $topicPartition in dir ${removedLog.dir.getParent}."
-          logDirFailureChannel.maybeAddOfflineLogDir(removedLog.dir.getParent, msg, e)
-          throw new KafkaStorageException(msg, e)
+      //We need to wait until there is no more cleaning task on the log to be deleted before actually deleting it.
+      if (cleaner != null && !isFuture) {
+        cleaner.abortCleaning(topicPartition)
+        cleaner.updateCheckpoints(removedLog.dir.getParentFile)
       }
+      removedLog.renameDir(Log.logDeleteDirName(topicPartition))
+      checkpointLogRecoveryOffsetsInDir(removedLog.dir.getParentFile)
+      checkpointLogStartOffsetsInDir(removedLog.dir.getParentFile)
+      logsToBeDeleted.add(removedLog)
+      info(s"Log for partition ${removedLog.topicPartition} is renamed to ${removedLog.dir.getAbsolutePath} and is scheduled for deletion")
     } else if (offlineLogDirs.nonEmpty) {
       throw new KafkaStorageException("Failed to delete log for " + topicPartition + " because it may be in one of the offline directories " + offlineLogDirs.mkString(","))
     }

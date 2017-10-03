@@ -283,7 +283,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
   }
 
   @Test
-  def testAlterReplicaLogDirsBeforeTopicCreation(): Unit = {
+  def testAlterReplicaLogDirs(): Unit = {
     val adminClient = AdminClient.create(createConfig())
     val topic = "topic"
     val tp = new TopicPartition(topic, 0)
