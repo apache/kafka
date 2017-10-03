@@ -27,7 +27,7 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResult;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
-import org.apache.kafka.clients.admin.DescribeReplicaLogDirResult.ReplicaLogDirInfo;
+import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
@@ -64,8 +64,8 @@ import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.AlterConfigsRequest;
 import org.apache.kafka.common.requests.AlterConfigsResponse;
-import org.apache.kafka.common.requests.AlterReplicaDirRequest;
-import org.apache.kafka.common.requests.AlterReplicaDirResponse;
+import org.apache.kafka.common.requests.AlterReplicaLogDirsRequest;
+import org.apache.kafka.common.requests.AlterReplicaLogDirsResponse;
 import org.apache.kafka.common.requests.CreatePartitionsRequest;
 import org.apache.kafka.common.requests.CreatePartitionsResponse;
 import org.apache.kafka.common.requests.ApiError;
@@ -1653,7 +1653,7 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public AlterReplicaDirResult alterReplicaDir(Map<TopicPartitionReplica, String> replicaAssignment, final AlterReplicaDirOptions options) {
+    public AlterReplicaLogDirsResult alterReplicaLogDirs(Map<TopicPartitionReplica, String> replicaAssignment, final AlterReplicaLogDirsOptions options) {
         final Map<TopicPartitionReplica, KafkaFutureImpl<Void>> futures = new HashMap<>(replicaAssignment.size());
 
         for (TopicPartitionReplica replica : replicaAssignment.keySet()) {
@@ -1677,17 +1677,17 @@ public class KafkaAdminClient extends AdminClient {
             final int brokerId = entry.getKey();
             final Map<TopicPartition, String> assignment = entry.getValue();
 
-            runnable.call(new Call("alterReplicaDir", calcDeadlineMs(now, options.timeoutMs()),
+            runnable.call(new Call("alterReplicaLogDirs", calcDeadlineMs(now, options.timeoutMs()),
                 new ConstantNodeIdProvider(brokerId)) {
 
                 @Override
                 public AbstractRequest.Builder createRequest(int timeoutMs) {
-                    return new AlterReplicaDirRequest.Builder(assignment);
+                    return new AlterReplicaLogDirsRequest.Builder(assignment);
                 }
 
                 @Override
                 public void handleResponse(AbstractResponse abstractResponse) {
-                    AlterReplicaDirResponse response = (AlterReplicaDirResponse) abstractResponse;
+                    AlterReplicaLogDirsResponse response = (AlterReplicaLogDirsResponse) abstractResponse;
                     for (Map.Entry<TopicPartition, Errors> responseEntry: response.responses().entrySet()) {
                         TopicPartition tp = responseEntry.getKey();
                         Errors error = responseEntry.getValue();
@@ -1710,7 +1710,7 @@ public class KafkaAdminClient extends AdminClient {
             }, now);
         }
 
-        return new AlterReplicaDirResult(new HashMap<TopicPartitionReplica, KafkaFuture<Void>>(futures));
+        return new AlterReplicaLogDirsResult(new HashMap<TopicPartitionReplica, KafkaFuture<Void>>(futures));
     }
 
     @Override
@@ -1754,11 +1754,11 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public DescribeReplicaLogDirResult describeReplicaLogDir(Collection<TopicPartitionReplica> replicas, DescribeReplicaLogDirOptions options) {
-        final Map<TopicPartitionReplica, KafkaFutureImpl<DescribeReplicaLogDirResult.ReplicaLogDirInfo>> futures = new HashMap<>(replicas.size());
+    public DescribeReplicaLogDirsResult describeReplicaLogDirs(Collection<TopicPartitionReplica> replicas, DescribeReplicaLogDirsOptions options) {
+        final Map<TopicPartitionReplica, KafkaFutureImpl<DescribeReplicaLogDirsResult.ReplicaLogDirInfo>> futures = new HashMap<>(replicas.size());
 
         for (TopicPartitionReplica replica : replicas) {
-            futures.put(replica, new KafkaFutureImpl<DescribeReplicaLogDirResult.ReplicaLogDirInfo>());
+            futures.put(replica, new KafkaFutureImpl<DescribeReplicaLogDirsResult.ReplicaLogDirInfo>());
         }
 
         Map<Integer, Set<TopicPartition>> partitionsByBroker = new HashMap<>();
@@ -1777,7 +1777,7 @@ public class KafkaAdminClient extends AdminClient {
             for (TopicPartition topicPartition: topicPartitions)
                 replicaDirInfoByPartition.put(topicPartition, new ReplicaLogDirInfo());
 
-            runnable.call(new Call("describeReplicaLogDir", calcDeadlineMs(now, options.timeoutMs()),
+            runnable.call(new Call("describeReplicaLogDirs", calcDeadlineMs(now, options.timeoutMs()),
                 new ConstantNodeIdProvider(brokerId)) {
 
                 @Override
@@ -1834,7 +1834,7 @@ public class KafkaAdminClient extends AdminClient {
             }, now);
         }
 
-        return new DescribeReplicaLogDirResult(new HashMap<TopicPartitionReplica, KafkaFuture<ReplicaLogDirInfo>>(futures));
+        return new DescribeReplicaLogDirsResult(new HashMap<TopicPartitionReplica, KafkaFuture<ReplicaLogDirInfo>>(futures));
     }
 
     public CreatePartitionsResult createPartitions(Map<String, NewPartitions> newPartitions,

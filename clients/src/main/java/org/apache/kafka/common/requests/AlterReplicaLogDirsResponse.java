@@ -38,7 +38,7 @@ import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 
 
-public class AlterReplicaDirResponse extends AbstractResponse {
+public class AlterReplicaLogDirsResponse extends AbstractResponse {
 
     // request level key names
     private static final String TOPICS_KEY_NAME = "topics";
@@ -46,7 +46,7 @@ public class AlterReplicaDirResponse extends AbstractResponse {
     // topic level key names
     private static final String PARTITIONS_KEY_NAME = "partitions";
 
-    private static final Schema ALTER_REPLICA_DIR_RESPONSE_V0 = new Schema(
+    private static final Schema ALTER_REPLICA_LOG_DIRS_RESPONSE_V0 = new Schema(
             THROTTLE_TIME_MS,
             new Field(TOPICS_KEY_NAME, new ArrayOf(new Schema(
                     TOPIC_NAME,
@@ -55,7 +55,7 @@ public class AlterReplicaDirResponse extends AbstractResponse {
                             ERROR_CODE)))))));
 
     public static Schema[] schemaVersions() {
-        return new Schema[]{ALTER_REPLICA_DIR_RESPONSE_V0};
+        return new Schema[]{ALTER_REPLICA_LOG_DIRS_RESPONSE_V0};
     }
 
     /**
@@ -69,7 +69,7 @@ public class AlterReplicaDirResponse extends AbstractResponse {
     private final Map<TopicPartition, Errors> responses;
     private final int throttleTimeMs;
 
-    public AlterReplicaDirResponse(Struct struct) {
+    public AlterReplicaLogDirsResponse(Struct struct) {
         throttleTimeMs = struct.get(THROTTLE_TIME_MS);
         responses = new HashMap<>();
         for (Object topicStructObj : struct.getArray(TOPICS_KEY_NAME)) {
@@ -87,14 +87,14 @@ public class AlterReplicaDirResponse extends AbstractResponse {
     /**
      * Constructor for version 0.
      */
-    public AlterReplicaDirResponse(int throttleTimeMs, Map<TopicPartition, Errors> responses) {
+    public AlterReplicaLogDirsResponse(int throttleTimeMs, Map<TopicPartition, Errors> responses) {
         this.throttleTimeMs = throttleTimeMs;
         this.responses = responses;
     }
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.ALTER_REPLICA_DIR.responseSchema(version));
+        Struct struct = new Struct(ApiKeys.ALTER_REPLICA_LOG_DIRS.responseSchema(version));
         struct.set(THROTTLE_TIME_MS, throttleTimeMs);
         Map<String, Map<Integer, Errors>> responsesByTopic = CollectionUtils.groupDataByTopic(responses);
         List<Struct> topicStructArray = new ArrayList<>();
@@ -129,7 +129,7 @@ public class AlterReplicaDirResponse extends AbstractResponse {
         return errorCounts(responses);
     }
 
-    public static AlterReplicaDirResponse parse(ByteBuffer buffer, short version) {
-        return new AlterReplicaDirResponse(ApiKeys.ALTER_REPLICA_DIR.responseSchema(version).read(buffer));
+    public static AlterReplicaLogDirsResponse parse(ByteBuffer buffer, short version) {
+        return new AlterReplicaLogDirsResponse(ApiKeys.ALTER_REPLICA_LOG_DIRS.responseSchema(version).read(buffer));
     }
 }

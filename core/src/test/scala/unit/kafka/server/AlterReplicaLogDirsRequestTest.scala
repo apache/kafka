@@ -29,7 +29,7 @@ import org.junit.Test
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
-class AlterReplicaDirRequestTest extends BaseRequestTest {
+class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
 
   override def numBrokers: Int = 1
   override def logDirCount: Int = 5
@@ -37,11 +37,11 @@ class AlterReplicaDirRequestTest extends BaseRequestTest {
   val topic = "topic"
 
   @Test
-  def testAlterReplicaDirRequestBeforeTopicCreation() {
+  def testAlterReplicaLogDirsRequestBeforeTopicCreation() {
     val partitionNum = 5
     val logDir = new File(servers.head.config.logDirs.head).getAbsolutePath
     val partitionDirs = (0 until partitionNum).map(partition => new TopicPartition(topic, partition) -> logDir).toMap
-    val alterReplicaDirResponse = sendAlterReplicaDirRequest(partitionDirs)
+    val alterReplicaDirResponse = sendAlterReplicaLogDirsRequest(partitionDirs)
 
     // The response should show error REPLICA_NOT_AVAILABLE for all partitions
     (0 until partitionNum).foreach { partition =>
@@ -57,7 +57,7 @@ class AlterReplicaDirRequestTest extends BaseRequestTest {
   }
 
   @Test
-  def testAlterReplicaDirRequestErrorCode(): Unit = {
+  def testAlterReplicaLogDirsRequestErrorCode(): Unit = {
     val validDir = new File(servers.head.config.logDirs.head).getAbsolutePath
     val offlineDir = new File(servers.head.config.logDirs.tail.head).getAbsolutePath
     servers.head.logDirFailureChannel.maybeAddOfflineLogDir(offlineDir, "", new java.io.IOException())
@@ -68,16 +68,16 @@ class AlterReplicaDirRequestTest extends BaseRequestTest {
     partitionDirs.put(new TopicPartition(topic, 1), validDir)
     partitionDirs.put(new TopicPartition(topic, 2), offlineDir)
 
-    val alterReplicaDirResponse = sendAlterReplicaDirRequest(partitionDirs.toMap)
+    val alterReplicaDirResponse = sendAlterReplicaLogDirsRequest(partitionDirs.toMap)
     assertEquals(Errors.LOG_DIR_NOT_FOUND, alterReplicaDirResponse.responses().get(new TopicPartition(topic, 0)))
     assertEquals(Errors.NONE, alterReplicaDirResponse.responses().get(new TopicPartition(topic, 1)))
     assertEquals(Errors.KAFKA_STORAGE_ERROR, alterReplicaDirResponse.responses().get(new TopicPartition(topic, 2)))
   }
 
-  private def sendAlterReplicaDirRequest(partitionDirs: Map[TopicPartition, String], socketServer: SocketServer = controllerSocketServer): AlterReplicaDirResponse = {
-    val request = new AlterReplicaDirRequest.Builder(partitionDirs.asJava).build()
-    val response = connectAndSend(request, ApiKeys.ALTER_REPLICA_DIR, socketServer)
-    AlterReplicaDirResponse.parse(response, request.version)
+  private def sendAlterReplicaLogDirsRequest(partitionDirs: Map[TopicPartition, String], socketServer: SocketServer = controllerSocketServer): AlterReplicaLogDirsResponse = {
+    val request = new AlterReplicaLogDirsRequest.Builder(partitionDirs.asJava).build()
+    val response = connectAndSend(request, ApiKeys.ALTER_REPLICA_LOG_DIRS, socketServer)
+    AlterReplicaLogDirsResponse.parse(response, request.version)
   }
 
 }

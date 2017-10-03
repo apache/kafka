@@ -18,14 +18,12 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
-import java.util.Collection;
+import java.util.Map;
 
 /**
- * Options for {@link AdminClient#describeReplicaLogDir(Collection<org.apache.kafka.common.TopicPartitionReplica>)}.
- *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * Options for {@link AdminClient#alterReplicaLogDirs(Map, AlterReplicaLogDirsOptions)}.
  */
 @InterfaceStability.Evolving
-public class DescribeReplicaLogDirOptions extends AbstractOptions<DescribeReplicaLogDirOptions> {
+public class AlterReplicaLogDirsOptions extends AbstractOptions<AlterReplicaLogDirsOptions> {
 
 }
