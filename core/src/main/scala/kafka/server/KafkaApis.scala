@@ -1453,7 +1453,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val (existingAndAuthorizedForDescribeTopics, nonExistingAndAuthorizedForDescribeTopics) = authorizedForDescribeTopics.partition {
-      case (topicPartition, _) =>metadataCache.contains(topicPartition.topic)
+      case (topicPartition, _) => metadataCache.contains(topicPartition.topic)
     }
 
     val (authorizedForDeleteTopics, unauthorizedForDeleteTopics) = existingAndAuthorizedForDescribeTopics.partition {
@@ -1967,11 +1967,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   private def configsAuthorizationApiError(session: RequestChannel.Session, resource: RResource): ApiError = {
     val error = resource.`type` match {
       case RResourceType.BROKER => Errors.CLUSTER_AUTHORIZATION_FAILED
-      case RResourceType.TOPIC =>
-        if (!authorize(session, Describe, new Resource(Topic, resource.name)) || metadataCache.contains(resource.name))
-          Errors.TOPIC_AUTHORIZATION_FAILED
-        else
-          Errors.UNKNOWN_TOPIC_OR_PARTITION
+      case RResourceType.TOPIC => Errors.TOPIC_AUTHORIZATION_FAILED
       case rt => throw new InvalidRequestException(s"Unexpected resource type $rt for resource ${resource.name}")
     }
     new ApiError(error, null)
