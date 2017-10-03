@@ -164,7 +164,7 @@ public enum ApiKeys {
             DescribeConfigsResponse.schemaVersions()),
     ALTER_CONFIGS(33, "AlterConfigs", AlterConfigsRequest.schemaVersions(),
             AlterConfigsResponse.schemaVersions()),
-    ALTER_REPLICA_LOG_DIRS(34, "AlterReplicaDirs", AlterReplicaLogDirsRequest.schemaVersions(),
+    ALTER_REPLICA_LOG_DIRS(34, "AlterReplicaLogDirs", AlterReplicaLogDirsRequest.schemaVersions(),
             AlterReplicaLogDirsResponse.schemaVersions()),
     DESCRIBE_LOG_DIRS(35, "DescribeLogDirs", DescribeLogDirsRequest.schemaVersions(),
             DescribeLogDirsResponse.schemaVersions()),
