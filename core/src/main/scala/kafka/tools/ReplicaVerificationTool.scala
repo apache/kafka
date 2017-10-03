@@ -22,17 +22,22 @@ import java.util.Date
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicReference
 import java.util.regex.{Pattern, PatternSyntaxException}
-
 import joptsimple.OptionParser
+
+import kafka.admin.AdminUtils
 import kafka.api._
 import kafka.client.ClientUtils
 import kafka.cluster.BrokerEndPoint
 import kafka.common.TopicAndPartition
-import kafka.consumer.{ConsumerConfig, SimpleConsumer, Whitelist}
+import kafka.consumer.{SimpleConsumer, Whitelist}
 import kafka.message.{ByteBufferMessageSet, MessageSet}
 import kafka.utils._
+
+import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.utils.Time
+
+import scala.collection.JavaConverters._
 
 /**
  *  For verifying the consistency among replicas.
@@ -74,7 +79,7 @@ object ReplicaVerificationTool extends Logging {
                          .withRequiredArg
                          .describedAs("bytes")
                          .ofType(classOf[java.lang.Integer])
-                         .defaultsTo(ConsumerConfig.FetchSize)
+                         .defaultsTo(ConsumerConfig.DEFAULT_FETCH_MAX_BYTES)
     val maxWaitMsOpt = parser.accepts("max-wait-ms", "The max amount of time each fetch request waits.")
                          .withRequiredArg
                          .describedAs("ms")
@@ -121,29 +126,23 @@ object ReplicaVerificationTool extends Logging {
     info("Getting topic metadata...")
     val brokerList = options.valueOf(brokerListOpt)
     ToolsUtils.validatePortOrDie(parser,brokerList)
-    val metadataTargetBrokers = ClientUtils.parseBrokerList(brokerList)
-    val topicsMetadataResponse = ClientUtils.fetchTopicMetadata(Set[String](), metadataTargetBrokers, clientId, maxWaitMs)
-    val brokerMap = topicsMetadataResponse.brokers.map(b => (b.id, b)).toMap
-    val filteredTopicMetadata = topicsMetadataResponse.topicsMetadata.filter(
-        topicMetadata => if (topicWhiteListFiler.isTopicAllowed(topicMetadata.topic, excludeInternalTopics = false))
-          true
-        else
-          false
-    )
+    val metadataTargetBrokers = BrokerEndPoint.parseBrokerList(brokerList)
+    val topicsMetadataResponse = ClientUtils.fetchMetadata(Set[String](), metadataTargetBrokers, Some(clientId), Some(maxWaitMs), false).topicMetadata.asScala
+    val brokerMap = topicsMetadataResponse.flatMap(_.partitionMetadata.asScala).map(m =>
+        (m.leader.id, BrokerEndPoint(m.leader.id, m.leader.host, m.leader.port))).toMap
+    val filteredTopicMetadata = topicsMetadataResponse.filter(m =>
+        topicWhiteListFiler.isTopicAllowed(m.topic, excludeInternalTopics = false))
 
     if (filteredTopicMetadata.isEmpty) {
       error("No topics found. " + topicWhiteListOpt + ", if specified, is either filtering out all topics or there is no topic.")
       Exit.exit(1)
     }
 
-    val topicPartitionReplicaList: Seq[TopicPartitionReplica] = filteredTopicMetadata.flatMap(
-      topicMetadataResponse =>
-        topicMetadataResponse.partitionsMetadata.flatMap(
-          partitionMetadata =>
-            partitionMetadata.replicas.map(broker =>
-              TopicPartitionReplica(topic = topicMetadataResponse.topic, partitionId = partitionMetadata.partitionId, replicaId = broker.id))
-        )
-    )
+    val topicPartitionReplicaList: Seq[TopicPartitionReplica] = filteredTopicMetadata.flatMap { metadata =>
+        metadata.partitionMetadata.asScala.flatMap(partitionMetadata =>
+            partitionMetadata.replicas.asScala.map(broker =>
+                TopicPartitionReplica(topic = metadata.topic, partitionId = partitionMetadata.partition, replicaId = broker.id)))
+    }.toSeq
     debug("Selected topic partitions: " + topicPartitionReplicaList)
     val topicAndPartitionsPerBroker: Map[Int, Seq[TopicAndPartition]] = topicPartitionReplicaList.groupBy(_.replicaId)
       .map { case (brokerId, partitions) =>
@@ -154,12 +153,12 @@ object ReplicaVerificationTool extends Logging {
           .map { case (topicAndPartition, replicaSet) => topicAndPartition -> replicaSet.size }
     debug("Expected replicas per topic partition: " + expectedReplicasPerTopicAndPartition)
     val leadersPerBroker: Map[Int, Seq[TopicAndPartition]] = filteredTopicMetadata.flatMap { topicMetadataResponse =>
-      topicMetadataResponse.partitionsMetadata.map { partitionMetadata =>
-        (TopicAndPartition(topicMetadataResponse.topic, partitionMetadata.partitionId), partitionMetadata.leader.get.id)
+        topicMetadataResponse.partitionMetadata.asScala.map { partitionMetadata =>
+            (TopicAndPartition(topicMetadataResponse.topic, partitionMetadata.partition), partitionMetadata.leader.id)
       }
     }.groupBy(_._2).mapValues(topicAndPartitionAndLeaderIds => topicAndPartitionAndLeaderIds.map { case (topicAndPartition, _) =>
        topicAndPartition
-     })
+     }.toSeq)
     debug("Leaders per broker: " + leadersPerBroker)
 
     val replicaBuffer = new ReplicaBuffer(expectedReplicasPerTopicAndPartition,

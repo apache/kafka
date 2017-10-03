@@ -16,20 +16,22 @@
  */
 package kafka.client
 
-import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
+import org.apache.kafka.clients.CommonClientConfigs
+import org.apache.kafka.clients.consumer.ConsumerConfig
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.MetadataResponse
 
-import scala.collection._
-import kafka.cluster._
+import kafka.admin.AdminClient
 import kafka.api._
-import kafka.producer._
-import kafka.common.{BrokerEndPointNotAvailableException, KafkaException}
-import kafka.utils.{CoreUtils, Logging}
-import java.util.Properties
-
-import util.Random
+import kafka.cluster._
+import kafka.common.KafkaException
 import kafka.network.BlockingChannel
-import kafka.utils.ZkUtils
+import kafka.producer._
+import kafka.utils.{Logging, ZkUtils}
+
 import java.io.IOException
+import java.util.Properties
+import util.Random
 
  /**
  * Helper functions common to clients (producer, consumer, or admin)
@@ -97,14 +99,27 @@ object ClientUtils extends Logging {
   }
 
   /**
-   * Parse a list of broker urls in the form host1:port1, host2:port2, ...
+   * Used to send a metadata request using AdminClient
+   * @param topics The topics for which the metadata needs to be fetched
+   * @param brokers The brokers in the cluster as configured on the producer through metadata.broker.list
+   * @param clientId The client's identifier
+   * @param autoCreateTopic Whether a missing topic in the request should be automatically created
+   * @return metadata response
    */
-  def parseBrokerList(brokerListStr: String): Seq[BrokerEndPoint] = {
-    val brokersStr = CoreUtils.parseCsvList(brokerListStr)
+  def fetchMetadata(topics: Set[String], brokers: Seq[BrokerEndPoint], clientId: Option[String] = None,
+                    timeout: Option[Int], autoCreateTopic: Boolean = true): MetadataResponse = {
+    var fetchMetaDataSucceeded: Boolean = false
+    var i: Int = 0
 
-    brokersStr.zipWithIndex.map { case (address, brokerId) =>
-      BrokerEndPoint.createBrokerEndPoint(brokerId, address)
-    }
+    val props = new Properties()
+    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokers.map(_.connectionString()).mkString(","))
+    if (clientId.nonEmpty)
+      props.put(ConsumerConfig.CLIENT_ID_CONFIG, clientId.get)
+    if (timeout.nonEmpty)
+      props.put(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, timeout.get.toString)
+    val adminClient = AdminClient.create(props)
+
+    adminClient.getTopicsMetadata(topics.toList, autoCreateTopic)
   }
 
   /**
@@ -114,7 +129,7 @@ object ClientUtils extends Logging {
     var channel: BlockingChannel = null
     var connected = false
     while (!connected) {
-      val allBrokers = getPlaintextBrokerEndPoints(zkUtils)
+      val allBrokers = BrokerEndPoint.getPlaintextBrokerEndPoints(zkUtils)
       Random.shuffle(allBrokers).find { broker =>
         trace("Connecting to broker %s:%d.".format(broker.host, broker.port))
         try {
@@ -137,79 +152,65 @@ object ClientUtils extends Logging {
   }
 
    /**
-    * Returns the first end point from each broker with the PLAINTEXT security protocol.
-    */
-  def getPlaintextBrokerEndPoints(zkUtils: ZkUtils): Seq[BrokerEndPoint] = {
-    zkUtils.getAllBrokersInCluster().map { broker =>
-      broker.endPoints.collectFirst {
-        case endPoint if endPoint.securityProtocol == SecurityProtocol.PLAINTEXT =>
-          new BrokerEndPoint(broker.id, endPoint.host, endPoint.port)
-      }.getOrElse(throw new BrokerEndPointNotAvailableException(s"End point with security protocol PLAINTEXT not found for broker ${broker.id}"))
-    }
-  }
-
-   /**
     * Creates a blocking channel to the offset manager of the given group
     */
-   def channelToOffsetManager(group: String, zkUtils: ZkUtils, socketTimeoutMs: Int = 3000, retryBackOffMs: Int = 1000) = {
-     var queryChannel = channelToAnyBroker(zkUtils)
+  def channelToOffsetManager(group: String, zkUtils: ZkUtils, socketTimeoutMs: Int = 3000, retryBackOffMs: Int = 1000) = {
+    var queryChannel = channelToAnyBroker(zkUtils)
+    var offsetManagerChannelOpt: Option[BlockingChannel] = None
 
-     var offsetManagerChannelOpt: Option[BlockingChannel] = None
+    while (offsetManagerChannelOpt.isEmpty) {
+      var coordinatorOpt: Option[BrokerEndPoint] = None
 
-     while (offsetManagerChannelOpt.isEmpty) {
+      while (coordinatorOpt.isEmpty) {
+        try {
+          if (!queryChannel.isConnected)
+            queryChannel = channelToAnyBroker(zkUtils)
+          debug("Querying %s:%d to locate offset manager for %s.".format(queryChannel.host, queryChannel.port, group))
+          queryChannel.send(GroupCoordinatorRequest(group))
+          val response = queryChannel.receive()
+          val consumerMetadataResponse =  GroupCoordinatorResponse.readFrom(response.payload())
+          debug("Consumer metadata response: " + consumerMetadataResponse.toString)
+          if (consumerMetadataResponse.error == Errors.NONE)
+            coordinatorOpt = consumerMetadataResponse.coordinatorOpt
+          else {
+            debug("Query to %s:%d to locate offset manager for %s failed - will retry in %d milliseconds."
+                 .format(queryChannel.host, queryChannel.port, group, retryBackOffMs))
+            Thread.sleep(retryBackOffMs)
+          }
+        }
+        catch {
+          case _: IOException =>
+            info("Failed to fetch consumer metadata from %s:%d.".format(queryChannel.host, queryChannel.port))
+            queryChannel.disconnect()
+        }
+      }
 
-       var coordinatorOpt: Option[BrokerEndPoint] = None
+      val coordinator = coordinatorOpt.get
+      if (coordinator.host == queryChannel.host && coordinator.port == queryChannel.port) {
+        offsetManagerChannelOpt = Some(queryChannel)
+      } else {
+        val connectString = "%s:%d".format(coordinator.host, coordinator.port)
+        var offsetManagerChannel: BlockingChannel = null
+        try {
+          debug("Connecting to offset manager %s.".format(connectString))
+          offsetManagerChannel = new BlockingChannel(coordinator.host, coordinator.port,
+                                                     BlockingChannel.UseDefaultBufferSize,
+                                                     BlockingChannel.UseDefaultBufferSize,
+                                                     socketTimeoutMs)
+          offsetManagerChannel.connect()
+          offsetManagerChannelOpt = Some(offsetManagerChannel)
+          queryChannel.disconnect()
+        }
+        catch {
+          case _: IOException => // offsets manager may have moved
+            info("Error while connecting to %s.".format(connectString))
+            if (offsetManagerChannel != null) offsetManagerChannel.disconnect()
+            Thread.sleep(retryBackOffMs)
+            offsetManagerChannelOpt = None // just in case someone decides to change shutdownChannel to not swallow exceptions
+        }
+      }
+    }
 
-       while (coordinatorOpt.isEmpty) {
-         try {
-           if (!queryChannel.isConnected)
-             queryChannel = channelToAnyBroker(zkUtils)
-           debug("Querying %s:%d to locate offset manager for %s.".format(queryChannel.host, queryChannel.port, group))
-           queryChannel.send(GroupCoordinatorRequest(group))
-           val response = queryChannel.receive()
-           val consumerMetadataResponse =  GroupCoordinatorResponse.readFrom(response.payload())
-           debug("Consumer metadata response: " + consumerMetadataResponse.toString)
-           if (consumerMetadataResponse.error == Errors.NONE)
-             coordinatorOpt = consumerMetadataResponse.coordinatorOpt
-           else {
-             debug("Query to %s:%d to locate offset manager for %s failed - will retry in %d milliseconds."
-                  .format(queryChannel.host, queryChannel.port, group, retryBackOffMs))
-             Thread.sleep(retryBackOffMs)
-           }
-         }
-         catch {
-           case _: IOException =>
-             info("Failed to fetch consumer metadata from %s:%d.".format(queryChannel.host, queryChannel.port))
-             queryChannel.disconnect()
-         }
-       }
-
-       val coordinator = coordinatorOpt.get
-       if (coordinator.host == queryChannel.host && coordinator.port == queryChannel.port) {
-         offsetManagerChannelOpt = Some(queryChannel)
-       } else {
-         val connectString = "%s:%d".format(coordinator.host, coordinator.port)
-         var offsetManagerChannel: BlockingChannel = null
-         try {
-           debug("Connecting to offset manager %s.".format(connectString))
-           offsetManagerChannel = new BlockingChannel(coordinator.host, coordinator.port,
-                                                      BlockingChannel.UseDefaultBufferSize,
-                                                      BlockingChannel.UseDefaultBufferSize,
-                                                      socketTimeoutMs)
-           offsetManagerChannel.connect()
-           offsetManagerChannelOpt = Some(offsetManagerChannel)
-           queryChannel.disconnect()
-         }
-         catch {
-           case _: IOException => // offsets manager may have moved
-             info("Error while connecting to %s.".format(connectString))
-             if (offsetManagerChannel != null) offsetManagerChannel.disconnect()
-             Thread.sleep(retryBackOffMs)
-             offsetManagerChannelOpt = None // just in case someone decides to change shutdownChannel to not swallow exceptions
-         }
-       }
-     }
-
-     offsetManagerChannelOpt.get
-   }
- }
+    offsetManagerChannelOpt.get
+  }
+}

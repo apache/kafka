@@ -17,20 +17,30 @@
 
 package kafka.admin
 
+import kafka.cluster.{Broker, BrokerEndPoint}
+import kafka.common.{BrokerEndPointNotAvailableException, TopicAlreadyMarkedForDeletionException}
 import kafka.log.LogConfig
 import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig}
 import kafka.utils._
 import kafka.utils.ZkUtils._
+
 import java.util.Random
 import java.util.Properties
 
-import kafka.common.TopicAlreadyMarkedForDeletionException
-import org.apache.kafka.common.errors.{BrokerNotAvailableException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidReplicationFactorException, InvalidTopicException, TopicExistsException, UnknownTopicOrPartitionException}
+import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.common.{KafkaException, Node, PartitionInfo}
+import org.apache.kafka.common.errors.{BrokerNotAvailableException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidReplicationFactorException, InvalidTopicException, LeaderNotAvailableException, ReplicaNotAvailableException, TopicExistsException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
+import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
+import org.apache.kafka.common.serialization.StringDeserializer
+import org.I0Itec.zkclient.exception.ZkNodeExistsException
 
 import collection.{Map, Set, mutable, _}
 import scala.collection.JavaConverters._
-import org.I0Itec.zkclient.exception.ZkNodeExistsException
-import org.apache.kafka.common.internals.Topic
+import scala.collection.mutable
+import scala.collection.mutable.ListBuffer
 
 trait AdminUtilities {
   def changeTopicConfig(zkUtils: ZkUtils, topic: String, configs: Properties)
@@ -677,6 +687,81 @@ object AdminUtils extends Logging with AdminUtilities {
     entityPaths(zkUtils, None)
       .flatMap(entity => entityPaths(zkUtils, Some(entity + '/' + childEntityType)))
       .map(entityPath => (entityPath, fetchEntityConfig(zkUtils, rootEntityType, entityPath))).toMap
+  }
+
+  def fetchTopicMetadata(topics: Set[String], brokers: Seq[BrokerEndPoint], properties: Properties)
+    : Map[String, List[PartitionInfo]] = {
+    val deserializer = (new StringDeserializer).getClass.getName
+    properties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, deserializer)
+    properties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, deserializer)
+
+    var fetchMetaDataSucceeded: Boolean = false
+    var i: Int = 0
+    var metadataResponse: Map[String, List[PartitionInfo]] = null
+    var t: Throwable = null
+    // shuffle the list of brokers before sending metadata requests so that most requests don't get routed to the
+    // same broker
+    val shuffledBrokers = scala.util.Random.shuffle(brokers)
+    while (i < shuffledBrokers.size && !fetchMetaDataSucceeded) {
+      properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, shuffledBrokers.map(_.connectionString).mkString(","))
+      val consumer = new KafkaConsumer(properties)
+      info("Fetching metadata from broker %s for topic(s) %s".format(shuffledBrokers(i), topics.size, topics))
+      try {
+        metadataResponse = consumer.listTopics().asScala.filterKeys(topics.isEmpty || topics.contains(_)).map {
+          case (topic, metadata) => (topic, metadata.asScala.toList)
+        }
+        fetchMetaDataSucceeded = true
+      }
+      catch {
+        case e: Throwable =>
+          warn("Fetching topic metadata for topics [%s] from broker [%s] failed".format(topics, shuffledBrokers(i).toString), e)
+          t = e
+      } finally {
+        i = i + 1
+        consumer.close()
+      }
+    }
+
+    if (!fetchMetaDataSucceeded) {
+      throw new KafkaException("fetching topic metadata for topics [%s] from broker [%s] failed".format(topics, shuffledBrokers), t)
+    } else {
+      debug("Successfully fetched metadata for %d topic(s) %s".format(topics.size, topics))
+    }
+
+    metadataResponse
+  }
+
+  def fetchTopicMetadata(topics: Set[String], brokers: Seq[BrokerEndPoint], clientId: String, timeoutMs: Int)
+    : Map[String, List[PartitionInfo]] = {
+    val props = new Properties()
+    props.put("metadata.broker.list", brokers.map(_.connectionString).mkString(","))
+    props.put("client.id", clientId)
+    props.put("request.timeout.ms", timeoutMs.toString)
+    val consumerProps = new Properties(props)
+    fetchTopicMetadata(topics, brokers, consumerProps)
+  }
+
+  /**
+    * Returns the first end point from each broker with the PLAINTEXT security protocol.
+    */
+  def getPlaintextBrokerEndPoints(zkUtils: ZkUtils): Seq[BrokerEndPoint] = {
+    zkUtils.getAllBrokersInCluster().map { broker =>
+      broker.endPoints.collectFirst {
+        case endPoint if endPoint.securityProtocol == SecurityProtocol.PLAINTEXT =>
+          new BrokerEndPoint(broker.id, endPoint.host, endPoint.port)
+      }.getOrElse(throw new BrokerEndPointNotAvailableException(s"End point with security protocol PLAINTEXT not found for broker ${broker.id}"))
+    }
+  }
+
+  /**
+   * Parse a list of broker urls in the form host1:port1, host2:port2, ...
+   */
+  def parseBrokerList(brokerListStr: String): Seq[BrokerEndPoint] = {
+    val brokersStr = CoreUtils.parseCsvList(brokerListStr)
+
+    brokersStr.zipWithIndex.map { case (address, brokerId) =>
+      BrokerEndPoint.createBrokerEndPoint(brokerId, address)
+    }
   }
 
   private def replicaIndex(firstReplicaIndex: Int, secondReplicaShift: Int, replicaIndex: Int, nBrokers: Int): Int = {

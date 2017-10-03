@@ -22,6 +22,7 @@ import kafka.admin.AdminClient.DeleteRecordsResult
 import kafka.common.KafkaException
 import kafka.coordinator.group.GroupOverview
 import kafka.utils.Logging
+
 import org.apache.kafka.clients._
 import org.apache.kafka.clients.consumer.internals.{ConsumerNetworkClient, ConsumerProtocol, RequestFuture, RequestFutureAdapter}
 import org.apache.kafka.common.config.ConfigDef.{Importance, Type}
@@ -33,6 +34,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion
 import org.apache.kafka.common.requests.DescribeGroupsResponse.GroupMetadata
+import org.apache.kafka.common.requests.MetadataResponse.TopicMetadata
 import org.apache.kafka.common.requests.OffsetFetchResponse
 import org.apache.kafka.common.utils.{LogContext, KafkaThread, Time, Utils}
 import org.apache.kafka.common.{Cluster, Node, TopicPartition}
@@ -164,6 +166,18 @@ class AdminClient(val time: Time,
     if (!errors.isEmpty)
       debug(s"Metadata request contained errors: $errors")
     response.cluster.nodes.asScala.toList
+  }
+
+  def getTopicsMetadata(topics: List[String], autoCreateTopic: Boolean = false): MetadataResponse = {
+    val request = topics match {
+      case List() => MetadataRequest.Builder.allTopics()
+      case topics => new MetadataRequest.Builder(topics.asJava, autoCreateTopic)
+    }
+    val response = sendAnyNode(ApiKeys.METADATA, request).asInstanceOf[MetadataResponse]
+    val errors = response.errors
+    if (!errors.isEmpty)
+      debug(s"Metadata request contained errors: $errors")
+    response
   }
 
   def listAllGroups(): Map[Node, List[GroupOverview]] = {

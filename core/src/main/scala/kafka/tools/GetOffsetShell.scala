@@ -18,13 +18,24 @@
  */
 package kafka.tools
 
-import kafka.consumer._
+import java.util.HashMap
+import java.lang.Long
+import java.util.Map
+import java.util.Properties
 import joptsimple._
+import scala.collection.JavaConverters._
+
+import kafka.admin.AdminUtils
 import kafka.api.{OffsetRequest, PartitionOffsetRequestInfo}
-import kafka.common.TopicAndPartition
 import kafka.client.ClientUtils
+import kafka.cluster.BrokerEndPoint
+import kafka.common.TopicAndPartition
 import kafka.utils.{CommandLineUtils, Exit, ToolsUtils}
 
+import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.common.{Node, PartitionInfo, TopicPartition}
+import org.apache.kafka.common.requests.MetadataResponse.TopicMetadata
+import org.apache.kafka.common.serialization.StringDeserializer
 
 object GetOffsetShell {
 
@@ -58,8 +69,8 @@ object GetOffsetShell {
                            .describedAs("ms")
                            .ofType(classOf[java.lang.Integer])
                            .defaultsTo(1000)
-                           
-   if(args.length == 0)
+
+    if(args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "An interactive shell for getting consumer offsets.")
 
     val options = parser.parse(args : _*)
@@ -69,41 +80,44 @@ object GetOffsetShell {
     val clientId = "GetOffsetShell"
     val brokerList = options.valueOf(brokerListOpt)
     ToolsUtils.validatePortOrDie(parser, brokerList)
-    val metadataTargetBrokers = ClientUtils.parseBrokerList(brokerList)
+    val metadataTargetBrokers = BrokerEndPoint.parseBrokerList(brokerList)
     val topic = options.valueOf(topicOpt)
     val partitionList = options.valueOf(partitionOpt)
     val time = options.valueOf(timeOpt).longValue
     val nOffsets = options.valueOf(nOffsetsOpt).intValue
     val maxWaitMs = options.valueOf(maxWaitMsOpt).intValue()
 
-    val topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic), metadataTargetBrokers, clientId, maxWaitMs).topicsMetadata
-    if(topicsMetadata.size != 1 || !topicsMetadata.head.topic.equals(topic)) {
-      System.err.println(("Error: no valid topic metadata for topic: %s, " + " probably the topic does not exist, run ").format(topic) +
-        "kafka-list-topic.sh to verify")
+    val topicMetadata: List[TopicMetadata] =
+            ClientUtils.fetchMetadata(Set(topic), metadataTargetBrokers, Some(clientId), Some(maxWaitMs), false).topicMetadata.asScala.filter(_.topic == topic).toList
+
+    if(topicMetadata.isEmpty) {
+      System.err.println(s"Error: no valid topic metadata for topic '$topic', probably the topic does not exist, run 'kafka-topics.sh --list' to verify")
       Exit.exit(1)
     }
-    val partitions =
-      if(partitionList == "") {
-        topicsMetadata.head.partitionsMetadata.map(_.partitionId)
-      } else {
-        partitionList.split(",").map(_.toInt).toSeq
-      }
-    partitions.foreach { partitionId =>
-      val partitionMetadataOpt = topicsMetadata.head.partitionsMetadata.find(_.partitionId == partitionId)
-      partitionMetadataOpt match {
-        case Some(metadata) =>
-          metadata.leader match {
-            case Some(leader) =>
-              val consumer = new SimpleConsumer(leader.host, leader.port, 10000, 100000, clientId)
-              val topicAndPartition = TopicAndPartition(topic, partitionId)
-              val request = OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(time, nOffsets)))
-              val offsets = consumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets
 
-              println("%s:%d:%s".format(topic, partitionId, offsets.mkString(",")))
-            case None => System.err.println("Error: partition %d does not have a leader. Skip getting offsets".format(partitionId))
-          }
-        case None => System.err.println("Error: partition %d does not exist".format(partitionId))
-      }
+    val groupedTopicMetadata = topicMetadata.flatMap(_.partitionMetadata.asScala).groupBy(_.leader)
+
+    val deserializer = (new StringDeserializer).getClass.getName
+    val properties = new Properties
+    properties.put(ConsumerConfig.CLIENT_ID_CONFIG, clientId)
+    properties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, deserializer)
+    properties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, deserializer)
+
+    groupedTopicMetadata.foreach {
+      case (null, metadata) =>
+        System.err.println(s"Error: These partitions do not have a leader: ${metadata.map(_.partition).mkString(", ")}. Skip getting offsets")
+      case (leader, metadata) =>
+        properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, leader.host + ":" + leader.port)
+        val consumer = new KafkaConsumer(properties)
+        val partitions = metadata.map(m => new TopicPartition(topic, m.partition))
+        val offsets: Map[TopicPartition, Long] = time match {
+          case -1 => consumer.endOffsets(partitions.asJava)
+          case -2 => consumer.beginningOffsets(partitions.asJava)
+          case _ => partitions.map(_ -> null).toMap[TopicPartition, Long].asJava
+        }
+        offsets.asScala.foreach {
+          offset => println(s"${offset._1.topic}:${offset._1.partition}:${offset._2}")
+        }
     }
   }
 }

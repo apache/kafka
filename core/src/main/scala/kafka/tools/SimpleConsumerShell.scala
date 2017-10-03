@@ -131,7 +131,7 @@ object SimpleConsumerShell extends Logging {
     info("Getting topic metadata...")
     val brokerList = options.valueOf(brokerListOpt)
     ToolsUtils.validatePortOrDie(parser,brokerList)
-    val metadataTargetBrokers = ClientUtils.parseBrokerList(brokerList)
+    val metadataTargetBrokers = BrokerEndPoint.parseBrokerList(brokerList)
     val topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic), metadataTargetBrokers, clientId, maxWaitMs).topicsMetadata
     if(topicsMetadata.size != 1 || !topicsMetadata.head.topic.equals(topic)) {
       System.err.println(("Error: no valid topic metadata for topic: %s, " + "what we get from server is only: %s").format(topic, topicsMetadata))

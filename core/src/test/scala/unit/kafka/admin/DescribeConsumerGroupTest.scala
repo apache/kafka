@@ -71,7 +71,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
   @Test
   @deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
-  def testDescribeNonExistingGroup() {
+  def testDescribeNonExistingGroupWithOldConsumer() {
     TestUtils.createOffsetsTopic(zkUtils, servers)
     createOldConsumer()
     val opts = new ConsumerGroupCommandOptions(Array("--zookeeper", zkConnect, "--describe", "--group", "missing.group"))
@@ -81,7 +81,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
   @Test
   @deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
-  def testDescribeExistingGroup() {
+  def testDescribeExistingGroupWithOldConsumer() {
     TestUtils.createOffsetsTopic(zkUtils, servers)
     createOldConsumer()
     val opts = new ConsumerGroupCommandOptions(Array("--zookeeper", zkConnect, "--describe", "--group", group))
@@ -96,7 +96,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
   @Test
   @deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
-  def testDescribeExistingGroupWithNoMembers() {
+  def testDescribeExistingGroupWithNoMembersWithOldConsumer() {
     TestUtils.createOffsetsTopic(zkUtils, servers)
     createOldConsumer()
     val opts = new ConsumerGroupCommandOptions(Array("--zookeeper", zkConnect, "--describe", "--group", group))
@@ -120,7 +120,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
   @Test
   @deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
-  def testDescribeConsumersWithNoAssignedPartitions() {
+  def testDescribeConsumersWithNoAssignedPartitionsWithOldConsumer() {
     TestUtils.createOffsetsTopic(zkUtils, servers)
     createOldConsumer()
     createOldConsumer()
@@ -136,7 +136,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testDescribeNonExistingGroupWithNewConsumer() {
+  def testDescribeNonExistingGroup() {
     TestUtils.createOffsetsTopic(zkUtils, servers)
     // run one consumer in the group consuming from a single-partition topic
     consumerGroupExecutor = new ConsumerGroupExecutor(brokerList, 1, group, topic)
@@ -151,7 +151,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testDescribeExistingGroupWithNewConsumer() {
+  def testDescribeExistingGroup() {
     TestUtils.createOffsetsTopic(zkUtils, servers)
     // run one consumer in the group consuming from a single-partition topic
     consumerGroupExecutor = new ConsumerGroupExecutor(brokerList, 1, group, topic)
@@ -172,7 +172,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testDescribeExistingGroupWithNoMembersWithNewConsumer() {
+  def testDescribeExistingGroupWithNoMembers() {
     TestUtils.createOffsetsTopic(zkUtils, servers)
     // run one consumer in the group consuming from a single-partition topic
     consumerGroupExecutor = new ConsumerGroupExecutor(brokerList, 1, group, topic)
@@ -211,7 +211,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testDescribeConsumersWithNoAssignedPartitionsWithNewConsumer() {
+  def testDescribeConsumersWithNoAssignedPartitions() {
     TestUtils.createOffsetsTopic(zkUtils, servers)
     // run two consumers in the group consuming from a single-partition topic
     consumerGroupExecutor = new ConsumerGroupExecutor(brokerList, 2, group, topic)
@@ -231,7 +231,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testDescribeWithMultiPartitionTopicAndMultipleConsumersWithNewConsumer() {
+  def testDescribeWithMultiPartitionTopicAndMultipleConsumers() {
     TestUtils.createOffsetsTopic(zkUtils, servers)
     val topic2 = "foo2"
     AdminUtils.createTopic(zkUtils, topic2, 2, 1)
@@ -254,7 +254,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testDescribeGroupWithNewConsumerWithShortInitializationTimeout() {
+  def testDescribeGroupWithShortInitializationTimeout() {
     // Let creation of the offsets topic happen during group initialisation to ensure that initialization doesn't
     // complete before the timeout expires
 

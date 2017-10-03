@@ -19,10 +19,12 @@ package kafka.producer
 import org.apache.kafka.common.protocol.Errors
 
 import collection.mutable.HashMap
+
 import kafka.api.TopicMetadata
+import kafka.client.ClientUtils
+import kafka.cluster.BrokerEndPoint
 import kafka.common.KafkaException
 import kafka.utils.Logging
-import kafka.client.ClientUtils
 
 @deprecated("This class has been deprecated and will be removed in a future release.", "0.10.0.0")
 class BrokerPartitionInfo(producerConfig: ProducerConfig,
@@ -30,7 +32,7 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
                           topicPartitionInfo: HashMap[String, TopicMetadata])
         extends Logging {
   val brokerList = producerConfig.brokerList
-  val brokers = ClientUtils.parseBrokerList(brokerList)
+  val brokers = BrokerEndPoint.parseBrokerList(brokerList)
 
   /**
    * Return a sequence of (brokerId, numPartitions).
