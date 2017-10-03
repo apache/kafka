@@ -265,16 +265,22 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseMaybeThrottle(request, requestThrottleMs => new OffsetCommitResponse(requestThrottleMs, results.asJava))
     } else {
 
-      val (authorizedForDescribeTopics, unauthorizedForDescribeTopics) = offsetCommitRequest.offsetData.asScala.toMap.partition {
-        case (topicPartition, _) => authorize(request.session, Describe, new Resource(Topic, topicPartition.topic))
-      }
+      var unauthorizedForDescribeTopics = mutable.Map[TopicPartition, OffsetCommitRequest.PartitionData]()
+      var nonExistingAndAuthorizedForDescribeTopics = mutable.Map[TopicPartition, OffsetCommitRequest.PartitionData]()
+      var unauthorizedForReadTopics = mutable.Map[TopicPartition, OffsetCommitRequest.PartitionData]()
+      var authorizedTopics = mutable.Map[TopicPartition, OffsetCommitRequest.PartitionData]()
 
-      val (existingAndAuthorizedForDescribeTopics, nonExistingAndAuthorizedForDescribeTopics) = authorizedForDescribeTopics.partition {
-        case (topicPartition, _) => metadataCache.contains(topicPartition.topic)
-      }
-
-      val (authorizedTopics, unauthorizedForReadTopics) = existingAndAuthorizedForDescribeTopics.partition {
-        case (topicPartition, _) => authorize(request.session, Read, new Resource(Topic, topicPartition.topic))
+      for ((topicPartition, partitionData) <- offsetCommitRequest.offsetData.asScala.toMap) {
+        if (authorize(request.session, Describe, new Resource(Topic, topicPartition.topic)))
+          if (metadataCache.contains(topicPartition.topic))
+            if (authorize(request.session, Read, new Resource(Topic, topicPartition.topic)))
+              authorizedTopics += (topicPartition -> partitionData)
+            else
+              unauthorizedForReadTopics += (topicPartition -> partitionData)
+          else
+            nonExistingAndAuthorizedForDescribeTopics += (topicPartition -> partitionData)
+        else
+          unauthorizedForDescribeTopics += (topicPartition -> partitionData)
       }
 
       // the callback for sending an offset commit response
@@ -313,7 +319,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               case e: Throwable => (topicPartition, Errors.forException(e))
             }
         }
-        sendResponseCallback(responseInfo)
+        sendResponseCallback(responseInfo.toMap)
       } else {
         // for version 1 and beyond store offsets in offset manager
 
@@ -353,7 +359,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           offsetCommitRequest.groupId,
           offsetCommitRequest.memberId,
           offsetCommitRequest.generationId,
-          partitionData,
+          partitionData.toMap,
           sendResponseCallback)
       }
     }
