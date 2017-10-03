@@ -23,6 +23,7 @@ import java.util.concurrent.TimeUnit
 import com.yammer.metrics.core.Meter
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.Pool
+
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
@@ -53,11 +54,8 @@ case class ProduceMetadata(produceRequiredAcks: Short,
 class DelayedProduce(delayMs: Long,
                      produceMetadata: ProduceMetadata,
                      replicaManager: ReplicaManager,
-                     responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
-                     lockOpt: Option[Object] = None)
+                     responseCallback: Map[TopicPartition, PartitionResponse] => Unit)
   extends DelayedOperation(delayMs) {
-
-  val lock = lockOpt.getOrElse(this)
 
   // first update the acks pending variable according to the error code
   produceMetadata.produceStatus.foreach { case (topicPartition, status) =>
@@ -71,11 +69,6 @@ class DelayedProduce(delayMs: Long,
 
     trace("Initial partition status for %s is %s".format(topicPartition, status))
   }
-
-  override def safeTryComplete(): Boolean = lock synchronized {
-    tryComplete()
-  }
-
 
   /**
    * The delayed produce operation can be completed if every partition

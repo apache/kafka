@@ -19,11 +19,11 @@ package kafka.server
 
 import java.util.concurrent._
 import java.util.concurrent.atomic._
-import java.util.concurrent.locks.ReentrantReadWriteLock
+import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
 
 import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaMetricsGroup
-import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
+import kafka.utils.CoreUtils.{inLock, inReadLock, inWriteLock}
 import kafka.utils._
 import kafka.utils.timer._
 
@@ -46,6 +46,11 @@ import scala.collection.mutable.ListBuffer
 abstract class DelayedOperation(override val delayMs: Long) extends TimerTask with Logging {
 
   private val completed = new AtomicBoolean(false)
+  protected var lock: ReentrantLock = null
+
+  def createLock(): Unit = {
+    lock = new ReentrantLock
+  }
 
   /*
    * Force completing the delayed operation, if not already completed.
@@ -96,13 +101,18 @@ abstract class DelayedOperation(override val delayMs: Long) extends TimerTask wi
   def tryComplete(): Boolean
 
   /**
-   * Thread-safe variant of tryComplete(). This can be overridden if the operation provides its
-   * own synchronization.
+   * Thread-safe variant of tryComplete() that attempts completion only if the lock can be acquired
+   * without blocking.
    */
   def safeTryComplete(): Boolean = {
-    synchronized {
-      tryComplete()
-    }
+    if (lock.tryLock()) {
+      try {
+        tryComplete()
+      } finally {
+        lock.unlock()
+      }
+    } else
+      false
   }
 
   /*
@@ -196,9 +206,14 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
     // operation is unnecessarily added for watch. However, this is a less severe issue since the
     // expire reaper will clean it up periodically.
 
-    var isCompletedByMe = operation.safeTryComplete()
+    // At this point the only thread that can attempt this operation is this current thread
+    // Hence it is safe to tryComplete() without a lock
+    var isCompletedByMe = operation.tryComplete()
     if (isCompletedByMe)
       return true
+
+    // Create a lock before adding to watch since multiple threads may attempt to complete
+    operation.createLock()
 
     var watchCreated = false
     for(key <- watchKeys) {
