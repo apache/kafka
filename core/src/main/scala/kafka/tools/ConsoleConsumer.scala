@@ -462,14 +462,15 @@ object ConsoleConsumer extends Logging {
 
     // if the group id is provided in more than place (through different means) all values must be the same
     val groupIdsProvided = Set(
-        options.valueOf(groupIdOpt),                           // via --group
-        consumerProps.get(ConsumerConfig.GROUP_ID_CONFIG),     // via --consumer-property
-        extraConsumerProps.get(ConsumerConfig.GROUP_ID_CONFIG) // via --cosumer.config
-      ).filter(_ != null)
+        Option(options.valueOf(groupIdOpt)),                           // via --group
+        Option(consumerProps.get(ConsumerConfig.GROUP_ID_CONFIG)),     // via --consumer-property
+        Option(extraConsumerProps.get(ConsumerConfig.GROUP_ID_CONFIG)) // via --cosumer.config
+      ).flatten
 
     if (groupIdsProvided.size > 1) {
       CommandLineUtils.printUsageAndDie(parser, "The group ids provided in different places (directly using '--group', "
-                                              + "via '--consumer-property', or via '--consumer.config') do not match.")
+                                              + "via '--consumer-property', or via '--consumer.config') do not match. "
+                                              + s"Detected group ids: ${groupIdsProvided.mkString("'", "', '", "'")}")
     }
 
     groupIdsProvided.headOption match {
