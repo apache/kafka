@@ -139,6 +139,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
     this.synchronized {
       acceptors.values.foreach(_.shutdown)
       processors.foreach(_.shutdown)
+      requestChannel.shutdown()
     }
     info("Shutdown completed")
   }
@@ -549,7 +550,7 @@ private[kafka] class Processor(val id: Int,
             val context = new RequestContext(header, receive.source, channel.socketAddress,
               channel.principal, listenerName, securityProtocol)
             val req = new RequestChannel.Request(processor = id, context = context,
-              startTimeNanos = time.nanoseconds, memoryPool, receive.payload)
+              startTimeNanos = time.nanoseconds, memoryPool, receive.payload, requestChannel.metrics)
             requestChannel.sendRequest(req)
             selector.mute(receive.source)
           case None =>

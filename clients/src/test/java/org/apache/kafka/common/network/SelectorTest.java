@@ -506,7 +506,7 @@ public class SelectorTest {
         // record void method invocations
         kafkaChannel.disconnect();
         kafkaChannel.close();
-        expect(kafkaChannel.ready()).andReturn(false);
+        expect(kafkaChannel.ready()).andReturn(false).anyTimes();
         // prepare throws an exception
         kafkaChannel.prepare();
         expectLastCall().andThrow(new IOException());

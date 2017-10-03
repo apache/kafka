@@ -74,7 +74,7 @@ public class Frequencies extends SampledStat implements CompoundStat {
      * Create a Frequencies that captures the values in the specified range into the given number of buckets,
      * where the buckets are centered around the minimum, maximum, and intermediate values.
      *
-     * @param buckets     the number of buckets
+     * @param buckets     the number of buckets; must be at least 1
      * @param min         the minimum value to be captured
      * @param max         the maximum value to be captured
      * @param frequencies the list of {@link Frequency} metrics, which at most should be one per bucket centered
@@ -90,7 +90,7 @@ public class Frequencies extends SampledStat implements CompoundStat {
                                                        + " must be greater than the minimum value " + min);
         }
         if (buckets < 1) {
-            throw new IllegalArgumentException("Must be at least 2 buckets");
+            throw new IllegalArgumentException("Must be at least 1 bucket");
         }
         if (buckets < frequencies.length) {
             throw new IllegalArgumentException("More frequencies than buckets");

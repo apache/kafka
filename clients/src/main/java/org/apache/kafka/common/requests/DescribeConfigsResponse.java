@@ -21,6 +21,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -173,6 +174,14 @@ public class DescribeConfigsResponse extends AbstractResponse {
 
     public int throttleTimeMs() {
         return throttleTimeMs;
+    }
+
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        Map<Errors, Integer> errorCounts = new HashMap<>();
+        for (Config response : configs.values())
+            updateErrorCounts(errorCounts, response.error.error());
+        return errorCounts;
     }
 
     @Override

@@ -87,6 +87,11 @@ public class LeaderAndIsrResponse extends AbstractResponse {
         return error;
     }
 
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        return errorCounts(error);
+    }
+
     public static LeaderAndIsrResponse parse(ByteBuffer buffer, short version) {
         return new LeaderAndIsrResponse(ApiKeys.LEADER_AND_ISR.parseResponse(version, buffer));
     }

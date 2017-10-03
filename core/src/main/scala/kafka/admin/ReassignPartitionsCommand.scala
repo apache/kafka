@@ -30,10 +30,10 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.TopicPartitionReplica
 import org.apache.kafka.common.errors.{LogDirNotFoundException, ReplicaNotAvailableException}
-import org.apache.kafka.clients.admin.{AdminClientConfig, AlterReplicaDirOptions, AdminClient => JAdminClient}
+import org.apache.kafka.clients.admin.{AdminClientConfig, AlterReplicaLogDirsOptions, DescribeReplicaLogDirsResult, AdminClient => JAdminClient}
 import LogConfig._
 import joptsimple.OptionParser
-import org.apache.kafka.clients.admin.DescribeReplicaLogDirResult.ReplicaLogDirInfo
+import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo
 
 object ReassignPartitionsCommand extends Logging {
 
@@ -320,7 +320,7 @@ object ReassignPartitionsCommand extends Logging {
       if (replicaAssignment.nonEmpty) {
         val adminClient = adminClientOpt.getOrElse(
           throw new AdminCommandFailedException("bootstrap-server needs to be provided in order to reassign replica to the specified log directory"))
-        adminClient.describeReplicaLogDir(replicaAssignment.keySet.asJava).all().get().asScala
+        adminClient.describeReplicaLogDirs(replicaAssignment.keySet.asJava).all().get().asScala
       } else {
         Map.empty[TopicPartitionReplica, ReplicaLogDirInfo]
       }
@@ -551,14 +551,14 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils,
       if (validPartitions.isEmpty) false
       else {
         if (proposedReplicaAssignment.nonEmpty) {
-          // Send AlterReplicaDirRequest to allow broker to create replica in the right log dir later if the replica
+          // Send AlterReplicaLogDirsRequest to allow broker to create replica in the right log dir later if the replica
           // has not been created it. This allows us to rebalance load across log directories in the cluster even if
           // we can not move replicas between log directories on the same broker. We will be able to move replicas
           // between log directories on the same broker after KIP-113 is implemented.
           val adminClient = adminClientOpt.getOrElse(
             throw new AdminCommandFailedException("bootstrap-server needs to be provided in order to reassign replica to the specified log directory"))
-          val alterReplicaDirResult = adminClient.alterReplicaDir(
-            proposedReplicaAssignment.asJava, new AlterReplicaDirOptions().timeoutMs(timeoutMs.toInt))
+          val alterReplicaDirResult = adminClient.alterReplicaLogDirs(
+            proposedReplicaAssignment.asJava, new AlterReplicaLogDirsOptions().timeoutMs(timeoutMs.toInt))
           alterReplicaDirResult.values().asScala.foreach { case (replica, future) => {
               try {
                 /*
@@ -568,7 +568,7 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils,
                  * for this replica.
                  *
                  * After KIP-113 is fully implemented, we will not need to verify that the broker returns this ReplicaNotAvailableException
-                 * in this step. And after the reassignment znode is created, we will need to re-send AlterReplicaDirRequest to broker
+                 * in this step. And after the reassignment znode is created, we will need to re-send AlterReplicaLogDirsRequest to broker
                  * if broker returns ReplicaNotAvailableException for any replica in the request.
                  */
                 future.get()
