@@ -38,10 +38,10 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
     }
 
     public String storeName() {
-        if (storeName != null) {
-            return storeName;
+        if (storeSupplier != null) {
+            return storeSupplier.name();
         }
-        return storeSupplier.name();
+        return storeName;
     }
 
     public StoreSupplier<S> storeSupplier() {

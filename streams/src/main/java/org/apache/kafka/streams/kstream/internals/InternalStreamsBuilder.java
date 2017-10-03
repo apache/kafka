@@ -33,7 +33,7 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
-public class InternalStreamsBuilder {
+public class InternalStreamsBuilder implements InternalNameProvider {
 
     final InternalTopologyBuilder internalTopologyBuilder;
 
@@ -94,7 +94,8 @@ public class InternalStreamsBuilder {
     public <K, V> KTable<K, V> table(final String topic,
                                      final ConsumedInternal<K, V> consumed,
                                      final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
-        final StoreBuilder<KeyValueStore<K, V>> storeBuilder = new KeyValueStoreMaterializer<>(materialized).materialize();
+        final StoreBuilder<KeyValueStore<K, V>> storeBuilder = new KeyValueStoreMaterializer<>(materialized, this)
+                .materialize(KTableImpl.SOURCE_NAME);
 
         final String source = newName(KStreamImpl.SOURCE_NAME);
         final String name = newName(KTableImpl.SOURCE_NAME);
@@ -139,7 +140,7 @@ public class InternalStreamsBuilder {
         Objects.requireNonNull(materialized, "materialized can't be null");
         // explicitly disable logging for global stores
         materialized.withLoggingDisabled();
-        final StoreBuilder storeBuilder = new KeyValueStoreMaterializer<>(materialized).materialize();
+        final StoreBuilder storeBuilder = new KeyValueStoreMaterializer<>(materialized, this).materialize(KTableImpl.SOURCE_NAME);
         final String sourceName = newName(KStreamImpl.SOURCE_NAME);
         final String processorName = newName(KTableImpl.SOURCE_NAME);
         final KTableSource<K, V> tableSource = new KTableSource<>(storeBuilder.name());
@@ -159,10 +160,12 @@ public class InternalStreamsBuilder {
         return new GlobalKTableImpl<>(new KTableSourceValueGetterSupplier<K, V>(storeBuilder.name()));
     }
 
+    @Override
     public String newName(final String prefix) {
         return prefix + String.format("%010d", index.getAndIncrement());
     }
 
+    @Override
     public String newStoreName(final String prefix) {
         return prefix + String.format(KTableImpl.STATE_STORE_NAME + "%010d", index.getAndIncrement());
     }

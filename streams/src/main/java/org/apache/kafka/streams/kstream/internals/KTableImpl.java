@@ -170,7 +170,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                                                                 materialized.storeName());
         builder.internalTopologyBuilder.addProcessor(name, processorSupplier, this.name);
 
-        final StoreBuilder builder = new KeyValueStoreMaterializer<>(materialized).materialize();
+        final StoreBuilder builder = new KeyValueStoreMaterializer<>(materialized, this.builder).materialize(FILTER_NAME);
         this.builder.internalTopologyBuilder.addStateStore(builder, name);
 
         return new KTableImpl<>(this.builder,
@@ -279,7 +279,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                                                                           mapper,
                                                                                           materializedInternal.storeName());
         builder.internalTopologyBuilder.addProcessor(name, processorSupplier, this.name);
-        builder.internalTopologyBuilder.addStateStore(new KeyValueStoreMaterializer<>(materializedInternal).materialize(),
+        builder.internalTopologyBuilder.addStateStore(new KeyValueStoreMaterializer<>(materializedInternal, builder)
+                                                              .materialize(MAPVALUES_NAME),
                                                       name);
         return new KTableImpl<>(builder, name, processorSupplier, sourceNodes, this.queryableStoreName, true);
     }
@@ -686,7 +687,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
         if (materialized != null) {
             final StoreBuilder<KeyValueStore<K, VR>> storeBuilder
-                    = new KeyValueStoreMaterializer<>(materialized).materialize();
+                    = new KeyValueStoreMaterializer<>(materialized, builder).materialize(MERGE_NAME);
             builder.internalTopologyBuilder.addStateStore(storeBuilder, joinMergeName);
         }
         return result;

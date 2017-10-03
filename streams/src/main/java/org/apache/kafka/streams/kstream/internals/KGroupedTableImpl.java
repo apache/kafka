@@ -188,7 +188,8 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                        materialized.storeName() + KStreamImpl.REPARTITION_TOPIC_SUFFIX,
                        funcName,
                        sourceName, sinkName);
-        builder.internalTopologyBuilder.addStateStore(new KeyValueStoreMaterializer<>(materialized).materialize(), funcName);
+        builder.internalTopologyBuilder.addStateStore(new KeyValueStoreMaterializer<>(materialized, builder)
+                                                              .materialize(functionName), funcName);
 
         // return the KTable representation with the intermediate topic as the sources
         return new KTableImpl<>(builder, funcName, aggregateSupplier, Collections.singleton(sourceName), materialized.storeName(), isQueryable);

@@ -465,8 +465,8 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                                          final String functionName,
                                          final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materializedInternal) {
 
-        final StoreBuilder<KeyValueStore<K, T>> storeBuilder = new KeyValueStoreMaterializer<>(materializedInternal)
-                .materialize();
+        final StoreBuilder<KeyValueStore<K, T>> storeBuilder = new KeyValueStoreMaterializer<>(materializedInternal, builder)
+                .materialize(functionName);
         return aggregateBuilder.build(aggregateSupplier, functionName, storeBuilder, materializedInternal.isQueryable());
 
     }
