@@ -18,12 +18,18 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Frequencies;
+import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.ConnectMetrics.LiteralSupplier;
+import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
@@ -43,6 +49,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -63,11 +70,16 @@ import java.util.concurrent.Executors;
 public class Worker {
     private static final Logger log = LoggerFactory.getLogger(Worker.class);
 
+    public enum State {
+        RUNNING, STOPPING, STOPPED;
+    }
+
     private final ExecutorService executor;
     private final Time time;
     private final String workerId;
     private final Plugins plugins;
     private final ConnectMetrics metrics;
+    private final WorkerMetricsGroup workerMetricsGroup;
     private final WorkerConfig config;
     private final Converter internalKeyConverter;
     private final Converter internalValueConverter;
@@ -91,6 +103,8 @@ public class Worker {
         this.time = time;
         this.plugins = plugins;
         this.config = config;
+        this.workerMetricsGroup = new WorkerMetricsGroup(metrics);
+
         // Internal converters are required properties, thus getClass won't return null.
         this.internalKeyConverter = plugins.newConverter(
                 config.getClass(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG).getName(),
@@ -135,6 +149,7 @@ public class Worker {
         offsetBackingStore.start();
         sourceTaskOffsetCommitter = new SourceTaskOffsetCommitter(config);
 
+        workerMetricsGroup.recordState(State.RUNNING);
         log.info("Worker started");
     }
 
@@ -143,6 +158,7 @@ public class Worker {
      */
     public void stop() {
         log.info("Worker stopping");
+        workerMetricsGroup.recordState(State.STOPPING);
 
         long started = time.milliseconds();
         long limit = started + config.getLong(WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG);
@@ -163,7 +179,10 @@ public class Worker {
         offsetBackingStore.stop();
         metrics.stop();
 
+        workerMetricsGroup.recordState(State.STOPPED);
         log.info("Worker stopped");
+
+        workerMetricsGroup.close();
     }
 
     /**
@@ -204,6 +223,7 @@ public class Worker {
             // Can't be put in a finally block because it needs to be swapped before the call on
             // statusListener
             Plugins.compareAndSwapLoaders(savedLoader);
+            workerMetricsGroup.recordConnectorStartupFailure();
             statusListener.onFailure(connName, t);
             return false;
         }
@@ -213,6 +233,7 @@ public class Worker {
             throw new ConnectException("Connector with name " + connName + " already exists");
 
         log.info("Finished creating connector {}", connName);
+        workerMetricsGroup.recordConnectorStartupSuccess();
         return true;
     }
 
@@ -396,6 +417,7 @@ public class Worker {
             // Can't be put in a finally block because it needs to be swapped before the call on
             // statusListener
             Plugins.compareAndSwapLoaders(savedLoader);
+            workerMetricsGroup.recordTaskFailure();
             statusListener.onFailure(id, t);
             return false;
         }
@@ -408,6 +430,7 @@ public class Worker {
         if (workerTask instanceof WorkerSourceTask) {
             sourceTaskOffsetCommitter.schedule(id, (WorkerSourceTask) workerTask);
         }
+        workerMetricsGroup.recordTaskSuccess();
         return true;
     }
 
@@ -581,6 +604,117 @@ public class Worker {
             }
         } finally {
             Plugins.compareAndSwapLoaders(savedLoader);
+        }
+    }
+
+    WorkerMetricsGroup workerMetricsGroup() {
+        return workerMetricsGroup;
+    }
+
+    class WorkerMetricsGroup {
+        private final MetricGroup metricGroup;
+        private final Sensor connectorStartupAttempts;
+        private final Sensor connectorStartupSuccesses;
+        private final Sensor connectorStartupFailures;
+        private final Sensor connectorStartupResults;
+        private final Sensor taskStartupAttempts;
+        private final Sensor taskStartupSuccesses;
+        private final Sensor taskStartupFailures;
+        private final Sensor taskStartupResults;
+        private State state;
+
+        public WorkerMetricsGroup(ConnectMetrics connectMetrics) {
+            ConnectMetricsRegistry registry = connectMetrics.registry();
+            metricGroup = connectMetrics.group(registry.workerGroupName());
+
+            metricGroup.addValueMetric(registry.connectorCount, new LiteralSupplier<Double>() {
+                @Override
+                public Double metricValue() {
+                    return (double) connectors.size();
+                }
+            });
+            metricGroup.addValueMetric(registry.taskCount, new LiteralSupplier<Double>() {
+                @Override
+                public Double metricValue() {
+                    return (double) tasks.size();
+                }
+            });
+            metricGroup.addValueMetric(registry.workerStatus, new LiteralSupplier<String>() {
+                @Override
+                public String metricValue() {
+                    return state.toString().toLowerCase(Locale.getDefault());
+                }
+            });
+
+            MetricName connectorFailurePct = metricGroup.metricName(registry.connectorStartupFailurePercentage);
+            MetricName connectorSuccessPct = metricGroup.metricName(registry.connectorStartupSuccessPercentage);
+            Frequencies connectorStartupResultFrequencies = Frequencies.forBooleanValues(connectorFailurePct, connectorSuccessPct);
+            connectorStartupResults = metricGroup.sensor("connector-startup-results");
+            connectorStartupResults.add(connectorStartupResultFrequencies);
+
+            connectorStartupAttempts = metricGroup.sensor("connector-startup-attempts");
+            connectorStartupAttempts.add(metricGroup.metricName(registry.connectorStartupAttemptsTotal), new Total());
+
+            connectorStartupSuccesses = metricGroup.sensor("connector-startup-successes");
+            connectorStartupSuccesses.add(metricGroup.metricName(registry.connectorStartupSuccessTotal), new Total());
+
+            connectorStartupFailures = metricGroup.sensor("connector-startup-failures");
+            connectorStartupFailures.add(metricGroup.metricName(registry.connectorStartupFailureTotal), new Total());
+
+            MetricName taskFailurePct = metricGroup.metricName(registry.taskStartupFailurePercentage);
+            MetricName taskSuccessPct = metricGroup.metricName(registry.taskStartupSuccessPercentage);
+            Frequencies taskStartupResultFrequencies = Frequencies.forBooleanValues(taskFailurePct, taskSuccessPct);
+            taskStartupResults = metricGroup.sensor("task-startup-results");
+            taskStartupResults.add(taskStartupResultFrequencies);
+
+            taskStartupAttempts = metricGroup.sensor("task-startup-attempts");
+            taskStartupAttempts.add(metricGroup.metricName(registry.taskStartupAttemptsTotal), new Total());
+
+            taskStartupSuccesses = metricGroup.sensor("task-startup-successes");
+            taskStartupSuccesses.add(metricGroup.metricName(registry.taskStartupSuccessTotal), new Total());
+
+            taskStartupFailures = metricGroup.sensor("task-startup-failures");
+            taskStartupFailures.add(metricGroup.metricName(registry.taskStartupFailureTotal), new Total());
+        }
+
+        void close() {
+            metricGroup.close();
+        }
+
+        void recordState(State state) {
+            this.state = state;
+        }
+
+        void recordConnectorStartupFailure() {
+            connectorStartupAttempts.record(1.0);
+            connectorStartupFailures.record(1.0);
+            connectorStartupResults.record(0.0);
+        }
+
+        void recordConnectorStartupSuccess() {
+            connectorStartupAttempts.record(1.0);
+            connectorStartupSuccesses.record(1.0);
+            connectorStartupResults.record(1.0);
+        }
+
+        void recordTaskFailure() {
+            taskStartupAttempts.record(1.0);
+            taskStartupFailures.record(1.0);
+            taskStartupResults.record(0.0);
+        }
+
+        void recordTaskSuccess() {
+            taskStartupAttempts.record(1.0);
+            taskStartupSuccesses.record(1.0);
+            taskStartupResults.record(1.0);
+        }
+
+        public State state() {
+            return state;
+        }
+
+        protected MetricGroup metricGroup() {
+            return metricGroup;
         }
     }
 }
