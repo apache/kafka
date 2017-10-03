@@ -1505,32 +1505,18 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test
-    public void testConsumerCoordinatorApisWithAuthenticationFailure() {
+    public void testEnsureActiveGroupWithAuthenticationFailure() {
         client.authenticationFailed(node, 300);
 
         try {
-            coordinator.ensureCoordinatorReady();
-            fail("Expected an authentication error.");
-        } catch (AuthenticationException e) {
-            // OK
-        }
-
-        try {
             coordinator.ensureActiveGroup();
             fail("Expected an authentication error.");
         } catch (AuthenticationException e) {
             // OK
         }
 
+        time.sleep(30); // wait less than the blackout period
         client.authenticationSucceeded(node);
-        time.sleep(30); // wait less than retry backoff period
-
-        try {
-            coordinator.ensureCoordinatorReady();
-            fail("Expected an authentication error.");
-        } catch (AuthenticationException e) {
-            // OK
-        }
 
         try {
             coordinator.ensureActiveGroup();
@@ -1539,10 +1525,11 @@ public class ConsumerCoordinatorTest {
             // OK
         }
 
-        time.sleep(300); // wait long enough this time
+        time.sleep(300); // wait until the blackout period is elapsed
+        client.authenticationSucceeded(node);
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        coordinator.ensureCoordinatorReady();
+        coordinator.ensureActiveGroup();
     }
 
     @Test

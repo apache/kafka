@@ -39,6 +39,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -2036,29 +2037,32 @@ public class FetcherTest {
     }
 
     @Test
-    public void testFetchWithAuthenticationFailure() {
+    public void testFetcherWithAuthenticationFailure() {
         client.authenticationFailed(node, 300);
 
         subscriptions.assignFromUser(singleton(tp0));
         subscriptions.seek(tp0, 0);
 
-        assertEquals(1, fetcher.sendFetches());
-        consumerClient.poll(0);
-        assertFalse(fetcher.hasCompletedFetches());
-        assertTrue(consumerClient.connectionFailed(node));
+        try {
+            fetcher.beginningOffsets(Collections.singleton(tp0), 1000);
+        } catch (SaslAuthenticationException e) {
+            // OK
+        }
 
+        time.sleep(30); // wait less than the blackout period
         client.authenticationSucceeded(node);
-        time.sleep(30); // wait less that retry backoff period
 
-        assertEquals(1, fetcher.sendFetches());
-        consumerClient.poll(0);
-        assertFalse(fetcher.hasCompletedFetches());
-        assertTrue(consumerClient.connectionFailed(node));
+        try {
+            fetcher.beginningOffsets(Collections.singleton(tp0), 1000);
+        } catch (SaslAuthenticationException e) {
+            // OK
+        }
 
-        time.sleep(300); // wait long enough this time
+        time.sleep(300); // wait until the blackout period is elapsed
+        client.authenticationSucceeded(node);
 
         client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.NONE, 100L, 0));
-        assertEquals(1, fetcher.sendFetches());
+        fetcher.sendFetches();
         consumerClient.poll(0);
         assertTrue(fetcher.hasCompletedFetches());
         assertEquals(1, fetcher.fetchedRecords().size());

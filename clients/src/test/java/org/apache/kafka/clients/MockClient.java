@@ -104,7 +104,7 @@ public class MockClient implements KafkaClient {
 
     @Override
     public boolean ready(Node node, long now) {
-        if (isBlackedOut(node))
+        if (isBlackedOut(node) || authenticationException(node) != null)
             return false;
         ready.add(node.idString());
         return true;
@@ -126,7 +126,8 @@ public class MockClient implements KafkaClient {
     }
 
     public void authenticationSucceeded(Node node) {
-        isBlackedOut(node);
+        if (!isBlackedOut(node))
+            authenticationException.remove(node);
     }
 
     private boolean isBlackedOut(Node node) {
@@ -134,7 +135,6 @@ public class MockClient implements KafkaClient {
             long expiration = blackedOut.get(node);
             if (time.milliseconds() > expiration) {
                 blackedOut.remove(node);
-                authenticationException.remove(node);
                 return false;
             } else {
                 return true;

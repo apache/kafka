@@ -1450,7 +1450,7 @@ public class KafkaConsumerTest {
 
         MockClient client = new MockClient(time, metadata);
         client.setNode(node);
-        client.authenticationFailed(node, 1000);
+        client.authenticationFailed(node, 300);
         PartitionAssignor assignor = new RangeAssignor();
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
@@ -1460,12 +1460,13 @@ public class KafkaConsumerTest {
 
         callConsumerApisAndExpectAnAuthenticationError(consumer, tp0);
 
+        time.sleep(30); // wait less than the blackout period
         client.authenticationSucceeded(node);
-        time.sleep(100); // wait less than backoff retry period
 
         callConsumerApisAndExpectAnAuthenticationError(consumer, tp0);
 
-        time.sleep(1000); // wait long enough
+        time.sleep(300); // wait until the blackout period is elapsed
+        client.authenticationSucceeded(node);
 
         client.prepareResponse(listOffsetsResponse(Collections.singletonMap(tp0, 0L), Errors.NONE));
         consumer.beginningOffsets(Collections.singleton(tp0));
@@ -1492,8 +1493,7 @@ public class KafkaConsumerTest {
         consumer.close(0, TimeUnit.MILLISECONDS);
     }
 
-    @SuppressWarnings("unchecked")
-    private void callConsumerApisAndExpectAnAuthenticationError(KafkaConsumer consumer, TopicPartition partition) {
+    private void callConsumerApisAndExpectAnAuthenticationError(KafkaConsumer<?, ?> consumer, TopicPartition partition) {
         try {
             consumer.partitionsFor("some other topic");
             fail("Expected an authentication error!");

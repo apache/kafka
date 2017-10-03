@@ -521,7 +521,7 @@ public class AbstractCoordinatorTest {
     }
 
     @Test
-    public void testCoordinatorWithAuthenticationFailure() {
+    public void testEnsureCoordinatorReadyWithAuthenticationFailure() {
         setupCoordinator(RETRY_BACKOFF_MS);
 
         mockClient.authenticationFailed(node, 300);
@@ -533,8 +533,8 @@ public class AbstractCoordinatorTest {
             // OK
         }
 
+        mockTime.sleep(30); // wait less than the blackout period
         mockClient.authenticationSucceeded(node);
-        mockTime.sleep(30); // wait less than retry backoff period
 
         try {
             coordinator.ensureCoordinatorReady();
@@ -543,7 +543,8 @@ public class AbstractCoordinatorTest {
             // OK
         }
 
-        mockTime.sleep(300); // wait long enough this time
+        mockTime.sleep(300); // wait until the blackout period is elapsed
+        mockClient.authenticationSucceeded(node);
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady();

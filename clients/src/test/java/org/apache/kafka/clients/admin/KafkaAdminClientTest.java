@@ -259,12 +259,13 @@ public class KafkaAdminClientTest {
 
         callAdminClientApisAndExpectAnAuthenticationError(env);
 
+        env.time().sleep(30); // wait less than the blackout period
         env.kafkaClient().authenticationSucceeded(node);
-        env.time().sleep(30); // wait less than retry backoff period
 
         callAdminClientApisAndExpectAnAuthenticationError(env);
 
-        env.time().sleep(300); // wait long enough this time
+        env.time().sleep(300); // wait until the blackout period is elapsed
+        env.kafkaClient().authenticationSucceeded(node);
 
         // try one of the apis to verify authentication error is gone
         env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
