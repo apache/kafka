@@ -54,7 +54,7 @@ public class Topology {
     final InternalTopologyBuilder internalTopologyBuilder = new InternalTopologyBuilder();
 
     /**
-     * Enum used to define auto offset reset policy when creating {@link KStream} or {@link KTable}
+     * Enum used to define auto offset reset policy when creating {@link KStream} or {@link KTable}.
      */
     public enum AutoOffsetReset {
         EARLIEST, LATEST
