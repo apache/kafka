@@ -190,7 +190,7 @@ public class Stores {
      *
      * @param name the name of the store
      * @return the factory that can be used to specify other options or configurations for the store; never null
-     * @deprected use {@link #persistentKeyValueStore(String)}, {@link #persistentWindowStore(String, long, int, long, boolean)}
+     * @deprecated use {@link #persistentKeyValueStore(String)}, {@link #persistentWindowStore(String, long, int, long, boolean)}
      * {@link #persistentSessionStore(String, long)}, {@link #lruMap(String, int)}, or {@link #inMemoryKeyValueStore(String)}
      */
     @Deprecated
