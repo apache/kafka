@@ -41,14 +41,14 @@ public class JavaTest {
     @Test
     public void testIsIBMJdk() {
         System.setProperty("java.vendor", "Oracle Corporation");
-        assertFalse(Java.isIBMJdk());
+        assertFalse(Java.isIbmJdk());
         System.setProperty("java.vendor", "IBM Corporation");
-        assertTrue(Java.isIBMJdk());
+        assertTrue(Java.isIbmJdk());
     }
 
     @Test
     public void testLoadKerberosLoginModule() throws ClassNotFoundException {
-        String clazz = Java.isIBMJdk()
+        String clazz = Java.isIbmJdk()
                 ? "com.ibm.security.auth.module.Krb5LoginModule"
                 : "com.sun.security.auth.module.Krb5LoginModule";
         Class.forName(clazz);

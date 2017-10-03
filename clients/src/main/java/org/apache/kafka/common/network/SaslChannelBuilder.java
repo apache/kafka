@@ -177,7 +177,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
         Class<?> classRef;
         Method getInstanceMethod;
         Method getDefaultRealmMethod;
-        if (Java.isIBMJdk()) {
+        if (Java.isIbmJdk()) {
             classRef = Class.forName("com.ibm.security.krb5.internal.Config");
         } else {
             classRef = Class.forName("sun.security.krb5.Config");

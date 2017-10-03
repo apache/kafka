@@ -48,7 +48,7 @@ public final class Java {
     public static final boolean IS_JAVA9_COMPATIBLE = isJava9Compatible(VERSION);
     public static final boolean IS_JAVA8_COMPATIBLE = isJava8Compatible(VERSION);
 
-    public static boolean isIBMJdk() {
+    public static boolean isIbmJdk() {
         return System.getProperty("java.vendor").contains("IBM");
     }
 
