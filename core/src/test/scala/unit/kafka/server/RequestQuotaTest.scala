@@ -294,8 +294,8 @@ class RequestQuotaTest extends BaseRequestTest {
                 new AlterConfigsRequest.ConfigEntry(LogConfig.MaxMessageBytesProp, "1000000")
               ))), true)
 
-        case ApiKeys.ALTER_REPLICA_DIR =>
-          new AlterReplicaDirRequest.Builder(Collections.singletonMap(tp, logDir))
+        case ApiKeys.ALTER_REPLICA_LOG_DIRS =>
+          new AlterReplicaLogDirsRequest.Builder(Collections.singletonMap(tp, logDir))
 
         case ApiKeys.DESCRIBE_LOG_DIRS =>
           new DescribeLogDirsRequest.Builder(Collections.singleton(tp))
@@ -396,7 +396,7 @@ class RequestQuotaTest extends BaseRequestTest {
       case ApiKeys.DELETE_ACLS => new DeleteAclsResponse(response).throttleTimeMs
       case ApiKeys.DESCRIBE_CONFIGS => new DescribeConfigsResponse(response).throttleTimeMs
       case ApiKeys.ALTER_CONFIGS => new AlterConfigsResponse(response).throttleTimeMs
-      case ApiKeys.ALTER_REPLICA_DIR => new AlterReplicaDirResponse(response).throttleTimeMs
+      case ApiKeys.ALTER_REPLICA_LOG_DIRS => new AlterReplicaLogDirsResponse(response).throttleTimeMs
       case ApiKeys.DESCRIBE_LOG_DIRS => new DescribeLogDirsResponse(response).throttleTimeMs
       case ApiKeys.CREATE_PARTITIONS => new CreatePartitionsResponse(response).throttleTimeMs
       case requestId => throw new IllegalArgumentException(s"No throttle time for $requestId")
