@@ -242,7 +242,6 @@ class ReplicaFetcherThread(name: String,
         } catch {
           case e: KafkaStorageException =>
             partitionsWithError += topicPartition
-            partitionStates.moveToEnd(topicPartition)
         }
       }
     }

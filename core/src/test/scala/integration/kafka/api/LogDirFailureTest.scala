@@ -29,6 +29,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderForPartitionException}
 import org.junit.{Before, Test}
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
 
 import scala.collection.JavaConverters._
 
@@ -50,7 +51,6 @@ class LogDirFailureTest extends IntegrationTestHarness {
   this.producerConfig.setProperty(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, "100")
   this.serverConfig.setProperty(KafkaConfig.ReplicaHighWatermarkCheckpointIntervalMsProp, "60000")
   this.serverConfig.setProperty(KafkaConfig.NumReplicaFetchersProp, "1")
-
 
   @Before
   override def setUp() {
@@ -84,13 +84,13 @@ class LogDirFailureTest extends IntegrationTestHarness {
     // so that ReplicaFetcherThread on the follower will get response from leader immediately
     val anotherPartitionWithTheSameLeader = (1 until partitionNum).find { i =>
       leaderServer.replicaManager.getPartition(new TopicPartition(topic, i)).flatMap(_.leaderReplicaIfLocal).isDefined
-    }.map(new TopicPartition(topic, _)).get
+    }.get
+    val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, anotherPartitionWithTheSameLeader, topic.getBytes, "message".getBytes)
+    // When producer.send(...).get returns, it is guaranteed that ReplicaFetcherThread on the follower
+    // has fetched from the leader and attempts to append to the offline replica.
+    producer.send(record).get
 
-    val startTimeMs = System.currentTimeMillis()
-    TestUtils.waitUntilTrue(() => {
-      startTimeMs < leaderServer.replicaManager.getPartition(anotherPartitionWithTheSameLeader).get.getReplica(followerServerId).get.lastCaughtUpTimeMs
-    }, "timed out waiting for follower to fetch from leader")
-
+    assertEquals(serverCount, leaderServer.replicaManager.getPartition(new TopicPartition(topic, anotherPartitionWithTheSameLeader)).get.inSyncReplicas.size)
     followerServer.replicaManager.replicaFetcherManager.fetcherThreadMap.values.foreach { thread =>
       assertTrue("ReplicaFetcherThread should still be working if its partition count > 0", thread.shutdownLatch.getCount > 0)
     }

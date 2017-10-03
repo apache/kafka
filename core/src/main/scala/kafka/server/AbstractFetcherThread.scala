@@ -144,11 +144,6 @@ abstract class AbstractFetcherThread(name: String,
   private def processFetchRequest(fetchRequest: REQ) {
     val partitionsWithError = mutable.Set[TopicPartition]()
 
-    def updatePartitionsWithError(partition: TopicPartition): Unit = {
-      partitionsWithError += partition
-      partitionStates.moveToEnd(partition)
-    }
-
     var responseData: Seq[(TopicPartition, PD)] = Seq.empty
 
     try {
@@ -159,7 +154,7 @@ abstract class AbstractFetcherThread(name: String,
         if (isRunning.get) {
           warn(s"Error in fetch to broker ${sourceBroker.id}, request $fetchRequest", t)
           inLock(partitionMapLock) {
-            partitionStates.partitionSet.asScala.foreach(updatePartitionsWithError)
+            partitionsWithError ++= partitionStates.partitionSet.asScala
             // there is an error occurred while fetching partitions, sleep a while
             // note that `ReplicaFetcherThread.handlePartitionsWithError` will also introduce the same delay for every
             // partition with error effectively doubling the delay. It would be good to improve this.
@@ -203,10 +198,10 @@ abstract class AbstractFetcherThread(name: String,
                       // 2. If the message is corrupt due to a transient state in the log (truncation, partial writes can cause this), we simply continue and
                       // should get fixed in the subsequent fetches
                       logger.error(s"Found invalid messages during fetch for partition $topicPartition offset ${currentPartitionFetchState.fetchOffset} error ${ime.getMessage}")
-                      updatePartitionsWithError(topicPartition)
+                      partitionsWithError += topicPartition
                     case e: KafkaStorageException =>
                       logger.error(s"Error while processing data for partition $topicPartition", e)
-                      updatePartitionsWithError(topicPartition)
+                      partitionsWithError += topicPartition
                     case e: Throwable =>
                       throw new KafkaException(s"Error processing data for partition $topicPartition " +
                         s"offset ${currentPartitionFetchState.fetchOffset}", e)
@@ -220,12 +215,12 @@ abstract class AbstractFetcherThread(name: String,
                     case e: FatalExitError => throw e
                     case e: Throwable =>
                       error(s"Error getting offset for partition $topicPartition to broker ${sourceBroker.id}", e)
-                      updatePartitionsWithError(topicPartition)
+                      partitionsWithError += topicPartition
                   }
                 case _ =>
                   if (isRunning.get) {
                     error(s"Error for partition $topicPartition to broker %${sourceBroker.id}:${partitionData.exception.get}")
-                    updatePartitionsWithError(topicPartition)
+                    partitionsWithError += topicPartition
                   }
               }
             })

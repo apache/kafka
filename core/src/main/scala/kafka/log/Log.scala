@@ -1412,7 +1412,7 @@ class Log(@volatile var dir: File,
    * Truncate this log so that it ends with the greatest offset < targetOffset.
    *
    * @param targetOffset The offset to truncate to, an upper bound on all offsets in the log after truncation is complete.
-   * @return True iff targetOffset >= logEndOffset
+   * @return True iff targetOffset < logEndOffset
    */
   private[log] def truncateTo(targetOffset: Long): Boolean = {
     maybeHandleIOException(s"Error while truncating log to offset $targetOffset for $topicPartition in dir ${dir.getParent}") {
