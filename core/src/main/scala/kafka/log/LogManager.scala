@@ -133,8 +133,11 @@ class LogManager(logDirs: Array[File],
 
     val liveLogDirs = new ConcurrentLinkedQueue[File]()
 
-    for (dir <- dirs if !initialOfflineDirs.contains(dir)) {
+    for (dir <- dirs) {
       try {
+        if (initialOfflineDirs.contains(dir))
+          throw new IOException(s"${dir.getAbsolutePath} fails to be loaded during broker startup")
+
         if (!dir.exists) {
           info("Log directory '" + dir.getAbsolutePath + "' not found, creating it.")
           val created = dir.mkdirs()
@@ -146,19 +149,11 @@ class LogManager(logDirs: Array[File],
         liveLogDirs.add(dir)
       } catch {
         case e: IOException =>
-          error(s"Failed to create or validate data directory $dir.getAbsolutePath", e)
+          logDirFailureChannel.maybeAddOfflineLogDir(dir.getAbsolutePath, s"Failed to create or validate data directory ${dir.getAbsolutePath}", e)
       }
     }
     if (liveLogDirs.isEmpty) {
       fatal(s"Shutdown broker because none of the specified log dirs from " + dirs.mkString(", ") + " can be created or validated")
-      Exit.halt(1)
-    }
-
-    // If IBP < 1.0, controller will send LeaderAndIsrRequest V0 which does not include isNew field.
-    // In this case broker can not determine whether it is safe to create partition when there is log directory failure.
-    // Thus we choose to have broker halt on log diretory failure if IBP < 1.0
-    if (interBrokerProtocolVersion < KAFKA_1_0_IV0 && liveLogDirs.size() < dirs.size) {
-      fatal(s"Halting broker because log dirs ${dirs.filterNot(liveLogDirs.contains(_)).mkString(",")} are offline")
       Exit.halt(1)
     }
 

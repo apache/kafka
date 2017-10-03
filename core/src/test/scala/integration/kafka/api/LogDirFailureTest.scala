@@ -85,9 +85,11 @@ class LogDirFailureTest extends IntegrationTestHarness {
       assertTrue(logDir.isFile)
 
       server = TestUtils.createServer(kafkaConfig)
-      fail("broker with IBP < 1.0 should halt if there is log dir failure ")
-    } catch {
-      case e: IllegalArgumentException => assertTrue(statusCodeOption.contains(1))
+      TestUtils.waitUntilTrue(() => {
+        server.logDirFailureChannel.offlineLogDirQueue.size() == 0
+      }, "timed out waiting for LogDirFailureHandler to process offline dir")
+
+      assertEquals(Some(1), statusCodeOption)
     } finally {
       Exit.resetHaltProcedure()
       if (server != null)
