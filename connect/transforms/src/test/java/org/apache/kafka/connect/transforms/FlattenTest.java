@@ -254,27 +254,4 @@ public class FlattenTest {
         Schema transformedOptFieldSchema = SchemaBuilder.string().optional().defaultValue("child_default").build();
         assertEquals(transformedOptFieldSchema, transformedSchema.field("opt_field").schema());
     }
-
-
-
-    @Test
-    public void testNullValueInStruct() {
-        xformKey.configure(Collections.<String, String>emptyMap());
-
-        Map<String, String> aStructMap = new HashMap<>();
-        aStructMap.put("B", null);
-        aStructMap.put("C", "cValue");
-        aStructMap.put("D", "dValue");
-
-        Map<String, Map<String, String>> key = Collections.singletonMap("A", aStructMap);
-        SourceRecord src = new SourceRecord(null, null, "topic", null, key, null, null);
-        SourceRecord transformed = xformKey.apply(src);
-
-        assertNull(transformed.keySchema());
-        assertTrue(transformed.key() instanceof Map);
-        Map<String, Object> transformedMap = (Map<String, Object>) transformed.key();
-        assertEquals(null, transformedMap.get("A.B"));
-        assertEquals(aStructMap.get("C"), transformedMap.get("A.C"));
-        assertEquals(aStructMap.get("D"), transformedMap.get("A.D"));
-    }
 }
