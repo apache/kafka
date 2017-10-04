@@ -18,7 +18,6 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -129,7 +128,7 @@ public class SessionWindowedKStreamImplTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldMaterializeCount() {
-        stream.count(Materialized.<String, Long, SessionStore<Bytes, byte[]>>as("count-store")
+        stream.count(Materialized.<String, Long, SessionStore>as("count-store")
                              .withKeySerde(Serdes.String()));
 
         processData();
@@ -145,7 +144,7 @@ public class SessionWindowedKStreamImplTest {
     @Test
     public void shouldMaterializeReduced() {
         stream.reduce(MockReducer.STRING_ADDER,
-                      Materialized.<String, String, SessionStore<Bytes, byte[]>>as("reduced")
+                      Materialized.<String, String, SessionStore>as("reduced")
                               .withKeySerde(Serdes.String())
                               .withValueSerde(Serdes.String()));
 
@@ -165,7 +164,7 @@ public class SessionWindowedKStreamImplTest {
         stream.aggregate(MockInitializer.STRING_INIT,
                          MockAggregator.TOSTRING_ADDER,
                          sessionMerger,
-                         Materialized.<String, String, SessionStore<Bytes, byte[]>>as("aggregated")
+                         Materialized.<String, String, SessionStore>as("aggregated")
                                  .withKeySerde(Serdes.String())
                                  .withValueSerde(Serdes.String()));
 
@@ -203,7 +202,7 @@ public class SessionWindowedKStreamImplTest {
         stream.aggregate(null,
                          MockAggregator.TOSTRING_ADDER,
                          sessionMerger,
-                         Materialized.<String, String, SessionStore<Bytes, byte[]>>as("store"));
+                         Materialized.<String, String, SessionStore>as("store"));
     }
 
     @Test(expected = NullPointerException.class)
@@ -211,7 +210,7 @@ public class SessionWindowedKStreamImplTest {
         stream.aggregate(MockInitializer.STRING_INIT,
                          null,
                          sessionMerger,
-                         Materialized.<String, String, SessionStore<Bytes, byte[]>>as("store"));
+                         Materialized.<String, String, SessionStore>as("store"));
     }
 
     @Test(expected = NullPointerException.class)
@@ -219,7 +218,7 @@ public class SessionWindowedKStreamImplTest {
         stream.aggregate(MockInitializer.STRING_INIT,
                          MockAggregator.TOSTRING_ADDER,
                          null,
-                         Materialized.<String, String, SessionStore<Bytes, byte[]>>as("store"));
+                         Materialized.<String, String, SessionStore>as("store"));
     }
 
     @SuppressWarnings("unchecked")
@@ -234,7 +233,7 @@ public class SessionWindowedKStreamImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnMaterializedReduceIfReducerIsNull() {
         stream.reduce(null,
-                      Materialized.<String, String, SessionStore<Bytes, byte[]>>as("store"));
+                      Materialized.<String, String, SessionStore>as("store"));
     }
 
     @Test(expected = NullPointerException.class)

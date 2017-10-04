@@ -22,7 +22,6 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -347,9 +346,9 @@ public class KTableKTableJoinIntegrationTest {
         final KTable<String, String> table2 = builder.table(TABLE_2);
         final KTable<String, String> table3 = builder.table(TABLE_3);
 
-        Materialized<String, String, KeyValueStore<Bytes, byte[]>> materialized = null;
+        Materialized<String, String, KeyValueStore> materialized = null;
         if (queryableName != null) {
-            materialized = Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(queryableName)
+            materialized = Materialized.<String, String, KeyValueStore>as(queryableName)
                     .withKeySerde(Serdes.String())
                     .withValueSerde(Serdes.String())
                     .withCachingDisabled();
@@ -363,7 +362,7 @@ public class KTableKTableJoinIntegrationTest {
     private KTable<String, String> join(final KTable<String, String> first,
                                         final KTable<String, String> second,
                                         final JoinType joinType,
-                                        final Materialized<String, String, KeyValueStore<Bytes, byte[]>> materialized) {
+                                        final Materialized<String, String, KeyValueStore> materialized) {
         final ValueJoiner<String, String, String> joiner = new ValueJoiner<String, String, String>() {
             @Override
             public String apply(final String value1, final String value2) {

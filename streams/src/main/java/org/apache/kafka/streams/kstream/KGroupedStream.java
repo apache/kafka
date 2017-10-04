@@ -19,7 +19,6 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -182,7 +181,7 @@ public interface KGroupedStream<K, V> {
      * @return a {@link KTable} that contains "update" records with unmodified keys and {@link Long} values that
      * represent the latest (rolling) count (i.e., number of records) for each key
      */
-    KTable<K, Long> count(final Materialized<K, Long, KeyValueStore<Bytes, byte[]>> materialized);
+    KTable<K, Long> count(final Materialized<K, Long, KeyValueStore> materialized);
 
     /**
      * Count the number of records in this stream by the grouped key and the defined windows.
@@ -623,7 +622,7 @@ public interface KGroupedStream<K, V> {
      * latest (rolling) aggregate for each key
      */
     KTable<K, V> reduce(final Reducer<V> reducer,
-                        final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized);
+                        final Materialized<K, V, KeyValueStore> materialized);
 
     /**
      * Combine the number of records in this stream by the grouped key and the defined windows.
@@ -1083,16 +1082,16 @@ public interface KGroupedStream<K, V> {
      * provide {@code queryableStoreName}, and "-changelog" is a fixed suffix.
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      *
+     * @param <VR>          the value type of the resulting {@link KTable}
      * @param initializer   an {@link Initializer} that computes an initial intermediate aggregation result
      * @param aggregator    an {@link Aggregator} that computes a new aggregate result
      * @param materialized  an instance of {@link Materialized} used to materialize a state store. Cannot be {@code null}.
-     * @param <VR>          the value type of the resulting {@link KTable}
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
      */
     <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
                                  final Aggregator<? super K, ? super V, VR> aggregator,
-                                 final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
+                                 final Materialized<K, VR, KeyValueStore> materialized);
 
 
     /**

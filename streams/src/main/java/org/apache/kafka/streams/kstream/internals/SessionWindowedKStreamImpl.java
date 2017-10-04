@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
@@ -31,6 +30,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.StoreSupplier;
 import org.apache.kafka.streams.state.Stores;
 
 import java.util.Objects;
@@ -80,9 +80,9 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
     }
 
     @Override
-    public KTable<Windowed<K>, Long> count(final Materialized<K, Long, SessionStore<Bytes, byte[]>> materialized) {
+    public KTable<Windowed<K>, Long> count(final Materialized<K, Long, SessionStore> materialized) {
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, Long, SessionStore<Bytes, byte[]>> materializedInternal
+        final MaterializedInternal<K, Long, SessionStore> materializedInternal
                 = new MaterializedInternal<>(materialized);
         if (materializedInternal.valueSerde() == null) {
             materialized.withValueSerde(Serdes.Long());
@@ -108,12 +108,12 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
     public <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
                                                   final Aggregator<? super K, ? super V, VR> aggregator,
                                                   final Merger<? super K, VR> sessionMerger,
-                                                  final Materialized<K, VR, SessionStore<Bytes, byte[]>> materialized) {
+                                                  final Materialized<K, VR, SessionStore> materialized) {
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(aggregator, "aggregator can't be null");
         Objects.requireNonNull(sessionMerger, "sessionMerger can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, VR, SessionStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
+        final MaterializedInternal<K, VR, SessionStore> materializedInternal = new MaterializedInternal<>(materialized);
         return (KTable<Windowed<K>, VR>) aggregateBuilder.build(
                 new KStreamSessionWindowAggregate<>(windows, materializedInternal.storeName(), initializer, aggregator, sessionMerger),
                 AGGREGATE_NAME,
@@ -129,7 +129,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
 
     @Override
     public KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
-                                         final Materialized<K, V, SessionStore<Bytes, byte[]>> materialized) {
+                                         final Materialized<K, V, SessionStore> materialized) {
         Objects.requireNonNull(reducer, "reducer can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
         final Aggregator<K, V, V> reduceAggregator = aggregatorForReducer(reducer);
@@ -137,13 +137,13 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
     }
 
 
-    private <VR> StoreBuilder<SessionStore<K, VR>> materialize(final MaterializedInternal<K, VR, SessionStore<Bytes, byte[]>> materialized) {
-        SessionBytesStoreSupplier supplier = (SessionBytesStoreSupplier) materialized.storeSupplier();
+    private <VR> StoreBuilder<SessionStore<K, VR>> materialize(final MaterializedInternal<K, VR, SessionStore> materialized) {
+        StoreSupplier supplier = materialized.storeSupplier();
         if (supplier == null) {
             supplier = Stores.persistentSessionStore(materialized.storeName(),
                                                      windows.maintainMs());
         }
-        final StoreBuilder<SessionStore<K, VR>> builder = Stores.sessionStoreBuilder(supplier,
+        final StoreBuilder<SessionStore<K, VR>> builder = Stores.sessionStoreBuilder((SessionBytesStoreSupplier) supplier,
                                                                                      materialized.keySerde(),
                                                                                      materialized.valueSerde());
 

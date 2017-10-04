@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.TopologyException;
@@ -160,7 +159,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     private KTable<K, V> doFilter(final Predicate<? super K, ? super V> predicate,
-                                  final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized,
+                                  final MaterializedInternal<K, V, KeyValueStore> materialized,
                                   final boolean filterNot) {
         String name = builder.newName(FILTER_NAME);
 
@@ -190,7 +189,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     @Override
     public KTable<K, V> filter(final Predicate<? super K, ? super V> predicate,
-                               final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+                               final Materialized<K, V, KeyValueStore> materialized) {
         Objects.requireNonNull(predicate, "predicate can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
         return doFilter(predicate, new MaterializedInternal<>(materialized), false);
@@ -220,7 +219,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     @Override
     public KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate,
-                                  final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+                                  final Materialized<K, V, KeyValueStore> materialized) {
         Objects.requireNonNull(predicate, "predicate can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
         return doFilter(predicate, new MaterializedInternal<>(materialized), true);
@@ -269,10 +268,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     @Override
     public <VR> KTable<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper,
-                                        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+                                        final Materialized<K, VR, KeyValueStore> materialized) {
         Objects.requireNonNull(mapper, "mapper can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal
+        final MaterializedInternal<K, VR, KeyValueStore> materializedInternal
                 = new MaterializedInternal<>(materialized);
         final String name = builder.newName(MAPVALUES_NAME);
         final KTableProcessorSupplier<K, V, VR> processorSupplier = new KTableMapValues<>(this,
@@ -402,7 +401,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
         return builder.table(topic,
                              new ConsumedInternal<>(keySerde, valSerde, new FailOnInvalidTimestamp(), null),
-                             new MaterializedInternal<>(Materialized.<K, V, KeyValueStore<Bytes, byte[]>>as(internalStoreName)
+                             new MaterializedInternal<>(Materialized.<K, V, KeyValueStore>as(internalStoreName)
                                      .withKeySerde(keySerde)
                                      .withValueSerde(valSerde),
                                      queryableStoreName != null));
@@ -545,7 +544,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     @Override
     public <VO, VR> KTable<K, VR> join(final KTable<K, VO> other,
                                        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                       final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+                                       final Materialized<K, VR, KeyValueStore> materialized) {
         Objects.requireNonNull(other, "other can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
@@ -577,7 +576,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     @Override
     public <VO, VR> KTable<K, VR> outerJoin(final KTable<K, VO> other,
                                             final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                            final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+                                            final Materialized<K, VR, KeyValueStore> materialized) {
         return doJoin(other, joiner, new MaterializedInternal<>(materialized), true, true);
     }
 
@@ -606,7 +605,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     @Override
     public <VO, VR> KTable<K, VR> leftJoin(final KTable<K, VO> other,
                                            final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                           final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+                                           final Materialized<K, VR, KeyValueStore> materialized) {
         return doJoin(other,
                       joiner,
                       new MaterializedInternal<>(materialized),
@@ -670,7 +669,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     private <VO, VR> KTable<K, VR> doJoin(final KTable<K, VO> other,
                                           final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                          final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materialized,
+                                          final MaterializedInternal<K, VR, KeyValueStore> materialized,
                                           final boolean leftOuter,
                                           final boolean rightOuter) {
         Objects.requireNonNull(other, "other can't be null");

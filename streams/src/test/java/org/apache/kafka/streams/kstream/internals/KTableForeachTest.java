@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -85,7 +84,7 @@ public class KTableForeachTest {
         StreamsBuilder builder = new StreamsBuilder();
         KTable<Integer, String> table = builder.table(topicName,
                                                       Consumed.with(intSerde, stringSerde),
-                                                      new MaterializedInternal<>(Materialized.<Integer, String, KeyValueStore<Bytes, byte[]>>as(topicName)
+                                                      new MaterializedInternal<>(Materialized.<Integer, String, KeyValueStore>as(topicName)
                                                                                          .withKeySerde(intSerde)
                                                                                          .withValueSerde(stringSerde)));
         table.foreach(action);

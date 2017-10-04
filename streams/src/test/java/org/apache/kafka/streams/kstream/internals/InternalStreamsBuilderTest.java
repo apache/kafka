@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.kstream.GlobalKTable;
@@ -61,8 +60,8 @@ public class InternalStreamsBuilderTest {
 
     private KStreamTestDriver driver = null;
     private final ConsumedInternal<String, String> consumed = new ConsumedInternal<>();
-    private MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized
-            = new MaterializedInternal<>(Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("test-store"), false);
+    private MaterializedInternal<String, String, KeyValueStore> materialized
+            = new MaterializedInternal<>(Materialized.<String, String, KeyValueStore>as("test-store"), false);
 
     @Before
     public void setUp() {
@@ -141,7 +140,7 @@ public class InternalStreamsBuilderTest {
         KTable table1 = builder.table("topic2",
                                       consumed,
                                       new MaterializedInternal<>(
-                                              Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("topic2"),
+                                              Materialized.<String, String, KeyValueStore>as("topic2"),
                                               false));
 
         final ProcessorTopology topology = builder.internalTopologyBuilder.build(null);
@@ -159,7 +158,7 @@ public class InternalStreamsBuilderTest {
         builder.globalTable("table",
                             consumed,
                             new MaterializedInternal<>(
-                                    Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("globalTable"),
+                                    Materialized.<String, String, KeyValueStore>as("globalTable"),
                                     false));
 
         final ProcessorTopology topology = builder.internalTopologyBuilder.buildGlobalStateTopology();
@@ -184,11 +183,11 @@ public class InternalStreamsBuilderTest {
         builder.globalTable("table",
                             consumed,
                             new MaterializedInternal<>(
-                                    Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("global1")));
+                                    Materialized.<String, String, KeyValueStore>as("global1")));
         builder.globalTable("table2",
                             consumed,
                             new MaterializedInternal<>(
-                                    Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("global2")));
+                                    Materialized.<String, String, KeyValueStore>as("global2")));
 
         doBuildGlobalTopologyWithAllGlobalTables();
     }
@@ -201,14 +200,14 @@ public class InternalStreamsBuilderTest {
         final GlobalKTable<String, String> globalTable = builder.globalTable("table",
                                                                              consumed,
                                                                              new MaterializedInternal<>(
-                                                                                     Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(one)));
+                                                                                     Materialized.<String, String, KeyValueStore>as(one)));
         final GlobalKTable<String, String> globalTable2 = builder.globalTable("table2",
                                                                               consumed,
                                                                               new MaterializedInternal<>(
-                                                                                      Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(two)));
+                                                                                      Materialized.<String, String, KeyValueStore>as(two)));
 
-        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized
-                = new MaterializedInternal<>(Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("not-global"), false);
+        final MaterializedInternal<String, String, KeyValueStore> materialized
+                = new MaterializedInternal<>(Materialized.<String, String, KeyValueStore>as("not-global"), false);
         builder.table("not-global", consumed, materialized);
 
         final KeyValueMapper<String, String, String> kvMapper = new KeyValueMapper<String, String, String>() {
@@ -242,8 +241,8 @@ public class InternalStreamsBuilderTest {
     public void shouldMapStateStoresToCorrectSourceTopics() throws Exception {
         final KStream<String, String> playEvents = builder.stream(Collections.singleton("events"), consumed);
 
-        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized
-                = new MaterializedInternal<>(Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("table-store"), false);
+        final MaterializedInternal<String, String, KeyValueStore> materialized
+                = new MaterializedInternal<>(Materialized.<String, String, KeyValueStore>as("table-store"), false);
         final KTable<String, String> table = builder.table("table-topic", consumed, materialized);
         assertEquals(Collections.singletonList("table-topic"), builder.internalTopologyBuilder.stateStoreNameToSourceTopics().get("table-store"));
 

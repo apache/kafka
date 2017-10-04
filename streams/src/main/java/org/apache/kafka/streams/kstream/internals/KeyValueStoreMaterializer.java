@@ -16,25 +16,25 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.StoreSupplier;
 import org.apache.kafka.streams.state.Stores;
 
 public class KeyValueStoreMaterializer<K, V> {
-    private final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized;
+    private final MaterializedInternal<K, V, KeyValueStore> materialized;
 
-    public KeyValueStoreMaterializer(final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+    public KeyValueStoreMaterializer(final MaterializedInternal<K, V, KeyValueStore> materialized) {
         this.materialized = materialized;
     }
 
     public StoreBuilder<KeyValueStore<K, V>> materialize() {
-        KeyValueBytesStoreSupplier supplier = (KeyValueBytesStoreSupplier) materialized.storeSupplier();
+        StoreSupplier supplier = materialized.storeSupplier();
         if (supplier == null) {
             supplier = Stores.persistentKeyValueStore(materialized.storeName());
         }
-        final StoreBuilder<KeyValueStore<K, V>> builder = Stores.keyValueStoreBuilder(supplier,
+        final StoreBuilder<KeyValueStore<K, V>> builder = Stores.keyValueStoreBuilder((KeyValueBytesStoreSupplier) supplier,
                                                                                       materialized.keySerde(),
                                                                                       materialized.valueSerde());
 

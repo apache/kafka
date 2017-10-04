@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -336,7 +335,7 @@ public class KTableImplTest {
         KTableImpl<String, String, String> table1 =
                 (KTableImpl<String, String, String>) builder.table(topic1,
                                                                    consumed,
-                                                                   Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(storeName1)
+                                                                   Materialized.<String, String, KeyValueStore>as(storeName1)
                                                                            .withKeySerde(stringSerde)
                                                                            .withValueSerde(stringSerde)
                 );
@@ -488,7 +487,7 @@ public class KTableImplTest {
             public boolean test(final String key, final String value) {
                 return false;
             }
-        }, (Materialized<String, String, KeyValueStore<Bytes, byte[]>>) null);
+        }, (Materialized<String, String, KeyValueStore>) null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -498,7 +497,7 @@ public class KTableImplTest {
             public boolean test(final String key, final String value) {
                 return false;
             }
-        }, (Materialized<String, String, KeyValueStore<Bytes, byte[]>>) null);
+        }, (Materialized<String, String, KeyValueStore>) null);
     }
 
     @Test(expected = NullPointerException.class)

@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -61,7 +60,7 @@ public class Materialized<K, V, S extends StateStore> {
     protected boolean cachingEnabled = true;
     protected Map<String, String> topicConfig = new HashMap<>();
 
-    private Materialized(final StoreSupplier<S> storeSupplier) {
+    private Materialized(final StoreSupplier storeSupplier) {
         this.storeSupplier = storeSupplier;
     }
 
@@ -106,7 +105,7 @@ public class Materialized<K, V, S extends StateStore> {
      * @param <V>      value type of the store
      * @return a new {@link Materialized} instance with the given supplier
      */
-    public static <K, V> Materialized<K, V, WindowStore<Bytes, byte[]>> as(final WindowBytesStoreSupplier supplier) {
+    public static <K, V> Materialized<K, V, WindowStore> as(final WindowBytesStoreSupplier supplier) {
         Objects.requireNonNull(supplier, "supplier can't be null");
         return new Materialized<>(supplier);
     }
@@ -120,7 +119,7 @@ public class Materialized<K, V, S extends StateStore> {
      * @return a new {@link Materialized} instance with the given sup
      * plier
      */
-    public static <K, V> Materialized<K, V, SessionStore<Bytes, byte[]>> as(final SessionBytesStoreSupplier supplier) {
+    public static <K, V> Materialized<K, V, SessionStore> as(final SessionBytesStoreSupplier supplier) {
         Objects.requireNonNull(supplier, "supplier can't be null");
         return new Materialized<>(supplier);
     }
@@ -133,7 +132,7 @@ public class Materialized<K, V, S extends StateStore> {
      * @param <V>      value type of the store
      * @return a new {@link Materialized} instance with the given supplier
      */
-    public static <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> as(final KeyValueBytesStoreSupplier supplier) {
+    public static <K, V> Materialized<K, V, KeyValueStore> as(final KeyValueBytesStoreSupplier supplier) {
         Objects.requireNonNull(supplier, "supplier can't be null");
         return new Materialized<>(supplier);
     }

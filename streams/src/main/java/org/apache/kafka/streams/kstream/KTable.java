@@ -19,7 +19,6 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -129,7 +128,7 @@ public interface KTable<K, V> {
      * @see #filterNot(Predicate, Materialized)
      */
     KTable<K, V> filter(final Predicate<? super K, ? super V> predicate,
-                        final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized);
+                        final Materialized<K, V, KeyValueStore> materialized);
 
     /**
      * Create a new {@code KTable} that consists of all records of this {@code KTable} which satisfy the given
@@ -265,7 +264,7 @@ public interface KTable<K, V> {
      * @see #filter(Predicate, Materialized)
      */
     KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate,
-                           final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized);
+                           final Materialized<K, V, KeyValueStore> materialized);
     /**
      * Create a new {@code KTable} that consists all records of this {@code KTable} which do <em>not</em> satisfy the
      * given predicate.
@@ -410,15 +409,15 @@ public interface KTable<K, V> {
      * Thus, for tombstones the provided value-mapper is not evaluated but the tombstone record is forwarded directly to
      * delete the corresponding record in the result {@code KTable}.
      *
+     * @param <VR>   the value type of the result {@code KTable}
+     *
      * @param mapper a {@link ValueMapper} that computes a new output value
      * @param materialized  a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
      *                      should be materialized. Cannot be {@code null}
-     * @param <VR>   the value type of the result {@code KTable}
-     *
      * @return a {@code KTable} that contains records with unmodified keys and new values (possibly of different type)
      */
     <VR> KTable<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper,
-                                 final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
+                                 final Materialized<K, VR, KeyValueStore> materialized);
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
@@ -1417,12 +1416,12 @@ public interface KTable<K, V> {
      * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
      * partitions.
      *
+     * @param <VO>          the value type of the other {@code KTable}
+     * @param <VR>          the value type of the result {@code KTable}
      * @param other         the other {@code KTable} to be joined with this {@code KTable}
      * @param joiner        a {@link ValueJoiner} that computes the join result for a pair of matching records
      * @param materialized  an instance of {@link Materialized} used to describe how the state store should be materialized.
      *                      Cannot be {@code null}
-     * @param <VO>          the value type of the other {@code KTable}
-     * @param <VR>          the value type of the result {@code KTable}
      * @return a {@code KTable} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key
      * @see #leftJoin(KTable, ValueJoiner, Materialized)
@@ -1430,7 +1429,7 @@ public interface KTable<K, V> {
      */
     <VO, VR> KTable<K, VR> join(final KTable<K, VO> other,
                                 final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
+                                final Materialized<K, VR, KeyValueStore> materialized);
     /**
      * Join records of this {@code KTable} with another {@code KTable}'s records using non-windowed inner equi join.
      * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
@@ -1744,12 +1743,12 @@ public interface KTable<K, V> {
      * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
      * partitions.
      *
+     * @param <VO>          the value type of the other {@code KTable}
+     * @param <VR>          the value type of the result {@code KTable}
      * @param other         the other {@code KTable} to be joined with this {@code KTable}
      * @param joiner        a {@link ValueJoiner} that computes the join result for a pair of matching records
      * @param materialized  an instance of {@link Materialized} used to describe how the state store should be materialized.
      *                      Cannot be {@code null}
-     * @param <VO>          the value type of the other {@code KTable}
-     * @param <VR>          the value type of the result {@code KTable}
      * @return a {@code KTable} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
      * left {@code KTable}
@@ -1758,7 +1757,7 @@ public interface KTable<K, V> {
      */
     <VO, VR> KTable<K, VR> leftJoin(final KTable<K, VO> other,
                                     final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                    final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
+                                    final Materialized<K, VR, KeyValueStore> materialized);
     /**
      * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
      * non-windowed left equi join.
@@ -2086,12 +2085,12 @@ public interface KTable<K, V> {
      * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
      * partitions.
      *
+     * @param <VO>          the value type of the other {@code KTable}
+     * @param <VR>          the value type of the result {@code KTable}
      * @param other         the other {@code KTable} to be joined with this {@code KTable}
      * @param joiner        a {@link ValueJoiner} that computes the join result for a pair of matching records
      * @param materialized  an instance of {@link Materialized} used to describe how the state store should be materialized.
      *                      Cannot be {@code null}
-     * @param <VO>          the value type of the other {@code KTable}
-     * @param <VR>          the value type of the result {@code KTable}
      * @return a {@code KTable} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
      * both {@code KTable}s
@@ -2100,7 +2099,7 @@ public interface KTable<K, V> {
      */
     <VO, VR> KTable<K, VR> outerJoin(final KTable<K, VO> other,
                                      final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                     final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
+                                     final Materialized<K, VR, KeyValueStore> materialized);
 
     /**
      * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using

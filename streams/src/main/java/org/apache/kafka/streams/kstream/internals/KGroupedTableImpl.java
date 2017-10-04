@@ -20,7 +20,6 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.KTable;
@@ -179,7 +178,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
     private <T> KTable<K, T> doAggregate(final ProcessorSupplier<K, Change<V>> aggregateSupplier,
                                          final String functionName,
-                                         final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materialized) {
+                                         final MaterializedInternal<K, T, KeyValueStore> materialized) {
         final String sinkName = builder.newName(KStreamImpl.SINK_NAME);
         final String sourceName = builder.newName(KStreamImpl.SOURCE_NAME);
         final String funcName = builder.newName(functionName);
@@ -205,11 +204,11 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     @Override
     public KTable<K, V> reduce(final Reducer<V> adder,
                                final Reducer<V> subtractor,
-                               final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+                               final Materialized<K, V, KeyValueStore> materialized) {
         Objects.requireNonNull(adder, "adder can't be null");
         Objects.requireNonNull(subtractor, "subtractor can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal
+        final MaterializedInternal<K, V, KeyValueStore> materializedInternal
                 = new MaterializedInternal<>(materialized);
         final ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableReduce<>(materializedInternal.storeName(),
                                                                                      adder,
@@ -241,7 +240,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     }
 
     @Override
-    public KTable<K, Long> count(final Materialized<K, Long, KeyValueStore<Bytes, byte[]>> materialized) {
+    public KTable<K, Long> count(final Materialized<K, Long, KeyValueStore> materialized) {
         return aggregate(countInitializer,
                          countAdder,
                          countSubtractor,
@@ -252,12 +251,12 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     public <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
                                         final Aggregator<? super K, ? super V, VR> adder,
                                         final Aggregator<? super K, ? super V, VR> subtractor,
-                                        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+                                        final Materialized<K, VR, KeyValueStore> materialized) {
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(adder, "adder can't be null");
         Objects.requireNonNull(subtractor, "subtractor can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal =
+        final MaterializedInternal<K, VR, KeyValueStore> materializedInternal =
                 new MaterializedInternal<>(materialized);
         final ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableAggregate<>(materializedInternal.storeName(),
                                                                                         initializer,
