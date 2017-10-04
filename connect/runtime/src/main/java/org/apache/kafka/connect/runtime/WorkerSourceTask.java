@@ -490,51 +490,27 @@ class WorkerSourceTask extends WorkerTask {
         private int activeRecordCount;
 
         public SourceTaskMetricsGroup(ConnectorTaskId id, ConnectMetrics connectMetrics) {
-            metricGroup = connectMetrics.group("source-task-metrics",
-                    "connector", id.connector(), "task", Integer.toString(id.task()));
+            ConnectMetricsRegistry registry = connectMetrics.registry();
+            metricGroup = connectMetrics.group(registry.sourceTaskGroupName(),
+                    registry.connectorTagName(), id.connector(),
+                    registry.taskTagName(), Integer.toString(id.task()));
 
             sourceRecordPoll = metricGroup.sensor("source-record-poll");
-            sourceRecordPoll.add(metricGroup.metricName("source-record-poll-rate",
-                    "The average per-second number of records produced/polled (before transformation) by this " +
-                            "task belonging to the named source connector in this worker."),
-                    new Rate());
-            sourceRecordPoll.add(metricGroup.metricName("source-record-poll-total",
-                    "The number of records produced/polled (before transformation) by this task belonging to " +
-                            "the named source connector in this worker, since the task was last restarted."),
-                    new Total());
+            sourceRecordPoll.add(metricGroup.metricName(registry.sourceRecordPollRate), new Rate());
+            sourceRecordPoll.add(metricGroup.metricName(registry.sourceRecordPollTotal), new Total());
 
             sourceRecordWrite = metricGroup.sensor("source-record-write");
-            sourceRecordWrite.add(metricGroup.metricName("source-record-write-rate",
-                    "The average per-second number of records output from the transformations and written to " +
-                            "Kafka for this task belonging to the named source connector in this worker. " +
-                            "This is after transformations are applied and excludes any records filtered out " +
-                            "by the transformations."),
-                    new Rate());
-            sourceRecordWrite.add(metricGroup.metricName("source-record-write-total",
-                    "The number of records output from the transformations and written to Kafka for this task " +
-                            "belonging to the named source connector in this worker, since the task was last " +
-                            "restarted."),
-                    new Total());
-
+            sourceRecordWrite.add(metricGroup.metricName(registry.sourceRecordWriteRate), new Rate());
+            sourceRecordWrite.add(metricGroup.metricName(registry.sourceRecordWriteTotal), new Total());
 
             pollTime = metricGroup.sensor("poll-batch-time");
-            pollTime.add(metricGroup.metricName("poll-batch-max-time-ms",
-                    "The maximum time in milliseconds taken by this task to poll for a batch of source records"),
-                    new Max());
-            pollTime.add(metricGroup.metricName("poll-batch-avg-time-ms",
-                    "The average time in milliseconds taken by this task to poll for a batch of source records"),
-                    new Avg());
+            pollTime.add(metricGroup.metricName(registry.sourceRecordPollBatchTimeMax), new Max());
+            pollTime.add(metricGroup.metricName(registry.sourceRecordPollBatchTimeAvg), new Avg());
 
-            sourceRecordActiveCount = metricGroup.metrics().sensor("source-record-active-count");
-            sourceRecordActiveCount.add(metricGroup.metricName("source-record-active-count",
-                    "The number of records that have been produced by this task but not yet completely written to Kafka."),
-                    new Value());
-            sourceRecordActiveCount.add(metricGroup.metricName("source-record-active-count-max",
-                    "The maximum number of records that have been produced by this task but not yet completely written to Kafka."),
-                    new Max());
-            sourceRecordActiveCount.add(metricGroup.metricName("source-record-active-count-avg",
-                    "The average number of records that have been produced by this task but not yet completely written to Kafka."),
-                    new Avg());
+            sourceRecordActiveCount = metricGroup.metrics().sensor("sink-record-active-count");
+            sourceRecordActiveCount.add(metricGroup.metricName(registry.sourceRecordActiveCount), new Value());
+            sourceRecordActiveCount.add(metricGroup.metricName(registry.sourceRecordActiveCountMax), new Max());
+            sourceRecordActiveCount.add(metricGroup.metricName(registry.sourceRecordActiveCountAvg), new Avg());
         }
 
         void close() {
