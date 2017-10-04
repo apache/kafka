@@ -23,7 +23,7 @@ import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
 
 import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaMetricsGroup
-import kafka.utils.CoreUtils.{inLock, inReadLock, inWriteLock}
+import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
 import kafka.utils.timer._
 
@@ -46,11 +46,8 @@ import scala.collection.mutable.ListBuffer
 abstract class DelayedOperation(override val delayMs: Long) extends TimerTask with Logging {
 
   private val completed = new AtomicBoolean(false)
-  protected var lock: ReentrantLock = null
-
-  def createLock(): Unit = {
-    lock = new ReentrantLock
-  }
+  // Visible for testing
+  private[server] val lock: ReentrantLock = new ReentrantLock
 
   /*
    * Force completing the delayed operation, if not already completed.
@@ -104,7 +101,7 @@ abstract class DelayedOperation(override val delayMs: Long) extends TimerTask wi
    * Thread-safe variant of tryComplete() that attempts completion only if the lock can be acquired
    * without blocking.
    */
-  def safeTryComplete(): Boolean = {
+  private[server] def maybeTryComplete(): Boolean = {
     if (lock.tryLock()) {
       try {
         tryComplete()
@@ -212,9 +209,6 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
     if (isCompletedByMe)
       return true
 
-    // Create a lock before adding to watch since multiple threads may attempt to complete
-    operation.createLock()
-
     var watchCreated = false
     for(key <- watchKeys) {
       // If the operation is already completed, stop adding it to the rest of the watcher list.
@@ -228,7 +222,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
       }
     }
 
-    isCompletedByMe = operation.safeTryComplete()
+    isCompletedByMe = operation.maybeTryComplete()
     if (isCompletedByMe)
       return true
 
@@ -350,7 +344,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
         if (curr.isCompleted) {
           // another thread has completed this operation, just remove it
           iter.remove()
-        } else if (curr.safeTryComplete()) {
+        } else if (curr.maybeTryComplete()) {
           iter.remove()
           completed += 1
         }

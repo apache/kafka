@@ -170,25 +170,24 @@ class DelayedOperationTest {
 
       // Lock held by current thread, completable operations should complete
       ops = createDelayedOperations(2)
-      inLock(ops(1).delayedOperationLock) {
+      inLock(ops(1).lock) {
         checkAndComplete(ops, ops)
       }
 
       // Lock held by another thread, should not block, only operations that can be
       // locked without blocking on the current thread should complete
       ops = createDelayedOperations(2)
-      runOnAnotherThread(ops(0).delayedOperationLock.lock(), true)
+      runOnAnotherThread(ops(0).lock.lock(), true)
       try {
         checkAndComplete(ops, Seq(ops(1)))
       } finally {
-        runOnAnotherThread(ops(0).delayedOperationLock.unlock(), true)
+        runOnAnotherThread(ops(0).lock.unlock(), true)
       }
 
       // Immediately completable operations should complete without locking
       ops = createCompletableOperations(2)
       ops.foreach { op =>
         assertTrue("Should have completed", purgatory.tryCompleteElseWatch(op, Seq(key)))
-        assertNull("Lock created unnecessarily", op.delayedOperationLock)
         assertTrue("Should have completed", op.isCompleted)
       }
 
@@ -201,8 +200,6 @@ class DelayedOperationTest {
   class MockDelayedOperation(delayMs: Long)
     extends DelayedOperation(delayMs) {
     var completable = false
-
-    def delayedOperationLock = lock
 
     def awaitExpiration() {
       synchronized {
