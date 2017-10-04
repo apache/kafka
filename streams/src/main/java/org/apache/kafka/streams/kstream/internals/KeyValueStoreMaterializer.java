@@ -24,24 +24,18 @@ import org.apache.kafka.streams.state.Stores;
 
 public class KeyValueStoreMaterializer<K, V> {
     private final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized;
-    private final InternalNameProvider streamsBuilder;
 
-    public KeyValueStoreMaterializer(final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized,
-                                     final InternalNameProvider streamsBuilder) {
+    public KeyValueStoreMaterializer(final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         this.materialized = materialized;
-        this.streamsBuilder = streamsBuilder;
     }
 
     /**
-     * @param storePrefix to prefix automatically generated store name when a storeName or storeSupplier
-     *                    has not been provided
      * @return  StoreBuilder
      */
-    public StoreBuilder<KeyValueStore<K, V>> materialize(final String storePrefix) {
+    public StoreBuilder<KeyValueStore<K, V>> materialize() {
         KeyValueBytesStoreSupplier supplier = (KeyValueBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
-            final String name = materialized.storeName() != null ? materialized.storeName()
-                    : streamsBuilder.newStoreName(storePrefix);
+            final String name = materialized.storeName();
             supplier = Stores.persistentKeyValueStore(name);
         }
         final StoreBuilder<KeyValueStore<K, V>> builder = Stores.keyValueStoreBuilder(supplier,

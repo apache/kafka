@@ -138,9 +138,9 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     private <T> KTable<K, T> doAggregate(final ProcessorSupplier<K, Change<V>> aggregateSupplier,
                                          final String functionName,
                                          final StateStoreSupplier<KeyValueStore> storeSupplier) {
-        final String sinkName = builder.newName(KStreamImpl.SINK_NAME);
-        final String sourceName = builder.newName(KStreamImpl.SOURCE_NAME);
-        final String funcName = builder.newName(functionName);
+        final String sinkName = builder.newProcessorName(KStreamImpl.SINK_NAME);
+        final String sourceName = builder.newProcessorName(KStreamImpl.SOURCE_NAME);
+        final String funcName = builder.newProcessorName(functionName);
 
         buildAggregate(aggregateSupplier,
                        storeSupplier.name() + KStreamImpl.REPARTITION_TOPIC_SUFFIX,
@@ -180,16 +180,16 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     private <T> KTable<K, T> doAggregate(final ProcessorSupplier<K, Change<V>> aggregateSupplier,
                                          final String functionName,
                                          final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materialized) {
-        final String sinkName = builder.newName(KStreamImpl.SINK_NAME);
-        final String sourceName = builder.newName(KStreamImpl.SOURCE_NAME);
-        final String funcName = builder.newName(functionName);
+        final String sinkName = builder.newProcessorName(KStreamImpl.SINK_NAME);
+        final String sourceName = builder.newProcessorName(KStreamImpl.SOURCE_NAME);
+        final String funcName = builder.newProcessorName(functionName);
 
         buildAggregate(aggregateSupplier,
                        materialized.storeName() + KStreamImpl.REPARTITION_TOPIC_SUFFIX,
                        funcName,
                        sourceName, sinkName);
-        builder.internalTopologyBuilder.addStateStore(new KeyValueStoreMaterializer<>(materialized, builder)
-                                                              .materialize(functionName), funcName);
+        builder.internalTopologyBuilder.addStateStore(new KeyValueStoreMaterializer<>(materialized)
+                                                              .materialize(), funcName);
 
         // return the KTable representation with the intermediate topic as the sources
         return new KTableImpl<>(builder, funcName, aggregateSupplier, Collections.singleton(sourceName), materialized.storeName(), isQueryable);
@@ -211,7 +211,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         Objects.requireNonNull(subtractor, "subtractor can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
         final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal
-                = new MaterializedInternal<>(materialized);
+                = new MaterializedInternal<>(materialized, builder, REDUCE_NAME);
         final ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableReduce<>(materializedInternal.storeName(),
                                                                                      adder,
                                                                                      subtractor);
@@ -259,7 +259,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         Objects.requireNonNull(subtractor, "subtractor can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
         final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal =
-                new MaterializedInternal<>(materialized);
+                new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME);
         final ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableAggregate<>(materializedInternal.storeName(),
                                                                                         initializer,
                                                                                         adder,

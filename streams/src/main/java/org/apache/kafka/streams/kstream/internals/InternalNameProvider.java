@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 public interface InternalNameProvider {
-    String newName(String prefix);
+    String newProcessorName(String prefix);
 
     String newStoreName(String prefix);
 }

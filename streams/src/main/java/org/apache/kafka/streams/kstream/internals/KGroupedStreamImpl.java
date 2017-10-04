@@ -108,7 +108,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
         Objects.requireNonNull(reducer, "reducer can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
         final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal
-                = new MaterializedInternal<>(materialized);
+                = new MaterializedInternal<>(materialized, builder, REDUCE_NAME);
         return doAggregate(
                 new KStreamReduce<K, V>(materializedInternal.storeName(), reducer),
                 REDUCE_NAME,
@@ -168,7 +168,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                                                      final Aggregator<? super K, ? super V, VR> aggregator,
                                                      final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
         final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal
-                = new MaterializedInternal<>(materialized);
+                = new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME);
         return doAggregate(
                 new KStreamAggregate<>(materializedInternal.storeName(), initializer, aggregator),
                 AGGREGATE_NAME,
@@ -179,10 +179,10 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     public <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer, final Aggregator<? super K, ? super V, VR> aggregator) {
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(aggregator, "aggregator can't be null");
-        final String storeName = builder.newStoreName(AGGREGATE_NAME);
-
         MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal =
-                new MaterializedInternal<>(Materialized.<K, VR, KeyValueStore<Bytes, byte[]>>as(storeName), false);
+                new MaterializedInternal<>(Materialized.<K, VR, KeyValueStore<Bytes, byte[]>>with(null, null),
+                                           builder,
+                                           AGGREGATE_NAME);
         return doAggregate(new KStreamAggregate<>(materializedInternal.storeName(), initializer, aggregator),
                            AGGREGATE_NAME,
                            materializedInternal);
@@ -267,7 +267,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     public KTable<K, Long> count(final Materialized<K, Long, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(materialized, "materialized can't be null");
         final MaterializedInternal<K, Long, KeyValueStore<Bytes, byte[]>> materializedInternal
-                = new MaterializedInternal<>(materialized);
+                = new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME);
         if (materializedInternal.valueSerde() == null) {
             materialized.withValueSerde(Serdes.Long());
         }
@@ -465,8 +465,8 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                                          final String functionName,
                                          final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materializedInternal) {
 
-        final StoreBuilder<KeyValueStore<K, T>> storeBuilder = new KeyValueStoreMaterializer<>(materializedInternal, builder)
-                .materialize(functionName);
+        final StoreBuilder<KeyValueStore<K, T>> storeBuilder = new KeyValueStoreMaterializer<>(materializedInternal)
+                .materialize();
         return aggregateBuilder.build(aggregateSupplier, functionName, storeBuilder, materializedInternal.isQueryable());
 
     }
@@ -476,7 +476,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
             final String functionName,
             final StateStoreSupplier storeSupplier) {
 
-        final String aggFunctionName = builder.newName(functionName);
+        final String aggFunctionName = builder.newProcessorName(functionName);
 
         final String sourceName = repartitionIfRequired(storeSupplier.name());
 

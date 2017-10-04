@@ -83,7 +83,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
     public KTable<Windowed<K>, Long> count(final Materialized<K, Long, SessionStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(materialized, "materialized can't be null");
         final MaterializedInternal<K, Long, SessionStore<Bytes, byte[]>> materializedInternal
-                = new MaterializedInternal<>(materialized);
+                = new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME);
         if (materializedInternal.valueSerde() == null) {
             materialized.withValueSerde(Serdes.Long());
         }
@@ -113,7 +113,8 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
         Objects.requireNonNull(aggregator, "aggregator can't be null");
         Objects.requireNonNull(sessionMerger, "sessionMerger can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, VR, SessionStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
+        final MaterializedInternal<K, VR, SessionStore<Bytes, byte[]>> materializedInternal
+                = new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME);
         return (KTable<Windowed<K>, VR>) aggregateBuilder.build(
                 new KStreamSessionWindowAggregate<>(windows, materializedInternal.storeName(), initializer, aggregator, sessionMerger),
                 AGGREGATE_NAME,
