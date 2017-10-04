@@ -285,26 +285,26 @@ object AdminUtils extends Logging with AdminUtilities {
         s"The number of partitions for a topic can only be increased. " +
           s"Topic $topic currently has ${existingAssignment.size} partitions, " +
           s"$numPartitions would not be an increase.")
-    else {
-      replicaAssignment.foreach { proposedReplicaAssignment =>
-        validateReplicaAssignment(proposedReplicaAssignment, existingAssignmentPartition0,
-          allBrokers.map(_.id).toSet)
-      }
 
-      val proposedAssignmentForNewPartitions = replicaAssignment.getOrElse {
-        val startIndex = math.max(0, allBrokers.indexWhere(_.id >= existingAssignmentPartition0.head))
-        AdminUtils.assignReplicasToBrokers(allBrokers, partitionsToAdd, existingAssignmentPartition0.size,
-          startIndex, existingAssignment.size)
-      }
-      val proposedAssignment = existingAssignment ++ proposedAssignmentForNewPartitions
-      if (!validateOnly) {
-        info(s"Creating $partitionsToAdd partitions for '$topic' with the following replica assignment: " +
-          s"$proposedAssignmentForNewPartitions.")
-        // add the combined new list
-        AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, proposedAssignment, update = true)
-      }
-      proposedAssignment
+    replicaAssignment.foreach { proposedReplicaAssignment =>
+      validateReplicaAssignment(proposedReplicaAssignment, existingAssignmentPartition0,
+        allBrokers.map(_.id).toSet)
     }
+
+    val proposedAssignmentForNewPartitions = replicaAssignment.getOrElse {
+      val startIndex = math.max(0, allBrokers.indexWhere(_.id >= existingAssignmentPartition0.head))
+      AdminUtils.assignReplicasToBrokers(allBrokers, partitionsToAdd, existingAssignmentPartition0.size,
+        startIndex, existingAssignment.size)
+    }
+    val proposedAssignment = existingAssignment ++ proposedAssignmentForNewPartitions
+    if (!validateOnly) {
+      info(s"Creating $partitionsToAdd partitions for '$topic' with the following replica assignment: " +
+        s"$proposedAssignmentForNewPartitions.")
+      // add the combined new list
+      AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, proposedAssignment, update = true)
+    }
+    proposedAssignment
+
   }
 
   /**

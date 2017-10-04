@@ -237,10 +237,7 @@ class AdminManager(val config: KafkaConfig,
             throw new InvalidReplicaAssignmentException(
               s"Unknown broker(s) in replica assignment: ${unknownBrokers.mkString(", ")}.")
 
-          if (assignments.size < numPartitionsIncrement ||
-            assignments.size > numPartitionsIncrement && numPartitionsIncrement != 0)
-            // If numPartitionsIncrement == 0 we allow assignments.size > numPartitionsIncrement
-            // so the request is idempotent.
+          if (assignments.size != numPartitionsIncrement)
             throw new InvalidReplicaAssignmentException(
               s"Increasing the number of partitions by $numPartitionsIncrement " +
                 s"but ${assignments.size} assignments provided.")
