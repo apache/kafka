@@ -244,7 +244,8 @@ abstract class AbstractFetcherThread(name: String,
           case Some(offset) =>
             // Remember the truncation offset for this partition provided by the caller
             // This is only used by ReplicaAlterDirThread when leader epoch is undefined
-            partitionTruncationOffsets.put(state.topicPartition(), offset)
+            val currentTruncationOffset = partitionTruncationOffsets.getOrElse(state.topicPartition(), Long.MaxValue)
+            partitionTruncationOffsets.put(state.topicPartition(), math.min(offset, currentTruncationOffset))
             // Mark this partition for truncation using leader epoch
             PartitionFetchState(state.value.fetchOffset, state.value.delay, truncatingLog = true)
           case None =>
