@@ -286,20 +286,6 @@ object AdminUtils extends Logging with AdminUtilities {
           s"Topic $topic currently has ${existingAssignment.size} partitions, " +
           s"$numPartitions would not be an increase.")
     else if (partitionsToAdd == 0) {
-      if (replicaAssignment.isDefined) {
-        // Check the provided assignments are compatible with the tail of the existing
-        val newAssignment = replicaAssignment.get
-        // keyed according to the old assignment
-        val newAssignmentWithOldPartitionIds = newAssignment.toList.sortBy { case (p, b) => p }.map { case (p, b) => p - existingAssignment.size + 1 -> b }.toMap
-        val tailOldPartitionIds = existingAssignment.toList.sortBy { case (p, b) => p }.takeRight(newAssignment.size).toMap
-        if (tailOldPartitionIds != newAssignmentWithOldPartitionIds) {
-          val mismatch = tailOldPartitionIds.filter { case (p, b) => newAssignmentWithOldPartitionIds(p) != b }
-          throw new InvalidReplicaAssignmentException(
-            s"Not changing the number of partitions and the given assignments for partitions " +
-              s"${mismatch.keySet.mkString(", ")} are incompatible with the existing assignments " +
-              s"${mismatch.values.map(_.mkString(", ")).mkString("; ")}.")
-        }
-      }
       existingAssignment
     } else {
       replicaAssignment.foreach { proposedReplicaAssignment =>

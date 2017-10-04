@@ -444,17 +444,8 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
       // try a newCount which would be a noop (where the assignment doesn't match current state)
       alterResult = client.createPartitions(Map(topic2 ->
         NewPartitions.increaseTo(3, newPartition2Assignments.asScala.reverse.toList.asJava)).asJava, option)
-      try {
-        alterResult.values.get(topic2).get
-        fail(s"$desc: Expect InvalidReplicaAssignmentException when newCount is a decrease")
-      } catch {
-        case e: ExecutionException =>
-          assertTrue(desc, e.getCause.isInstanceOf[InvalidReplicaAssignmentException])
-          assertEquals(desc, "Not changing the number of partitions and the given assignments for partitions " +
-            "1, 2 are incompatible with the existing assignments 0, 1; 1, 2.", e.getCause.getMessage)
-          assertEquals(desc, 3, numPartitions(topic2))
-      }
-
+      alterResult.values.get(topic2).get
+      assertEquals(desc, 3, numPartitions(topic2))
 
       // try a bad topic name
       val unknownTopic = "an-unknown-topic"
