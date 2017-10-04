@@ -20,7 +20,7 @@ package kafka.consumer
 import kafka.api.{FetchRequestBuilder, FetchResponsePartitionData, OffsetRequest, Request}
 import kafka.cluster.BrokerEndPoint
 import kafka.message.ByteBufferMessageSet
-import kafka.server.{AbstractFetcherThread, PartitionFetchState}
+import kafka.server.{AbstractFetcherThread, PartitionFetchState, ResultWithPartitions}
 import kafka.common.{ErrorMapping, TopicAndPartition}
 
 import scala.collection.Map
@@ -29,6 +29,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.EpochEndOffset
+
 
 @deprecated("This class has been deprecated and will be removed in a future release. " +
             "Please use org.apache.kafka.clients.consumer.internals.Fetcher instead.", "0.11.0.0")

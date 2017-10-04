@@ -14,14 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.api
+package kafka.server
 
 import java.io.File
 import java.util.Collections
 import java.util.concurrent.{ExecutionException, TimeUnit}
 
+import kafka.server.LogDirFailureTest._
+import kafka.api.IntegrationTestHarness
 import kafka.controller.{OfflineReplica, PartitionAndReplica}
-import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{CoreUtils, Exit, TestUtils, ZkUtils}
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
@@ -29,8 +30,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderForPartitionException}
 import org.junit.{Before, Test}
-import org.junit.Assert.assertTrue
-import org.junit.Assert.assertEquals
+import org.junit.Assert.{assertTrue, assertFalse, assertEquals}
 
 import scala.collection.JavaConverters._
 
@@ -38,8 +38,6 @@ import scala.collection.JavaConverters._
   * Test whether clients can producer and consume when there is log directory failure
   */
 class LogDirFailureTest extends IntegrationTestHarness {
-
-  import kafka.api.LogDirFailureTest._
 
   val producerCount: Int = 1
   val consumerCount: Int = 1
@@ -65,7 +63,8 @@ class LogDirFailureTest extends IntegrationTestHarness {
   }
 
   @Test
-  def brokerWithOldIBPShouldHaltOnLogDirFailure() {
+  // Broker should halt on any log directory failure if inter-broker protocol < 1.0
+  def brokerWithOldInterBrokerProtocolShouldHaltOnLogDirFailure() {
     @volatile var statusCodeOption: Option[Int] = None
     Exit.setHaltProcedure { (statusCode, _) =>
       statusCodeOption = Some(statusCode)
@@ -122,7 +121,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
 
     assertEquals(serverCount, leaderServer.replicaManager.getPartition(new TopicPartition(topic, anotherPartitionWithTheSameLeader)).get.inSyncReplicas.size)
     followerServer.replicaManager.replicaFetcherManager.fetcherThreadMap.values.foreach { thread =>
-      assertTrue("ReplicaFetcherThread should still be working if its partition count > 0", thread.shutdownLatch.getCount > 0)
+      assertFalse("ReplicaFetcherThread should still be working if its partition count > 0", thread.isShutdownComplete)
     }
   }
 

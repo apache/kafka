@@ -182,14 +182,14 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     val followerId = if (leaderId == brokerId1) brokerId2 else brokerId1
     debug("Follower for " + topic  + " is: %s".format(followerId))
 
-    produceMessage(servers, topic, null, "first")
+    produceMessage(servers, topic, "first")
     waitUntilMetadataIsPropagated(servers, topic, partitionId)
     assertEquals(List("first"), consumeAllMessages(topic))
 
     // shutdown follower server
     servers.filter(server => server.config.brokerId == followerId).map(server => shutdownServer(server))
 
-    produceMessage(servers, topic, null, "second")
+    produceMessage(servers, topic, "second")
     assertEquals(List("first", "second"), consumeAllMessages(topic))
 
     // shutdown leader and then restart follower
@@ -199,7 +199,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     // wait until new leader is (uncleanly) elected
     waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId, newLeaderOpt = Some(followerId))
 
-    produceMessage(servers, topic, null, "third")
+    produceMessage(servers, topic, "third")
 
     // second message was lost due to unclean election
     assertEquals(List("first", "third"), consumeAllMessages(topic))
@@ -215,14 +215,14 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     val followerId = if (leaderId == brokerId1) brokerId2 else brokerId1
     debug("Follower for " + topic  + " is: %s".format(followerId))
 
-    produceMessage(servers, topic, null, "first")
+    produceMessage(servers, topic, "first")
     waitUntilMetadataIsPropagated(servers, topic, partitionId)
     assertEquals(List("first"), consumeAllMessages(topic))
 
     // shutdown follower server
     servers.filter(server => server.config.brokerId == followerId).map(server => shutdownServer(server))
 
-    produceMessage(servers, topic, null, "second")
+    produceMessage(servers, topic, "second")
     assertEquals(List("first", "second"), consumeAllMessages(topic))
 
     // shutdown leader and then restart follower
@@ -234,7 +234,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
 
     // message production and consumption should both fail while leader is down
     try {
-      produceMessage(servers, topic, null, "third")
+      produceMessage(servers, topic, "third")
       fail("Message produced while leader is down should fail, but it succeeded")
     } catch {
       case e: ExecutionException if e.getCause.isInstanceOf[TimeoutException] => // expected
@@ -246,7 +246,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     servers.filter(server => server.config.brokerId == leaderId).map(server => server.startup())
     waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId, newLeaderOpt = Some(leaderId))
 
-    produceMessage(servers, topic, null, "third")
+    produceMessage(servers, topic, "third")
     waitUntilMetadataIsPropagated(servers, topic, partitionId)
     servers.filter(server => server.config.brokerId == leaderId).map(server => shutdownServer(server))
 

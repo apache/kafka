@@ -240,7 +240,9 @@ class ReplicaFetcherThread(name: String,
           val logStartOffset = replicaMgr.getReplicaOrException(topicPartition).logStartOffset
           requestMap.put(topicPartition, new JFetchRequest.PartitionData(partitionFetchState.fetchOffset, logStartOffset, fetchSize))
         } catch {
-          case e: KafkaStorageException =>
+          case _: KafkaStorageException =>
+            // The replica has already been marked offline due to log directory failure and the original failure should have already been logged.
+            // This partition should be removed from ReplicaFetcherThread soon by ReplicaManager.handleLogDirFailure()
             partitionsWithError += topicPartition
         }
       }

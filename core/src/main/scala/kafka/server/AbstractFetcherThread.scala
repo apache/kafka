@@ -82,8 +82,6 @@ abstract class AbstractFetcherThread(name: String,
 
   protected def buildFetchRequest(partitionMap: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[REQ]
 
-  case class ResultWithPartitions[R](result: R, partitionsWithError: Set[TopicPartition])
-
   protected def fetch(fetchRequest: REQ): Seq[(TopicPartition, PD)]
 
   override def shutdown(){
@@ -420,3 +418,5 @@ case class PartitionFetchState(fetchOffset: Long, delay: DelayedItem, truncating
 
   override def toString = "offset:%d-isReadyForFetch:%b-isTruncatingLog:%b".format(fetchOffset, isReadyForFetch, truncatingLog)
 }
+
+case class ResultWithPartitions[R](result: R, partitionsWithError: Set[TopicPartition])

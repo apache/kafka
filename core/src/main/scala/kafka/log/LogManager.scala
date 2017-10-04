@@ -134,7 +134,7 @@ class LogManager(logDirs: Array[File],
     for (dir <- dirs) {
       try {
         if (initialOfflineDirs.contains(dir))
-          throw new IOException(s"${dir.getAbsolutePath} fails to be loaded during broker startup")
+          throw new IOException(s"Failed to load ${dir.getAbsolutePath} during broker startup")
 
         if (!dir.exists) {
           info("Log directory '" + dir.getAbsolutePath + "' not found, creating it.")

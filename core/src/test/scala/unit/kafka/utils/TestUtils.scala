@@ -1110,13 +1110,13 @@ object TestUtils extends Logging {
     values
   }
 
-  def produceMessage(servers: Seq[KafkaServer], topic: String, partition: Integer, message: String) {
+  def produceMessage(servers: Seq[KafkaServer], topic: String, message: String) {
     val producer = createNewProducer(
       TestUtils.getBrokerListStrFromServers(servers),
       retries = 5,
       requestTimeoutMs = 2000
     )
-    producer.send(new ProducerRecord(topic, partition, topic.getBytes, message.getBytes)).get
+    producer.send(new ProducerRecord(topic, topic.getBytes, message.getBytes)).get
     producer.close()
   }
 
