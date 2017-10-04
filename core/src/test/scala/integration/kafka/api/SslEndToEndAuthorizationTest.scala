@@ -18,8 +18,7 @@
 package kafka.api
 
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
-import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder, SslAuthenticationContext}
+import org.apache.kafka.common.security.auth._
 import org.junit.Before
 
 object SslEndToEndAuthorizationTest {

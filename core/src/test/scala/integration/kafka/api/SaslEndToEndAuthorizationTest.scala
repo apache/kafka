@@ -20,9 +20,9 @@ import java.util.Properties
 
 import kafka.utils.TestUtils
 import kafka.utils.Implicits._
-import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.errors.GroupAuthorizationException
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.{Before, Test}
 
 import scala.collection.immutable.List
