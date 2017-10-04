@@ -34,9 +34,23 @@ import java.util.Objects;
 
 /**
  * Used to describe how a {@link StateStore} should be materialized.
- * You can either provide a custom {@link StateStore} backend
- * through one of the provided methods accepting a supplier or use the default RocksDB backends
- * by providing just a store name.
+ * You can either provide a custom {@link StateStore} backend through one of the provided methods accepting a supplier
+ * or use the default RocksDB backends by providing just a store name.
+ * <p>
+ * For example, you can read a topic as {@link KTable} and force a state store materialization to access the content
+ * via Interactive Queries API:
+ * <pre>{@code
+ * StreamsBuilder builder = new StreamsBuilder();
+ * KTable<Integer, Integer> table = builder.table(
+ *   "topicName",
+ *   Materialized.as("queryable-store-name"));
+ * }</pre>
+ *
+ * @param <K> type of record key
+ * @param <V> type of record value
+ * @param <S> type of state store (note: state stores always have key/value types {@code <Bytes,byte[]>}
+ *
+ * @see org.apache.kafka.streams.state.Stores
  */
 public class Materialized<K, V, S extends StateStore> {
     protected StoreSupplier<S> storeSupplier;
