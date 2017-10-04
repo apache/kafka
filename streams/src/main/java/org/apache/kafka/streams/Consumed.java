@@ -26,7 +26,7 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
  * The {@code Consumed} class is used to define the optional parameters when using {@link StreamsBuilder} to
  * build instances of {@link KStream}, {@link KTable}, and {@link GlobalKTable}.
  * <p>
- * For example, you can read an topic as {@link KStream} with custom timestamp extractor and specify the corresponding
+ * For example, you can read a topic as {@link KStream} with a custom timestamp extractor and specify the corresponding
  * key and value serdes like:
  * <pre>{@code
  * StreamsBuilder builder = new StreamsBuilder();
@@ -35,8 +35,9 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
  *   Consumed.with(Serdes.String(), Serdes.Long())
  *           .withTimestampExtractor(new LogAndSkipOnInvalidTimestamp()));
  * }</pre>
- * Similar, you can read a topic as {@link KTable} with custom "auto.offset.reset" strategy and force a state store
- * {@link org.apache.kafka.streams.kstream.Materialized materialization} to access the content via Interactive Queries API:
+ * Similarly, you can read a topic as {@link KTable} with a custom {@code auto.offset.reset} configuration and force a
+ * state store {@link org.apache.kafka.streams.kstream.Materialized materialization} to access the content via
+ * interactive queries:
  * <pre>{@code
  * StreamsBuilder builder = new StreamsBuilder();
  * KTable<Integer, Integer> table = builder.table(

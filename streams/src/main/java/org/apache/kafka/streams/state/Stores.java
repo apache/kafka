@@ -45,7 +45,7 @@ import java.util.Map;
 /**
  * Factory for creating state stores in Kafka Streams.
  * <p>
- * For high-level DSL, i.e., {@link org.apache.kafka.streams.StreamsBuilder StreamsBuilder}, users create
+ * When using the high-level DSL, i.e., {@link org.apache.kafka.streams.StreamsBuilder StreamsBuilder}, users create
  * {@link StoreSupplier}s that can be further customized via
  * {@link org.apache.kafka.streams.kstream.Materialized Materialized}.
  * For example, a topic read as {@link org.apache.kafka.streams.kstream.KTable KTable} can be materialized into an
@@ -60,21 +60,21 @@ import java.util.Map;
  *               .withValueSerde(Serdes.String())
  *               .withCachingDisabled());
  * }</pre>
- * For low-level Processor API, i.e., {@link org.apache.kafka.streams.Topology Topology}, users create
+ * When using the Processor API, i.e., {@link org.apache.kafka.streams.Topology Topology}, users create
  * {@link StoreBuilder}s that can be attached to {@link org.apache.kafka.streams.processor.Processor Processor}s.
- * For example, you can create an {@link org.apache.kafka.streams.kstream.Windowed windowed} RocksDB store with custom
- * changelog configuration like:
+ * For example, you can create a {@link org.apache.kafka.streams.kstream.Windowed windowed} RocksDB store with custom
+ * changelog topic configuration like:
  * <pre>{@code
  * Topology topology = new Topology();
  * topology.addProcessor("processorName", ...);
  *
- * Map<String,String> changelogConfig = new HashMap<>();
+ * Map<String,String> topicConfig = new HashMap<>();
  * StoreBuilder<WindowStore<Integer, Long>> storeBuilder = Stores
  *   .windowStoreBuilder(
  *     Stores.persistentWindowStore("queryable-store-name", ...),
  *     Serdes.Integer(),
  *     Serdes.Long())
- *   .withLoggingEnabled(changelogConfig);
+ *   .withLoggingEnabled(topicConfig);
  *
  * topology.addStateStore(storeBuilder, "processorName");
  * }</pre>

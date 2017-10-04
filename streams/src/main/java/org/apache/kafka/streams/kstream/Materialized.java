@@ -48,7 +48,7 @@ import java.util.Objects;
  *
  * @param <K> type of record key
  * @param <V> type of record value
- * @param <S> type of state store (note, state stores always have key/value types {@code <Bytes,byte[]>}
+ * @param <S> type of state store (note: state stores always have key/value types {@code <Bytes,byte[]>}
  *
  * @see org.apache.kafka.streams.state.Stores
  */
