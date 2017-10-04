@@ -20,7 +20,7 @@ import java.util.Properties
 import kafka.admin.AdminUtils
 import kafka.server.{ConfigEntityName, KafkaConfig, QuotaId}
 import kafka.utils.JaasTestUtils
-import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.{After, Before}
 import org.apache.kafka.common.metrics.Sanitizer
 

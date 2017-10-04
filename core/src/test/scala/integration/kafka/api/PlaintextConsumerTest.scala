@@ -21,7 +21,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.{Metric, MetricName, TopicPartition}
+import org.apache.kafka.common.{MetricName, TopicPartition}
 import org.apache.kafka.common.errors.InvalidTopicException
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.record.{CompressionType, TimestampType}

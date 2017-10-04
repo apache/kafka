@@ -22,9 +22,10 @@ import util.Arrays.asList
 import kafka.common.BrokerEndPointNotAvailableException
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.UpdateMetadataRequest
 import org.apache.kafka.common.requests.UpdateMetadataRequest.{Broker, EndPoint}
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Test
 import org.junit.Assert._
 

@@ -17,7 +17,6 @@
  package kafka.log
 
 import java.io.File
-import java.util.concurrent.ConcurrentLinkedDeque
 
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.checkEquals

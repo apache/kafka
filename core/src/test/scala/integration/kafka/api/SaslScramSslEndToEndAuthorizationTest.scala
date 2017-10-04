@@ -18,7 +18,6 @@ package kafka.api
 
 import org.apache.kafka.common.security.scram.ScramMechanism
 import kafka.utils.JaasTestUtils
-import kafka.admin.ConfigCommand
 import kafka.utils.ZkUtils
 import scala.collection.JavaConverters._
 import org.junit.Before

@@ -22,7 +22,6 @@ import org.apache.kafka.common.metrics.{MetricConfig, Metrics, Quota, Sanitizer}
 import org.apache.kafka.common.utils.MockTime
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{Before, Test}
-import kafka.admin.ConfigCommand
 
 class ClientQuotaManagerTest {
   private val time = new MockTime

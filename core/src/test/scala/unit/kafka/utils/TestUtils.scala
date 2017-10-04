@@ -47,8 +47,8 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
-import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.record._
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{ByteArraySerializer, Serializer}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.utils.Utils._

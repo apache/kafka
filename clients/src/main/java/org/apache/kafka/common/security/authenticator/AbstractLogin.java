@@ -27,7 +27,6 @@ import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.Subject;
 
 import org.apache.kafka.common.security.JaasContext;
-import org.apache.kafka.common.security.auth.Login;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
