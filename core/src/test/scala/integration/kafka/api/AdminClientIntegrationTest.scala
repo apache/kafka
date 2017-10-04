@@ -438,7 +438,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
       } catch {
         case e: ExecutionException =>
           assertTrue(desc, e.getCause.isInstanceOf[InvalidPartitionsException])
-          assertEquals(desc, "The number of partitions for a topic can only be increased. Topic create-partitions-topic-2 currently has 3 partitions, 3 would not be an increase.", e.getCause.getMessage)
+          assertEquals(desc, "Topic already has 3 partitions.", e.getCause.getMessage)
           assertEquals(desc, 3, numPartitions(topic2))
       }
 
@@ -450,7 +450,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
       } catch {
         case e: ExecutionException =>
           assertTrue(desc, e.getCause.isInstanceOf[InvalidPartitionsException])
-          assertEquals(desc, "The number of partitions for a topic can only be increased. Topic create-partitions-topic-2 currently has 3 partitions, 3 would not be an increase.", e.getCause.getMessage)
+          assertEquals(desc, "Topic already has 3 partitions.", e.getCause.getMessage)
           assertEquals(desc, 3, numPartitions(topic2))
       }
 
@@ -462,7 +462,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
       } catch {
         case e: ExecutionException =>
           assertTrue(desc, e.getCause.isInstanceOf[InvalidPartitionsException])
-          assertEquals(desc, "The number of partitions for a topic can only be increased. Topic create-partitions-topic-2 currently has 3 partitions, 3 would not be an increase.", e.getCause.getMessage)
+          assertEquals(desc, "Topic already has 3 partitions.", e.getCause.getMessage)
           assertEquals(desc, 3, numPartitions(topic2))
       }
 

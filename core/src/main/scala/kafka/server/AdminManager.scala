@@ -227,6 +227,8 @@ class AdminManager(val config: KafkaConfig,
         if (numPartitionsIncrement < 0) {
           throw new InvalidPartitionsException(
             s"Topic currently has $oldNumPartitions partitions, which is higher than the requested $newNumPartitions.")
+        } else if (numPartitionsIncrement == 0) {
+          throw new InvalidPartitionsException(s"Topic already has $oldNumPartitions partitions.")
         }
 
         val reassignment = Option(newPartition.assignments).map(_.asScala.map(_.asScala.map(_.toInt))).map { assignments =>
