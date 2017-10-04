@@ -49,7 +49,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -69,10 +68,6 @@ import java.util.concurrent.Executors;
  */
 public class Worker {
     private static final Logger log = LoggerFactory.getLogger(Worker.class);
-
-    public enum State {
-        RUNNING, STOPPING, STOPPED;
-    }
 
     private final ExecutorService executor;
     private final Time time;
@@ -149,7 +144,6 @@ public class Worker {
         offsetBackingStore.start();
         sourceTaskOffsetCommitter = new SourceTaskOffsetCommitter(config);
 
-        workerMetricsGroup.recordState(State.RUNNING);
         log.info("Worker started");
     }
 
@@ -158,7 +152,6 @@ public class Worker {
      */
     public void stop() {
         log.info("Worker stopping");
-        workerMetricsGroup.recordState(State.STOPPING);
 
         long started = time.milliseconds();
         long limit = started + config.getLong(WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG);
@@ -179,7 +172,6 @@ public class Worker {
         offsetBackingStore.stop();
         metrics.stop();
 
-        workerMetricsGroup.recordState(State.STOPPED);
         log.info("Worker stopped");
 
         workerMetricsGroup.close();
@@ -621,7 +613,6 @@ public class Worker {
         private final Sensor taskStartupSuccesses;
         private final Sensor taskStartupFailures;
         private final Sensor taskStartupResults;
-        private State state;
 
         public WorkerMetricsGroup(ConnectMetrics connectMetrics) {
             ConnectMetricsRegistry registry = connectMetrics.registry();
@@ -637,12 +628,6 @@ public class Worker {
                 @Override
                 public Double metricValue(long now) {
                     return (double) tasks.size();
-                }
-            });
-            metricGroup.addValueMetric(registry.workerStatus, new LiteralSupplier<String>() {
-                @Override
-                public String metricValue(long now) {
-                    return state.toString().toLowerCase(Locale.getDefault());
                 }
             });
 
@@ -681,10 +666,6 @@ public class Worker {
             metricGroup.close();
         }
 
-        void recordState(State state) {
-            this.state = state;
-        }
-
         void recordConnectorStartupFailure() {
             connectorStartupAttempts.record(1.0);
             connectorStartupFailures.record(1.0);
@@ -707,10 +688,6 @@ public class Worker {
             taskStartupAttempts.record(1.0);
             taskStartupSuccesses.record(1.0);
             taskStartupResults.record(1.0);
-        }
-
-        public State state() {
-            return state;
         }
 
         protected MetricGroup metricGroup() {

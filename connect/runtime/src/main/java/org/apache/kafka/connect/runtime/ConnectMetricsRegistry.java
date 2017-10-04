@@ -86,7 +86,6 @@ public class ConnectMetricsRegistry {
     public final MetricNameTemplate taskStartupSuccessPercentage;
     public final MetricNameTemplate taskStartupFailureTotal;
     public final MetricNameTemplate taskStartupFailurePercentage;
-    public final MetricNameTemplate workerStatus;
     public final MetricNameTemplate leaderName;
     public final MetricNameTemplate epoch;
     public final MetricNameTemplate rebalanceCompletedTotal;
@@ -259,8 +258,6 @@ public class ConnectMetricsRegistry {
 
         connectorCount = createTemplate("connector-count", WORKER_GROUP_NAME, "The number of connectors run in this worker.", workerTags);
         taskCount = createTemplate("task-count", WORKER_GROUP_NAME, "The number of tasks run in this worker.", workerTags);
-        workerStatus = createTemplate("status", WORKER_GROUP_NAME, "The state of this worker. One of: 'running', 'stopping', or 'stopped'.",
-                                      workerTags);
         connectorStartupAttemptsTotal = createTemplate("connector-startup-attempts-total", WORKER_GROUP_NAME,
                                                   "The total number of connector startups that this worker has attempted.", workerTags);
         connectorStartupSuccessTotal = createTemplate("connector-startup-success-total", WORKER_GROUP_NAME,
