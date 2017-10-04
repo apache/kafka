@@ -68,6 +68,8 @@
     <li>The Java clients and tools now accept any string as a client-id.</li>
     <li>The deprecated tool <code>kafka-consumer-offset-checker.sh</code> has been removed. Use <code>kafka-consumer-groups.sh</code> to get consumer group details.</li>
     <li>SimpleAclAuthorizer now logs access denials to the authorizer log by default.</li>
+    <li>Authentication failures are now reported to clients as one of the subclasses of <code>AuthenticationException</code>.
+        No retries will be performed if client connection fails authentication.</li>
     <li>The <code>app-info</code> mbean registered with JMX to provide version and commit id will be deprecated and replaced with
         metrics providing these attributes.</li>
     <li>Kafka metrics may now contain non-numeric values. <code>org.apache.kafka.common.Metric#value()</code> has been deprecated and
@@ -85,6 +87,9 @@
     <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-112%3A+Handle+disk+failure+for+JBOD">KIP-112</a>: MetadataResponse v5 introduces a partition-level <code>offline_replicas</code> field. </li>
     <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-112%3A+Handle+disk+failure+for+JBOD">KIP-112</a>: ProduceResponse v4 introduces error code for KafkaStorageException. </li>
     <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-112%3A+Handle+disk+failure+for+JBOD">KIP-112</a>: FetchResponse v6 introduces error code for KafkaStorageException. </li>
+    <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-152+-+Improve+diagnostics+for+SASL+authentication+failures">KIP-152</a>:
+         SaslAuthenticate request has been added to enable reporting of authentication failures. This request will
+         be used if SaslHandshake request version is greater than v0. </li>
 </ul>
 
 <h5><a id="upgrade_100_streams" href="#upgrade_100_streams">Upgrading a 1.0.0 Kafka Streams Application</a></h5>
