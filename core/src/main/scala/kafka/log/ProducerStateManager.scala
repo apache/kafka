@@ -159,34 +159,46 @@ private[log] class ProducerAppendInfo(val producerId: Long,
   private val transactions = ListBuffer.empty[TxnMetadata]
 
   private def maybeValidateAppend(producerEpoch: Short, firstSeq: Int, lastSeq: Int) = {
-   if (validationType != ValidationType.None) {
-      if (isFenced(producerEpoch)) {
-        throw new ProducerFencedException(s"Producer's epoch is no longer valid. There is probably another producer " +
-          s"with a newer epoch. $producerEpoch (request epoch), ${currentEntry.producerEpoch} (server epoch)")
-      }
-      if (validationType == ValidationType.Full) {
-        if (producerEpoch != currentEntry.producerEpoch) {
-          if (firstSeq != 0) {
-            if (currentEntry.producerEpoch != RecordBatch.NO_PRODUCER_EPOCH) {
-              throw new OutOfOrderSequenceException(s"Invalid sequence number for new epoch: $producerEpoch " +
-                s"(request epoch), $firstSeq (seq. number)")
-            } else {
-              throw new UnknownProducerIdException(s"Found no record of producerId=$producerId on the broker. It is possible " +
-                s"that the last message with the producerId=$producerId has been removed due to hitting the retention limit.")
-            }
-          }
-        } else if (currentEntry.lastSeq == RecordBatch.NO_SEQUENCE && firstSeq != 0) {
-          // the epoch was bumped by a control record, so we expect the sequence number to be reset
-          throw new OutOfOrderSequenceException(s"Out of order sequence number for producerId $producerId: found $firstSeq " +
-            s"(incoming seq. number), but expected 0")
-        } else if (isDuplicate(firstSeq, lastSeq)) {
-          throw new DuplicateSequenceException(s"Duplicate sequence number for producerId $producerId: (incomingBatch.firstSeq, " +
-            s"incomingBatch.lastSeq): ($firstSeq, $lastSeq).")
-        } else if (!inSequence(firstSeq, lastSeq)) {
-          throw new OutOfOrderSequenceException(s"Out of order sequence number for producerId $producerId: $firstSeq " +
-            s"(incoming seq. number), ${currentEntry.lastSeq} (current end sequence number)")
+    validationType match {
+      case ValidationType.None =>
+
+      case ValidationType.EpochOnly =>
+        checkEpoch(producerEpoch)
+
+      case ValidationType.Full =>
+        checkEpoch(producerEpoch)
+        checkSequence(producerEpoch, firstSeq, lastSeq)
+    }
+  }
+
+  private def checkEpoch(producerEpoch: Short): Unit = {
+    if (isFenced(producerEpoch)) {
+      throw new ProducerFencedException(s"Producer's epoch is no longer valid. There is probably another producer " +
+        s"with a newer epoch. $producerEpoch (request epoch), ${currentEntry.producerEpoch} (server epoch)")
+    }
+  }
+
+  private def checkSequence(producerEpoch: Short, firstSeq: Int, lastSeq: Int): Unit = {
+    if (producerEpoch != currentEntry.producerEpoch) {
+      if (firstSeq != 0) {
+        if (currentEntry.producerEpoch != RecordBatch.NO_PRODUCER_EPOCH) {
+          throw new OutOfOrderSequenceException(s"Invalid sequence number for new epoch: $producerEpoch " +
+            s"(request epoch), $firstSeq (seq. number)")
+        } else {
+          throw new UnknownProducerIdException(s"Found no record of producerId=$producerId on the broker. It is possible " +
+            s"that the last message with the producerId=$producerId has been removed due to hitting the retention limit.")
         }
       }
+    } else if (currentEntry.lastSeq == RecordBatch.NO_SEQUENCE && firstSeq != 0) {
+      // the epoch was bumped by a control record, so we expect the sequence number to be reset
+      throw new OutOfOrderSequenceException(s"Out of order sequence number for producerId $producerId: found $firstSeq " +
+        s"(incoming seq. number), but expected 0")
+    } else if (isDuplicate(firstSeq, lastSeq)) {
+      throw new DuplicateSequenceException(s"Duplicate sequence number for producerId $producerId: (incomingBatch.firstSeq, " +
+        s"incomingBatch.lastSeq): ($firstSeq, $lastSeq).")
+    } else if (!inSequence(firstSeq, lastSeq)) {
+      throw new OutOfOrderSequenceException(s"Out of order sequence number for producerId $producerId: $firstSeq " +
+        s"(incoming seq. number), ${currentEntry.lastSeq} (current end sequence number)")
     }
   }
 
