@@ -1915,7 +1915,7 @@ public class KafkaAdminClient extends AdminClient {
                     for (Map.Entry<TopicPartition, DeleteRecordsResponse.PartitionResponse> result: response.responses().entrySet()) {
 
                         KafkaFutureImpl<Long> future = futures.get(result.getKey());
-                        if (result.getValue().error != Errors.NONE) {
+                        if (result.getValue().error == Errors.NONE) {
                             future.complete(result.getValue().lowWatermark);
                         } else {
                             future.completeExceptionally(result.getValue().error.exception());
