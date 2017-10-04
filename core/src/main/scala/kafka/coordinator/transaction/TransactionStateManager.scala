@@ -196,8 +196,7 @@ class TransactionStateManager(brokerId: Int,
           internalTopicsAllowed = true,
           isFromClient = false,
           recordsPerPartition,
-          removeFromCacheCallback,
-          None
+          removeFromCacheCallback
         )
       }
 
@@ -601,8 +600,7 @@ class TransactionStateManager(brokerId: Int,
                 internalTopicsAllowed = true,
                 isFromClient = false,
                 recordsPerPartition,
-                updateCacheCallback,
-                delayedProduceLock = Some(newMetadata))
+                updateCacheCallback)
 
               trace(s"Appending new metadata $newMetadata for transaction id $transactionalId with coordinator epoch $coordinatorEpoch to the local transaction log")
             }
