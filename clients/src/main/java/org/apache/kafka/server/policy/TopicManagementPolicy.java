@@ -25,67 +25,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Represents the state of a topic either before, or as a result of,
- * an administrative request affecting a topic.
- */
-interface TopicState {
-    /**
-     * The number of partitions of the topic.
-     */
-    int numPartitions();
-
-    /**
-     * The replication factor of the topic. More precisely, the number of assigned replicas for partition 0.
-     * // TODO what about during reassignment
-     */
-    Short replicationFactor();
-
-    /**
-     * A map of the replica assignments of the topic, with partition ids as keys and
-     * the assigned brokers as the corresponding values.
-     * // TODO what about during reassignment
-     */
-    Map<Integer, List<Integer>> replicasAssignments();
-
-    /**
-     * The topic config.
-     */
-    Map<String,String> configs();
-
-    /**
-     * Returns whether the topic is marked for deletion.
-     */
-    boolean markedForDeletion();
-
-    /**
-     * Returns whether the topic is an internal topic.
-     */
-    boolean internal();
-
-}
-
-
-/** The current state of the topics in the cluster, before the request takes effect. */
-interface ClusterState {
-    /**
-     * Returns the current state of the given topic, or null if the topic does not exist.
-     */
-    TopicState topicState(String topicName);
-
-    /**
-     * Returns all the topics in the cluster, including internal topics if
-     * {@code includeInternal} is true, and including those marked for deletion
-     * if {@code includeMarkedForDeletion} is true.
-     */
-    Set<String> topics(boolean includeInternal, boolean includeMarkedForDeletion);
-
-    /**
-     * The number of brokers in the cluster.
-     */
-    int clusterSize();
-}
-
 
 /**
  * A policy that is enforced on topic creation, alteration and deletion,
@@ -100,7 +39,7 @@ interface ClusterState {
  * released (if necessary).
  *
  */
-interface TopicManagementPolicy  extends Configurable, AutoCloseable {
+public interface TopicManagementPolicy  extends Configurable, AutoCloseable {
 
     static interface AbstractRequestMetadata {
 
