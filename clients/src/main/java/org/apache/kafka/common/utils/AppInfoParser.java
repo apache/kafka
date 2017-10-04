@@ -62,7 +62,7 @@ public class AppInfoParser {
             AppInfo mBean = new AppInfo();
             ManagementFactory.getPlatformMBeanServer().registerMBean(mBean, name);
 
-            registerMetrics(metrics); // prefix will be added later by JmxReporter
+            registerMetrics(metrics, id); // prefix will be added later by JmxReporter
         } catch (JMException e) {
             log.warn("Error registering AppInfo mbean", e);
         }
@@ -85,10 +85,11 @@ public class AppInfoParser {
         return metrics.metricName(name, "app-info", "Metric indicating " + name);
     }
 
-    private static void registerMetrics(Metrics metrics) {
+    private static void registerMetrics(Metrics metrics, String id) {
         if (metrics != null) {
             metrics.addMetric(metricName(metrics, "version"), new ImmutableValue<>(VERSION));
             metrics.addMetric(metricName(metrics, "commit-id"), new ImmutableValue<>(COMMIT_ID));
+            metrics.addMetric(metricName(metrics, "id"), new ImmutableValue<>(id));
         }
     }
 
