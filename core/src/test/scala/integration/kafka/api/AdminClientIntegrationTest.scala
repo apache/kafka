@@ -388,14 +388,12 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     var alterResult = client.createPartitions(Map(topic1 ->
       NewPartitions.increaseTo(3)).asJava, validateOnly)
     var altered = alterResult.values.get(topic1).get
-    // validateOnly: assert that the topics still has 1 partition
     assertEquals(1, numPartitions(topic1))
 
     // try creating a new partition (no assignments), to bring the total to 3 partitions
     alterResult = client.createPartitions(Map(topic1 ->
       NewPartitions.increaseTo(3)).asJava, actuallyDoIt)
     altered = alterResult.values.get(topic1).get
-    // assert that the topics now has 2 partitions
     assertEquals(3, numPartitions(topic1))
 
     // validateOnly: now try creating a new partition (with assignments), to bring the total to 3 partitions
@@ -403,14 +401,12 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     alterResult = client.createPartitions(Map(topic2 ->
       NewPartitions.increaseTo(3, newPartition2Assignments)).asJava, validateOnly)
     altered = alterResult.values.get(topic2).get
-    // validateOnly: assert that the topics still has 1 partition
     assertEquals(1, numPartitions(topic2))
 
     // now try creating a new partition (with assignments), to bring the total to 3 partitions
     alterResult = client.createPartitions(Map(topic2 ->
       NewPartitions.increaseTo(3, newPartition2Assignments)).asJava, actuallyDoIt)
     altered = alterResult.values.get(topic2).get
-    // assert that the topics now has 3 partitions
     var actualPartitions2 = partitions(topic2)
     assertEquals(3, actualPartitions2.size)
     assertEquals(Seq(0, 1), actualPartitions2.get(1).replicas.asScala.map(_.id).toList)
@@ -454,7 +450,8 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
       } catch {
         case e: ExecutionException =>
           assertTrue(desc, e.getCause.isInstanceOf[InvalidReplicaAssignmentException])
-          assertEquals(desc, "Not changing the number of partitions and the given assignments for partitions 1, 2 are incompatible with the existing assignments 0, 1; 1, 2.", e.getCause.getMessage)
+          assertEquals(desc, "Not changing the number of partitions and the given assignments for partitions " +
+            "1, 2 are incompatible with the existing assignments 0, 1; 1, 2.", e.getCause.getMessage)
           assertEquals(desc, 3, numPartitions(topic2))
       }
 
