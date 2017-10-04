@@ -25,8 +25,6 @@ import scala.collection._
 
 /**
   * The create metadata maintained by the delayed create topic or create partitions operations.
-  *
-  * TODO: local state doesn't count, need to know state of all relevant brokers
   */
 case class CreatePartitionsMetadata(topic: String, replicaAssignments: Map[Int, Seq[Int]], error: ApiError)
 
