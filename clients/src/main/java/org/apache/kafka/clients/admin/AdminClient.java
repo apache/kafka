@@ -453,11 +453,12 @@ public abstract class AdminClient implements AutoCloseable {
     public abstract DescribeReplicaLogDirsResult describeReplicaLogDirs(Collection<TopicPartitionReplica> replicas, DescribeReplicaLogDirsOptions options);
 
     /**
-     * Increase the number of partitions of the topics given as the keys of {@code newPartitions}
-     * according to the corresponding values.
+     * <p>Increase the number of partitions of the topics given as the keys of {@code newPartitions}
+     * according to the corresponding values. <strong>If partitions are increased for a topic that has a key,
+     * the partition logic or ordering of the messages will be affected.</strong></p>
      *
-     * This is a convenience method for {@link #createPartitions(Map, CreatePartitionsOptions)} with default options.
-     * See the overload for more details.
+     * <p>This is a convenience method for {@link #createPartitions(Map, CreatePartitionsOptions)} with default options.
+     * See the overload for more details.</p>
      *
      * @param newPartitions The topics which should have new partitions created, and corresponding parameters
      *                      for the created partitions.
@@ -468,17 +469,36 @@ public abstract class AdminClient implements AutoCloseable {
     }
 
     /**
-     * Increase the number of partitions of the topics given as the keys of {@code newPartitions}
-     * according to the corresponding values.
+     * <p>Increase the number of partitions of the topics given as the keys of {@code newPartitions}
+     * according to the corresponding values. <strong>If partitions are increased for a topic that has a key,
+     * the partition logic or ordering of the messages will be affected.</strong></p>
      *
-     * This operation is not transactional so it may succeed for some topics while fail for others.
+     * <p>This operation is not transactional so it may succeed for some topics while fail for others.</p>
      *
-     * It may take several seconds after this method returns
+     * <p>It may take several seconds after this method returns
      * success for all the brokers to become aware that the partitions have been created.
      * During this time, {@link AdminClient#describeTopics(Collection)}
-     * may not return information about the new partitions.
+     * may not return information about the new partitions.</p>
      *
-     * This operation is supported by brokers with version 1.0.0 or higher.
+     * <p>This operation is supported by brokers with version 1.0.0 or higher.</p>
+     *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link CreatePartitionsResult#values() values()} method of the returned {@code CreatePartitionsResult}</p>
+     * <ul>
+     *     <li>{@link org.apache.kafka.common.errors.AuthorizationException}
+     *     if the authenticated user is not authorized to alter the topic</li>
+     *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *     if the request was not completed in within the given {@link CreatePartitionsOptions#timeoutMs()}.</li>
+     *     <li>{@link org.apache.kafka.common.errors.ReassignmentInProgressException}
+     *     if a partition reassignment is currently in progress</li>
+     *     <li>{@link org.apache.kafka.common.errors.BrokerNotAvailableException}
+     *     if the requested {@link NewPartitions#assignments()} contain a broker that is currently unavailable.</li>
+     *     <li>{@link org.apache.kafka.common.errors.InvalidReplicationFactorException}
+     *     if no {@link NewPartitions#assignments()} are given and it is impossible for the broker to assign
+     *     replicas with the topics replication factor.</li>
+     *     <li>Subclasses of {@link org.apache.kafka.common.KafkaException}
+     *     if the request is invalid in some way.</li>
+     * </ul>
      *
      * @param newPartitions The topics which should have new partitions created, and corresponding parameters
      *                      for the created partitions.
