@@ -48,7 +48,6 @@ import java.util.regex.Pattern;
  * {@link KafkaStreams} instance that will then {@link KafkaStreams#start() begin consuming, processing, and producing
  * records}.
  */
-@SuppressWarnings("unchecked")
 public class Topology {
 
     final InternalTopologyBuilder internalTopologyBuilder = new InternalTopologyBuilder();
@@ -571,6 +570,7 @@ public class Topology {
      * @return itself
      * @throws TopologyException if the processor of state is already registered
      */
+    @SuppressWarnings("unchecked")
     public synchronized Topology addGlobalStore(final StoreBuilder storeBuilder,
                                                 final String sourceName,
                                                 final Deserializer keyDeserializer,
@@ -607,6 +607,7 @@ public class Topology {
      * @return itself
      * @throws TopologyException if the processor of state is already registered
      */
+    @SuppressWarnings("unchecked")
     public synchronized Topology addGlobalStore(final StoreBuilder storeBuilder,
                                                 final String sourceName,
                                                 final TimestampExtractor timestampExtractor,
@@ -639,6 +640,7 @@ public class Topology {
      *
      * @return a description of the topology.
      */
+
     public synchronized TopologyDescription describe() {
         return internalTopologyBuilder.describe();
     }
