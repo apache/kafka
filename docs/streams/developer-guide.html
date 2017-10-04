@@ -18,7 +18,16 @@
 <script><!--#include virtual="../js/templateData.js" --></script>
 
 <script id="content-template" type="text/x-handlebars-template">
-    <h1>Developer Manual</h1>
+    <h1>Developer Guide for Kafka Streams API</h1>
+    
+    <p>
+        This developer guide describes how to write, configure, and execute a Kafka Streams application. There is a <a href="/{{version}}/documentation/#quickstart_kafkastreams">quickstart</a> example that provides how to run a stream processing program coded in the Kafka Streams library.
+    </p>
+
+    <p>
+        The computational logic of a Kafka Streams application is defined as a <a href="/{{version}}/documentation/streams/core-concepts#streams_topology">processor topology</a>. Kafka Streams provide two sets of APIs to define the processor topology, Low-Level Processor API and High-Level Streams DSL.
+    </p>
+
     <ul class="toc">
         <li><a href="#streams_processor">1. Low-level Processor API</a>
             <ul>
@@ -85,18 +94,17 @@
     <h4><a id="streams_processor_process" href="#streams_processor_process">Processor</a></h4>
 
     <p>
-        As mentioned in the <a href="/{{version}}/documentation/streams/core-concepts"><b>Core Concepts</b></a> section, a stream processor is a node in the processor topology that represents a single processing step.
-        With the <code>Processor</code> API developers can define arbitrary stream processors that process one received record at a time, and connect these processors with
+        A <a href="/{{version}}/documentation/streams/core-concepts"><b>stream processor</b></a> is a node in the processor topology that represents a single processing step.
+        With the <code>Processor</code> API, you can define arbitrary stream processors that process one received record at a time, and connect these processors with
         their associated state stores to compose the processor topology that represents their customized processing logic.
     </p>
 
     <p>
-        The <code>Processor</code> interface provides one main API method, the <code>process</code> method,
-        which is performed on each of the received records.
-        In addition, the processor can maintain the current <code>ProcessorContext</code> instance variable initialized in the <code>init</code> method
+        The <code>Processor</code> interface provides the <code>process</code> method API, which is performed on each record that is received.
+        The processor can maintain the current <code>ProcessorContext</code> instance variable initialized in the <code>init</code> method
         and use the context to schedule a periodically called punctuation function (<code>context().schedule</code>),
-        to forward the modified / new key-value pair to downstream processors (<code>context().forward</code>),
-        to commit the current processing progress (<code>context().commit</code>), etc.
+        to forward the new or modified key-value pair to downstream processors (<code>context().forward</code>),
+        to commit the current processing progress (<code>context().commit</code>), and so on.
     </p>
 
     <p>
@@ -178,7 +186,7 @@
     </pre>
 
     <p>
-        In the above implementation, the following actions are performed:
+        In the previous example, the following actions are performed:
     </p>
 
     <ul>
@@ -192,7 +200,7 @@
     <h4><a id="streams_processor_topology" href="#streams_processor_topology">Processor Topology</a></h4>
 
     <p>
-        With the customized processors defined in the Processor API, developers can use <code>Topology</code> to build a processor topology
+        With the customized processors defined in the Processor API, you can use <code>Topology</code> to build a processor topology
         by connecting these processors together:
     </p>
 
@@ -222,18 +230,18 @@
     .addSink("SINK3", "sink-topic3", "PROCESS3");
     </pre>
 
-    There are several steps in the above code to build the topology, and here is a quick walk through:
+    Here is a quick walk through of the previous code to build the topology:
 
     <ul>
-        <li>First of all a source node named "SOURCE" is added to the topology using the <code>addSource</code> method, with one Kafka topic "src-topic" fed to it.</li>
-        <li>Three processor nodes are then added using the <code>addProcessor</code> method; here the first processor is a child of the "SOURCE" node, but is the parent of the other two processors.</li>
-        <li>Finally three sink nodes are added to complete the topology using the <code>addSink</code> method, each piping from a different parent processor node and writing to a separate topic.</li>
+        <li>A source node (<code>"SOURCE"</code>) is added to the topology using the <code>addSource</code> method, with one Kafka topic (<code>"src-topic"</code>) fed to it.</li>
+        <li>Three processor nodes are then added using the <code>addProcessor</code> method; here the first processor is a child of the source node, but is the parent of the other two processors.</li>
+        <li>Three sink nodes are added to complete the topology using the <code>addSink</code> method, each piping from a different parent processor node and writing to a separate topic.</li>
     </ul>
 
 <h4><a id="streams_processor_statestore" href="#streams_processor_statestore">State Stores</a></h4>
 
 <p>
-In order to make state stores fault-tolerant (e.g., to recover from machine crashes) as well as to allow for state store migration without data loss (e.g., to migrate a stateful stream task from one machine to another when elastically adding or removing capacity from your application), a state store can be <strong>continuously backed up</strong> to a Kafka topic behind the scenes. 
+To make state stores fault-tolerant (e.g., to recover from machine crashes) as well as to allow for state store migration without data loss (e.g., to migrate a stateful stream task from one machine to another when elastically adding or removing capacity from your application), a state store can be <strong>continuously backed up</strong> to a Kafka topic behind the scenes. 
 We sometimes refer to this topic as the state store's associated <em>changelog topic</em> or simply its <em>changelog</em>. 
 In the case of a machine failure, for example, the state store and thus the application's state can be fully restored from its changelog. 
 You can enable or disable this backup feature for a state store, and thus its fault tolerance.
@@ -451,14 +459,14 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
     <h4><a id="streams_processor_describe" href="#streams_processor_describe">Describe a <code>Topology</code></a></h4>
 
     <p>
-        After a <code>Topology</code> is specified it is possible to retrieve a description of the corresponding DAG via <code>#describe()</code> that returns a <code>TopologyDescription</code>.
+        After a <code>Topology</code> is specified, it is possible to retrieve a description of the corresponding DAG via <code>#describe()</code> that returns a <code>TopologyDescription</code>.
         A <code>TopologyDescription</code> contains all added source, processor, and sink nodes as well as all attached stores.
-        For source and sink nodes one can access the specified input/output topic name/pattern.
-        For processor nodes the attached stores are added to the description.
+        You can access the specified input and output topic names and patterns for source and sink nodes.
+        For processor nodes, the attached stores are added to the description.
         Additionally, all nodes have a list to all their connected successor and predecessor nodes.
         Thus, <code>TopologyDescritpion</code> allows to retrieve the DAG structure of the specified topology.
         <br />
-        Note that global stores are listed explicitly as they are accessible by all nodes without the need to explicitly connect them.
+        Note that global stores are listed explicitly because they are accessible by all nodes without the need to explicitly connect them.
         Furthermore, nodes are grouped by <code>Sub-topologies</code>, where each sub-topology is a group of processor nodes that are directly connected to each other (i.e., either by a direct connection&mdash;but not a topic&mdash;or by sharing a store).
         During execution, each <code>Sub-topology</code> will be processed by <a href="/{{version}}/documentation/streams/architecture#streams_architecture_tasks">one or multiple tasks</a>.
         Thus, each <code>Sub-topology</code> describes an independent unit of works that can be executed by different threads in parallel.
@@ -704,7 +712,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                     // KStream branches[1] contains all records whose keys start with "B"
                     // KStream branches[2] contains all other records
                     // Java 7 example: cf. `filter` for how to create `Predicate` instances
-	        </pre>
+            </pre>
             </td>
         </tr>
         <tr>
@@ -731,7 +739,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
 
                     // A filter on a KTable that materializes the result into a StateStore
                     table.filter((key, value) -> value != 0, Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt;as("filtered"));
-	            </pre>
+                </pre>
             </td>
         </tr>
         <tr>
@@ -2556,7 +2564,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
           Optional&lt;Long&gt; result = streams.allMetadataForStore("word-count")
               .stream()
               .map(streamsMetadata -> {
-                  // Construct the (fictituous) full endpoint URL to query the current remote application instance
+                  // Construct the (fictitious) full endpoint URL to query the current remote application instance
                   String url = "http://" + streamsMetadata.host() + ":" + streamsMetadata.port() + "/word-count/alice";
                   // Read and return the count for 'alice', if any.
                   return http.getLong(url);
