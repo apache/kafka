@@ -20,7 +20,7 @@ import java.io._
 import java.nio.ByteBuffer
 import java.nio.file.Files
 
-import kafka.common.KafkaException
+import kafka.common.{BaseEnum, KafkaException}
 import kafka.log.Log.offsetFromFilename
 import kafka.server.LogOffsetMetadata
 import kafka.utils.{Logging, nonthreadsafe, threadsafe}
@@ -35,6 +35,23 @@ import scala.collection.mutable.ListBuffer
 import scala.collection.{immutable, mutable}
 
 class CorruptSnapshotException(msg: String) extends KafkaException(msg)
+
+
+// ValidationType and its subtypes define the extent of the validation to perform on a given ProducerAppendInfo instance
+private[log] sealed trait ValidationType extends BaseEnum
+
+private[log] case object NoValidation extends ValidationType {
+  val name = "NoValidation"
+}
+
+private[log] case object EpochOnlyValidation extends ValidationType {
+  val name = "EpochOnlyValidation"
+}
+
+private[log] case object FullValidation extends ValidationType {
+  val name = "FullValidation"
+}
+
 
 private[log] case class TxnMetadata(producerId: Long, var firstOffset: LogOffsetMetadata, var lastOffset: Option[Long] = None) {
   def this(producerId: Long, firstOffset: Long) = this(producerId, LogOffsetMetadata(firstOffset))
@@ -138,49 +155,45 @@ private[log] class ProducerIdEntry(val producerId: Long, val batchMetadata: muta
  *                      the most recent appends made by the producer. Validation of the first incoming append will
  *                      be made against the lastest append in the current entry. New appends will replace older appends
  *                      in the current entry so that the space overhead is constant.
- * @param validateSequenceNumbers Whether or not sequence numbers should be validated. The only current use
- *                                of this is the consumer offsets topic which uses producer ids from incoming
- *                                TxnOffsetCommit, but has no sequence number to validate and does not depend
- *                                on the deduplication which sequence numbers provide.
- * @param isFromClient The parameter indicates whether the write is coming from a client or not. If it is not coming
- *                     from a client, it could be due to replication traffic, or when rebuilding producer state on
- *                     from the log. In the latter two cases, we should not validate the append, but accept the
- *                     incoming append unconditionally. This is for two reasons: first, the write was already
- *                     validated when received from the client. Second, the data is already the log, so it is not
- *                     clear what would be achieved by validating it again.
+ * @param validationType Indicates the extend of validation to perform on the appends on this instance. Offset commits
+ *                       coming from the producer should have EpochOnlyValidation. Appends which aren't from a client
+ *                       will not be validated at all, and should be set to NoValidation. All other appends should
+ *                       have FullValidation.
  */
 private[log] class ProducerAppendInfo(val producerId: Long,
                                       currentEntry: ProducerIdEntry,
-                                      validateSequenceNumbers: Boolean,
-                                      isFromClient: Boolean) {
+                                      validationType: ValidationType) {
 
   private val transactions = ListBuffer.empty[TxnMetadata]
 
-  private def validateAppend(producerEpoch: Short, firstSeq: Int, lastSeq: Int) = {
-    if (isFenced(producerEpoch)) {
-      throw new ProducerFencedException(s"Producer's epoch is no longer valid. There is probably another producer " +
-        s"with a newer epoch. $producerEpoch (request epoch), ${currentEntry.producerEpoch} (server epoch)")
-    } else if (validateSequenceNumbers) {
-      if (producerEpoch != currentEntry.producerEpoch) {
-        if (firstSeq != 0) {
-          if (currentEntry.producerEpoch != RecordBatch.NO_PRODUCER_EPOCH) {
-            throw new OutOfOrderSequenceException(s"Invalid sequence number for new epoch: $producerEpoch " +
-              s"(request epoch), $firstSeq (seq. number)")
-          } else {
-            throw new UnknownProducerIdException(s"Found no record of producerId=$producerId on the broker. It is possible " +
-              s"that the last message with the producerId=$producerId has been removed due to hitting the retention limit.")
+  private def maybeValidateAppend(producerEpoch: Short, firstSeq: Int, lastSeq: Int) = {
+    if (validationType != NoValidation) {
+      if (isFenced(producerEpoch)) {
+        throw new ProducerFencedException(s"Producer's epoch is no longer valid. There is probably another producer " +
+          s"with a newer epoch. $producerEpoch (request epoch), ${currentEntry.producerEpoch} (server epoch)")
+      }
+      if (validationType == FullValidation) {
+        if (producerEpoch != currentEntry.producerEpoch) {
+          if (firstSeq != 0) {
+            if (currentEntry.producerEpoch != RecordBatch.NO_PRODUCER_EPOCH) {
+              throw new OutOfOrderSequenceException(s"Invalid sequence number for new epoch: $producerEpoch " +
+                s"(request epoch), $firstSeq (seq. number)")
+            } else {
+              throw new UnknownProducerIdException(s"Found no record of producerId=$producerId on the broker. It is possible " +
+                s"that the last message with the producerId=$producerId has been removed due to hitting the retention limit.")
+            }
           }
+        } else if (currentEntry.lastSeq == RecordBatch.NO_SEQUENCE && firstSeq != 0) {
+          // the epoch was bumped by a control record, so we expect the sequence number to be reset
+          throw new OutOfOrderSequenceException(s"Out of order sequence number for producerId $producerId: found $firstSeq " +
+            s"(incoming seq. number), but expected 0")
+        } else if (isDuplicate(firstSeq, lastSeq)) {
+          throw new DuplicateSequenceException(s"Duplicate sequence number for producerId $producerId: (incomingBatch.firstSeq, " +
+            s"incomingBatch.lastSeq): ($firstSeq, $lastSeq).")
+        } else if (!inSequence(firstSeq, lastSeq)) {
+          throw new OutOfOrderSequenceException(s"Out of order sequence number for producerId $producerId: $firstSeq " +
+            s"(incoming seq. number), ${currentEntry.lastSeq} (current end sequence number)")
         }
-      } else if (currentEntry.lastSeq == RecordBatch.NO_SEQUENCE && firstSeq != 0) {
-        // the epoch was bumped by a control record, so we expect the sequence number to be reset
-        throw new OutOfOrderSequenceException(s"Out of order sequence number for producerId $producerId: found $firstSeq " +
-          s"(incoming seq. number), but expected 0")
-      } else if (isDuplicate(firstSeq, lastSeq)) {
-        throw new DuplicateSequenceException(s"Duplicate sequence number for producerId $producerId: (incomingBatch.firstSeq, " +
-          s"incomingBatch.lastSeq): ($firstSeq, $lastSeq).")
-      } else if (!inSequence(firstSeq, lastSeq)) {
-        throw new OutOfOrderSequenceException(s"Out of order sequence number for producerId $producerId: $firstSeq " +
-          s"(incoming seq. number), ${currentEntry.lastSeq} (current end sequence number)")
       }
     }
   }
@@ -217,11 +230,7 @@ private[log] class ProducerAppendInfo(val producerId: Long,
              lastTimestamp: Long,
              lastOffset: Long,
              isTransactional: Boolean): Unit = {
-    if (isFromClient)
-      // We should only validate appends coming from the client. In particular, this means that we don't validate
-      // appends for sequence numbers and epochs when building producer state from the log or for writes on a replica.
-      // So validation only happens on the first write from the client to the partition leader.
-      validateAppend(epoch, firstSeq, lastSeq)
+    maybeValidateAppend(epoch, firstSeq, lastSeq)
 
     currentEntry.addBatchMetadata(epoch, lastSeq, lastOffset, lastSeq - firstSeq, lastTimestamp)
 
@@ -543,9 +552,17 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     }
   }
 
-  def prepareUpdate(producerId: Long, isFromClient: Boolean): ProducerAppendInfo =
-    new ProducerAppendInfo(producerId, lastEntry(producerId).getOrElse(ProducerIdEntry.empty(producerId)), validateSequenceNumbers,
-      isFromClient)
+  def prepareUpdate(producerId: Long, isFromClient: Boolean): ProducerAppendInfo = {
+    val validationToPerform =
+      if (!isFromClient)
+        NoValidation
+      else if (topicPartition.topic == Topic.GROUP_METADATA_TOPIC_NAME)
+        EpochOnlyValidation
+      else
+        FullValidation
+
+    new ProducerAppendInfo(producerId, lastEntry(producerId).getOrElse(ProducerIdEntry.empty(producerId)), validationToPerform)
+  }
 
   /**
    * Update the mapping with the given append information
