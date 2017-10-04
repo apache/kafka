@@ -416,7 +416,7 @@ public class NetworkClient implements KafkaClient {
                 log.trace("Sending {} {} with correlation id {} to node {}", clientRequest.apiKey(), request,
                         clientRequest.correlationId(), nodeId);
             } else {
-                log.debug("Using older server API v{} to send {} {} with correlation id {} to node {}",
+                log.trace("Using older server API v{} to send {} {} with correlation id {} to node {}",
                         header.apiVersion(), clientRequest.apiKey(), request, clientRequest.correlationId(), nodeId);
             }
         }
