@@ -367,6 +367,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         // converted
         expectInitializeTask();
 
+        expectPollInitialAssignment();
         expectOnePoll().andAnswer(new IAnswer<Object>() {
             @Override
             public Object answer() throws Throwable {
@@ -420,6 +421,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
+        workerTask.iteration();
         workerTask.iteration();
         workerTask.iteration();
         workerTask.iteration();

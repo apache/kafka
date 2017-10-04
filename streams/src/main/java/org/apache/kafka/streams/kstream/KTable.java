@@ -27,7 +27,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.internals.WindowedSerializer;
 import org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -206,7 +205,8 @@ public interface KTable<K, V> {
      * @deprecated use {@link #filter(Predicate, Materialized) filter(predicate, Materialized.as(KeyValueByteStoreSupplier))}
      */
     @Deprecated
-    KTable<K, V> filter(final Predicate<? super K, ? super V> predicate, final StateStoreSupplier<KeyValueStore> storeSupplier);
+    KTable<K, V> filter(final Predicate<? super K, ? super V> predicate,
+                        final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
      * Create a new {@code KTable} that consists all records of this {@code KTable} which do <em>not</em> satisfy the
@@ -300,7 +300,8 @@ public interface KTable<K, V> {
      * @deprecated use {@link #filterNot(Predicate, Materialized) filterNot(predicate, Materialized.as(KeyValueByteStoreSupplier))}
      */
     @Deprecated
-    KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate, final StateStoreSupplier<KeyValueStore> storeSupplier);
+    KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate,
+                           final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
      * Create a new {@code KTable} that consists all records of this {@code KTable} which do <em>not</em> satisfy the
@@ -512,7 +513,7 @@ public interface KTable<K, V> {
     @Deprecated
     <VR> KTable<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper,
                                  final Serde<VR> valueSerde,
-                                 final StateStoreSupplier<KeyValueStore> storeSupplier);
+                                 final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier);
 
 
     /**
@@ -811,7 +812,7 @@ public interface KTable<K, V> {
      */
     @Deprecated
     KTable<K, V> through(final String topic,
-                         final StateStoreSupplier<KeyValueStore> storeSupplier);
+                         final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
      * Materialize this changelog stream to a topic and creates a new {@code KTable} from the topic using default
@@ -913,7 +914,7 @@ public interface KTable<K, V> {
     @Deprecated
     KTable<K, V> through(final StreamPartitioner<? super K, ? super V> partitioner,
                          final String topic,
-                         final StateStoreSupplier<KeyValueStore> storeSupplier);
+                         final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
      * Materialize this changelog stream to a topic and creates a new {@code KTable} from the topic.
@@ -978,7 +979,7 @@ public interface KTable<K, V> {
     KTable<K, V> through(final Serde<K> keySerde,
                          final Serde<V> valSerde,
                          final String topic,
-                         final StateStoreSupplier<KeyValueStore> storeSupplier);
+                         final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
      * Materialize this changelog stream to a topic and creates a new {@code KTable} from the topic.
@@ -1080,7 +1081,7 @@ public interface KTable<K, V> {
                          final Serde<V> valSerde,
                          final StreamPartitioner<? super K, ? super V> partitioner,
                          final String topic,
-                         final StateStoreSupplier<KeyValueStore> storeSupplier);
+                         final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
      * Materialize this changelog stream to a topic and creates a new {@code KTable} from the topic using a customizable
@@ -1590,7 +1591,7 @@ public interface KTable<K, V> {
     @Deprecated
     <VO, VR> KTable<K, VR> join(final KTable<K, VO> other,
                                 final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                final StateStoreSupplier<KeyValueStore> storeSupplier);
+                                final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier);
 
 
     /**
@@ -1934,7 +1935,7 @@ public interface KTable<K, V> {
     @Deprecated
     <VO, VR> KTable<K, VR> leftJoin(final KTable<K, VO> other,
                                     final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                    final StateStoreSupplier<KeyValueStore> storeSupplier);
+                                    final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier);
 
 
     /**
@@ -2275,7 +2276,7 @@ public interface KTable<K, V> {
     @Deprecated
     <VO, VR> KTable<K, VR> outerJoin(final KTable<K, VO> other,
                                      final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                     final StateStoreSupplier<KeyValueStore> storeSupplier);
+                                     final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
      * Get the name of the local state store used that can be used to query this {@code KTable}.

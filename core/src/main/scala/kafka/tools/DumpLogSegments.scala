@@ -334,8 +334,12 @@ object DumpLogSegments {
         }
       }.mkString("{", ",", "}")
 
-      val keyString = s"metadata::$groupId"
-      val valueString = s"$protocolType:${group.protocol}:${group.generationId}:$assignment"
+      val keyString = Json.encode(Map("metadata" -> groupId))
+      val valueString = Json.encode(Map(
+          "protocolType" -> protocolType,
+          "protocol" -> group.protocol,
+          "generationId" -> group.generationId,
+          "assignment" -> assignment))
 
       (Some(keyString), Some(valueString))
     }
@@ -436,7 +440,7 @@ object DumpLogSegments {
     val shallowOffsetNotFound = new mutable.HashMap[String, ArrayBuffer[(Long, Long)]]
 
     def recordMismatchTimeIndex(file: File, indexTimestamp: Long, logTimestamp: Long) {
-      var misMatchesSeq = misMatchesForTimeIndexFilesMap.getOrElse(file.getAbsolutePath, new ArrayBuffer[(Long, Long)]())
+      val misMatchesSeq = misMatchesForTimeIndexFilesMap.getOrElse(file.getAbsolutePath, new ArrayBuffer[(Long, Long)]())
       if (misMatchesSeq.isEmpty)
         misMatchesForTimeIndexFilesMap.put(file.getAbsolutePath, misMatchesSeq)
       misMatchesSeq += ((indexTimestamp, logTimestamp))

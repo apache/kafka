@@ -68,14 +68,24 @@
     <li>The Java clients and tools now accept any string as a client-id.</li>
     <li>The deprecated tool <code>kafka-consumer-offset-checker.sh</code> has been removed. Use <code>kafka-consumer-groups.sh</code> to get consumer group details.</li>
     <li>SimpleAclAuthorizer now logs access denials to the authorizer log by default.</li>
+    <li>Authentication failures are now reported to clients as one of the subclasses of <code>AuthenticationException</code>.
+        No retries will be performed if a client connection fails authentication.</li>
+    <li>Custom <code>SaslServer</code> implementations may throw <code>SaslAuthenticationException</code> to provide an error
+        message to return to clients indicating the reason for authentication failure. Implementors should take care not to include
+        any security-critical information in the exception message that should not be leaked to unauthenticated clients.</li>
     <li>The <code>app-info</code> mbean registered with JMX to provide version and commit id will be deprecated and replaced with
         metrics providing these attributes.</li>
     <li>Kafka metrics may now contain non-numeric values. <code>org.apache.kafka.common.Metric#value()</code> has been deprecated and
         will return <code>0.0</code> in such cases to minimise the probability of breaking users who read the value of every client
         metric (via a <code>MetricsReporter</code> implementation or by calling the <code>metrics()</code> method).
         <code>org.apache.kafka.common.Metric#metricValue()</code> can be used to retrieve numeric and non-numeric metric values.</li>
+    <li>Every Kafka rate metric now has a corresponding cumulative count metric with the suffix <code>-total</code>
+        to simplify downstream processing. For example, <code>records-consumed-rate</code> has a corresponding
+        metric named <code>records-consumed-total</code>.</li>
     <li>Mx4j will only be enabled if the system property <code>kafka_mx4jenable</code> is set to <code>true</code>. Due to a logic
         inversion bug, it was previously enabled by default and disabled if <code>kafka_mx4jenable</code> was set to <code>true</code>.</li>
+    <li>The package <code>org.apache.kafka.common.security.auth</code> in the clients jar has been made public and added to the javadocs.
+        Internal classes which had previously been located in this package have been moved elsewhere.</li>
 </ul>
 
 <h5><a id="upgrade_100_new_protocols" href="#upgrade_100_new_protocols">New Protocol Versions</a></h5>
@@ -85,6 +95,9 @@
     <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-112%3A+Handle+disk+failure+for+JBOD">KIP-112</a>: MetadataResponse v5 introduces a partition-level <code>offline_replicas</code> field. </li>
     <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-112%3A+Handle+disk+failure+for+JBOD">KIP-112</a>: ProduceResponse v4 introduces error code for KafkaStorageException. </li>
     <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-112%3A+Handle+disk+failure+for+JBOD">KIP-112</a>: FetchResponse v6 introduces error code for KafkaStorageException. </li>
+    <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-152+-+Improve+diagnostics+for+SASL+authentication+failures">KIP-152</a>:
+         SaslAuthenticate request has been added to enable reporting of authentication failures. This request will
+         be used if the SaslHandshake request version is greater than 0. </li>
 </ul>
 
 <h5><a id="upgrade_100_streams" href="#upgrade_100_streams">Upgrading a 1.0.0 Kafka Streams Application</a></h5>

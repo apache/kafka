@@ -243,8 +243,7 @@ class GroupMetadataManager(brokerId: Int,
       internalTopicsAllowed = true,
       isFromClient = false,
       entriesPerPartition = records,
-      responseCallback = callback,
-      delayedProduceLock = Some(group))
+      responseCallback = callback)
   }
 
   /**

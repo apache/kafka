@@ -27,7 +27,7 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
   this.setDaemon(false)
   this.logIdent = "[" + name + "]: "
   val isRunning: AtomicBoolean = new AtomicBoolean(true)
-  private val shutdownLatch = new CountDownLatch(1)
+  val shutdownLatch = new CountDownLatch(1)
 
   def shutdown(): Unit = {
     initiateShutdown()

@@ -31,13 +31,13 @@ object JaasTestUtils {
                              serviceName: Option[String]) extends JaasModule {
 
     def name =
-      if (Java.isIBMJdk)
+      if (Java.isIbmJdk)
         "com.ibm.security.auth.module.Krb5LoginModule"
       else
         "com.sun.security.auth.module.Krb5LoginModule"
 
     def entries: Map[String, String] =
-      if (Java.isIBMJdk)
+      if (Java.isIbmJdk)
         Map(
           "principal" -> principal,
           "credsType" -> "both"
@@ -142,7 +142,7 @@ object JaasTestUtils {
     }
     // IBM Kerberos module doesn't support the serviceName JAAS property, hence it needs to be
     // passed as a Kafka property
-    if (Java.isIBMJdk && !result.contains(KafkaConfig.SaslKerberosServiceNameProp))
+    if (Java.isIbmJdk && !result.contains(KafkaConfig.SaslKerberosServiceNameProp))
       result.put(KafkaConfig.SaslKerberosServiceNameProp, serviceName)
     result
   }

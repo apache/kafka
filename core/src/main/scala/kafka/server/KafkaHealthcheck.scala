@@ -27,7 +27,7 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
 import com.yammer.metrics.core.Gauge
 import org.I0Itec.zkclient.IZkStateListener
-import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.zookeeper.Watcher.Event.KeeperState
 
 import scala.collection.mutable.Set

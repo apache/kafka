@@ -677,6 +677,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         return expectSendRecord(anyTimes, isRetry, false);
     }
 
+    @SuppressWarnings("unchecked")
     private Capture<ProducerRecord<byte[], byte[]>> expectSendRecord(boolean anyTimes, boolean isRetry, boolean succeed) throws InterruptedException {
         expectConvertKeyValue(anyTimes);
         expectApplyTransformationChain(anyTimes);
@@ -820,6 +821,12 @@ public class WorkerSourceTaskTest extends ThreadedTest {
             assertTrue(pollBatchTimeMax >= 0.0d);
         }
         assertTrue(pollBatchTimeAvg >= 0.0d);
+        double activeCount = metrics.currentMetricValue(sourceTaskGroup, "source-record-active-count");
+        double activeCountMax = metrics.currentMetricValue(sourceTaskGroup, "source-record-active-count-max");
+        assertEquals(0, activeCount, 0.000001d);
+        if (minimumPollCountExpected > 0) {
+            assertEquals(RECORDS.size(), activeCountMax, 0.000001d);
+        }
     }
 
     private abstract static class TestSourceTask extends SourceTask {

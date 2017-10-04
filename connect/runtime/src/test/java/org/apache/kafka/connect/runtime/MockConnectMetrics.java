@@ -53,7 +53,11 @@ public class MockConnectMetrics extends ConnectMetrics {
     }
 
     public MockConnectMetrics() {
-        super("mock", new WorkerConfig(WorkerConfig.baseConfigDef(), DEFAULT_WORKER_CONFIG), new MockTime());
+        this(new MockTime());
+    }
+
+    public MockConnectMetrics(MockTime time) {
+        super("mock", new WorkerConfig(WorkerConfig.baseConfigDef(), DEFAULT_WORKER_CONFIG), time);
     }
 
     @Override
@@ -70,7 +74,7 @@ public class MockConnectMetrics extends ConnectMetrics {
      * @return the current value of the metric
      */
     public double currentMetricValue(MetricGroup metricGroup, String name) {
-        MetricName metricName = metricGroup.metricName(name, "desc");
+        MetricName metricName = metricGroup.metricName(name);
         for (MetricsReporter reporter : metrics().reporters()) {
             if (reporter instanceof MockMetricsReporter) {
                 return ((MockMetricsReporter) reporter).currentMetricValue(metricName);
@@ -88,7 +92,7 @@ public class MockConnectMetrics extends ConnectMetrics {
      * @return true if the metric is still register, or false if it has been removed
      */
     public boolean metricExists(MetricGroup metricGroup, String name) {
-        MetricName metricName = metricGroup.metricName(name, "desc");
+        MetricName metricName = metricGroup.metricName(name);
         KafkaMetric metric = metricGroup.metrics().metric(metricName);
         return metric != null;
     }
@@ -132,8 +136,10 @@ public class MockConnectMetrics extends ConnectMetrics {
          * @param metricName the name of the metric that was registered most recently
          * @return the current value of the metric
          */
+        @SuppressWarnings("deprecation")
         public double currentMetricValue(MetricName metricName) {
-            return metricsByName.get(metricName).value();
+            KafkaMetric metric = metricsByName.get(metricName);
+            return metric != null ? metric.value() : Double.NaN;
         }
     }
 }

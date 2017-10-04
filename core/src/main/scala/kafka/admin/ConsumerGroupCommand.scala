@@ -35,8 +35,9 @@ import org.apache.kafka.common.errors.BrokerNotAvailableException
 import org.apache.kafka.common.{KafkaException, Node, TopicPartition}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.security.JaasUtils
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.common.utils.Utils
 

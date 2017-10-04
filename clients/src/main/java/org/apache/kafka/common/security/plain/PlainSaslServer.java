@@ -26,6 +26,7 @@ import javax.security.sasl.SaslException;
 import javax.security.sasl.SaslServer;
 import javax.security.sasl.SaslServerFactory;
 
+import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.authenticator.SaslServerCallbackHandler;
 
@@ -56,8 +57,18 @@ public class PlainSaslServer implements SaslServer {
         this.jaasContext = jaasContext;
     }
 
+    /**
+     * @throws SaslAuthenticationException if username/password combination is invalid or if the requested
+     *         authorization id is not the same as username.
+     * <p>
+     * <b>Note:</b> This method may throw {@link SaslAuthenticationException} to provide custom error messages
+     * to clients. But care should be taken to avoid including any information in the exception message that
+     * should not be leaked to unauthenticated clients. It may be safer to throw {@link SaslException} in
+     * some cases so that a standard error message is returned to clients.
+     * </p>
+     */
     @Override
-    public byte[] evaluateResponse(byte[] response) throws SaslException {
+    public byte[] evaluateResponse(byte[] response) throws SaslException, SaslAuthenticationException {
         /*
          * Message format (from https://tools.ietf.org/html/rfc4616):
          *
@@ -93,11 +104,11 @@ public class PlainSaslServer implements SaslServer {
         String expectedPassword = jaasContext.configEntryOption(JAAS_USER_PREFIX + username,
                 PlainLoginModule.class.getName());
         if (!password.equals(expectedPassword)) {
-            throw new SaslException("Authentication failed: Invalid username or password");
+            throw new SaslAuthenticationException("Authentication failed: Invalid username or password");
         }
 
         if (!authorizationIdFromClient.isEmpty() && !authorizationIdFromClient.equals(username))
-            throw new SaslException("Authentication failed: Client requested an authorization id that is different from username");
+            throw new SaslAuthenticationException("Authentication failed: Client requested an authorization id that is different from username");
 
         this.authorizationId = username;
 

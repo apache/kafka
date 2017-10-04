@@ -1078,7 +1078,7 @@ class LogValidatorTest {
     assertNotNull("Records processing info is null", stats)
     assertEquals(numConvertedRecords, stats.numRecordsConverted)
     if (numConvertedRecords > 0)
-      assertTrue(s"Conversion time not recorded $stats", stats.conversionTimeNanos > 0)
+      assertTrue(s"Conversion time not recorded $stats", stats.conversionTimeNanos >= 0)
     val originalSize = records.sizeInBytes
     val tempBytes = stats.temporaryMemoryBytes
     if (numConvertedRecords > 0 && compressed)

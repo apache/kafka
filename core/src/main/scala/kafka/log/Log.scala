@@ -155,7 +155,7 @@ class Log(@volatile var dir: File,
   /* last time it was flushed */
   private val lastflushedTime = new AtomicLong(time.milliseconds)
 
-  def initFileSize() : Int = {
+  def initFileSize: Int = {
     if (config.preallocate)
       config.segmentSize
     else
@@ -408,7 +408,7 @@ class Log(@volatile var dir: File,
                                       rollJitterMs = config.randomSegmentJitter,
                                       time = time,
                                       fileAlreadyExists = false,
-                                      initFileSize = this.initFileSize(),
+                                      initFileSize = this.initFileSize,
                                       preallocate = config.preallocate))
     } else if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
       recoverLog()
@@ -1412,28 +1412,31 @@ class Log(@volatile var dir: File,
    * Truncate this log so that it ends with the greatest offset < targetOffset.
    *
    * @param targetOffset The offset to truncate to, an upper bound on all offsets in the log after truncation is complete.
+   * @return True iff targetOffset < logEndOffset
    */
-  private[log] def truncateTo(targetOffset: Long) {
+  private[log] def truncateTo(targetOffset: Long): Boolean = {
     maybeHandleIOException(s"Error while truncating log to offset $targetOffset for $topicPartition in dir ${dir.getParent}") {
       if (targetOffset < 0)
         throw new IllegalArgumentException("Cannot truncate to a negative offset (%d).".format(targetOffset))
       if (targetOffset >= logEndOffset) {
         info("Truncating %s to %d has no effect as the largest offset in the log is %d.".format(name, targetOffset, logEndOffset - 1))
-        return
-      }
-      info("Truncating log %s to offset %d.".format(name, targetOffset))
-      lock synchronized {
-        if (segments.firstEntry.getValue.baseOffset > targetOffset) {
-          truncateFullyAndStartAt(targetOffset)
-        } else {
-          val deletable = logSegments.filter(segment => segment.baseOffset > targetOffset)
-          deletable.foreach(deleteSegment)
-          activeSegment.truncateTo(targetOffset)
-          updateLogEndOffset(targetOffset)
-          this.recoveryPoint = math.min(targetOffset, this.recoveryPoint)
-          this.logStartOffset = math.min(targetOffset, this.logStartOffset)
-          leaderEpochCache.clearAndFlushLatest(targetOffset)
-          loadProducerState(targetOffset, reloadFromCleanShutdown = false)
+        false
+      } else {
+        info("Truncating log %s to offset %d.".format(name, targetOffset))
+        lock synchronized {
+          if (segments.firstEntry.getValue.baseOffset > targetOffset) {
+            truncateFullyAndStartAt(targetOffset)
+          } else {
+            val deletable = logSegments.filter(segment => segment.baseOffset > targetOffset)
+            deletable.foreach(deleteSegment)
+            activeSegment.truncateTo(targetOffset)
+            updateLogEndOffset(targetOffset)
+            this.recoveryPoint = math.min(targetOffset, this.recoveryPoint)
+            this.logStartOffset = math.min(targetOffset, this.logStartOffset)
+            leaderEpochCache.clearAndFlushLatest(targetOffset)
+            loadProducerState(targetOffset, reloadFromCleanShutdown = false)
+          }
+          true
         }
       }
     }
@@ -1572,7 +1575,7 @@ class Log(@volatile var dir: File,
    * @param oldSegments The old log segments to delete from the log
    * @param isRecoveredSwapFile true if the new segment was created from a swap file during recovery after a crash
    */
-  private[log] def replaceSegments(newSegment: LogSegment, oldSegments: Seq[LogSegment], isRecoveredSwapFile : Boolean = false) {
+  private[log] def replaceSegments(newSegment: LogSegment, oldSegments: Seq[LogSegment], isRecoveredSwapFile: Boolean = false) {
     lock synchronized {
       // need to do this in two phases to be crash safe AND do the delete asynchronously
       // if we crash in the middle of this we complete the swap in loadSegments()
@@ -1581,9 +1584,9 @@ class Log(@volatile var dir: File,
       addSegment(newSegment)
 
       // delete the old files
-      for(seg <- oldSegments) {
+      for (seg <- oldSegments) {
         // remove the index entry
-        if(seg.baseOffset != newSegment.baseOffset)
+        if (seg.baseOffset != newSegment.baseOffset)
           segments.remove(seg.baseOffset)
         // delete segment
         asyncDeleteSegment(seg)

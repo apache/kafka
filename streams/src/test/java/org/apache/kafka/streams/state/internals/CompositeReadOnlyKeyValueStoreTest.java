@@ -40,6 +40,7 @@ import static org.junit.Assert.fail;
 public class CompositeReadOnlyKeyValueStoreTest {
 
     private final String storeName = "my-store";
+    private final String storeNameA = "my-storeA";
     private StateStoreProviderStub stubProviderTwo;
     private KeyValueStore<String, String> stubOneUnderlying;
     private CompositeReadOnlyKeyValueStore<String, String> theStore;
@@ -254,6 +255,24 @@ public class CompositeReadOnlyKeyValueStoreTest {
         });
 
         stubOneUnderlying.put("overflow", "me");
+        assertEquals(Long.MAX_VALUE, theStore.approximateNumEntries());
+    }
+
+    @Test
+    public void shouldReturnLongMaxValueOnUnderflow() {
+        stubProviderTwo.addStore(storeName, new NoOpReadOnlyStore<Object, Object>() {
+            @Override
+            public long approximateNumEntries() {
+                return Long.MAX_VALUE;
+            }
+        });
+        stubProviderTwo.addStore(storeNameA, new NoOpReadOnlyStore<Object, Object>() {
+            @Override
+            public long approximateNumEntries() {
+                return Long.MAX_VALUE;
+            }
+        });
+
         assertEquals(Long.MAX_VALUE, theStore.approximateNumEntries());
     }
 

@@ -30,7 +30,7 @@ import java.util.Map;
  *
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
-
+@Deprecated
 public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, WindowStore> implements WindowStoreSupplier<WindowStore> {
     public static final int MIN_SEGMENTS = 2;
     private final long retentionPeriod;

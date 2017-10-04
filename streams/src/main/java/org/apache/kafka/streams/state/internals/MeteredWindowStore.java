@@ -57,7 +57,7 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
         this.valueSerde = valueSerde;
     }
 
-
+    @SuppressWarnings("unchecked")
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         this.context = context;

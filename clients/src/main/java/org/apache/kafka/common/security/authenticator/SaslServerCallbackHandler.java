@@ -20,7 +20,6 @@ import java.io.IOException;
 import java.util.Map;
 
 import org.apache.kafka.common.security.JaasContext;
-import org.apache.kafka.common.security.auth.AuthCallbackHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

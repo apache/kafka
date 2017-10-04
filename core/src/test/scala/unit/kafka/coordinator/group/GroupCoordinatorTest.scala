@@ -186,6 +186,22 @@ class GroupCoordinatorTest extends JUnitSuite {
   }
 
   @Test
+  def testJoinGroupWithEmptyProtocolType() {
+    val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
+
+    val joinGroupResult = joinGroup(groupId, memberId, "", protocols)
+    assertEquals(Errors.INCONSISTENT_GROUP_PROTOCOL, joinGroupResult.error)
+  }
+
+  @Test
+  def testJoinGroupWithEmptyGroupProtocol() {
+    val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
+
+    val joinGroupResult = joinGroup(groupId, memberId, protocolType, List())
+    assertEquals(Errors.INCONSISTENT_GROUP_PROTOCOL, joinGroupResult.error)
+  }
+
+  @Test
   def testJoinGroupInconsistentGroupProtocol() {
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
 
@@ -1351,7 +1367,6 @@ class GroupCoordinatorTest extends JUnitSuite {
       isFromClient = EasyMock.eq(false),
       EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
       EasyMock.capture(capturedArgument),
-      EasyMock.anyObject().asInstanceOf[Option[Object]],
       EasyMock.anyObject())).andAnswer(new IAnswer[Unit] {
       override def answer = capturedArgument.getValue.apply(
         Map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId) ->
@@ -1435,7 +1450,6 @@ class GroupCoordinatorTest extends JUnitSuite {
       isFromClient = EasyMock.eq(false),
       EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
       EasyMock.capture(capturedArgument),
-      EasyMock.anyObject().asInstanceOf[Option[Object]],
       EasyMock.anyObject())
     ).andAnswer(new IAnswer[Unit] {
       override def answer = capturedArgument.getValue.apply(
@@ -1465,7 +1479,6 @@ class GroupCoordinatorTest extends JUnitSuite {
       isFromClient = EasyMock.eq(false),
       EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
       EasyMock.capture(capturedArgument),
-      EasyMock.anyObject().asInstanceOf[Option[Object]],
       EasyMock.anyObject())
     ).andAnswer(new IAnswer[Unit] {
       override def answer = capturedArgument.getValue.apply(
