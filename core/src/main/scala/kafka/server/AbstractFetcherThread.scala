@@ -18,6 +18,7 @@
 package kafka.server
 
 import java.util.concurrent.locks.ReentrantLock
+
 import kafka.cluster.BrokerEndPoint
 import kafka.utils.{DelayedItem, Pool, ShutdownableThread}
 import org.apache.kafka.common.errors.KafkaStorageException
@@ -27,10 +28,12 @@ import kafka.utils.CoreUtils.inLock
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.protocol.Errors
 import AbstractFetcherThread._
+
 import scala.collection.{Map, Set, mutable}
 import scala.collection.JavaConverters._
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
+
 import com.yammer.metrics.core.Gauge
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.{FatalExitError, PartitionStates}
@@ -71,13 +74,15 @@ abstract class AbstractFetcherThread(name: String,
   // deal with partitions with errors, potentially due to leadership changes
   protected def handlePartitionsWithErrors(partitions: Iterable[TopicPartition])
 
-  protected def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): Map[TopicPartition, Int]
+  protected def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[Map[TopicPartition, Int]]
 
   protected def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset]
 
-  protected def maybeTruncate(fetchedEpochs: Map[TopicPartition, EpochEndOffset]): Map[TopicPartition, Long]
+  protected def maybeTruncate(fetchedEpochs: Map[TopicPartition, EpochEndOffset]): ResultWithPartitions[Map[TopicPartition, Long]]
 
-  protected def buildFetchRequest(partitionMap: Seq[(TopicPartition, PartitionFetchState)]): REQ
+  protected def buildFetchRequest(partitionMap: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[REQ]
+
+  case class ResultWithPartitions[R](result: R, partitionsWithError: Set[TopicPartition])
 
   protected def fetch(fetchRequest: REQ): Seq[(TopicPartition, PD)]
 
@@ -98,11 +103,12 @@ abstract class AbstractFetcherThread(name: String,
   override def doWork() {
     maybeTruncate()
     val fetchRequest = inLock(partitionMapLock) {
-      val fetchRequest = buildFetchRequest(states)
+      val ResultWithPartitions(fetchRequest, partitionsWithError) = buildFetchRequest(states)
       if (fetchRequest.isEmpty) {
         trace("There are no active partitions. Back off for %d ms before sending a fetch request".format(fetchBackOffMs))
         partitionMapCond.await(fetchBackOffMs, TimeUnit.MILLISECONDS)
       }
+      handlePartitionsWithErrors(partitionsWithError)
       fetchRequest
     }
     if (!fetchRequest.isEmpty)
@@ -119,7 +125,8 @@ abstract class AbstractFetcherThread(name: String,
     *   occur during truncation.
     */
   def maybeTruncate(): Unit = {
-    val epochRequests = inLock(partitionMapLock) { buildLeaderEpochRequest(states) }
+    val ResultWithPartitions(epochRequests, partitionsWithError) = inLock(partitionMapLock) { buildLeaderEpochRequest(states) }
+    handlePartitionsWithErrors(partitionsWithError)
 
     if (epochRequests.nonEmpty) {
       val fetchedEpochs = fetchEpochsFromLeader(epochRequests)
@@ -127,7 +134,8 @@ abstract class AbstractFetcherThread(name: String,
       inLock(partitionMapLock) {
         //Check no leadership changes happened whilst we were unlocked, fetching epochs
         val leaderEpochs = fetchedEpochs.filter { case (tp, _) => partitionStates.contains(tp) }
-        val truncationPoints = maybeTruncate(leaderEpochs)
+        val ResultWithPartitions(truncationPoints, partitionsWithError) = maybeTruncate(leaderEpochs)
+        handlePartitionsWithErrors(partitionsWithError)
         markTruncationComplete(truncationPoints)
       }
     }
@@ -135,11 +143,6 @@ abstract class AbstractFetcherThread(name: String,
 
   private def processFetchRequest(fetchRequest: REQ) {
     val partitionsWithError = mutable.Set[TopicPartition]()
-
-    def updatePartitionsWithError(partition: TopicPartition): Unit = {
-      partitionsWithError += partition
-      partitionStates.moveToEnd(partition)
-    }
 
     var responseData: Seq[(TopicPartition, PD)] = Seq.empty
 
@@ -151,7 +154,7 @@ abstract class AbstractFetcherThread(name: String,
         if (isRunning.get) {
           warn(s"Error in fetch to broker ${sourceBroker.id}, request $fetchRequest", t)
           inLock(partitionMapLock) {
-            partitionStates.partitionSet.asScala.foreach(updatePartitionsWithError)
+            partitionsWithError ++= partitionStates.partitionSet.asScala
             // there is an error occurred while fetching partitions, sleep a while
             // note that `ReplicaFetcherThread.handlePartitionsWithError` will also introduce the same delay for every
             // partition with error effectively doubling the delay. It would be good to improve this.
@@ -195,10 +198,10 @@ abstract class AbstractFetcherThread(name: String,
                       // 2. If the message is corrupt due to a transient state in the log (truncation, partial writes can cause this), we simply continue and
                       // should get fixed in the subsequent fetches
                       logger.error(s"Found invalid messages during fetch for partition $topicPartition offset ${currentPartitionFetchState.fetchOffset} error ${ime.getMessage}")
-                      updatePartitionsWithError(topicPartition)
+                      partitionsWithError += topicPartition
                     case e: KafkaStorageException =>
                       logger.error(s"Error while processing data for partition $topicPartition", e)
-                      updatePartitionsWithError(topicPartition)
+                      partitionsWithError += topicPartition
                     case e: Throwable =>
                       throw new KafkaException(s"Error processing data for partition $topicPartition " +
                         s"offset ${currentPartitionFetchState.fetchOffset}", e)
@@ -212,12 +215,12 @@ abstract class AbstractFetcherThread(name: String,
                     case e: FatalExitError => throw e
                     case e: Throwable =>
                       error(s"Error getting offset for partition $topicPartition to broker ${sourceBroker.id}", e)
-                      updatePartitionsWithError(topicPartition)
+                      partitionsWithError += topicPartition
                   }
                 case _ =>
                   if (isRunning.get) {
                     error(s"Error for partition $topicPartition to broker %${sourceBroker.id}:${partitionData.exception.get}")
-                    updatePartitionsWithError(topicPartition)
+                    partitionsWithError += topicPartition
                   }
               }
             })
@@ -225,10 +228,9 @@ abstract class AbstractFetcherThread(name: String,
       }
     }
 
-    if (partitionsWithError.nonEmpty) {
+    if (partitionsWithError.nonEmpty)
       debug("handling partitions with error for %s".format(partitionsWithError))
-      handlePartitionsWithErrors(partitionsWithError)
-    }
+    handlePartitionsWithErrors(partitionsWithError)
   }
 
   def addPartitions(partitionAndOffsets: Map[TopicPartition, Long]) {
@@ -253,6 +255,7 @@ abstract class AbstractFetcherThread(name: String,
 
   /**
     * Loop through all partitions, marking them as truncation complete and applying the correct offset
+    *
     * @param partitions the partitions to mark truncation complete
     */
   private def markTruncationComplete(partitions: Map[TopicPartition, Long]) {

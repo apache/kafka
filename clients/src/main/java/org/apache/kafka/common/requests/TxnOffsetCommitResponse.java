@@ -125,6 +125,11 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
         return errors;
     }
 
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        return errorCounts(errors);
+    }
+
     public static TxnOffsetCommitResponse parse(ByteBuffer buffer, short version) {
         return new TxnOffsetCommitResponse(ApiKeys.TXN_OFFSET_COMMIT.parseResponse(version, buffer));
     }

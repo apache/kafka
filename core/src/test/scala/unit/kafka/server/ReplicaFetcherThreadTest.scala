@@ -122,7 +122,7 @@ class ReplicaFetcherThreadTest {
 
 
     //Expectations
-    expect(logManager.truncateTo(anyObject())).once
+    expect(logManager.truncateTo(anyObject())).times(2)
 
     replay(leaderEpochs, replicaManager, logManager, quota, replica)
 
@@ -171,7 +171,7 @@ class ReplicaFetcherThreadTest {
     val initialLEO = 200
 
     //Stubs
-    expect(logManager.truncateTo(capture(truncateToCapture))).once
+    expect(logManager.truncateTo(capture(truncateToCapture))).times(2)
     expect(replica.epochs).andReturn(Some(leaderEpochs)).anyTimes()
     expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(initialLEO)).anyTimes()
     expect(leaderEpochs.latestEpoch).andReturn(5).anyTimes()
@@ -194,8 +194,9 @@ class ReplicaFetcherThreadTest {
     thread.doWork()
 
     //We should have truncated to the offsets in the response
-    assertEquals(156, truncateToCapture.getValue.get(t1p0).get)
-    assertEquals(172, truncateToCapture.getValue.get(t2p1).get)
+    val truncationPoints = truncateToCapture.getValues.asScala.flatMap(_.toSeq).toMap
+    assertEquals(156, truncationPoints(t1p0))
+    assertEquals(172, truncationPoints(t2p1))
   }
 
   @Test

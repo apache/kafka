@@ -140,6 +140,10 @@
       <allow class="org.apache.kafka.common.errors.SerializationException" />
       <allow class="org.apache.kafka.common.header.Headers" />
     </subpackage>
+
+    <subpackage name="utils">
+      <allow pkg="org.apache.kafka.common.metrics" />
+    </subpackage>
   </subpackage>
 
   <subpackage name="clients">

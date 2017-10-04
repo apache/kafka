@@ -27,7 +27,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Map;
 
-@SuppressWarnings("deprecation")
+@Deprecated
 public class MockStateStoreSupplier implements StateStoreSupplier {
     private String name;
     private boolean persistent;

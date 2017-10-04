@@ -147,6 +147,11 @@ public class JoinGroupResponse extends AbstractResponse {
         return error;
     }
 
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        return errorCounts(error);
+    }
+
     public int generationId() {
         return generationId;
     }

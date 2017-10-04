@@ -84,6 +84,11 @@ public class StopReplicaResponse extends AbstractResponse {
         return error;
     }
 
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        return errorCounts(error);
+    }
+
     public static StopReplicaResponse parse(ByteBuffer buffer, short version) {
         return new StopReplicaResponse(ApiKeys.STOP_REPLICA.parseResponse(version, buffer));
     }

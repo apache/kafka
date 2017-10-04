@@ -183,23 +183,27 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired);
     }
-    
+
+    @SuppressWarnings("deprecation")
     @Override
     public void print() {
         print(defaultKeyValueMapper, null, null, this.name);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void print(final String label) {
         print(defaultKeyValueMapper, null, null, label);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void print(final Serde<K> keySerde,
                       final Serde<V> valSerde) {
         print(defaultKeyValueMapper, keySerde, valSerde, this.name);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void print(final Serde<K> keySerde,
                       final Serde<V> valSerde,
@@ -207,17 +211,20 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         print(defaultKeyValueMapper, keySerde, valSerde, label);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void print(final KeyValueMapper<? super K, ? super V, String> mapper) {
         print(mapper, null, null, this.name);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void print(final KeyValueMapper<? super K, ? super V, String> mapper,
                       final String label) {
         print(mapper, null, null, label);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void print(final KeyValueMapper<? super K, ? super V, String> mapper,
                       final Serde<K> keySerde,
@@ -225,6 +232,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         print(mapper, keySerde, valSerde, this.name);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void print(final KeyValueMapper<? super K, ? super V, String> mapper,
                       final Serde<K> keySerde,
@@ -243,17 +251,20 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         builder.internalTopologyBuilder.addProcessor(name, printedInternal.build(this.name), this.name);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void writeAsText(final String filePath) {
         writeAsText(filePath, this.name, null, null, defaultKeyValueMapper);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void writeAsText(final String filePath,
                             final String label) {
         writeAsText(filePath, label, null, null, defaultKeyValueMapper);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void writeAsText(final String filePath,
                             final Serde<K> keySerde,
@@ -261,6 +272,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         writeAsText(filePath, this.name, keySerde, valSerde, defaultKeyValueMapper);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void writeAsText(final String filePath,
                             final String label,
@@ -269,12 +281,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         writeAsText(filePath, label, keySerde, valSerde, defaultKeyValueMapper);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void writeAsText(final String filePath,
                             final KeyValueMapper<? super K, ? super V, String> mapper) {
         writeAsText(filePath, this.name, null, null, mapper);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void writeAsText(final String filePath,
                             final String label,
@@ -282,6 +296,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         writeAsText(filePath, label, null, null, mapper);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void writeAsText(final String filePath,
                             final Serde<K> keySerde,
@@ -290,6 +305,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         writeAsText(filePath, this.name, keySerde, valSerde, mapper);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void writeAsText(final String filePath,
                             final String label,
@@ -368,6 +384,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         return new KStreamImpl<>(builder, name, allSourceNodes, requireRepartitioning);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public KStream<K, V> through(final Serde<K> keySerde,
                                  final Serde<V> valSerde,
@@ -404,6 +421,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         return new KStreamImpl<>(builder, name, sourceNodes, repartitionRequired);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public KStream<K, V> through(final Serde<K> keySerde,
                                  final Serde<V> valSerde,
@@ -411,6 +429,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         return through(topic, Produced.with(keySerde, valSerde));
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public KStream<K, V> through(final StreamPartitioner<? super K, ? super V> partitioner,
                                  final String topic) {
@@ -427,12 +446,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         to(topic, Produced.<K, V>with(null, null, null));
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void to(final StreamPartitioner<? super K, ? super V> partitioner,
                    final String topic) {
         to(topic, Produced.streamPartitioner(partitioner));
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void to(final Serde<K> keySerde,
                    final Serde<V> valSerde,
@@ -440,7 +461,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         to(topic, Produced.with(keySerde, valSerde));
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "deprecation"})
     @Override
     public void to(final Serde<K> keySerde,
                    final Serde<V> valSerde,
@@ -459,6 +480,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     }
 
+    @SuppressWarnings("unchecked")
     private void to(final String topic, final ProducedInternal<K, V> produced) {
         final String name = builder.newName(SINK_NAME);
         final Serializer<K> keySerializer = produced.keySerde() == null ? null : produced.keySerde().serializer();
@@ -513,6 +535,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public <V1, R> KStream<K, R> join(final KStream<K, V1> other,
                                       final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
@@ -540,6 +563,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                              new KStreamImplJoin(false, false));
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public <V1, R> KStream<K, R> outerJoin(final KStream<K, V1> other,
                                            final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
@@ -641,6 +665,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         return sourceName;
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public <V1, R> KStream<K, R> leftJoin(final KStream<K, V1> other,
                                           final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
@@ -696,6 +721,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public <V1, R> KStream<K, R> join(final KTable<K, V1> other,
                                       final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
@@ -732,6 +758,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         return new KStreamImpl<>(builder, name, sourceNodes, false);
     }
 
+    @SuppressWarnings("unchecked")
     private <V1, R> KStream<K, R> doStreamTableJoin(final KTable<K, V1> other,
                                                     final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
                                                     final boolean leftJoin) {
@@ -768,6 +795,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         }
     }
 
+    @SuppressWarnings("deprecation")
+    @Override
     public <V1, R> KStream<K, R> leftJoin(final KTable<K, V1> other,
                                           final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
                                           final Serde<K> keySerde,
@@ -795,6 +824,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                         true);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public <K1> KGroupedStream<K1, V> groupBy(final KeyValueMapper<? super K, ? super V, K1> selector,
                                               final Serde<K1> keySerde,
@@ -820,6 +850,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public KGroupedStream<K, V> groupByKey(final Serde<K> keySerde,
                                            final Serde<V> valSerde) {
@@ -849,6 +880,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             this.rightOuter = rightOuter;
         }
 
+        @SuppressWarnings("unchecked")
         public <K1, R, V1, V2> KStream<K1, R> join(final KStream<K1, V1> lhs,
                                                    final KStream<K1, V2> other,
                                                    final ValueJoiner<? super V1, ? super V2, ? extends R> joiner,

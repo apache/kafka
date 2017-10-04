@@ -189,6 +189,11 @@ public class OffsetFetchResponse extends AbstractResponse {
         return this.error;
     }
 
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        return errorCounts(error);
+    }
+
     public Map<TopicPartition, PartitionData> responseData() {
         return responseData;
     }

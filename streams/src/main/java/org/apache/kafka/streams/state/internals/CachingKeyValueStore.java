@@ -38,6 +38,7 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
     private CacheFlushListener<K, V> flushListener;
+    private boolean sendOldValues;
     private String cacheName;
     private ThreadCache cache;
     private InternalProcessorContext context;
@@ -87,9 +88,10 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
             context.setRecordContext(entry.recordContext());
             if (flushListener != null) {
 
+                final V oldValue = sendOldValues ? serdes.valueFrom(underlying.get(entry.key())) : null;
                 flushListener.apply(serdes.keyFrom(entry.key().get()),
                                     serdes.valueFrom(entry.newValue()),
-                                    serdes.valueFrom(underlying.get(entry.key())));
+                                    oldValue);
 
             }
             underlying.put(entry.key(), entry.newValue());
@@ -98,8 +100,11 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
         }
     }
 
-    public void setFlushListener(final CacheFlushListener<K, V> flushListener) {
+    public void setFlushListener(final CacheFlushListener<K, V> flushListener,
+                                 final boolean sendOldValues) {
+
         this.flushListener = flushListener;
+        this.sendOldValues = sendOldValues;
     }
 
     @Override

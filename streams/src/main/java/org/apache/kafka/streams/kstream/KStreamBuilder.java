@@ -29,7 +29,6 @@ import org.apache.kafka.streams.kstream.internals.KTableImpl;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.kstream.internals.KTableSourceValueGetterSupplier;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
@@ -431,7 +430,7 @@ public class KStreamBuilder extends org.apache.kafka.streams.processor.TopologyB
      * @return a {@link KTable} for the specified topic
      */
     public <K, V> KTable<K, V> table(final String topic,
-                                     final StateStoreSupplier<KeyValueStore> storeSupplier) {
+                                     final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier) {
         return table(null, null, null, null, topic, storeSupplier);
     }
 
@@ -479,10 +478,11 @@ public class KStreamBuilder extends org.apache.kafka.streams.processor.TopologyB
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
-     * @param offsetReset       the {@code "auto.offset.reset"} policy to use for the specified topic if no valid committed
-     *                          offsets are available
-     * @param topic             the topic name; cannot be {@code null}
-     * @param queryableStoreName the state store name; If {@code null} this is the equivalent of {@link KStreamBuilder#table(AutoOffsetReset, String)} ()}.
+     * @param offsetReset        the {@code "auto.offset.reset"} policy to use for the specified topic if no valid committed
+     *                           offsets are available
+     * @param topic              the topic name; cannot be {@code null}
+     * @param queryableStoreName the state store name; If {@code null} this is the equivalent of
+     * {@link #table(org.apache.kafka.streams.processor.TopologyBuilder.AutoOffsetReset, String) table(AutoOffsetReset, String)}.
      * @return a {@link KTable} for the specified topic
      */
     public <K, V> KTable<K, V> table(final AutoOffsetReset offsetReset,
@@ -524,7 +524,7 @@ public class KStreamBuilder extends org.apache.kafka.streams.processor.TopologyB
      */
     public <K, V> KTable<K, V> table(final AutoOffsetReset offsetReset,
                                      final String topic,
-                                     final StateStoreSupplier<KeyValueStore> storeSupplier) {
+                                     final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier) {
         return table(offsetReset, null, null, null, topic, storeSupplier);
     }
 
@@ -701,7 +701,7 @@ public class KStreamBuilder extends org.apache.kafka.streams.processor.TopologyB
     public <K, V> KTable<K, V> table(final Serde<K> keySerde,
                                      final Serde<V> valSerde,
                                      final String topic,
-                                     final StateStoreSupplier<KeyValueStore> storeSupplier) {
+                                     final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier) {
         return table(null, null, keySerde, valSerde, topic, storeSupplier);
     }
 
@@ -736,7 +736,7 @@ public class KStreamBuilder extends org.apache.kafka.streams.processor.TopologyB
                                         final Serde<V> valSerde,
                                         final TimestampExtractor timestampExtractor,
                                         final String topic,
-                                        final StateStoreSupplier<KeyValueStore> storeSupplier,
+                                        final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier,
                                         final boolean isQueryable) {
         try {
             final String source = newName(KStreamImpl.SOURCE_NAME);
@@ -791,7 +791,8 @@ public class KStreamBuilder extends org.apache.kafka.streams.processor.TopologyB
      * @param valSerde           value serde used to send key-value pairs,
      *                           if not specified the default value serde defined in the configuration will be used
      * @param topic              the topic name; cannot be {@code null}
-     * @param queryableStoreName the state store name; If {@code null} this is the equivalent of {@link KStreamBuilder#table(AutoOffsetReset, Serde, Serde, String)} ()} ()}.
+     * @param queryableStoreName the state store name; If {@code null} this is the equivalent of
+     * {@link #table(org.apache.kafka.streams.processor.TopologyBuilder.AutoOffsetReset, Serde, Serde, String) table(AutoOffsetReset, Serde, Serde, String)}
      * @return a {@link KTable} for the specified topic
      */
     public <K, V> KTable<K, V> table(final AutoOffsetReset offsetReset,
@@ -876,9 +877,11 @@ public class KStreamBuilder extends org.apache.kafka.streams.processor.TopologyB
      * @param valSerde           value serde used to send key-value pairs,
      *                           if not specified the default value serde defined in the configuration will be used
      * @param topic              the topic name; cannot be {@code null}
-     * @param queryableStoreName the state store name; If {@code null} this is the equivalent of {@link KStreamBuilder#table(AutoOffsetReset, Serde, Serde, String)} ()} ()}.
+     * @param queryableStoreName the state store name; If {@code null} this is the equivalent of
+     * {@link #table(org.apache.kafka.streams.processor.TopologyBuilder.AutoOffsetReset, Serde, Serde, String) table(AutoOffsetReset, Serde, Serde, String)}
      * @return a {@link KTable} for the specified topic
      */
+    @SuppressWarnings("unchecked")
     public <K, V> KTable<K, V> table(final AutoOffsetReset offsetReset,
                                      final TimestampExtractor timestampExtractor,
                                      final Serde<K> keySerde,
@@ -886,12 +889,13 @@ public class KStreamBuilder extends org.apache.kafka.streams.processor.TopologyB
                                      final String topic,
                                      final String queryableStoreName) {
         final String internalStoreName = queryableStoreName != null ? queryableStoreName : newStoreName(KTableImpl.SOURCE_NAME);
-        final StateStoreSupplier storeSupplier = new RocksDBKeyValueStoreSupplier<>(internalStoreName,
-                keySerde,
-                valSerde,
-                false,
-                Collections.<String, String>emptyMap(),
-                true);
+        final org.apache.kafka.streams.processor.StateStoreSupplier storeSupplier = new RocksDBKeyValueStoreSupplier<>(
+            internalStoreName,
+            keySerde,
+            valSerde,
+            false,
+            Collections.<String, String>emptyMap(),
+            true);
         return doTable(offsetReset, keySerde, valSerde, timestampExtractor, topic, storeSupplier, queryableStoreName != null);
     }
 
@@ -962,7 +966,7 @@ public class KStreamBuilder extends org.apache.kafka.streams.processor.TopologyB
                                      final Serde<K> keySerde,
                                      final Serde<V> valSerde,
                                      final String topic,
-                                     final StateStoreSupplier<KeyValueStore> storeSupplier) {
+                                     final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier) {
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
         return doTable(offsetReset, keySerde, valSerde, timestampExtractor, topic, storeSupplier, true);
     }
@@ -1093,7 +1097,7 @@ public class KStreamBuilder extends org.apache.kafka.streams.processor.TopologyB
     public <K, V> GlobalKTable<K, V> globalTable(final Serde<K> keySerde,
                                                  final Serde<V> valSerde,
                                                  final String topic,
-                                                 final StateStoreSupplier<KeyValueStore> storeSupplier) {
+                                                 final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier) {
         return doGlobalTable(keySerde, valSerde, null, topic, storeSupplier);
     }
 
@@ -1169,7 +1173,7 @@ public class KStreamBuilder extends org.apache.kafka.streams.processor.TopologyB
                                                     final Serde<V> valSerde,
                                                     final TimestampExtractor timestampExtractor,
                                                     final String topic,
-                                                    final StateStoreSupplier<KeyValueStore> storeSupplier) {
+                                                    final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier) {
         try {
             Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
             final String sourceName = newName(KStreamImpl.SOURCE_NAME);
@@ -1221,6 +1225,7 @@ public class KStreamBuilder extends org.apache.kafka.streams.processor.TopologyB
      * @param streams the {@link KStream}s to be merged
      * @return a {@link KStream} containing all records of the given streams
      */
+    @SuppressWarnings("unchecked")
     public <K, V> KStream<K, V> merge(final KStream<K, V>... streams) {
         Objects.requireNonNull(streams, "streams can't be null");
         if (streams.length <= 1) {

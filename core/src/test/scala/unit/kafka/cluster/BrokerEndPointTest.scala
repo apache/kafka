@@ -19,7 +19,7 @@ package kafka.cluster
 
 import kafka.utils.TestUtils
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert.{assertEquals, assertNotEquals, assertNull}
 import org.junit.Test
 

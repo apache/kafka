@@ -20,7 +20,7 @@ import java.util.Properties
 
 import kafka.admin.ConfigCommand.ConfigCommandOptions
 import kafka.common.InvalidConfigException
-import kafka.server.{ConfigEntityName, QuotaId}
+import kafka.server.ConfigEntityName
 import kafka.utils.{Logging, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 

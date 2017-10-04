@@ -32,7 +32,6 @@ import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 
 import java.util.regex.Pattern;
 
@@ -54,7 +53,9 @@ public class Topology {
     final InternalTopologyBuilder internalTopologyBuilder = new InternalTopologyBuilder();
 
     /**
-     * Enum used to define auto offset reset policy when creating {@link KStream} or {@link KTable}
+     * Sets the {@code auto.offset.reset} configuration when
+     * {@link #addSource(AutoOffsetReset, String, String...) adding a source processor} or when creating {@link KStream}
+     * or {@link KTable} via {@link StreamsBuilder}.
      */
     public enum AutoOffsetReset {
         EARLIEST, LATEST
@@ -571,6 +572,7 @@ public class Topology {
      * @return itself
      * @throws TopologyException if the processor of state is already registered
      */
+    @SuppressWarnings("unchecked")
     public synchronized Topology addGlobalStore(final StoreBuilder storeBuilder,
                                                 final String sourceName,
                                                 final Deserializer keyDeserializer,
@@ -607,7 +609,8 @@ public class Topology {
      * @return itself
      * @throws TopologyException if the processor of state is already registered
      */
-    public synchronized Topology addGlobalStore(final KeyValueStoreBuilder storeBuilder,
+    @SuppressWarnings("unchecked")
+    public synchronized Topology addGlobalStore(final StoreBuilder storeBuilder,
                                                 final String sourceName,
                                                 final TimestampExtractor timestampExtractor,
                                                 final Deserializer keyDeserializer,
@@ -639,6 +642,7 @@ public class Topology {
      *
      * @return a description of the topology.
      */
+
     public synchronized TopologyDescription describe() {
         return internalTopologyBuilder.describe();
     }

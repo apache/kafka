@@ -19,7 +19,7 @@ package kafka.api
 
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.atomic.AtomicReference
-import java.util.{Properties}
+import java.util.Properties
 
 import kafka.common.TopicAndPartition
 import kafka.integration.KafkaServerTestHarness
@@ -100,8 +100,8 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
   val topic = "e2etopic"
   val part = 0
   val tp = new TopicPartition(topic, part)
-  val topicAndPartition = new TopicAndPartition(topic, part)
-  this.serverConfig.setProperty(KafkaConfig.MetricReporterClassesProp, "kafka.api.EndToEndClusterIdTest$MockBrokerMetricsReporter")
+  val topicAndPartition = TopicAndPartition(topic, part)
+  this.serverConfig.setProperty(KafkaConfig.MetricReporterClassesProp, classOf[MockBrokerMetricsReporter].getName)
 
   override def generateConfigs = {
     val cfgs = TestUtils.createBrokerConfigs(serverCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
@@ -112,7 +112,7 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
 
   @Before
   override def setUp() {
-    super.setUp
+    super.setUp()
     MockDeserializer.resetStaticVariables
     // create the consumer offset topic
     TestUtils.createTopic(this.zkUtils, topic, 2, serverCount, this.servers)
@@ -129,9 +129,9 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
 
     val producerProps = new Properties()
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    producerProps.put(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockProducerInterceptor")
+    producerProps.put(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, classOf[MockProducerInterceptor].getName)
     producerProps.put("mock.interceptor.append", appendStr)
-    producerProps.put(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG, "kafka.api.EndToEndClusterIdTest$MockProducerMetricsReporter")
+    producerProps.put(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG, classOf[MockProducerMetricsReporter].getName)
     val testProducer = new KafkaProducer(producerProps, new MockSerializer, new MockSerializer)
 
     // Send one record and make sure clusterId is set after send and before onAcknowledgement
@@ -150,8 +150,8 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
     isValidClusterId(MockProducerMetricsReporter.CLUSTER_META.get.clusterId)
 
     this.consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    this.consumerConfig.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockConsumerInterceptor")
-    this.consumerConfig.put(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, "kafka.api.EndToEndClusterIdTest$MockConsumerMetricsReporter")
+    this.consumerConfig.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, classOf[MockConsumerInterceptor].getName)
+    this.consumerConfig.put(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, classOf[MockConsumerMetricsReporter].getName)
     val testConsumer = new KafkaConsumer(this.consumerConfig, new MockDeserializer, new MockDeserializer)
     testConsumer.assign(List(tp).asJava)
     testConsumer.seek(tp, 0)

@@ -266,7 +266,8 @@ public enum Errors {
             }
         }),
     INCONSISTENT_GROUP_PROTOCOL(23,
-            "The group member's supported protocols are incompatible with those of existing members.",
+            "The group member's supported protocols are incompatible with those of existing members" +
+                " or first group member tried to join with empty protocol type or empty protocol list.",
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {
