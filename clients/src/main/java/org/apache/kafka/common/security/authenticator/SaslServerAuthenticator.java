@@ -146,6 +146,7 @@ public class SaslServerAuthenticator implements Authenticator {
         this.transportLayer = transportLayer;
 
         this.configs = configs;
+        @SuppressWarnings("unchecked")
         List<String> enabledMechanisms = (List<String>) this.configs.get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG);
         if (enabledMechanisms == null || enabledMechanisms.isEmpty())
             throw new IllegalArgumentException("No SASL mechanisms are enabled");

@@ -81,6 +81,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
             this.configs = configs;
             boolean hasKerberos;
             if (mode == Mode.SERVER) {
+                @SuppressWarnings("unchecked")
                 List<String> enabledMechanisms = (List<String>) this.configs.get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG);
                 hasKerberos = enabledMechanisms == null || enabledMechanisms.contains(SaslConfigs.GSSAPI_MECHANISM);
             } else {
