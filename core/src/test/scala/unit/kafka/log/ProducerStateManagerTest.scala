@@ -343,6 +343,28 @@ class ProducerStateManagerTest extends JUnitSuite {
   }
 
   @Test
+  def testAcceptAppendWithSequenceGapsOnReplica(): Unit = {
+    val epoch = 0.toShort
+    append(stateManager, producerId, epoch, 0, 0L, 0)
+    val outOfOrderSequence = 3
+
+    // First we ensure that we raise an OutOfOrderSequenceException is raised when the append comes from a client.
+    try {
+      append(stateManager, producerId, epoch, outOfOrderSequence, 1L, 1, isFromClient = true)
+      fail("Expected an OutOfOrderSequenceException to be raised.")
+    } catch {
+      case _ : OutOfOrderSequenceException =>
+      // Good!
+      case _ : Exception =>
+        fail("Expected an OutOfOrderSequenceException to be raised.")
+    }
+
+    assertEquals(0L, stateManager.activeProducers(producerId).lastSeq)
+    append(stateManager, producerId, epoch, outOfOrderSequence, 1L, 1, isFromClient = false)
+    assertEquals(outOfOrderSequence, stateManager.activeProducers(producerId).lastSeq)
+  }
+
+  @Test
   def testDeleteSnapshotsBefore(): Unit = {
     val epoch = 0.toShort
     append(stateManager, producerId, epoch, 0, 0L)
