@@ -23,7 +23,6 @@ import java.util.concurrent._
 
 import com.yammer.metrics.core.Gauge
 import kafka.admin.AdminUtils
-import kafka.api.{ApiVersion, KAFKA_1_0_IV0}
 import kafka.common.KafkaException
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.OffsetCheckpointFile
@@ -63,8 +62,7 @@ class LogManager(logDirs: Array[File],
                  val brokerState: BrokerState,
                  brokerTopicStats: BrokerTopicStats,
                  logDirFailureChannel: LogDirFailureChannel,
-                 time: Time,
-                 interBrokerProtocolVersion: ApiVersion) extends Logging with KafkaMetricsGroup {
+                 time: Time) extends Logging with KafkaMetricsGroup {
   val RecoveryPointCheckpointFile = "recovery-point-offset-checkpoint"
   val LogStartOffsetCheckpointFile = "log-start-offset-checkpoint"
   val LockFile = ".lock"
@@ -805,7 +803,6 @@ object LogManager {
       brokerState = brokerState,
       brokerTopicStats = brokerTopicStats,
       logDirFailureChannel = logDirFailureChannel,
-      time = time,
-      interBrokerProtocolVersion = config.interBrokerProtocolVersion)
+      time = time)
   }
 }

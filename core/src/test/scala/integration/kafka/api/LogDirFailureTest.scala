@@ -85,11 +85,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
       assertTrue(logDir.isFile)
 
       server = TestUtils.createServer(kafkaConfig)
-      TestUtils.waitUntilTrue(() => {
-        server.logDirFailureChannel.offlineLogDirQueue.size() == 0
-      }, "timed out waiting for LogDirFailureHandler to process offline dir")
-
-      assertEquals(Some(1), statusCodeOption)
+      TestUtils.waitUntilTrue(() => statusCodeOption.contains(1), "timed out waiting for broker to halt")
     } finally {
       Exit.resetHaltProcedure()
       if (server != null)

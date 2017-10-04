@@ -1039,8 +1039,7 @@ object TestUtils extends Logging {
                    time = time,
                    brokerState = BrokerState(),
                    brokerTopicStats = new BrokerTopicStats,
-                   logDirFailureChannel = new LogDirFailureChannel(logDirs.size),
-                   interBrokerProtocolVersion = ApiVersion.latestVersion)
+                   logDirFailureChannel = new LogDirFailureChannel(logDirs.size))
   }
 
   @deprecated("This method has been deprecated and it will be removed in a future release.", "0.10.0.0")

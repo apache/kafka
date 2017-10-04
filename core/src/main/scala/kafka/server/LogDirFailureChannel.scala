@@ -37,7 +37,7 @@ import kafka.utils.Logging
 class LogDirFailureChannel(logDirNum: Int) extends Logging {
 
   private val offlineLogDirs = new ConcurrentHashMap[String, String]
-  val offlineLogDirQueue = new ArrayBlockingQueue[String](logDirNum)
+  private val offlineLogDirQueue = new ArrayBlockingQueue[String](logDirNum)
 
   /*
    * If the given logDir is not already offline, add it to the
