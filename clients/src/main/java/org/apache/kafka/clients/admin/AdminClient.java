@@ -491,8 +491,6 @@ public abstract class AdminClient implements AutoCloseable {
      *     if the request was not completed in within the given {@link CreatePartitionsOptions#timeoutMs()}.</li>
      *     <li>{@link org.apache.kafka.common.errors.ReassignmentInProgressException}
      *     if a partition reassignment is currently in progress</li>
-     *     <li>{@link org.apache.kafka.common.errors.InvalidTopicException}
-     *     if the topic is queue for deletion</li>
      *     <li>{@link org.apache.kafka.common.errors.BrokerNotAvailableException}
      *     if the requested {@link NewPartitions#assignments()} contain a broker that is currently unavailable.</li>
      *     <li>{@link org.apache.kafka.common.errors.InvalidReplicationFactorException}
