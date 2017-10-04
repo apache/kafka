@@ -1914,8 +1914,12 @@ public class KafkaAdminClient extends AdminClient {
                     DeleteRecordsResponse response = (DeleteRecordsResponse) abstractResponse;
                     for (Map.Entry<TopicPartition, DeleteRecordsResponse.PartitionResponse> result: response.responses().entrySet()) {
 
-                        // TODO
-
+                        KafkaFutureImpl<Long> future = futures.get(result.getKey());
+                        if (result.getValue().error != Errors.NONE) {
+                            future.complete(result.getValue().lowWatermark);
+                        } else {
+                            future.completeExceptionally(result.getValue().error.exception());
+                        }
                     }
                 }
 

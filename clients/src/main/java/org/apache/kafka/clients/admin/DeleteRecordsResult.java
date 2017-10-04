@@ -32,5 +32,18 @@ public class DeleteRecordsResult {
         this.futures = futures;
     }
 
-    // TODO
+    /**
+     * Return a map from topic partition to futures which can be used to check the status of
+     * individual deletions.
+     */
+    public Map<TopicPartition, KafkaFuture<Long>> values() {
+        return futures;
+    }
+
+    /**
+     * Return a future which succeeds only if all the records deletions succeed.
+     */
+    public KafkaFuture<Void> all() {
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
+    }
 }
