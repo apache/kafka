@@ -70,6 +70,9 @@
     <li>SimpleAclAuthorizer now logs access denials to the authorizer log by default.</li>
     <li>Authentication failures are now reported to clients as one of the subclasses of <code>AuthenticationException</code>.
         No retries will be performed if a client connection fails authentication.</li>
+    <li>Custom <code>SaslServer</code> implementations may throw <code>SaslAuthenticationException</code> to provide an error
+        message to return to clients indicating the reason for authentication failure. Implementors should take care not to include
+        any security-critical information in the exception message that should not be leaked to unauthenticated clients.</li>
     <li>The <code>app-info</code> mbean registered with JMX to provide version and commit id will be deprecated and replaced with
         metrics providing these attributes.</li>
     <li>Kafka metrics may now contain non-numeric values. <code>org.apache.kafka.common.Metric#value()</code> has been deprecated and

@@ -79,7 +79,8 @@ public class NetworkTestUtils {
         assertTrue(selector.isChannelReady(node));
     }
 
-    public static ChannelState waitForChannelClose(Selector selector, String node, ChannelState.State channelState) throws IOException {
+    public static ChannelState waitForChannelClose(Selector selector, String node, ChannelState.State channelState)
+            throws IOException {
         boolean closed = false;
         for (int i = 0; i < 30; i++) {
             selector.poll(1000L);

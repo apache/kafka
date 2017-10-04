@@ -21,7 +21,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.network.CertStores;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.ChannelBuilders;
@@ -155,10 +155,8 @@ public class SaslAuthenticatorTest {
         jaasConfig.setClientOptions("PLAIN", TestJaasConfig.USERNAME, "invalidpassword");
 
         server = createEchoServer(securityProtocol);
-        ChannelState finalState = createAndCheckClientConnectionFailure(securityProtocol, node);
-        Exception exception = finalState.exception();
-        assertTrue("Invalid exception class " + exception.getClass(), exception instanceof AuthenticationException);
-        assertEquals("Authentication failed: Invalid username or password", exception.getMessage());
+        createAndCheckClientAuthenticationFailure(securityProtocol, node, "PLAIN",
+                "Authentication failed: Invalid username or password");
         server.verifyAuthenticationMetrics(0, 1);
     }
 
@@ -173,7 +171,8 @@ public class SaslAuthenticatorTest {
         jaasConfig.setClientOptions("PLAIN", "invaliduser", TestJaasConfig.PASSWORD);
 
         server = createEchoServer(securityProtocol);
-        createAndCheckClientConnectionFailure(securityProtocol, node);
+        createAndCheckClientAuthenticationFailure(securityProtocol, node, "PLAIN",
+                "Authentication failed: Invalid username or password");
         server.verifyAuthenticationMetrics(0, 1);
     }
 
@@ -311,7 +310,7 @@ public class SaslAuthenticatorTest {
         String node = "0";
         server = createEchoServer(securityProtocol);
         updateScramCredentialCache(TestJaasConfig.USERNAME, TestJaasConfig.PASSWORD);
-        createAndCheckClientConnectionFailure(securityProtocol, node);
+        createAndCheckClientAuthenticationFailure(securityProtocol, node, "SCRAM-SHA-256", null);
         server.verifyAuthenticationMetrics(0, 1);
     }
 
@@ -330,7 +329,7 @@ public class SaslAuthenticatorTest {
         String node = "0";
         server = createEchoServer(securityProtocol);
         updateScramCredentialCache(TestJaasConfig.USERNAME, TestJaasConfig.PASSWORD);
-        createAndCheckClientConnectionFailure(securityProtocol, node);
+        createAndCheckClientAuthenticationFailure(securityProtocol, node, "SCRAM-SHA-256", null);
         server.verifyAuthenticationMetrics(0, 1);
     }
 
@@ -348,7 +347,7 @@ public class SaslAuthenticatorTest {
         server.credentialCache().cache(ScramMechanism.SCRAM_SHA_256.mechanismName(), ScramCredential.class).remove(TestJaasConfig.USERNAME);
         String node = "1";
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "SCRAM-SHA-256");
-        createAndCheckClientConnectionFailure(securityProtocol, node);
+        createAndCheckClientAuthenticationFailure(securityProtocol, node, "SCRAM-SHA-256", null);
         server.verifyAuthenticationMetrics(0, 1);
 
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "SCRAM-SHA-512");
@@ -1140,9 +1139,21 @@ public class SaslAuthenticatorTest {
         selector = null;
     }
 
-    private ChannelState createAndCheckClientConnectionFailure(SecurityProtocol securityProtocol, String node) throws Exception {
+    private void createAndCheckClientAuthenticationFailure(SecurityProtocol securityProtocol, String node,
+            String mechanism, String expectedErrorMessage) throws Exception {
+        ChannelState finalState = createAndCheckClientConnectionFailure(securityProtocol, node);
+        Exception exception = finalState.exception();
+        assertTrue("Invalid exception class " + exception.getClass(), exception instanceof SaslAuthenticationException);
+        if (expectedErrorMessage == null)
+            expectedErrorMessage = "Authentication failed due to invalid credentials with SASL mechanism " + mechanism;
+        assertEquals(expectedErrorMessage, exception.getMessage());
+    }
+
+    private ChannelState createAndCheckClientConnectionFailure(SecurityProtocol securityProtocol, String node)
+            throws Exception {
         createClientConnection(securityProtocol, node);
-        ChannelState finalState = NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
+        ChannelState finalState = NetworkTestUtils.waitForChannelClose(selector, node,
+                ChannelState.State.AUTHENTICATION_FAILED);
         selector.close();
         selector = null;
         return finalState;
