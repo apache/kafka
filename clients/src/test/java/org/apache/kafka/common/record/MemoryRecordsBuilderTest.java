@@ -649,7 +649,7 @@ public class MemoryRecordsBuilderTest {
         assertNotNull("Records processing info is null", processingStats);
         assertEquals(numRecordsConverted, processingStats.numRecordsConverted());
         // Since nanoTime accuracy on build machines may not be sufficient to measure small conversion times,
-        // only check if the value >= 0.
+        // only check if the value >= 0. Default is -1, so this checks if time has been recorded.
         assertTrue("Processing time not recorded: " + processingStats, processingStats.conversionTimeNanos() >= 0);
         long tempBytes = processingStats.temporaryMemoryBytes();
         if (compressionType == CompressionType.NONE) {
