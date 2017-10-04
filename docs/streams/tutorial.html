@@ -485,12 +485,14 @@
                        return value;
                    }
                 })
-              .count("Counts");
+              // Materialize the result into a KeyValueStore named "counts-store".
+              // The Materialized store is always of type &lt;Bytes, byte[]&gt; as this is the format of the inner most store.
+              .count(Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt; as("counts-store"));
     </pre>
 
     <p>
-        Note that the <code>count</code> operator has a <code>String</code> typed parameter <code>Counts</code>,
-        which stores the running counts that keep being updated as more records are piped and processed from the source Kafka topic.
+        Note that the <code>count</code> operator has a <code>Materialized</code> parameter that specifies that the
+        running count should be stored in a state store named <code>counts-store</code>.
         This <code>Counts</code> store can be queried in real-time, with details described in the <a href="/{{version}}/documentation/streams/developer-guide#streams_interactive_queries">Developer Manual</a>.
     </p>
 
@@ -502,7 +504,7 @@
     </p>
 
     <pre class="brush: java;">
-        counts.to(Serdes.String(), Serdes.Long(), "streams-wordcount-output");
+        counts.toStream().to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long());
     </pre>
 
     <p>
@@ -516,8 +518,9 @@
         KStream&lt;String, String&gt; source = builder.stream("streams-plaintext-input");
         source.flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
               .groupBy((key, value) -> value)
-              .count("Counts")
-              .to(Serdes.String(), Serdes.Long(), "streams-wordcount-output");
+              .count(Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt;as("counts-store"))
+              .toStream()
+              .to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long());
     </pre>
 
     <p>
@@ -589,8 +592,9 @@
                 KStream&lt;String, String&gt; source = builder.stream("streams-plaintext-input");
                 source.flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
                       .groupBy((key, value) -> value)
-                      .count("Counts")
-                      .to(Serdes.String(), Serdes.Long(), "streams-wordcount-output");
+                      .count(Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt;as("counts-store"))
+                      .toStream()
+                      .to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long());
 
                 final Topology topology = builder.build();
                 final KafkaStreams streams = new KafkaStreams(topology, props);
