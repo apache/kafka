@@ -429,23 +429,42 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
           assertEquals(desc, 3, numPartitions(topic1))
       }
 
-      // try a newCount which would be a noop (wihout assignment)
+      // try a newCount which would be a noop (without assignment)
       alterResult = client.createPartitions(Map(topic2 ->
         NewPartitions.increaseTo(3)).asJava, option)
-      alterResult.values.get(topic2).get
-      assertEquals(desc, 3, numPartitions(topic2))
+      try {
+        alterResult.values.get(topic2).get
+        fail(s"$desc: Expect InvalidPartitionsException when requesting a noop")
+      } catch {
+        case e: ExecutionException =>
+          assertTrue(desc, e.getCause.isInstanceOf[InvalidPartitionsException])
+          assertEquals(desc, "The number of partitions for a topic can only be increased. Topic create-partitions-topic-2 currently has 3 partitions, 3 would not be an increase.", e.getCause.getMessage)
+          assertEquals(desc, 3, numPartitions(topic2))
+      }
 
       // try a newCount which would be a noop (where the assignment matches current state)
       alterResult = client.createPartitions(Map(topic2 ->
         NewPartitions.increaseTo(3, newPartition2Assignments)).asJava, option)
-      alterResult.values.get(topic2).get
-      assertEquals(desc, 3, numPartitions(topic2))
+      try {
+        alterResult.values.get(topic2).get
+      } catch {
+        case e: ExecutionException =>
+          assertTrue(desc, e.getCause.isInstanceOf[InvalidPartitionsException])
+          assertEquals(desc, "The number of partitions for a topic can only be increased. Topic create-partitions-topic-2 currently has 3 partitions, 3 would not be an increase.", e.getCause.getMessage)
+          assertEquals(desc, 3, numPartitions(topic2))
+      }
 
       // try a newCount which would be a noop (where the assignment doesn't match current state)
       alterResult = client.createPartitions(Map(topic2 ->
         NewPartitions.increaseTo(3, newPartition2Assignments.asScala.reverse.toList.asJava)).asJava, option)
-      alterResult.values.get(topic2).get
-      assertEquals(desc, 3, numPartitions(topic2))
+      try {
+        alterResult.values.get(topic2).get
+      } catch {
+        case e: ExecutionException =>
+          assertTrue(desc, e.getCause.isInstanceOf[InvalidPartitionsException])
+          assertEquals(desc, "The number of partitions for a topic can only be increased. Topic create-partitions-topic-2 currently has 3 partitions, 3 would not be an increase.", e.getCause.getMessage)
+          assertEquals(desc, 3, numPartitions(topic2))
+      }
 
       // try a bad topic name
       val unknownTopic = "an-unknown-topic"
