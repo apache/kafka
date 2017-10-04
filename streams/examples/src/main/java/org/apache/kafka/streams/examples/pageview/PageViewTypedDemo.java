@@ -38,6 +38,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Demonstrates how to perform a join between a KStream and a KTable, i.e. an example of a stateful computation,
@@ -150,45 +151,45 @@ public class PageViewTypedDemo {
                                                           Consumed.with(Serdes.String(), userProfileSerde));
 
         KStream<WindowedPageViewByRegion, RegionCount> regionCount = views
-                .leftJoin(users, new ValueJoiner<PageView, UserProfile, PageViewByRegion>() {
-                    @Override
-                    public PageViewByRegion apply(PageView view, UserProfile profile) {
-                        PageViewByRegion viewByRegion = new PageViewByRegion();
-                        viewByRegion.user = view.user;
-                        viewByRegion.page = view.page;
+            .leftJoin(users, new ValueJoiner<PageView, UserProfile, PageViewByRegion>() {
+                @Override
+                public PageViewByRegion apply(PageView view, UserProfile profile) {
+                    PageViewByRegion viewByRegion = new PageViewByRegion();
+                    viewByRegion.user = view.user;
+                    viewByRegion.page = view.page;
 
-                        if (profile != null) {
-                            viewByRegion.region = profile.region;
-                        } else {
-                            viewByRegion.region = "UNKNOWN";
-                        }
-                        return viewByRegion;
+                    if (profile != null) {
+                        viewByRegion.region = profile.region;
+                    } else {
+                        viewByRegion.region = "UNKNOWN";
                     }
-                })
-                .map(new KeyValueMapper<String, PageViewByRegion, KeyValue<String, PageViewByRegion>>() {
-                    @Override
-                    public KeyValue<String, PageViewByRegion> apply(String user, PageViewByRegion viewRegion) {
-                        return new KeyValue<>(viewRegion.region, viewRegion);
-                    }
-                })
-                .groupByKey(Serialized.with(Serdes.String(), pageViewByRegionSerde))
-                .count(TimeWindows.of(7 * 24 * 60 * 60 * 1000L).advanceBy(1000), "RollingSevenDaysOfPageViewsByRegion")
-                // TODO: we can merge ths toStream().map(...) with a single toStream(...)
-                .toStream()
-                .map(new KeyValueMapper<Windowed<String>, Long, KeyValue<WindowedPageViewByRegion, RegionCount>>() {
-                    @Override
-                    public KeyValue<WindowedPageViewByRegion, RegionCount> apply(Windowed<String> key, Long value) {
-                        WindowedPageViewByRegion wViewByRegion = new WindowedPageViewByRegion();
-                        wViewByRegion.windowStart = key.window().start();
-                        wViewByRegion.region = key.key();
+                    return viewByRegion;
+                }
+            })
+            .map(new KeyValueMapper<String, PageViewByRegion, KeyValue<String, PageViewByRegion>>() {
+                @Override
+                public KeyValue<String, PageViewByRegion> apply(String user, PageViewByRegion viewRegion) {
+                    return new KeyValue<>(viewRegion.region, viewRegion);
+                }
+            })
+            .groupByKey(Serialized.with(Serdes.String(), pageViewByRegionSerde))
+            .windowedBy(TimeWindows.of(TimeUnit.DAYS.toMillis(7)).advanceBy(TimeUnit.SECONDS.toMillis(1)))
+            .count()
+            .toStream()
+            .map(new KeyValueMapper<Windowed<String>, Long, KeyValue<WindowedPageViewByRegion, RegionCount>>() {
+                @Override
+                public KeyValue<WindowedPageViewByRegion, RegionCount> apply(Windowed<String> key, Long value) {
+                    WindowedPageViewByRegion wViewByRegion = new WindowedPageViewByRegion();
+                    wViewByRegion.windowStart = key.window().start();
+                    wViewByRegion.region = key.key();
 
-                        RegionCount rCount = new RegionCount();
-                        rCount.region = key.key();
-                        rCount.count = value;
+                    RegionCount rCount = new RegionCount();
+                    rCount.region = key.key();
+                    rCount.count = value;
 
-                        return new KeyValue<>(wViewByRegion, rCount);
-                    }
-                });
+                    return new KeyValue<>(wViewByRegion, rCount);
+                }
+            });
 
         // write to the result topic
         regionCount.to("streams-pageviewstats-typed-output", Produced.with(wPageViewByRegionSerde, regionCountSerde));
