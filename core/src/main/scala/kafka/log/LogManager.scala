@@ -437,6 +437,7 @@ class LogManager(logDirs: Array[File],
    * @param partitionOffsets Partition logs that need to be truncated
    */
   def truncateTo(partitionOffsets: Map[TopicPartition, Long]) {
+    var truncated = false
     for ((topicPartition, truncateOffset) <- partitionOffsets) {
       val log = logs.get(topicPartition)
       // If the log does not exist, skip it
@@ -446,7 +447,8 @@ class LogManager(logDirs: Array[File],
         if (needToStopCleaner)
           cleaner.abortAndPauseCleaning(topicPartition)
         try {
-          log.truncateTo(truncateOffset)
+          if (log.truncateTo(truncateOffset))
+            truncated = true
           if (needToStopCleaner)
             cleaner.maybeTruncateCheckpoint(log.dir.getParentFile, topicPartition, log.activeSegment.baseOffset)
         } finally {
@@ -455,7 +457,9 @@ class LogManager(logDirs: Array[File],
         }
       }
     }
-    checkpointLogRecoveryOffsets()
+
+    if (truncated)
+      checkpointLogRecoveryOffsets()
   }
 
   /**
