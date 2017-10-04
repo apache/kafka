@@ -47,8 +47,8 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
     private static final String REDUCE_NAME = "KTABLE-REDUCE-";
 
-    protected final Serde<? extends K> keySerde;
-    protected final Serde<? extends V> valSerde;
+    protected final Serde<K> keySerde;
+    protected final Serde<V> valSerde;
     private boolean isQueryable = true;
     private final Initializer<Long> countInitializer = new Initializer<Long>() {
         @Override
@@ -74,8 +74,8 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     KGroupedTableImpl(final InternalStreamsBuilder builder,
                       final String name,
                       final String sourceName,
-                      final Serde<? extends K> keySerde,
-                      final Serde<? extends V> valSerde) {
+                      final Serde<K> keySerde,
+                      final Serde<V> valSerde) {
         super(builder, name, Collections.singleton(sourceName));
         this.keySerde = keySerde;
         this.valSerde = valSerde;
@@ -257,6 +257,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                          materialized);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
                                         final Aggregator<? super K, ? super V, VR> adder,
@@ -268,6 +269,9 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         Objects.requireNonNull(materialized, "materialized can't be null");
         final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal =
                 new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME);
+        if (materializedInternal.keySerde() == null) {
+            materializedInternal.withKeySerde(keySerde);
+        }
         final ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableAggregate<>(materializedInternal.storeName(),
                                                                                         initializer,
                                                                                         adder,

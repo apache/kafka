@@ -184,7 +184,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(aggregator, "aggregator can't be null");
         MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal =
-                new MaterializedInternal<>(Materialized.<K, VR, KeyValueStore<Bytes, byte[]>>with(null, null),
+                new MaterializedInternal<>(Materialized.<K, VR, KeyValueStore<Bytes, byte[]>>with(keySerde, null),
                                            builder,
                                            AGGREGATE_NAME);
         return doAggregate(new KStreamAggregate<>(materializedInternal.storeName(), initializer, aggregator),
