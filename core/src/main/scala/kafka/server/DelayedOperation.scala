@@ -19,7 +19,7 @@ package kafka.server
 
 import java.util.concurrent._
 import java.util.concurrent.atomic._
-import java.util.concurrent.locks.ReentrantReadWriteLock
+import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
 
 import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaMetricsGroup
@@ -46,6 +46,8 @@ import scala.collection.mutable.ListBuffer
 abstract class DelayedOperation(override val delayMs: Long) extends TimerTask with Logging {
 
   private val completed = new AtomicBoolean(false)
+  // Visible for testing
+  private[server] val lock: ReentrantLock = new ReentrantLock
 
   /*
    * Force completing the delayed operation, if not already completed.
@@ -96,13 +98,18 @@ abstract class DelayedOperation(override val delayMs: Long) extends TimerTask wi
   def tryComplete(): Boolean
 
   /**
-   * Thread-safe variant of tryComplete(). This can be overridden if the operation provides its
-   * own synchronization.
+   * Thread-safe variant of tryComplete() that attempts completion only if the lock can be acquired
+   * without blocking.
    */
-  def safeTryComplete(): Boolean = {
-    synchronized {
-      tryComplete()
-    }
+  private[server] def maybeTryComplete(): Boolean = {
+    if (lock.tryLock()) {
+      try {
+        tryComplete()
+      } finally {
+        lock.unlock()
+      }
+    } else
+      false
   }
 
   /*
@@ -196,7 +203,9 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
     // operation is unnecessarily added for watch. However, this is a less severe issue since the
     // expire reaper will clean it up periodically.
 
-    var isCompletedByMe = operation.safeTryComplete()
+    // At this point the only thread that can attempt this operation is this current thread
+    // Hence it is safe to tryComplete() without a lock
+    var isCompletedByMe = operation.tryComplete()
     if (isCompletedByMe)
       return true
 
@@ -213,7 +222,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
       }
     }
 
-    isCompletedByMe = operation.safeTryComplete()
+    isCompletedByMe = operation.maybeTryComplete()
     if (isCompletedByMe)
       return true
 
@@ -335,7 +344,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
         if (curr.isCompleted) {
           // another thread has completed this operation, just remove it
           iter.remove()
-        } else if (curr.safeTryComplete()) {
+        } else if (curr.maybeTryComplete()) {
           iter.remove()
           completed += 1
         }

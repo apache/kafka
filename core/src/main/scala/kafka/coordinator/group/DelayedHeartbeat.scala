@@ -30,10 +30,6 @@ private[group] class DelayedHeartbeat(coordinator: GroupCoordinator,
                                       sessionTimeout: Long)
   extends DelayedOperation(sessionTimeout) {
 
-  // overridden since tryComplete already synchronizes on the group. This makes it safe to
-  // call purgatory operations while holding the group lock.
-  override def safeTryComplete(): Boolean = tryComplete()
-
   override def tryComplete(): Boolean = coordinator.tryCompleteHeartbeat(group, member, heartbeatDeadline, forceComplete _)
   override def onExpiration() = coordinator.onExpireHeartbeat(group, member, heartbeatDeadline)
   override def onComplete() = coordinator.onCompleteHeartbeat()
