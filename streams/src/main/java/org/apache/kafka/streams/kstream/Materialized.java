@@ -38,7 +38,7 @@ import java.util.Objects;
  * by providing just a store name.
  */
 public class Materialized<K, V, S extends StateStore> {
-    protected StoreSupplier storeSupplier;
+    protected StoreSupplier<S> storeSupplier;
     protected String storeName;
     protected Serde<V> valueSerde;
     protected Serde<K> keySerde;
