@@ -14,22 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.api
+package kafka.server
 
+import java.io.File
 import java.util.Collections
 import java.util.concurrent.{ExecutionException, TimeUnit}
 
+import kafka.server.LogDirFailureTest._
+import kafka.api.IntegrationTestHarness
 import kafka.controller.{OfflineReplica, PartitionAndReplica}
-import kafka.server.KafkaConfig
-import kafka.utils.{CoreUtils, TestUtils, ZkUtils}
+import kafka.utils.{CoreUtils, Exit, TestUtils, ZkUtils}
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderForPartitionException}
 import org.junit.{Before, Test}
-import org.junit.Assert.assertTrue
-import org.junit.Assert.assertEquals
+import org.junit.Assert.{assertTrue, assertFalse, assertEquals}
 
 import scala.collection.JavaConverters._
 
@@ -37,8 +38,6 @@ import scala.collection.JavaConverters._
   * Test whether clients can producer and consume when there is log directory failure
   */
 class LogDirFailureTest extends IntegrationTestHarness {
-
-  import kafka.api.LogDirFailureTest._
 
   val producerCount: Int = 1
   val consumerCount: Int = 1
@@ -61,6 +60,36 @@ class LogDirFailureTest extends IntegrationTestHarness {
   @Test
   def testIOExceptionDuringLogRoll() {
     testProduceAfterLogDirFailureOnLeader(Roll)
+  }
+
+  @Test
+  // Broker should halt on any log directory failure if inter-broker protocol < 1.0
+  def brokerWithOldInterBrokerProtocolShouldHaltOnLogDirFailure() {
+    @volatile var statusCodeOption: Option[Int] = None
+    Exit.setHaltProcedure { (statusCode, _) =>
+      statusCodeOption = Some(statusCode)
+      throw new IllegalArgumentException
+    }
+
+    var server: KafkaServer = null
+    try {
+      val props = TestUtils.createBrokerConfig(serverCount, zkConnect, logDirCount = 3)
+      props.put(KafkaConfig.InterBrokerProtocolVersionProp, "0.11.0")
+      props.put(KafkaConfig.LogMessageFormatVersionProp, "0.11.0")
+      val kafkaConfig = KafkaConfig.fromProps(props)
+      val logDir = new File(kafkaConfig.logDirs.head)
+      // Make log directory of the partition on the leader broker inaccessible by replacing it with a file
+      CoreUtils.swallow(Utils.delete(logDir))
+      logDir.createNewFile()
+      assertTrue(logDir.isFile)
+
+      server = TestUtils.createServer(kafkaConfig)
+      TestUtils.waitUntilTrue(() => statusCodeOption.contains(1), "timed out waiting for broker to halt")
+    } finally {
+      Exit.resetHaltProcedure()
+      if (server != null)
+        TestUtils.shutdownServers(List(server))
+    }
   }
 
   @Test
@@ -92,7 +121,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
 
     assertEquals(serverCount, leaderServer.replicaManager.getPartition(new TopicPartition(topic, anotherPartitionWithTheSameLeader)).get.inSyncReplicas.size)
     followerServer.replicaManager.replicaFetcherManager.fetcherThreadMap.values.foreach { thread =>
-      assertTrue("ReplicaFetcherThread should still be working if its partition count > 0", thread.shutdownLatch.getCount > 0)
+      assertFalse("ReplicaFetcherThread should still be working if its partition count > 0", thread.isShutdownComplete)
     }
   }
 

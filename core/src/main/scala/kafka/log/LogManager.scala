@@ -131,8 +131,11 @@ class LogManager(logDirs: Array[File],
 
     val liveLogDirs = new ConcurrentLinkedQueue[File]()
 
-    for (dir <- dirs if !initialOfflineDirs.contains(dir)) {
+    for (dir <- dirs) {
       try {
+        if (initialOfflineDirs.contains(dir))
+          throw new IOException(s"Failed to load ${dir.getAbsolutePath} during broker startup")
+
         if (!dir.exists) {
           info("Log directory '" + dir.getAbsolutePath + "' not found, creating it.")
           val created = dir.mkdirs()
@@ -144,7 +147,7 @@ class LogManager(logDirs: Array[File],
         liveLogDirs.add(dir)
       } catch {
         case e: IOException =>
-          error(s"Failed to create or validate data directory $dir.getAbsolutePath", e)
+          logDirFailureChannel.maybeAddOfflineLogDir(dir.getAbsolutePath, s"Failed to create or validate data directory ${dir.getAbsolutePath}", e)
       }
     }
     if (liveLogDirs.isEmpty) {
