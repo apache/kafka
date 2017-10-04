@@ -20,7 +20,7 @@ import java.io._
 import java.nio.ByteBuffer
 import java.nio.file.Files
 
-import kafka.common.{BaseEnum, KafkaException}
+import kafka.common.KafkaException
 import kafka.log.Log.offsetFromFilename
 import kafka.server.LogOffsetMetadata
 import kafka.utils.{Logging, nonthreadsafe, threadsafe}
@@ -38,19 +38,11 @@ class CorruptSnapshotException(msg: String) extends KafkaException(msg)
 
 
 // ValidationType and its subtypes define the extent of the validation to perform on a given ProducerAppendInfo instance
-private[log] sealed trait ValidationType extends BaseEnum
+private[log] sealed trait ValidationType
 private[log] object ValidationType {
-  case object None extends ValidationType {
-    val name = "NoValidation"
-  }
-
-  case object EpochOnly extends ValidationType {
-    val name = "EpochOnlyValidation"
-  }
-
-  case object Full extends ValidationType {
-    val name = "FullValidation"
-  }
+  case object None extends ValidationType
+  case object EpochOnly extends ValidationType
+  case object Full extends ValidationType
 }
 
 private[log] case class TxnMetadata(producerId: Long, var firstOffset: LogOffsetMetadata, var lastOffset: Option[Long] = None) {
