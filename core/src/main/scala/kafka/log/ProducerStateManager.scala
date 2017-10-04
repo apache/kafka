@@ -39,19 +39,18 @@ class CorruptSnapshotException(msg: String) extends KafkaException(msg)
 
 // ValidationType and its subtypes define the extent of the validation to perform on a given ProducerAppendInfo instance
 private[log] sealed trait ValidationType extends BaseEnum
+private[log] object ValidationType {
+  case object None extends ValidationType {
+    val name = "NoValidation"
+  }
 
-private[log] case object NoValidation extends ValidationType {
-  val name = "NoValidation"
+  case object EpochOnly extends ValidationType {
+    val name = "EpochOnlyValidation"
+  }
+  case object Full extends ValidationType {
+    val name = "FullValidation"
+  }
 }
-
-private[log] case object EpochOnlyValidation extends ValidationType {
-  val name = "EpochOnlyValidation"
-}
-
-private[log] case object FullValidation extends ValidationType {
-  val name = "FullValidation"
-}
-
 
 private[log] case class TxnMetadata(producerId: Long, var firstOffset: LogOffsetMetadata, var lastOffset: Option[Long] = None) {
   def this(producerId: Long, firstOffset: Long) = this(producerId, LogOffsetMetadata(firstOffset))
@@ -155,7 +154,7 @@ private[log] class ProducerIdEntry(val producerId: Long, val batchMetadata: muta
  *                      the most recent appends made by the producer. Validation of the first incoming append will
  *                      be made against the lastest append in the current entry. New appends will replace older appends
  *                      in the current entry so that the space overhead is constant.
- * @param validationType Indicates the extend of validation to perform on the appends on this instance. Offset commits
+ * @param validationType Indicates the extent of validation to perform on the appends on this instance. Offset commits
  *                       coming from the producer should have EpochOnlyValidation. Appends which aren't from a client
  *                       will not be validated at all, and should be set to NoValidation. All other appends should
  *                       have FullValidation.
@@ -167,12 +166,12 @@ private[log] class ProducerAppendInfo(val producerId: Long,
   private val transactions = ListBuffer.empty[TxnMetadata]
 
   private def maybeValidateAppend(producerEpoch: Short, firstSeq: Int, lastSeq: Int) = {
-    if (validationType != NoValidation) {
+   if (validationType != ValidationType.None) {
       if (isFenced(producerEpoch)) {
         throw new ProducerFencedException(s"Producer's epoch is no longer valid. There is probably another producer " +
           s"with a newer epoch. $producerEpoch (request epoch), ${currentEntry.producerEpoch} (server epoch)")
       }
-      if (validationType == FullValidation) {
+      if (validationType == ValidationType.Full) {
         if (producerEpoch != currentEntry.producerEpoch) {
           if (firstSeq != 0) {
             if (currentEntry.producerEpoch != RecordBatch.NO_PRODUCER_EPOCH) {
@@ -555,11 +554,11 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   def prepareUpdate(producerId: Long, isFromClient: Boolean): ProducerAppendInfo = {
     val validationToPerform =
       if (!isFromClient)
-        NoValidation
+        ValidationType.None
       else if (topicPartition.topic == Topic.GROUP_METADATA_TOPIC_NAME)
-        EpochOnlyValidation
+        ValidationType.EpochOnly
       else
-        FullValidation
+        ValidationType.Full
 
     new ProducerAppendInfo(producerId, lastEntry(producerId).getOrElse(ProducerIdEntry.empty(producerId)), validationToPerform)
   }
