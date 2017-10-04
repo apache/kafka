@@ -47,6 +47,7 @@ private[log] object ValidationType {
   case object EpochOnly extends ValidationType {
     val name = "EpochOnlyValidation"
   }
+
   case object Full extends ValidationType {
     val name = "FullValidation"
   }
