@@ -56,6 +56,10 @@ public class MockConnectMetrics extends ConnectMetrics {
         this(new MockTime());
     }
 
+    public MockConnectMetrics(org.apache.kafka.common.utils.MockTime time) {
+        super("mock", new WorkerConfig(WorkerConfig.baseConfigDef(), DEFAULT_WORKER_CONFIG), time);
+    }
+
     public MockConnectMetrics(MockTime time) {
         super("mock", new WorkerConfig(WorkerConfig.baseConfigDef(), DEFAULT_WORKER_CONFIG), time);
     }

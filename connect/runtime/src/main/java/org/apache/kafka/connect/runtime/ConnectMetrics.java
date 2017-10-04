@@ -306,7 +306,7 @@ public class ConnectMetrics {
                 metrics().addMetric(metricName, new Gauge<T>() {
                     @Override
                     public T value(MetricConfig config, long now) {
-                        return supplier.metricValue();
+                        return supplier.metricValue(now);
                     }
                 });
             }
@@ -421,9 +421,10 @@ public class ConnectMetrics {
         /**
          * Return the literal value for the metric.
          *
+         * @param now the current time in milliseconds
          * @return the literal metric value; may not be null
          */
-        T metricValue();
+        T metricValue(long now);
     }
 
     /**

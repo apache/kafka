@@ -629,19 +629,19 @@ public class Worker {
 
             metricGroup.addValueMetric(registry.connectorCount, new LiteralSupplier<Double>() {
                 @Override
-                public Double metricValue() {
+                public Double metricValue(long now) {
                     return (double) connectors.size();
                 }
             });
             metricGroup.addValueMetric(registry.taskCount, new LiteralSupplier<Double>() {
                 @Override
-                public Double metricValue() {
+                public Double metricValue(long now) {
                     return (double) tasks.size();
                 }
             });
             metricGroup.addValueMetric(registry.workerStatus, new LiteralSupplier<String>() {
                 @Override
-                public String metricValue() {
+                public String metricValue(long now) {
                     return state.toString().toLowerCase(Locale.getDefault());
                 }
             });

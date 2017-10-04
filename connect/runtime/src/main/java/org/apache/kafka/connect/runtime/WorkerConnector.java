@@ -253,7 +253,7 @@ public class WorkerConnector {
             metricGroup.addImmutableValueMetric(registry.connectorVersion, connector.version());
             metricGroup.addValueMetric(registry.connectorStatus, new LiteralSupplier<String>() {
                 @Override
-                public String metricValue() {
+                public String metricValue(long now) {
                     return state.toString().toLowerCase(Locale.getDefault());
                 }
             });

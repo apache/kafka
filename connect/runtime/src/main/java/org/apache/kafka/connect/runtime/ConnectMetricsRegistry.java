@@ -87,6 +87,13 @@ public class ConnectMetricsRegistry {
     public final MetricNameTemplate taskStartupFailureTotal;
     public final MetricNameTemplate taskStartupFailurePercentage;
     public final MetricNameTemplate workerStatus;
+    public final MetricNameTemplate leaderName;
+    public final MetricNameTemplate epoch;
+    public final MetricNameTemplate rebalanceCompletedTotal;
+    public final MetricNameTemplate rebalanceMode;
+    public final MetricNameTemplate rebalanceTimeMax;
+    public final MetricNameTemplate rebalanceTimeAvg;
+    public final MetricNameTemplate rebalanceTimeSinceLast;
 
     public ConnectMetricsRegistry() {
         this(new LinkedHashSet<String>());
@@ -274,6 +281,22 @@ public class ConnectMetricsRegistry {
                                                  "The total number of task starts that failed.", workerTags);
         taskStartupFailurePercentage = createTemplate("task-startup-failure-percentage", WORKER_GROUP_NAME,
                                                       "The average percentage of this worker's tasks starts that failed.", workerTags);
+
+        /***** Worker rebalance level *****/
+        Set<String> rebalanceTags = new LinkedHashSet<>(tags);
+
+        leaderName = createTemplate("leader-name", WORKER_REBALANCE_GROUP_NAME, "The name of the group leader.", rebalanceTags);
+        epoch = createTemplate("epoch", WORKER_REBALANCE_GROUP_NAME, "The epoch or generation number of this worker.", rebalanceTags);
+        rebalanceCompletedTotal = createTemplate("completed-rebalances-total", WORKER_REBALANCE_GROUP_NAME,
+                                                "The total number of rebalances completed by this worker.", rebalanceTags);
+        rebalanceMode = createTemplate("rebalancing", WORKER_REBALANCE_GROUP_NAME,
+                                               "Whether this worker is currently rebalancing.", rebalanceTags);
+        rebalanceTimeMax = createTemplate("rebalance-max-time-ms", WORKER_REBALANCE_GROUP_NAME,
+                                          "The maximum time in milliseconds spent by this worker to rebalance.", rebalanceTags);
+        rebalanceTimeAvg = createTemplate("rebalance-avg-time-ms", WORKER_REBALANCE_GROUP_NAME,
+                                          "The average time in milliseconds spent by this worker to rebalance.", rebalanceTags);
+        rebalanceTimeSinceLast = createTemplate("time-since-last-rebalance-ms", WORKER_REBALANCE_GROUP_NAME,
+                                                "The time in milliseconds since this worker completed the most recent rebalance.", rebalanceTags);
     }
 
     private MetricNameTemplate createTemplate(String name, String group, String doc, Set<String> tags) {

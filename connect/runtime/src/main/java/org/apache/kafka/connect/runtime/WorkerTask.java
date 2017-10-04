@@ -316,7 +316,7 @@ abstract class WorkerTask implements Runnable {
 
             metricGroup.addValueMetric(registry.taskStatus, new LiteralSupplier<String>() {
                 @Override
-                public String metricValue() {
+                public String metricValue(long now) {
                     return taskStateTimer.currentState().toString().toLowerCase(Locale.getDefault());
                 }
             });
