@@ -265,9 +265,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseMaybeThrottle(request, requestThrottleMs => new OffsetCommitResponse(requestThrottleMs, results.asJava))
     } else {
 
-      var unauthorizedForDescribeTopics = mutable.Map[TopicPartition, OffsetCommitRequest.PartitionData]()
-      var nonExistingAndAuthorizedForDescribeTopics = mutable.Map[TopicPartition, OffsetCommitRequest.PartitionData]()
-      var unauthorizedForReadTopics = mutable.Map[TopicPartition, OffsetCommitRequest.PartitionData]()
+      var unauthorizedTopics = Set[TopicPartition]()
+      var nonExistingAndAuthorizedForDescribeTopics = Set[TopicPartition]()
       var authorizedTopics = mutable.Map[TopicPartition, OffsetCommitRequest.PartitionData]()
 
       for ((topicPartition, partitionData) <- offsetCommitRequest.offsetData.asScala.toMap) {
@@ -276,19 +275,18 @@ class KafkaApis(val requestChannel: RequestChannel,
             if (authorize(request.session, Read, new Resource(Topic, topicPartition.topic)))
               authorizedTopics += (topicPartition -> partitionData)
             else
-              unauthorizedForReadTopics += (topicPartition -> partitionData)
+              unauthorizedTopics += topicPartition
           else
-            nonExistingAndAuthorizedForDescribeTopics += (topicPartition -> partitionData)
+            nonExistingAndAuthorizedForDescribeTopics += topicPartition
         else
-          unauthorizedForDescribeTopics += (topicPartition -> partitionData)
+          unauthorizedTopics += topicPartition
       }
 
       // the callback for sending an offset commit response
       def sendResponseCallback(commitStatus: immutable.Map[TopicPartition, Errors]) {
         val combinedCommitStatus = commitStatus ++
-          unauthorizedForDescribeTopics.mapValues(_ => Errors.TOPIC_AUTHORIZATION_FAILED) ++
-          nonExistingAndAuthorizedForDescribeTopics.mapValues(_ => Errors.UNKNOWN_TOPIC_OR_PARTITION) ++
-          unauthorizedForReadTopics.mapValues(_ => Errors.TOPIC_AUTHORIZATION_FAILED)
+          unauthorizedTopics.map(_ -> Errors.TOPIC_AUTHORIZATION_FAILED) ++
+          nonExistingAndAuthorizedForDescribeTopics.map(_ -> Errors.UNKNOWN_TOPIC_OR_PARTITION)
 
         if (isDebugEnabled)
           combinedCommitStatus.foreach { case (topicPartition, error) =>
@@ -387,26 +385,29 @@ class KafkaApis(val requestChannel: RequestChannel,
       return
     }
 
-    val (authorizedForDescribeTopics, unauthorizedForDescribeTopics) =
-      produceRequest.partitionRecordsOrFail.asScala.partition { case (tp, _) =>
-        authorize(request.session, Describe, new Resource(Topic, tp.topic))
-      }
+    var unauthorizedTopics = Set[TopicPartition]()
+    var nonExistingAndAuthorizedForDescribeTopics = Set[TopicPartition]()
+    var authorizedRequestInfo = mutable.Map[TopicPartition, MemoryRecords]()
 
-    val (existingAndAuthorizedForDescribeTopics, nonExistingAndAuthorizedForDescribeTopics) = authorizedForDescribeTopics.partition {
-      case (tp, _) => metadataCache.contains(tp.topic)
-    }
-
-    val (authorizedRequestInfo, unauthorizedForWriteRequestInfo) = existingAndAuthorizedForDescribeTopics.partition {
-      case (tp, _) => authorize(request.session, Write, new Resource(Topic, tp.topic))
+    for ((topicPartition, memoryRecords) <- produceRequest.partitionRecordsOrFail.asScala) {
+      if (authorize(request.session, Describe, new Resource(Topic, topicPartition.topic)))
+        if (metadataCache.contains(topicPartition.topic))
+          if (authorize(request.session, Write, new Resource(Topic, topicPartition.topic)))
+            authorizedRequestInfo += (topicPartition -> memoryRecords)
+          else
+            unauthorizedTopics += topicPartition
+        else
+          nonExistingAndAuthorizedForDescribeTopics += topicPartition
+      else
+        unauthorizedTopics += topicPartition
     }
 
     // the callback for sending a produce response
     def sendResponseCallback(responseStatus: Map[TopicPartition, PartitionResponse]) {
 
       val mergedResponseStatus = responseStatus ++
-        unauthorizedForDescribeTopics.mapValues(_ => new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED)) ++
-        unauthorizedForWriteRequestInfo.mapValues(_ => new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED)) ++
-        nonExistingAndAuthorizedForDescribeTopics.mapValues(_ => new PartitionResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION))
+        unauthorizedTopics.map(_ -> new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED)) ++
+        nonExistingAndAuthorizedForDescribeTopics.map(_ -> new PartitionResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION))
 
       var errorInResponse = false
 
@@ -490,26 +491,30 @@ class KafkaApis(val requestChannel: RequestChannel,
     val versionId = request.header.apiVersion
     val clientId = request.header.clientId
 
-    val (authorizedForDescribeTopics, unauthorizedForDescribeTopics) = fetchRequest.fetchData.asScala.toSeq.partition {
-      case (tp, _) => authorize(request.session, Describe, new Resource(Topic, tp.topic))
-    }
+    var unauthorizedTopics = Set[TopicPartition]()
+    var nonExistingAndAuthorizedForDescribeTopics = Set[TopicPartition]()
+    var authorizedRequestInfo = mutable.ArrayBuffer[(TopicPartition, FetchRequest.PartitionData)]()
 
-    val (existingAndAuthorizedForDescribeTopics, nonExistingAndAuthorizedForDescribeTopics) = authorizedForDescribeTopics.partition {
-      case (tp, _) => metadataCache.contains(tp.topic)
-    }
-
-    val (authorizedRequestInfo, unauthorizedForReadRequestInfo) = existingAndAuthorizedForDescribeTopics.partition {
-      case (tp, _) => authorize(request.session, Read, new Resource(Topic, tp.topic))
+    for ((topicPartition, partitionData) <- fetchRequest.fetchData.asScala) {
+      if (authorize(request.session, Describe, new Resource(Topic, topicPartition.topic)))
+        if (metadataCache.contains(topicPartition.topic))
+          if (authorize(request.session, Read, new Resource(Topic, topicPartition.topic)))
+            authorizedRequestInfo += (topicPartition -> partitionData)
+          else
+            unauthorizedTopics += topicPartition
+        else
+          nonExistingAndAuthorizedForDescribeTopics += topicPartition
+      else
+        unauthorizedTopics += topicPartition
     }
 
     val nonExistingPartitionData = nonExistingAndAuthorizedForDescribeTopics.map {
-      case (tp, _) => (tp, new FetchResponse.PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION,
+      case tp => (tp, new FetchResponse.PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION,
         FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY))
     }
 
-    val unauthorizedTopicPartitions = unauthorizedForDescribeTopics ++ unauthorizedForReadRequestInfo
-    val unauthorizedForReadPartitionData = unauthorizedTopicPartitions.map {
-      case (tp, _) => (tp, new FetchResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED,
+    val unauthorizedForReadPartitionData = unauthorizedTopics.map {
+      case tp => (tp, new FetchResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED,
         FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY))
     }
 
@@ -1408,23 +1413,27 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleDeleteTopicsRequest(request: RequestChannel.Request) {
     val deleteTopicRequest = request.body[DeleteTopicsRequest]
 
-    val (authorizedForDescribeTopics, unauthorizedForDescribeTopics) = deleteTopicRequest.topics.asScala.partition { topic =>
-      authorize(request.session, Describe, new Resource(Topic, topic))
-    }
+    var unauthorizedTopics = Set[String]()
+    var nonExistingAndAuthorizedForDescribeTopics = Set[String]()
+    var authorizedForDeleteTopics =  Set[String]()
 
-    val (existingAndAuthorizedForDescribeTopics, nonExistingAndAuthorizedForDescribeTopics) = authorizedForDescribeTopics.partition { topic =>
-      metadataCache.contains(topic)
-    }
-
-    val (authorizedForDeleteTopics, unauthorizedForDeleteTopics) = existingAndAuthorizedForDescribeTopics.partition { topic =>
-      authorize(request.session, Delete, new Resource(Topic, topic))
+    for (topic <- deleteTopicRequest.topics.asScala) {
+      if (authorize(request.session, Describe, new Resource(Topic, topic)))
+        if (metadataCache.contains(topic))
+          if (authorize(request.session, Delete, new Resource(Topic, topic)))
+            authorizedForDeleteTopics += topic
+          else
+            unauthorizedTopics += topic
+        else
+          nonExistingAndAuthorizedForDescribeTopics += topic
+      else
+        unauthorizedTopics += topic
     }
 
     def sendResponseCallback(results: Map[String, Errors]): Unit = {
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
-        val completeResults = unauthorizedForDescribeTopics.map(topic => (topic, Errors.TOPIC_AUTHORIZATION_FAILED)).toMap ++
-            nonExistingAndAuthorizedForDescribeTopics.map(topic => (topic, Errors.UNKNOWN_TOPIC_OR_PARTITION)).toMap ++
-            unauthorizedForDeleteTopics.map(topic => (topic, Errors.TOPIC_AUTHORIZATION_FAILED)).toMap ++ results
+        val completeResults = unauthorizedTopics.map(topic => (topic, Errors.TOPIC_AUTHORIZATION_FAILED)).toMap ++
+            nonExistingAndAuthorizedForDescribeTopics.map(topic => (topic, Errors.UNKNOWN_TOPIC_OR_PARTITION)).toMap ++ results
         val responseBody = new DeleteTopicsResponse(requestThrottleMs, completeResults.asJava)
         trace(s"Sending delete topics response $responseBody for correlation id ${request.header.correlationId} to client ${request.header.clientId}.")
         responseBody
@@ -1454,27 +1463,30 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleDeleteRecordsRequest(request: RequestChannel.Request) {
     val deleteRecordsRequest = request.body[DeleteRecordsRequest]
 
-    val (authorizedForDescribeTopics, unauthorizedForDescribeTopics) = deleteRecordsRequest.partitionOffsets.asScala.partition {
-      case (topicPartition, _) => authorize(request.session, Describe, new Resource(Topic, topicPartition.topic))
-    }
+    var unauthorizedTopics = Set[TopicPartition]()
+    var nonExistingAndAuthorizedForDescribeTopics = Set[TopicPartition]()
+    var authorizedForDeleteTopics = mutable.Map[TopicPartition, Long]()
 
-    val (existingAndAuthorizedForDescribeTopics, nonExistingAndAuthorizedForDescribeTopics) = authorizedForDescribeTopics.partition {
-      case (topicPartition, _) => metadataCache.contains(topicPartition.topic)
-    }
-
-    val (authorizedForDeleteTopics, unauthorizedForDeleteTopics) = existingAndAuthorizedForDescribeTopics.partition {
-      case (topicPartition, _) => authorize(request.session, Delete, new Resource(Topic, topicPartition.topic))
+    for ((topicPartition, offset) <- deleteRecordsRequest.partitionOffsets.asScala) {
+      if (authorize(request.session, Describe, new Resource(Topic, topicPartition.topic)))
+        if (metadataCache.contains(topicPartition.topic))
+          if (authorize(request.session, Delete, new Resource(Topic, topicPartition.topic)))
+            authorizedForDeleteTopics += (topicPartition -> offset)
+          else
+            unauthorizedTopics += topicPartition
+        else
+          nonExistingAndAuthorizedForDescribeTopics += topicPartition
+      else
+        unauthorizedTopics += topicPartition
     }
 
     // the callback for sending a DeleteRecordsResponse
     def sendResponseCallback(responseStatus: Map[TopicPartition, DeleteRecordsResponse.PartitionResponse]) {
 
       val mergedResponseStatus = responseStatus ++
-        unauthorizedForDescribeTopics.mapValues(_ =>
+        unauthorizedTopics.map(_ ->
           new DeleteRecordsResponse.PartitionResponse(DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.TOPIC_AUTHORIZATION_FAILED)) ++
-        unauthorizedForDeleteTopics.mapValues(_ =>
-          new DeleteRecordsResponse.PartitionResponse(DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.TOPIC_AUTHORIZATION_FAILED)) ++
-        nonExistingAndAuthorizedForDescribeTopics.mapValues(_ =>
+        nonExistingAndAuthorizedForDescribeTopics.map(_ ->
           new DeleteRecordsResponse.PartitionResponse(DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.UNKNOWN_TOPIC_OR_PARTITION))
 
       mergedResponseStatus.foreach { case (topicPartition, status) =>
@@ -1673,29 +1685,32 @@ class KafkaApis(val requestChannel: RequestChannel,
     else {
       val internalTopics = partitionsToAdd.asScala.filter {tp => org.apache.kafka.common.internals.Topic.isInternal(tp.topic())}
 
-      val (authorizedForDescribeTopics, unauthorizedForDescribeTopics) = partitionsToAdd.asScala.partition { tp =>
-        authorize(request.session, Describe, new Resource(Topic, tp.topic))
+      var unauthorizedTopics = Set[TopicPartition]()
+      var nonExistingAndAuthorizedForDescribeTopics = Set[TopicPartition]()
+      var authorizedPartitions =  Set[TopicPartition]()
+
+      for ( topicPartition <- partitionsToAdd.asScala) {
+        if (authorize(request.session, Describe, new Resource(Topic, topicPartition.topic)))
+          if (metadataCache.contains(topicPartition.topic))
+            if (authorize(request.session, Write, new Resource(Topic, topicPartition.topic)))
+              authorizedPartitions += topicPartition
+            else
+              unauthorizedTopics += topicPartition
+          else
+            nonExistingAndAuthorizedForDescribeTopics += topicPartition
+        else
+          unauthorizedTopics += topicPartition
       }
 
-      val (existingAndAuthorizedForDescribeTopics, nonExistingAndAuthorizedForDescribeTopics) = authorizedForDescribeTopics.partition { topic =>
-        metadataCache.contains(topic)
-      }
-
-      val (authorizedPartitions, unauthorizedForWriteRequestInfo) = existingAndAuthorizedForDescribeTopics.partition { tp =>
-        authorize(request.session, Write, new Resource(Topic, tp.topic))
-      }
-
-      if (unauthorizedForDescribeTopics.nonEmpty
+      if (unauthorizedTopics.nonEmpty
         || nonExistingAndAuthorizedForDescribeTopics.nonEmpty
-        || unauthorizedForWriteRequestInfo.nonEmpty
         || internalTopics.nonEmpty) {
 
         // Any failed partition check causes the entire request to fail. We send the appropriate error codes for the
         // partitions which failed, and an 'OPERATION_NOT_ATTEMPTED' error code for the partitions which succeeded
         // the authorization check to indicate that they were not added to the transaction.
-        val partitionErrors = (unauthorizedForDescribeTopics.map(_ -> Errors.TOPIC_AUTHORIZATION_FAILED) ++
+        val partitionErrors = (unauthorizedTopics.map(_ -> Errors.TOPIC_AUTHORIZATION_FAILED) ++
           nonExistingAndAuthorizedForDescribeTopics.map(_ -> Errors.UNKNOWN_TOPIC_OR_PARTITION) ++
-          unauthorizedForWriteRequestInfo.map(_ -> Errors.TOPIC_AUTHORIZATION_FAILED) ++
           internalTopics.map(_ -> Errors.TOPIC_AUTHORIZATION_FAILED) ++
           authorizedPartitions.map(_ -> Errors.OPERATION_NOT_ATTEMPTED)).toMap
 
@@ -1767,24 +1782,28 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendErrorResponseMaybeThrottle(request, Errors.GROUP_AUTHORIZATION_FAILED.exception)
     else {
 
-      val (authorizedForDescribeTopics, unauthorizedForDescribeTopics) = txnOffsetCommitRequest.offsets.asScala.toMap.partition {
-        case (topicPartition, _) => authorize(request.session, Describe, new Resource(Topic, topicPartition.topic))
-      }
+      var unauthorizedTopics = Set[TopicPartition]()
+      var nonExistingAndAuthorizedForDescribeTopics = Set[TopicPartition]()
+      var authorizedTopics = mutable.Map[TopicPartition, TxnOffsetCommitRequest.CommittedOffset]()
 
-      val (existingAndAuthorizedForDescribeTopics, nonExistingAndAuthorizedForDescribeTopics) = authorizedForDescribeTopics.partition {
-        case (topicPartition, _) => metadataCache.contains(topicPartition.topic)
-      }
-
-      val (authorizedTopics, unauthorizedForReadTopics) = existingAndAuthorizedForDescribeTopics.partition {
-        case (topicPartition, _) => authorize(request.session, Read, new Resource(Topic, topicPartition.topic))
+      for ((topicPartition, commitedOffset) <- txnOffsetCommitRequest.offsets.asScala) {
+       if (authorize(request.session, Describe, new Resource(Topic, topicPartition.topic)))
+         if (metadataCache.contains(topicPartition.topic))
+           if (authorize(request.session, Read, new Resource(Topic, topicPartition.topic)))
+             authorizedTopics += (topicPartition -> commitedOffset)
+           else
+             unauthorizedTopics += topicPartition
+         else
+           nonExistingAndAuthorizedForDescribeTopics += topicPartition
+       else
+         unauthorizedTopics += topicPartition
       }
 
       // the callback for sending an offset commit response
       def sendResponseCallback(commitStatus: Map[TopicPartition, Errors]) {
         val combinedCommitStatus = commitStatus ++
-          unauthorizedForDescribeTopics.mapValues(_ => Errors.TOPIC_AUTHORIZATION_FAILED) ++
-          nonExistingAndAuthorizedForDescribeTopics.mapValues(_ => Errors.UNKNOWN_TOPIC_OR_PARTITION)
-          unauthorizedForReadTopics.mapValues(_ => Errors.TOPIC_AUTHORIZATION_FAILED)
+          unauthorizedTopics.map(_ -> Errors.TOPIC_AUTHORIZATION_FAILED) ++
+          nonExistingAndAuthorizedForDescribeTopics.map(_ -> Errors.UNKNOWN_TOPIC_OR_PARTITION)
 
         if (isDebugEnabled)
           combinedCommitStatus.foreach { case (topicPartition, error) =>
@@ -1800,7 +1819,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (authorizedTopics.isEmpty)
         sendResponseCallback(Map.empty)
       else {
-        val offsetMetadata = convertTxnOffsets(authorizedTopics)
+        val offsetMetadata = convertTxnOffsets(authorizedTopics.toMap)
         groupCoordinator.handleTxnCommitOffsets(
           txnOffsetCommitRequest.consumerGroupId,
           txnOffsetCommitRequest.producerId,
