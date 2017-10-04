@@ -21,6 +21,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.network.CertStores;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.ChannelBuilders;
@@ -154,7 +155,10 @@ public class SaslAuthenticatorTest {
         jaasConfig.setClientOptions("PLAIN", TestJaasConfig.USERNAME, "invalidpassword");
 
         server = createEchoServer(securityProtocol);
-        createAndCheckClientConnectionFailure(securityProtocol, node);
+        ChannelState finalState = createAndCheckClientConnectionFailure(securityProtocol, node);
+        Exception exception = finalState.exception();
+        assertTrue("Invalid exception class " + exception.getClass(), exception instanceof AuthenticationException);
+        assertEquals("Authentication failed: Invalid username or password", exception.getMessage());
         server.verifyAuthenticationMetrics(0, 1);
     }
 
@@ -1136,11 +1140,12 @@ public class SaslAuthenticatorTest {
         selector = null;
     }
 
-    private void createAndCheckClientConnectionFailure(SecurityProtocol securityProtocol, String node) throws Exception {
+    private ChannelState createAndCheckClientConnectionFailure(SecurityProtocol securityProtocol, String node) throws Exception {
         createClientConnection(securityProtocol, node);
-        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
+        ChannelState finalState = NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
         selector.close();
         selector = null;
+        return finalState;
     }
 
     private AbstractResponse sendKafkaRequestReceiveResponse(String node, ApiKeys apiKey, AbstractRequest request) throws IOException {

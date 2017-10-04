@@ -26,6 +26,7 @@ import javax.security.sasl.SaslException;
 import javax.security.sasl.SaslServer;
 import javax.security.sasl.SaslServerFactory;
 
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.authenticator.SaslServerCallbackHandler;
 
@@ -93,11 +94,11 @@ public class PlainSaslServer implements SaslServer {
         String expectedPassword = jaasContext.configEntryOption(JAAS_USER_PREFIX + username,
                 PlainLoginModule.class.getName());
         if (!password.equals(expectedPassword)) {
-            throw new SaslException("Authentication failed: Invalid username or password");
+            throw new AuthenticationException("Authentication failed: Invalid username or password");
         }
 
         if (!authorizationIdFromClient.isEmpty() && !authorizationIdFromClient.equals(username))
-            throw new SaslException("Authentication failed: Client requested an authorization id that is different from username");
+            throw new AuthenticationException("Authentication failed: Client requested an authorization id that is different from username");
 
         this.authorizationId = username;
 

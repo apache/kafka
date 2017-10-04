@@ -381,9 +381,11 @@ public class SaslServerAuthenticator implements Authenticator {
                 // For versions with SASL_AUTHENTICATE header, send a response to SASL_AUTHENTICATE request even if token is empty.
                 ByteBuffer responseBuf = responseToken == null ? EMPTY_BUFFER : ByteBuffer.wrap(responseToken);
                 sendKafkaResponse(requestContext, new SaslAuthenticateResponse(Errors.NONE, null, responseBuf));
-            } catch (SaslException e) {
+            } catch (Exception e) {
+                String errorMessage = e instanceof AuthenticationException ? e.getMessage() :
+                    "Authentication failed due to invalid credentials with SASL mechanism " + saslMechanism;
                 sendKafkaResponse(requestContext, new SaslAuthenticateResponse(Errors.SASL_AUTHENTICATION_FAILED,
-                        "Authentication failed due to invalid credentials with SASL mechanism " + saslMechanism));
+                        errorMessage));
                 throw e;
             }
         }
