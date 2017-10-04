@@ -97,6 +97,7 @@ public class AppInfoParser {
         if (metrics != null) {
             metrics.removeMetric(metricName(metrics, "version"));
             metrics.removeMetric(metricName(metrics, "commit-id"));
+            metrics.removeMetric(metricName(metrics, "id"));
         }
     }
 
