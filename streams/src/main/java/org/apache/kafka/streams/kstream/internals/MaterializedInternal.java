@@ -33,10 +33,10 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
                                 final String generatedStorePrefix) {
         super(materialized);
         if (storeName() == null) {
-            this.queryable = false;
+            queryable = false;
             storeName = nameProvider.newStoreName(generatedStorePrefix);
         } else {
-            this.queryable = true;
+            queryable = true;
         }
     }
 

@@ -1509,7 +1509,7 @@ public interface KGroupedStream<K, V> {
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
      * @deprecated use {@link #windowedBy(SessionWindows) windowedBy(sessionWindows)} followed by
-     * {@link SessionWindowedKStream#aggregate(Initializer, Aggregator, Merger, Materialized) aggregate(initializer, aggregator, sessionMerger, Materialized.as("someStoreName").withValueSerde(aggValueSerde))}
+     * {@link SessionWindowedKStream#aggregate(Initializer, Aggregator, Merger, Materialized) aggregate(initializer, aggregator, sessionMerger, Materialized.with(keySerde, aggValueSerde))}
      */
     @Deprecated
     <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
