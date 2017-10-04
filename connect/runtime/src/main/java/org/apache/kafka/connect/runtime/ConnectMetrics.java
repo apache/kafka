@@ -23,6 +23,7 @@ import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
+import org.apache.kafka.common.metrics.Sanitizer;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Time;
@@ -73,7 +74,7 @@ public class ConnectMetrics {
         reporters.add(new JmxReporter(JMX_PREFIX));
         this.metrics = new Metrics(metricConfig, reporters, time);
         LOG.debug("Registering Connect metrics with JMX for worker '{}'", workerId);
-        AppInfoParser.registerAppInfo(JMX_PREFIX, workerId, metrics);
+        AppInfoParser.registerAppInfo(JMX_PREFIX, Sanitizer.sanitize(workerId), metrics);
     }
 
     /**
