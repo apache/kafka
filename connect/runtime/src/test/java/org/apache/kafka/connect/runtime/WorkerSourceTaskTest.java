@@ -677,6 +677,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         return expectSendRecord(anyTimes, isRetry, false);
     }
 
+    @SuppressWarnings("unchecked")
     private Capture<ProducerRecord<byte[], byte[]>> expectSendRecord(boolean anyTimes, boolean isRetry, boolean succeed) throws InterruptedException {
         expectConvertKeyValue(anyTimes);
         expectApplyTransformationChain(anyTimes);

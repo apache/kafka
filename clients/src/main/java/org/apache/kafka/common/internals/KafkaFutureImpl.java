@@ -142,7 +142,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
     @Override
     public <R> KafkaFuture<R> thenApply(Function<T, R> function) {
         KafkaFutureImpl<R> future = new KafkaFutureImpl<R>();
-        addWaiter(new Applicant(function, future));
+        addWaiter(new Applicant<>(function, future));
         return future;
     }
 
