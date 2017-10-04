@@ -483,35 +483,23 @@ public abstract class AdminClient implements AutoCloseable {
      * <p>This operation is supported by brokers with version 1.0.0 or higher.</p>
      *
      * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
-     * {@link CreatePartitionsResult#values() values()} method of the  returned {@code CreatePartitionsResult}</p>
+     * {@link CreatePartitionsResult#values() values()} method of the returned {@code CreatePartitionsResult}</p>
      * <ul>
-     *     <li>{@link org.apache.kafka.common.errors.InvalidRequestException}
-     *     if duplicate topics were present in the request</li>
-     *     <li>{@link org.apache.kafka.common.errors.TopicAuthorizationException}
+     *     <li>{@link org.apache.kafka.common.errors.AuthorizationException}
      *     if the authenticated user is not authorized to alter the topic</li>
-     *     <li>{@link org.apache.kafka.common.errors.InvalidTopicException}
-     *     if the topic is queue for deletion</li>
+     *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *     if the request was not completed in within the given {@link CreatePartitionsOptions#timeoutMs()}.</li>
      *     <li>{@link org.apache.kafka.common.errors.ReassignmentInProgressException}
      *     if a partition reassignment is currently in progress</li>
-     *     <li>{@link org.apache.kafka.common.errors.UnknownTopicOrPartitionException}
-     *     if the topic does not exist</li>
-     *     <li>{@link org.apache.kafka.common.errors.InvalidPartitionsException}
-     *     if the requested {@link NewPartitions#totalCount()} is less than the current number of partitions</li>
-     *     <li>{@link org.apache.kafka.common.errors.InvalidReplicaAssignmentException}
-     *     if the requested {@link NewPartitions#assignments()} contain an unknown broker id,
-     *     or contain duplicate broker ids,
-     *     or are incompatible with the increase in the number of partitions or the topic replication factor
-     *     </li>
+     *     <li>{@link org.apache.kafka.common.errors.InvalidTopicException}
+     *     if the topic is queue for deletion</li>
      *     <li>{@link org.apache.kafka.common.errors.BrokerNotAvailableException}
-     *     if the requested {@link NewPartitions#assignments()} contain a broker that is currently unavailable
-     *     </li>
+     *     if the requested {@link NewPartitions#assignments()} contain a broker that is currently unavailable.</li>
      *     <li>{@link org.apache.kafka.common.errors.InvalidReplicationFactorException}
      *     if no {@link NewPartitions#assignments()} are given and it is impossible for the broker to assign
-     *     replicas with the topics replication factor
-     *     </li>
-     *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
-     *     if the request was not completed in within the given {@link CreatePartitionsOptions#timeoutMs()}.
-     *     </li>
+     *     replicas with the topics replication factor.</li>
+     *     <li>Subclasses of {@link org.apache.kafka.common.KafkaException}
+     *     if the request is invalid in some way.</li>
      * </ul>
      *
      * @param newPartitions The topics which should have new partitions created, and corresponding parameters
