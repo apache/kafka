@@ -22,6 +22,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBinding;
@@ -30,6 +31,7 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.protocol.Errors;
@@ -41,6 +43,7 @@ import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.DeleteAclsResponse;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclDeletionResult;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
+import org.apache.kafka.common.requests.DeleteRecordsResponse;
 import org.apache.kafka.common.requests.DescribeAclsResponse;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
 import org.apache.kafka.common.resource.Resource;
@@ -56,6 +59,7 @@ import org.junit.rules.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -410,6 +414,51 @@ public class KafkaAdminClientTest {
                 assertTrue(e0.getCause() instanceof InvalidTopicException);
                 InvalidTopicException e = (InvalidTopicException) e0.getCause();
                 assertEquals("some detailed reason", e.getMessage());
+            }
+        }
+    }
+
+    @Test
+    public void testDeleteRecords() throws Exception {
+
+        HashMap<Integer, Node> nodes = new HashMap<>();
+        nodes.put(0, new Node(0, "localhost", 8121));
+        List<PartitionInfo> partitionInfos = new ArrayList<>();
+        partitionInfos.add(new PartitionInfo("my_topic", 0, nodes.get(0), new Node[] { nodes.get(0) }, new Node[] { nodes.get(0) }));
+        partitionInfos.add(new PartitionInfo("other_topic", 0, nodes.get(0), new Node[] { nodes.get(0) }, new Node[] { nodes.get(0) }));
+        Cluster cluster = new Cluster("mockClusterId", nodes.values(),
+                partitionInfos, Collections.<String>emptySet(),
+                Collections.<String>emptySet(), nodes.get(0));
+
+        try (MockKafkaAdminClientEnv env = new MockKafkaAdminClientEnv(cluster)) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
+            env.kafkaClient().setNode(env.cluster().nodes().get(0));
+
+            Map<TopicPartition, DeleteRecordsResponse.PartitionResponse> m = new HashMap<>();
+            m.put(new TopicPartition("my_topic", 0),
+                    new DeleteRecordsResponse.PartitionResponse(3, Errors.NONE));
+            m.put(new TopicPartition("other_topic", 0),
+                    new DeleteRecordsResponse.PartitionResponse(-1, Errors.OFFSET_OUT_OF_RANGE));
+
+            env.kafkaClient().prepareResponse(new DeleteRecordsResponse(0, m));
+
+            Map<TopicPartition, Long> partitionsAndOffsets = new HashMap<>();
+            partitionsAndOffsets.put(new TopicPartition("my_topic", 0), (long)3);
+            partitionsAndOffsets.put(new TopicPartition("other_topic", 0), (long)10);
+            
+            DeleteRecordsResult results = env.adminClient().deleteRecords(partitionsAndOffsets);
+
+            Map<TopicPartition, KafkaFuture<Long>> values = results.values();
+            KafkaFuture<Long> myTopicResult = values.get(new TopicPartition("my_topic", 0));
+            long lowWatermark = myTopicResult.get();
+            assertEquals(lowWatermark,3);
+            KafkaFuture<Long> otherTopicResult = values.get(new TopicPartition("other_topic", 0));
+            try {
+                otherTopicResult.get();
+                fail("get() should throw ExecutionException");
+            } catch (ExecutionException e0) {
+                assertTrue(e0.getCause() instanceof OffsetOutOfRangeException);
             }
         }
     }
