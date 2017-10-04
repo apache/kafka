@@ -251,8 +251,8 @@ public class WorkerSinkTaskTest {
         assertSinkMetricValue("offset-commit-seq-no", 0.0);
         assertSinkMetricValue("offset-commit-completion-rate", 0.0);
         assertSinkMetricValue("offset-commit-completion-total", 0.0);
-        assertSinkMetricValue("offset-commit-completion-skip-rate", 0.0);
-        assertSinkMetricValue("offset-commit-completion-skip-total", 0.0);
+        assertSinkMetricValue("offset-commit-skip-rate", 0.0);
+        assertSinkMetricValue("offset-commit-skip-total", 0.0);
         assertTaskMetricValue("status-running", 1.0);
         assertTaskMetricValue("status-paused", 0.0);
         assertTaskMetricValue("running-ratio", 1.0);
@@ -270,8 +270,8 @@ public class WorkerSinkTaskTest {
         assertSinkMetricValue("offset-commit-seq-no", 1.0);
         assertSinkMetricValue("offset-commit-completion-rate", 0.0333);
         assertSinkMetricValue("offset-commit-completion-total", 1.0);
-        assertSinkMetricValue("offset-commit-completion-skip-rate", 0.0);
-        assertSinkMetricValue("offset-commit-completion-skip-total", 0.0);
+        assertSinkMetricValue("offset-commit-skip-rate", 0.0);
+        assertSinkMetricValue("offset-commit-skip-total", 0.0);
         assertTaskMetricValue("status-running", 0.0);
         assertTaskMetricValue("status-paused", 1.0);
         assertTaskMetricValue("running-ratio", 0.25);
@@ -331,8 +331,8 @@ public class WorkerSinkTaskTest {
         assertSinkMetricValue("offset-commit-seq-no", 0.0);
         assertSinkMetricValue("offset-commit-completion-rate", 0.0);
         assertSinkMetricValue("offset-commit-completion-total", 0.0);
-        assertSinkMetricValue("offset-commit-completion-skip-rate", 0.0);
-        assertSinkMetricValue("offset-commit-completion-skip-total", 0.0);
+        assertSinkMetricValue("offset-commit-skip-rate", 0.0);
+        assertSinkMetricValue("offset-commit-skip-total", 0.0);
         assertTaskMetricValue("status-running", 1.0);
         assertTaskMetricValue("status-paused", 0.0);
         assertTaskMetricValue("running-ratio", 1.0);
@@ -491,7 +491,7 @@ public class WorkerSinkTaskTest {
         assertSinkMetricValue("sink-record-active-count-avg", 0.33333);
         assertSinkMetricValue("offset-commit-seq-no", 1.0);
         assertSinkMetricValue("offset-commit-completion-total", 1.0);
-        assertSinkMetricValue("offset-commit-completion-skip-total", 0.0);
+        assertSinkMetricValue("offset-commit-skip-total", 0.0);
         assertTaskMetricValue("status-running", 1.0);
         assertTaskMetricValue("status-paused", 0.0);
         assertTaskMetricValue("running-ratio", 1.0);
@@ -559,7 +559,7 @@ public class WorkerSinkTaskTest {
         assertSinkMetricValue("sink-record-active-count-avg", 0.333333);
         assertSinkMetricValue("offset-commit-seq-no", 0.0);
         assertSinkMetricValue("offset-commit-completion-total", 0.0);
-        assertSinkMetricValue("offset-commit-completion-skip-total", 0.0);
+        assertSinkMetricValue("offset-commit-skip-total", 0.0);
         assertTaskMetricValue("status-running", 1.0);
         assertTaskMetricValue("status-paused", 0.0);
         assertTaskMetricValue("running-ratio", 1.0);
@@ -587,7 +587,7 @@ public class WorkerSinkTaskTest {
         assertSinkMetricValue("sink-record-active-count-avg", 0.2);
         assertSinkMetricValue("offset-commit-seq-no", 1.0);
         assertSinkMetricValue("offset-commit-completion-total", 1.0);
-        assertSinkMetricValue("offset-commit-completion-skip-total", 0.0);
+        assertSinkMetricValue("offset-commit-skip-total", 0.0);
         assertTaskMetricValue("status-running", 1.0);
         assertTaskMetricValue("status-paused", 0.0);
         assertTaskMetricValue("running-ratio", 1.0);
@@ -990,7 +990,7 @@ public class WorkerSinkTaskTest {
         assertSinkMetricValue("sink-record-active-count-avg", 0.71429);
         assertSinkMetricValue("offset-commit-seq-no", 2.0);
         assertSinkMetricValue("offset-commit-completion-total", 1.0);
-        assertSinkMetricValue("offset-commit-completion-skip-total", 1.0);
+        assertSinkMetricValue("offset-commit-skip-total", 1.0);
         assertTaskMetricValue("status-running", 1.0);
         assertTaskMetricValue("status-paused", 0.0);
         assertTaskMetricValue("running-ratio", 1.0);
@@ -1025,7 +1025,7 @@ public class WorkerSinkTaskTest {
         assertSinkMetricValue("sink-record-active-count-avg", 0.5555555);
         assertSinkMetricValue("offset-commit-seq-no", 3.0);
         assertSinkMetricValue("offset-commit-completion-total", 2.0);
-        assertSinkMetricValue("offset-commit-completion-skip-total", 1.0);
+        assertSinkMetricValue("offset-commit-skip-total", 1.0);
         assertTaskMetricValue("status-running", 1.0);
         assertTaskMetricValue("status-paused", 0.0);
         assertTaskMetricValue("running-ratio", 1.0);
@@ -1099,6 +1099,7 @@ public class WorkerSinkTaskTest {
         createTask(initialState);
 
         expectInitializeTask();
+        expectPollInitialAssignment();
         expectConsumerPoll(1, RecordBatch.NO_TIMESTAMP, TimestampType.CREATE_TIME);
         expectConversionAndTransformation(1);
 
@@ -1110,7 +1111,8 @@ public class WorkerSinkTaskTest {
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
-        workerTask.iteration();
+        workerTask.iteration(); // iter 1 -- initial assignment
+        workerTask.iteration(); // iter 2 -- deliver 1 record
 
         SinkRecord record = records.getValue().iterator().next();
 
@@ -1129,18 +1131,19 @@ public class WorkerSinkTaskTest {
         createTask(initialState);
 
         expectInitializeTask();
+        expectPollInitialAssignment();
         expectConsumerPoll(1, timestamp, timestampType);
         expectConversionAndTransformation(1);
 
         Capture<Collection<SinkRecord>> records = EasyMock.newCapture(CaptureType.ALL);
-
         sinkTask.put(EasyMock.capture(records));
 
         PowerMock.replayAll();
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
-        workerTask.iteration();
+        workerTask.iteration(); // iter 1 -- initial assignment
+        workerTask.iteration(); // iter 2 -- deliver 1 record
 
         SinkRecord record = records.getValue().iterator().next();
 
@@ -1309,8 +1312,8 @@ public class WorkerSinkTaskTest {
         sinkMetricValue("offset-commit-seq-no");
         sinkMetricValue("offset-commit-completion-rate");
         sinkMetricValue("offset-commit-completion-total");
-        sinkMetricValue("offset-commit-completion-skip-rate");
-        sinkMetricValue("offset-commit-completion-skip-total");
+        sinkMetricValue("offset-commit-skip-rate");
+        sinkMetricValue("offset-commit-skip-total");
         sinkMetricValue("put-batch-max-time-ms");
         sinkMetricValue("put-batch-avg-time-ms");
 

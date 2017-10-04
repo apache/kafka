@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.runtime.ConnectMetrics.IndicatorPredicate;
@@ -225,19 +226,17 @@ public class WorkerConnector {
         public ConnectorMetricsGroup(ConnectMetrics connectMetrics, AbstractStatus.State initialState, ConnectorStatus.Listener delegate) {
             this.delegate = delegate;
             this.state = initialState;
-            this.metricGroup = connectMetrics.group("connector-metrics",
-                    "connector", connName);
+            ConnectMetricsRegistry registry = connectMetrics.registry();
+            this.metricGroup = connectMetrics.group(registry.connectorGroupName(),
+                    registry.connectorTagName(), connName);
 
-            addStateMetric(AbstractStatus.State.RUNNING, "status-running",
-                    "Signals whether the connector task is in the running state.");
-            addStateMetric(AbstractStatus.State.PAUSED, "status-paused",
-                    "Signals whether the connector task is in the paused state.");
-            addStateMetric(AbstractStatus.State.FAILED, "status-failed",
-                    "Signals whether the connector task is in the failed state.");
+            addStateMetric(AbstractStatus.State.RUNNING, registry.connectorStatusRunning);
+            addStateMetric(AbstractStatus.State.PAUSED, registry.connectorStatusPaused);
+            addStateMetric(AbstractStatus.State.FAILED, registry.connectorStatusFailed);
         }
 
-        private void addStateMetric(final AbstractStatus.State matchingState, String name, String description) {
-            metricGroup.addIndicatorMetric(name, description, new IndicatorPredicate() {
+        private void addStateMetric(final AbstractStatus.State matchingState, MetricNameTemplate nameTemplate) {
+            metricGroup.addIndicatorMetric(nameTemplate, new IndicatorPredicate() {
                 @Override
                 public boolean matches() {
                     return state == matchingState;

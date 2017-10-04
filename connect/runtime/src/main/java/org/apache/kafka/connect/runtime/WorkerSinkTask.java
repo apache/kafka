@@ -268,7 +268,9 @@ class WorkerSinkTask extends WorkerTask {
         log.info("{} Sink task finished initialization and start", this);
     }
 
-    /** Poll for new messages with the given timeout. Should only be invoked by the worker thread. */
+    /**
+     * Poll for new messages with the given timeout. Should only be invoked by the worker thread.
+     */
     protected void poll(long timeoutMs) {
         rewind();
         long retryTimeout = context.timeout();
@@ -627,6 +629,8 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     static class SinkTaskMetricsGroup {
+        private final ConnectorTaskId id;
+        private final ConnectMetrics metrics;
         private final MetricGroup metricGroup;
         private final Sensor sinkRecordRead;
         private final Sensor sinkRecordSend;
@@ -641,77 +645,44 @@ class WorkerSinkTask extends WorkerTask {
         private Map<TopicPartition, OffsetAndMetadata> committedOffsets = new HashMap<>();
 
         public SinkTaskMetricsGroup(ConnectorTaskId id, ConnectMetrics connectMetrics) {
-            metricGroup = connectMetrics.group("sink-task-metrics",
-                    "connector", id.connector(), "task", Integer.toString(id.task()));
+            this.metrics = connectMetrics;
+            this.id = id;
+
+            ConnectMetricsRegistry registry = connectMetrics.registry();
+            metricGroup = connectMetrics
+                                  .group(registry.sinkTaskGroupName(), registry.connectorTagName(), id.connector(), registry.taskTagName(),
+                                         Integer.toString(id.task()));
 
             sinkRecordRead = metricGroup.metrics().sensor("sink-record-read");
-            sinkRecordRead.add(metricGroup.metricName("sink-record-read-rate",
-                    "The average per-second number of records read from Kafka for this task belonging to the " +
-                            "named sink connector in this worker. This is before transformations are applied."),
-                    new Rate());
-            sinkRecordRead.add(metricGroup.metricName("sink-record-read-total",
-                    "The total number of records produced/polled (before transformation) by this task belonging " +
-                            "to the named sink connector in this worker, since the task was last restarted."),
-                    new Total());
+            sinkRecordRead.add(metricGroup.metricName(registry.sinkRecordReadRate), new Rate());
+            sinkRecordRead.add(metricGroup.metricName(registry.sinkRecordReadTotal), new Total());
 
             sinkRecordSend = metricGroup.metrics().sensor("sink-record-send");
-            sinkRecordSend.add(metricGroup.metricName("sink-record-send-rate",
-                    "The average per-second number of records output from the transformations and sent/put to " +
-                            "this task belonging to the named sink connector in this worker. This is after transformations " +
-                            "are applied and excludes any records filtered out by the transformations."),
-                    new Rate());
-            sinkRecordSend.add(metricGroup.metricName("sink-record-send-total",
-                    "The total number of records output from the transformations and sent/put to this task " +
-                            "belonging to the named sink connector in this worker, since the task was last restarted."),
-                    new Total());
+            sinkRecordSend.add(metricGroup.metricName(registry.sinkRecordSendRate), new Rate());
+            sinkRecordSend.add(metricGroup.metricName(registry.sinkRecordSendTotal), new Total());
 
             sinkRecordActiveCount = metricGroup.metrics().sensor("sink-record-active-count");
-            sinkRecordActiveCount.add(metricGroup.metricName("sink-record-active-count",
-                    "The number of records that have been read from Kafka but not yet completely committed/flushed/acknowledged" +
-                        "by the sink task"),
-                    new Value());
-            sinkRecordActiveCount.add(metricGroup.metricName("sink-record-active-count-max",
-                    "The maximum number of records that have been read from Kafka but not yet completely committed/flushed/acknowledged" +
-                        "by the sink task"),
-                    new Max());
-            sinkRecordActiveCount.add(metricGroup.metricName("sink-record-active-count-avg",
-                    "The average number of records that have been read from Kafka but not yet completely committed/flushed/acknowledged" +
-                        "by the sink task"),
-                    new Avg());
+            sinkRecordActiveCount.add(metricGroup.metricName(registry.sinkRecordActiveCount), new Value());
+            sinkRecordActiveCount.add(metricGroup.metricName(registry.sinkRecordActiveCountMax), new Max());
+            sinkRecordActiveCount.add(metricGroup.metricName(registry.sinkRecordActiveCountAvg), new Avg());
 
             partitionCount = metricGroup.metrics().sensor("partition-count");
-            partitionCount.add(metricGroup.metricName("partition-count",
-                    "The number of topic partitions assigned to this task belonging to the named sink connector in this worker."),
-                    new Value());
+            partitionCount.add(metricGroup.metricName(registry.sinkRecordPartitionCount), new Value());
 
             offsetSeqNum = metricGroup.metrics().sensor("offset-seq-number");
-            offsetSeqNum.add(metricGroup.metricName("offset-commit-seq-no",
-                    "The current sequence number for offset commits"),
-                    new Value());
+            offsetSeqNum.add(metricGroup.metricName(registry.sinkRecordOffsetCommitSeqNum), new Value());
 
             offsetCompletion = metricGroup.metrics().sensor("offset-commit-completion");
-            offsetCompletion.add(metricGroup.metricName("offset-commit-completion-rate",
-                    "The average per-second number of offset commit completions that were completed successfully."),
-                    new Rate());
-            offsetCompletion.add(metricGroup.metricName("offset-commit-completion-total",
-                    "The total number of offset commit completions that were completed successfully."),
-                    new Total());
+            offsetCompletion.add(metricGroup.metricName(registry.sinkRecordOffsetCommitCompletionRate), new Rate());
+            offsetCompletion.add(metricGroup.metricName(registry.sinkRecordOffsetCommitCompletionTotal), new Total());
 
             offsetCompletionSkip = metricGroup.metrics().sensor("offset-commit-completion-skip");
-            offsetCompletionSkip.add(metricGroup.metricName("offset-commit-completion-skip-rate",
-                    "The average per-second number of offset commit completions that were received too late and skipped/ignored."),
-                    new Rate());
-            offsetCompletionSkip.add(metricGroup.metricName("offset-commit-completion-skip-total",
-                    "The total number of offset commit completions that were received too late and skipped/ignored."),
-                    new Total());
+            offsetCompletionSkip.add(metricGroup.metricName(registry.sinkRecordOffsetCommitSkipRate), new Rate());
+            offsetCompletionSkip.add(metricGroup.metricName(registry.sinkRecordOffsetCommitSkipTotal), new Total());
 
             putBatchTime = metricGroup.metrics().sensor("put-batch-time");
-            putBatchTime.add(metricGroup.metricName("put-batch-max-time-ms",
-                    "The maximum time taken by this task to put a batch of sinks records."),
-                    new Max());
-            putBatchTime.add(metricGroup.metricName("put-batch-avg-time-ms",
-                    "The average time taken by this task to put a batch of sinks records."),
-                    new Avg());
+            putBatchTime.add(metricGroup.metricName(registry.sinkRecordPutBatchTimeMax), new Max());
+            putBatchTime.add(metricGroup.metricName(registry.sinkRecordPutBatchTimeAvg), new Avg());
         }
 
         void computeSinkRecordLag() {
