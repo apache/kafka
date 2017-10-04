@@ -252,7 +252,6 @@ class AssignedTasks implements RestoringTasks {
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     boolean maybeResumeSuspendedTask(final TaskId taskId, final Set<TopicPartition> partitions) {
-        final Set<TopicPartition> readyPartitions = new HashSet<>();
         if (suspended.containsKey(taskId)) {
             final Task task = suspended.get(taskId);
             log.trace("found suspended {} {}", taskTypeName, taskId);
@@ -265,7 +264,7 @@ class AssignedTasks implements RestoringTasks {
                     suspended.remove(taskId);
                     throw e;
                 }
-                transitionToRunning(task, readyPartitions);
+                transitionToRunning(task, new HashSet<TopicPartition>());
                 log.trace("resuming suspended {} {}", taskTypeName, task.id());
                 return true;
             } else {
