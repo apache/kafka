@@ -136,6 +136,7 @@ public class MockConnectMetrics extends ConnectMetrics {
          * @param metricName the name of the metric that was registered most recently
          * @return the current value of the metric
          */
+        @SuppressWarnings("deprecation")
         public double currentMetricValue(MetricName metricName) {
             KafkaMetric metric = metricsByName.get(metricName);
             return metric != null ? metric.value() : Double.NaN;
