@@ -104,8 +104,11 @@ public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueSto
         long total = 0;
         for (ReadOnlyKeyValueStore<K, V> store : stores) {
             total += store.approximateNumEntries();
+            if (total < 0) {
+                return Long.MAX_VALUE;
+            }
         }
-        return total < 0 ? Long.MAX_VALUE : total;
+        return total;
     }
 
 
