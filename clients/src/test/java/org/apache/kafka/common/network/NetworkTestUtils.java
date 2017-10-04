@@ -79,7 +79,8 @@ public class NetworkTestUtils {
         assertTrue(selector.isChannelReady(node));
     }
 
-    public static void waitForChannelClose(Selector selector, String node, ChannelState.State channelState) throws IOException {
+    public static ChannelState waitForChannelClose(Selector selector, String node, ChannelState.State channelState)
+            throws IOException {
         boolean closed = false;
         for (int i = 0; i < 30; i++) {
             selector.poll(1000L);
@@ -89,6 +90,8 @@ public class NetworkTestUtils {
             }
         }
         assertTrue("Channel was not closed by timeout", closed);
-        assertEquals(channelState, selector.disconnected().get(node).state());
+        ChannelState finalState = selector.disconnected().get(node);
+        assertEquals(channelState, finalState.state());
+        return finalState;
     }
 }

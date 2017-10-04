@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.errors;
 
+import javax.security.sasl.SaslServer;
+
 /**
  * This exception indicates that SASL authentication has failed. The error message
  * in the exception indicates the actual cause of failure.
@@ -23,6 +25,12 @@ package org.apache.kafka.common.errors;
  * SASL authentication failures typically indicate invalid credentials, but
  * could also include other failures specific to the SASL mechanism used
  * for authentication.
+ * </p>
+ * <p><b>Note:</b>If {@link SaslServer#evaluateResponse(byte[])} throws this exception during
+ * authentication, the message from the exception will be sent to clients in the SaslAuthenticate
+ * response. Custom {@link SaslServer} implementations may throw this exception in order to
+ * provide custom error messages to clients, but should take care not to include any
+ * security-critical information in the message that should not be leaked to unauthenticated clients.
  * </p>
  */
 public class SaslAuthenticationException extends AuthenticationException {
