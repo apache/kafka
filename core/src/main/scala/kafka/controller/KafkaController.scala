@@ -993,7 +993,8 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
     // remove this partition from that list
     val updatedPartitionsBeingReassigned = partitionsBeingReassigned - topicAndPartition
     // write the new list to zookeeper
-    zkUtils.updatePartitionReassignmentData(updatedPartitionsBeingReassigned.mapValues(_.newReplicas))
+    if (updatedPartitionsBeingReassigned.size < partitionsBeingReassigned.size)
+      zkUtils.updatePartitionReassignmentData(updatedPartitionsBeingReassigned.mapValues(_.newReplicas))
     // update the cache. NO-OP if the partition's reassignment was never started
     controllerContext.partitionsBeingReassigned.remove(topicAndPartition)
   }
@@ -1366,16 +1367,20 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
     def state = ControllerState.IsrChange
 
     override def process(): Unit = {
+      // Read the current isr change notification znodes from ZK again instead of using sequenceNumbers
+      // to increase the odds of processing recent isr changes in a single ControllerEvent
+      // and to reduce the odds of trying to access znodes that have already been deleted (KAFKA-5879).
+      val currentSequenceNumbers = zkUtils.getChildrenParentMayNotExist(ZkUtils.IsrChangeNotificationPath)
       if (!isActive) return
       try {
-        val topicAndPartitions = sequenceNumbers.flatMap(getTopicAndPartition).toSet
+        val topicAndPartitions = currentSequenceNumbers.flatMap(getTopicAndPartition).toSet
         if (topicAndPartitions.nonEmpty) {
           updateLeaderAndIsrCache(topicAndPartitions)
           processUpdateNotifications(topicAndPartitions)
         }
       } finally {
         // delete the notifications
-        sequenceNumbers.map(x => controllerContext.zkUtils.deletePath(ZkUtils.IsrChangeNotificationPath + "/" + x))
+        currentSequenceNumbers.map(x => controllerContext.zkUtils.deletePath(ZkUtils.IsrChangeNotificationPath + "/" + x))
       }
     }
 
