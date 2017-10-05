@@ -55,9 +55,6 @@ abstract class AbstractFetcherThread(name: String,
   type PD <: PartitionData
 
   private[server] val partitionStates = new PartitionStates[PartitionFetchState]
-  // partitionTruncationOffsets is written by ReplicaFetcherThread when a current replica is truncated.
-  // Then it is read by ReplicaAlterDirThread to truncate the corresponding future replica if leader epoch is undefined
-  val partitionTruncationOffsets = mutable.Map.empty[TopicPartition, Long]
   private val partitionMapLock = new ReentrantLock
   private val partitionMapCond = partitionMapLock.newCondition()
 
@@ -137,7 +134,6 @@ abstract class AbstractFetcherThread(name: String,
         val ResultWithPartitions(truncationPoints, partitionsWithError) = maybeTruncate(leaderEpochs)
         handlePartitionsWithErrors(partitionsWithError)
         markTruncationComplete(truncationPoints)
-        truncationPoints.keys.foreach(partitionTruncationOffsets.remove)
       }
     }
   }
@@ -242,10 +238,6 @@ abstract class AbstractFetcherThread(name: String,
       val newStates = partitionStates.partitionStates.asScala.map { state =>
         val maybeNeedTruncation = partitionAndOffsets.get(state.topicPartition()) match {
           case Some(offset) =>
-            // Remember the truncation offset for this partition provided by the caller
-            // This is only used by ReplicaAlterDirThread when leader epoch is undefined
-            val currentTruncationOffset = partitionTruncationOffsets.getOrElse(state.topicPartition(), Long.MaxValue)
-            partitionTruncationOffsets.put(state.topicPartition(), math.min(offset, currentTruncationOffset))
             // Mark this partition for truncation using leader epoch
             PartitionFetchState(state.value.fetchOffset, state.value.delay, truncatingLog = true)
           case None =>
@@ -314,7 +306,6 @@ abstract class AbstractFetcherThread(name: String,
     try {
       topicPartitions.foreach { topicPartition =>
         partitionStates.remove(topicPartition)
-        partitionTruncationOffsets.remove(topicPartition)
         fetcherLagStats.unregister(topicPartition.topic, topicPartition.partition)
       }
     } finally partitionMapLock.unlock()

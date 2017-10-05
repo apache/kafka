@@ -172,7 +172,7 @@ class ReplicaAlterLogDirsThread(name: String,
         } else {
           val truncationOffset =
             if (epochOffset.endOffset == UNDEFINED_EPOCH_OFFSET)
-              math.min(futureReplica.highWatermark.messageOffset, partitionTruncationOffsets.getOrElse(topicPartition, Long.MaxValue))
+              futureReplica.highWatermark.messageOffset
             else if (epochOffset.endOffset >= futureReplica.logEndOffset.messageOffset)
               futureReplica.logEndOffset.messageOffset
             else
