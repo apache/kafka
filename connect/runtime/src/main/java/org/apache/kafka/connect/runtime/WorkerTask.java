@@ -26,13 +26,14 @@ import org.apache.kafka.common.metrics.stats.Frequencies;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.AbstractStatus.State;
-import org.apache.kafka.connect.runtime.ConnectMetrics.IndicatorPredicate;
+import org.apache.kafka.connect.runtime.ConnectMetrics.LiteralSupplier;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -313,11 +314,12 @@ abstract class WorkerTask implements Runnable {
                     registry.connectorTagName(), id.connector(),
                     registry.taskTagName(), Integer.toString(id.task()));
 
-            addTaskStateMetric(State.UNASSIGNED, registry.taskStatusUnassigned);
-            addTaskStateMetric(State.RUNNING, registry.taskStatusRunning);
-            addTaskStateMetric(State.PAUSED, registry.taskStatusPaused);
-            addTaskStateMetric(State.FAILED, registry.taskStatusDestroyed);
-            addTaskStateMetric(State.DESTROYED, registry.taskStatusDestroyed);
+            metricGroup.addValueMetric(registry.taskStatus, new LiteralSupplier<String>() {
+                @Override
+                public String metricValue(long now) {
+                    return taskStateTimer.currentState().toString().toLowerCase(Locale.getDefault());
+                }
+            });
 
             addRatioMetric(State.RUNNING, registry.taskRunningRatio);
             addRatioMetric(State.PAUSED, registry.taskPauseRatio);
@@ -335,15 +337,6 @@ abstract class WorkerTask implements Runnable {
             Frequencies commitFrequencies = Frequencies.forBooleanValues(offsetCommitFailures, offsetCommitSucceeds);
             commitAttempts = metricGroup.sensor("offset-commit-completion");
             commitAttempts.add(commitFrequencies);
-        }
-
-        private void addTaskStateMetric(final State matchingState, MetricNameTemplate template) {
-            metricGroup.addIndicatorMetric(template, new IndicatorPredicate() {
-                @Override
-                public boolean matches() {
-                    return matchingState == taskStateTimer.currentState();
-                }
-            });
         }
 
         private void addRatioMetric(final State matchingState, MetricNameTemplate template) {

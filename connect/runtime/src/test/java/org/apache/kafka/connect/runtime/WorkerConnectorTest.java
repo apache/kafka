@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
+import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
@@ -32,12 +33,15 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.easymock.EasyMock.expectLastCall;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(EasyMockRunner.class)
 public class WorkerConnectorTest extends EasyMockSupport {
 
+    private static final String VERSION = "1.1";
     public static final String CONNECTOR = "connector";
     public static final Map<String, String> CONFIG = new HashMap<>();
     static {
@@ -45,7 +49,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
         CONFIG.put(ConnectorConfig.NAME_CONFIG, CONNECTOR);
     }
     public ConnectorConfig connectorConfig;
-    public ConnectMetrics metrics;
+    public MockConnectMetrics metrics;
 
     @Mock Plugins plugins;
     @Mock Connector connector;
@@ -66,6 +70,9 @@ public class WorkerConnectorTest extends EasyMockSupport {
     @Test
     public void testInitializeFailure() {
         RuntimeException exception = new RuntimeException();
+
+        connector.version();
+        expectLastCall().andReturn(VERSION);
 
         connector.initialize(EasyMock.notNull(ConnectorContext.class));
         expectLastCall().andThrow(exception);
@@ -91,6 +98,9 @@ public class WorkerConnectorTest extends EasyMockSupport {
     @Test
     public void testFailureIsFinalState() {
         RuntimeException exception = new RuntimeException();
+
+        connector.version();
+        expectLastCall().andReturn(VERSION);
 
         connector.initialize(EasyMock.notNull(ConnectorContext.class));
         expectLastCall().andThrow(exception);
@@ -119,6 +129,9 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
     @Test
     public void testStartupAndShutdown() {
+        connector.version();
+        expectLastCall().andReturn(VERSION);
+
         connector.initialize(EasyMock.notNull(ConnectorContext.class));
         expectLastCall();
 
@@ -150,6 +163,9 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
     @Test
     public void testStartupAndPause() {
+        connector.version();
+        expectLastCall().andReturn(VERSION);
+
         connector.initialize(EasyMock.notNull(ConnectorContext.class));
         expectLastCall();
 
@@ -186,6 +202,9 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
     @Test
     public void testOnResume() {
+        connector.version();
+        expectLastCall().andReturn(VERSION);
+
         connector.initialize(EasyMock.notNull(ConnectorContext.class));
         expectLastCall();
 
@@ -222,6 +241,9 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
     @Test
     public void testStartupPaused() {
+        connector.version();
+        expectLastCall().andReturn(VERSION);
+
         connector.initialize(EasyMock.notNull(ConnectorContext.class));
         expectLastCall();
 
@@ -250,6 +272,9 @@ public class WorkerConnectorTest extends EasyMockSupport {
     @Test
     public void testStartupFailure() {
         RuntimeException exception = new RuntimeException();
+
+        connector.version();
+        expectLastCall().andReturn(VERSION);
 
         connector.initialize(EasyMock.notNull(ConnectorContext.class));
         expectLastCall();
@@ -280,6 +305,9 @@ public class WorkerConnectorTest extends EasyMockSupport {
     @Test
     public void testShutdownFailure() {
         RuntimeException exception = new RuntimeException();
+
+        connector.version();
+        expectLastCall().andReturn(VERSION);
 
         connector.initialize(EasyMock.notNull(ConnectorContext.class));
         expectLastCall();
@@ -312,6 +340,9 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
     @Test
     public void testTransitionStartedToStarted() {
+        connector.version();
+        expectLastCall().andReturn(VERSION);
+
         connector.initialize(EasyMock.notNull(ConnectorContext.class));
         expectLastCall();
 
@@ -346,6 +377,9 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
     @Test
     public void testTransitionPausedToPaused() {
+        connector.version();
+        expectLastCall().andReturn(VERSION);
+
         connector.initialize(EasyMock.notNull(ConnectorContext.class));
         expectLastCall();
 
@@ -415,6 +449,14 @@ public class WorkerConnectorTest extends EasyMockSupport {
         assertFalse(workerConnector.metrics().isFailed());
         assertFalse(workerConnector.metrics().isPaused());
         assertFalse(workerConnector.metrics().isRunning());
+        MetricGroup metricGroup = workerConnector.metrics().metricGroup();
+        String status = metrics.currentMetricValueAsString(metricGroup, "status");
+        String type = metrics.currentMetricValueAsString(metricGroup, "connector-type");
+        String clazz = metrics.currentMetricValueAsString(metricGroup, "connector-class");
+        String version = metrics.currentMetricValueAsString(metricGroup, "connector-version");
+        assertEquals(type, "unknown");
+        assertNotNull(clazz);
+        assertEquals(VERSION, version);
     }
 
     private static abstract class TestConnector extends Connector {
