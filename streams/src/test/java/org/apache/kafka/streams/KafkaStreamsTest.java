@@ -28,9 +28,9 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
 import org.apache.kafka.streams.processor.internals.StreamThread;
-import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.MockStateRestoreListener;
@@ -54,9 +54,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.junit.Assert.assertNotNull;
 
 @Category({IntegrationTest.class})
 public class KafkaStreamsTest {
@@ -83,7 +83,7 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void testStateChanges() throws Exception {
+    public void testStateChanges() throws InterruptedException {
         final StreamsBuilder builder = new StreamsBuilder();
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
 
@@ -104,7 +104,7 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void testStateCloseAfterCreate() throws Exception {
+    public void testStateCloseAfterCreate() {
         final StreamsBuilder builder = new StreamsBuilder();
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
 
@@ -208,7 +208,7 @@ public class KafkaStreamsTest {
 
 
     @Test
-    public void testInitializesAndDestroysMetricsReporters() throws Exception {
+    public void testInitializesAndDestroysMetricsReporters() {
         final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
         final StreamsBuilder builder = new StreamsBuilder();
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
@@ -223,7 +223,7 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void testCloseIsIdempotent() throws Exception {
+    public void testCloseIsIdempotent() {
         streams.close();
         final int closeCount = MockMetricsReporter.CLOSE_COUNT.get();
 
@@ -233,7 +233,7 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void testCannotStartOnceClosed() throws Exception {
+    public void testCannotStartOnceClosed() {
         streams.start();
         streams.close();
         try {
@@ -247,7 +247,7 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void testCannotStartTwice() throws Exception {
+    public void testCannotStartTwice() {
         streams.start();
 
         try {
@@ -302,8 +302,8 @@ public class KafkaStreamsTest {
     public void testNumberDefaultMetrics() {
         final KafkaStreams streams = createKafkaStreams();
         final Map<MetricName, ? extends Metric> metrics = streams.metrics();
-        // all 15 default StreamThread metrics + 1 metric that keeps track of number of metrics
-        assertEquals(metrics.size(), 16);
+        // all 22 default StreamThread metrics + 1 metric that keeps track of number of metrics
+        assertEquals(23, metrics.size());
     }
 
     @Test
@@ -336,22 +336,22 @@ public class KafkaStreamsTest {
     }
 
     @Test(expected = IllegalStateException.class)
-    public void shouldNotGetAllTasksWhenNotRunning() throws Exception {
+    public void shouldNotGetAllTasksWhenNotRunning() {
         streams.allMetadata();
     }
 
     @Test(expected = IllegalStateException.class)
-    public void shouldNotGetAllTasksWithStoreWhenNotRunning() throws Exception {
+    public void shouldNotGetAllTasksWithStoreWhenNotRunning() {
         streams.allMetadataForStore("store");
     }
 
     @Test(expected = IllegalStateException.class)
-    public void shouldNotGetTaskWithKeyAndSerializerWhenNotRunning() throws Exception {
+    public void shouldNotGetTaskWithKeyAndSerializerWhenNotRunning() {
         streams.metadataForKey("store", "key", Serdes.String().serializer());
     }
 
     @Test(expected = IllegalStateException.class)
-    public void shouldNotGetTaskWithKeyAndPartitionerWhenNotRunning() throws Exception {
+    public void shouldNotGetTaskWithKeyAndPartitionerWhenNotRunning() {
         streams.metadataForKey("store", "key", new StreamPartitioner<String, Object>() {
             @Override
             public Integer partition(final String key, final Object value, final int numPartitions) {
@@ -438,7 +438,7 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void testCleanup() throws Exception {
+    public void testCleanup() {
         final Properties props = new Properties();
         props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "testLocalCleanup");
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -453,7 +453,7 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void testCannotCleanupWhileRunning() throws Exception {
+    public void testCannotCleanupWhileRunning() throws InterruptedException {
         final Properties props = new Properties();
         props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "testCannotCleanupWhileRunning");
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -505,7 +505,8 @@ public class KafkaStreamsTest {
         CLUSTER.createTopic(topic);
         final StreamsBuilder builder = new StreamsBuilder();
 
-        builder.table(Serdes.String(), Serdes.String(), topic, topic);
+        final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
+        builder.table(topic, consumed);
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
         final CountDownLatch latch = new CountDownLatch(1);
@@ -557,4 +558,5 @@ public class KafkaStreamsTest {
             mapStates.put(newState, prevCount + 1);
         }
     }
+
 }

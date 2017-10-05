@@ -19,8 +19,12 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo;
+
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -29,6 +33,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
+import static org.apache.kafka.common.protocol.types.Type.INT32;
 
 public class DescribeLogDirsRequest extends AbstractRequest {
 
@@ -36,8 +42,16 @@ public class DescribeLogDirsRequest extends AbstractRequest {
     private static final String TOPICS_KEY_NAME = "topics";
 
     // topic level key names
-    private static final String TOPIC_KEY_NAME = "topic";
     private static final String PARTITIONS_KEY_NAME = "partitions";
+
+    private static final Schema DESCRIBE_LOG_DIRS_REQUEST_V0 = new Schema(
+            new Field(TOPICS_KEY_NAME, ArrayOf.nullable(new Schema(
+                    TOPIC_NAME,
+                    new Field(PARTITIONS_KEY_NAME, new ArrayOf(INT32), "List of partition ids of the topic.")))));
+
+    public static Schema[] schemaVersions() {
+        return new Schema[]{DESCRIBE_LOG_DIRS_REQUEST_V0};
+    }
 
     private final Set<TopicPartition> topicPartitions;
 
@@ -75,7 +89,7 @@ public class DescribeLogDirsRequest extends AbstractRequest {
             topicPartitions = new HashSet<>();
             for (Object topicStructObj : struct.getArray(TOPICS_KEY_NAME)) {
                 Struct topicStruct = (Struct) topicStructObj;
-                String topic = topicStruct.getString(TOPIC_KEY_NAME);
+                String topic = topicStruct.get(TOPIC_NAME);
                 for (Object partitionObj : topicStruct.getArray(PARTITIONS_KEY_NAME)) {
                     int partition = (Integer) partitionObj;
                     topicPartitions.add(new TopicPartition(topic, partition));
@@ -109,7 +123,7 @@ public class DescribeLogDirsRequest extends AbstractRequest {
         List<Struct> topicStructArray = new ArrayList<>();
         for (Map.Entry<String, List<Integer>> partitionsByTopicEntry : partitionsByTopic.entrySet()) {
             Struct topicStruct = struct.instance(TOPICS_KEY_NAME);
-            topicStruct.set(TOPIC_KEY_NAME, partitionsByTopicEntry.getKey());
+            topicStruct.set(TOPIC_NAME, partitionsByTopicEntry.getKey());
             topicStruct.set(PARTITIONS_KEY_NAME, partitionsByTopicEntry.getValue().toArray());
             topicStructArray.add(topicStruct);
         }

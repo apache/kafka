@@ -146,6 +146,9 @@ class GroupCoordinator(val brokerId: Int,
       if (!group.is(Empty) && (!group.protocolType.contains(protocolType) || !group.supportsProtocols(protocols.map(_._1).toSet))) {
         // if the new member does not support the group protocol, reject it
         responseCallback(joinError(memberId, Errors.INCONSISTENT_GROUP_PROTOCOL))
+      } else if (group.is(Empty) && (protocols.isEmpty || protocolType.isEmpty)) {
+        //reject if first member with empty group protocol or protocolType is empty
+        responseCallback(joinError(memberId, Errors.INCONSISTENT_GROUP_PROTOCOL))
       } else if (memberId != JoinGroupRequest.UNKNOWN_MEMBER_ID && !group.has(memberId)) {
         // if the member trying to register with a un-recognized id, send the response to let
         // it reset its member id and retry

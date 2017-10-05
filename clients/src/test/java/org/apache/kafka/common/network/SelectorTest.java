@@ -20,7 +20,8 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.memory.SimpleMemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.protocol.SecurityProtocol;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -39,13 +40,6 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -56,6 +50,12 @@ import java.util.Set;
 import static org.easymock.EasyMock.createControl;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 
 /**
@@ -80,7 +80,7 @@ public class SelectorTest {
         this.channelBuilder = new PlaintextChannelBuilder();
         this.channelBuilder.configure(configs);
         this.metrics = new Metrics();
-        this.selector = new Selector(5000, this.metrics, time, "MetricGroup", channelBuilder);
+        this.selector = new Selector(5000, this.metrics, time, "MetricGroup", channelBuilder, new LogContext());
     }
 
     @After
@@ -300,7 +300,7 @@ public class SelectorTest {
             public void close() {
             }
         };
-        Selector selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder);
+        Selector selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder, new LogContext());
         SocketChannel socketChannel = SocketChannel.open();
         socketChannel.configureBlocking(false);
         try {
@@ -317,10 +317,11 @@ public class SelectorTest {
     public void testCloseConnectionInClosingState() throws Exception {
         KafkaChannel channel = createConnectionWithStagedReceives(5);
         String id = channel.id();
-        time.sleep(6000); // The max idle time is 5000ms
+        selector.mute(id); // Mute to allow channel to be expired even if more data is available for read
+        time.sleep(6000);  // The max idle time is 5000ms
         selector.poll(0);
-        assertEquals(channel, selector.closingChannel(id));
         assertNull("Channel not expired", selector.channel(id));
+        assertEquals(channel, selector.closingChannel(id));
         assertEquals(ChannelState.EXPIRED, channel.state());
         selector.close(id);
         assertNull("Channel not removed from channels", selector.channel(id));
@@ -412,7 +413,7 @@ public class SelectorTest {
         selector.close();
         MemoryPool pool = new SimpleMemoryPool(900, 900, false, null);
         selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup",
-            new HashMap<String, String>(), true, false, channelBuilder, pool);
+            new HashMap<String, String>(), true, false, channelBuilder, pool, new LogContext());
 
         try (ServerSocketChannel ss = ServerSocketChannel.open()) {
             ss.bind(new InetSocketAddress(0));
@@ -505,7 +506,7 @@ public class SelectorTest {
         // record void method invocations
         kafkaChannel.disconnect();
         kafkaChannel.close();
-        expect(kafkaChannel.ready()).andReturn(false);
+        expect(kafkaChannel.ready()).andReturn(false).anyTimes();
         // prepare throws an exception
         kafkaChannel.prepare();
         expectLastCall().andThrow(new IOException());

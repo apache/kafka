@@ -261,7 +261,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
 
   private def refreshJvmKerberosConfig(): Unit = {
     val klass =
-      if (Java.isIBMJdk)
+      if (Java.isIbmJdk)
         Class.forName("com.ibm.security.krb5.internal.Config")
       else
         Class.forName("sun.security.krb5.Config")

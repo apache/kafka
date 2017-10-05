@@ -58,7 +58,7 @@ public class KStreamKTableLeftJoinTest {
     }
 
     @Test
-    public void testJoin() throws Exception {
+    public void testJoin() {
         StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -68,8 +68,9 @@ public class KStreamKTableLeftJoinTest {
         MockProcessorSupplier<Integer, String> processor;
 
         processor = new MockProcessorSupplier<>();
-        stream = builder.stream(topic1, Consumed.with(intSerde, stringSerde));
-        table = builder.table(intSerde, stringSerde, topic2, "anyStoreName");
+        Consumed<Integer, String> consumed = Consumed.with(intSerde, stringSerde);
+        stream = builder.stream(topic1, consumed);
+        table = builder.table(topic2, consumed);
         stream.leftJoin(table, MockValueJoiner.TOSTRING_JOINER).process(processor);
 
         Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);

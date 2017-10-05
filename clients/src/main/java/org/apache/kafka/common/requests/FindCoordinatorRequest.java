@@ -20,14 +20,31 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
+
+import static org.apache.kafka.common.protocol.types.Type.INT8;
+import static org.apache.kafka.common.protocol.types.Type.STRING;
 
 public class FindCoordinatorRequest extends AbstractRequest {
     private static final String GROUP_ID_KEY_NAME = "group_id";
     private static final String COORDINATOR_KEY_KEY_NAME = "coordinator_key";
     private static final String COORDINATOR_TYPE_KEY_NAME = "coordinator_type";
+
+    private static final Schema FIND_COORDINATOR_REQUEST_V0 = new Schema(
+            new Field("group_id", STRING, "The unique group id."));
+
+    private static final Schema FIND_COORDINATOR_REQUEST_V1 = new Schema(
+            new Field("coordinator_key", STRING, "Id to use for finding the coordinator (for groups, this is the groupId, " +
+                            "for transactional producers, this is the transactional id)"),
+            new Field("coordinator_type", INT8, "The type of coordinator to find (0 = group, 1 = transaction)"));
+
+    public static Schema[] schemaVersions() {
+        return new Schema[] {FIND_COORDINATOR_REQUEST_V0, FIND_COORDINATOR_REQUEST_V1};
+    }
 
     public static class Builder extends AbstractRequest.Builder<FindCoordinatorRequest> {
         private final String coordinatorKey;

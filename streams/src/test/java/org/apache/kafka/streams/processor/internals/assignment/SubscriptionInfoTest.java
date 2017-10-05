@@ -47,7 +47,7 @@ public class SubscriptionInfoTest {
     }
 
     @Test
-    public void shouldEncodeDecodeWithUserEndPoint() throws Exception {
+    public void shouldEncodeDecodeWithUserEndPoint() {
         SubscriptionInfo original = new SubscriptionInfo(UUID.randomUUID(),
                 Collections.singleton(new TaskId(0, 0)), Collections.<TaskId>emptySet(), "localhost:80");
         SubscriptionInfo decoded = SubscriptionInfo.decode(original.encode());
@@ -55,7 +55,7 @@ public class SubscriptionInfoTest {
     }
 
     @Test
-    public void shouldBeBackwardCompatible() throws Exception {
+    public void shouldBeBackwardCompatible() {
         UUID processId = UUID.randomUUID();
 
         Set<TaskId> activeTasks =

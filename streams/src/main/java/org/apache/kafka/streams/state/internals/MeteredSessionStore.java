@@ -57,6 +57,7 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
         this.time = time;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         //noinspection unchecked

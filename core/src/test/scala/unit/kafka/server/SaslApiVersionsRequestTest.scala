@@ -16,11 +16,10 @@
   */
 package kafka.server
 
-import java.io.IOException
 import java.net.Socket
 import java.util.Collections
 
-import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse}
 import org.apache.kafka.common.requests.SaslHandshakeRequest
 import org.apache.kafka.common.requests.SaslHandshakeResponse
@@ -28,6 +27,7 @@ import org.junit.{After, Before, Test}
 import org.junit.Assert._
 import kafka.api.{KafkaSasl, SaslSetup}
 import kafka.utils.JaasTestUtils
+import org.apache.kafka.common.security.auth.SecurityProtocol
 
 class SaslApiVersionsRequestTest extends BaseRequestTest with SaslSetup {
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
@@ -66,12 +66,8 @@ class SaslApiVersionsRequestTest extends BaseRequestTest with SaslSetup {
     val plaintextSocket = connect(protocol = securityProtocol)
     try {
       sendSaslHandshakeRequestValidateResponse(plaintextSocket)
-      try {
-        sendApiVersionsRequest(plaintextSocket, new ApiVersionsRequest.Builder().build(0))
-        fail("Versions Request during Sasl handshake did not fail")
-      } catch {
-        case _: IOException => // expected exception
-      }
+      val response = sendApiVersionsRequest(plaintextSocket, new ApiVersionsRequest.Builder().build(0))
+      assertEquals(Errors.ILLEGAL_SASL_STATE, response.error)
     } finally {
       plaintextSocket.close()
     }

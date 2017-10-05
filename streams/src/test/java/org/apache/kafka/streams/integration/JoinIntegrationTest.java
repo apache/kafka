@@ -100,7 +100,7 @@ public class JoinIntegrationTest {
     };
 
     @BeforeClass
-    public static void setupConfigsAndUtils() throws Exception {
+    public static void setupConfigsAndUtils() {
         PRODUCER_CONFIG.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         PRODUCER_CONFIG.put(ProducerConfig.ACKS_CONFIG, "all");
         PRODUCER_CONFIG.put(ProducerConfig.RETRIES_CONFIG, 0);
@@ -124,22 +124,22 @@ public class JoinIntegrationTest {
     }
 
     @Before
-    public void prepareTopology() throws Exception {
+    public void prepareTopology() throws InterruptedException {
         CLUSTER.createTopics(INPUT_TOPIC_1, INPUT_TOPIC_2, OUTPUT_TOPIC);
 
         builder = new StreamsBuilder();
-        leftTable = builder.table(INPUT_TOPIC_1, "leftTable");
-        rightTable = builder.table(INPUT_TOPIC_2, "rightTable");
+        leftTable = builder.table(INPUT_TOPIC_1);
+        rightTable = builder.table(INPUT_TOPIC_2);
         leftStream = leftTable.toStream();
         rightStream = rightTable.toStream();
     }
 
     @After
-    public void cleanup() throws Exception {
+    public void cleanup() throws InterruptedException {
         CLUSTER.deleteTopicsAndWait(120000, INPUT_TOPIC_1, INPUT_TOPIC_2, OUTPUT_TOPIC);
     }
 
-    private void checkResult(final String outputTopic, final List<String> expectedResult) throws Exception {
+    private void checkResult(final String outputTopic, final List<String> expectedResult) throws InterruptedException {
         if (expectedResult != null) {
             final List<String> result = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(RESULT_CONSUMER_CONFIG, outputTopic, expectedResult.size(), 30 * 1000L);
             assertThat(result, is(expectedResult));

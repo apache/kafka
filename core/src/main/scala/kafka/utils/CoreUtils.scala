@@ -25,12 +25,11 @@ import java.lang.management._
 import java.util.{Properties, UUID}
 import javax.management._
 
-import org.apache.kafka.common.protocol.SecurityProtocol
-
 import scala.collection._
 import scala.collection.mutable
 import kafka.cluster.EndPoint
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{Base64, KafkaThread, Utils}
 
 /**
@@ -45,6 +44,12 @@ import org.apache.kafka.common.utils.{Base64, KafkaThread, Utils}
  * 3. You have tests for it if it is nontrivial in any way
  */
 object CoreUtils extends Logging {
+
+  /**
+   * Return the smallest element in `traversable` if it is not empty. Otherwise return `ifEmpty`.
+   */
+  def min[A, B >: A](traversable: TraversableOnce[A], ifEmpty: A)(implicit cmp: Ordering[B]): A =
+    if (traversable.isEmpty) ifEmpty else traversable.min(cmp)
 
   /**
    * Wrap the given function in a java.lang.Runnable

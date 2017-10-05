@@ -229,7 +229,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.debug("Attempting to start KafkaService on %s with command: %s" % (str(node.account), cmd))
         with node.account.monitor_log(KafkaService.STDOUT_STDERR_CAPTURE) as monitor:
             node.account.ssh(cmd)
-            monitor.wait_until("Kafka Server.*started", timeout_sec=30, backoff_sec=.25, err_msg="Kafka server didn't finish startup")
+            # Kafka 1.0.0 and higher don't have a space between "Kafka" and "Server"
+            monitor.wait_until("Kafka\s*Server.*started", timeout_sec=30, backoff_sec=.25, err_msg="Kafka server didn't finish startup")
 
         # Credentials for inter-broker communication are created before starting Kafka.
         # Client credentials are created after starting Kafka so that both loading of

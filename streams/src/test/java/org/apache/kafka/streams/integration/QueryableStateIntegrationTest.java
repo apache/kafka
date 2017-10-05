@@ -127,7 +127,7 @@ public class QueryableStateIntegrationTest {
     }
 
     @Before
-    public void before() throws IOException, InterruptedException {
+    public void before() throws Exception {
         testNo++;
         createTopics();
         streamsConfiguration = new Properties();
@@ -255,7 +255,7 @@ public class QueryableStateIntegrationTest {
 
     private void verifyAllKVKeys(final StreamRunnable[] streamRunnables, final KafkaStreams streams,
                                  final KafkaStreamsTest.StateListenerStub stateListenerStub,
-                                 final Set<String> keys, final String storeName) throws Exception {
+                                 final Set<String> keys, final String storeName) throws InterruptedException {
         for (final String key : keys) {
             TestUtils.waitForCondition(new TestCondition() {
                 @Override
@@ -287,7 +287,7 @@ public class QueryableStateIntegrationTest {
     private void verifyAllWindowedKeys(final StreamRunnable[] streamRunnables, final KafkaStreams streams,
                                        final KafkaStreamsTest.StateListenerStub stateListenerStub,
                                        final Set<String> keys, final String storeName,
-                                       final Long from, final Long to) throws Exception {
+                                       final Long from, final Long to) throws InterruptedException {
         for (final String key : keys) {
             TestUtils.waitForCondition(new TestCondition() {
                 @Override
@@ -317,7 +317,7 @@ public class QueryableStateIntegrationTest {
 
 
     @Test
-    public void queryOnRebalance() throws Exception {
+    public void queryOnRebalance() throws InterruptedException {
         final int numThreads = STREAM_TWO_PARTITIONS;
         final StreamRunnable[] streamRunnables = new StreamRunnable[numThreads];
         final Thread[] streamThreads = new Thread[numThreads];
@@ -369,7 +369,7 @@ public class QueryableStateIntegrationTest {
     }
 
     @Test
-    public void concurrentAccesses() throws Exception {
+    public void concurrentAccesses() throws InterruptedException {
 
         final int numIterations = 500000;
 
@@ -590,7 +590,7 @@ public class QueryableStateIntegrationTest {
         }
     }
 
-    private void verifyCanQueryState(final int cacheSizeBytes) throws java.util.concurrent.ExecutionException, InterruptedException {
+    private void verifyCanQueryState(final int cacheSizeBytes) throws Exception {
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
         final StreamsBuilder builder = new StreamsBuilder();
         final String[] keys = {"hello", "goodbye", "welcome", "go", "kafka"};

@@ -52,7 +52,7 @@ public class AssignmentInfoTest {
     }
 
     @Test
-    public void shouldDecodePreviousVersion() throws Exception {
+    public void shouldDecodePreviousVersion() throws IOException {
         List<TaskId> activeTasks =
                 Arrays.asList(new TaskId(0, 0), new TaskId(0, 0), new TaskId(0, 1), new TaskId(1, 0));
         Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();

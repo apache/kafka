@@ -27,6 +27,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
@@ -49,6 +50,7 @@ public class GlobalStreamThreadTest {
     private final KStreamBuilder builder = new KStreamBuilder();
     private final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final MockTime time = new MockTime();
+    private final MockStateRestoreListener stateRestoreListener = new MockStateRestoreListener();
     private GlobalStreamThread globalStreamThread;
     private StreamsConfig config;
 
@@ -65,11 +67,12 @@ public class GlobalStreamThreadTest {
                                                     new StateDirectory("appId", TestUtils.tempDirectory().getPath(), time),
                                                     new Metrics(),
                                                     new MockTime(),
-                                                    "clientId");
+                                                    "clientId",
+                                                     stateRestoreListener);
     }
 
     @Test
-    public void shouldThrowStreamsExceptionOnStartupIfThereIsAStreamsException() throws Exception {
+    public void shouldThrowStreamsExceptionOnStartupIfThereIsAStreamsException() {
         // should throw as the MockConsumer hasn't been configured and there are no
         // partitions available
         try {
@@ -83,7 +86,7 @@ public class GlobalStreamThreadTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldThrowStreamsExceptionOnStartupIfExceptionOccurred() throws Exception {
+    public void shouldThrowStreamsExceptionOnStartupIfExceptionOccurred() {
         final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer(OffsetResetStrategy.EARLIEST) {
             @Override
             public List<PartitionInfo> partitionsFor(final String topic) {
@@ -96,7 +99,8 @@ public class GlobalStreamThreadTest {
                                                     new StateDirectory("appId", TestUtils.tempDirectory().getPath(), time),
                                                     new Metrics(),
                                                     new MockTime(),
-                                                    "clientId");
+                                                    "clientId",
+                                                    stateRestoreListener);
 
         try {
             globalStreamThread.start();
@@ -110,14 +114,14 @@ public class GlobalStreamThreadTest {
 
 
     @Test
-    public void shouldBeRunningAfterSuccessfulStart() throws Exception {
+    public void shouldBeRunningAfterSuccessfulStart() {
         initializeConsumer();
         globalStreamThread.start();
         assertTrue(globalStreamThread.stillRunning());
     }
 
     @Test(timeout = 30000)
-    public void shouldStopRunningWhenClosedByUser() throws Exception {
+    public void shouldStopRunningWhenClosedByUser() throws InterruptedException {
         initializeConsumer();
         globalStreamThread.start();
         globalStreamThread.shutdown();
@@ -126,7 +130,7 @@ public class GlobalStreamThreadTest {
     }
 
     @Test
-    public void shouldCloseStateStoresOnClose() throws Exception {
+    public void shouldCloseStateStoresOnClose() throws InterruptedException {
         initializeConsumer();
         globalStreamThread.start();
         final StateStore globalStore = builder.globalStateStores().get("bar");

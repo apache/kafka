@@ -18,12 +18,22 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
 
 public class ApiVersionsRequest extends AbstractRequest {
+    private static final Schema API_VERSIONS_REQUEST_V0 = new Schema();
+
+    /* v1 request is the same as v0. Throttle time has been added to response */
+    private static final Schema API_VERSIONS_REQUEST_V1 = API_VERSIONS_REQUEST_V0;
+
+    public static Schema[] schemaVersions() {
+        return new Schema[]{API_VERSIONS_REQUEST_V0, API_VERSIONS_REQUEST_V1};
+    }
+
     public static class Builder extends AbstractRequest.Builder<ApiVersionsRequest> {
 
         public Builder() {

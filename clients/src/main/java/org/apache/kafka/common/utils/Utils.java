@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.utils;
 
-import java.text.DecimalFormat;
 import org.apache.kafka.common.KafkaException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,6 +44,7 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -322,12 +322,13 @@ public class Utils {
         Class<?>[] argTypes = new Class<?>[params.length / 2];
         Object[] args = new Object[params.length / 2];
         try {
-            Class c = Class.forName(className, true, Utils.getContextOrKafkaClassLoader());
+            Class<?> c = Class.forName(className, true, Utils.getContextOrKafkaClassLoader());
             for (int i = 0; i < params.length / 2; i++) {
                 argTypes[i] = (Class<?>) params[2 * i];
                 args[i] = params[(2 * i) + 1];
             }
-            Constructor<T> constructor = c.getConstructor(argTypes);
+            @SuppressWarnings("unchecked")
+            Constructor<T> constructor = (Constructor<T>) c.getConstructor(argTypes);
             return constructor.newInstance(args);
         } catch (NoSuchMethodException e) {
             throw new ClassNotFoundException(String.format("Failed to find " +
@@ -719,7 +720,7 @@ public class Utils {
             try {
                 closeable.close();
             } catch (Throwable t) {
-                log.warn("Failed to close {}", name, t);
+                log.warn("Failed to close {} with type {}", name, closeable.getClass().getName(), t);
             }
         }
     }

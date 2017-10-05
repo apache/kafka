@@ -30,9 +30,9 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
  */
 public class Produced<K, V> {
 
-    private Serde<K> keySerde;
-    private Serde<V> valueSerde;
-    private StreamPartitioner<? super K, ? super V> partitioner;
+    protected Serde<K> keySerde;
+    protected Serde<V> valueSerde;
+    protected StreamPartitioner<? super K, ? super V> partitioner;
 
     private Produced(final Serde<K> keySerde,
                      final Serde<V> valueSerde,
@@ -40,6 +40,12 @@ public class Produced<K, V> {
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.partitioner = partitioner;
+    }
+
+    protected Produced(final Produced<K, V> produced) {
+        this.keySerde = produced.keySerde;
+        this.valueSerde = produced.valueSerde;
+        this.partitioner = produced.partitioner;
     }
 
     /**
@@ -147,17 +153,5 @@ public class Produced<K, V> {
     public Produced<K, V> withKeySerde(final Serde<K> keySerde) {
         this.keySerde = keySerde;
         return this;
-    }
-
-    public Serde<K> keySerde() {
-        return keySerde;
-    }
-
-    public Serde<V> valueSerde() {
-        return valueSerde;
-    }
-
-    public StreamPartitioner<? super K, ? super V>  streamPartitioner() {
-        return partitioner;
     }
 }

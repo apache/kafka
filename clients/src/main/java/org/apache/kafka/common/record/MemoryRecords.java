@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.CloseableIterator;
+import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -111,8 +112,8 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     @Override
-    public MemoryRecords downConvert(byte toMagic, long firstOffset) {
-        return downConvert(batches(), toMagic, firstOffset);
+    public ConvertedRecords<MemoryRecords> downConvert(byte toMagic, long firstOffset, Time time) {
+        return downConvert(batches(), toMagic, firstOffset, time);
     }
 
     /**

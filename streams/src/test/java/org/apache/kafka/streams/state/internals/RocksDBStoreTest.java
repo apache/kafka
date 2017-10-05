@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -58,18 +59,18 @@ public class RocksDBStoreTest {
     private File dir;
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         subject = new RocksDBStore<>("test", Serdes.String(), Serdes.String());
         dir = TestUtils.tempDirectory();
         context = new MockProcessorContext(dir,
             Serdes.String(),
             Serdes.String(),
             new NoOpRecordCollector(),
-            new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
+            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())));
     }
 
     @After
-    public void tearDown() throws Exception {
+    public void tearDown() {
         subject.close();
     }
 
@@ -95,7 +96,7 @@ public class RocksDBStoreTest {
     }
 
     @Test
-    public void verifyRocksDbConfigSetterIsCalled() throws Exception {
+    public void verifyRocksDbConfigSetterIsCalled() {
         final Map<String, Object> configs = new HashMap<>();
         configs.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-application");
         configs.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "test-server:9092");
@@ -113,7 +114,7 @@ public class RocksDBStoreTest {
             Serdes.String(),
             Serdes.Long(),
             new NoOpRecordCollector(),
-            new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
+            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())));
         tmpDir.setReadOnly();
 
         subject.openDB(tmpContext);

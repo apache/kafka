@@ -131,8 +131,11 @@ class LogManager(logDirs: Array[File],
 
     val liveLogDirs = new ConcurrentLinkedQueue[File]()
 
-    for (dir <- dirs if !initialOfflineDirs.contains(dir)) {
+    for (dir <- dirs) {
       try {
+        if (initialOfflineDirs.contains(dir))
+          throw new IOException(s"Failed to load ${dir.getAbsolutePath} during broker startup")
+
         if (!dir.exists) {
           info("Log directory '" + dir.getAbsolutePath + "' not found, creating it.")
           val created = dir.mkdirs()
@@ -144,7 +147,7 @@ class LogManager(logDirs: Array[File],
         liveLogDirs.add(dir)
       } catch {
         case e: IOException =>
-          error(s"Failed to create or validate data directory $dir.getAbsolutePath", e)
+          logDirFailureChannel.maybeAddOfflineLogDir(dir.getAbsolutePath, s"Failed to create or validate data directory ${dir.getAbsolutePath}", e)
       }
     }
     if (liveLogDirs.isEmpty) {
@@ -437,6 +440,7 @@ class LogManager(logDirs: Array[File],
    * @param partitionOffsets Partition logs that need to be truncated
    */
   def truncateTo(partitionOffsets: Map[TopicPartition, Long]) {
+    var truncated = false
     for ((topicPartition, truncateOffset) <- partitionOffsets) {
       val log = logs.get(topicPartition)
       // If the log does not exist, skip it
@@ -446,7 +450,8 @@ class LogManager(logDirs: Array[File],
         if (needToStopCleaner)
           cleaner.abortAndPauseCleaning(topicPartition)
         try {
-          log.truncateTo(truncateOffset)
+          if (log.truncateTo(truncateOffset))
+            truncated = true
           if (needToStopCleaner)
             cleaner.maybeTruncateCheckpoint(log.dir.getParentFile, topicPartition, log.activeSegment.baseOffset)
         } finally {
@@ -455,7 +460,9 @@ class LogManager(logDirs: Array[File],
         }
       }
     }
-    checkpointLogRecoveryOffsets()
+
+    if (truncated)
+      checkpointLogRecoveryOffsets()
   }
 
   /**

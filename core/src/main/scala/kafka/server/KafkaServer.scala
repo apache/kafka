@@ -43,11 +43,11 @@ import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ControlledShutdownRequest, ControlledShutdownResponse}
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
-import org.apache.kafka.common.utils.{AppInfoParser, Time}
+import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, Node}
 
 import scala.collection.JavaConverters._
-import scala.collection.{Seq, Map, mutable}
+import scala.collection.{Map, Seq, mutable}
 
 object KafkaServer {
   // Copy the subset of properties that are relevant to Logs
@@ -101,6 +101,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   private val jmxPrefix: String = "kafka.server"
 
+  private var logContext: LogContext = null
+
   var metrics: Metrics = null
 
   val brokerState: BrokerState = new BrokerState
@@ -135,7 +137,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   var zkUtils: ZkUtils = null
   val correlationId: AtomicInteger = new AtomicInteger(0)
   val brokerMetaPropsFile = "meta.properties"
-  val brokerMetadataCheckpoints = config.logDirs.map(logDir => (logDir, new BrokerMetadataCheckpoint(new File(logDir + File.separator +brokerMetaPropsFile)))).toMap
+  val brokerMetadataCheckpoints = config.logDirs.map(logDir => (logDir, new BrokerMetadataCheckpoint(new File(logDir + File.separator + brokerMetaPropsFile)))).toMap
 
   private var _clusterId: String = null
   private var _brokerTopicStats: BrokerTopicStats = null
@@ -162,7 +164,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     "yammer-metrics-count",
     new Gauge[Int] {
       def value = {
-        com.yammer.metrics.Metrics.defaultRegistry().allMetrics().size()
+        com.yammer.metrics.Metrics.defaultRegistry.allMetrics.size
       }
     }
   )
@@ -198,7 +200,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         /* generate brokerId */
         val (brokerId, initialOfflineDirs) = getBrokerIdAndOfflineDirs
         config.brokerId = brokerId
-        this.logIdent = "[Kafka Server " + config.brokerId + "], "
+        logContext = new LogContext(s"[KafkaServer id=${config.brokerId}] ")
+        this.logIdent = logContext.logPrefix
 
         /* create and configure metrics */
         val reporters = config.getConfiguredInstances(KafkaConfig.MetricReporterClassesProp, classOf[MetricsReporter],
@@ -290,7 +293,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         shutdownLatch = new CountDownLatch(1)
         startupComplete.set(true)
         isStartingUp.set(false)
-        AppInfoParser.registerAppInfo(jmxPrefix, config.brokerId.toString)
+        AppInfoParser.registerAppInfo(jmxPrefix, config.brokerId.toString, metrics)
         info("started")
       }
     }
@@ -330,19 +333,21 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
     chrootOption.foreach { chroot =>
       val zkConnForChrootCreation = config.zkConnect.substring(0, chrootIndex)
-      val zkClientForChrootCreation = ZkUtils(zkConnForChrootCreation,
+      val zkClientForChrootCreation = ZkUtils.withMetrics(zkConnForChrootCreation,
                                               sessionTimeout = config.zkSessionTimeoutMs,
                                               connectionTimeout = config.zkConnectionTimeoutMs,
-                                              secureAclsEnabled)
+                                              secureAclsEnabled,
+                                              time)
       zkClientForChrootCreation.makeSurePersistentPathExists(chroot)
       info(s"Created zookeeper path $chroot")
       zkClientForChrootCreation.close()
     }
 
-    val zkUtils = ZkUtils(config.zkConnect,
+    val zkUtils = ZkUtils.withMetrics(config.zkConnect,
                           sessionTimeout = config.zkSessionTimeoutMs,
                           connectionTimeout = config.zkConnectionTimeoutMs,
-                          secureAclsEnabled)
+                          secureAclsEnabled,
+                          time)
     zkUtils.setupCommonPaths()
     zkUtils
   }
@@ -381,7 +386,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           "kafka-server-controlled-shutdown",
           Map.empty.asJava,
           false,
-          channelBuilder
+          channelBuilder,
+          logContext
         )
         new NetworkClient(
           selector,
@@ -395,7 +401,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           config.requestTimeoutMs,
           time,
           false,
-          new ApiVersions)
+          new ApiVersions,
+          logContext)
       }
 
       var shutdownSucceeded: Boolean = false
@@ -507,6 +514,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         CoreUtils.swallow(controlledShutdown())
         brokerState.newState(BrokerShuttingDown)
 
+        if (kafkaHealthcheck != null)
+          CoreUtils.swallow(kafkaHealthcheck.shutdown())
+
         if (socketServer != null)
           CoreUtils.swallow(socketServer.shutdown())
         if (requestHandlerPool != null)
@@ -544,7 +554,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         startupComplete.set(false)
         isShuttingDown.set(false)
-        CoreUtils.swallow(AppInfoParser.unregisterAppInfo(jmxPrefix, config.brokerId.toString))
+        CoreUtils.swallow(AppInfoParser.unregisterAppInfo(jmxPrefix, config.brokerId.toString, metrics))
         shutdownLatch.countDown()
         info("shut down completed")
       }
@@ -593,7 +603,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
       } catch {
         case e : IOException =>
           offlineDirs += logDir
-          error(s"Fail to read ${brokerMetaPropsFile} under log directory ${logDir}", e)
+          error(s"Fail to read $brokerMetaPropsFile under log directory $logDir", e)
       }
     }
 

@@ -41,7 +41,7 @@ public class StoresTest {
 
     @SuppressWarnings("deprecation")
     @Test
-    public void shouldCreateInMemoryStoreSupplierWithLoggedConfig() throws Exception {
+    public void shouldCreateInMemoryStoreSupplierWithLoggedConfig() {
         final StateStoreSupplier supplier = Stores.create("store")
                 .withKeys(Serdes.String())
                 .withValues(Serdes.String())
@@ -56,7 +56,7 @@ public class StoresTest {
 
     @SuppressWarnings("deprecation")
     @Test
-    public void shouldCreateInMemoryStoreSupplierNotLogged() throws Exception {
+    public void shouldCreateInMemoryStoreSupplierNotLogged() {
         final StateStoreSupplier supplier = Stores.create("store")
                 .withKeys(Serdes.String())
                 .withValues(Serdes.String())
@@ -69,7 +69,7 @@ public class StoresTest {
 
     @SuppressWarnings("deprecation")
     @Test
-    public void shouldCreatePersistenStoreSupplierWithLoggedConfig() throws Exception {
+    public void shouldCreatePersistenStoreSupplierWithLoggedConfig() {
         final StateStoreSupplier supplier = Stores.create("store")
                 .withKeys(Serdes.String())
                 .withValues(Serdes.String())
@@ -84,7 +84,7 @@ public class StoresTest {
 
     @SuppressWarnings("deprecation")
     @Test
-    public void shouldCreatePersistenStoreSupplierNotLogged() throws Exception {
+    public void shouldCreatePersistenStoreSupplierNotLogged() {
         final StateStoreSupplier supplier = Stores.create("store")
                 .withKeys(Serdes.String())
                 .withValues(Serdes.String())
@@ -96,7 +96,7 @@ public class StoresTest {
     }
 
     @Test
-    public void shouldThrowIllegalArgumentExceptionWhenTryingToConstructWindowStoreWithLessThanTwoSegments() throws Exception {
+    public void shouldThrowIllegalArgumentExceptionWhenTryingToConstructWindowStoreWithLessThanTwoSegments() {
         final Stores.PersistentKeyValueFactory<String, String> storeFactory = Stores.create("store")
                 .withKeys(Serdes.String())
                 .withValues(Serdes.String())

@@ -49,14 +49,14 @@ public class KStreamWindowAggregateTest {
     private File stateDir = null;
     @Rule
     public final KStreamTestDriver driver = new KStreamTestDriver();
-    
+
     @Before
     public void setUp() throws IOException {
         stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
     @Test
-    public void testAggBasic() throws Exception {
+    public void testAggBasic() {
         final StreamsBuilder builder = new StreamsBuilder();
         String topic1 = "topic1";
 
@@ -147,7 +147,7 @@ public class KStreamWindowAggregateTest {
     }
 
     @Test
-    public void testJoin() throws Exception {
+    public void testJoin() {
         final StreamsBuilder builder = new StreamsBuilder();
         String topic1 = "topic1";
         String topic2 = "topic2";

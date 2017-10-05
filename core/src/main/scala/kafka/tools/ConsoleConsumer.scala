@@ -31,7 +31,7 @@ import kafka.metrics.KafkaMetricsReporter
 import kafka.utils._
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord}
-import org.apache.kafka.common.errors.WakeupException
+import org.apache.kafka.common.errors.{AuthenticationException, WakeupException}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.serialization.Deserializer
 import org.apache.kafka.common.utils.Utils
@@ -53,6 +53,9 @@ object ConsoleConsumer extends Logging {
     try {
       run(conf)
     } catch {
+      case e: AuthenticationException =>
+        error("Authentication failed: terminating consumer process", e)
+        Exit.exit(1)
       case e: Throwable =>
         error("Unknown error when running consumer: ", e)
         Exit.exit(1)
@@ -337,6 +340,10 @@ object ConsoleConsumer extends Logging {
       .ofType(classOf[String])
       .defaultsTo("read_uncommitted")
 
+    val groupIdOpt = parser.accepts("group", "The consumer group id of the consumer.")
+      .withRequiredArg
+      .describedAs("consumer group id")
+      .ofType(classOf[String])
 
     if (args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "The console consumer is a tool that reads data from Kafka and outputs it to standard output.")
@@ -453,10 +460,25 @@ object ConsoleConsumer extends Logging {
       KafkaMetricsReporter.startReporters(verifiableProps)
     }
 
-    //Provide the consumer with a randomly assigned group id
-    if (!consumerProps.containsKey(ConsumerConfig.GROUP_ID_CONFIG)) {
-      consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, s"console-consumer-${new Random().nextInt(100000)}")
-      groupIdPassed = false
+    // if the group id is provided in more than place (through different means) all values must be the same
+    val groupIdsProvided = Set(
+        Option(options.valueOf(groupIdOpt)),                           // via --group
+        Option(consumerProps.get(ConsumerConfig.GROUP_ID_CONFIG)),     // via --consumer-property
+        Option(extraConsumerProps.get(ConsumerConfig.GROUP_ID_CONFIG)) // via --cosumer.config
+      ).flatten
+
+    if (groupIdsProvided.size > 1) {
+      CommandLineUtils.printUsageAndDie(parser, "The group ids provided in different places (directly using '--group', "
+                                              + "via '--consumer-property', or via '--consumer.config') do not match. "
+                                              + s"Detected group ids: ${groupIdsProvided.mkString("'", "', '", "'")}")
+    }
+
+    groupIdsProvided.headOption match {
+      case Some(group) =>
+        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, group)
+      case None =>
+        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, s"console-consumer-${new Random().nextInt(100000)}")
+        groupIdPassed = false
     }
 
     def tryParse(parser: OptionParser, args: Array[String]): OptionSet = {

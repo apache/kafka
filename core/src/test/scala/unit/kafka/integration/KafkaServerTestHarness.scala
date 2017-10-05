@@ -24,8 +24,7 @@ import kafka.common.KafkaException
 import kafka.server._
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
-import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.junit.{After, Before}
 
 import scala.collection.mutable.{ArrayBuffer, Buffer}
@@ -80,7 +79,7 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
 
   @Before
   override def setUp() {
-    super.setUp
+    super.setUp()
 
     if (configs.isEmpty)
       throw new KafkaException("Must supply at least one server config.")

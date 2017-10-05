@@ -52,10 +52,11 @@ public class GlobalKTableJoinsTest {
     public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         stateDir = TestUtils.tempDirectory();
-        global = builder.globalTable(Serdes.String(), Serdes.String(), null, globalTopic, "global-store");
-        stream = builder.stream(streamTopic, Consumed.with(Serdes.String(), Serdes.String()));
+        final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
+        global = builder.globalTable(globalTopic, consumed);
+        stream = builder.stream(streamTopic, consumed);
         keyValueMapper = new KeyValueMapper<String, String, String>() {
             @Override
             public String apply(final String key, final String value) {

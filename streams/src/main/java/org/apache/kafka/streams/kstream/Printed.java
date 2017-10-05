@@ -49,7 +49,7 @@ public class Printed<K, V> {
      * Copy constructor.
      * @param printed   instance of {@link Printed} to copy
      */
-    public Printed(final Printed<K, V> printed) {
+    protected Printed(final Printed<K, V> printed) {
         this.printWriter = printed.printWriter;
         this.label = printed.label;
         this.mapper = printed.mapper;
@@ -105,7 +105,6 @@ public class Printed<K, V> {
      * The example below shows how to customize output data.
      * <pre>{@code
      * final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
-     *     @Override
      *     public String apply(Integer key, String value) {
      *         return String.format("(%d, %s)", key, value);
      *     }

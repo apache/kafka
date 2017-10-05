@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryLRUCacheStoreSupplier;
@@ -44,6 +43,40 @@ import java.util.Map;
 
 /**
  * Factory for creating state stores in Kafka Streams.
+ * <p>
+ * When using the high-level DSL, i.e., {@link org.apache.kafka.streams.StreamsBuilder StreamsBuilder}, users create
+ * {@link StoreSupplier}s that can be further customized via
+ * {@link org.apache.kafka.streams.kstream.Materialized Materialized}.
+ * For example, a topic read as {@link org.apache.kafka.streams.kstream.KTable KTable} can be materialized into an
+ * in-memory store with custom key/value serdes and caching disabled:
+ * <pre>{@code
+ * StreamsBuilder builder = new StreamsBuilder();
+ * KeyValueBytesStoreSupplier storeSupplier = Stores.inMemoryKeyValueStore("queryable-store-name");
+ * KTable<Long,String> table = builder.table(
+ *   "topicName",
+ *   Materialized.as(storeSupplier)
+ *               .withKeySerde(Serdes.Long())
+ *               .withValueSerde(Serdes.String())
+ *               .withCachingDisabled());
+ * }</pre>
+ * When using the Processor API, i.e., {@link org.apache.kafka.streams.Topology Topology}, users create
+ * {@link StoreBuilder}s that can be attached to {@link org.apache.kafka.streams.processor.Processor Processor}s.
+ * For example, you can create a {@link org.apache.kafka.streams.kstream.Windowed windowed} RocksDB store with custom
+ * changelog topic configuration like:
+ * <pre>{@code
+ * Topology topology = new Topology();
+ * topology.addProcessor("processorName", ...);
+ *
+ * Map<String,String> topicConfig = new HashMap<>();
+ * StoreBuilder<WindowStore<Integer, Long>> storeBuilder = Stores
+ *   .windowStoreBuilder(
+ *     Stores.persistentWindowStore("queryable-store-name", ...),
+ *     Serdes.Integer(),
+ *     Serdes.Long())
+ *   .withLoggingEnabled(topicConfig);
+ *
+ * topology.addStateStore(storeBuilder, "processorName");
+ * }</pre>
  */
 @InterfaceStability.Evolving
 public class Stores {
@@ -190,7 +223,7 @@ public class Stores {
      *
      * @param name the name of the store
      * @return the factory that can be used to specify other options or configurations for the store; never null
-     * @deprected use {@link #persistentKeyValueStore(String)}, {@link #persistentWindowStore(String, long, int, long, boolean)}
+     * @deprecated use {@link #persistentKeyValueStore(String)}, {@link #persistentWindowStore(String, long, int, long, boolean)}
      * {@link #persistentSessionStore(String, long)}, {@link #lruMap(String, int)}, or {@link #inMemoryKeyValueStore(String)}
      */
     @Deprecated
@@ -237,7 +270,7 @@ public class Stores {
                                     }
 
                                     @Override
-                                    public StateStoreSupplier build() {
+                                    public org.apache.kafka.streams.processor.StateStoreSupplier build() {
                                         log.trace("Defining InMemory Store name={} capacity={} logged={}", name, capacity, logged);
                                         if (capacity < Integer.MAX_VALUE) {
                                             return new InMemoryLRUCacheStoreSupplier<>(name, capacity, keySerde, valueSerde, logged, logConfig);
@@ -301,7 +334,7 @@ public class Stores {
                                     }
 
                                     @Override
-                                    public StateStoreSupplier build() {
+                                    public org.apache.kafka.streams.processor.StateStoreSupplier build() {
                                         log.trace("Defining RocksDb Store name={} numSegments={} logged={}", name, numSegments, logged);
                                         if (sessionWindows) {
                                             return new RocksDBSessionStoreSupplier<>(name, retentionPeriod, keySerde, valueSerde, logged, logConfig, cachingEnabled);
@@ -501,6 +534,7 @@ public class Stores {
      * @param <K> the type of keys
      * @param <V> the type of values
      */
+    @Deprecated
     public interface InMemoryKeyValueFactory<K, V> {
         /**
          * Limits the in-memory key-value store to hold a maximum number of entries. The default is {@link Integer#MAX_VALUE}, which is
@@ -533,7 +567,7 @@ public class Stores {
          * Return the instance of StateStoreSupplier of new key-value store.
          * @return the state store supplier; never null
          */
-        StateStoreSupplier build();
+        org.apache.kafka.streams.processor.StateStoreSupplier build();
     }
 
     /**
@@ -542,6 +576,7 @@ public class Stores {
      * @param <K> the type of keys
      * @param <V> the type of values
      */
+    @Deprecated
     public interface PersistentKeyValueFactory<K, V> {
 
         /**
@@ -580,11 +615,12 @@ public class Stores {
          * @return the factory to create a persistent key-value store
          */
         PersistentKeyValueFactory<K, V> enableCaching();
+
         /**
          * Return the instance of StateStoreSupplier of new key-value store.
          * @return the key-value store; never null
          */
-        StateStoreSupplier build();
+        org.apache.kafka.streams.processor.StateStoreSupplier build();
 
     }
 }

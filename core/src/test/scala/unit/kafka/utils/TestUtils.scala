@@ -47,8 +47,8 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
-import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.record._
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{ByteArraySerializer, Serializer}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.utils.Utils._
@@ -57,7 +57,6 @@ import org.apache.zookeeper.ZooDefs._
 import org.apache.zookeeper.data.ACL
 import org.junit.Assert._
 
-import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.collection.{Map, mutable}
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
@@ -1379,11 +1378,12 @@ object TestUtils extends Logging {
     records
   }
 
-  def createTransactionalProducer(transactionalId: String, servers: Seq[KafkaServer]) = {
+  def createTransactionalProducer(transactionalId: String, servers: Seq[KafkaServer], batchSize: Int = 16384) = {
     val props = new Properties()
     props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
-    props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1")
+    props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "5")
     props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
+    props.put(ProducerConfig.BATCH_SIZE_CONFIG, batchSize.toString)
     TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers), retries = Integer.MAX_VALUE, acks = -1, props = Some(props))
   }
 
@@ -1411,7 +1411,7 @@ object TestUtils extends Logging {
   // If true, this will return the value as a string. It is expected that the record in question should have been created
   // by the `producerRecordWithExpectedTransactionStatus` method.
   def assertCommittedAndGetValue(record: ConsumerRecord[Array[Byte], Array[Byte]]) : String = {
-    record.headers.headers(transactionStatusKey).headOption match {
+    record.headers.headers(transactionStatusKey).asScala.headOption match {
       case Some(header) =>
         assertEquals(s"Got ${asString(header.value)} but expected the value to indicate " +
           s"committed status.", asString(committedValue), asString(header.value))
@@ -1433,7 +1433,7 @@ object TestUtils extends Logging {
       else
         abortedValue
     }
-    new ProducerRecord[Array[Byte], Array[Byte]](topic, null, key, value, List(header))
+    new ProducerRecord[Array[Byte], Array[Byte]](topic, null, key, value, Collections.singleton(header))
   }
 
   def producerRecordWithExpectedTransactionStatus(topic: String, key: String, value: String,
@@ -1444,7 +1444,7 @@ object TestUtils extends Logging {
   // Collect the current positions for all partition in the consumers current assignment.
   def consumerPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) : Map[TopicPartition, OffsetAndMetadata]  = {
     val offsetsToCommit = new mutable.HashMap[TopicPartition, OffsetAndMetadata]()
-    consumer.assignment.foreach{ topicPartition =>
+    consumer.assignment.asScala.foreach { topicPartition =>
       offsetsToCommit.put(topicPartition, new OffsetAndMetadata(consumer.position(topicPartition)))
     }
     offsetsToCommit.toMap
@@ -1453,14 +1453,14 @@ object TestUtils extends Logging {
   def pollUntilAtLeastNumRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int): Seq[ConsumerRecord[Array[Byte], Array[Byte]]] = {
     val records = new ArrayBuffer[ConsumerRecord[Array[Byte], Array[Byte]]]()
     TestUtils.waitUntilTrue(() => {
-      records ++= consumer.poll(50)
+      records ++= consumer.poll(50).asScala
       records.size >= numRecords
     }, s"Consumed ${records.size} records until timeout, but expected $numRecords records.")
     records
   }
 
   def resetToCommittedPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) = {
-    consumer.assignment.foreach { case(topicPartition) =>
+    consumer.assignment.asScala.foreach { case(topicPartition) =>
       val offset = consumer.committed(topicPartition)
       if (offset != null)
         consumer.seek(topicPartition, offset.offset)

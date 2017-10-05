@@ -28,6 +28,7 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
@@ -119,7 +120,7 @@ public class StandbyTaskTest {
     private File baseDir;
     private StateDirectory stateDirectory;
 
-    private StreamsConfig createConfig(final File baseDir) throws Exception {
+    private StreamsConfig createConfig(final File baseDir) throws IOException {
         return new StreamsConfig(new Properties() {
             {
                 setProperty(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
@@ -133,7 +134,7 @@ public class StandbyTaskTest {
 
     private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final MockRestoreConsumer restoreStateConsumer = new MockRestoreConsumer();
-    private final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreStateConsumer, stateRestoreListener);
+    private final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreStateConsumer, stateRestoreListener, new LogContext("standby-task-test "));
 
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
@@ -162,7 +163,7 @@ public class StandbyTaskTest {
     }
 
     @Test
-    public void testStorePartitions() throws Exception {
+    public void testStorePartitions() throws IOException {
         StreamsConfig config = createConfig(baseDir);
         StandbyTask task = new StandbyTask(taskId, applicationId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
         task.initialize();
@@ -171,8 +172,8 @@ public class StandbyTaskTest {
     }
 
     @SuppressWarnings("unchecked")
-    @Test(expected = Exception.class)
-    public void testUpdateNonPersistentStore() throws Exception {
+    @Test(expected = ProcessorStateException.class)
+    public void testUpdateNonPersistentStore() throws IOException {
         StreamsConfig config = createConfig(baseDir);
         StandbyTask task = new StandbyTask(taskId, applicationId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
 
@@ -185,7 +186,7 @@ public class StandbyTaskTest {
     }
 
     @Test
-    public void testUpdate() throws Exception {
+    public void testUpdate() throws IOException {
         StreamsConfig config = createConfig(baseDir);
         StandbyTask task = new StandbyTask(taskId, applicationId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
         task.initialize();
@@ -231,7 +232,7 @@ public class StandbyTaskTest {
     }
 
     @Test
-    public void testUpdateKTable() throws Exception {
+    public void testUpdateKTable() throws IOException {
         consumer.assign(Utils.mkList(ktable));
         Map<TopicPartition, OffsetAndMetadata> committedOffsets = new HashMap<>();
         committedOffsets.put(new TopicPartition(ktable.topic(), ktable.partition()), new OffsetAndMetadata(0L));
@@ -323,7 +324,7 @@ public class StandbyTaskTest {
     }
 
     @Test
-    public void shouldNotThrowUnsupportedOperationExceptionWhenInitializingStateStores() throws Exception {
+    public void shouldNotThrowUnsupportedOperationExceptionWhenInitializingStateStores() throws IOException {
         final String changelogName = "test-application-my-store-changelog";
         final List<TopicPartition> partitions = Utils.mkList(new TopicPartition(changelogName, 0));
         consumer.assign(partitions);
@@ -334,7 +335,7 @@ public class StandbyTaskTest {
         restoreStateConsumer.updatePartitions(changelogName, Utils.mkList(
                 new PartitionInfo(changelogName, 0, Node.noNode(), new Node[0], new Node[0])));
         final InternalStreamsBuilder builder = new InternalStreamsBuilder(new InternalTopologyBuilder());
-        builder.stream(Collections.singleton("topic"), new ConsumedInternal<>()).groupByKey().count("my-store");
+        builder.stream(Collections.singleton("topic"), new ConsumedInternal<>()).groupByKey().count();
 
         final StreamsConfig config = createConfig(baseDir);
         final InternalTopologyBuilder internalTopologyBuilder = InternalStreamsBuilderTest.internalTopologyBuilder(builder);
@@ -345,7 +346,7 @@ public class StandbyTaskTest {
     }
 
     @Test
-    public void shouldCheckpointStoreOffsetsOnCommit() throws Exception {
+    public void shouldCheckpointStoreOffsetsOnCommit() throws IOException {
         consumer.assign(Utils.mkList(ktable));
         final Map<TopicPartition, OffsetAndMetadata> committedOffsets = new HashMap<>();
         committedOffsets.put(new TopicPartition(ktable.topic(), ktable.partition()), new OffsetAndMetadata(100L));

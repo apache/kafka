@@ -25,6 +25,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -55,21 +56,21 @@ public class AbstractTaskTest {
     }
 
     @Test(expected = ProcessorStateException.class)
-    public void shouldThrowProcessorStateExceptionOnInitializeOffsetsWhenAuthorizationException() throws Exception {
+    public void shouldThrowProcessorStateExceptionOnInitializeOffsetsWhenAuthorizationException() {
         final Consumer consumer = mockConsumer(new AuthorizationException("blah"));
         final AbstractTask task = createTask(consumer, Collections.<StateStore>emptyList());
         task.updateOffsetLimits();
     }
 
     @Test(expected = ProcessorStateException.class)
-    public void shouldThrowProcessorStateExceptionOnInitializeOffsetsWhenKafkaException() throws Exception {
+    public void shouldThrowProcessorStateExceptionOnInitializeOffsetsWhenKafkaException() {
         final Consumer consumer = mockConsumer(new KafkaException("blah"));
         final AbstractTask task = createTask(consumer, Collections.<StateStore>emptyList());
         task.updateOffsetLimits();
     }
 
     @Test(expected = WakeupException.class)
-    public void shouldThrowWakeupExceptionOnInitializeOffsetsWhenWakeupException() throws Exception {
+    public void shouldThrowWakeupExceptionOnInitializeOffsetsWhenWakeupException() {
         final Consumer consumer = mockConsumer(new WakeupException());
         final AbstractTask task = createTask(consumer, Collections.<StateStore>emptyList());
         task.updateOffsetLimits();
@@ -121,7 +122,7 @@ public class AbstractTaskTest {
                                                       Collections.<String, String>emptyMap(),
                                                       Collections.<StateStore>emptyList()),
                                 consumer,
-                                new StoreChangelogReader(consumer, new MockStateRestoreListener()),
+                                new StoreChangelogReader(consumer, new MockStateRestoreListener(), new LogContext("stream-task-test ")),
                                 false,
                                 stateDirectory,
                                 config) {
