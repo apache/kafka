@@ -60,7 +60,7 @@ object RequestChannel extends Logging {
 
     def apply(metricName: String) = metricsMap(metricName)
 
-    def shutdown(): Unit = {
+    def close(): Unit = {
        metricsMap.values.foreach(_.removeMetrics())
     }
   }
@@ -318,7 +318,6 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
 
   def shutdown() {
     requestQueue.clear()
-    metrics.shutdown()
   }
 
   def sendShutdownRequest(): Unit = requestQueue.put(ShutdownRequest)
