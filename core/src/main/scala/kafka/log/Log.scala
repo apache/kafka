@@ -424,7 +424,7 @@ class Log(@volatile var dir: File,
   private def recoverLog() {
     // if we have the clean shutdown marker, skip recovery
     if (hasCleanShutdownFile) {
-      this.recoveryPoint = activeSegment.nextOffset()
+      recoveryPoint = activeSegment.nextOffset
       return
     }
 
@@ -450,6 +450,8 @@ class Log(@volatile var dir: File,
         unflushed.foreach(deleteSegment)
       }
     }
+
+    recoveryPoint = activeSegment.nextOffset
   }
 
   private def loadProducerState(lastOffset: Long, reloadFromCleanShutdown: Boolean): Unit = lock synchronized {
