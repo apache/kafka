@@ -17,6 +17,7 @@ from ducktape.mark import parametrize
 from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
 
+from kafkatest.services.kafka import config_property
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.verifiable_producer import VerifiableProducer
@@ -42,15 +43,15 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         self.zk = ZookeeperService(test_context, num_nodes=1)
         self.kafka = KafkaService(test_context, num_nodes=4, zk=self.zk,
                                   server_prop_overides=[
-                                      ["log.retention.check.interval.ms", 6000],
-                                      ["log.segment.bytes", 102400]
+                                      [config_property.LOG_ROLL_TIME_MS, "4500"],
+                                      [config_property.LOG_RETENTION_CHECK_INTERVAL_MS, "5500"],
+                                      [config_property.LOG_RETENTION_MS, "5000"]
                                   ],
                                   topics={self.topic: {
                                       "partitions": self.num_partitions,
                                       "replication-factor": 3,
                                       'configs': {
                                           "min.insync.replicas": 3,
-                                          "retention.bytes": 102400,
                                       }}
                                   })
         self.timeout_sec = 60
