@@ -109,10 +109,12 @@ class AssignedTasks implements RestoringTasks {
     }
 
     /**
+     * @return partitions that are ready to be resumed
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
      */
-    void initializeNewTasks() {
+    Set<TopicPartition> initializeNewTasks() {
+        final Set<TopicPartition> readyPartitions = new HashSet<>();
         if (!created.isEmpty()) {
             log.debug("Initializing {}s {}", taskTypeName, created.keySet());
         }
@@ -123,7 +125,7 @@ class AssignedTasks implements RestoringTasks {
                     log.debug("transitioning {} {} to restoring", taskTypeName, entry.getKey());
                     addToRestoring(entry.getValue());
                 } else {
-                    transitionToRunning(entry.getValue());
+                    transitionToRunning(entry.getValue(), readyPartitions);
                 }
                 it.remove();
             } catch (final LockException e) {
@@ -131,6 +133,7 @@ class AssignedTasks implements RestoringTasks {
                 log.trace("Could not create {} {} due to {}; will retry", taskTypeName, entry.getKey(), e.getMessage());
             }
         }
+        return readyPartitions;
     }
 
     Set<TopicPartition> updateRestored(final Collection<TopicPartition> restored) {
@@ -144,8 +147,7 @@ class AssignedTasks implements RestoringTasks {
             final Map.Entry<TaskId, Task> entry = it.next();
             final Task task = entry.getValue();
             if (restoredPartitions.containsAll(task.changelogPartitions())) {
-                transitionToRunning(task);
-                resume.addAll(task.partitions());
+                transitionToRunning(task, resume);
                 it.remove();
             } else {
                 if (log.isTraceEnabled()) {
@@ -262,11 +264,11 @@ class AssignedTasks implements RestoringTasks {
                     suspended.remove(taskId);
                     throw e;
                 }
-                transitionToRunning(task);
+                transitionToRunning(task, new HashSet<TopicPartition>());
                 log.trace("resuming suspended {} {}", taskTypeName, task.id());
                 return true;
             } else {
-                log.trace("couldn't resume task {} assigned partitions {}, task partitions {}", taskId, partitions, task.partitions());
+                log.warn("couldn't resume task {} assigned partitions {}, task partitions {}", taskId, partitions, task.partitions());
             }
         }
         return false;
@@ -282,11 +284,14 @@ class AssignedTasks implements RestoringTasks {
         }
     }
 
-    private void transitionToRunning(final Task task) {
+    private void transitionToRunning(final Task task, final Set<TopicPartition> readyPartitions) {
         log.debug("transitioning {} {} to running", taskTypeName, task.id());
         running.put(task.id(), task);
         for (TopicPartition topicPartition : task.partitions()) {
             runningByPartition.put(topicPartition, task);
+            if (task.hasStateStores()) {
+                readyPartitions.add(topicPartition);
+            }
         }
         for (TopicPartition topicPartition : task.changelogPartitions()) {
             runningByPartition.put(topicPartition, task);
