@@ -35,7 +35,7 @@ public interface TopicState {
      * // TODO what about during reassignment
      * // TODO Why is this a boxed Short?
      */
-    Short replicationFactor();
+    short replicationFactor();
 
     /**
      * A map of the replica assignments of the topic, with partition ids as keys and

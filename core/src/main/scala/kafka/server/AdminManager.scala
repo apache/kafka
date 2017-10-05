@@ -135,7 +135,10 @@ class AdminManager(val config: KafkaConfig,
               if (arguments.numPartitions == NO_NUM_PARTITIONS) null else arguments.numPartitions
             val replicationFactor: java.lang.Short =
               if (arguments.replicationFactor == NO_REPLICATION_FACTOR) null else arguments.replicationFactor
-            val replicaAssignments = if (arguments.replicasAssignments.isEmpty) null else arguments.replicasAssignments
+            val replicaAssignments = if (arguments.replicasAssignments.isEmpty) assignments.map {
+              case (partition, replicas) =>
+                new Integer(partition) -> replicas.map(new Integer(_)).asJava
+            }.asJava else arguments.replicasAssignments
             val topicName = topic
             val topicConfig = configs
             val topicReplicationFactor = replicationFactor
@@ -176,13 +179,10 @@ class AdminManager(val config: KafkaConfig,
                   * // TODO what about during reassignment
                   */
                 override def replicasAssignments() = {
-                  if (policy.isInstanceOf[TopicManagementPolicyAdapter]) {
-                    replicaAssignments
+                  if (policy.isInstanceOf[TopicManagementPolicyAdapter] && generatedReplicaAssignments) {
+                    null
                   } else {
-                    assignments.map {
-                      case (partition, replicas) =>
-                        new Integer(partition) -> replicas.map(new Integer(_)).asJava
-                    }.asJava
+                    replicaAssignments
                   }
                 }
 
