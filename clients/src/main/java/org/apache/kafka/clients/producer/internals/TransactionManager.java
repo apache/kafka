@@ -26,6 +26,7 @@ import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.AddOffsetsToTxnRequest;
@@ -435,6 +436,17 @@ public class TransactionManager {
         inflightBatchesBySequence.get(batch.topicPartition).offer(batch);
     }
 
+    synchronized int firstInFlightSequence(TopicPartition topicPartition) {
+        PriorityQueue<ProducerBatch> inFlightBatches = inflightBatchesBySequence.get(topicPartition);
+        if (inFlightBatches == null)
+            return RecordBatch.NO_SEQUENCE;
+
+        ProducerBatch firstInFlightBatch = inFlightBatches.peek();
+        if (firstInFlightBatch == null)
+            return RecordBatch.NO_SEQUENCE;
+
+        return firstInFlightBatch.baseSequence();
+    }
 
     synchronized ProducerBatch nextBatchBySequence(TopicPartition topicPartition) {
         PriorityQueue<ProducerBatch> queue = inflightBatchesBySequence.get(topicPartition);
