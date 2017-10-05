@@ -1645,7 +1645,7 @@ object Log {
   /** a time index file */
   val TimeIndexFileSuffix = ".timeindex"
 
-  val ProducerIdSnapshotFileSuffix = ".snapshot"
+  val ProducerSnapshotFileSuffix = ".snapshot"
 
   /** an (aborted) txn index */
   val TxnIndexFileSuffix = ".txnindex"
@@ -1748,7 +1748,7 @@ object Log {
    * @param offset The last offset (exclusive) included in the snapshot
    */
   def producerSnapshotFile(dir: File, offset: Long): File =
-    new File(dir, filenamePrefixFromOffset(offset) + ProducerIdSnapshotFileSuffix)
+    new File(dir, filenamePrefixFromOffset(offset) + ProducerSnapshotFileSuffix)
 
   def transactionIndexFile(dir: File, offset: Long): File =
     new File(dir, filenamePrefixFromOffset(offset) + TxnIndexFileSuffix)

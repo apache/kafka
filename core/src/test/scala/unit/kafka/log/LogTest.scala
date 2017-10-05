@@ -167,7 +167,7 @@ class LogTest {
     assertTrue(log.logSegments.size >= 2)
     log.close()
 
-    logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(Log.ProducerIdSnapshotFileSuffix)).foreach { file =>
+    logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(Log.ProducerSnapshotFileSuffix)).foreach { file =>
       Files.delete(file.toPath)
     }
 
@@ -533,7 +533,7 @@ class LogTest {
       producerEpoch = epoch, sequence = 1), leaderEpoch = 0)
 
     // Delete all snapshots prior to truncating
-    logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(Log.ProducerIdSnapshotFileSuffix)).foreach { file =>
+    logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(Log.ProducerSnapshotFileSuffix)).foreach { file =>
       Files.delete(file.toPath)
     }
 
@@ -2587,7 +2587,7 @@ class LogTest {
     appendEndTxnMarkerAsLeader(log, pid4, epoch, ControlRecordType.COMMIT) // 90
 
     // delete all snapshot files
-    logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(Log.ProducerIdSnapshotFileSuffix)).foreach { file =>
+    logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(Log.ProducerSnapshotFileSuffix)).foreach { file =>
       Files.delete(file.toPath)
     }
 

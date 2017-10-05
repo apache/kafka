@@ -114,7 +114,7 @@ object DumpLogSegments {
           dumpIndex(file, indexSanityOnly, verifyOnly, misMatchesForIndexFilesMap, maxMessageSize)
         case Log.TimeIndexFileSuffix =>
           dumpTimeIndex(file, indexSanityOnly, verifyOnly, timeIndexDumpErrors, maxMessageSize)
-        case Log.ProducerIdSnapshotFileSuffix =>
+        case Log.ProducerSnapshotFileSuffix =>
           dumpProducerIdSnapshot(file)
         case Log.TxnIndexFileSuffix =>
           dumpTxnIndex(file)

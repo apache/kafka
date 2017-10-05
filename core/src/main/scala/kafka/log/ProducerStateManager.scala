@@ -403,7 +403,7 @@ object ProducerStateManager {
     }
   }
 
-  private def isSnapshotFile(file: File): Boolean = file.getName.endsWith(Log.ProducerIdSnapshotFileSuffix)
+  private def isSnapshotFile(file: File): Boolean = file.getName.endsWith(Log.ProducerSnapshotFileSuffix)
 
 }
 
