@@ -462,7 +462,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       ApiKeys.DELETE_TOPICS -> deleteTopicsRequest,
       ApiKeys.DELETE_RECORDS -> deleteRecordsRequest,
       ApiKeys.ADD_PARTITIONS_TO_TXN -> addPartitionsToTxnRequest,
-      ApiKeys.ADD_OFFSETS_TO_TXN -> addOffsetsToTxnRequest
+      ApiKeys.ADD_OFFSETS_TO_TXN -> addOffsetsToTxnRequest,
+      ApiKeys.CREATE_PARTITIONS -> createPartitionsRequest
     )
 
     for ((key, request) <- requestKeyToRequest) {
@@ -996,7 +997,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val response = connectAndSend(createPartitionsRequest, ApiKeys.CREATE_PARTITIONS)
     val version = ApiKeys.CREATE_PARTITIONS.latestVersion
     val createPartitionsResponse = CreatePartitionsResponse.parse(response, version)
-    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, createPartitionsResponse.errors.asScala.head._2.error)
+    assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED, createPartitionsResponse.errors.asScala.head._2.error)
   }
 
   @Test
