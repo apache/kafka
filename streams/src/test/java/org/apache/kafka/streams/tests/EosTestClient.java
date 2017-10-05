@@ -58,6 +58,7 @@ public class EosTestClient extends SmokeTestUtil {
                 if (!uncaughtException) {
                     System.out.println(System.currentTimeMillis());
                     System.out.println("EOS-TEST-CLIENT-CLOSED");
+                    System.out.flush();
                 }
             }
         }));
@@ -73,6 +74,7 @@ public class EosTestClient extends SmokeTestUtil {
                         System.out.println(System.currentTimeMillis());
                         System.out.println("EOS-TEST-CLIENT-EXCEPTION");
                         e.printStackTrace();
+                        System.out.flush();
                         uncaughtException = true;
                     }
                 });
@@ -82,6 +84,7 @@ public class EosTestClient extends SmokeTestUtil {
                         // don't remove this -- it's required test output
                         System.out.println(System.currentTimeMillis());
                         System.out.println("StateChange: " + oldState + " -> " + newState);
+                        System.out.flush();
                     }
                 });
                 streams.start();

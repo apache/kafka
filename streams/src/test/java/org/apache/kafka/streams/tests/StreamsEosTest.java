@@ -33,6 +33,7 @@ public class StreamsEosTest {
         System.out.println("kafka=" + kafka);
         System.out.println("stateDir=" + stateDir);
         System.out.println("command=" + command);
+        System.out.flush();
 
         if (command == null || stateDir == null) {
             System.exit(-1);
@@ -56,6 +57,8 @@ public class StreamsEosTest {
                 break;
             default:
                 System.out.println("unknown command: " + command);
+                System.out.flush();
+                System.exit(-1);
         }
     }
 

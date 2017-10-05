@@ -215,6 +215,7 @@ public class EosTestDriver extends SmokeTestUtil {
 
         // do not modify: required test output
         System.out.println("ALL-RECORDS-DELIVERED");
+        System.out.flush();
     }
 
     private static void ensureStreamsApplicationDown(final String kafka) {
