@@ -257,11 +257,11 @@ class TaskManager {
      * @throws TaskMigratedException if another thread wrote to the changelog topic that is currently restored
      */
     boolean updateNewAndRestoringTasks() {
-        active.initializeNewTasks();
+        final Set<TopicPartition> resumed = active.initializeNewTasks();
         standby.initializeNewTasks();
 
         final Collection<TopicPartition> restored = changelogReader.restore(active);
-        final Set<TopicPartition> resumed = active.updateRestored(restored);
+        resumed.addAll(active.updateRestored(restored));
 
         if (!resumed.isEmpty()) {
             log.trace("resuming partitions {}", resumed);
