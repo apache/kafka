@@ -20,7 +20,8 @@ package kafka.consumer
 import kafka.api.{FetchRequestBuilder, FetchResponsePartitionData, OffsetRequest, Request}
 import kafka.cluster.BrokerEndPoint
 import kafka.message.ByteBufferMessageSet
-import kafka.server.{AbstractFetcherThread, PartitionFetchState, ResultWithPartitions}
+import kafka.server.{AbstractFetcherThread, PartitionFetchState}
+import AbstractFetcherThread.ResultWithPartitions
 import kafka.common.{ErrorMapping, TopicAndPartition}
 
 import scala.collection.Map

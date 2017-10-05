@@ -741,6 +741,6 @@ class ProducerStateManagerTest extends JUnitSuite {
   }
 
   private def currentSnapshotOffsets =
-    logDir.listFiles().map(file => Log.offsetFromFilename(file.getName)).toSet
+    logDir.listFiles.map(Log.offsetFromFile).toSet
 
 }

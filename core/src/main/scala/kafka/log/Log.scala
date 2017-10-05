@@ -256,10 +256,10 @@ class Log(@volatile var dir: File,
     var swapFiles = Set[File]()
 
     for (file <- dir.listFiles if file.isFile) {
-      if(!file.canRead)
+      if (!file.canRead)
         throw new IOException("Could not read file " + file)
       val filename = file.getName
-      if(filename.endsWith(DeletedFileSuffix) || filename.endsWith(CleanedFileSuffix)) {
+      if (filename.endsWith(DeletedFileSuffix) || filename.endsWith(CleanedFileSuffix)) {
         // if the file ends in .deleted or .cleaned, delete it
         Files.deleteIfExists(file.toPath)
       } else if(filename.endsWith(SwapFileSuffix)) {
@@ -271,7 +271,7 @@ class Log(@volatile var dir: File,
           Files.deleteIfExists(file.toPath)
         } else if (isLogFile(baseFile)) {
           // delete the index files
-          val offset = offsetFromFilename(baseFile.getName)
+          val offset = offsetFromFile(baseFile)
           Files.deleteIfExists(Log.offsetIndexFile(dir, offset).toPath)
           Files.deleteIfExists(Log.timeIndexFile(dir, offset).toPath)
           Files.deleteIfExists(Log.transactionIndexFile(dir, offset).toPath)
@@ -287,10 +287,9 @@ class Log(@volatile var dir: File,
     // load segments in ascending order because transactional data from one segment may depend on the
     // segments that come before it
     for (file <- dir.listFiles.sortBy(_.getName) if file.isFile) {
-      val filename = file.getName
       if (isIndexFile(file)) {
         // if it is an index file, make sure it has a corresponding .log file
-        val offset = offsetFromFilename(filename)
+        val offset = offsetFromFile(file)
         val logFile = Log.logFile(dir, offset)
         if (!logFile.exists) {
           warn("Found an orphaned index file, %s, with no corresponding log file.".format(file.getAbsolutePath))
@@ -298,7 +297,7 @@ class Log(@volatile var dir: File,
         }
       } else if (isLogFile(file)) {
         // if it's a log file, load the corresponding log segment
-        val startOffset = offsetFromFilename(filename)
+        val startOffset = offsetFromFile(file)
         val indexFile = Log.offsetIndexFile(dir, startOffset)
         val timeIndexFile = Log.timeIndexFile(dir, startOffset)
         val txnIndexFile = Log.transactionIndexFile(dir, startOffset)
@@ -361,8 +360,7 @@ class Log(@volatile var dir: File,
   private def completeSwapOperations(swapFiles: Set[File]): Unit = {
     for (swapFile <- swapFiles) {
       val logFile = new File(CoreUtils.replaceSuffix(swapFile.getPath, SwapFileSuffix, ""))
-      val filename = logFile.getName
-      val startOffset = offsetFromFilename(filename)
+      val startOffset = offsetFromFile(logFile)
       val indexFile = new File(CoreUtils.replaceSuffix(logFile.getPath, LogFileSuffix, IndexFileSuffix) + SwapFileSuffix)
       val index =  new OffsetIndex(indexFile, baseOffset = startOffset, maxIndexSize = config.maxIndexSize)
       val timeIndexFile = new File(CoreUtils.replaceSuffix(logFile.getPath, LogFileSuffix, TimeIndexFileSuffix) + SwapFileSuffix)
@@ -425,14 +423,14 @@ class Log(@volatile var dir: File,
   // This method does not need to convert IOException to KafkaStorageException because it is only called before all logs are loaded
   private def recoverLog() {
     // if we have the clean shutdown marker, skip recovery
-    if(hasCleanShutdownFile) {
+    if (hasCleanShutdownFile) {
       this.recoveryPoint = activeSegment.nextOffset()
       return
     }
 
     // okay we need to actually recovery this log
     val unflushed = logSegments(this.recoveryPoint, Long.MaxValue).iterator
-    while(unflushed.hasNext) {
+    while (unflushed.hasNext) {
       val segment = unflushed.next
       info("Recovering unflushed segment %d in log %s.".format(segment.baseOffset, name))
       val truncatedBytes =
@@ -445,7 +443,7 @@ class Log(@volatile var dir: File,
                  "creating an empty one with starting offset " + startOffset)
             segment.truncateTo(startOffset)
         }
-      if(truncatedBytes > 0) {
+      if (truncatedBytes > 0) {
         // we had an invalid message, delete all remaining log
         warn("Corruption found in segment %d of log %s, truncating to offset %d.".format(segment.baseOffset, name,
           segment.nextOffset()))
@@ -1281,15 +1279,12 @@ class Log(@volatile var dir: File,
           file.delete()
         }
 
-        segments.lastEntry() match {
-          case null =>
-          case entry => {
-            val seg = entry.getValue
-            seg.onBecomeInactiveSegment()
-            seg.index.trimToValidSize()
-            seg.timeIndex.trimToValidSize()
-            seg.log.trim()
-          }
+        Option(segments.lastEntry).foreach { entry =>
+          val seg = entry.getValue
+          seg.onBecomeInactiveSegment()
+          seg.index.trimToValidSize()
+          seg.timeIndex.trimToValidSize()
+          seg.log.trim()
         }
 
         // take a snapshot of the producer state to facilitate recovery. It is useful to have the snapshot
@@ -1638,7 +1633,7 @@ object Log {
   /** a time index file */
   val TimeIndexFileSuffix = ".timeindex"
 
-  val PidSnapshotFileSuffix = ".snapshot"
+  val ProducerIdSnapshotFileSuffix = ".snapshot"
 
   /** an (aborted) txn index */
   val TxnIndexFileSuffix = ".txnindex"
@@ -1704,7 +1699,7 @@ object Log {
    * @param dir The directory in which the log will reside
    * @param offset The base offset of the log file
    */
-  def logFile(dir: File, offset: Long) =
+  def logFile(dir: File, offset: Long): File =
     new File(dir, filenamePrefixFromOffset(offset) + LogFileSuffix)
 
   /**
@@ -1722,7 +1717,7 @@ object Log {
    * @param dir The directory in which the log will reside
    * @param offset The base offset of the log file
    */
-  def offsetIndexFile(dir: File, offset: Long) =
+  def offsetIndexFile(dir: File, offset: Long): File =
     new File(dir, filenamePrefixFromOffset(offset) + IndexFileSuffix)
 
   /**
@@ -1731,7 +1726,7 @@ object Log {
    * @param dir The directory in which the log will reside
    * @param offset The base offset of the log file
    */
-  def timeIndexFile(dir: File, offset: Long) =
+  def timeIndexFile(dir: File, offset: Long): File =
     new File(dir, filenamePrefixFromOffset(offset) + TimeIndexFileSuffix)
 
   /**
@@ -1740,14 +1735,16 @@ object Log {
    * @param dir The directory in which the log will reside
    * @param offset The last offset (exclusive) included in the snapshot
    */
-  def producerSnapshotFile(dir: File, offset: Long) =
-    new File(dir, filenamePrefixFromOffset(offset) + PidSnapshotFileSuffix)
+  def producerSnapshotFile(dir: File, offset: Long): File =
+    new File(dir, filenamePrefixFromOffset(offset) + ProducerIdSnapshotFileSuffix)
 
-  def transactionIndexFile(dir: File, offset: Long) =
+  def transactionIndexFile(dir: File, offset: Long): File =
     new File(dir, filenamePrefixFromOffset(offset) + TxnIndexFileSuffix)
 
-  def offsetFromFilename(filename: String): Long =
+  def offsetFromFile(file: File): Long = {
+    val filename = file.getName
     filename.substring(0, filename.indexOf('.')).toLong
+  }
 
   /**
     * Calculate a log's size (in bytes) based on its log segments

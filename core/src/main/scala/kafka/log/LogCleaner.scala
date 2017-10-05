@@ -87,7 +87,7 @@ import scala.collection.JavaConverters._
  * @param time A way to control the passage of time
  */
 class LogCleaner(val config: CleanerConfig,
-                 val logDirs: Array[File],
+                 val logDirs: Seq[File],
                  val logs: Pool[TopicPartition, Log],
                  val logDirFailureChannel: LogDirFailureChannel,
                  time: Time = Time.SYSTEM) extends Logging with KafkaMetricsGroup {

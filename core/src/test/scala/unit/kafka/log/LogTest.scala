@@ -69,20 +69,20 @@ class LogTest {
   }
 
   @Test
-  def testOffsetFromFilename() {
+  def testOffsetFromFile() {
     val offset = 23423423L
 
     val logFile = Log.logFile(tmpDir, offset)
-    assertEquals(offset, Log.offsetFromFilename(logFile.getName))
+    assertEquals(offset, Log.offsetFromFile(logFile))
 
     val offsetIndexFile = Log.offsetIndexFile(tmpDir, offset)
-    assertEquals(offset, Log.offsetFromFilename(offsetIndexFile.getName))
+    assertEquals(offset, Log.offsetFromFile(offsetIndexFile))
 
     val timeIndexFile = Log.timeIndexFile(tmpDir, offset)
-    assertEquals(offset, Log.offsetFromFilename(timeIndexFile.getName))
+    assertEquals(offset, Log.offsetFromFile(timeIndexFile))
 
     val snapshotFile = Log.producerSnapshotFile(tmpDir, offset)
-    assertEquals(offset, Log.offsetFromFilename(snapshotFile.getName))
+    assertEquals(offset, Log.offsetFromFile(snapshotFile))
   }
 
   /**
@@ -167,7 +167,7 @@ class LogTest {
     assertTrue(log.logSegments.size >= 2)
     log.close()
 
-    logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(Log.PidSnapshotFileSuffix)).foreach { file =>
+    logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(Log.ProducerIdSnapshotFileSuffix)).foreach { file =>
       Files.delete(file.toPath)
     }
 
@@ -192,7 +192,7 @@ class LogTest {
   }
 
   @Test
-  def testPidMapOffsetUpdatedForNonIdempotentData() {
+  def testProducerIdMapOffsetUpdatedForNonIdempotentData() {
     val logConfig = createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig)
     val records = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds, "key".getBytes, "value".getBytes)))
@@ -383,7 +383,7 @@ class LogTest {
   }
 
   @Test
-  def testRebuildPidMapWithCompactedData() {
+  def testRebuildProducerIdMapWithCompactedData() {
     val logConfig = createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig)
     val pid = 1L
@@ -467,7 +467,7 @@ class LogTest {
   }
 
   @Test
-  def testUpdatePidMapWithCompactedData() {
+  def testUpdateProducerIdMapWithCompactedData() {
     val logConfig = createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig)
     val pid = 1L
@@ -500,7 +500,7 @@ class LogTest {
   }
 
   @Test
-  def testPidMapTruncateTo() {
+  def testProducerIdMapTruncateTo() {
     val logConfig = createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig)
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("a".getBytes))), leaderEpoch = 0)
@@ -520,7 +520,7 @@ class LogTest {
   }
 
   @Test
-  def testPidMapTruncateToWithNoSnapshots() {
+  def testProducerIdMapTruncateToWithNoSnapshots() {
     // This ensures that the upgrade optimization path cannot be hit after initial loading
     val logConfig = createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig)
@@ -533,7 +533,7 @@ class LogTest {
       producerEpoch = epoch, sequence = 1), leaderEpoch = 0)
 
     // Delete all snapshots prior to truncating
-    logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(Log.PidSnapshotFileSuffix)).foreach { file =>
+    logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(Log.ProducerIdSnapshotFileSuffix)).foreach { file =>
       Files.delete(file.toPath)
     }
 
@@ -612,7 +612,7 @@ class LogTest {
   }
 
   @Test
-  def testPidMapTruncateFullyAndStartAt() {
+  def testProducerIdMapTruncateFullyAndStartAt() {
     val records = TestUtils.singletonRecords("foo".getBytes)
     val logConfig = createLogConfig(segmentBytes = records.sizeInBytes, retentionBytes = records.sizeInBytes * 2)
     val log = createLog(logDir, logConfig)
@@ -634,7 +634,7 @@ class LogTest {
   }
 
   @Test
-  def testPidExpirationOnSegmentDeletion() {
+  def testProducerIdExpirationOnSegmentDeletion() {
     val pid1 = 1L
     val records = TestUtils.records(Seq(new SimpleRecord("foo".getBytes)), producerId = pid1, producerEpoch = 0, sequence = 0)
     val logConfig = createLogConfig(segmentBytes = records.sizeInBytes, retentionBytes = records.sizeInBytes * 2)
@@ -729,7 +729,7 @@ class LogTest {
   }
 
   @Test
-  def testPeriodicPidExpiration() {
+  def testPeriodicProducerIdExpiration() {
     val maxProducerIdExpirationMs = 200
     val producerIdExpirationCheckIntervalMs = 100
 
@@ -824,7 +824,7 @@ class LogTest {
   }
 
   @Test
-  def testMultiplePidsPerMemoryRecord() : Unit = {
+  def testMultipleProducerIdsPerMemoryRecord() : Unit = {
     // create a log
     val log = createLog(logDir, LogConfig())
 
@@ -2585,7 +2585,7 @@ class LogTest {
     appendEndTxnMarkerAsLeader(log, pid4, epoch, ControlRecordType.COMMIT) // 90
 
     // delete all snapshot files
-    logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(Log.PidSnapshotFileSuffix)).foreach { file =>
+    logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(Log.ProducerIdSnapshotFileSuffix)).foreach { file =>
       Files.delete(file.toPath)
     }
 
