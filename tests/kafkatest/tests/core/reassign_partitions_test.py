@@ -24,6 +24,7 @@ from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
 import random
+import time
 
 class ReassignPartitionsTest(ProduceConsumeValidateTest):
     """
@@ -40,13 +41,16 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         self.num_partitions = 20
         self.zk = ZookeeperService(test_context, num_nodes=1)
         self.kafka = KafkaService(test_context, num_nodes=4, zk=self.zk,
-                                  server_prop_overides=[["log.retention.check.interval.ms", "6000"]],
+                                  server_prop_overides=[
+                                      ["log.retention.check.interval.ms", 6000],
+                                      ["log.segment.bytes", 102400]
+                                  ],
                                   topics={self.topic: {
                                       "partitions": self.num_partitions,
                                       "replication-factor": 3,
                                       'configs': {
                                           "min.insync.replicas": 3,
-                                          "retention.ms":5000
+                                          "retention.bytes": 102400,
                                       }}
                                   })
         self.timeout_sec = 60
@@ -82,6 +86,10 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
             partition_info["partitions"][i]["partition"] = shuffled_list[i]
         self.logger.debug("Jumbled partitions: " + str(partition_info))
 
+        # Wait for a while to let one cleaning run through, so that the
+        # reassign partitions starts from a segment which doesn't have base
+        # offset 0.
+        time.sleep(10)
         # send reassign partitions command
         self.kafka.execute_reassign_partitions(partition_info)
 
