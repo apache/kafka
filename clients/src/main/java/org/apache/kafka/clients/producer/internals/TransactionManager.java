@@ -436,6 +436,13 @@ public class TransactionManager {
         inflightBatchesBySequence.get(batch.topicPartition).offer(batch);
     }
 
+    /**
+     * Returns the first inflight sequence for a given partition. This is the base sequence of an inflight batch with
+     * the lowest sequence number.
+     * @return the lowest inflight sequence if the transaction manager is tracking inflight requests for this partition.
+     *         If there are no inflight requests being tracked for this partition, this method will return
+     *         RecordBatch.NO_SEQUENCE.
+     */
     synchronized int firstInFlightSequence(TopicPartition topicPartition) {
         PriorityQueue<ProducerBatch> inFlightBatches = inflightBatchesBySequence.get(topicPartition);
         if (inFlightBatches == null)
