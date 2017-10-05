@@ -1119,35 +1119,30 @@ public class SenderTest {
         Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
                 senderMetrics, time, REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
 
-        Future<RecordMetadata> failedResponse = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
-        Future<RecordMetadata> successfulResponse = accumulator.append(tp1, time.milliseconds(), "key".getBytes(),
+        Future<RecordMetadata> response = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
                 "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
         sender.run(time.milliseconds());  // connect.
         sender.run(time.milliseconds());  // send.
 
         assertEquals(1, client.inFlightRequestCount());
 
-        Map<TopicPartition, OffsetAndError> responses = new HashMap<>();
-        responses.put(tp0, new OffsetAndError(-1, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER));
-        responses.put(tp1, new OffsetAndError(-1, Errors.NOT_LEADER_FOR_PARTITION));
-        client.respond(produceResponse(responses));
+        client.respond(produceResponse(tp0, -1, Errors.NOT_LEADER_FOR_PARTITION, -1));
         sender.run(time.milliseconds());
-        assertTrue(failedResponse.isDone());
-        assertFalse("Expected transaction state to be reset upon receiving an OutOfOrderSequenceException", transactionManager.hasProducerId());
+        assertFalse(response.isDone());
+        transactionManager.resetProducerId();
         prepareAndReceiveInitProducerId(producerId + 1, Errors.NONE);
         assertEquals(producerId + 1, transactionManager.producerIdAndEpoch().producerId);
         sender.run(time.milliseconds());  // send request to tp1
 
-        assertFalse(successfulResponse.isDone());
-        client.respond(produceResponse(tp1, 10, Errors.NONE, -1));
+        assertFalse(response.isDone());
+        client.respond(produceResponse(tp0, 10, Errors.NONE, -1));
         sender.run(time.milliseconds());
 
-        assertTrue(successfulResponse.isDone());
-        assertEquals(10, successfulResponse.get().offset());
+        assertTrue(response.isDone());
+        assertEquals(10, response.get().offset());
 
         // Since the response came back for the old producer id, we shouldn't update the next sequence.
-        assertEquals(0, transactionManager.sequenceNumber(tp1).longValue());
+        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
     }
 
     @Test
@@ -1165,36 +1160,31 @@ public class SenderTest {
         Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
                 senderMetrics, time, REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
 
-        Future<RecordMetadata> failedResponse = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
-        Future<RecordMetadata> successfulResponse = accumulator.append(tp1, time.milliseconds(), "key".getBytes(),
+        Future<RecordMetadata> response = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
                 "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
         sender.run(time.milliseconds());  // connect.
         sender.run(time.milliseconds());  // send.
 
         assertEquals(1, client.inFlightRequestCount());
 
-        Map<TopicPartition, OffsetAndError> responses = new HashMap<>();
-        responses.put(tp0, new OffsetAndError(-1, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER));
-        responses.put(tp1, new OffsetAndError(-1, Errors.NOT_LEADER_FOR_PARTITION));
-        client.respond(produceResponse(responses));
+        client.respond(produceResponse(tp0, -1, Errors.NOT_LEADER_FOR_PARTITION, -1));
         sender.run(time.milliseconds());
-        assertTrue(failedResponse.isDone());
-        assertFalse("Expected transaction state to be reset upon receiving an OutOfOrderSequenceException", transactionManager.hasProducerId());
+        assertFalse(response.isDone());
+        transactionManager.resetProducerId();
         prepareAndReceiveInitProducerId(producerId + 1, Errors.NONE);
         assertEquals(producerId + 1, transactionManager.producerIdAndEpoch().producerId);
-        sender.run(time.milliseconds());  // send request to tp1 with the old producerId
+        sender.run(time.milliseconds());  // send request to tp1
 
-        assertFalse(successfulResponse.isDone());
+        assertFalse(response.isDone());
         // The response comes back with a retriable error.
-        client.respond(produceResponse(tp1, 0, Errors.NOT_LEADER_FOR_PARTITION, -1));
+        client.respond(produceResponse(tp0, 0, Errors.NOT_LEADER_FOR_PARTITION, -1));
         sender.run(time.milliseconds());
 
-        assertTrue(successfulResponse.isDone());
+        assertTrue(response.isDone());
         // Since the batch has an old producerId, it will not be retried yet again, but will be failed with a Fatal
         // exception.
         try {
-            successfulResponse.get();
+            response.get();
             fail("Should have raised an OutOfOrderSequenceException");
         } catch (Exception e) {
             assertTrue(e.getCause() instanceof OutOfOrderSequenceException);
@@ -1911,16 +1901,6 @@ public class SenderTest {
         return new ProduceResponse(partResp, throttleTimeMs);
     }
 
-    private ProduceResponse produceResponse(Map<TopicPartition, OffsetAndError> responses) {
-        Map<TopicPartition, ProduceResponse.PartitionResponse> partResponses = new HashMap<>();
-        for (Map.Entry<TopicPartition, OffsetAndError> entry : responses.entrySet()) {
-            ProduceResponse.PartitionResponse response = new ProduceResponse.PartitionResponse(entry.getValue().error,
-                    entry.getValue().offset, RecordBatch.NO_TIMESTAMP, -1);
-            partResponses.put(entry.getKey(), response);
-        }
-        return new ProduceResponse(partResponses);
-
-    }
     private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs) {
         return produceResponse(tp, offset, error, throttleTimeMs, -1L);
     }
