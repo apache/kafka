@@ -33,7 +33,8 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.CreateTopicsRequest._
 import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError, DescribeConfigsResponse, Resource, ResourceType}
-import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
+import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy, RequestTopicState, TopicManagementPolicy, TopicManagementPolicyAdapter, TopicState}
 import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
 
 import scala.collection._
@@ -49,11 +50,33 @@ class AdminManager(val config: KafkaConfig,
   private val topicPurgatory = DelayedOperationPurgatory[DelayedOperation]("topic", config.brokerId)
   private val adminZkClient = new AdminZkClient(zkClient)
 
-  private val createTopicPolicy =
-    Option(config.getConfiguredInstance(KafkaConfig.CreateTopicPolicyClassNameProp, classOf[CreateTopicPolicy]))
+  val topicManagementPolicy = if (config.values.get(KafkaConfig.CreateTopicPolicyClassNameProp) != null ||
+        config.values.get(KafkaConfig.AlterConfigPolicyClassNameProp) != null) {
+    if (config.values.get(KafkaConfig.TopicManagementPolicyClassNameProp) != null) {
+      error(s"Use of config ${KafkaConfig.TopicManagementPolicyClassNameProp} " +
+        s"precludes use of ${KafkaConfig.CreateTopicPolicyClassNameProp} " +
+        s"and ${KafkaConfig.AlterConfigPolicyClassNameProp}.")
+      // TODO how do we die here?
+    }
+    val createTopicPolicy =
+      Option(config.getConfiguredInstance(KafkaConfig.CreateTopicPolicyClassNameProp, classOf[CreateTopicPolicy]))
 
-  private val alterConfigPolicy =
-    Option(config.getConfiguredInstance(KafkaConfig.AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
+    val alterConfigPolicy =
+      Option(config.getConfiguredInstance(KafkaConfig.AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
+
+    if (createTopicPolicy.isDefined) {
+        warn(s"Use of config ${KafkaConfig.CreateTopicPolicyClassNameProp} is deprecated. Use ${KafkaConfig.TopicManagementPolicyClassNameProp} instead.")
+    }
+    if (alterConfigPolicy.isDefined) {
+      warn(s"Use of config ${KafkaConfig.AlterConfigPolicyClassNameProp} is deprecated. Use ${KafkaConfig.TopicManagementPolicyClassNameProp} instead.")
+    }
+    Some(new TopicManagementPolicyAdapter(
+      config.getConfiguredInstance(KafkaConfig.CreateTopicPolicyClassNameProp, classOf[CreateTopicPolicy]),
+      config.getConfiguredInstance(KafkaConfig.AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy])
+    ))
+  } else {
+    Option(config.getConfiguredInstance(KafkaConfig.TopicManagementPolicyClassNameProp, classOf[TopicManagementPolicy]))
+  }
 
   def hasDelayedTopicOperations = topicPurgatory.delayed != 0
 
@@ -73,6 +96,8 @@ class AdminManager(val config: KafkaConfig,
   def createTopics(timeout: Int,
                    validateOnly: Boolean,
                    createInfo: Map[String, TopicDetails],
+                   principal: KafkaPrincipal,
+                   listenerName: ListenerName,
                    responseCallback: Map[String, ApiError] => Unit) {
 
     // 1. map over topics creating assignment and calling zookeeper
@@ -101,7 +126,7 @@ class AdminManager(val config: KafkaConfig,
         }
         trace(s"Assignments for topic $topic are $assignments ")
 
-        createTopicPolicy match {
+        topicManagementPolicy match {
           case Some(policy) =>
             adminZkClient.validateCreateOrUpdateTopic(topic, assignments, configs, update = false)
 
@@ -111,9 +136,89 @@ class AdminManager(val config: KafkaConfig,
             val replicationFactor: java.lang.Short =
               if (arguments.replicationFactor == NO_REPLICATION_FACTOR) null else arguments.replicationFactor
             val replicaAssignments = if (arguments.replicasAssignments.isEmpty) null else arguments.replicasAssignments
+            val topicName = topic
+            val topicConfig = configs
+            val topicReplicationFactor = replicationFactor
+            val topicNumPartitions = numPartitions
+            //policy.validateCreateTopic(new RequestMetadata(topic, numPartitions, replicationFactor, replicaAssignments,
+            //  arguments.configs))
+            policy.validateCreateTopic(new TopicManagementPolicy.CreateTopicRequest {
+              /**
+                * The requested state of the topic to be created.
+                */
+              override def requestedState() = new RequestTopicState {
+                /**
+                  * The number of partitions of the topic.
+                  */
+                override def numPartitions() = {
+                  if (policy.isInstanceOf[TopicManagementPolicyAdapter]) {
+                    if (topicNumPartitions == null) -1 else topicNumPartitions
+                  } else {
+                    assignments.size
+                  }
+                }
 
-            policy.validate(new RequestMetadata(topic, numPartitions, replicationFactor, replicaAssignments,
-              arguments.configs))
+                /**
+                  * The replication factor of the topic. More precisely, the number of assigned replicas for partition 0.
+                  * // TODO what about during reassignment
+                  */
+                override def replicationFactor() = {
+                  if (policy.isInstanceOf[TopicManagementPolicyAdapter]) {
+                    topicReplicationFactor
+                  } else {
+                    assignments(0).size.toShort
+                  }
+                }
+
+                /**
+                  * A map of the replica assignments of the topic, with partition ids as keys and
+                  * the assigned brokers as the corresponding values.
+                  * // TODO what about during reassignment
+                  */
+                override def replicasAssignments() = {
+                  if (policy.isInstanceOf[TopicManagementPolicyAdapter]) {
+                    replicaAssignments
+                  } else {
+                    assignments.map {
+                      case (partition, replicas) =>
+                        new Integer(partition) -> replicas.map(new Integer(_)).asJava
+                    }.asJava
+                  }
+                }
+
+                /**
+                  * The topic config.
+                  */
+                override def configs() = topicConfig.asScala.asJava//TODO there must be a better way than this!It took
+
+                /**
+                  * Returns whether the topic is marked for deletion.
+                  */
+                override def markedForDeletion() = false
+
+                /**
+                  * Returns whether the topic is an internal topic.
+                  */
+                override def internal() = Topic.isInternal(topicName)
+
+                /**
+                  * True if the {@link TopicState#replicasAssignments()}
+                  * in this request was generated by the broker, false if
+                  * the assignment were explicitly requested by the client.
+                  */
+                override def generatedReplicaAssignments() = arguments.replicasAssignments.isEmpty
+              }
+
+              /**
+                * The topic the action is being performed upon.
+                */
+              override def topic() = topicName
+
+              /**
+                * The authenticated principal making the request, or null if the session is not authenticated.
+                */
+              override def principal() = principal
+            }, new ClusterStateImpl(this, listenerName))
 
             if (!validateOnly)
               adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, assignments, configs, update = false)
@@ -338,7 +443,7 @@ class AdminManager(val config: KafkaConfig,
     }.toMap
   }
 
-  def alterConfigs(configs: Map[Resource, AlterConfigsRequest.Config], validateOnly: Boolean): Map[Resource, ApiError] = {
+  def alterConfigs(configs: Map[Resource, AlterConfigsRequest.Config], validateOnly: Boolean, requestPrincipal: KafkaPrincipal, listenerName: ListenerName): Map[Resource, ApiError] = {
     configs.map { case (resource, config) =>
       try {
         resource.`type` match {
@@ -350,13 +455,39 @@ class AdminManager(val config: KafkaConfig,
               properties.setProperty(configEntry.name(), configEntry.value())
             }
 
-            alterConfigPolicy match {
+            topicManagementPolicy match {
               case Some(policy) =>
                 adminZkClient.validateTopicConfig(topic, properties)
 
                 val configEntriesMap = config.entries.asScala.map(entry => (entry.name, entry.value)).toMap
-                policy.validate(new AlterConfigPolicy.RequestMetadata(
-                  new ConfigResource(ConfigResource.Type.TOPIC, resource.name), configEntriesMap.asJava))
+                //policy.validateAlterTopic(new AlterConfigPolicy.RequestMetadata(
+                //  new ConfigResource(ConfigResource.Type.TOPIC, resource.name), configEntriesMap.asJava))
+                val topicName = topic
+                policy.validateAlterTopic(new TopicManagementPolicy.AlterTopicRequest {
+                  /**
+                    * The state the topic will have after the alteration.
+                    */
+                  override def requestedState() = new TopicStateImpl(topic, AdminManager.this, listenerName) with RequestTopicState {
+                    override def configs() = configEntriesMap.asJava
+
+                    /**
+                      * True if the {@link TopicState#replicasAssignments()}
+                      * in this request was generated by the broker, false if
+                      * the assignment were explicitly requested by the client.
+                      */
+                    override def generatedReplicaAssignments() = false
+                  }
+
+                  /**
+                    * The topic the action is being performed upon.
+                    */
+                  override def topic() = topicName
+
+                  /**
+                    * The authenticated principal making the request, or null if the session is not authenticated.
+                    */
+                  override def principal() = requestPrincipal
+                }, new ClusterStateImpl(this, listenerName))
 
                 if (!validateOnly)
                   adminZkClient.changeTopicConfig(topic, properties)
@@ -391,5 +522,6 @@ class AdminManager(val config: KafkaConfig,
     topicPurgatory.shutdown()
     CoreUtils.swallow(createTopicPolicy.foreach(_.close()), this)
     CoreUtils.swallow(alterConfigPolicy.foreach(_.close()), this)
+    CoreUtils.swallow(topicManagementPolicy.foreach(_.close()), this)
   }
 }

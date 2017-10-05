@@ -310,6 +310,7 @@ object KafkaConfig {
   val MinInSyncReplicasProp = "min.insync.replicas"
   val CreateTopicPolicyClassNameProp = "create.topic.policy.class.name"
   val AlterConfigPolicyClassNameProp = "alter.config.policy.class.name"
+  val TopicManagementPolicyClassNameProp = "topic.management.policy.class.name"
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMsProp = "controller.socket.timeout.ms"
   val DefaultReplicationFactorProp = "default.replication.factor"
@@ -547,10 +548,14 @@ object KafkaConfig {
     "produce with acks of \"all\". This will ensure that the producer raises an exception " +
     "if a majority of replicas do not receive a write."
 
-  val CreateTopicPolicyClassNameDoc = "The create topic policy class that should be used for validation. The class should " +
-    "implement the <code>org.apache.kafka.server.policy.CreateTopicPolicy</code> interface."
-  val AlterConfigPolicyClassNameDoc = "The alter configs policy class that should be used for validation. The class should " +
-    "implement the <code>org.apache.kafka.server.policy.AlterConfigPolicy</code> interface."
+  val CreateTopicPolicyClassNameDoc = s"DEPRECATED: Replaced by $TopicManagementPolicyClassNameProp. " +
+    "The create topic policy class that should be used for validation. " +
+    "The class should implement the <code>org.apache.kafka.server.policy.CreateTopicPolicy</code> interface."
+  val AlterConfigPolicyClassNameDoc = s"DEPRECATED: Replaced by $TopicManagementPolicyClassNameProp. " +
+    "The alter configs policy class that should be used for validation. " +
+    "The class should implement the <code>org.apache.kafka.server.policy.AlterConfigPolicy</code> interface."
+  val TopicManagementPolicyClassNameDoc = "The policy class that should be used for validation of changes to topics. " +
+    "The class should implement the <code>org.apache.kafka.server.policy.TopicManagementPolicy</code> interface."
 
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMsDoc = "The socket timeout for controller-to-broker channels"
@@ -780,6 +785,7 @@ object KafkaConfig {
       .define(LogMessageTimestampDifferenceMaxMsProp, LONG, Defaults.LogMessageTimestampDifferenceMaxMs, MEDIUM, LogMessageTimestampDifferenceMaxMsDoc)
       .define(CreateTopicPolicyClassNameProp, CLASS, null, LOW, CreateTopicPolicyClassNameDoc)
       .define(AlterConfigPolicyClassNameProp, CLASS, null, LOW, AlterConfigPolicyClassNameDoc)
+      .define(TopicManagementPolicyClassNameProp, CLASS, null, LOW, TopicManagementPolicyClassNameDoc)
 
       /** ********* Replication configuration ***********/
       .define(ControllerSocketTimeoutMsProp, INT, Defaults.ControllerSocketTimeoutMs, MEDIUM, ControllerSocketTimeoutMsDoc)
