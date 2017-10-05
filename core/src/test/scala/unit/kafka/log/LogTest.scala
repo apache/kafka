@@ -1377,7 +1377,8 @@ class LogTest {
     }
     log.close()
 
-    def verifyRecoveredLog(log: Log) {
+    def verifyRecoveredLog(log: Log, expectedRecoveryPoint: Long) {
+      assertEquals(s"Unexpected recovery point", expectedRecoveryPoint, log.recoveryPoint)
       assertEquals(s"Should have $numMessages messages when log is reopened w/o recovery", numMessages, log.logEndOffset)
       assertEquals("Should have same last index offset as before.", lastIndexOffset, log.activeSegment.index.lastOffset)
       assertEquals("Should have same number of index entries as before.", numIndexEntries, log.activeSegment.index.entries)
@@ -1387,12 +1388,12 @@ class LogTest {
     }
 
     log = createLog(logDir, logConfig, recoveryPoint = lastOffset)
-    verifyRecoveredLog(log)
+    verifyRecoveredLog(log, lastOffset)
     log.close()
 
     // test recovery case
     log = createLog(logDir, logConfig)
-    verifyRecoveredLog(log)
+    verifyRecoveredLog(log, lastOffset)
     log.close()
   }
 
