@@ -105,19 +105,22 @@ public class AssignedTasksTest {
         EasyMock.expect(t1.partitions()).andReturn(Collections.singleton(tp1));
         EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.<TopicPartition>emptySet());
         EasyMock.expect(t2.initialize()).andReturn(true);
-        EasyMock.expect(t2.partitions()).andReturn(Collections.singleton(tp2));
+        final Set<TopicPartition> t2partitions = Collections.singleton(tp2);
+        EasyMock.expect(t2.partitions()).andReturn(t2partitions);
         EasyMock.expect(t2.changelogPartitions()).andReturn(Collections.<TopicPartition>emptyList());
+        EasyMock.expect(t2.hasStateStores()).andReturn(true);
 
         EasyMock.replay(t1, t2);
 
         assignedTasks.addNewTask(t1);
         assignedTasks.addNewTask(t2);
 
-        assignedTasks.initializeNewTasks();
+        final Set<TopicPartition> readyPartitions = assignedTasks.initializeNewTasks();
 
         Collection<Task> restoring = assignedTasks.restoringTasks();
         assertThat(restoring.size(), equalTo(1));
         assertSame(restoring.iterator().next(), t1);
+        assertThat(readyPartitions, equalTo(t2partitions));
     }
 
     @Test
@@ -125,13 +128,15 @@ public class AssignedTasksTest {
         EasyMock.expect(t2.initialize()).andReturn(true);
         EasyMock.expect(t2.partitions()).andReturn(Collections.singleton(tp2));
         EasyMock.expect(t2.changelogPartitions()).andReturn(Collections.<TopicPartition>emptyList());
+        EasyMock.expect(t2.hasStateStores()).andReturn(false);
 
         EasyMock.replay(t2);
 
         assignedTasks.addNewTask(t2);
-        assignedTasks.initializeNewTasks();
+        final Set<TopicPartition> toResume = assignedTasks.initializeNewTasks();
 
         assertThat(assignedTasks.runningTaskIds(), equalTo(Collections.singleton(taskId2)));
+        assertThat(toResume, equalTo(Collections.<TopicPartition>emptySet()));
     }
 
     @Test
@@ -140,6 +145,7 @@ public class AssignedTasksTest {
         EasyMock.expect(t1.initialize()).andReturn(false);
         EasyMock.expect(t1.partitions()).andReturn(task1Partitions).anyTimes();
         EasyMock.expect(t1.changelogPartitions()).andReturn(Utils.mkSet(changeLog1, changeLog2)).anyTimes();
+        EasyMock.expect(t1.hasStateStores()).andReturn(true).anyTimes();
         EasyMock.replay(t1);
 
         addAndInitTask();
@@ -263,6 +269,7 @@ public class AssignedTasksTest {
         EasyMock.expect(t1.initialize()).andReturn(true);
         EasyMock.expect(t1.partitions()).andReturn(Collections.singleton(tp1));
         EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.<TopicPartition>emptyList());
+        EasyMock.expect(t1.hasStateStores()).andReturn(false);
     }
 
     @Test
@@ -443,6 +450,7 @@ public class AssignedTasksTest {
 
     private void mockRunningTaskSuspension() {
         EasyMock.expect(t1.initialize()).andReturn(true);
+        EasyMock.expect(t1.hasStateStores()).andReturn(false).anyTimes();
         EasyMock.expect(t1.partitions()).andReturn(Collections.singleton(tp1)).anyTimes();
         EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.<TopicPartition>emptyList()).anyTimes();
         t1.suspend();
