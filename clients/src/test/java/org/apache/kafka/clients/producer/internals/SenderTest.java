@@ -1130,7 +1130,7 @@ public class SenderTest {
 
         Map<TopicPartition, OffsetAndError> responses = new HashMap<>();
         responses.put(tp0, new OffsetAndError(-1, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER));
-        responses.put(tp1, new OffsetAndError(-1, Errors.NOT_LEADER_FOR_PARTITION ));
+        responses.put(tp1, new OffsetAndError(-1, Errors.NOT_LEADER_FOR_PARTITION));
         client.respond(produceResponse(responses));
         sender.run(time.milliseconds());
         assertTrue(failedResponse.isDone());
