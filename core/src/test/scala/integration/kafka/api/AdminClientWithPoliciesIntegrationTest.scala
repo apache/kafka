@@ -25,7 +25,7 @@ import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig, AlterConf
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.{InvalidRequestException, PolicyViolationException}
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.server.policy.AlterConfigPolicy
+import org.apache.kafka.server.policy.{AlterConfigPolicy, ClusterState, TopicManagementPolicy}
 import org.junit.Assert.{assertEquals, assertNull, assertTrue}
 import org.junit.{After, Before, Rule, Test}
 import org.junit.rules.Timeout
@@ -36,8 +36,7 @@ import scala.collection.JavaConverters._
   * Tests AdminClient calls when the broker is configured with policies like AlterConfigPolicy, CreateTopicPolicy, etc.
   */
 class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with Logging {
-
-  import AdminClientWithPoliciesIntegrationTest._
+  import AdminClientWithPoliciesIntegrationTest.Policy
 
   var client: AdminClient = null
   val brokerCount = 3
@@ -63,7 +62,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
 
   override def generateConfigs = {
     val configs = TestUtils.createBrokerConfigs(brokerCount, zkConnect)
-    configs.foreach(props => props.put(KafkaConfig.AlterConfigPolicyClassNameProp, classOf[Policy]))
+    configs.foreach(props => props.put(KafkaConfig.TopicManagementPolicyClassNameProp, classOf[Policy]))
     configs.map(KafkaConfig.fromProps)
   }
 
@@ -179,12 +178,56 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     assertNull(configs.get(brokerResource).get(KafkaConfig.SslTruststorePasswordProp).value)
   }
 
-
 }
 
 object AdminClientWithPoliciesIntegrationTest {
 
-  class Policy extends AlterConfigPolicy {
+  class Policy extends TopicManagementPolicy {
+
+    var configs: Map[String, _] = _
+    var closed = false
+
+    def configure(configs: util.Map[String, _]): Unit = {
+      this.configs = configs.asScala.toMap
+    }
+
+    def close(): Unit = closed = true
+
+    override def validateCreateTopic(requestMetadata: TopicManagementPolicy.CreateTopicRequest, clusterState: ClusterState): Unit = ???
+
+    override def validateAlterTopic(requestMetadata: TopicManagementPolicy.AlterTopicRequest, clusterState: ClusterState): Unit = {
+      require(!closed, "Policy should not be closed")
+      require(!configs.isEmpty, "configure should have been called with non empty configs")
+      require(!requestMetadata.requestedState.configs.isEmpty, "request configs should not be empty")
+      require(requestMetadata.topic.nonEmpty, "resource name should not be empty")
+      require(requestMetadata.topic.contains("topic"))
+      if (requestMetadata.requestedState.configs.containsKey(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG))
+        throw new PolicyViolationException("Min in sync replicas cannot be updated")
+    }
+
+    override def validateDeleteTopic(requestMetadata: TopicManagementPolicy.DeleteTopicRequest, clusterState: ClusterState): Unit = ???
+
+    override def validateDeleteRecords(requestMetadata: TopicManagementPolicy.DeleteRecordsRequest, clusterState: ClusterState): Unit = ???
+  }
+}
+
+@deprecated("deprecated because AlterConfigPolicyClassNameProp is deprecated")
+class AdminClientWithAlterConfigPolicyIntegrationTest extends AdminClientWithPoliciesIntegrationTest {
+
+  import AdminClientWithAlterConfigPolicyIntegrationTest._
+
+  override def generateConfigs = {
+    val configs = TestUtils.createBrokerConfigs(brokerCount, zkConnect)
+    configs.foreach(props => props.put(KafkaConfig.AlterConfigPolicyClassNameProp, classOf[ConfigPolicy]))
+    configs.map(KafkaConfig.fromProps)
+  }
+
+}
+
+@deprecated("deprecated because AlterConfigPolicyClassNameProp is deprecated")
+object AdminClientWithAlterConfigPolicyIntegrationTest {
+
+  class ConfigPolicy extends AlterConfigPolicy {
 
     var configs: Map[String, _] = _
     var closed = false

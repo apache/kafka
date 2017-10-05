@@ -25,7 +25,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.PolicyViolationException
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.CreateTopicsRequest
-import org.apache.kafka.server.policy.CreateTopicPolicy
+import org.apache.kafka.server.policy.{ClusterState, CreateTopicPolicy, TopicManagementPolicy}
 import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
 import org.junit.Test
 
@@ -36,7 +36,7 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
 
   override def propertyOverrides(properties: Properties): Unit = {
     super.propertyOverrides(properties)
-    properties.put(KafkaConfig.CreateTopicPolicyClassNameProp, classOf[Policy].getName)
+    properties.put(KafkaConfig.TopicManagementPolicyClassNameProp, classOf[Policy].getName)
   }
 
   @Test
@@ -106,6 +106,68 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
 }
 
 object CreateTopicsRequestWithPolicyTest {
+
+  class Policy extends TopicManagementPolicy {
+
+    var configs: Map[String, _] = _
+    var closed = false
+
+    def configure(configs: util.Map[String, _]): Unit = {
+      this.configs = configs.asScala.toMap
+    }
+
+    def close(): Unit = closed = true
+
+    override def validateCreateTopic(request: TopicManagementPolicy.CreateTopicRequest, clusterState: ClusterState): Unit = {
+      require(!closed, "Policy should not be closed")
+      require(!configs.isEmpty, "configure should have been called with non empty configs")
+
+      val requestMetadata = request.requestedState
+      import requestMetadata._
+      if (generatedReplicaAssignments) {
+
+        if (numPartitions < 5)
+          throw new PolicyViolationException(s"Topics should have at least 5 partitions, received $numPartitions")
+
+        if (numPartitions > 10) {
+          if (requestMetadata.configs.asScala.get(LogConfig.RetentionMsProp).fold(true)(_.toInt > 5000))
+            throw new PolicyViolationException("RetentionMs should be less than 5000ms if replicationFactor > 5")
+        } else
+          require(requestMetadata.configs.isEmpty, s"Topic configs should be empty, but it is ${requestMetadata.configs}")
+
+      } else {
+        require(replicasAssignments != null, s"replicaAssigments should not be null, but it is $replicasAssignments")
+
+        replicasAssignments.asScala.foreach { case (partitionId, assignment) =>
+          if (assignment.size < 2)
+            throw new PolicyViolationException("Topic partitions should have at least 2 partitions, received " +
+              s"${assignment.size} for partition $partitionId")
+        }
+      }
+
+    }
+
+    override def validateAlterTopic(requestMetadata: TopicManagementPolicy.AlterTopicRequest, clusterState: ClusterState) {}
+
+    override def validateDeleteTopic(requestMetadata: TopicManagementPolicy.DeleteTopicRequest, clusterState: ClusterState) {}
+
+    override def validateDeleteRecords(requestMetadata: TopicManagementPolicy.DeleteRecordsRequest, clusterState: ClusterState) {}
+  }
+}
+
+@deprecated("deprecated because CreateTopicPolicyClassNameProp is deprecated. Remove in 2.0")
+class CreateTopicsRequestWithCreateTopicPolicyTest extends CreateTopicsRequestWithPolicyTest {
+
+  import CreateTopicsRequestWithCreateTopicPolicyTest._
+
+  override def propertyOverrides(properties: Properties): Unit = {
+    super.propertyOverrides(properties)
+    properties.put(KafkaConfig.CreateTopicPolicyClassNameProp, classOf[Policy].getName)
+  }
+}
+
+@deprecated("deprecated because CreateTopicPolicyClassNameProp is deprecated. Remove in 2.0")
+object CreateTopicsRequestWithCreateTopicPolicyTest {
 
   class Policy extends CreateTopicPolicy {
 
