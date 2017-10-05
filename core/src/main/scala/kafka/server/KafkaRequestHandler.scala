@@ -105,6 +105,7 @@ class KafkaRequestHandlerPool(val brokerId: Int,
       handler.initiateShutdown()
     for (handler <- runnables)
       handler.awaitShutdown()
+    requestChannel.metrics.close()
     info("shut down completely")
   }
 }

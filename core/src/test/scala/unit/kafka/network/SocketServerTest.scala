@@ -136,7 +136,7 @@ class SocketServerTest extends JUnitSuite {
   def shutdownServerAndMetrics(server: SocketServer): Unit = {
     server.shutdown()
     server.metrics.close()
-    server.closeRequestMetrics()
+    server.requestChannel.metrics.close()
   }
 
   @After
@@ -591,7 +591,7 @@ class SocketServerTest extends JUnitSuite {
       .collect { case (k, metric: Meter) => (k.toString, metric.count) }
 
     assertEquals(nonZeroMeters, requestMetricMeters.filter { case (_, value) => value != 0 })
-    server.closeRequestMetrics()
+    server.requestChannel.metrics.close()
     assertEquals(Map.empty, requestMetricMeters)
   }
 

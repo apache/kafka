@@ -547,8 +547,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         if (metrics != null)
           CoreUtils.swallow(metrics.close())
-        if (socketServer != null)
-          CoreUtils.swallow(socketServer.closeRequestMetrics())
         if (brokerTopicStats != null)
           CoreUtils.swallow(brokerTopicStats.close())
 

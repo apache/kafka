@@ -144,10 +144,6 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
     info("Shutdown completed")
   }
 
-  def closeRequestMetrics(): Unit = {
-    requestChannel.metrics.close()
-  }
-
   def boundPort(listenerName: ListenerName): Int = {
     try {
       acceptors(endpoints(listenerName)).serverChannel.socket.getLocalPort
