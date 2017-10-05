@@ -38,6 +38,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -899,10 +900,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 // treat subscribing to empty topic list as the same as unsubscribing
                 this.unsubscribe();
             } else {
+                IllegalArgumentException iae = new IllegalArgumentException("Detected issues with topic names in topic partitions to assign:");
                 for (String topic : topics) {
-                    if (topic == null || topic.trim().isEmpty())
-                        throw new IllegalArgumentException("Topic collection to subscribe to cannot contain null or empty topic");
+                    try {
+                        Topic.validate(topic);
+                    } catch (Exception e) {
+                        iae.addSuppressed(e);
+                    }
                 }
+
+                if (iae.getSuppressed().length > 0)
+                    throw iae;
 
                 throwIfNoAssignorsConfigured();
 
@@ -1047,13 +1055,20 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             } else if (partitions.isEmpty()) {
                 this.unsubscribe();
             } else {
+                IllegalArgumentException iae = new IllegalArgumentException("Detected issues with topic names in topic partitions to assign:");
                 Set<String> topics = new HashSet<>();
                 for (TopicPartition tp : partitions) {
                     String topic = (tp != null) ? tp.topic() : null;
-                    if (topic == null || topic.trim().isEmpty())
-                        throw new IllegalArgumentException("Topic partitions to assign to cannot have null or empty topic");
+                    try {
+                        Topic.validate(topic);
+                    } catch (Exception e) {
+                        iae.addSuppressed(e);
+                    }
                     topics.add(topic);
                 }
+
+                if (iae.getSuppressed().length > 0)
+                    throw iae;
 
                 // make sure the offsets of topic partitions the consumer is unsubscribing from
                 // are committed since there will be no following rebalance

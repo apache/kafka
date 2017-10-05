@@ -34,6 +34,8 @@ public class Topic {
     private static final int MAX_NAME_LENGTH = 249;
 
     public static void validate(String topic) {
+        if (topic == null)
+            throw new InvalidTopicException("Topic name is illegal, it can't be null");
         if (topic.isEmpty())
             throw new InvalidTopicException("Topic name is illegal, it can't be empty");
         if (topic.equals(".") || topic.equals(".."))

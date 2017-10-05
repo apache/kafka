@@ -44,7 +44,7 @@ public class TopicTest {
     public void shouldThrowOnInvalidTopicNames() {
         char[] longString = new char[250];
         Arrays.fill(longString, 'a');
-        String[] invalidTopicNames = {"", "foo bar", "..", "foo:bar", "foo=bar", ".", new String(longString)};
+        String[] invalidTopicNames = {"", "foo bar", "..", "foo:bar", "foo=bar", ".", new String(longString), null};
 
         for (String topicName : invalidTopicNames) {
             try {
