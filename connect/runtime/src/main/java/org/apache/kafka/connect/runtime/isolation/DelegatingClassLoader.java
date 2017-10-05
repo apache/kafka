@@ -229,10 +229,17 @@ public class DelegatingClassLoader extends URLClassLoader {
                         Iterator<Driver> driversIterator = loadedDrivers.iterator();
                         try {
                             while (driversIterator.hasNext()) {
-                                driversIterator.next();
+                                Driver driver = driversIterator.next();
+                                log.debug(
+                                        "Registered java.sql.Driver: {} to java.sql.DriverManager",
+                                        driver
+                                );
                             }
                         } catch (Throwable t) {
-                            // Do nothing
+                            log.debug(
+                                    "Ignoring java.sql.Driver classes listed in resources but not"
+                                            + " present in class loader's classpath"
+                            );
                         }
                         return null;
                     }
