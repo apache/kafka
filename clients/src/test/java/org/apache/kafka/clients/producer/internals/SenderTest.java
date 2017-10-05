@@ -1128,9 +1128,9 @@ public class SenderTest {
 
         assertEquals(1, client.inFlightRequestCount());
 
-        Map<TopicPartition, OffsetAndError> responses = new HashMap<>();
-        responses.put(tp0, new OffsetAndError(-1, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER));
+        Map<TopicPartition, OffsetAndError> responses = new LinkedHashMap<>();
         responses.put(tp1, new OffsetAndError(-1, Errors.NOT_LEADER_FOR_PARTITION));
+        responses.put(tp0, new OffsetAndError(-1, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER));
         client.respond(produceResponse(responses));
         sender.run(time.milliseconds());
         assertTrue(failedResponse.isDone());
@@ -1174,9 +1174,9 @@ public class SenderTest {
 
         assertEquals(1, client.inFlightRequestCount());
 
-        Map<TopicPartition, OffsetAndError> responses = new HashMap<>();
-        responses.put(tp0, new OffsetAndError(-1, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER));
+        Map<TopicPartition, OffsetAndError> responses = new LinkedHashMap<>();
         responses.put(tp1, new OffsetAndError(-1, Errors.NOT_LEADER_FOR_PARTITION));
+        responses.put(tp0, new OffsetAndError(-1, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER));
         client.respond(produceResponse(responses));
         sender.run(time.milliseconds());
         assertTrue(failedResponse.isDone());
@@ -1912,7 +1912,7 @@ public class SenderTest {
     }
 
     private ProduceResponse produceResponse(Map<TopicPartition, OffsetAndError> responses) {
-        Map<TopicPartition, ProduceResponse.PartitionResponse> partResponses = new HashMap<>();
+        Map<TopicPartition, ProduceResponse.PartitionResponse> partResponses = new LinkedHashMap<>();
         for (Map.Entry<TopicPartition, OffsetAndError> entry : responses.entrySet()) {
             ProduceResponse.PartitionResponse response = new ProduceResponse.PartitionResponse(entry.getValue().error,
                     entry.getValue().offset, RecordBatch.NO_TIMESTAMP, -1);
