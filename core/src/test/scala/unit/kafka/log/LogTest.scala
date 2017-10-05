@@ -677,9 +677,11 @@ class LogTest {
     log.roll(3L)
     assertEquals(Some(3L), log.latestProducerSnapshotOffset)
 
-    // roll triggers a flush at the starting offset of the new segment. we should
-    // retain the snapshots from the active segment and the previous segment, but
-    // the oldest one should be gone
+    // roll triggers a flush at the starting offset of the new segment, we should retain all snapshots
+    assertEquals(Some(1L), log.oldestProducerSnapshotOffset)
+
+    // retain the snapshots from the active segment and the previous segment, delete the oldest one
+    log.deleteSnapshotsAfterRecoveryPointCheckpoint()
     assertEquals(Some(2L), log.oldestProducerSnapshotOffset)
 
     // even if we flush within the active segment, the snapshot should remain

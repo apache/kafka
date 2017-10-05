@@ -515,6 +515,7 @@ class LogManager(logDirs: Seq[File],
     } {
       try {
         checkpoint.write(partitionToLog.mapValues(_.recoveryPoint))
+        logs.values.foreach(_.deleteSnapshotsAfterRecoveryPointCheckpoint())
       } catch {
         case e: IOException =>
           logDirFailureChannel.maybeAddOfflineLogDir(dir.getAbsolutePath, s"Disk error while writing to recovery point " +

@@ -474,7 +474,7 @@ class Log(@volatile var dir: File,
       // To avoid an expensive scan through all of the segments, we take empty snapshots from the start of the
       // last two segments and the last offset. This should avoid the full scan in the case that the log needs
       // truncation.
-      val nextLatestSegmentBaseOffset = Option(segments.lowerEntry(activeSegment.baseOffset)).map(_.getValue.baseOffset)
+      val nextLatestSegmentBaseOffset = lowerSegment(activeSegment.baseOffset).map(_.baseOffset)
       val offsetsToSnapshot = Seq(nextLatestSegmentBaseOffset, Some(activeSegment.baseOffset), Some(lastOffset))
       offsetsToSnapshot.flatten.foreach { offset =>
         producerStateManager.updateMapEndOffset(offset)
@@ -1344,11 +1344,6 @@ class Log(@volatile var dir: File,
       for (segment <- logSegments(this.recoveryPoint, offset))
         segment.flush()
 
-      // now that we have flushed, we can cleanup old producer snapshots. However, it is useful to retain
-      // the snapshots from the recent segments in case we need to truncate and rebuild the producer state.
-      // Otherwise, we would always need to rebuild from the earliest segment.
-      producerStateManager.deleteSnapshotsBefore(minSnapshotOffsetToRetain(offset))
-
       lock synchronized {
         if (offset > this.recoveryPoint) {
           this.recoveryPoint = offset
@@ -1358,16 +1353,31 @@ class Log(@volatile var dir: File,
     }
   }
 
-  def minSnapshotOffsetToRetain(flushedOffset: Long) = {
-    // always retain the producer snapshot from the last two segments. This solves the common case
-    // of truncating to an offset within the active segment, and the rarer case of truncating to the
-    // previous segment just after rolling the new segment.
-    var minSnapshotOffset = activeSegment.baseOffset
-    val previousSegment = segments.lowerEntry(activeSegment.baseOffset)
-    if (previousSegment != null)
-      minSnapshotOffset = previousSegment.getValue.baseOffset
-    math.min(flushedOffset, minSnapshotOffset)
+  /**
+   * Cleanup old producer snapshots after the recovery point is checkpointed. It is useful to retain
+   * the snapshots from the recent segments in case we need to truncate and rebuild the producer state.
+   * Otherwise, we would always need to rebuild from the earliest segment.
+   *
+   * More specifically:
+   *
+   * 1. We always retain the producer snapshot from the last two segments. This solves the common case
+   * of truncating to an offset within the active segment, and the rarer case of truncating to the previous segment.
+   *
+   * 2. We only delete snapshots for offsets less than the recovery point. The recovery point is checkpointed
+   * periodically and it can be behind after a hard shutdown. Since recovery starts from the recovery point, the logic
+   * of rebuilding the producer snapshots in one pass and without loading older segments is simpler if we always
+   * have a producer snapshot for all segments being recovered.
+   */
+  def deleteSnapshotsAfterRecoveryPointCheckpoint(): Unit = {
+    val twoSegmentsMinOffset = lowerSegment(activeSegment.baseOffset).getOrElse(activeSegment).baseOffset
+    // Prefer segment base offset
+    val recoveryPointOffset = lowerSegment(recoveryPoint).map(_.baseOffset).getOrElse(recoveryPoint)
+    val minOffsetToRetain = math.min(recoveryPointOffset, twoSegmentsMinOffset)
+    producerStateManager.deleteSnapshotsBefore(minOffsetToRetain)
   }
+
+  private def lowerSegment(offset: Long): Option[LogSegment] =
+    Option(segments.lowerEntry(offset)).map(_.getValue)
 
   /**
    * Completely delete this log directory and all contents from the file system with no delay
