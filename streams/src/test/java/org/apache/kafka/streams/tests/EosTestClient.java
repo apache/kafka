@@ -53,7 +53,7 @@ public class EosTestClient extends SmokeTestUtil {
             @Override
             public void run() {
                 isRunning = false;
-                streams.close(TimeUnit.SECONDS.toMillis(60), TimeUnit.SECONDS);
+                streams.close(TimeUnit.SECONDS.toMillis(300), TimeUnit.SECONDS);
                 // do not remove these printouts since they are needed for health scripts
                 if (!uncaughtException) {
                     System.out.println(System.currentTimeMillis());
