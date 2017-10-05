@@ -21,10 +21,7 @@ import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
-
 
 /**
  * A policy that is enforced on topic creation, alteration and deletion,
@@ -41,25 +38,28 @@ import java.util.Set;
  */
 public interface TopicManagementPolicy  extends Configurable, AutoCloseable {
 
-    static interface AbstractRequestMetadata {
+    /**
+     * Metadata common to all requests about topics.
+     */
+    interface AbstractRequestMetadata {
 
         /**
          * The topic the action is being performed upon.
          */
-        public String topic();
+        String topic();
 
         /**
          * The authenticated principal making the request, or null if the session is not authenticated.
          */
-        public KafkaPrincipal principal();
+        KafkaPrincipal principal();
     }
 
-
-    static interface CreateTopicRequest extends AbstractRequestMetadata {
+    /** Represents a request to create a topic. */
+    interface CreateTopicRequest extends AbstractRequestMetadata {
         /**
          * The requested state of the topic to be created.
          */
-        public TopicState requestedState();
+        RequestTopicState requestedState();
     }
 
     /**
@@ -77,11 +77,12 @@ public interface TopicManagementPolicy  extends Configurable, AutoCloseable {
      */
     void validateCreateTopic(CreateTopicRequest requestMetadata, ClusterState clusterState) throws PolicyViolationException;
 
-    static interface AlterTopicRequest extends AbstractRequestMetadata {
+    /** Represents a request to alter an existing topic. */
+    interface AlterTopicRequest extends AbstractRequestMetadata {
         /**
          * The state the topic will have after the alteration.
          */
-        public TopicState requestedState();
+        RequestTopicState requestedState();
     }
 
     /**
@@ -101,10 +102,8 @@ public interface TopicManagementPolicy  extends Configurable, AutoCloseable {
      */
     void validateAlterTopic(AlterTopicRequest requestMetadata, ClusterState clusterState) throws PolicyViolationException;
 
-    /**
-     * Parameters for a request to delete the given topic.
-     */
-    static interface DeleteTopicRequest extends AbstractRequestMetadata {
+    /** Represents a request to delete an existing topic. */
+    interface DeleteTopicRequest extends AbstractRequestMetadata {
     }
 
     /**
@@ -124,10 +123,8 @@ public interface TopicManagementPolicy  extends Configurable, AutoCloseable {
      */
     void validateDeleteTopic(DeleteTopicRequest requestMetadata, ClusterState clusterState) throws PolicyViolationException;
 
-    /**
-     * Parameters for a request to delete records from the topic.
-     */
-    static interface DeleteRecordsRequest extends AbstractRequestMetadata {
+    /** Represents a request to delete some records from an existing topic. */
+    interface DeleteRecordsRequest extends AbstractRequestMetadata {
 
         /**
          * Returns a map of topic partitions and the corresponding offset of the last message

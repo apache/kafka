@@ -33,6 +33,7 @@ public interface TopicState {
     /**
      * The replication factor of the topic. More precisely, the number of assigned replicas for partition 0.
      * // TODO what about during reassignment
+     * // TODO Why is this a boxed Short?
      */
     Short replicationFactor();
 
@@ -46,7 +47,7 @@ public interface TopicState {
     /**
      * The topic config.
      */
-    Map<String,String> configs();
+    Map<String, String> configs();
 
     /**
      * Returns whether the topic is marked for deletion.
