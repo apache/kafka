@@ -19,8 +19,8 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
+import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.JmxReporter;
-import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
@@ -68,9 +68,11 @@ public class ConnectMetrics {
         this.time = time;
 
         MetricConfig metricConfig = new MetricConfig().samples(config.getInt(CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG))
-                                            .timeWindow(config.getLong(CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
-                                            .recordLevel(Sensor.RecordingLevel.forName(config.getString(CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG)));
-        List<MetricsReporter> reporters = config.getConfiguredInstances(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class);
+                                                      .timeWindow(config.getLong(CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG),
+                                                                  TimeUnit.MILLISECONDS).recordLevel(
+                        Sensor.RecordingLevel.forName(config.getString(CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG)));
+        List<MetricsReporter> reporters = config.getConfiguredInstances(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG,
+                                                                        MetricsReporter.class);
         reporters.add(new JmxReporter(JMX_PREFIX));
         this.metrics = new Metrics(metricConfig, reporters, time);
         LOG.debug("Registering Connect metrics with JMX for worker '{}'", workerId);
@@ -121,7 +123,8 @@ public class ConnectMetrics {
         if (group == null) {
             group = new MetricGroup(groupId);
             MetricGroup previous = groupsByName.putIfAbsent(groupId, group);
-            if (previous != null) group = previous;
+            if (previous != null)
+                group = previous;
         }
         return group;
     }
@@ -204,7 +207,8 @@ public class ConnectMetrics {
 
         @Override
         public boolean equals(Object obj) {
-            if (obj == this) return true;
+            if (obj == this)
+                return true;
             if (obj instanceof MetricGroupId) {
                 MetricGroupId that = (MetricGroupId) obj;
                 return this.groupName.equals(that.groupName) && this.tags.equals(that.tags);
@@ -290,19 +294,38 @@ public class ConnectMetrics {
         }
 
         /**
-         * Add to this group an indicator metric with a function that will be used to obtain the indicator state.
+         * Add to this group an indicator metric with a function that returns the current value.
          *
          * @param nameTemplate the name template for the metric; may not be null
-         * @param predicate    the predicate function used to determine the indicator state; may not be null
+         * @param supplier     the function used to determine the literal value of the metric; may not be null
          * @throws IllegalArgumentException if the name is not valid
          */
-        public void addIndicatorMetric(MetricNameTemplate nameTemplate, final IndicatorPredicate predicate) {
+        public <T> void addValueMetric(MetricNameTemplate nameTemplate, final LiteralSupplier<T> supplier) {
             MetricName metricName = metricName(nameTemplate);
             if (metrics().metric(metricName) == null) {
-                metrics().addMetric(metricName, new Measurable() {
+                metrics().addMetric(metricName, new Gauge<T>() {
                     @Override
-                    public double measure(MetricConfig config, long now) {
-                        return predicate.matches() ? 1.0d : 0.0d;
+                    public T value(MetricConfig config, long now) {
+                        return supplier.metricValue(now);
+                    }
+                });
+            }
+        }
+
+        /**
+         * Add to this group an indicator metric that always returns the specified value.
+         *
+         * @param nameTemplate the name template for the metric; may not be null
+         * @param value        the value; may not be null
+         * @throws IllegalArgumentException if the name is not valid
+         */
+        public <T> void addImmutableValueMetric(MetricNameTemplate nameTemplate, final T value) {
+            MetricName metricName = metricName(nameTemplate);
+            if (metrics().metric(metricName) == null) {
+                metrics().addMetric(metricName, new Gauge<T>() {
+                    @Override
+                    public T value(MetricConfig config, long now) {
+                        return value;
                     }
                 });
             }
@@ -369,7 +392,8 @@ public class ConnectMetrics {
         public synchronized Sensor sensor(String name, MetricConfig config, Sensor.RecordingLevel recordingLevel, Sensor... parents) {
             // We need to make sure that all sensor names are unique across all groups, so use the sensor prefix
             Sensor result = metrics.sensor(sensorPrefix + name, config, Long.MAX_VALUE, recordingLevel, parents);
-            if (result != null) sensorNames.add(result.name());
+            if (result != null)
+                sensorNames.add(result.name());
             return result;
         }
 
@@ -390,16 +414,17 @@ public class ConnectMetrics {
     }
 
     /**
-     * A simple functional interface that determines whether an indicator metric is true.
+     * A simple functional interface that returns a literal value.
      */
-    public interface IndicatorPredicate {
+    public interface LiteralSupplier<T> {
 
         /**
-         * Return whether the indicator metric is true.
+         * Return the literal value for the metric.
          *
-         * @return true if the indicator metric is satisfied, or false otherwise
+         * @param now the current time in milliseconds
+         * @return the literal metric value; may not be null
          */
-        boolean matches();
+        T metricValue(long now);
     }
 
     /**

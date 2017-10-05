@@ -615,12 +615,12 @@ public class WorkerSourceTaskTest extends ThreadedTest {
             group.recordPoll(100, 1000 + i * 100);
             group.recordWrite(10);
         }
-        assertEquals(1900.0, metrics.currentMetricValue(group.metricGroup(), "poll-batch-max-time-ms"), 0.001d);
-        assertEquals(1450.0, metrics.currentMetricValue(group.metricGroup(), "poll-batch-avg-time-ms"), 0.001d);
-        assertEquals(33.333, metrics.currentMetricValue(group.metricGroup(), "source-record-poll-rate"), 0.001d);
-        assertEquals(1000, metrics.currentMetricValue(group.metricGroup(), "source-record-poll-total"), 0.001d);
-        assertEquals(3.3333, metrics.currentMetricValue(group.metricGroup(), "source-record-write-rate"), 0.001d);
-        assertEquals(100, metrics.currentMetricValue(group.metricGroup(), "source-record-write-total"), 0.001d);
+        assertEquals(1900.0, metrics.currentMetricValueAsDouble(group.metricGroup(), "poll-batch-max-time-ms"), 0.001d);
+        assertEquals(1450.0, metrics.currentMetricValueAsDouble(group.metricGroup(), "poll-batch-avg-time-ms"), 0.001d);
+        assertEquals(33.333, metrics.currentMetricValueAsDouble(group.metricGroup(), "source-record-poll-rate"), 0.001d);
+        assertEquals(1000, metrics.currentMetricValueAsDouble(group.metricGroup(), "source-record-poll-total"), 0.001d);
+        assertEquals(3.3333, metrics.currentMetricValueAsDouble(group.metricGroup(), "source-record-write-rate"), 0.001d);
+        assertEquals(100, metrics.currentMetricValueAsDouble(group.metricGroup(), "source-record-write-total"), 0.001d);
     }
 
     private CountDownLatch expectPolls(int minimum, final AtomicInteger count) throws InterruptedException {
@@ -795,19 +795,19 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     private void assertPollMetrics(int minimumPollCountExpected) {
         MetricGroup sourceTaskGroup = workerTask.sourceTaskMetricsGroup().metricGroup();
         MetricGroup taskGroup = workerTask.taskMetricsGroup().metricGroup();
-        double pollRate = metrics.currentMetricValue(sourceTaskGroup, "source-record-poll-rate");
-        double pollTotal = metrics.currentMetricValue(sourceTaskGroup, "source-record-poll-total");
+        double pollRate = metrics.currentMetricValueAsDouble(sourceTaskGroup, "source-record-poll-rate");
+        double pollTotal = metrics.currentMetricValueAsDouble(sourceTaskGroup, "source-record-poll-total");
         if (minimumPollCountExpected > 0) {
-            assertEquals(RECORDS.size(), metrics.currentMetricValue(taskGroup, "batch-size-max"), 0.000001d);
-            assertEquals(RECORDS.size(), metrics.currentMetricValue(taskGroup, "batch-size-avg"), 0.000001d);
+            assertEquals(RECORDS.size(), metrics.currentMetricValueAsDouble(taskGroup, "batch-size-max"), 0.000001d);
+            assertEquals(RECORDS.size(), metrics.currentMetricValueAsDouble(taskGroup, "batch-size-avg"), 0.000001d);
             assertTrue(pollRate > 0.0d);
         } else {
             assertTrue(pollRate == 0.0d);
         }
         assertTrue(pollTotal >= minimumPollCountExpected);
 
-        double writeRate = metrics.currentMetricValue(sourceTaskGroup, "source-record-write-rate");
-        double writeTotal = metrics.currentMetricValue(sourceTaskGroup, "source-record-write-total");
+        double writeRate = metrics.currentMetricValueAsDouble(sourceTaskGroup, "source-record-write-rate");
+        double writeTotal = metrics.currentMetricValueAsDouble(sourceTaskGroup, "source-record-write-total");
         if (minimumPollCountExpected > 0) {
             assertTrue(writeRate > 0.0d);
         } else {
@@ -815,14 +815,14 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         }
         assertTrue(writeTotal >= minimumPollCountExpected);
 
-        double pollBatchTimeMax = metrics.currentMetricValue(sourceTaskGroup, "poll-batch-max-time-ms");
-        double pollBatchTimeAvg = metrics.currentMetricValue(sourceTaskGroup, "poll-batch-avg-time-ms");
+        double pollBatchTimeMax = metrics.currentMetricValueAsDouble(sourceTaskGroup, "poll-batch-max-time-ms");
+        double pollBatchTimeAvg = metrics.currentMetricValueAsDouble(sourceTaskGroup, "poll-batch-avg-time-ms");
         if (minimumPollCountExpected > 0) {
             assertTrue(pollBatchTimeMax >= 0.0d);
         }
         assertTrue(pollBatchTimeAvg >= 0.0d);
-        double activeCount = metrics.currentMetricValue(sourceTaskGroup, "source-record-active-count");
-        double activeCountMax = metrics.currentMetricValue(sourceTaskGroup, "source-record-active-count-max");
+        double activeCount = metrics.currentMetricValueAsDouble(sourceTaskGroup, "source-record-active-count");
+        double activeCountMax = metrics.currentMetricValueAsDouble(sourceTaskGroup, "source-record-active-count-max");
         assertEquals(0, activeCount, 0.000001d);
         if (minimumPollCountExpected > 0) {
             assertEquals(RECORDS.size(), activeCountMax, 0.000001d);

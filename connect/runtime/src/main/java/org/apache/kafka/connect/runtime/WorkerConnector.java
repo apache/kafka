@@ -16,16 +16,18 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
-import org.apache.kafka.connect.runtime.ConnectMetrics.IndicatorPredicate;
+import org.apache.kafka.connect.runtime.ConnectMetrics.LiteralSupplier;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.sink.SinkConnector;
+import org.apache.kafka.connect.source.SourceConnector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Container for connectors which is responsible for managing their lifecycle (e.g. handling startup,
@@ -199,6 +201,18 @@ public class WorkerConnector {
         return SinkConnector.class.isAssignableFrom(connector.getClass());
     }
 
+    public boolean isSourceConnector() {
+        return SourceConnector.class.isAssignableFrom(connector.getClass());
+    }
+
+    protected String connectorType() {
+        if (isSinkConnector())
+            return "sink";
+        if (isSourceConnector())
+            return "source";
+        return "unknown";
+    }
+
     public Connector connector() {
         return connector;
     }
@@ -224,22 +238,23 @@ public class WorkerConnector {
         private final ConnectorStatus.Listener delegate;
 
         public ConnectorMetricsGroup(ConnectMetrics connectMetrics, AbstractStatus.State initialState, ConnectorStatus.Listener delegate) {
+            Objects.requireNonNull(connectMetrics);
+            Objects.requireNonNull(connector);
+            Objects.requireNonNull(initialState);
+            Objects.requireNonNull(delegate);
             this.delegate = delegate;
             this.state = initialState;
             ConnectMetricsRegistry registry = connectMetrics.registry();
             this.metricGroup = connectMetrics.group(registry.connectorGroupName(),
                     registry.connectorTagName(), connName);
 
-            addStateMetric(AbstractStatus.State.RUNNING, registry.connectorStatusRunning);
-            addStateMetric(AbstractStatus.State.PAUSED, registry.connectorStatusPaused);
-            addStateMetric(AbstractStatus.State.FAILED, registry.connectorStatusFailed);
-        }
-
-        private void addStateMetric(final AbstractStatus.State matchingState, MetricNameTemplate nameTemplate) {
-            metricGroup.addIndicatorMetric(nameTemplate, new IndicatorPredicate() {
+            metricGroup.addImmutableValueMetric(registry.connectorType, connectorType());
+            metricGroup.addImmutableValueMetric(registry.connectorClass, connector.getClass().getName());
+            metricGroup.addImmutableValueMetric(registry.connectorVersion, connector.version());
+            metricGroup.addValueMetric(registry.connectorStatus, new LiteralSupplier<String>() {
                 @Override
-                public boolean matches() {
-                    return state == matchingState;
+                public String metricValue(long now) {
+                    return state.toString().toLowerCase(Locale.getDefault());
                 }
             });
         }

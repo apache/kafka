@@ -56,6 +56,10 @@ public class MockConnectMetrics extends ConnectMetrics {
         this(new MockTime());
     }
 
+    public MockConnectMetrics(org.apache.kafka.common.utils.MockTime time) {
+        super("mock", new WorkerConfig(WorkerConfig.baseConfigDef(), DEFAULT_WORKER_CONFIG), time);
+    }
+
     public MockConnectMetrics(MockTime time) {
         super("mock", new WorkerConfig(WorkerConfig.baseConfigDef(), DEFAULT_WORKER_CONFIG), time);
     }
@@ -73,28 +77,81 @@ public class MockConnectMetrics extends ConnectMetrics {
      * @param name        the name of the metric
      * @return the current value of the metric
      */
-    public double currentMetricValue(MetricGroup metricGroup, String name) {
+    public Object currentMetricValue(MetricGroup metricGroup, String name) {
+        return currentMetricValue(this, metricGroup, name);
+    }
+
+    /**
+     * Get the current value of the named metric, which may have already been removed from the
+     * {@link org.apache.kafka.common.metrics.Metrics} but will have been captured before it was removed.
+     *
+     * @param metricGroup the metric metricGroup that contained the metric
+     * @param name        the name of the metric
+     * @return the current value of the metric
+     */
+    public double currentMetricValueAsDouble(MetricGroup metricGroup, String name) {
+        Object value = currentMetricValue(metricGroup, name);
+        return value instanceof Double ? ((Double) value).doubleValue() : Double.NaN;
+    }
+
+    /**
+     * Get the current value of the named metric, which may have already been removed from the
+     * {@link org.apache.kafka.common.metrics.Metrics} but will have been captured before it was removed.
+     *
+     * @param metricGroup the metric metricGroup that contained the metric
+     * @param name        the name of the metric
+     * @return the current value of the metric
+     */
+    public String currentMetricValueAsString(MetricGroup metricGroup, String name) {
+        Object value = currentMetricValue(metricGroup, name);
+        return value instanceof String ? (String) value : null;
+    }
+
+    /**
+     * Get the current value of the named metric, which may have already been removed from the
+     * {@link org.apache.kafka.common.metrics.Metrics} but will have been captured before it was removed.
+     *
+     * @param metrics the {@link ConnectMetrics} instance
+     * @param metricGroup the metric metricGroup that contained the metric
+     * @param name        the name of the metric
+     * @return the current value of the metric
+     */
+    public static Object currentMetricValue(ConnectMetrics metrics, MetricGroup metricGroup, String name) {
         MetricName metricName = metricGroup.metricName(name);
-        for (MetricsReporter reporter : metrics().reporters()) {
+        for (MetricsReporter reporter : metrics.metrics().reporters()) {
             if (reporter instanceof MockMetricsReporter) {
                 return ((MockMetricsReporter) reporter).currentMetricValue(metricName);
             }
         }
-        return Double.NEGATIVE_INFINITY;
+        return null;
     }
 
     /**
-     * Determine if the {@link KafkaMetric} with the specified name exists within the
-     * {@link org.apache.kafka.common.metrics.Metrics} instance.
+     * Get the current value of the named metric, which may have already been removed from the
+     * {@link org.apache.kafka.common.metrics.Metrics} but will have been captured before it was removed.
      *
+     * @param metrics the {@link ConnectMetrics} instance
      * @param metricGroup the metric metricGroup that contained the metric
      * @param name        the name of the metric
-     * @return true if the metric is still register, or false if it has been removed
+     * @return the current value of the metric
      */
-    public boolean metricExists(MetricGroup metricGroup, String name) {
-        MetricName metricName = metricGroup.metricName(name);
-        KafkaMetric metric = metricGroup.metrics().metric(metricName);
-        return metric != null;
+    public static double currentMetricValueAsDouble(ConnectMetrics metrics, MetricGroup metricGroup, String name) {
+        Object value = currentMetricValue(metrics, metricGroup, name);
+        return value instanceof Double ? ((Double) value).doubleValue() : Double.NaN;
+    }
+
+    /**
+     * Get the current value of the named metric, which may have already been removed from the
+     * {@link org.apache.kafka.common.metrics.Metrics} but will have been captured before it was removed.
+     *
+     * @param metrics the {@link ConnectMetrics} instance
+     * @param metricGroup the metric metricGroup that contained the metric
+     * @param name        the name of the metric
+     * @return the current value of the metric
+     */
+    public static String currentMetricValueAsString(ConnectMetrics metrics, MetricGroup metricGroup, String name) {
+        Object value = currentMetricValue(metrics, metricGroup, name);
+        return value instanceof String ? (String) value : null;
     }
 
     public static class MockMetricsReporter implements MetricsReporter {
@@ -136,10 +193,9 @@ public class MockConnectMetrics extends ConnectMetrics {
          * @param metricName the name of the metric that was registered most recently
          * @return the current value of the metric
          */
-        @SuppressWarnings("deprecation")
-        public double currentMetricValue(MetricName metricName) {
+        public Object currentMetricValue(MetricName metricName) {
             KafkaMetric metric = metricsByName.get(metricName);
-            return metric != null ? metric.value() : Double.NaN;
+            return metric != null ? metric.metricValue() : null;
         }
     }
 }

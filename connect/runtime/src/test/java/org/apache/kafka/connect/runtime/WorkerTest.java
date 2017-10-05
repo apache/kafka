@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
@@ -27,6 +28,8 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.json.JsonConverter;
+import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
+import org.apache.kafka.connect.runtime.MockConnectMetrics.MockMetricsReporter;
 import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -43,7 +46,6 @@ import org.apache.kafka.connect.util.MockTime;
 import org.apache.kafka.connect.util.ThreadedTest;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -76,7 +78,6 @@ public class WorkerTest extends ThreadedTest {
 
     private WorkerConfig config;
     private Worker worker;
-    private ConnectMetrics metrics;
 
     @Mock
     private Plugins plugins;
@@ -103,15 +104,10 @@ public class WorkerTest extends ThreadedTest {
         workerProps.put("internal.key.converter.schemas.enable", "false");
         workerProps.put("internal.value.converter.schemas.enable", "false");
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
+        workerProps.put(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
         config = new StandaloneConfig(workerProps);
-        metrics = new MockConnectMetrics();
 
         PowerMock.mockStatic(Plugins.class);
-    }
-
-    @After
-    public void tearDown() {
-        if (metrics != null) metrics.stop();
     }
 
     @Test
@@ -133,6 +129,8 @@ public class WorkerTest extends ThreadedTest {
         props.put(ConnectorConfig.TASKS_MAX_CONFIG, "1");
         props.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_ID);
         props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, WorkerTestConnector.class.getName());
+
+        EasyMock.expect(connector.version()).andReturn("1.0");
 
         EasyMock.expect(plugins.compareAndSwapLoaders(connector))
                 .andReturn(delegatingLoader)
@@ -171,10 +169,15 @@ public class WorkerTest extends ThreadedTest {
         } catch (ConnectException e) {
             // expected
         }
+        assertStatistics(worker, 1, 0);
+        assertStartupStatistics(worker, 1, 0, 0, 0);
         worker.stopConnector(CONNECTOR_ID);
+        assertStatistics(worker, 0, 0);
+        assertStartupStatistics(worker, 1, 0, 0, 0);
         assertEquals(Collections.emptySet(), worker.connectorNames());
         // Nothing should be left, so this should effectively be a nop
         worker.stop();
+        assertStatistics(worker, 0, 0);
 
         PowerMock.verifyAll();
     }
@@ -210,11 +213,17 @@ public class WorkerTest extends ThreadedTest {
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore);
         worker.start();
 
+        assertStatistics(worker, 0, 0);
         assertFalse(worker.startConnector(CONNECTOR_ID, props, ctx, connectorStatusListener, TargetState.STARTED));
 
+        assertStartupStatistics(worker, 1, 1, 0, 0);
         assertEquals(Collections.emptySet(), worker.connectorNames());
 
+        assertStatistics(worker, 0, 0);
+        assertStartupStatistics(worker, 1, 1, 0, 0);
         assertFalse(worker.stopConnector(CONNECTOR_ID));
+        assertStatistics(worker, 0, 0);
+        assertStartupStatistics(worker, 1, 1, 0, 0);
 
         PowerMock.verifyAll();
     }
@@ -238,6 +247,7 @@ public class WorkerTest extends ThreadedTest {
         props.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_ID);
         props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, "WorkerTestConnector");
 
+        EasyMock.expect(connector.version()).andReturn("1.0");
         EasyMock.expect(plugins.compareAndSwapLoaders(connector))
                 .andReturn(delegatingLoader)
                 .times(2);
@@ -267,14 +277,21 @@ public class WorkerTest extends ThreadedTest {
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore);
         worker.start();
 
+        assertStatistics(worker, 0, 0);
         assertEquals(Collections.emptySet(), worker.connectorNames());
         worker.startConnector(CONNECTOR_ID, props, ctx, connectorStatusListener, TargetState.STARTED);
         assertEquals(new HashSet<>(Arrays.asList(CONNECTOR_ID)), worker.connectorNames());
+        assertStatistics(worker, 1, 0);
+        assertStartupStatistics(worker, 1, 0, 0, 0);
 
         worker.stopConnector(CONNECTOR_ID);
+        assertStatistics(worker, 0, 0);
+        assertStartupStatistics(worker, 1, 0, 0, 0);
         assertEquals(Collections.emptySet(), worker.connectorNames());
         // Nothing should be left, so this should effectively be a nop
         worker.stop();
+        assertStatistics(worker, 0, 0);
+        assertStartupStatistics(worker, 1, 0, 0, 0);
 
         PowerMock.verifyAll();
     }
@@ -298,6 +315,7 @@ public class WorkerTest extends ThreadedTest {
         props.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_ID);
         props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, "WorkerTest");
 
+        EasyMock.expect(connector.version()).andReturn("1.0");
         EasyMock.expect(plugins.compareAndSwapLoaders(connector))
                 .andReturn(delegatingLoader)
                 .times(2);
@@ -327,14 +345,18 @@ public class WorkerTest extends ThreadedTest {
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore);
         worker.start();
 
+        assertStatistics(worker, 0, 0);
         assertEquals(Collections.emptySet(), worker.connectorNames());
         worker.startConnector(CONNECTOR_ID, props, ctx, connectorStatusListener, TargetState.STARTED);
         assertEquals(new HashSet<>(Arrays.asList(CONNECTOR_ID)), worker.connectorNames());
+        assertStatistics(worker, 1, 0);
 
         worker.stopConnector(CONNECTOR_ID);
+        assertStatistics(worker, 0, 0);
         assertEquals(Collections.emptySet(), worker.connectorNames());
         // Nothing should be left, so this should effectively be a nop
         worker.stop();
+        assertStatistics(worker, 0, 0);
 
         PowerMock.verifyAll();
     }
@@ -374,6 +396,7 @@ public class WorkerTest extends ThreadedTest {
         props.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_ID);
         props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, WorkerTestConnector.class.getName());
 
+        EasyMock.expect(connector.version()).andReturn("1.0");
         EasyMock.expect(plugins.compareAndSwapLoaders(connector))
                 .andReturn(delegatingLoader)
                 .times(3);
@@ -409,8 +432,10 @@ public class WorkerTest extends ThreadedTest {
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore);
         worker.start();
 
+        assertStatistics(worker, 0, 0);
         assertEquals(Collections.emptySet(), worker.connectorNames());
         worker.startConnector(CONNECTOR_ID, props, ctx, connectorStatusListener, TargetState.STARTED);
+        assertStatistics(worker, 1, 0);
         assertEquals(new HashSet<>(Arrays.asList(CONNECTOR_ID)), worker.connectorNames());
         try {
             worker.startConnector(CONNECTOR_ID, props, ctx, connectorStatusListener, TargetState.STARTED);
@@ -426,10 +451,15 @@ public class WorkerTest extends ThreadedTest {
         assertEquals(2, taskConfigs.size());
         assertEquals(expectedTaskProps, taskConfigs.get(0));
         assertEquals(expectedTaskProps, taskConfigs.get(1));
+        assertStatistics(worker, 1, 0);
+        assertStartupStatistics(worker, 1, 0, 0, 0);
         worker.stopConnector(CONNECTOR_ID);
+        assertStatistics(worker, 0, 0);
+        assertStartupStatistics(worker, 1, 0, 0, 0);
         assertEquals(Collections.emptySet(), worker.connectorNames());
         // Nothing should be left, so this should effectively be a nop
         worker.stop();
+        assertStatistics(worker, 0, 0);
 
         PowerMock.verifyAll();
     }
@@ -507,13 +537,21 @@ public class WorkerTest extends ThreadedTest {
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore);
         worker.start();
+        assertStatistics(worker, 0, 0);
+        assertStartupStatistics(worker, 0, 0, 0, 0);
         assertEquals(Collections.emptySet(), worker.taskIds());
         worker.startTask(TASK_ID, anyConnectorConfigMap(), origProps, taskStatusListener, TargetState.STARTED);
+        assertStatistics(worker, 0, 1);
+        assertStartupStatistics(worker, 0, 0, 1, 0);
         assertEquals(new HashSet<>(Arrays.asList(TASK_ID)), worker.taskIds());
         worker.stopAndAwaitTask(TASK_ID);
+        assertStatistics(worker, 0, 0);
+        assertStartupStatistics(worker, 0, 0, 1, 0);
         assertEquals(Collections.emptySet(), worker.taskIds());
         // Nothing should be left, so this should effectively be a nop
         worker.stop();
+        assertStatistics(worker, 0, 0);
+        assertStartupStatistics(worker, 0, 0, 1, 0);
 
         PowerMock.verifyAll();
     }
@@ -550,9 +588,14 @@ public class WorkerTest extends ThreadedTest {
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore);
         worker.start();
+        assertStatistics(worker, 0, 0);
+        assertStartupStatistics(worker, 0, 0, 0, 0);
 
         assertFalse(worker.startTask(TASK_ID, anyConnectorConfigMap(), origProps, taskStatusListener, TargetState.STARTED));
+        assertStartupStatistics(worker, 0, 0, 1, 1);
 
+        assertStatistics(worker, 0, 0);
+        assertStartupStatistics(worker, 0, 0, 1, 1);
         assertEquals(Collections.emptySet(), worker.taskIds());
 
         PowerMock.verifyAll();
@@ -632,8 +675,11 @@ public class WorkerTest extends ThreadedTest {
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore);
         worker.start();
+        assertStatistics(worker, 0, 0);
         worker.startTask(TASK_ID, anyConnectorConfigMap(), origProps, taskStatusListener, TargetState.STARTED);
+        assertStatistics(worker, 0, 1);
         worker.stop();
+        assertStatistics(worker, 0, 0);
 
         PowerMock.verifyAll();
     }
@@ -712,6 +758,7 @@ public class WorkerTest extends ThreadedTest {
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore);
         worker.start();
+        assertStatistics(worker, 0, 0);
         assertEquals(Collections.emptySet(), worker.taskIds());
         Map<String, String> connProps = anyConnectorConfigMap();
         connProps.put(ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
@@ -719,17 +766,55 @@ public class WorkerTest extends ThreadedTest {
         connProps.put(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
         connProps.put("value.converter.extra.config", "bar");
         worker.startTask(TASK_ID, connProps, origProps, taskStatusListener, TargetState.STARTED);
+        assertStatistics(worker, 0, 1);
         assertEquals(new HashSet<>(Arrays.asList(TASK_ID)), worker.taskIds());
         worker.stopAndAwaitTask(TASK_ID);
+        assertStatistics(worker, 0, 0);
         assertEquals(Collections.emptySet(), worker.taskIds());
         // Nothing should be left, so this should effectively be a nop
         worker.stop();
+        assertStatistics(worker, 0, 0);
 
         // Validate extra configs got passed through to overridden converters
         assertEquals("foo", keyConverter.getValue().configs.get("extra.config"));
         assertEquals("bar", valueConverter.getValue().configs.get("extra.config"));
 
         PowerMock.verifyAll();
+    }
+
+    private void assertStatistics(Worker worker, int connectors, int tasks) {
+        MetricGroup workerMetrics = worker.workerMetricsGroup().metricGroup();
+        assertEquals(connectors, MockConnectMetrics.currentMetricValueAsDouble(worker.metrics(), workerMetrics, "connector-count"), 0.0001d);
+        assertEquals(tasks, MockConnectMetrics.currentMetricValueAsDouble(worker.metrics(), workerMetrics, "task-count"), 0.0001d);
+        assertEquals(tasks, MockConnectMetrics.currentMetricValueAsDouble(worker.metrics(), workerMetrics, "task-count"), 0.0001d);
+    }
+
+    private void assertStartupStatistics(Worker worker, int connectorStartupAttempts, int connectorStartupFailures, int taskStartupAttempts, int taskStartupFailures) {
+        double connectStartupSuccesses = connectorStartupAttempts - connectorStartupFailures;
+        double taskStartupSuccesses = taskStartupAttempts - taskStartupFailures;
+        double connectStartupSuccessPct = 0.0d;
+        double connectStartupFailurePct = 0.0d;
+        double taskStartupSuccessPct = 0.0d;
+        double taskStartupFailurePct = 0.0d;
+        if (connectorStartupAttempts != 0) {
+            connectStartupSuccessPct = connectStartupSuccesses / connectorStartupAttempts;
+            connectStartupFailurePct = (double) connectorStartupFailures / connectorStartupAttempts;
+        }
+        if (taskStartupAttempts != 0) {
+            taskStartupSuccessPct = taskStartupSuccesses / taskStartupAttempts;
+            taskStartupFailurePct = (double) taskStartupFailures / taskStartupAttempts;
+        }
+        MetricGroup workerMetrics = worker.workerMetricsGroup().metricGroup();
+        assertEquals(connectorStartupAttempts, MockConnectMetrics.currentMetricValueAsDouble(worker.metrics(), workerMetrics, "connector-startup-attempts-total"), 0.0001d);
+        assertEquals(connectStartupSuccesses, MockConnectMetrics.currentMetricValueAsDouble(worker.metrics(), workerMetrics, "connector-startup-success-total"), 0.0001d);
+        assertEquals(connectorStartupFailures, MockConnectMetrics.currentMetricValueAsDouble(worker.metrics(), workerMetrics, "connector-startup-failure-total"), 0.0001d);
+        assertEquals(connectStartupSuccessPct, MockConnectMetrics.currentMetricValueAsDouble(worker.metrics(), workerMetrics, "connector-startup-success-percentage"), 0.0001d);
+        assertEquals(connectStartupFailurePct, MockConnectMetrics.currentMetricValueAsDouble(worker.metrics(), workerMetrics, "connector-startup-failure-percentage"), 0.0001d);
+        assertEquals(taskStartupAttempts, MockConnectMetrics.currentMetricValueAsDouble(worker.metrics(), workerMetrics, "task-startup-attempts-total"), 0.0001d);
+        assertEquals(taskStartupSuccesses, MockConnectMetrics.currentMetricValueAsDouble(worker.metrics(), workerMetrics, "task-startup-success-total"), 0.0001d);
+        assertEquals(taskStartupFailures, MockConnectMetrics.currentMetricValueAsDouble(worker.metrics(), workerMetrics, "task-startup-failure-total"), 0.0001d);
+        assertEquals(taskStartupSuccessPct, MockConnectMetrics.currentMetricValueAsDouble(worker.metrics(), workerMetrics, "task-startup-success-percentage"), 0.0001d);
+        assertEquals(taskStartupFailurePct, MockConnectMetrics.currentMetricValueAsDouble(worker.metrics(), workerMetrics, "task-startup-failure-percentage"), 0.0001d);
     }
 
     private void expectStartStorage() {
