@@ -25,7 +25,6 @@ from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
 import random
 
-
 class ReassignPartitionsTest(ProduceConsumeValidateTest):
     """
     These tests validate partition reassignment.
@@ -38,13 +37,18 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         super(ReassignPartitionsTest, self).__init__(test_context=test_context)
 
         self.topic = "test_topic"
-        self.zk = ZookeeperService(test_context, num_nodes=1)
-        self.kafka = KafkaService(test_context, num_nodes=4, zk=self.zk, topics={self.topic: {
-                                                                    "partitions": 20,
-                                                                    "replication-factor": 3,
-                                                                    'configs': {"min.insync.replicas": 2}}
-                                                                })
         self.num_partitions = 20
+        self.zk = ZookeeperService(test_context, num_nodes=1)
+        self.kafka = KafkaService(test_context, num_nodes=4, zk=self.zk,
+                                  server_prop_overides=[["log.retention.check.interval.ms", "6000"]],
+                                  topics={self.topic: {
+                                      "partitions": self.num_partitions,
+                                      "replication-factor": 3,
+                                      'configs': {
+                                          "min.insync.replicas": 3,
+                                          "retention.ms":5000
+                                      }}
+                                  })
         self.timeout_sec = 60
         self.producer_throughput = 1000
         self.num_producers = 1
@@ -93,7 +97,8 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
     @parametrize(security_protocol="PLAINTEXT", bounce_brokers=False)
     def test_reassign_partitions(self, bounce_brokers, security_protocol):
         """Reassign partitions tests.
-        Setup: 1 zk, 3 kafka nodes, 1 topic with partitions=3, replication-factor=3, and min.insync.replicas=2
+        Setup: 1 zk, 4 kafka nodes, 1 topic with partitions=20, replication-factor=3,
+        and min.insync.replicas=3
 
             - Produce messages in the background
             - Consume messages in the background
@@ -106,7 +111,7 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         self.kafka.security_protocol = security_protocol
         self.kafka.interbroker_security_protocol = security_protocol
         new_consumer = False if  self.kafka.security_protocol == "PLAINTEXT" else True
-        self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka, self.topic, throughput=self.producer_throughput)
+        self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka, self.topic, throughput=self.producer_throughput, enable_idempotence=True)
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic, new_consumer=new_consumer, consumer_timeout_ms=60000, message_validator=is_int)
         self.kafka.start()
 
