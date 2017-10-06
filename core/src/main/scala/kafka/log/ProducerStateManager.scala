@@ -40,8 +40,22 @@ class CorruptSnapshotException(msg: String) extends KafkaException(msg)
 // ValidationType and its subtypes define the extent of the validation to perform on a given ProducerAppendInfo instance
 private[log] sealed trait ValidationType
 private[log] object ValidationType {
+
+  /**
+    * This indicates no validation should be performed on the incoming append. This is the case for all appends on
+    * a replica, as well as appends when the producer state is being built from the log.
+    */
   case object None extends ValidationType
+
+  /**
+    * We only validate the epoch (and not the sequence numbers) for offset commit requests coming from the transactional
+    * producer. These appends will not have sequence numbers, so we can't validate them.
+    */
   case object EpochOnly extends ValidationType
+
+  /**
+    * Perform the full validation. This should be used fo regular produce requests coming to the leader.
+    */
   case object Full extends ValidationType
 }
 
@@ -148,9 +162,9 @@ private[log] class ProducerIdEntry(val producerId: Long, val batchMetadata: muta
  *                      be made against the lastest append in the current entry. New appends will replace older appends
  *                      in the current entry so that the space overhead is constant.
  * @param validationType Indicates the extent of validation to perform on the appends on this instance. Offset commits
- *                       coming from the producer should have EpochOnlyValidation. Appends which aren't from a client
- *                       will not be validated at all, and should be set to NoValidation. All other appends should
- *                       have FullValidation.
+ *                       coming from the producer should have ValidationType.EpochOnly. Appends which aren't from a client
+ *                       should have ValidationType.None. Appends coming from a client for produce requests should have
+ *                       ValidationType.Full.
  */
 private[log] class ProducerAppendInfo(val producerId: Long,
                                       currentEntry: ProducerIdEntry,
