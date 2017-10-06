@@ -1369,13 +1369,21 @@ class Log(@volatile var dir: File,
    * periodically and it can be behind after a hard shutdown. Since recovery starts from the recovery point, the logic
    * of rebuilding the producer snapshots in one pass and without loading older segments is simpler if we always
    * have a producer snapshot for all segments being recovered.
+   *
+   * Return the minimum snapshots offset that was retained.
    */
-  def deleteSnapshotsAfterRecoveryPointCheckpoint(): Unit = {
+  def deleteSnapshotsAfterRecoveryPointCheckpoint(): Long = {
+    val minOffsetToRetain = minSnapshotsOffsetToRetain
+    producerStateManager.deleteSnapshotsBefore(minOffsetToRetain)
+    minOffsetToRetain
+  }
+
+  // Visible for testing, see `deleteSnapshotsAfterRecoveryPointCheckpoint()` for details
+  private[log] def minSnapshotsOffsetToRetain: Long = {
     val twoSegmentsMinOffset = lowerSegment(activeSegment.baseOffset).getOrElse(activeSegment).baseOffset
     // Prefer segment base offset
     val recoveryPointOffset = lowerSegment(recoveryPoint).map(_.baseOffset).getOrElse(recoveryPoint)
-    val minOffsetToRetain = math.min(recoveryPointOffset, twoSegmentsMinOffset)
-    producerStateManager.deleteSnapshotsBefore(minOffsetToRetain)
+    math.min(recoveryPointOffset, twoSegmentsMinOffset)
   }
 
   private def lowerSegment(offset: Long): Option[LogSegment] =

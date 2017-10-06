@@ -1019,7 +1019,7 @@ object TestUtils extends Logging {
   /**
    * Create new LogManager instance with default configuration for testing
    */
-  def createLogManager(logDirs: Array[File] = Array.empty[File],
+  def createLogManager(logDirs: Seq[File] = Seq.empty[File],
                        defaultConfig: LogConfig = LogConfig(),
                        cleanerConfig: CleanerConfig = CleanerConfig(enableCleaner = false),
                        time: MockTime = new MockTime()): LogManager = {
