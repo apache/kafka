@@ -1251,7 +1251,7 @@ public class KStreamBuilder extends org.apache.kafka.streams.processor.TopologyB
      * @return a new unique name
      */
     public String newName(final String prefix) {
-        return internalStreamsBuilder.newName(prefix);
+        return internalStreamsBuilder.newProcessorName(prefix);
     }
 
     /**
