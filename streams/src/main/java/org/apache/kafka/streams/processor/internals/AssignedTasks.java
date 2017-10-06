@@ -122,7 +122,7 @@ class AssignedTasks implements RestoringTasks {
             final Map.Entry<TaskId, Task> entry = it.next();
             try {
                 if (!entry.getValue().initialize()) {
-                    log.debug("transitioning {} {} to restoring", taskTypeName, entry.getKey());
+                    log.debug("Transitioning {} {} to restoring", taskTypeName, entry.getKey());
                     addToRestoring(entry.getValue());
                 } else {
                     transitionToRunning(entry.getValue(), readyPartitions);
@@ -140,7 +140,7 @@ class AssignedTasks implements RestoringTasks {
         if (restored.isEmpty()) {
             return Collections.emptySet();
         }
-        log.trace("{} partitions restored for {}", taskTypeName, restored);
+        log.trace("{} changelog partitions that have completed restoring so far: {}", taskTypeName, restored);
         final Set<TopicPartition> resume = new HashSet<>();
         restoredPartitions.addAll(restored);
         for (final Iterator<Map.Entry<TaskId, Task>> it = restoring.entrySet().iterator(); it.hasNext(); ) {
@@ -153,10 +153,10 @@ class AssignedTasks implements RestoringTasks {
                 if (log.isTraceEnabled()) {
                     final HashSet<TopicPartition> outstandingPartitions = new HashSet<>(task.changelogPartitions());
                     outstandingPartitions.removeAll(restoredPartitions);
-                    log.trace("partition restoration not complete for {} {} partitions: {}",
+                    log.trace("{} {} cannot resume processing yet since some of its changelog partitions have not completed restoring: {}",
                               taskTypeName,
                               task.id(),
-                              task.changelogPartitions());
+                              outstandingPartitions);
                 }
             }
         }
