@@ -333,7 +333,7 @@ class Log(@volatile var dir: File,
           error("Could not find offset index file corresponding to log file %s, rebuilding index...".format(segment.log.file.getAbsolutePath))
           recoverSegment(segment)
         }
-        segments.put(startOffset, segment)
+        addSegment(segment)
       }
     }
   }
@@ -397,17 +397,17 @@ class Log(@volatile var dir: File,
     // before the swap file is restored as the new segment file.
     completeSwapOperations(swapFiles)
 
-    if(logSegments.isEmpty) {
+    if (logSegments.isEmpty) {
       // no existing segments, create a new mutable segment beginning at offset 0
-      segments.put(0L, new LogSegment(dir = dir,
-                                      startOffset = 0,
-                                      indexIntervalBytes = config.indexInterval,
-                                      maxIndexSize = config.maxIndexSize,
-                                      rollJitterMs = config.randomSegmentJitter,
-                                      time = time,
-                                      fileAlreadyExists = false,
-                                      initFileSize = this.initFileSize,
-                                      preallocate = config.preallocate))
+      addSegment(new LogSegment(dir = dir,
+        startOffset = 0,
+        indexIntervalBytes = config.indexInterval,
+        maxIndexSize = config.maxIndexSize,
+        rollJitterMs = config.randomSegmentJitter,
+        time = time,
+        fileAlreadyExists = false,
+        initFileSize = this.initFileSize,
+        preallocate = config.preallocate))
     } else if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
       recoverLog()
       // reset the index size of the currently active log segment to allow more entries
@@ -483,7 +483,8 @@ class Log(@volatile var dir: File,
         producerStateManager.takeSnapshot()
       }
     } else {
-      val isEmptyBeforeTruncation = producerStateManager.isEmpty && producerStateManager.mapEndOffset >= lastOffset
+      val nonEmptyBeforeTruncation = !producerStateManager.isEmpty
+      val snapOffsetBeforeTruncation = producerStateManager.mapEndOffset
       producerStateManager.truncateAndReload(logStartOffset, lastOffset, time.milliseconds())
 
       // Only do the potentially expensive reloading if the last snapshot offset is lower than the log end
@@ -492,7 +493,7 @@ class Log(@volatile var dir: File,
       // shouldn't change that fact (although it could cause a producerId to expire earlier than expected),
       // and we can skip the loading. This is an optimization for users which are not yet using
       // idempotent/transactional features yet.
-      if (lastOffset > producerStateManager.mapEndOffset && !isEmptyBeforeTruncation) {
+      if (lastOffset > producerStateManager.mapEndOffset && (lastOffset > snapOffsetBeforeTruncation || nonEmptyBeforeTruncation)) {
         logSegments(producerStateManager.mapEndOffset, lastOffset).foreach { segment =>
           val startOffset = Utils.max(segment.baseOffset, producerStateManager.mapEndOffset, logStartOffset)
           producerStateManager.updateMapEndOffset(startOffset)
@@ -531,7 +532,7 @@ class Log(@volatile var dir: File,
   /**
    * Check if we have the "clean shutdown" file
    */
-  private def hasCleanShutdownFile = new File(dir.getParentFile, CleanShutdownFile).exists()
+  private def hasCleanShutdownFile: Boolean = new File(dir.getParentFile, CleanShutdownFile).exists()
 
   /**
    * The number of segments in the log.
@@ -1380,10 +1381,12 @@ class Log(@volatile var dir: File,
 
   // Visible for testing, see `deleteSnapshotsAfterRecoveryPointCheckpoint()` for details
   private[log] def minSnapshotsOffsetToRetain: Long = {
-    val twoSegmentsMinOffset = lowerSegment(activeSegment.baseOffset).getOrElse(activeSegment).baseOffset
-    // Prefer segment base offset
-    val recoveryPointOffset = lowerSegment(recoveryPoint).map(_.baseOffset).getOrElse(recoveryPoint)
-    math.min(recoveryPointOffset, twoSegmentsMinOffset)
+    lock synchronized {
+      val twoSegmentsMinOffset = lowerSegment(activeSegment.baseOffset).getOrElse(activeSegment).baseOffset
+      // Prefer segment base offset
+      val recoveryPointOffset = lowerSegment(recoveryPoint).map(_.baseOffset).getOrElse(recoveryPoint)
+      math.min(recoveryPointOffset, twoSegmentsMinOffset)
+    }
   }
 
   private def lowerSegment(offset: Long): Option[LogSegment] =
@@ -1493,7 +1496,7 @@ class Log(@volatile var dir: File,
   /**
    * The time this log is last known to have been fully flushed to disk
    */
-  def lastFlushTime(): Long = lastflushedTime.get
+  def lastFlushTime: Long = lastflushedTime.get
 
   /**
    * The active segment that is currently taking appends
@@ -1512,7 +1515,7 @@ class Log(@volatile var dir: File,
   def logSegments(from: Long, to: Long): Iterable[LogSegment] = {
     lock synchronized {
       val floor = segments.floorKey(from)
-      if(floor eq null)
+      if (floor eq null)
         segments.headMap(to).values.asScala
       else
         segments.subMap(floor, true, to, false).values.asScala

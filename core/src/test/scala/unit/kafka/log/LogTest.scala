@@ -19,7 +19,6 @@ package kafka.log
 
 import java.io._
 import java.nio.ByteBuffer
-import java.nio.file.Files
 import java.util.Properties
 
 import org.apache.kafka.common.errors._
@@ -27,7 +26,7 @@ import kafka.common.KafkaException
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import kafka.utils._
-import kafka.server.{BrokerTopicStats, KafkaConfig, LogDirFailureChannel}
+import kafka.server.{BrokerTopicStats, FetchDataInfo, KafkaConfig, LogDirFailureChannel}
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
@@ -39,7 +38,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.easymock.EasyMock
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 class LogTest {
 
@@ -156,26 +155,44 @@ class LogTest {
     // simulate the upgrade path by creating a new log with several segments, deleting the
     // snapshot files, and then reloading the log
     val logConfig = createLogConfig(segmentBytes = 64 * 10)
-    val log = createLog(logDir, logConfig)
+    var log = createLog(logDir, logConfig)
     assertEquals(None, log.oldestProducerSnapshotOffset)
 
     for (i <- 0 to 100) {
       val record = new SimpleRecord(mockTime.milliseconds, i.toString.getBytes)
       log.appendAsLeader(TestUtils.records(List(record)), leaderEpoch = 0)
     }
-
     assertTrue(log.logSegments.size >= 2)
+    val logEndOffset = log.logEndOffset
     log.close()
 
-    logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(Log.ProducerSnapshotFileSuffix)).foreach { file =>
-      Files.delete(file.toPath)
-    }
+    val cleanShutdownFile = createCleanShutdownFile()
+    deleteProducerSnapshotFiles()
 
-    val reloadedLog = createLog(logDir, logConfig)
-    val expectedSnapshotsOffsets = log.logSegments.toSeq.reverse.take(2).map(_.baseOffset) ++ Seq(reloadedLog.logEndOffset)
-    expectedSnapshotsOffsets.foreach { offset =>
-      assertTrue(Log.producerSnapshotFile(logDir, offset).exists)
-    }
+    // Reload after clean shutdown
+    log = createLog(logDir, logConfig, recoveryPoint = logEndOffset)
+    var expectedSnapshotOffsets = log.logSegments.map(_.baseOffset).takeRight(2).toVector :+ log.logEndOffset
+    assertEquals(expectedSnapshotOffsets, listProducerSnapshotOffsets)
+    log.close()
+
+    Utils.delete(cleanShutdownFile)
+    deleteProducerSnapshotFiles()
+
+    // Reload after unclean shutdown with recoveryPoint set to log end offset
+    log = createLog(logDir, logConfig, recoveryPoint = logEndOffset)
+    // Is this working as intended?
+    expectedSnapshotOffsets = Vector(log.logEndOffset)
+    assertEquals(expectedSnapshotOffsets, listProducerSnapshotOffsets)
+    log.close()
+
+    deleteProducerSnapshotFiles()
+
+    // Reload after unclean shutdown with recoveryPoint set to 0
+    log = createLog(logDir, logConfig, recoveryPoint = 0L)
+    // Is this working as intended?
+    expectedSnapshotOffsets = log.logSegments.map(_.baseOffset).tail.toVector :+ log.logEndOffset
+    assertEquals(expectedSnapshotOffsets, listProducerSnapshotOffsets)
+    log.close()
   }
 
   @Test
@@ -343,7 +360,7 @@ class LogTest {
       logDirFailureChannel = null)
 
     EasyMock.verify(stateManager)
-    cleanShutdownFile.delete()
+    Utils.delete(cleanShutdownFile)
   }
 
   @Test
@@ -379,7 +396,7 @@ class LogTest {
       logDirFailureChannel = null)
 
     EasyMock.verify(stateManager)
-    cleanShutdownFile.delete()
+    Utils.delete(cleanShutdownFile)
   }
 
   @Test
@@ -532,10 +549,7 @@ class LogTest {
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("b".getBytes)), producerId = pid,
       producerEpoch = epoch, sequence = 1), leaderEpoch = 0)
 
-    // Delete all snapshots prior to truncating
-    logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(Log.ProducerSnapshotFileSuffix)).foreach { file =>
-      Files.delete(file.toPath)
-    }
+    deleteProducerSnapshotFiles()
 
     log.truncateTo(1L)
     assertEquals(1, log.activeProducersWithLastSequence.size)
@@ -660,7 +674,7 @@ class LogTest {
   }
 
   @Test
-  def testTakeSnapshotOnRollAndDeleteSnapshotOnFlush() {
+  def testTakeSnapshotOnRollAndDeleteSnapshotOnRecoveryPointCheckpoint() {
     val logConfig = createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig)
     log.appendAsLeader(TestUtils.singletonRecords("a".getBytes), leaderEpoch = 0)
@@ -1201,7 +1215,7 @@ class LogTest {
       maxOffset = Some(numMessages + 1)).records
     assertEquals("Should be no more messages", 0, lastRead.records.asScala.size)
 
-    // check that rolling the log forced a flushed the log--the flush is asyn so retry in case of failure
+    // check that rolling the log forced a flushed, the flush is async so retry in case of failure
     TestUtils.retry(1000L){
       assertTrue("Log role should have forced flush", log.recoveryPoint >= log.activeSegment.baseOffset)
     }
@@ -1830,7 +1844,7 @@ class LogTest {
     recoveryPoint = log.logEndOffset
     log = createLog(logDir, logConfig)
     assertEquals(recoveryPoint, log.logEndOffset)
-    cleanShutdownFile.delete()
+    Utils.delete(cleanShutdownFile)
   }
 
   @Test
@@ -2587,10 +2601,7 @@ class LogTest {
     appendPid4(4) // 89
     appendEndTxnMarkerAsLeader(log, pid4, epoch, ControlRecordType.COMMIT) // 90
 
-    // delete all snapshot files
-    logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(Log.ProducerSnapshotFileSuffix)).foreach { file =>
-      Files.delete(file.toPath)
-    }
+    deleteProducerSnapshotFiles()
 
     // delete the last offset and transaction index files to force recovery. this should force us to rebuild
     // the producer state from the start of the log
@@ -2933,4 +2944,13 @@ class LogTest {
     assertTrue(".kafka_cleanshutdown must exist", cleanShutdownFile.exists())
     cleanShutdownFile
   }
+
+  private def deleteProducerSnapshotFiles(): Unit = {
+    val files = logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(Log.ProducerSnapshotFileSuffix))
+    files.foreach(Utils.delete)
+  }
+
+  private def listProducerSnapshotOffsets: Seq[Long] =
+    ProducerStateManager.listSnapshotFiles(logDir).map(Log.offsetFromFile).sorted
+
 }

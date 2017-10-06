@@ -63,10 +63,11 @@ class LogManager(logDirs: Seq[File],
                  brokerTopicStats: BrokerTopicStats,
                  logDirFailureChannel: LogDirFailureChannel,
                  time: Time) extends Logging with KafkaMetricsGroup {
-  val RecoveryPointCheckpointFile = "recovery-point-offset-checkpoint"
-  val LogStartOffsetCheckpointFile = "log-start-offset-checkpoint"
+
+  import LogManager._
+
   val LockFile = ".lock"
-  val InitialTaskDelayMs = 30*1000
+  val InitialTaskDelayMs = 30 * 1000
 
   private val logCreationOrDeletionLock = new Object
   private val logs = new Pool[TopicPartition, Log]()
@@ -769,6 +770,8 @@ class LogManager(logDirs: Seq[File],
 
 object LogManager {
 
+  val RecoveryPointCheckpointFile = "recovery-point-offset-checkpoint"
+  val LogStartOffsetCheckpointFile = "log-start-offset-checkpoint"
   val ProducerIdExpirationCheckIntervalMs = 10 * 60 * 1000
 
   def apply(config: KafkaConfig,
