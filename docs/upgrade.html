@@ -86,6 +86,10 @@
         inversion bug, it was previously enabled by default and disabled if <code>kafka_mx4jenable</code> was set to <code>true</code>.</li>
     <li>The package <code>org.apache.kafka.common.security.auth</code> in the clients jar has been made public and added to the javadocs.
         Internal classes which had previously been located in this package have been moved elsewhere.</li>
+    <li>When using an Authorizer and a user doesn't have required permissions on a topic, the broker
+        will return TOPIC_AUTHORIZATION_FAILED errors to requests irrespective of topic existence on broker.
+        If the user have required permissions and the topic doesn't exists, then the UNKNOWN_TOPIC_OR_PARTITION
+        error code will be returned. </li>
 </ul>
 
 <h5><a id="upgrade_100_new_protocols" href="#upgrade_100_new_protocols">New Protocol Versions</a></h5>
