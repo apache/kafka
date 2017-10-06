@@ -18,13 +18,14 @@
 package kafka.server
 
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.ApiError
 
 import scala.collection._
 
 /**
   * The delete metadata maintained by the delayed delete operation
   */
-case class DeleteTopicMetadata(topic: String, error: Errors)
+case class DeleteTopicMetadata(topic: String, error: ApiError)
 
 /**
   * A delayed delete topics operation that can be created by the admin manager and watched
@@ -33,7 +34,7 @@ case class DeleteTopicMetadata(topic: String, error: Errors)
 class DelayedDeleteTopics(delayMs: Long,
                           deleteMetadata: Seq[DeleteTopicMetadata],
                           adminManager: AdminManager,
-                          responseCallback: Map[String, Errors] => Unit)
+                          responseCallback: Map[String, ApiError] => Unit)
   extends DelayedOperation(delayMs) {
 
   /**
@@ -43,7 +44,7 @@ class DelayedDeleteTopics(delayMs: Long,
     trace(s"Trying to complete operation for $deleteMetadata")
 
     // Ignore topics that already have errors
-    val existingTopics = deleteMetadata.count { metadata => metadata.error == Errors.NONE && topicExists(metadata.topic) }
+    val existingTopics = deleteMetadata.count { metadata => metadata.error.isSuccess && topicExists(metadata.topic) }
 
     if (existingTopics == 0) {
       trace("All topics have been deleted or have errors, completing the delayed operation")
@@ -61,8 +62,8 @@ class DelayedDeleteTopics(delayMs: Long,
     trace(s"Completing operation for $deleteMetadata")
     val results = deleteMetadata.map { metadata =>
       // ignore topics that already have errors
-      if (metadata.error == Errors.NONE && topicExists(metadata.topic))
-        (metadata.topic, Errors.REQUEST_TIMED_OUT)
+      if (metadata.error.isSuccess && topicExists(metadata.topic))
+        (metadata.topic, new ApiError(Errors.REQUEST_TIMED_OUT, null))
       else
         (metadata.topic, metadata.error)
     }.toMap

@@ -1,8 +1,0 @@
-* Add error messages to the responses.
-* Tests for the new and old API versions (serialisation).
-* Tests for the validate_only functionality.
-* Update AdminClient docs for the policy violation.
-* Add policy calls to deletetopics, deleterecords and addpartitions.
-* Extend add tests for the new policy applications.
-* Decide whether its OK for the old version of the response to return a new error code (POLICY_VIOLATION)
-  If not, we could map it to an existing error code UNKNOWN_SERVER_ERROR for the old version only.

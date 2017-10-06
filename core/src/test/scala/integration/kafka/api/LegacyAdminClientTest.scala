@@ -184,13 +184,24 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
 
     sendRecords(producers.head, 10, tp)
     // Should get success result
-    assertEquals(DeleteRecordsResult(5L, null), client.deleteRecordsBefore(Map((tp, 5L))).get()(tp))
+
+    // DeleteRecordsResult has Exception member, which doesn't implement .equals()
+    def sameResult(expect: DeleteRecordsResult, actual: DeleteRecordsResult): Unit = {
+      assertEquals(expect.lowWatermark, actual.lowWatermark)
+      assertEquals(expect.error == null, actual.error == null)
+      if (expect.error != null && actual.error != null) {
+        assertEquals(expect.error.getClass, actual.error.getClass)
+        assertEquals(expect.error.getMessage, actual.error.getMessage)
+      }
+    }
+
+    sameResult(DeleteRecordsResult(5L, null), client.deleteRecordsBefore(Map((tp, 5L))).get()(tp))
     // OffsetOutOfRangeException if offset > high_watermark
-    assertEquals(DeleteRecordsResult(-1L, Errors.OFFSET_OUT_OF_RANGE.exception()), client.deleteRecordsBefore(Map((tp, 20))).get()(tp))
+    sameResult(DeleteRecordsResult(-1L, Errors.OFFSET_OUT_OF_RANGE.exception("Cannot increment the log start offset to 20 of partition topic-0 since it is larger than the high watermark 10")), client.deleteRecordsBefore(Map((tp, 20))).get()(tp))
 
     val nonExistPartition = new TopicPartition(topic, 3)
     // UnknownTopicOrPartitionException if user tries to delete records of a non-existent partition
-    assertEquals(DeleteRecordsResult(-1L, Errors.LEADER_NOT_AVAILABLE.exception()),
+    sameResult(DeleteRecordsResult(-1L, Errors.LEADER_NOT_AVAILABLE.exception()),
                  client.deleteRecordsBefore(Map((nonExistPartition, 20))).get()(nonExistPartition))
   }
 

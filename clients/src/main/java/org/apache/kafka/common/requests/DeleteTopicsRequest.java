@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
@@ -77,6 +77,9 @@ public class DeleteTopicsRequest extends AbstractRequest {
 
         @Override
         public DeleteTopicsRequest build(short version) {
+            if (validateOnly && version < 2)
+                throw new UnsupportedVersionException("validateOnly is not supported in version " + version + " of " +
+                        "DeleteTopicsRequest");
             return new DeleteTopicsRequest(topics, timeout, validateOnly, version);
         }
 
@@ -108,7 +111,7 @@ public class DeleteTopicsRequest extends AbstractRequest {
 
         this.topics = topics;
         this.timeout = struct.getInt(TIMEOUT_KEY_NAME);
-        this.validateOnly = struct.getBoolean(VALIDATE_ONLY_KEY_NAME);
+        this.validateOnly = struct.hasField(VALIDATE_ONLY_KEY_NAME) ? struct.getBoolean(VALIDATE_ONLY_KEY_NAME) : false;
     }
 
     @Override
@@ -116,15 +119,17 @@ public class DeleteTopicsRequest extends AbstractRequest {
         Struct struct = new Struct(ApiKeys.DELETE_TOPICS.requestSchema(version()));
         struct.set(TOPICS_KEY_NAME, topics.toArray());
         struct.set(TIMEOUT_KEY_NAME, timeout);
-        struct.set(VALIDATE_ONLY_KEY_NAME, validateOnly);
+        if (version() >= 2) {
+            struct.set(VALIDATE_ONLY_KEY_NAME, validateOnly);
+        }
         return struct;
     }
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        Map<String, Errors> topicErrors = new HashMap<>();
+        Map<String, ApiError> topicErrors = new HashMap<>();
         for (String topic : topics)
-            topicErrors.put(topic, Errors.forException(e));
+            topicErrors.put(topic, ApiError.fromThrowable(e));
 
         switch (version()) {
             case 0:

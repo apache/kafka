@@ -1154,7 +1154,7 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse abstractResponse) {
                 DeleteTopicsResponse response = (DeleteTopicsResponse) abstractResponse;
                 // Handle server responses for particular topics.
-                for (Map.Entry<String, Errors> entry : response.errors().entrySet()) {
+                for (Map.Entry<String, ApiError> entry : response.apiErrors().entrySet()) {
                     KafkaFutureImpl<Void> future = topicFutures.get(entry.getKey());
                     if (future == null) {
                         log.warn("Server response mentioned unknown topic {}", entry.getKey());

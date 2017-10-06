@@ -159,9 +159,21 @@ public class RequestResponseTest {
         checkRequest(createCreateTopicRequest(1));
         checkErrorResponse(createCreateTopicRequest(1), new UnknownServerException());
         checkResponse(createCreateTopicResponse(), 1);
-        checkRequest(createDeleteTopicsRequest());
-        checkErrorResponse(createDeleteTopicsRequest(), new UnknownServerException());
+        checkRequest(createDeleteTopicsRequest((short) 0));
+        checkErrorResponse(createDeleteTopicsRequest((short) 0), new UnknownServerException());
         checkResponse(createDeleteTopicsResponse(), 0);
+        checkRequest(createDeleteTopicsRequest((short) 1));
+        checkErrorResponse(createDeleteTopicsRequest((short) 1), new UnknownServerException());
+        checkResponse(createDeleteTopicsResponse(), 1);
+        checkRequest(createDeleteTopicsRequest((short) 2));
+        checkErrorResponse(createDeleteTopicsRequest((short) 2), new UnknownServerException());
+        checkResponse(createDeleteTopicsResponse(), 2);
+        checkRequest(createDeleteRecordsRequest((short) 0));
+        checkErrorResponse(createDeleteRecordsRequest((short) 0), new UnknownServerException());
+        checkResponse(createDeleteRecordsResponse(), 0);
+        checkRequest(createDeleteRecordsRequest((short) 1));
+        checkErrorResponse(createDeleteRecordsRequest((short) 1), new UnknownServerException());
+        checkResponse(createDeleteRecordsResponse(), 1);
 
         checkRequest(createInitPidRequest());
         checkErrorResponse(createInitPidRequest(), new UnknownServerException());
@@ -869,15 +881,33 @@ public class RequestResponseTest {
         return new CreateTopicsResponse(errors);
     }
 
-    private DeleteTopicsRequest createDeleteTopicsRequest() {
-        return new DeleteTopicsRequest.Builder(Utils.mkSet("my_t1", "my_t2"), 10000, false).build();
+    private DeleteTopicsRequest createDeleteTopicsRequest(short version) {
+        return new DeleteTopicsRequest.Builder(Utils.mkSet("my_t1", "my_t2"), 10000, version > 1).build(version);
     }
 
     private DeleteTopicsResponse createDeleteTopicsResponse() {
-        Map<String, Errors> errors = new HashMap<>();
-        errors.put("t1", Errors.INVALID_TOPIC_EXCEPTION);
-        errors.put("t2", Errors.TOPIC_AUTHORIZATION_FAILED);
+        Map<String, ApiError> errors = new HashMap<>();
+        errors.put("t1", new ApiError(Errors.INVALID_TOPIC_EXCEPTION, "foo"));
+        errors.put("t2", new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, "bar"));
         return new DeleteTopicsResponse(errors);
+    }
+
+    private DeleteRecordsRequest createDeleteRecordsRequest(short version) {
+        Map<TopicPartition, Long> offsets = new HashMap<>();
+        offsets.put(new TopicPartition("t1", 0), 102L);
+        offsets.put(new TopicPartition("t2", 1), 234092408L);
+        return new DeleteRecordsRequest.Builder(1000, offsets, version > 0).build(version);
+    }
+
+    private DeleteRecordsResponse createDeleteRecordsResponse() {
+        Map<TopicPartition, DeleteRecordsResponse.PartitionResponse> errors = new HashMap<>();
+        errors.put(new TopicPartition("t1", 0),
+                new DeleteRecordsResponse.PartitionResponse(103,
+                        new ApiError(Errors.INVALID_TOPIC_EXCEPTION, "foo")));
+        errors.put(new TopicPartition("t2", 1),
+                new DeleteRecordsResponse.PartitionResponse(234092409,
+                        new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, "bar")));
+        return new DeleteRecordsResponse(1000, errors);
     }
 
     private InitProducerIdRequest createInitPidRequest() {

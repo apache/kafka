@@ -23,7 +23,7 @@ import java.util.concurrent.TimeUnit
 import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.requests.DeleteRecordsResponse
+import org.apache.kafka.common.requests.{ApiError, DeleteRecordsResponse}
 
 import scala.collection._
 
@@ -48,10 +48,10 @@ class DelayedDeleteRecords(delayMs: Long,
 
   // first update the acks pending variable according to the error code
   deleteRecordsStatus.foreach { case (topicPartition, status) =>
-    if (status.responseStatus.error == Errors.NONE) {
+    if (status.responseStatus.error.error == Errors.NONE) {
       // Timeout error state will be cleared when required acks are received
       status.acksPending = true
-      status.responseStatus.error = Errors.REQUEST_TIMED_OUT
+      status.responseStatus.error = ApiError.fromThrowable(Errors.REQUEST_TIMED_OUT.exception());
     } else {
       status.acksPending = false
     }
@@ -75,20 +75,20 @@ class DelayedDeleteRecords(delayMs: Long,
         val (lowWatermarkReached, error, lw) = replicaManager.getPartition(topicPartition) match {
           case Some(partition) =>
             if (partition eq ReplicaManager.OfflinePartition) {
-              (false, Errors.KAFKA_STORAGE_ERROR, DeleteRecordsResponse.INVALID_LOW_WATERMARK)
+              (false, new ApiError(Errors.KAFKA_STORAGE_ERROR, null), DeleteRecordsResponse.INVALID_LOW_WATERMARK)
             } else {
               partition.leaderReplicaIfLocal match {
                 case Some(_) =>
                   val leaderLW = partition.lowWatermarkIfLeader
-                  (leaderLW >= status.requiredOffset, Errors.NONE, leaderLW)
+                  (leaderLW >= status.requiredOffset, ApiError.NONE, leaderLW)
                 case None =>
-                  (false, Errors.NOT_LEADER_FOR_PARTITION, DeleteRecordsResponse.INVALID_LOW_WATERMARK)
+                  (false, new ApiError(Errors.NOT_LEADER_FOR_PARTITION, null), DeleteRecordsResponse.INVALID_LOW_WATERMARK)
               }
             }
           case None =>
-            (false, Errors.UNKNOWN_TOPIC_OR_PARTITION, DeleteRecordsResponse.INVALID_LOW_WATERMARK)
+            (false, new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, null), DeleteRecordsResponse.INVALID_LOW_WATERMARK)
         }
-        if (error != Errors.NONE || lowWatermarkReached) {
+        if (error.isFailure || lowWatermarkReached) {
           status.acksPending = false
           status.responseStatus.error = error
           status.responseStatus.lowWatermark = lw

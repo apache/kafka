@@ -61,9 +61,9 @@ case class LogAppendResult(info: LogAppendInfo, exception: Option[Throwable] = N
 }
 
 case class LogDeleteRecordsResult(requestedOffset: Long, lowWatermark: Long, exception: Option[Throwable] = None) {
-  def error: Errors = exception match {
-    case None => Errors.NONE
-    case Some(e) => Errors.forException(e)
+  def error: ApiError = exception match {
+    case None => ApiError.NONE
+    case Some(e) => ApiError.fromThrowable(e)
   }
 }
 

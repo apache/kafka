@@ -1383,22 +1383,23 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleDeleteTopicsRequest(request: RequestChannel.Request) {
     val deleteTopicRequest = request.body[DeleteTopicsRequest]
 
-    val unauthorizedTopicErrors = mutable.Map[String, Errors]()
-    val nonExistingTopicErrors = mutable.Map[String, Errors]()
+    val unauthorizedTopicErrors = mutable.Map[String, ApiError]()
+    val nonExistingTopicErrors = mutable.Map[String, ApiError]()
     val authorizedForDeleteTopics =  mutable.Set[String]()
 
     for (topic <- deleteTopicRequest.topics.asScala) {
       if (!authorize(request.session, Delete, new Resource(Topic, topic)))
-        unauthorizedTopicErrors += topic -> Errors.TOPIC_AUTHORIZATION_FAILED
+        unauthorizedTopicErrors += topic -> new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, null)
       else if (!metadataCache.contains(topic))
-        nonExistingTopicErrors += topic -> Errors.UNKNOWN_TOPIC_OR_PARTITION
+        nonExistingTopicErrors += topic -> new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, null)
       else
         authorizedForDeleteTopics.add(topic)
     }
 
-    def sendResponseCallback(authorizedTopicErrors: Map[String, Errors]): Unit = {
+    def sendResponseCallback(authorizedTopicErrors: Map[String, ApiError]): Unit = {
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
         val completeResults = unauthorizedTopicErrors ++ nonExistingTopicErrors ++ authorizedTopicErrors
+
         val responseBody = new DeleteTopicsResponse(requestThrottleMs, completeResults.asJava)
         trace(s"Sending delete topics response $responseBody for correlation id ${request.header.correlationId} to client ${request.header.clientId}.")
         responseBody
@@ -1408,7 +1409,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     if (!controller.isActive) {
       val results = deleteTopicRequest.topics.asScala.map { topic =>
-        (topic, Errors.NOT_CONTROLLER)
+        (topic, new ApiError(Errors.NOT_CONTROLLER, null))
       }.toMap
       sendResponseCallback(results)
     } else {
@@ -1435,10 +1436,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     for ((topicPartition, offset) <- deleteRecordsRequest.partitionOffsets.asScala) {
       if (!authorize(request.session, Delete, new Resource(Topic, topicPartition.topic)))
         unauthorizedTopicResponses += topicPartition -> new DeleteRecordsResponse.PartitionResponse(
-          DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.TOPIC_AUTHORIZATION_FAILED)
+          DeleteRecordsResponse.INVALID_LOW_WATERMARK, new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, null))
       else if (!metadataCache.contains(topicPartition.topic))
         nonExistingTopicResponses += topicPartition -> new DeleteRecordsResponse.PartitionResponse(
-          DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.UNKNOWN_TOPIC_OR_PARTITION)
+          DeleteRecordsResponse.INVALID_LOW_WATERMARK, new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, null))
       else
         authorizedForDeleteTopicOffsets += (topicPartition -> offset)
     }
@@ -1447,12 +1448,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     def sendResponseCallback(authorizedTopicResponses: Map[TopicPartition, DeleteRecordsResponse.PartitionResponse]) {
       val mergedResponseStatus = authorizedTopicResponses ++ unauthorizedTopicResponses ++ nonExistingTopicResponses
       mergedResponseStatus.foreach { case (topicPartition, status) =>
-        if (status.error != Errors.NONE) {
+        if (status.error.isFailure) {
           debug("DeleteRecordsRequest with correlation id %d from client %s on partition %s failed due to %s".format(
             request.header.correlationId,
             request.header.clientId,
             topicPartition,
-            status.error.exceptionName))
+            status.error))
         }
       }
 

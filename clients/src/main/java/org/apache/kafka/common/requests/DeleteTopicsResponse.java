@@ -30,26 +30,37 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
+import static org.apache.kafka.common.protocol.CommonFields.ERROR_MESSAGE;
 import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 
 public class DeleteTopicsResponse extends AbstractResponse {
     private static final String TOPIC_ERROR_CODES_KEY_NAME = "topic_error_codes";
 
-    private static final Schema TOPIC_ERROR_CODE = new Schema(
+    private static final Schema TOPIC_ERROR_CODE_V0 = new Schema(
             TOPIC_NAME,
             ERROR_CODE);
 
+    private static final Schema TOPIC_ERROR_CODE_V1 = new Schema(
+            TOPIC_NAME,
+            ERROR_CODE,
+            ERROR_MESSAGE);
+
     private static final Schema DELETE_TOPICS_RESPONSE_V0 = new Schema(
             new Field(TOPIC_ERROR_CODES_KEY_NAME,
-                    new ArrayOf(TOPIC_ERROR_CODE), "An array of per topic error codes."));
+                    new ArrayOf(TOPIC_ERROR_CODE_V0), "An array of per topic error codes."));
 
+    // v1 adds THROTTLE_TIME_MS
     private static final Schema DELETE_TOPICS_RESPONSE_V1 = new Schema(
             THROTTLE_TIME_MS,
             new Field(TOPIC_ERROR_CODES_KEY_NAME,
-                    new ArrayOf(TOPIC_ERROR_CODE), "An array of per topic error codes."));
+                    new ArrayOf(TOPIC_ERROR_CODE_V0), "An array of per topic error codes."));
 
-    private static final Schema DELETE_TOPICS_RESPONSE_V2 = DELETE_TOPICS_RESPONSE_V1;
+    // v2 adds ERROR_MESSAGE
+    private static final Schema DELETE_TOPICS_RESPONSE_V2 = new Schema(
+            THROTTLE_TIME_MS,
+            new Field(TOPIC_ERROR_CODES_KEY_NAME,
+                    new ArrayOf(TOPIC_ERROR_CODE_V1), "An array of per topic error codes and error messages."));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{DELETE_TOPICS_RESPONSE_V0, DELETE_TOPICS_RESPONSE_V1, DELETE_TOPICS_RESPONSE_V2};
@@ -64,14 +75,14 @@ public class DeleteTopicsResponse extends AbstractResponse {
      * TOPIC_AUTHORIZATION_FAILED(29)
      * NOT_CONTROLLER(41)
      */
-    private final Map<String, Errors> errors;
+    private final Map<String, ApiError> errors;
     private final int throttleTimeMs;
 
-    public DeleteTopicsResponse(Map<String, Errors> errors) {
+    public DeleteTopicsResponse(Map<String, ApiError> errors) {
         this(DEFAULT_THROTTLE_TIME, errors);
     }
 
-    public DeleteTopicsResponse(int throttleTimeMs, Map<String, Errors> errors) {
+    public DeleteTopicsResponse(int throttleTimeMs, Map<String, ApiError> errors) {
         this.throttleTimeMs = throttleTimeMs;
         this.errors = errors;
     }
@@ -79,14 +90,13 @@ public class DeleteTopicsResponse extends AbstractResponse {
     public DeleteTopicsResponse(Struct struct) {
         this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
         Object[] topicErrorCodesStructs = struct.getArray(TOPIC_ERROR_CODES_KEY_NAME);
-        Map<String, Errors> errors = new HashMap<>();
+        Map<String, ApiError> errors = new HashMap<>();
         for (Object topicErrorCodeStructObj : topicErrorCodesStructs) {
             Struct topicErrorCodeStruct = (Struct) topicErrorCodeStructObj;
             String topic = topicErrorCodeStruct.get(TOPIC_NAME);
-            Errors error = Errors.forCode(topicErrorCodeStruct.get(ERROR_CODE));
+            ApiError error = new ApiError(topicErrorCodeStruct);
             errors.put(topic, error);
         }
-
         this.errors = errors;
     }
 
@@ -95,10 +105,10 @@ public class DeleteTopicsResponse extends AbstractResponse {
         Struct struct = new Struct(ApiKeys.DELETE_TOPICS.responseSchema(version));
         struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
         List<Struct> topicErrorCodeStructs = new ArrayList<>(errors.size());
-        for (Map.Entry<String, Errors> topicError : errors.entrySet()) {
+        for (Map.Entry<String, ApiError> topicError : errors.entrySet()) {
             Struct topicErrorCodeStruct = struct.instance(TOPIC_ERROR_CODES_KEY_NAME);
             topicErrorCodeStruct.set(TOPIC_NAME, topicError.getKey());
-            topicErrorCodeStruct.set(ERROR_CODE, topicError.getValue().code());
+            topicError.getValue().write(topicErrorCodeStruct);
             topicErrorCodeStructs.add(topicErrorCodeStruct);
         }
         struct.set(TOPIC_ERROR_CODES_KEY_NAME, topicErrorCodeStructs.toArray());
@@ -109,13 +119,25 @@ public class DeleteTopicsResponse extends AbstractResponse {
         return throttleTimeMs;
     }
 
+    /**
+     * @deprecated Replaced by {@link #apiErrors()}, which includes the error message
+     */
+    @Deprecated
     public Map<String, Errors> errors() {
+        Map<String, Errors> result = new HashMap<String, Errors>(errors.size());
+        for (Map.Entry<String, ApiError> entry : errors.entrySet()) {
+            result.put(entry.getKey(), entry.getValue().error());
+        }
+        return result;
+    }
+
+    public Map<String, ApiError> apiErrors() {
         return errors;
     }
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return errorCounts(errors);
+        return apiErrorCounts(errors);
     }
 
     public static DeleteTopicsResponse parse(ByteBuffer buffer, short version) {

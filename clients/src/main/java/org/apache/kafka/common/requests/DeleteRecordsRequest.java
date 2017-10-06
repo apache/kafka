@@ -18,8 +18,8 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
@@ -93,6 +93,9 @@ public class DeleteRecordsRequest extends AbstractRequest {
 
         @Override
         public DeleteRecordsRequest build(short version) {
+            if (validateOnly && version == 0)
+                throw new UnsupportedVersionException("validateOnly is not supported in version 0 of " +
+                        "DeleteRecordsRequest");
             return new DeleteRecordsRequest(timeout, partitionOffsets, validateOnly, version);
         }
 
@@ -123,7 +126,7 @@ public class DeleteRecordsRequest extends AbstractRequest {
             }
         }
         timeout = struct.getInt(TIMEOUT_KEY_NAME);
-        validateOnly = struct.getBoolean(VALIDATE_ONLY_KEY_NAME);
+        validateOnly = struct.hasField(VALIDATE_ONLY_KEY_NAME) ? struct.getBoolean(VALIDATE_ONLY_KEY_NAME) : false;
     }
 
     public DeleteRecordsRequest(int timeout, Map<TopicPartition, Long> partitionOffsets, boolean validateOnly, short version) {
@@ -152,7 +155,9 @@ public class DeleteRecordsRequest extends AbstractRequest {
             topicStructArray.add(topicStruct);
         }
         struct.set(TOPICS_KEY_NAME, topicStructArray.toArray());
-        struct.set(VALIDATE_ONLY_KEY_NAME, validateOnly);
+        if (version() >= 1) {
+            struct.set(VALIDATE_ONLY_KEY_NAME, validateOnly);
+        }
         return struct;
     }
 
@@ -161,7 +166,7 @@ public class DeleteRecordsRequest extends AbstractRequest {
         Map<TopicPartition, DeleteRecordsResponse.PartitionResponse> responseMap = new HashMap<>();
 
         for (Map.Entry<TopicPartition, Long> entry : partitionOffsets.entrySet()) {
-            responseMap.put(entry.getKey(), new DeleteRecordsResponse.PartitionResponse(DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.forException(e)));
+            responseMap.put(entry.getKey(), new DeleteRecordsResponse.PartitionResponse(DeleteRecordsResponse.INVALID_LOW_WATERMARK, ApiError.fromThrowable(e)));
         }
 
         short versionId = version();

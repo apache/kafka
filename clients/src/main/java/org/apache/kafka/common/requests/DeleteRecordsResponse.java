@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
+import static org.apache.kafka.common.protocol.CommonFields.ERROR_MESSAGE;
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
@@ -56,15 +57,27 @@ public class DeleteRecordsResponse extends AbstractResponse {
             new Field(LOW_WATERMARK_KEY_NAME, INT64, "Smallest available offset of all live replicas"),
             ERROR_CODE);
 
+    private static final Schema DELETE_RECORDS_RESPONSE_PARTITION_V1 = new Schema(
+            PARTITION_ID,
+            new Field(LOW_WATERMARK_KEY_NAME, INT64, "Smallest available offset of all live replicas"),
+            ERROR_CODE,
+            ERROR_MESSAGE);
+
     private static final Schema DELETE_RECORDS_RESPONSE_TOPIC_V0 = new Schema(
             TOPIC_NAME,
             new Field(PARTITIONS_KEY_NAME, new ArrayOf(DELETE_RECORDS_RESPONSE_PARTITION_V0)));
+
+    private static final Schema DELETE_RECORDS_RESPONSE_TOPIC_V1 = new Schema(
+            TOPIC_NAME,
+            new Field(PARTITIONS_KEY_NAME, new ArrayOf(DELETE_RECORDS_RESPONSE_PARTITION_V1)));
 
     private static final Schema DELETE_RECORDS_RESPONSE_V0 = new Schema(
             THROTTLE_TIME_MS,
             new Field(TOPICS_KEY_NAME, new ArrayOf(DELETE_RECORDS_RESPONSE_TOPIC_V0)));
 
-    private static final Schema DELETE_RECORDS_RESPONSE_V1 = DELETE_RECORDS_RESPONSE_V0;
+    private static final Schema DELETE_RECORDS_RESPONSE_V1 = new Schema(
+            THROTTLE_TIME_MS,
+            new Field(TOPICS_KEY_NAME, new ArrayOf(DELETE_RECORDS_RESPONSE_TOPIC_V1)));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{DELETE_RECORDS_RESPONSE_V0, DELETE_RECORDS_RESPONSE_V1};
@@ -85,9 +98,9 @@ public class DeleteRecordsResponse extends AbstractResponse {
 
     public static final class PartitionResponse {
         public long lowWatermark;
-        public Errors error;
+        public ApiError error;
 
-        public PartitionResponse(long lowWatermark, Errors error) {
+        public PartitionResponse(long lowWatermark, ApiError error) {
             this.lowWatermark = lowWatermark;
             this.error = error;
         }
@@ -115,7 +128,7 @@ public class DeleteRecordsResponse extends AbstractResponse {
                 Struct partitionStruct = (Struct) partitionStructObj;
                 int partition = partitionStruct.get(PARTITION_ID);
                 long lowWatermark = partitionStruct.getLong(LOW_WATERMARK_KEY_NAME);
-                Errors error = Errors.forCode(partitionStruct.get(ERROR_CODE));
+                ApiError error = new ApiError(partitionStruct);
                 responses.put(new TopicPartition(topic, partition), new PartitionResponse(lowWatermark, error));
             }
         }
@@ -144,7 +157,8 @@ public class DeleteRecordsResponse extends AbstractResponse {
                 PartitionResponse response = responsesByPartitionEntry.getValue();
                 partitionStruct.set(PARTITION_ID, responsesByPartitionEntry.getKey());
                 partitionStruct.set(LOW_WATERMARK_KEY_NAME, response.lowWatermark);
-                partitionStruct.set(ERROR_CODE, response.error.code());
+                response.error.write(partitionStruct);
+
                 partitionStructArray.add(partitionStruct);
             }
             topicStruct.set(PARTITIONS_KEY_NAME, partitionStructArray.toArray());
@@ -166,7 +180,7 @@ public class DeleteRecordsResponse extends AbstractResponse {
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
         for (PartitionResponse response : responses.values())
-            updateErrorCounts(errorCounts, response.error);
+            updateErrorCounts(errorCounts, response.error.error());
         return errorCounts;
     }
 
