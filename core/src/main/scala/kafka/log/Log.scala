@@ -192,14 +192,14 @@ class Log(@volatile var dir: File,
   locally {
     val startMs = time.milliseconds
 
-    loadSegments()
+    val nextOffset = loadSegments()
 
     /* Calculate the offset of the next message */
-    nextOffsetMetadata = new LogOffsetMetadata(activeSegment.nextOffset, activeSegment.baseOffset, activeSegment.size)
+    nextOffsetMetadata = new LogOffsetMetadata(nextOffset, activeSegment.baseOffset, activeSegment.size)
 
     leaderEpochCache.clearAndFlushLatest(nextOffsetMetadata.messageOffset)
 
-    logStartOffset = math.max(logStartOffset, segments.firstEntry().getValue.baseOffset)
+    logStartOffset = math.max(logStartOffset, segments.firstEntry.getValue.baseOffset)
 
     // The earliest leader epoch may not be flushed during a hard failure. Recover it here.
     leaderEpochCache.clearAndFlushEarliest(logStartOffset)
@@ -382,9 +382,9 @@ class Log(@volatile var dir: File,
     }
   }
 
-  // Load the log segments from the log files on disk
+  // Load the log segments from the log files on disk and return the next offset
   // This method does not need to convert IOException to KafkaStorageException because it is only called before all logs are loaded
-  private def loadSegments() {
+  private def loadSegments(): Long = {
     // first do a pass through the files in the log directory and remove any temporary files
     // and find any interrupted swap operations
     val swapFiles = removeTempFilesAndCollectSwapFiles()
@@ -408,50 +408,54 @@ class Log(@volatile var dir: File,
         fileAlreadyExists = false,
         initFileSize = this.initFileSize,
         preallocate = config.preallocate))
+      0
     } else if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
-      recoverLog()
+      val nextOffset = recoverLog()
       // reset the index size of the currently active log segment to allow more entries
       activeSegment.index.resize(config.maxIndexSize)
       activeSegment.timeIndex.resize(config.maxIndexSize)
-    }
+      nextOffset
+    } else 0
   }
 
   private def updateLogEndOffset(messageOffset: Long) {
     nextOffsetMetadata = new LogOffsetMetadata(messageOffset, activeSegment.baseOffset, activeSegment.size)
   }
 
-  // This method does not need to convert IOException to KafkaStorageException because it is only called before all logs are loaded
-  private def recoverLog() {
+  /**
+   * Recover the log segments and return the next offset after recovery.
+   *
+   * This method does not need to convert IOException to KafkaStorageException because it is only called before all
+   * logs are loaded.
+   */
+  private def recoverLog(): Long = {
     // if we have the clean shutdown marker, skip recovery
-    if (hasCleanShutdownFile) {
-      recoveryPoint = activeSegment.nextOffset
-      return
-    }
-
-    // okay we need to actually recovery this log
-    val unflushed = logSegments(this.recoveryPoint, Long.MaxValue).iterator
-    while (unflushed.hasNext) {
-      val segment = unflushed.next
-      info("Recovering unflushed segment %d in log %s.".format(segment.baseOffset, name))
-      val truncatedBytes =
-        try {
-          recoverSegment(segment, Some(leaderEpochCache))
-        } catch {
-          case _: InvalidOffsetException =>
-            val startOffset = segment.baseOffset
-            warn("Found invalid offset during recovery for log " + dir.getName +". Deleting the corrupt segment and " +
-                 "creating an empty one with starting offset " + startOffset)
-            segment.truncateTo(startOffset)
+    if (!hasCleanShutdownFile) {
+      // okay we need to actually recovery this log
+      val unflushed = logSegments(this.recoveryPoint, Long.MaxValue).iterator
+      while (unflushed.hasNext) {
+        val segment = unflushed.next
+        info("Recovering unflushed segment %d in log %s.".format(segment.baseOffset, name))
+        val truncatedBytes =
+          try {
+            recoverSegment(segment, Some(leaderEpochCache))
+          } catch {
+            case _: InvalidOffsetException =>
+              val startOffset = segment.baseOffset
+              warn("Found invalid offset during recovery for log " + dir.getName + ". Deleting the corrupt segment and " +
+                "creating an empty one with starting offset " + startOffset)
+              segment.truncateTo(startOffset)
+          }
+        if (truncatedBytes > 0) {
+          // we had an invalid message, delete all remaining log
+          warn("Corruption found in segment %d of log %s, truncating to offset %d.".format(segment.baseOffset, name,
+            segment.nextOffset()))
+          unflushed.foreach(deleteSegment)
         }
-      if (truncatedBytes > 0) {
-        // we had an invalid message, delete all remaining log
-        warn("Corruption found in segment %d of log %s, truncating to offset %d.".format(segment.baseOffset, name,
-          segment.nextOffset()))
-        unflushed.foreach(deleteSegment)
       }
     }
-
     recoveryPoint = activeSegment.nextOffset
+    recoveryPoint
   }
 
   private def loadProducerState(lastOffset: Long, reloadFromCleanShutdown: Boolean): Unit = lock synchronized {
