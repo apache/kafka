@@ -149,4 +149,5 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
                                         consumer_timeout_ms=60000,
                                         message_validator=is_int)
 
+        self.enable_idempotence=True
         self.run_produce_consume_validate(core_test_action=lambda: self.reassign_partitions(bounce_brokers))
