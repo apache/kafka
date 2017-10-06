@@ -139,6 +139,24 @@ public class Materialized<K, V, S extends StateStore> {
     }
 
     /**
+     * Materialize a {@link StateStore} with the provided key and value {@link Serde}s.
+     * An internal name will be used for the store.
+     *
+     * @param keySerde      the key {@link Serde} to use. If the {@link Serde} is null, then the default key
+     *                      serde from configs will be used
+     * @param valueSerde    the value {@link Serde} to use. If the {@link Serde} is null, then the default value
+     *                      serde from configs will be used
+     * @param <K>           key type
+     * @param <V>           value type
+     * @param <S>           store type
+     * @return a new {@link Materialized} instance with the given key and value serdes
+     */
+    public static <K, V, S extends StateStore> Materialized<K, V, S> with(final Serde<K> keySerde,
+                                                                          final Serde<V> valueSerde) {
+        return new Materialized<K, V, S>((String) null).withKeySerde(keySerde).withValueSerde(valueSerde);
+    }
+
+    /**
      * Set the valueSerde the materialized {@link StateStore} will use.
      *
      * @param valueSerde the value {@link Serde} to use. If the {@link Serde} is null, then the default value
