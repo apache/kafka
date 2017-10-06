@@ -27,7 +27,7 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import kafka.utils._
 import kafka.server.{BrokerTopicStats, FetchDataInfo, KafkaConfig, LogDirFailureChannel}
-import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
+import kafka.server.epoch.{EpochEntry, LeaderEpochCache, LeaderEpochFileCache}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
@@ -180,8 +180,8 @@ class LogTest {
 
     // Reload after unclean shutdown with recoveryPoint set to log end offset
     log = createLog(logDir, logConfig, recoveryPoint = logEndOffset)
-    // Is this working as intended?
-    expectedSnapshotOffsets = Vector(log.logEndOffset)
+    // Note that we don't maintain the guarantee of having a snapshot for the 2 most recent segments in this case
+    expectedSnapshotOffsets = Vector(log.logSegments.last.baseOffset, log.logEndOffset)
     assertEquals(expectedSnapshotOffsets, listProducerSnapshotOffsets)
     log.close()
 
@@ -208,17 +208,19 @@ class LogTest {
 
     assertTrue(log.logSegments.size >= 5)
     val segmentOffsets = log.logSegments.toVector.map(_.baseOffset)
+    val activeSegmentOffset = segmentOffsets.last
 
     // We want the recovery point to be past the segment offset and before the last 2 segments including a gap of
     // 1 segment. We collect the data before closing the log.
     val offsetForSegmentAfterRecoveryPoint = segmentOffsets(segmentOffsets.size - 3)
     val offsetForRecoveryPointSegment = segmentOffsets(segmentOffsets.size - 4)
+    val (segOffsetsBeforeRecovery, segOffsetsAfterRecovery) = segmentOffsets.partition(_ < offsetForRecoveryPointSegment)
     val recoveryPoint = offsetForRecoveryPointSegment + 1
-    println("recovery point " + recoveryPoint)
     assertTrue(recoveryPoint < offsetForSegmentAfterRecoveryPoint)
     log.close()
 
     val segmentsWithReads = ArrayBuffer[LogSegment]()
+    val recoveredSegments = ArrayBuffer[LogSegment]()
 
     def createLogWithInterceptedReads(recoveryPoint: Long) = {
       val maxProducerIdExpirationMs = 60 * 60 * 1000
@@ -240,6 +242,12 @@ class LogTest {
               segmentsWithReads += this
               super.read(startOffset, maxOffset, maxSize, maxPosition, minOneMessage)
             }
+
+            override def recover(producerStateManager: ProducerStateManager,
+                                 leaderEpochCache: Option[LeaderEpochCache]): Int = {
+              recoveredSegments += this
+              super.recover(producerStateManager, leaderEpochCache)
+            }
           }
           super.addSegment(wrapper)
         }
@@ -248,20 +256,23 @@ class LogTest {
 
     // Retain snapshots for the last 2 segments
     ProducerStateManager.deleteSnapshotsBefore(logDir, segmentOffsets(segmentOffsets.size - 2))
-    log = createLogWithInterceptedReads(recoveryPoint)
+    log = createLogWithInterceptedReads(offsetForRecoveryPointSegment)
     // We will reload all segments because the recovery point is behind the producer snapshot files (pre KAFKA-5829 behaviour)
-    assertEquals(segmentOffsets, segmentsWithReads.map(_.baseOffset))
-    var expectedSnapshotOffsets = segmentOffsets.takeRight(3) :+ log.logEndOffset
+    assertEquals(segOffsetsBeforeRecovery, segmentsWithReads.map(_.baseOffset) -- Seq(activeSegmentOffset))
+    assertEquals(segOffsetsAfterRecovery, recoveredSegments.map(_.baseOffset))
+    var expectedSnapshotOffsets = segmentOffsets.takeRight(4) :+ log.logEndOffset
     assertEquals(expectedSnapshotOffsets, listProducerSnapshotOffsets)
     log.close()
     segmentsWithReads.clear()
+    recoveredSegments.clear()
 
     // Only delete snapshots before the base offset of the recovery point segment (post KAFKA-5829 behaviour) to
     // avoid reading all segments
     ProducerStateManager.deleteSnapshotsBefore(logDir, offsetForRecoveryPointSegment)
     log = createLogWithInterceptedReads(recoveryPoint = recoveryPoint)
-    expectedSnapshotOffsets = log.logSegments.map(_.baseOffset).toVector.takeRight(3) :+ log.logEndOffset
-    assertEquals(expectedSnapshotOffsets, segmentsWithReads.map(_.baseOffset))
+    assertEquals(Seq(activeSegmentOffset), segmentsWithReads.map(_.baseOffset))
+    assertEquals(segOffsetsAfterRecovery, recoveredSegments.map(_.baseOffset))
+    expectedSnapshotOffsets = log.logSegments.map(_.baseOffset).toVector.takeRight(4) :+ log.logEndOffset
     assertEquals(expectedSnapshotOffsets, listProducerSnapshotOffsets)
 
     // Verify that we keep 2 snapshot files if we checkpoint the log end offset

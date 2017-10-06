@@ -348,6 +348,11 @@ class Log(@volatile var dir: File,
         loadProducersFromLog(stateManager, fetchDataInfo.records)
     }
     stateManager.updateMapEndOffset(segment.baseOffset)
+
+    // take a snapshot for the first recovered segment to avoid reloading all the segments if we shutdown before we
+    // checkpoint the recovery point
+    stateManager.takeSnapshot()
+
     val bytesTruncated = segment.recover(stateManager, leaderEpochCache)
 
     // once we have recovered the segment's data, take a snapshot to ensure that we won't
@@ -487,8 +492,7 @@ class Log(@volatile var dir: File,
         producerStateManager.takeSnapshot()
       }
     } else {
-      val nonEmptyBeforeTruncation = !producerStateManager.isEmpty
-      val snapOffsetBeforeTruncation = producerStateManager.mapEndOffset
+      val isEmptyBeforeTruncation = producerStateManager.isEmpty && producerStateManager.mapEndOffset >= lastOffset
       producerStateManager.truncateAndReload(logStartOffset, lastOffset, time.milliseconds())
 
       // Only do the potentially expensive reloading if the last snapshot offset is lower than the log end
@@ -497,7 +501,7 @@ class Log(@volatile var dir: File,
       // shouldn't change that fact (although it could cause a producerId to expire earlier than expected),
       // and we can skip the loading. This is an optimization for users which are not yet using
       // idempotent/transactional features yet.
-      if (lastOffset > producerStateManager.mapEndOffset && (lastOffset > snapOffsetBeforeTruncation || nonEmptyBeforeTruncation)) {
+      if (lastOffset > producerStateManager.mapEndOffset && !isEmptyBeforeTruncation) {
         logSegments(producerStateManager.mapEndOffset, lastOffset).foreach { segment =>
           val startOffset = Utils.max(segment.baseOffset, producerStateManager.mapEndOffset, logStartOffset)
           producerStateManager.updateMapEndOffset(startOffset)
