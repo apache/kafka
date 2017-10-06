@@ -19,6 +19,7 @@ package kafka.server
 
 import java.util
 
+import AbstractFetcherThread.ResultWithPartitions
 import kafka.admin.AdminUtils
 import kafka.api.{FetchRequest => _, _}
 import kafka.cluster.{BrokerEndPoint, Replica}

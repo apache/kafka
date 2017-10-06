@@ -21,6 +21,7 @@ import kafka.api.{FetchRequestBuilder, FetchResponsePartitionData, OffsetRequest
 import kafka.cluster.BrokerEndPoint
 import kafka.message.ByteBufferMessageSet
 import kafka.server.{AbstractFetcherThread, PartitionFetchState}
+import AbstractFetcherThread.ResultWithPartitions
 import kafka.common.{ErrorMapping, TopicAndPartition}
 
 import scala.collection.Map

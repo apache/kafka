@@ -82,8 +82,6 @@ abstract class AbstractFetcherThread(name: String,
 
   protected def buildFetchRequest(partitionMap: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[REQ]
 
-  case class ResultWithPartitions[R](result: R, partitionsWithError: Set[TopicPartition])
-
   protected def fetch(fetchRequest: REQ): Seq[(TopicPartition, PD)]
 
   override def shutdown(){
@@ -302,6 +300,8 @@ abstract class AbstractFetcherThread(name: String,
 }
 
 object AbstractFetcherThread {
+
+  case class ResultWithPartitions[R](result: R, partitionsWithError: Set[TopicPartition])
 
   trait FetchRequest {
     def isEmpty: Boolean
