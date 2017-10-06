@@ -238,7 +238,8 @@ public class DelegatingClassLoader extends URLClassLoader {
                         } catch (Throwable t) {
                             log.debug(
                                     "Ignoring java.sql.Driver classes listed in resources but not"
-                                            + " present in class loader's classpath"
+                                            + " present in class loader's classpath: ",
+                                    t
                             );
                         }
                         return null;
