@@ -21,7 +21,7 @@ import java.nio.ByteBuffer
 import java.nio.file.Files
 
 import kafka.common.KafkaException
-import kafka.log.Log.offsetFromFilename
+import kafka.log.Log.offsetFromFile
 import kafka.server.LogOffsetMetadata
 import kafka.utils.{Logging, nonthreadsafe, threadsafe}
 import org.apache.kafka.common.TopicPartition
@@ -417,7 +417,25 @@ object ProducerStateManager {
     }
   }
 
-  private def isSnapshotFile(name: String): Boolean = name.endsWith(Log.PidSnapshotFileSuffix)
+  private def isSnapshotFile(file: File): Boolean = file.getName.endsWith(Log.ProducerSnapshotFileSuffix)
+
+  // visible for testing
+  private[log] def listSnapshotFiles(dir: File): Seq[File] = {
+    if (dir.exists && dir.isDirectory) {
+      Option(dir.listFiles).map { files =>
+        files.filter(f => f.isFile && isSnapshotFile(f)).toSeq
+      }.getOrElse(Seq.empty)
+    } else Seq.empty
+  }
+
+  // visible for testing
+  private[log] def deleteSnapshotsBefore(dir: File, offset: Long): Unit = deleteSnapshotFiles(dir, _ < offset)
+
+  private def deleteSnapshotFiles(dir: File, predicate: Long => Boolean = _ => true) {
+    listSnapshotFiles(dir).filter(file => predicate(offsetFromFile(file))).foreach { file =>
+      Files.deleteIfExists(file.toPath)
+    }
+  }
 
 }
 
@@ -444,7 +462,6 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   import ProducerStateManager._
   import java.util
 
-  private val validateSequenceNumbers = topicPartition.topic != Topic.GROUP_METADATA_TOPIC_NAME
   private val producers = mutable.Map.empty[Long, ProducerIdEntry]
   private var lastMapOffset = 0L
   private var lastSnapOffset = 0L
@@ -509,7 +526,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
               isProducerRetained(producerEntry, logStartOffset) && !isProducerExpired(currentTime, producerEntry)
             }
             loadedProducers.foreach(loadProducerEntry)
-            lastSnapOffset = offsetFromFilename(file.getName)
+            lastSnapOffset = offsetFromFile(file)
             lastMapOffset = lastSnapOffset
             return
           } catch {
@@ -553,9 +570,9 @@ class ProducerStateManager(val topicPartition: TopicPartition,
    */
   def truncateAndReload(logStartOffset: Long, logEndOffset: Long, currentTimeMs: Long) {
     // remove all out of range snapshots
-    deleteSnapshotFiles { snapOffset =>
+    deleteSnapshotFiles(logDir, { snapOffset =>
       snapOffset > logEndOffset || snapOffset <= logStartOffset
-    }
+    })
 
     if (logEndOffset != mapEndOffset) {
       producers.clear()
@@ -625,12 +642,12 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   /**
    * Get the last offset (exclusive) of the latest snapshot file.
    */
-  def latestSnapshotOffset: Option[Long] = latestSnapshotFile.map(file => offsetFromFilename(file.getName))
+  def latestSnapshotOffset: Option[Long] = latestSnapshotFile.map(file => offsetFromFile(file))
 
   /**
    * Get the last offset (exclusive) of the oldest snapshot file.
    */
-  def oldestSnapshotOffset: Option[Long] = oldestSnapshotFile.map(file => offsetFromFilename(file.getName))
+  def oldestSnapshotOffset: Option[Long] = oldestSnapshotFile.map(file => offsetFromFile(file))
 
   private def isProducerRetained(producerIdEntry: ProducerIdEntry, logStartOffset: Long): Boolean = {
     producerIdEntry.removeBatchesOlderThan(logStartOffset)
@@ -689,7 +706,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     producers.clear()
     ongoingTxns.clear()
     unreplicatedTxns.clear()
-    deleteSnapshotFiles()
+    deleteSnapshotFiles(logDir)
     lastSnapOffset = 0L
     lastMapOffset = 0L
   }
@@ -710,25 +727,12 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   }
 
   @threadsafe
-  def deleteSnapshotsBefore(offset: Long): Unit = {
-    deleteSnapshotFiles(_ < offset)
-  }
-
-  private def listSnapshotFiles: List[File] = {
-    if (logDir.exists && logDir.isDirectory) {
-      val files = logDir.listFiles
-      if (files != null)
-        files.filter(f => f.isFile && isSnapshotFile(f.getName)).toList
-      else
-        List.empty[File]
-    } else
-      List.empty[File]
-  }
+  def deleteSnapshotsBefore(offset: Long): Unit = ProducerStateManager.deleteSnapshotsBefore(logDir, offset)
 
   private def oldestSnapshotFile: Option[File] = {
     val files = listSnapshotFiles
     if (files.nonEmpty)
-      Some(files.minBy(file => offsetFromFilename(file.getName)))
+      Some(files.minBy(offsetFromFile))
     else
       None
   }
@@ -736,14 +740,11 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   private def latestSnapshotFile: Option[File] = {
     val files = listSnapshotFiles
     if (files.nonEmpty)
-      Some(files.maxBy(file => offsetFromFilename(file.getName)))
+      Some(files.maxBy(offsetFromFile))
     else
       None
   }
 
-  private def deleteSnapshotFiles(predicate: Long => Boolean = _ => true) {
-    listSnapshotFiles.filter(file => predicate(offsetFromFilename(file.getName)))
-      .foreach(file => Files.deleteIfExists(file.toPath))
-  }
+  private def listSnapshotFiles: Seq[File] = ProducerStateManager.listSnapshotFiles(logDir)
 
 }
