@@ -41,7 +41,7 @@ import org.apache.kafka.common.internals.Topic
 import scala.collection.JavaConverters._
 import scala.collection._
 
-class GroupMetadataManagerTest extends Logging {
+class GroupMetadataManagerTest {
 
   var time: MockTime = null
   var replicaManager: ReplicaManager = null
@@ -1396,13 +1396,17 @@ class GroupMetadataManagerTest extends Logging {
     EasyMock.expect(replicaManager.nonOfflinePartition(groupTopicPartition)).andStubReturn(Some(partition))
   }
 
+  private def getGauge(manager: GroupMetadataManager, name: String): Gauge[Int]  = {
+    Metrics.defaultRegistry().allMetrics().get(manager.metricName(name, Map.empty)).asInstanceOf[Gauge[Int]]
+  }
+
   private def expectMetrics(manager: GroupMetadataManager,
                             expectedNumGroups: Int,
                             expectedNumGroupsPreparingRebalance: Int,
                             expectedNumGroupsCompletingRebalance: Int): Unit = {
-    assertEquals(expectedNumGroups, manager.numGroupsGauge.value)
-    assertEquals(expectedNumGroupsPreparingRebalance, manager.numGroupsPreparingRebalanceGauge.value)
-    assertEquals(expectedNumGroupsCompletingRebalance, manager.numGroupsCompletingRebalanceGauge.value)
+    assertEquals(expectedNumGroups, getGauge(manager, "NumGroups").value)
+    assertEquals(expectedNumGroupsPreparingRebalance, getGauge(manager, "NumGroupsPreparingRebalanceGauge").value)
+    assertEquals(expectedNumGroupsCompletingRebalance, getGauge(manager, "NumGroupsCompletingRebalanceGauge").value)
   }
 
   @Test

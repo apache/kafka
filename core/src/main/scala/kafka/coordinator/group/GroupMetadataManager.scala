@@ -94,43 +94,43 @@ class GroupMetadataManager(brokerId: Int,
       }).sum
     })
 
-  val numGroupsGauge = recreateGauge("NumGroups",
+  recreateGauge("NumGroups",
     new Gauge[Int] {
       def value = groupMetadataCache.size
     })
 
-  val numGroupsPreparingRebalanceGauge = recreateGauge("NumGroupsPreparingRebalance",
+  recreateGauge("NumGroupsPreparingRebalance",
     new Gauge[Int] {
       def value(): Int = groupMetadataCache.values.count(group => {
-        group synchronized { group.currentState == PreparingRebalance }
+        group synchronized { group.is(PreparingRebalance) }
       })
     })
 
-  val numGroupsCompletingRebalanceGauge = recreateGauge("NumGroupsCompletingRebalance",
+  recreateGauge("NumGroupsCompletingRebalance",
     new Gauge[Int] {
       def value(): Int = groupMetadataCache.values.count(group => {
-        group synchronized { group.currentState == CompletingRebalance }
+        group synchronized { group.is(CompletingRebalance) }
       })
     })
 
   recreateGauge("NumGroupsStable",
     new Gauge[Int] {
       def value(): Int = groupMetadataCache.values.count(group => {
-        group synchronized { group.currentState == Stable }
+        group synchronized { group.is(Stable) }
       })
     })
 
   recreateGauge("NumGroupsDead",
     new Gauge[Int] {
       def value(): Int = groupMetadataCache.values.count(group => {
-        group synchronized { group.currentState == Dead }
+        group synchronized { group.is(Dead) }
       })
     })
 
   recreateGauge("NumGroupsEmpty",
     new Gauge[Int] {
       def value(): Int = groupMetadataCache.values.count(group => {
-        group synchronized { group.currentState == Empty }
+        group synchronized { group.is(Empty) }
       })
     })
 
