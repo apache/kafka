@@ -34,6 +34,7 @@ import java.util.Map;
 
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
+import static org.apache.kafka.common.protocol.types.Type.BOOLEAN;
 import static org.apache.kafka.common.protocol.types.Type.INT32;
 import static org.apache.kafka.common.protocol.types.Type.INT64;
 
@@ -44,6 +45,7 @@ public class DeleteRecordsRequest extends AbstractRequest {
     // request level key names
     private static final String TOPICS_KEY_NAME = "topics";
     private static final String TIMEOUT_KEY_NAME = "timeout";
+    private static final String VALIDATE_ONLY_KEY_NAME = "validate_only";
 
     // topic level key names
     private static final String PARTITIONS_KEY_NAME = "partitions";
@@ -64,26 +66,34 @@ public class DeleteRecordsRequest extends AbstractRequest {
             new Field(TOPICS_KEY_NAME, new ArrayOf(DELETE_RECORDS_REQUEST_TOPIC_V0)),
             new Field(TIMEOUT_KEY_NAME, INT32, "The maximum time to await a response in ms."));
 
+    private static final Schema DELETE_RECORDS_REQUEST_V1 = new Schema(
+            new Field(TOPICS_KEY_NAME, new ArrayOf(DELETE_RECORDS_REQUEST_TOPIC_V0)),
+            new Field(TIMEOUT_KEY_NAME, INT32, "The maximum time to await a response in ms."),
+            new Field(VALIDATE_ONLY_KEY_NAME, BOOLEAN, "If true then validate the request, but don't actually delete the records."));
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{DELETE_RECORDS_REQUEST_V0};
+        return new Schema[]{DELETE_RECORDS_REQUEST_V0, DELETE_RECORDS_REQUEST_V1};
     }
 
     private final int timeout;
     private final Map<TopicPartition, Long> partitionOffsets;
+    private final boolean validateOnly;
 
     public static class Builder extends AbstractRequest.Builder<DeleteRecordsRequest> {
         private final int timeout;
         private final Map<TopicPartition, Long> partitionOffsets;
+        private final boolean validateOnly;
 
-        public Builder(int timeout, Map<TopicPartition, Long> partitionOffsets) {
+        public Builder(int timeout, Map<TopicPartition, Long> partitionOffsets, boolean validateOnly) {
             super(ApiKeys.DELETE_RECORDS);
             this.timeout = timeout;
             this.partitionOffsets = partitionOffsets;
+            this.validateOnly = validateOnly;
         }
 
         @Override
         public DeleteRecordsRequest build(short version) {
-            return new DeleteRecordsRequest(timeout, partitionOffsets, version);
+            return new DeleteRecordsRequest(timeout, partitionOffsets, validateOnly, version);
         }
 
         @Override
@@ -92,6 +102,7 @@ public class DeleteRecordsRequest extends AbstractRequest {
             builder.append("(type=DeleteRecordsRequest")
                    .append(", timeout=").append(timeout)
                    .append(", partitionOffsets=(").append(partitionOffsets)
+                   .append(", validateOnly=").append(validateOnly)
                    .append("))");
             return builder.toString();
         }
@@ -112,12 +123,14 @@ public class DeleteRecordsRequest extends AbstractRequest {
             }
         }
         timeout = struct.getInt(TIMEOUT_KEY_NAME);
+        validateOnly = struct.getBoolean(VALIDATE_ONLY_KEY_NAME);
     }
 
-    public DeleteRecordsRequest(int timeout, Map<TopicPartition, Long> partitionOffsets, short version) {
+    public DeleteRecordsRequest(int timeout, Map<TopicPartition, Long> partitionOffsets, boolean validateOnly, short version) {
         super(version);
         this.timeout = timeout;
         this.partitionOffsets = partitionOffsets;
+        this.validateOnly = validateOnly;
     }
     @Override
     protected Struct toStruct() {
@@ -139,6 +152,7 @@ public class DeleteRecordsRequest extends AbstractRequest {
             topicStructArray.add(topicStruct);
         }
         struct.set(TOPICS_KEY_NAME, topicStructArray.toArray());
+        struct.set(VALIDATE_ONLY_KEY_NAME, validateOnly);
         return struct;
     }
 
@@ -153,6 +167,7 @@ public class DeleteRecordsRequest extends AbstractRequest {
         short versionId = version();
         switch (versionId) {
             case 0:
+            case 1:
                 return new DeleteRecordsResponse(throttleTimeMs, responseMap);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
@@ -166,6 +181,10 @@ public class DeleteRecordsRequest extends AbstractRequest {
 
     public Map<TopicPartition, Long> partitionOffsets() {
         return partitionOffsets;
+    }
+
+    public boolean validateOnly() {
+        return validateOnly;
     }
 
     public static DeleteRecordsRequest parse(ByteBuffer buffer, short version) {

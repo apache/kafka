@@ -46,10 +46,13 @@ public class DeleteTopicsResponse extends AbstractResponse {
 
     private static final Schema DELETE_TOPICS_RESPONSE_V1 = new Schema(
             THROTTLE_TIME_MS,
-            new Field(TOPIC_ERROR_CODES_KEY_NAME, new ArrayOf(TOPIC_ERROR_CODE), "An array of per topic error codes."));
+            new Field(TOPIC_ERROR_CODES_KEY_NAME,
+                    new ArrayOf(TOPIC_ERROR_CODE), "An array of per topic error codes."));
+
+    private static final Schema DELETE_TOPICS_RESPONSE_V2 = DELETE_TOPICS_RESPONSE_V1;
 
     public static Schema[] schemaVersions() {
-        return new Schema[]{DELETE_TOPICS_RESPONSE_V0, DELETE_TOPICS_RESPONSE_V1};
+        return new Schema[]{DELETE_TOPICS_RESPONSE_V0, DELETE_TOPICS_RESPONSE_V1, DELETE_TOPICS_RESPONSE_V2};
     }
 
 

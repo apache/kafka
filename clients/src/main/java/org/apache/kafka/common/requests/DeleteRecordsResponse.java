@@ -64,8 +64,10 @@ public class DeleteRecordsResponse extends AbstractResponse {
             THROTTLE_TIME_MS,
             new Field(TOPICS_KEY_NAME, new ArrayOf(DELETE_RECORDS_RESPONSE_TOPIC_V0)));
 
+    private static final Schema DELETE_RECORDS_RESPONSE_V1 = DELETE_RECORDS_RESPONSE_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{DELETE_RECORDS_RESPONSE_V0};
+        return new Schema[]{DELETE_RECORDS_RESPONSE_V0, DELETE_RECORDS_RESPONSE_V1};
     }
 
     private final int throttleTimeMs;

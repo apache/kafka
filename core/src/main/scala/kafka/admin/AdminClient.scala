@@ -250,7 +250,7 @@ class AdminClient(val time: Time,
     // prepare requests and generate Future objects
     val futures = partitionsGroupByLeader.map{ case (node, partitionAndOffsets) =>
       val convertedMap: java.util.Map[TopicPartition, java.lang.Long] = partitionAndOffsets.mapValues(_.asInstanceOf[java.lang.Long]).asJava
-      val future = client.send(node, new DeleteRecordsRequest.Builder(requestTimeoutMs, convertedMap))
+      val future = client.send(node, new DeleteRecordsRequest.Builder(requestTimeoutMs, convertedMap, false))
       pendingFutures.add(future)
       future.compose(new RequestFutureAdapter[ClientResponse, Map[TopicPartition, DeleteRecordsResult]]() {
           override def onSuccess(response: ClientResponse, future: RequestFuture[Map[TopicPartition, DeleteRecordsResult]]) {

@@ -870,7 +870,7 @@ public class RequestResponseTest {
     }
 
     private DeleteTopicsRequest createDeleteTopicsRequest() {
-        return new DeleteTopicsRequest.Builder(Utils.mkSet("my_t1", "my_t2"), 10000).build();
+        return new DeleteTopicsRequest.Builder(Utils.mkSet("my_t1", "my_t2"), 10000, false).build();
     }
 
     private DeleteTopicsResponse createDeleteTopicsResponse() {

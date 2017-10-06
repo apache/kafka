@@ -28,6 +28,7 @@ import java.util.Collection;
  */
 @InterfaceStability.Evolving
 public class DeleteTopicsOptions extends AbstractOptions<DeleteTopicsOptions> {
+    private boolean validateOnly;
 
     /**
      * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
@@ -40,4 +41,12 @@ public class DeleteTopicsOptions extends AbstractOptions<DeleteTopicsOptions> {
         return this;
     }
 
+    public DeleteTopicsOptions validateOnly(boolean validateOnly) {
+        this.validateOnly = validateOnly;
+        return this;
+    }
+
+    public boolean validateOnly() {
+        return this.validateOnly;
+    }
 }

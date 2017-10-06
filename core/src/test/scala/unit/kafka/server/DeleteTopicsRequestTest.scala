@@ -33,11 +33,11 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
     val timeout = 10000
     // Single topic
     TestUtils.createTopic(zkUtils, "topic-1", 1, 1, servers)
-    validateValidDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set("topic-1").asJava, timeout).build())
+    validateValidDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set("topic-1").asJava, timeout, false).build())
     // Multi topic
     TestUtils.createTopic(zkUtils, "topic-3", 5, 2, servers)
     TestUtils.createTopic(zkUtils, "topic-4", 1, 2, servers)
-    validateValidDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set("topic-3", "topic-4").asJava, timeout).build())
+    validateValidDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set("topic-3", "topic-4").asJava, timeout, false).build())
   }
 
   private def validateValidDeleteTopicRequests(request: DeleteTopicsRequest): Unit = {
@@ -57,14 +57,14 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
     val timeoutTopic = "invalid-timeout"
 
     // Basic
-    validateErrorDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set("invalid-topic").asJava, timeout).build(),
+    validateErrorDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set("invalid-topic").asJava, timeout, false).build(),
       Map("invalid-topic" -> Errors.UNKNOWN_TOPIC_OR_PARTITION))
 
     // Partial
     TestUtils.createTopic(zkUtils, "partial-topic-1", 1, 1, servers)
     validateErrorDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set(
       "partial-topic-1",
-      "partial-invalid-topic").asJava, timeout).build(),
+      "partial-invalid-topic").asJava, timeout, false).build(),
       Map(
         "partial-topic-1" -> Errors.NONE,
         "partial-invalid-topic" -> Errors.UNKNOWN_TOPIC_OR_PARTITION
@@ -74,7 +74,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
     // Timeout
     TestUtils.createTopic(zkUtils, timeoutTopic, 5, 2, servers)
     // Must be a 0ms timeout to avoid transient test failures. Even a timeout of 1ms has succeeded in the past.
-    validateErrorDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set(timeoutTopic).asJava, 0).build(),
+    validateErrorDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set(timeoutTopic).asJava, 0, false).build(),
       Map(timeoutTopic -> Errors.REQUEST_TIMED_OUT))
     // The topic should still get deleted eventually
     TestUtils.waitUntilTrue(() => !servers.head.metadataCache.contains(timeoutTopic), s"Topic $timeoutTopic is never deleted")
@@ -97,7 +97,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
 
   @Test
   def testNotController() {
-    val request = new DeleteTopicsRequest.Builder(Set("not-controller").asJava, 1000).build()
+    val request = new DeleteTopicsRequest.Builder(Set("not-controller").asJava, 1000, false).build()
     val response = sendDeleteTopicsRequest(request, notControllerSocketServer)
 
     val error = response.errors.asScala.head._2

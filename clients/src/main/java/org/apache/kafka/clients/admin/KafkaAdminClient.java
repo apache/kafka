@@ -1134,7 +1134,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DeleteTopicsResult deleteTopics(final Collection<String> topicNames,
-                                           DeleteTopicsOptions options) {
+                                           final DeleteTopicsOptions options) {
         final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(topicNames.size());
         for (String topicName : topicNames) {
             if (topicFutures.get(topicName) == null) {
@@ -1147,7 +1147,7 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new DeleteTopicsRequest.Builder(new HashSet<>(topicNames), timeoutMs);
+                return new DeleteTopicsRequest.Builder(new HashSet<>(topicNames), timeoutMs, options.validateOnly());
             }
 
             @Override
