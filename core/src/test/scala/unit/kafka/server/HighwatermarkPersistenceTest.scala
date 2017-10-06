@@ -37,7 +37,7 @@ class HighwatermarkPersistenceTest {
   val zkUtils = EasyMock.createMock(classOf[ZkUtils])
   val logManagers = configs map { config =>
     TestUtils.createLogManager(
-      logDirs = config.logDirs.map(new File(_)).toArray,
+      logDirs = config.logDirs.map(new File(_)),
       cleanerConfig = CleanerConfig())
   }
 
@@ -47,7 +47,7 @@ class HighwatermarkPersistenceTest {
 
   @After
   def teardown() {
-    for(manager <- logManagers; dir <- manager.liveLogDirs)
+    for (manager <- logManagers; dir <- manager.liveLogDirs)
       Utils.delete(dir)
   }
 

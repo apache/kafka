@@ -114,7 +114,7 @@ object DumpLogSegments {
           dumpIndex(file, indexSanityOnly, verifyOnly, misMatchesForIndexFilesMap, maxMessageSize)
         case Log.TimeIndexFileSuffix =>
           dumpTimeIndex(file, indexSanityOnly, verifyOnly, timeIndexDumpErrors, maxMessageSize)
-        case Log.PidSnapshotFileSuffix =>
+        case Log.ProducerSnapshotFileSuffix =>
           dumpProducerIdSnapshot(file)
         case Log.TxnIndexFileSuffix =>
           dumpTxnIndex(file)
@@ -145,7 +145,7 @@ object DumpLogSegments {
   }
 
   private def dumpTxnIndex(file: File): Unit = {
-    val index = new TransactionIndex(Log.offsetFromFilename(file.getName), file)
+    val index = new TransactionIndex(Log.offsetFromFile(file), file)
     for (abortedTxn <- index.allAbortedTxns) {
       println(s"version: ${abortedTxn.version} producerId: ${abortedTxn.producerId} firstOffset: ${abortedTxn.firstOffset} " +
         s"lastOffset: ${abortedTxn.lastOffset} lastStableOffset: ${abortedTxn.lastStableOffset}")

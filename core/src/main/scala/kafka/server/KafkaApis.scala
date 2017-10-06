@@ -2000,7 +2000,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (authorize(request.session, Describe, Resource.ClusterResource)) {
         val partitions =
           if (describeLogDirsDirRequest.isAllTopicPartitions)
-            replicaManager.logManager.allLogs().map(_.topicPartition).toSet
+            replicaManager.logManager.allLogs.map(_.topicPartition).toSet
           else
             describeLogDirsDirRequest.topicPartitions().asScala
 
