@@ -196,6 +196,82 @@ class LogTest {
   }
 
   @Test
+  def testProducerSnapshotsRecoveryAfterUncleanShutdown(): Unit = {
+    val logConfig = createLogConfig(segmentBytes = 64 * 10)
+    var log = createLog(logDir, logConfig)
+    assertEquals(None, log.oldestProducerSnapshotOffset)
+
+    for (i <- 0 to 100) {
+      val record = new SimpleRecord(mockTime.milliseconds, i.toString.getBytes)
+      log.appendAsLeader(TestUtils.records(List(record)), leaderEpoch = 0)
+    }
+
+    assertTrue(log.logSegments.size >= 5)
+    val segmentOffsets = log.logSegments.toVector.map(_.baseOffset)
+
+    // We want the recovery point to be past the segment offset and before the last 2 segments including a gap of
+    // 1 segment. We collect the data before closing the log.
+    val offsetForSegmentAfterRecoveryPoint = segmentOffsets(segmentOffsets.size - 3)
+    val offsetForRecoveryPointSegment = segmentOffsets(segmentOffsets.size - 4)
+    val recoveryPoint = offsetForRecoveryPointSegment + 1
+    println("recovery point " + recoveryPoint)
+    assertTrue(recoveryPoint < offsetForSegmentAfterRecoveryPoint)
+    log.close()
+
+    val segmentsWithReads = ArrayBuffer[LogSegment]()
+
+    def createLogWithInterceptedReads(recoveryPoint: Long) = {
+      val maxProducerIdExpirationMs = 60 * 60 * 1000
+      val topicPartition = Log.parseTopicPartitionName(logDir)
+      val producerStateManager = new ProducerStateManager(topicPartition, logDir, maxProducerIdExpirationMs)
+
+      // Intercept all segment read calls
+      new Log(logDir, logConfig, logStartOffset = 0, recoveryPoint = recoveryPoint, mockTime.scheduler,
+        brokerTopicStats, mockTime, maxProducerIdExpirationMs, LogManager.ProducerIdExpirationCheckIntervalMs,
+        topicPartition, producerStateManager, new LogDirFailureChannel(10)) {
+
+        override def addSegment(segment: LogSegment): LogSegment = {
+          val wrapper = new LogSegment(segment.log, segment.index, segment.timeIndex, segment.txnIndex, segment.baseOffset,
+            segment.indexIntervalBytes, segment.rollJitterMs, mockTime) {
+
+            override def read(startOffset: Long, maxOffset: Option[Long], maxSize: Int, maxPosition: Long,
+                              minOneMessage: Boolean): FetchDataInfo = {
+              new Exception().printStackTrace()
+              segmentsWithReads += this
+              super.read(startOffset, maxOffset, maxSize, maxPosition, minOneMessage)
+            }
+          }
+          super.addSegment(wrapper)
+        }
+      }
+    }
+
+    // Retain snapshots for the last 2 segments
+    ProducerStateManager.deleteSnapshotsBefore(logDir, segmentOffsets(segmentOffsets.size - 2))
+    log = createLogWithInterceptedReads(recoveryPoint)
+    // We will reload all segments because the recovery point is behind the producer snapshot files (pre KAFKA-5829 behaviour)
+    assertEquals(segmentOffsets, segmentsWithReads.map(_.baseOffset))
+    var expectedSnapshotOffsets = segmentOffsets.takeRight(3) :+ log.logEndOffset
+    assertEquals(expectedSnapshotOffsets, listProducerSnapshotOffsets)
+    log.close()
+    segmentsWithReads.clear()
+
+    // Only delete snapshots before the base offset of the recovery point segment (post KAFKA-5829 behaviour) to
+    // avoid reading all segments
+    ProducerStateManager.deleteSnapshotsBefore(logDir, offsetForRecoveryPointSegment)
+    log = createLogWithInterceptedReads(recoveryPoint = recoveryPoint)
+    expectedSnapshotOffsets = log.logSegments.map(_.baseOffset).toVector.takeRight(3) :+ log.logEndOffset
+    assertEquals(expectedSnapshotOffsets, segmentsWithReads.map(_.baseOffset))
+    assertEquals(expectedSnapshotOffsets, listProducerSnapshotOffsets)
+
+    // Verify that we keep 2 snapshot files if we checkpoint the log end offset
+    log.deleteSnapshotsAfterRecoveryPointCheckpoint()
+    expectedSnapshotOffsets = log.logSegments.map(_.baseOffset).toVector.takeRight(2) :+ log.logEndOffset
+    assertEquals(expectedSnapshotOffsets, listProducerSnapshotOffsets)
+    log.close()
+  }
+
+  @Test
   def testSizeForLargeLogs(): Unit = {
     val largeSize = Int.MaxValue.toLong * 2
     val logSegment = EasyMock.createMock(classOf[LogSegment])
