@@ -20,6 +20,7 @@ import java.util
 import util.Arrays.asList
 
 import kafka.common.BrokerEndPointNotAvailableException
+import kafka.log.LogConfig
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -30,13 +31,14 @@ import org.junit.Test
 import org.junit.Assert._
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 
 class MetadataCacheTest {
 
   @Test
   def getTopicMetadataNonExistingTopics() {
     val topic = "topic"
-    val cache = new MetadataCache(1)
+    val cache = new MetadataCache(1, Map.empty[String, LogConfig])
     val topicMetadata = cache.getTopicMetadata(Set(topic), ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
     assertTrue(topicMetadata.isEmpty)
   }
@@ -46,8 +48,7 @@ class MetadataCacheTest {
     val topic0 = "topic-0"
     val topic1 = "topic-1"
 
-
-    val cache = new MetadataCache(1)
+    val cache = new MetadataCache(1, createLogConfigs(Seq(topic0, topic1), "0.11.0", 110))
 
     val zkVersion = 3
     val controllerId = 2
@@ -85,6 +86,8 @@ class MetadataCacheTest {
         val topicMetadata = topicMetadatas.head
         assertEquals(Errors.NONE, topicMetadata.error)
         assertEquals(topic, topicMetadata.topic)
+        assertEquals(2, topicMetadata.messageFormatVersion())
+        assertEquals(110, topicMetadata.messageMaxBytes())
 
         val topicPartitionStates = partitionStates.filter { case (tp, _) => tp.topic ==  topic }
         val partitionMetadatas = topicMetadata.partitionMetadata.asScala.sortBy(_.partition)
@@ -114,7 +117,7 @@ class MetadataCacheTest {
   def getTopicMetadataPartitionLeaderNotAvailable() {
     val topic = "topic"
 
-    val cache = new MetadataCache(1)
+    val cache = new MetadataCache(1, createLogConfigs(Seq(topic)))
 
     val zkVersion = 3
     val controllerId = 2
@@ -154,7 +157,7 @@ class MetadataCacheTest {
   def getTopicMetadataReplicaNotAvailable() {
     val topic = "topic"
 
-    val cache = new MetadataCache(1)
+    val cache = new MetadataCache(1, createLogConfigs(Seq(topic)))
 
     val zkVersion = 3
     val controllerId = 2
@@ -214,7 +217,7 @@ class MetadataCacheTest {
   def getTopicMetadataIsrNotAvailable() {
     val topic = "topic"
 
-    val cache = new MetadataCache(1)
+    val cache = new MetadataCache(1, createLogConfigs(Seq(topic)))
 
     val zkVersion = 3
     val controllerId = 2
@@ -273,7 +276,7 @@ class MetadataCacheTest {
   @Test
   def getTopicMetadataWithNonSupportedSecurityProtocol() {
     val topic = "topic"
-    val cache = new MetadataCache(1)
+    val cache = new MetadataCache(1, createLogConfigs(Seq(topic)))
     val securityProtocol = SecurityProtocol.PLAINTEXT
     val brokers = Set(new Broker(0,
       Seq(new EndPoint("foo", 9092, securityProtocol, ListenerName.forSecurityProtocol(securityProtocol))).asJava, ""))
@@ -302,7 +305,7 @@ class MetadataCacheTest {
   @Test
   def getAliveBrokersShouldNotBeMutatedByUpdateCache() {
     val topic = "topic"
-    val cache = new MetadataCache(1)
+    val cache = new MetadataCache(1, createLogConfigs(Seq(topic)))
 
     def updateCache(brokerIds: Set[Int]) {
       val brokers = brokerIds.map { brokerId =>
@@ -331,4 +334,59 @@ class MetadataCacheTest {
     assertEquals(initialBrokerIds, aliveBrokersFromCache.map(_.id).toSet)
   }
 
+  @Test
+  def testPropagationOfTopicConfigs(): Unit = {
+    val existingTopic : String = "existing"
+    val newTopic = "newtopic"
+    val zkVersion = 3
+    val controllerId = 2
+    val controllerEpoch = 1
+
+    def endPoints(brokerId: Int): Seq[EndPoint] = {
+      val host = s"foo-$brokerId"
+      Seq(
+        new EndPoint(host, 9092, SecurityProtocol.PLAINTEXT, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
+      )
+    }
+
+    val brokers = (0 to 4).map { brokerId =>
+      new Broker(brokerId, endPoints(brokerId).asJava, "rack1")
+    }.toSet
+
+    val partitionStates = Map(
+      new TopicPartition(newTopic, 0) -> new UpdateMetadataRequest.PartitionState(controllerEpoch, 0, 0, asList(0, 1, 3), zkVersion, asList(0, 1, 3), asList()),
+      new TopicPartition(existingTopic, 0) -> new UpdateMetadataRequest.PartitionState(controllerEpoch, 0, 0, asList(0, 1, 3), zkVersion, asList(0, 1, 3), asList()))
+
+    val version = ApiKeys.UPDATE_METADATA.latestVersion
+    val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch,
+      partitionStates.asJava, brokers.asJava).build()
+
+    val cache = new MetadataCache(1, createLogConfigs(Seq(existingTopic), "0.10.2"))
+    val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
+    cache.updateCache(15, updateMetadataRequest)
+
+    val retrievedMetadata = cache.getTopicMetadata(Set(existingTopic), listenerName, true)
+    assertEquals(1, retrievedMetadata.size)
+    assertEquals(1, retrievedMetadata.head.messageFormatVersion())
+
+    val updatedConfig = createLogConfigs(Seq(existingTopic), "0.11.0")
+    cache.updateTopicMetadata(existingTopic, updatedConfig(existingTopic))
+
+    val newConfig = createLogConfigs(Seq(newTopic), "0.9.0")
+    cache.updateTopicMetadata(newTopic, newConfig(newTopic))
+
+    val updatedMetadata = cache.getTopicMetadata(Set(existingTopic, newTopic), listenerName)
+    assertEquals(2, updatedMetadata.size)
+    assertEquals(2, updatedMetadata.head.messageFormatVersion())
+    assertEquals(0, updatedMetadata.tail.head.messageFormatVersion())
+  }
+
+  private def createLogConfigs(topics: Seq[String], messageFormatVersion: String = "0.11.0", messageMaxBytes: Int = 1000000) : Map[String, LogConfig] = {
+    val configs = mutable.Map[String, Object]()
+    configs.put(LogConfig.MessageFormatVersionProp, messageFormatVersion)
+    configs.put(LogConfig.MaxMessageBytesProp, messageMaxBytes.toString)
+    topics.map { case topic =>
+      (topic, LogConfig(configs.asJava))
+    }.toMap
+  }
 }

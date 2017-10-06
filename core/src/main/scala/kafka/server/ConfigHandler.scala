@@ -45,25 +45,27 @@ trait ConfigHandler {
   * The TopicConfigHandler will process topic config changes in ZK.
   * The callback provides the topic name and the full properties set read from ZK
   */
-class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaConfig, val quotas: QuotaManagers) extends ConfigHandler with Logging  {
+class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaConfig, val quotas: QuotaManagers,
+                         val metadataCache: MetadataCache) extends ConfigHandler with Logging  {
 
   def processConfigChanges(topic: String, topicConfig: Properties) {
     // Validate the configurations.
     val configNamesToExclude = excludedConfigs(topic, topicConfig)
 
     val logs = logManager.logsByTopicPartition.filterKeys(_.topic == topic).values.toBuffer
+
     if (logs.nonEmpty) {
-      /* combine the default properties with the overrides in zk to create the new LogConfig */
       val props = new Properties()
       props ++= logManager.defaultConfig.originals.asScala
       topicConfig.asScala.foreach { case (key, value) =>
         if (!configNamesToExclude.contains(key)) props.put(key, value)
       }
       val logConfig = LogConfig(props)
-      if ((topicConfig.containsKey(LogConfig.RetentionMsProp) 
+      /* combine the default properties with the overrides in zk to create the new LogConfig */
+      if ((topicConfig.containsKey(LogConfig.RetentionMsProp)
         || topicConfig.containsKey(LogConfig.MessageTimestampDifferenceMaxMsProp))
         && logConfig.retentionMs < logConfig.messageTimestampDifferenceMaxMs)
-        warn(s"${LogConfig.RetentionMsProp} for topic $topic is set to ${logConfig.retentionMs}. It is smaller than " + 
+        warn(s"${LogConfig.RetentionMsProp} for topic $topic is set to ${logConfig.retentionMs}. It is smaller than " +
           s"${LogConfig.MessageTimestampDifferenceMaxMsProp}'s value ${logConfig.messageTimestampDifferenceMaxMs}. " +
           s"This may result in frequent log rolling.")
       logs.foreach(_.config = logConfig)
@@ -81,6 +83,8 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
     }
     updateThrottledList(LogConfig.LeaderReplicationThrottledReplicasProp, quotas.leader)
     updateThrottledList(LogConfig.FollowerReplicationThrottledReplicasProp, quotas.follower)
+    debug(s"Updating metadataCache topic $topic -> $topicConfig")
+    metadataCache.updateTopicMetadata(topic, LogConfig(topicConfig))
   }
 
   def parseThrottledPartitions(topicConfig: Properties, brokerId: Int, prop: String): Seq[Int] = {

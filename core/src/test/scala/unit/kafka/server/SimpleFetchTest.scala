@@ -21,7 +21,7 @@ import java.io.File
 import kafka.api._
 import kafka.utils._
 import kafka.cluster.Replica
-import kafka.log.Log
+import kafka.log.{Log, LogConfig}
 import kafka.server.QuotaFactory.UnboundedQuota
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
@@ -108,12 +108,13 @@ class SimpleFetchTest {
     val logManager = EasyMock.createMock(classOf[kafka.log.LogManager])
     EasyMock.expect(logManager.getLog(topicPartition)).andReturn(Some(log)).anyTimes()
     EasyMock.expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
+    EasyMock.expect(logManager.topicConfigs).andReturn(Map.empty[String, LogConfig]).anyTimes()
     EasyMock.replay(logManager)
 
     // create the replica manager
     replicaManager = new ReplicaManager(configs.head, metrics, time, zkUtils, scheduler, logManager,
       new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time).follower, new BrokerTopicStats,
-      new MetadataCache(configs.head.brokerId), new LogDirFailureChannel(configs.head.logDirs.size))
+      new MetadataCache(configs.head.brokerId, logManager.topicConfigs), new LogDirFailureChannel(configs.head.logDirs.size))
 
     // add the partition with two replicas, both in ISR
     val partition = replicaManager.getOrCreatePartition(new TopicPartition(topic, partitionId))

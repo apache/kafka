@@ -2046,7 +2046,8 @@ public class FetcherTest {
             }
         }
 
-        MetadataResponse.TopicMetadata topicMetadata = new MetadataResponse.TopicMetadata(error, topic, false, partitionsMetadata);
+        MetadataResponse.TopicMetadata topicMetadata = new MetadataResponse.TopicMetadata(error, topic, false,
+                MetadataResponse.UNKNOWN_TOPIC_MESSAGE_FORMAT_VERSION, MetadataResponse.UNKNOWN_TOPIC_MESSAGE_MAX_BYTES, partitionsMetadata);
         return new MetadataResponse(cluster.nodes(), null, MetadataResponse.NO_CONTROLLER_ID, Arrays.asList(topicMetadata));
     }
 

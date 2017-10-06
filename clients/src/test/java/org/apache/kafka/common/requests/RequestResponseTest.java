@@ -121,6 +121,7 @@ public class RequestResponseTest {
         checkResponse(createMetadataResponse(), 3);
         checkErrorResponse(createMetadataRequest(3, singletonList("topic1")), new UnknownServerException());
         checkResponse(createMetadataResponse(), 4);
+        checkResponse(createMetadataResponse(), 6);
         checkErrorResponse(createMetadataRequest(4, singletonList("topic1")), new UnknownServerException());
         checkRequest(createOffsetCommitRequest(2));
         checkErrorResponse(createOffsetCommitRequest(2), new UnknownServerException());
@@ -678,8 +679,9 @@ public class RequestResponseTest {
 
         List<MetadataResponse.TopicMetadata> allTopicMetadata = new ArrayList<>();
         allTopicMetadata.add(new MetadataResponse.TopicMetadata(Errors.NONE, "__consumer_offsets", true,
-                asList(new MetadataResponse.PartitionMetadata(Errors.NONE, 1, node, replicas, isr, offlineReplicas))));
+                RecordBatch.MAGIC_VALUE_V2, 16384, asList(new MetadataResponse.PartitionMetadata(Errors.NONE, 1, node, replicas, isr, offlineReplicas))));
         allTopicMetadata.add(new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, "topic2", false,
+                MetadataResponse.UNKNOWN_TOPIC_MESSAGE_FORMAT_VERSION, MetadataResponse.UNKNOWN_TOPIC_MESSAGE_MAX_BYTES,
                 Collections.<MetadataResponse.PartitionMetadata>emptyList()));
 
         return new MetadataResponse(asList(node), null, MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata);
