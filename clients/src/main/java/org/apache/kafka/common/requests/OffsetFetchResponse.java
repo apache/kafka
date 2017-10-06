@@ -85,6 +85,8 @@ public class OffsetFetchResponse extends AbstractResponse {
     public static final String NO_METADATA = "";
     public static final PartitionData UNKNOWN_PARTITION = new PartitionData(INVALID_OFFSET, NO_METADATA,
             Errors.UNKNOWN_TOPIC_OR_PARTITION);
+    public static final PartitionData UNAUTHORIZED_PARTITION = new PartitionData(INVALID_OFFSET, NO_METADATA,
+            Errors.TOPIC_AUTHORIZATION_FAILED);
 
     /**
      * Possible error codes:
