@@ -210,7 +210,7 @@ class AssignedTasks implements RestoringTasks {
     }
 
     private RuntimeException suspendTasks(final Collection<Task> tasks) {
-        RuntimeException exception = null;
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
         for (Iterator<Task> it = tasks.iterator(); it.hasNext(); ) {
             final Task task = it.next();
             try {
@@ -218,30 +218,30 @@ class AssignedTasks implements RestoringTasks {
                 suspended.put(task.id(), task);
             } catch (final TaskMigratedException closeAsZombieAndSwallow) {
                 // as we suspend a task, we are either shutting down or rebalancing, thus, we swallow and move on
-                closeZombieTask(task);
+                firstException.compareAndSet(null, closeZombieTask(task));
                 it.remove();
             } catch (final RuntimeException e) {
                 log.error("Suspending {} {} failed due to the following error:", taskTypeName, task.id(), e);
+                firstException.compareAndSet(null, e);
                 try {
                     task.close(false, false);
-                } catch (final Exception f) {
+                } catch (final RuntimeException f) {
                     log.error("After suspending failed, closing the same {} {} failed again due to the following error:", taskTypeName, task.id(), f);
-                }
-                if (exception == null) {
-                    exception = e;
                 }
             }
         }
-        return exception;
+        return firstException.get();
     }
 
-    private void closeZombieTask(final Task task) {
+    private RuntimeException closeZombieTask(final Task task) {
         log.warn("{} {} got migrated to another thread already. Closing it as zombie.", taskTypeName, task.id());
         try {
             task.close(false, true);
-        } catch (final Exception e) {
+        } catch (final RuntimeException e) {
             log.warn("Failed to close zombie {} {} due to {}; ignore and proceed.", taskTypeName, task.id(), e.getMessage());
+            return e;
         }
+        return null;
     }
 
     boolean hasRunningTasks() {
@@ -260,7 +260,10 @@ class AssignedTasks implements RestoringTasks {
                 try {
                     task.resume();
                 } catch (final TaskMigratedException e) {
-                    closeZombieTask(task);
+                    final RuntimeException fatalException = closeZombieTask(task);
+                    if (fatalException != null) {
+                        throw fatalException;
+                    }
                     suspended.remove(taskId);
                     throw e;
                 }
@@ -402,7 +405,10 @@ class AssignedTasks implements RestoringTasks {
                     processed++;
                 }
             } catch (final TaskMigratedException e) {
-                closeZombieTask(task);
+                final RuntimeException fatalException = closeZombieTask(task);
+                if (fatalException != null) {
+                    throw fatalException;
+                }
                 it.remove();
                 throw e;
             } catch (final RuntimeException e) {
@@ -429,7 +435,10 @@ class AssignedTasks implements RestoringTasks {
                     punctuated++;
                 }
             } catch (final TaskMigratedException e) {
-                closeZombieTask(task);
+                final RuntimeException fatalException = closeZombieTask(task);
+                if (fatalException != null) {
+                    throw fatalException;
+                }
                 it.remove();
                 throw e;
             } catch (final KafkaException e) {
@@ -448,7 +457,10 @@ class AssignedTasks implements RestoringTasks {
             try {
                 action.apply(task);
             } catch (final TaskMigratedException e) {
-                closeZombieTask(task);
+                final RuntimeException fatalException = closeZombieTask(task);
+                if (fatalException != null) {
+                    throw fatalException;
+                }
                 it.remove();
                 if (firstException == null) {
                     firstException = e;
@@ -488,20 +500,45 @@ class AssignedTasks implements RestoringTasks {
     }
 
     void close(final boolean clean) {
-        close(allTasks(), clean);
-        clear();
-    }
-
-    private void close(final Collection<Task> tasks, final boolean clean) {
-        for (final Task task : tasks) {
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
+        for (final Task task : allTasks()) {
             try {
                 task.close(clean, false);
-            } catch (final Throwable t) {
+            } catch (final TaskMigratedException e) {
+                firstException.compareAndSet(null, closeZombieTask(task));
+            } catch (final RuntimeException t) {
+                firstException.compareAndSet(null, t);
                 log.error("Failed while closing {} {} due to the following error:",
                           task.getClass().getSimpleName(),
                           task.id(),
                           t);
+                firstException.compareAndSet(null, closeUncleanIfRequired(task, clean));
             }
         }
+
+        clear();
+
+        final RuntimeException fatalException = firstException.get();
+        if (fatalException != null) {
+            throw fatalException;
+        }
+    }
+
+    private RuntimeException closeUncleanIfRequired(final Task task,
+                                                    final boolean triedToCloseCleanlyPreviously) {
+        if (triedToCloseCleanlyPreviously) {
+            log.info("Try to close {} {} unclean.", task.getClass().getSimpleName(), task.id());
+            try {
+                task.close(false, false);
+            } catch (final RuntimeException fatalException) {
+                log.error("Failed while closing {} {} due to the following error:",
+                    task.getClass().getSimpleName(),
+                    task.id(),
+                    fatalException);
+                return fatalException;
+            }
+        }
+
+        return null;
     }
 }

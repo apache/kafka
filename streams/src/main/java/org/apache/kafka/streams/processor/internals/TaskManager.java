@@ -206,10 +206,16 @@ class TaskManager {
     }
 
     void shutdown(final boolean clean) {
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
+
         log.debug("Shutting down all active tasks {}, standby tasks {}, suspended tasks {}, and suspended standby tasks {}", active.runningTaskIds(), standby.runningTaskIds(),
                   active.previousTaskIds(), standby.previousTaskIds());
 
-        active.close(clean);
+        try {
+            active.close(clean);
+        } catch (final RuntimeException fatalException) {
+            firstException.compareAndSet(null, fatalException);
+        }
         standby.close(clean);
         try {
             threadMetadataProvider.close();
@@ -220,6 +226,11 @@ class TaskManager {
         restoreConsumer.assign(Collections.<TopicPartition>emptyList());
         taskCreator.close();
         standbyTaskCreator.close();
+
+        final RuntimeException fatalException = firstException.get();
+        if (fatalException != null) {
+            throw fatalException;
+        }
     }
 
     Set<TaskId> suspendedActiveTaskIds() {
