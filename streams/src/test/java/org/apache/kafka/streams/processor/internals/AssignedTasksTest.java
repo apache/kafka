@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.TaskMigratedException;
@@ -30,8 +31,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Set;
 
-import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertSame;
@@ -161,7 +160,7 @@ public class AssignedTasksTest {
         mockRunningTaskSuspension();
         EasyMock.replay(t1);
 
-        assertThat(suspendTask(), nullValue());
+        suspendTask();
 
         assertThat(assignedTasks.previousTaskIds(), equalTo(Collections.singleton(taskId1)));
         EasyMock.verify(t1);
@@ -176,7 +175,8 @@ public class AssignedTasksTest {
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
 
-        assertThat(suspendTask(), nullValue());
+        suspendTask();
+
         EasyMock.verify(t1);
     }
 
@@ -187,7 +187,7 @@ public class AssignedTasksTest {
         EasyMock.replay(t1);
 
         assignedTasks.addNewTask(t1);
-        assertThat(assignedTasks.suspend(), nullValue());
+        assignedTasks.suspend();
 
         EasyMock.verify(t1);
     }
@@ -197,11 +197,11 @@ public class AssignedTasksTest {
         mockRunningTaskSuspension();
         EasyMock.replay(t1);
 
-        assertThat(suspendTask(), nullValue());
-        assertThat(assignedTasks.suspend(), nullValue());
+        suspendTask();
+        assignedTasks.suspend();
+
         EasyMock.verify(t1);
     }
-
 
     @Test
     public void shouldCloseTaskOnSuspendWhenRuntimeException() {
@@ -212,8 +212,9 @@ public class AssignedTasksTest {
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
 
-        assertThat(suspendTask(), not(nullValue()));
-        assertThat(assignedTasks.previousTaskIds(), equalTo(Collections.singleton(taskId1)));
+        suspendTask();
+
+        assertTrue(assignedTasks.previousTaskIds().isEmpty());
         EasyMock.verify(t1);
     }
 
@@ -226,7 +227,40 @@ public class AssignedTasksTest {
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
 
-        assertThat(suspendTask(), nullValue());
+        suspendTask();
+
+        assertTrue(assignedTasks.previousTaskIds().isEmpty());
+        EasyMock.verify(t1);
+    }
+
+    @Test
+    public void shouldCloseTaskOnCloseWhenRuntimeException() {
+        mockTaskInitialization();
+        t1.close(true, false);
+        EasyMock.expectLastCall().andThrow(new RuntimeException("KABOOM!"));
+        t1.close(false, false);
+        EasyMock.expectLastCall();
+        EasyMock.replay(t1);
+
+        addAndInitTask();
+        assignedTasks.close(true);
+
+        assertTrue(assignedTasks.previousTaskIds().isEmpty());
+        EasyMock.verify(t1);
+    }
+
+    @Test
+    public void shouldCloseTaskOnCloseWhenProducerFencedException() {
+        mockTaskInitialization();
+        t1.close(true, false);
+        EasyMock.expectLastCall().andThrow(new ProducerFencedException("KABOOM!"));
+        t1.close(false, true);
+        EasyMock.expectLastCall().andThrow(new ProducerFencedException("KABOOM!"));
+        EasyMock.replay(t1);
+
+        addAndInitTask();
+        assignedTasks.close(true);
+
         assertTrue(assignedTasks.previousTaskIds().isEmpty());
         EasyMock.verify(t1);
     }
@@ -238,7 +272,7 @@ public class AssignedTasksTest {
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
 
-        assertThat(suspendTask(), nullValue());
+        suspendTask();
 
         assertTrue(assignedTasks.maybeResumeSuspendedTask(taskId1, Collections.singleton(tp1)));
         assertThat(assignedTasks.runningTaskIds(), equalTo(Collections.singleton(taskId1)));
@@ -254,7 +288,7 @@ public class AssignedTasksTest {
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
 
-        assertThat(suspendTask(), nullValue());
+        suspendTask();
 
         try {
             assignedTasks.maybeResumeSuspendedTask(taskId1, Collections.singleton(tp1));
@@ -443,9 +477,9 @@ public class AssignedTasksTest {
         assignedTasks.initializeNewTasks();
     }
 
-    private RuntimeException suspendTask() {
+    private void suspendTask() {
         addAndInitTask();
-        return assignedTasks.suspend();
+        assignedTasks.suspend();
     }
 
     private void mockRunningTaskSuspension() {

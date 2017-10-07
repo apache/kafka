@@ -29,7 +29,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static java.util.Collections.singleton;
 
@@ -187,22 +186,14 @@ class TaskManager {
     /**
      * Similar to shutdownTasksAndState, however does not close the task managers, in the hope that
      * soon the tasks will be assigned again
-     * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     void suspendTasksAndState()  {
         log.debug("Suspending all active tasks {} and standby tasks {}", active.runningTaskIds(), standby.runningTaskIds());
 
-        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
-
-        firstException.compareAndSet(null, active.suspend());
-        firstException.compareAndSet(null, standby.suspend());
+        active.suspend();
+        standby.suspend();
         // remove the changelog partitions from restore consumer
         restoreConsumer.assign(Collections.<TopicPartition>emptyList());
-
-        final Exception exception = firstException.get();
-        if (exception != null) {
-            throw new StreamsException(logPrefix + "failed to suspend stream tasks", exception);
-        }
     }
 
     void shutdown(final boolean clean) {
