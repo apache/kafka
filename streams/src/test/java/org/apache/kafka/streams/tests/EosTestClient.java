@@ -53,10 +53,12 @@ public class EosTestClient extends SmokeTestUtil {
             @Override
             public void run() {
                 isRunning = false;
-                streams.close(5, TimeUnit.SECONDS);
+                streams.close(TimeUnit.SECONDS.toMillis(300), TimeUnit.SECONDS);
                 // do not remove these printouts since they are needed for health scripts
                 if (!uncaughtException) {
+                    System.out.println(System.currentTimeMillis());
                     System.out.println("EOS-TEST-CLIENT-CLOSED");
+                    System.out.flush();
                 }
             }
         }));
@@ -69,15 +71,26 @@ public class EosTestClient extends SmokeTestUtil {
                 streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
                     @Override
                     public void uncaughtException(final Thread t, final Throwable e) {
+                        System.out.println(System.currentTimeMillis());
                         System.out.println("EOS-TEST-CLIENT-EXCEPTION");
                         e.printStackTrace();
+                        System.out.flush();
                         uncaughtException = true;
+                    }
+                });
+                streams.setStateListener(new KafkaStreams.StateListener() {
+                    @Override
+                    public void onChange(KafkaStreams.State newState, KafkaStreams.State oldState) {
+                        // don't remove this -- it's required test output
+                        System.out.println(System.currentTimeMillis());
+                        System.out.println("StateChange: " + oldState + " -> " + newState);
+                        System.out.flush();
                     }
                 });
                 streams.start();
             }
             if (uncaughtException) {
-                streams.close(5, TimeUnit.SECONDS);
+                streams.close(TimeUnit.SECONDS.toMillis(60), TimeUnit.SECONDS);
                 streams = null;
             }
             sleep(1000);
@@ -90,7 +103,7 @@ public class EosTestClient extends SmokeTestUtil {
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID);
         props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.toString());
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
-        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2);
         props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 3);
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
