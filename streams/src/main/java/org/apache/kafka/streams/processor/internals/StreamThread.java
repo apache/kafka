@@ -1193,7 +1193,11 @@ public class StreamThread extends Thread implements ThreadDataProvider {
 
         log.info("Shutting down");
 
-        taskManager.shutdown(cleanRun);
+        try {
+            taskManager.shutdown(cleanRun);
+        } catch (final Throwable e) {
+            log.error("Failed to close task manager due to the following error:", e);
+        }
         try {
             consumer.close();
         } catch (final Throwable e) {
