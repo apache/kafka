@@ -210,7 +210,7 @@ class AssignedTasks implements RestoringTasks {
     }
 
     private RuntimeException suspendTasks(final Collection<Task> tasks) {
-        final AtomicReference<RuntimeException> exception = new AtomicReference<>(null);
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
         for (Iterator<Task> it = tasks.iterator(); it.hasNext(); ) {
             final Task task = it.next();
             try {
@@ -218,20 +218,19 @@ class AssignedTasks implements RestoringTasks {
                 suspended.put(task.id(), task);
             } catch (final TaskMigratedException closeAsZombieAndSwallow) {
                 // as we suspend a task, we are either shutting down or rebalancing, thus, we swallow and move on
-                exception.compareAndSet(null, closeZombieTask(task));
+                firstException.compareAndSet(null, closeZombieTask(task));
                 it.remove();
             } catch (final RuntimeException e) {
                 log.error("Suspending {} {} failed due to the following error:", taskTypeName, task.id(), e);
-                exception.compareAndSet(null, e);
+                firstException.compareAndSet(null, e);
                 try {
                     task.close(false, false);
                 } catch (final RuntimeException f) {
                     log.error("After suspending failed, closing the same {} {} failed again due to the following error:", taskTypeName, task.id(), f);
-                    exception.compareAndSet(null, f);
                 }
             }
         }
-        return exception.get();
+        return firstException.get();
     }
 
     private RuntimeException closeZombieTask(final Task task) {
