@@ -518,11 +518,7 @@ class Partition(val topic: String,
   }
 
   def appendRecordsToFutureReplica(records: MemoryRecords) {
-    // The read lock is needed to avoid race condition while ReplicaAlterDirThread is executing
-    // maybeDeleteAndSwapFutureReplica() to replace follower replica with the future replica
-    inReadLock(leaderIsrUpdateLock) {
-      getReplica(Request.FutureLocalReplicaId).get.log.get.appendAsFollower(records)
-    }
+    getReplica(Request.FutureLocalReplicaId).get.log.get.appendAsFollower(records)
   }
 
   def appendRecordsToFollower(records: MemoryRecords) {

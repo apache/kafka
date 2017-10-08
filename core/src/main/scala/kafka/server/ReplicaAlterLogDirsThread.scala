@@ -20,6 +20,7 @@ package kafka.server
 import java.nio.ByteBuffer
 import java.util
 
+import AbstractFetcherThread.ResultWithPartitions
 import kafka.cluster.BrokerEndPoint
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.EpochEndOffset._
@@ -153,7 +154,13 @@ class ReplicaAlterLogDirsThread(name: String,
 
   def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {
     partitions.map { case (tp, epoch) =>
-      tp -> new EpochEndOffset(Errors.NONE, replicaMgr.getReplicaOrException(tp).epochs.get.endOffsetFor(epoch))
+      try {
+        tp -> new EpochEndOffset(Errors.NONE, replicaMgr.getReplicaOrException(tp).epochs.get.endOffsetFor(epoch))
+      } catch {
+        case t: Throwable =>
+          warn(s"Error when getting EpochEndOffset for $tp", t)
+          tp -> new EpochEndOffset(Errors.forException(t), UNDEFINED_EPOCH_OFFSET)
+      }
     }
   }
 

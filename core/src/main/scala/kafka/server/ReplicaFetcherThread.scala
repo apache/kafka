@@ -162,7 +162,7 @@ class ReplicaFetcherThread(name: String,
       warn(s"Reset fetch offset for partition $topicPartition from ${replica.logEndOffset.messageOffset} to current " +
         s"leader's latest offset $leaderEndOffset")
       partition.truncateTo(leaderEndOffset, isFuture = false)
-      replicaMgr.replicaAlterLogDirsManager.markPartitionsForTruncation(brokerConfig.brokerId, Map(topicPartition -> leaderEndOffset))
+      replicaMgr.replicaAlterLogDirsManager.markPartitionsForTruncation(brokerConfig.brokerId, topicPartition)
       leaderEndOffset
     } else {
       /**
@@ -194,7 +194,7 @@ class ReplicaFetcherThread(name: String,
       // Only truncate log when current leader's log start offset is greater than follower's log end offset.
       if (leaderStartOffset > replica.logEndOffset.messageOffset) {
         partition.truncateFullyAndStartAt(leaderStartOffset, isFuture = false)
-        replicaMgr.replicaAlterLogDirsManager.markPartitionsForTruncation(brokerConfig.brokerId, Map(topicPartition -> leaderStartOffset))
+        replicaMgr.replicaAlterLogDirsManager.markPartitionsForTruncation(brokerConfig.brokerId, topicPartition)
       }
       offsetToFetch
     }
@@ -287,7 +287,7 @@ class ReplicaFetcherThread(name: String,
               epochOffset.endOffset
 
           partition.truncateTo(truncationOffset, isFuture = false)
-          replicaMgr.replicaAlterLogDirsManager.markPartitionsForTruncation(brokerConfig.brokerId, Map(tp -> truncationOffset))
+          replicaMgr.replicaAlterLogDirsManager.markPartitionsForTruncation(brokerConfig.brokerId, tp)
           truncationPoints.put(tp, truncationOffset)
         }
       } catch {

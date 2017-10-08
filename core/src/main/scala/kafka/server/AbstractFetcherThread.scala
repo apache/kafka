@@ -200,7 +200,6 @@ abstract class AbstractFetcherThread(name: String,
                     case e: KafkaStorageException =>
                       error(s"Error while processing data for partition $topicPartition", e)
                       partitionsWithError += topicPartition
-
                     case e: Throwable =>
                       throw new KafkaException(s"Error processing data for partition $topicPartition " +
                         s"offset ${currentPartitionFetchState.fetchOffset}", e)
@@ -232,21 +231,13 @@ abstract class AbstractFetcherThread(name: String,
     handlePartitionsWithErrors(partitionsWithError)
   }
 
-  def markPartitionsForTruncation(partitionAndOffsets: Map[TopicPartition, Long]) {
+  def markPartitionsForTruncation(topicPartition: TopicPartition) {
     partitionMapLock.lockInterruptibly()
     try {
-      val newStates = partitionStates.partitionStates.asScala.map { state =>
-        val maybeNeedTruncation = partitionAndOffsets.get(state.topicPartition()) match {
-          case Some(offset) =>
-            // Mark this partition for truncation using leader epoch
-            PartitionFetchState(state.value.fetchOffset, state.value.delay, truncatingLog = true)
-          case None =>
-            state.value()
-        }
-        (state.topicPartition(), maybeNeedTruncation)
-      }.toMap
-
-      partitionStates.set(newStates.asJava)
+      Option(partitionStates.stateValue(topicPartition)).foreach { state =>
+        val newState = PartitionFetchState(state.fetchOffset, state.delay, truncatingLog = true)
+        partitionStates.updateAndMoveToEnd(topicPartition, newState)
+      }
       partitionMapCond.signalAll()
     } finally partitionMapLock.unlock()
   }
