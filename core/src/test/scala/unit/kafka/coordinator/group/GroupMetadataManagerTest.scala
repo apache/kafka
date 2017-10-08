@@ -1405,8 +1405,8 @@ class GroupMetadataManagerTest {
                             expectedNumGroupsPreparingRebalance: Int,
                             expectedNumGroupsCompletingRebalance: Int): Unit = {
     assertEquals(expectedNumGroups, getGauge(manager, "NumGroups").value)
-    assertEquals(expectedNumGroupsPreparingRebalance, getGauge(manager, "NumGroupsPreparingRebalanceGauge").value)
-    assertEquals(expectedNumGroupsCompletingRebalance, getGauge(manager, "NumGroupsCompletingRebalanceGauge").value)
+    assertEquals(expectedNumGroupsPreparingRebalance, getGauge(manager, "NumGroupsPreparingRebalance").value)
+    assertEquals(expectedNumGroupsCompletingRebalance, getGauge(manager, "NumGroupsCompletingRebalance").value)
   }
 
   @Test
