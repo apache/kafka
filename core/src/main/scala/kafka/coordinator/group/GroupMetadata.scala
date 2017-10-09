@@ -35,7 +35,7 @@ private[group] sealed trait GroupState
  *         park join group requests from new or existing members until all expected members have joined
  *         allow offset commits from previous generation
  *         allow offset fetch requests
- * transition: some members have joined by the timeout => AwaitingSync
+ * transition: some members have joined by the timeout => CompletingRebalance
  *             all members have left the group => Empty
  *             group is removed by partition emigration => Dead
  */
@@ -54,7 +54,7 @@ private[group] case object PreparingRebalance extends GroupState
  *             member failure detected => PreparingRebalance
  *             group is removed by partition emigration => Dead
  */
-private[group] case object AwaitingSync extends GroupState
+private[group] case object CompletingRebalance extends GroupState
 
 /**
  * Group is stable
@@ -105,10 +105,10 @@ private[group] case object Empty extends GroupState
 
 private object GroupMetadata {
   private val validPreviousStates: Map[GroupState, Set[GroupState]] =
-    Map(Dead -> Set(Stable, PreparingRebalance, AwaitingSync, Empty, Dead),
-      AwaitingSync -> Set(PreparingRebalance),
-      Stable -> Set(AwaitingSync),
-      PreparingRebalance -> Set(Stable, AwaitingSync, Empty),
+    Map(Dead -> Set(Stable, PreparingRebalance, CompletingRebalance, Empty, Dead),
+      CompletingRebalance -> Set(PreparingRebalance),
+      Stable -> Set(CompletingRebalance),
+      PreparingRebalance -> Set(Stable, CompletingRebalance, Empty),
       Empty -> Set(PreparingRebalance))
 }
 
@@ -256,7 +256,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     if (members.nonEmpty) {
       generationId += 1
       protocol = selectProtocol
-      transitionTo(AwaitingSync)
+      transitionTo(CompletingRebalance)
     } else {
       generationId += 1
       protocol = null

@@ -23,7 +23,7 @@ import kafka.common.OffsetAndMetadata
 import kafka.log.{Log, LogAppendInfo}
 import kafka.server.{FetchDataInfo, KafkaConfig, LogOffsetMetadata, ReplicaManager}
 import kafka.utils.TestUtils.fail
-import kafka.utils.{KafkaScheduler, MockTime, TestUtils, ZkUtils}
+import kafka.utils.{KafkaScheduler, Logging, MockTime, TestUtils, ZkUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record._
@@ -34,6 +34,8 @@ import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.{Before, Test}
 import java.nio.ByteBuffer
 
+import com.yammer.metrics.Metrics
+import com.yammer.metrics.core.Gauge
 import org.apache.kafka.common.internals.Topic
 
 import scala.collection.JavaConverters._
@@ -1392,4 +1394,29 @@ class GroupMetadataManagerTest {
     EasyMock.expect(replicaManager.nonOfflinePartition(groupTopicPartition)).andStubReturn(Some(partition))
   }
 
+  private def getGauge(manager: GroupMetadataManager, name: String): Gauge[Int]  = {
+    Metrics.defaultRegistry().allMetrics().get(manager.metricName(name, Map.empty)).asInstanceOf[Gauge[Int]]
+  }
+
+  private def expectMetrics(manager: GroupMetadataManager,
+                            expectedNumGroups: Int,
+                            expectedNumGroupsPreparingRebalance: Int,
+                            expectedNumGroupsCompletingRebalance: Int): Unit = {
+    assertEquals(expectedNumGroups, getGauge(manager, "NumGroups").value)
+    assertEquals(expectedNumGroupsPreparingRebalance, getGauge(manager, "NumGroupsPreparingRebalance").value)
+    assertEquals(expectedNumGroupsCompletingRebalance, getGauge(manager, "NumGroupsCompletingRebalance").value)
+  }
+
+  @Test
+  def testMetrics() {
+    groupMetadataManager.cleanupGroupMetadata()
+    expectMetrics(groupMetadataManager, 0, 0, 0)
+    val group = new GroupMetadata("foo2", Stable)
+    groupMetadataManager.addGroup(group)
+    expectMetrics(groupMetadataManager, 1, 0, 0)
+    group.transitionTo(PreparingRebalance)
+    expectMetrics(groupMetadataManager, 1, 1, 0)
+    group.transitionTo(CompletingRebalance)
+    expectMetrics(groupMetadataManager, 1, 0, 1)
+  }
 }

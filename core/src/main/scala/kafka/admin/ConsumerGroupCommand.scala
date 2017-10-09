@@ -89,7 +89,7 @@ object ConsumerGroupCommand extends Logging {
                 case Some("Empty") =>
                   System.err.println(s"Consumer group '$groupId' has no active members.")
                   printAssignment(assignments, true)
-                case Some("PreparingRebalance") | Some("AwaitingSync") =>
+                case Some("PreparingRebalance") | Some("CompletingRebalance") =>
                   System.err.println(s"Warning: Consumer group '$groupId' is rebalancing.")
                   printAssignment(assignments, true)
                 case Some("Stable") =>
