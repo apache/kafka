@@ -603,13 +603,14 @@ class Partition(val topic: String,
    *
    * Return low watermark of the partition.
    */
-  def deleteRecordsOnLeader(offset: Long): Long = {
+  def deleteRecordsOnLeader(offset: Long, validateOnly: Boolean): Long = {
     inReadLock(leaderIsrUpdateLock) {
       leaderReplicaIfLocal match {
         case Some(leaderReplica) =>
           if (!leaderReplica.log.get.config.delete)
-            throw new PolicyViolationException("Records of partition %s can not be deleted due to the configured policy".format(topicPartition))
-          leaderReplica.maybeIncrementLogStartOffset(offset)
+            throw new PolicyViolationException(
+              s"Records of partition $topicPartition can not be deleted because the configured ${LogConfig.CleanupPolicyProp} policy is not '${LogConfig.Delete}'.")
+          leaderReplica.maybeIncrementLogStartOffset(offset, validateOnly)
           lowWatermarkIfLeader
         case None =>
           throw new NotLeaderForPartitionException("Leader not local for partition %s on broker %d"

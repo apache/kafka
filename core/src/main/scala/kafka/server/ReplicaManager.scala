@@ -512,7 +512,7 @@ class ReplicaManager(val config: KafkaConfig,
    * Delete records on leader replicas of the partition, and wait for delete records operation be propagated to other replicas;
    * the callback function will be triggered either when timeout or logStartOffset of all live replicas have reached the specified offset
    */
-  private def deleteRecordsOnLocalLog(offsetPerPartition: Map[TopicPartition, Long]): Map[TopicPartition, LogDeleteRecordsResult] = {
+  private def deleteRecordsOnLocalLog(offsetPerPartition: Map[TopicPartition, Long], validateOnly: Boolean): Map[TopicPartition, LogDeleteRecordsResult] = {
     trace("Delete records on local logs to offsets [%s]".format(offsetPerPartition))
     offsetPerPartition.map { case (topicPartition, requestedOffset) =>
       // reject delete records operation on internal topics
@@ -529,7 +529,7 @@ class ReplicaManager(val config: KafkaConfig,
           if (convertedOffset < 0)
             throw new OffsetOutOfRangeException(s"The offset $convertedOffset for partition $topicPartition is not valid")
 
-          val lowWatermark = partition.deleteRecordsOnLeader(convertedOffset)
+          val lowWatermark = partition.deleteRecordsOnLeader(convertedOffset, validateOnly)
           (topicPartition, LogDeleteRecordsResult(convertedOffset, lowWatermark))
         } catch {
           case e@ (_: UnknownTopicOrPartitionException |
@@ -670,9 +670,10 @@ class ReplicaManager(val config: KafkaConfig,
 
   def deleteRecords(timeout: Long,
                     offsetPerPartition: Map[TopicPartition, Long],
+                    validateOnly: Boolean,
                     responseCallback: Map[TopicPartition, DeleteRecordsResponse.PartitionResponse] => Unit) {
     val timeBeforeLocalDeleteRecords = time.milliseconds
-    val localDeleteRecordsResults = deleteRecordsOnLocalLog(offsetPerPartition)
+    val localDeleteRecordsResults = deleteRecordsOnLocalLog(offsetPerPartition, validateOnly)
     debug("Delete records on local log in %d ms".format(time.milliseconds - timeBeforeLocalDeleteRecords))
 
     val deleteRecordsStatus = localDeleteRecordsResults.map { case (topicPartition, result) =>
@@ -682,7 +683,7 @@ class ReplicaManager(val config: KafkaConfig,
           new DeleteRecordsResponse.PartitionResponse(result.lowWatermark, result.error)) // response status
     }
 
-    if (delayedDeleteRecordsRequired(localDeleteRecordsResults)) {
+    if (!validateOnly && delayedDeleteRecordsRequired(localDeleteRecordsResults)) {
       // create delayed delete records operation
       val delayedDeleteRecords = new DelayedDeleteRecords(timeout, deleteRecordsStatus, this, responseCallback)
 

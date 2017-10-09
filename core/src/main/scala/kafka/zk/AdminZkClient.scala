@@ -169,15 +169,17 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
    * Creates a delete path for a given topic
    * @param topic
    */
-  def deleteTopic(topic: String) {
+  def deleteTopic(topic: String, validateOnly: Boolean = false) {
     if (zkClient.topicExists(topic)) {
-      try {
-        zkClient.createDeleteTopicPath(topic)
-      } catch {
-        case _: NodeExistsException => throw new TopicAlreadyMarkedForDeletionException(
-          "topic %s is already marked for deletion".format(topic))
-        case e: Throwable => throw new AdminOperationException(e.getMessage)
-       }
+      if (validateOnly) {
+        try {
+          zkClient.createDeleteTopicPath(topic)
+        } catch {
+          case _: NodeExistsException => throw new TopicAlreadyMarkedForDeletionException(
+            "topic %s is already marked for deletion".format(topic))
+          case e: Throwable => throw new AdminOperationException(e.getMessage)
+        }
+      }
     } else {
       throw new UnknownTopicOrPartitionException(s"Topic `$topic` to delete does not exist")
     }

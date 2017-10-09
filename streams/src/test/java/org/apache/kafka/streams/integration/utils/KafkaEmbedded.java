@@ -198,7 +198,7 @@ public class KafkaEmbedded {
             ZKStringSerializer$.MODULE$);
         final boolean isSecure = false;
         final ZkUtils zkUtils = new ZkUtils(zkClient, new ZkConnection(zookeeperConnect()), isSecure);
-        AdminUtils.deleteTopic(zkUtils, topic);
+        AdminUtils.deleteTopic(zkUtils, topic, false);
         zkClient.close();
     }
 

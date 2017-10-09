@@ -1420,6 +1420,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         adminManager.deleteTopics(
           deleteTopicRequest.timeout.toInt,
           authorizedForDeleteTopics,
+          deleteTopicRequest.validateOnly,
           sendResponseCallback
         )
       }
@@ -1468,6 +1469,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       replicaManager.deleteRecords(
         deleteRecordsRequest.timeout.toLong,
         authorizedForDeleteTopicOffsets,
+        deleteRecordsRequest.validateOnly,
         sendResponseCallback)
     }
   }
