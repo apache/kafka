@@ -512,7 +512,7 @@ class AssignedTasks implements RestoringTasks {
                           task.getClass().getSimpleName(),
                           task.id(),
                           t);
-                firstException.compareAndSet(null, closeUncleanIfRequired(task, clean));
+                closeUncleanIfRequired(task, clean);
             }
         }
 
