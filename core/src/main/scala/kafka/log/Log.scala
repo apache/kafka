@@ -339,6 +339,8 @@ class Log(@volatile var dir: File,
   }
 
   private def recoverSegment(segment: LogSegment, leaderEpochCache: Option[LeaderEpochCache] = None): Int = lock synchronized {
+    if (dir == null)
+      throw new KafkaStorageException(s"The log for partition $topicPartition is offline")
     val stateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
     stateManager.truncateAndReload(logStartOffset, segment.baseOffset, time.milliseconds)
     logSegments(stateManager.mapEndOffset, segment.baseOffset).foreach { segment =>
@@ -464,6 +466,8 @@ class Log(@volatile var dir: File,
   }
 
   private def loadProducerState(lastOffset: Long, reloadFromCleanShutdown: Boolean): Unit = lock synchronized {
+    if (dir == null)
+      throw new KafkaStorageException(s"The log for partition $topicPartition is offline")
     val messageFormatVersion = config.messageFormatVersion.messageFormatVersion
     info(s"Loading producer state from offset $lastOffset for partition $topicPartition with message " +
       s"format version $messageFormatVersion")
@@ -554,6 +558,9 @@ class Log(@volatile var dir: File,
   def close() {
     debug(s"Closing log $name")
     lock synchronized {
+      if (dir == null)
+        throw new KafkaStorageException(s"The log for partition $topicPartition is offline")
+      dir = null
       // We take a snapshot at the last written offset to hopefully avoid the need to scan the log
       // after restarting and to ensure that we cannot inadvertently hit the upgrade optimization
       // (the clean shutdown file is written after the logs are all closed).
@@ -568,6 +575,7 @@ class Log(@volatile var dir: File,
   def closeHandlers() {
     debug(s"Closing handlers of log $name")
     lock synchronized {
+      dir = null
       logSegments.foreach(_.closeHandlers())
     }
   }
@@ -619,7 +627,8 @@ class Log(@volatile var dir: File,
 
       // they are valid, insert them in the log
       lock synchronized {
-
+        if (dir == null)
+          throw new KafkaStorageException(s"The log for partition $topicPartition is offline")
         if (assignOffsets) {
           // assign offsets to the message set
           val offset = new LongRef(nextOffsetMetadata.messageOffset)
@@ -751,6 +760,8 @@ class Log(@volatile var dir: File,
   }
 
   private def updateFirstUnstableOffset(): Unit = lock synchronized {
+    if (dir == null)
+      throw new KafkaStorageException(s"The log for partition $topicPartition is offline")
     val updatedFirstStableOffset = producerStateManager.firstUnstableOffset match {
       case Some(logOffsetMetadata) if logOffsetMetadata.messageOffsetOnly || logOffsetMetadata.messageOffset < logStartOffset =>
         val offset = math.max(logOffsetMetadata.messageOffset, logStartOffset)
@@ -775,6 +786,8 @@ class Log(@volatile var dir: File,
     // in an unclean manner within log.flush.start.offset.checkpoint.interval.ms. The chance of this happening is low.
     maybeHandleIOException(s"Exception while increasing log start offset for $topicPartition to $newLogStartOffset in dir ${dir.getParent}") {
       lock synchronized {
+        if (dir == null)
+          throw new KafkaStorageException(s"The log for partition $topicPartition is offline")
         if (newLogStartOffset > logStartOffset) {
           info(s"Incrementing log start offset of partition $topicPartition to $newLogStartOffset in dir ${dir.getParent}")
           logStartOffset = newLogStartOffset
@@ -1116,6 +1129,8 @@ class Log(@volatile var dir: File,
    */
   private def deleteOldSegments(predicate: (LogSegment, Option[LogSegment]) => Boolean, reason: String): Int = {
     lock synchronized {
+      if (dir == null)
+        throw new KafkaStorageException(s"The log for partition $topicPartition is offline")
       val deletable = deletableSegments(predicate)
       if (deletable.nonEmpty)
         info(s"Found deletable segments with base offsets [${deletable.map(_.baseOffset).mkString(",")}] due to $reason")
@@ -1131,6 +1146,8 @@ class Log(@volatile var dir: File,
         if (segments.size == numToDelete)
           roll()
         lock synchronized {
+          if (dir == null)
+            throw new KafkaStorageException(s"The log for partition $topicPartition is offline")
           // remove the segments for lookups
           deletable.foreach(deleteSegment)
           maybeIncrementLogStartOffset(segments.firstEntry.getValue.baseOffset)
@@ -1280,6 +1297,8 @@ class Log(@volatile var dir: File,
     maybeHandleIOException(s"Error while rolling log segment for $topicPartition in dir ${dir.getParent}") {
       val start = time.nanoseconds
       lock synchronized {
+        if (dir == null)
+          throw new KafkaStorageException(s"The log for partition $topicPartition is offline")
         val newOffset = math.max(expectedNextOffset, logEndOffset)
         val logFile = Log.logFile(dir, newOffset)
         val offsetIdxFile = offsetIndexFile(dir, newOffset)
@@ -1356,6 +1375,8 @@ class Log(@volatile var dir: File,
         segment.flush()
 
       lock synchronized {
+        if (dir == null)
+          throw new KafkaStorageException(s"The log for partition $topicPartition is offline")
         if (offset > this.recoveryPoint) {
           this.recoveryPoint = offset
           lastflushedTime.set(time.milliseconds)
@@ -1406,6 +1427,8 @@ class Log(@volatile var dir: File,
   private[log] def delete() {
     maybeHandleIOException(s"Error while deleting log for $topicPartition in dir ${dir.getParent}") {
       lock synchronized {
+        if (dir == null)
+          throw new KafkaStorageException(s"The log for partition $topicPartition is offline")
         logSegments.foreach(_.delete())
         segments.clear()
         leaderEpochCache.clear()
@@ -1416,6 +1439,8 @@ class Log(@volatile var dir: File,
 
   // visible for testing
   private[log] def takeProducerSnapshot(): Unit = lock synchronized {
+    if (dir == null)
+      throw new KafkaStorageException(s"The log for partition $topicPartition is offline")
     producerStateManager.takeSnapshot()
   }
 
@@ -1450,6 +1475,8 @@ class Log(@volatile var dir: File,
       } else {
         info("Truncating log %s to offset %d.".format(name, targetOffset))
         lock synchronized {
+          if (dir == null)
+            throw new KafkaStorageException(s"The log for partition $topicPartition is offline")
           if (segments.firstEntry.getValue.baseOffset > targetOffset) {
             truncateFullyAndStartAt(targetOffset)
           } else {
@@ -1477,6 +1504,8 @@ class Log(@volatile var dir: File,
     maybeHandleIOException(s"Error while truncating the entire log for $topicPartition in dir ${dir.getParent}") {
       debug(s"Truncate and start log '$name' at offset $newOffset")
       lock synchronized {
+        if (dir == null)
+          throw new KafkaStorageException(s"The log for partition $topicPartition is offline")
         val segmentsToDelete = logSegments.toList
         segmentsToDelete.foreach(deleteSegment)
         addSegment(new LogSegment(dir,
@@ -1603,6 +1632,8 @@ class Log(@volatile var dir: File,
    */
   private[log] def replaceSegments(newSegment: LogSegment, oldSegments: Seq[LogSegment], isRecoveredSwapFile: Boolean = false) {
     lock synchronized {
+      if (dir == null)
+        throw new KafkaStorageException(s"The log for partition $topicPartition is offline")
       // need to do this in two phases to be crash safe AND do the delete asynchronously
       // if we crash in the middle of this we complete the swap in loadSegments()
       if (!isRecoveredSwapFile)
