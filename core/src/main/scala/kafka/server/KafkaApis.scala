@@ -1392,7 +1392,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       else if (!metadataCache.contains(topic))
         nonExistingTopicErrors += topic -> Errors.UNKNOWN_TOPIC_OR_PARTITION
       else
-        authorizedForDeleteTopics += topic
+        authorizedForDeleteTopics.add(topic)
     }
 
     def sendResponseCallback(authorizedTopicErrors: Map[String, Errors]): Unit = {
@@ -1634,23 +1634,23 @@ class KafkaApis(val requestChannel: RequestChannel,
     ensureInterBrokerVersion(KAFKA_0_11_0_IV0)
     val addPartitionsToTxnRequest = request.body[AddPartitionsToTxnRequest]
     val transactionalId = addPartitionsToTxnRequest.transactionalId
-    val partitionsToAdd = addPartitionsToTxnRequest.partitions
+    val partitionsToAdd = addPartitionsToTxnRequest.partitions.asScala
     if (!authorize(request.session, Write, new Resource(TransactionalId, transactionalId)))
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         addPartitionsToTxnRequest.getErrorResponse(requestThrottleMs, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED.exception))
     else {
       val unauthorizedTopicErrors = mutable.Map[TopicPartition, Errors]()
       val nonExistingTopicErrors = mutable.Map[TopicPartition, Errors]()
-      val authorizedPartitions =  mutable.Set[TopicPartition]()
+      val authorizedPartitions = mutable.Set[TopicPartition]()
 
-      for (topicPartition <- partitionsToAdd.asScala) {
+      for (topicPartition <- partitionsToAdd) {
         if (org.apache.kafka.common.internals.Topic.isInternal(topicPartition.topic) ||
             !authorize(request.session, Write, new Resource(Topic, topicPartition.topic)))
           unauthorizedTopicErrors += topicPartition -> Errors.TOPIC_AUTHORIZATION_FAILED
         else if (!metadataCache.contains(topicPartition.topic))
           nonExistingTopicErrors += topicPartition -> Errors.UNKNOWN_TOPIC_OR_PARTITION
         else
-          authorizedPartitions += topicPartition
+          authorizedPartitions.add(topicPartition)
       }
 
       if (unauthorizedTopicErrors.nonEmpty || nonExistingTopicErrors.nonEmpty) {
@@ -1665,7 +1665,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         def sendResponseCallback(error: Errors): Unit = {
           def createResponse(requestThrottleMs: Int): AbstractResponse = {
             val responseBody: AddPartitionsToTxnResponse = new AddPartitionsToTxnResponse(requestThrottleMs,
-              partitionsToAdd.asScala.map{tp => (tp, error)}.toMap.asJava)
+              partitionsToAdd.map{tp => (tp, error)}.toMap.asJava)
             trace(s"Completed $transactionalId's AddPartitionsToTxnRequest with partitions $partitionsToAdd: errors: $error from client ${request.header.clientId}")
             responseBody
           }
@@ -1676,7 +1676,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         txnCoordinator.handleAddPartitionsToTransaction(transactionalId,
           addPartitionsToTxnRequest.producerId,
           addPartitionsToTxnRequest.producerEpoch,
-          partitionsToAdd.asScala.toSet,
+          authorizedPartitions,
           sendResponseCallback)
       }
     }
