@@ -231,7 +231,7 @@ public class VerifiableProducer {
     public void send(String key, String value) {
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, null, createTime, key, value);
         if (createTime != null)
-            createTime += (System.currentTimeMillis() - startTime);
+            createTime += System.currentTimeMillis() - startTime;
         numSent++;
         try {
             producer.send(record, new PrintInfoCallback(key, value));
