@@ -19,7 +19,7 @@ package kafka.log
 import java.io.{File, IOException}
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
-import java.nio.file.StandardOpenOption
+import java.nio.file.{Files, StandardOpenOption}
 
 import kafka.utils.{Logging, nonthreadsafe}
 import org.apache.kafka.common.KafkaException
@@ -62,11 +62,8 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
   def flush(): Unit = maybeChannel.foreach(_.force(true))
 
   def delete(): Boolean = {
-    maybeChannel.forall { channel =>
-      channel.force(true)
-      close()
-      file.delete()
-    }
+    close()
+    file.delete()
   }
 
   private def channel: FileChannel = {
