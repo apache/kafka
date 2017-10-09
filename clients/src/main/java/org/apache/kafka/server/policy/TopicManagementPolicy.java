@@ -75,7 +75,8 @@ public interface TopicManagementPolicy  extends Configurable, AutoCloseable {
      * @param clusterState the current state of the cluster
      * @throws PolicyViolationException if the request parameters do not satisfy this policy.
      */
-    void validateCreateTopic(CreateTopicRequest requestMetadata, ClusterState clusterState) throws PolicyViolationException;
+    void validateCreateTopic(CreateTopicRequest requestMetadata, ClusterState clusterState)
+            throws PolicyViolationException;
 
     /** Represents a request to alter an existing topic. */
     interface AlterTopicRequest extends AbstractRequestMetadata {
@@ -100,7 +101,8 @@ public interface TopicManagementPolicy  extends Configurable, AutoCloseable {
      * @param clusterState the current state of the cluster
      * @throws PolicyViolationException if the request parameters do not satisfy this policy.
      */
-    void validateAlterTopic(AlterTopicRequest requestMetadata, ClusterState clusterState) throws PolicyViolationException;
+    void validateAlterTopic(AlterTopicRequest requestMetadata, ClusterState clusterState)
+            throws PolicyViolationException;
 
     /** Represents a request to delete an existing topic. */
     interface DeleteTopicRequest extends AbstractRequestMetadata {
@@ -121,7 +123,8 @@ public interface TopicManagementPolicy  extends Configurable, AutoCloseable {
      * @param clusterState the current state of the cluster
      * @throws PolicyViolationException if the request parameters do not satisfy this policy.
      */
-    void validateDeleteTopic(DeleteTopicRequest requestMetadata, ClusterState clusterState) throws PolicyViolationException;
+    void validateDeleteTopic(DeleteTopicRequest requestMetadata, ClusterState clusterState)
+            throws PolicyViolationException;
 
     /** Represents a request to delete some records from an existing topic. */
     interface DeleteRecordsRequest extends AbstractRequestMetadata {
@@ -149,7 +152,8 @@ public interface TopicManagementPolicy  extends Configurable, AutoCloseable {
      * @param clusterState the current state of the cluster
      * @throws PolicyViolationException if the request parameters do not satisfy this policy.
      */
-    void validateDeleteRecords(DeleteRecordsRequest requestMetadata, ClusterState clusterState) throws PolicyViolationException;
+    void validateDeleteRecords(DeleteRecordsRequest requestMetadata, ClusterState clusterState)
+            throws PolicyViolationException;
 }
 
 
