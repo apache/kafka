@@ -650,9 +650,9 @@ private[log] class Cleaner(val id: Int,
     var segs = segments.toList
     while(segs.nonEmpty) {
       var group = List(segs.head)
-      var logSize = segs.head.size
-      var indexSize = segs.head.index.sizeInBytes
-      var timeIndexSize = segs.head.timeIndex.sizeInBytes
+      var logSize = segs.head.size.toLong
+      var indexSize = segs.head.index.sizeInBytes.toLong
+      var timeIndexSize = segs.head.timeIndex.sizeInBytes.toLong
       segs = segs.tail
       while(segs.nonEmpty &&
             logSize + segs.head.size <= maxSize &&
@@ -847,10 +847,10 @@ private class CleanerStats(time: Time = Time.SYSTEM) {
  * Helper class for a log, its topic/partition, the first cleanable position, and the first uncleanable dirty position
  */
 private case class LogToClean(topicPartition: TopicPartition, log: Log, firstDirtyOffset: Long, uncleanableOffset: Long) extends Ordered[LogToClean] {
-  val cleanBytes = log.logSegments(-1, firstDirtyOffset).map(_.size).sum
+  val cleanBytes = log.logSegments(-1, firstDirtyOffset).map(_.size.toLong).sum
   private[this] val firstUncleanableSegment = log.logSegments(uncleanableOffset, log.activeSegment.baseOffset).headOption.getOrElse(log.activeSegment)
   val firstUncleanableOffset = firstUncleanableSegment.baseOffset
-  val cleanableBytes = log.logSegments(firstDirtyOffset, math.max(firstDirtyOffset, firstUncleanableOffset)).map(_.size).sum
+  val cleanableBytes = log.logSegments(firstDirtyOffset, math.max(firstDirtyOffset, firstUncleanableOffset)).map(_.size.toLong).sum
   val totalBytes = cleanBytes + cleanableBytes
   val cleanableRatio = cleanableBytes / totalBytes.toDouble
   override def compare(that: LogToClean): Int = math.signum(this.cleanableRatio - that.cleanableRatio).toInt
