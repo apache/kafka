@@ -705,7 +705,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
             OffsetAndMetadata offsetAndMetadata = entry.getValue();
             if (offsetAndMetadata.offset() < 0) {
-                return RequestFuture.failure(new OffsetOutOfRangeException(Collections.singletonMap(entry.getKey(),offsetAndMetadata.offset())));
+                return RequestFuture.failure(new OffsetOutOfRangeException(Collections.singletonMap(entry.getKey(), offsetAndMetadata.offset())));
             }
             offsetData.put(entry.getKey(), new OffsetCommitRequest.PartitionData(
                     offsetAndMetadata.offset(), offsetAndMetadata.metadata()));
