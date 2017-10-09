@@ -274,7 +274,7 @@ class LogSegmentTest {
     val segment = createSegment(100)
     val producerEpoch = 0.toShort
     val partitionLeaderEpoch = 15
-    val sequence = 0
+    val sequence = 100
 
     val pid1 = 5L
     val pid2 = 10L

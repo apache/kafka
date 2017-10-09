@@ -91,16 +91,17 @@ private[log] case class ProducerIdEntry(producerId: Long, producerEpoch: Short, 
  *                                of this is the consumer offsets topic which uses producer ids from incoming
  *                                TxnOffsetCommit, but has no sequence number to validate and does not depend
  *                                on the deduplication which sequence numbers provide.
- * @param loadingFromLog This parameter indicates whether the new append is being loaded directly from the log.
- *                       This is used to repopulate producer state when the broker is initialized. The only
- *                       difference in behavior is that we do not validate the sequence number of the first append
- *                       since we may have lost previous sequence numbers when segments were removed due to log
- *                       retention enforcement.
+ * @param isFromClient The parameter indicates whether the write is coming from a client or not. If it is not coming
+ *                     from a client, it could be due to replication traffic, or when rebuilding producer state on
+ *                     from the log. In the latter two cases, we should not validate the append, but accept the
+ *                     incoming append unconditionally. This is for two reasons: first, the write was already
+ *                     validated when received from the client. Second, the data is already the log, so it is not
+ *                     clear what would be achieved by validating it again.
  */
 private[log] class ProducerAppendInfo(val producerId: Long,
                                       initialEntry: ProducerIdEntry,
                                       validateSequenceNumbers: Boolean,
-                                      loadingFromLog: Boolean) {
+                                      isFromClient: Boolean) {
   private var producerEpoch = initialEntry.producerEpoch
   private var firstSeq = initialEntry.firstSeq
   private var lastSeq = initialEntry.lastSeq
@@ -108,6 +109,7 @@ private[log] class ProducerAppendInfo(val producerId: Long,
   private var maxTimestamp = initialEntry.timestamp
   private var currentTxnFirstOffset = initialEntry.currentTxnFirstOffset
   private var coordinatorEpoch = initialEntry.coordinatorEpoch
+
   private val transactions = ListBuffer.empty[TxnMetadata]
 
   private def validateAppend(producerEpoch: Short, firstSeq: Int, lastSeq: Int) = {
@@ -161,9 +163,10 @@ private[log] class ProducerAppendInfo(val producerId: Long,
              lastTimestamp: Long,
              lastOffset: Long,
              isTransactional: Boolean): Unit = {
-    if (epoch != RecordBatch.NO_PRODUCER_EPOCH && !loadingFromLog)
-      // skip validation if this is the first entry when loading from the log. Log retention
-      // will generally have removed the beginning entries from each producer id
+    if (isFromClient)
+      // We should only validate appends coming from the client. In particular, this means that we don't validate
+      // appends for sequence numbers and epochs when building producer state from the log or for writes on a replica.
+      // So validation only happens on the first write from the client to the partition leader.
       validateAppend(epoch, firstSeq, lastSeq)
 
     this.producerEpoch = epoch
@@ -507,9 +510,9 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     }
   }
 
-  def prepareUpdate(producerId: Long, loadingFromLog: Boolean): ProducerAppendInfo =
+  def prepareUpdate(producerId: Long, isFromClient: Boolean): ProducerAppendInfo =
     new ProducerAppendInfo(producerId, lastEntry(producerId).getOrElse(ProducerIdEntry.Empty), validateSequenceNumbers,
-      loadingFromLog)
+      isFromClient)
 
   /**
    * Update the mapping with the given append information
