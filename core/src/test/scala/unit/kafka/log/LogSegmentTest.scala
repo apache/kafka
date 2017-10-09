@@ -177,7 +177,7 @@ class LogSegmentTest {
       seg.append(offset, offset, offset, offset, records(offset, "hello"))
       offset += 1
     }
-    assertEquals(offset, seg.nextOffset)
+    assertEquals(offset, seg.readNextOffset)
 
     val expectedNumEntries = numMessages / 2 - 1
     assertEquals(s"Should have $expectedNumEntries time indexes", expectedNumEntries, seg.timeIndex.entries)
@@ -185,7 +185,7 @@ class LogSegmentTest {
     seg.truncateTo(41)
     assertEquals(s"Should have 0 time indexes", 0, seg.timeIndex.entries)
     assertEquals(s"Largest timestamp should be 400", 400L, seg.largestTimestamp)
-    assertEquals(41, seg.nextOffset)
+    assertEquals(41, seg.readNextOffset)
   }
 
   /**
@@ -233,9 +233,9 @@ class LogSegmentTest {
   @Test
   def testNextOffsetCalculation() {
     val seg = createSegment(40)
-    assertEquals(40, seg.nextOffset)
+    assertEquals(40, seg.readNextOffset)
     seg.append(50, 52, RecordBatch.NO_TIMESTAMP, -1L, records(50, "hello", "there", "you"))
-    assertEquals(53, seg.nextOffset)
+    assertEquals(53, seg.readNextOffset)
   }
 
   /**

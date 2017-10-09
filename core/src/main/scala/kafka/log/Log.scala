@@ -266,6 +266,15 @@ class Log(@volatile var dir: File,
   }
 
   private def removeTempFilesAndCollectSwapFiles(): Set[File] = {
+
+    def deleteIndicesIfExist(baseFile: File, swapFile: File, fileType: String): Unit = {
+      info(s"Found $fileType file ${swapFile.getAbsolutePath} from interrupted swap operation. Deleting index files (if they exist).")
+      val offset = offsetFromFile(baseFile)
+      Files.deleteIfExists(Log.offsetIndexFile(dir, offset).toPath)
+      Files.deleteIfExists(Log.timeIndexFile(dir, offset).toPath)
+      Files.deleteIfExists(Log.transactionIndexFile(dir, offset).toPath)
+    }
+
     var swapFiles = Set[File]()
 
     for (file <- dir.listFiles if file.isFile) {
@@ -275,19 +284,15 @@ class Log(@volatile var dir: File,
       if (filename.endsWith(DeletedFileSuffix) || filename.endsWith(CleanedFileSuffix)) {
         // if the file ends in .deleted or .cleaned, delete it
         Files.deleteIfExists(file.toPath)
-      } else if(filename.endsWith(SwapFileSuffix)) {
+      } else if (filename.endsWith(SwapFileSuffix)) {
         // we crashed in the middle of a swap operation, to recover:
-        // if a log, delete the .index file, complete the swap operation later
-        // if an index just delete it, it will be rebuilt
+        // if a log, delete the index files, complete the swap operation later
+        // if an index just delete the index files, they will be rebuilt
         val baseFile = new File(CoreUtils.replaceSuffix(file.getPath, SwapFileSuffix, ""))
         if (isIndexFile(baseFile)) {
-          Files.deleteIfExists(file.toPath)
+          deleteIndicesIfExist(baseFile, file, "log")
         } else if (isLogFile(baseFile)) {
-          // delete the index files
-          val offset = offsetFromFile(baseFile)
-          Files.deleteIfExists(Log.offsetIndexFile(dir, offset).toPath)
-          Files.deleteIfExists(Log.timeIndexFile(dir, offset).toPath)
-          Files.deleteIfExists(Log.transactionIndexFile(dir, offset).toPath)
+          deleteIndicesIfExist(baseFile, file, "index")
           swapFiles += file
         }
       }
@@ -311,12 +316,6 @@ class Log(@volatile var dir: File,
       } else if (isLogFile(file)) {
         // if it's a log file, load the corresponding log segment
         val startOffset = offsetFromFile(file)
-        val indexFile = Log.offsetIndexFile(dir, startOffset)
-        val timeIndexFile = Log.timeIndexFile(dir, startOffset)
-        val txnIndexFile = Log.transactionIndexFile(dir, startOffset)
-
-        val indexFileExists = indexFile.exists()
-        val timeIndexFileExists = timeIndexFile.exists()
         val segment = new LogSegment(dir = dir,
           startOffset = startOffset,
           indexIntervalBytes = config.indexInterval,
@@ -325,25 +324,32 @@ class Log(@volatile var dir: File,
           time = time,
           fileAlreadyExists = true)
 
-        if (indexFileExists) {
+        val offsetIndex = segment.index
+        val timeIndex = segment.timeIndex
+        val txnIndex = segment.txnIndex
+        if (offsetIndex.file.exists) {
           try {
-            segment.index.sanityCheck()
+            offsetIndex.sanityCheck()
             // Resize the time index file to 0 if it is newly created.
-            if (!timeIndexFileExists)
+            if (!segment.timeIndex.file.exists)
               segment.timeIndex.resize(0)
             segment.timeIndex.sanityCheck()
             segment.txnIndex.sanityCheck()
           } catch {
             case e: java.lang.IllegalArgumentException =>
-              warn(s"Found a corrupted index file due to ${e.getMessage}}. deleting ${timeIndexFile.getAbsolutePath}, " +
-                s"${indexFile.getAbsolutePath}, and ${txnIndexFile.getAbsolutePath} and rebuilding index...")
-              Files.deleteIfExists(timeIndexFile.toPath)
-              Files.delete(indexFile.toPath)
-              segment.txnIndex.delete()
+              warn(s"Found a corrupted index file due to ${e.getMessage}}. deleting ${timeIndex.file.getAbsolutePath}, " +
+                s"${offsetIndex.file.getAbsolutePath}, and ${txnIndex.file.getAbsolutePath} and rebuilding index files...")
+              if (timeIndex.file.exists)
+                timeIndex.delete()
+              offsetIndex.delete()
+              txnIndex.delete()
               recoverSegment(segment)
           }
         } else {
-          error("Could not find offset index file corresponding to log file %s, rebuilding index...".format(segment.log.file.getAbsolutePath))
+          error(s"Could not find offset index file corresponding to log file ${segment.log.file.getAbsolutePath}, rebuilding index files...")
+          if (timeIndex.file.exists)
+            timeIndex.delete()
+          txnIndex.delete()
           recoverSegment(segment)
         }
         addSegment(segment)
@@ -393,9 +399,9 @@ class Log(@volatile var dir: File,
         indexIntervalBytes = config.indexInterval,
         rollJitterMs = config.randomSegmentJitter,
         time = time)
-      info("Found log file %s from interrupted swap operation, repairing.".format(swapFile.getPath))
+      info(s"Found log file ${swapFile.getPath} from interrupted swap operation, repairing.")
       recoverSegment(swapSegment)
-      val oldSegments = logSegments(swapSegment.baseOffset, swapSegment.nextOffset())
+      val oldSegments = logSegments(swapSegment.baseOffset)
       replaceSegments(swapSegment, oldSegments.toSeq, isRecoveredSwapFile = true)
     }
   }
@@ -467,12 +473,12 @@ class Log(@volatile var dir: File,
         if (truncatedBytes > 0) {
           // we had an invalid message, delete all remaining log
           warn("Corruption found in segment %d of log %s, truncating to offset %d.".format(segment.baseOffset, name,
-            segment.nextOffset()))
+            segment.readNextOffset))
           unflushed.foreach(deleteSegment)
         }
       }
     }
-    recoveryPoint = activeSegment.nextOffset
+    recoveryPoint = activeSegment.readNextOffset
     recoveryPoint
   }
 
@@ -1572,17 +1578,24 @@ class Log(@volatile var dir: File,
    */
   def logSegments: Iterable[LogSegment] = segments.values.asScala
 
+  def logSegments(from: Long): Iterable[LogSegment] = {
+    lock synchronized {
+      Option(segments.floorKey(from)).map { floor =>
+        segments.tailMap(floor).values.asScala
+      }.getOrElse(logSegments)
+    }
+  }
+
   /**
    * Get all segments beginning with the segment that includes "from" and ending with the segment
    * that includes up to "to-1" or the end of the log (if to > logEndOffset)
    */
   def logSegments(from: Long, to: Long): Iterable[LogSegment] = {
     lock synchronized {
-      val floor = segments.floorKey(from)
-      if (floor eq null)
-        segments.headMap(to).values.asScala
-      else
-        segments.subMap(floor, true, to, false).values.asScala
+      val view = Option(segments.floorKey(from)).map { floor =>
+        segments.subMap(floor, to)
+      }.getOrElse(segments.headMap(to))
+      view.values.asScala
     }
   }
 

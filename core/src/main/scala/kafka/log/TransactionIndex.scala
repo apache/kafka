@@ -61,9 +61,15 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
 
   def flush(): Unit = maybeChannel.foreach(_.force(true))
 
-  def delete(): Boolean = {
+  /**
+   * Delete this index.
+   *
+   * @throws IOException if deletion fails
+   */
+  def delete(): Unit = {
+    info(s"Deleting transaction index ${file.getAbsolutePath}")
     close()
-    file.delete()
+    Files.delete(file.toPath)
   }
 
   private def channel: FileChannel = {

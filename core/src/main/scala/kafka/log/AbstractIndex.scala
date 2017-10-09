@@ -20,6 +20,7 @@ package kafka.log
 import java.io.{File, RandomAccessFile}
 import java.nio.{ByteBuffer, MappedByteBuffer}
 import java.nio.channels.FileChannel
+import java.nio.file.Files
 import java.util.concurrent.locks.{Lock, ReentrantLock}
 
 import kafka.log.IndexSearchType.IndexSearchEntity
@@ -156,9 +157,11 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   }
 
   /**
-   * Delete this index file
+   * Delete this index file.
+   *
+   * @throws IOException if the deletion fails
    */
-  def delete(): Boolean = {
+  def delete(): Unit = {
     info(s"Deleting index ${file.getAbsolutePath}")
     inLock(lock) {
       // On JVM, a memory mapping is typically unmapped by garbage collector.
@@ -167,7 +170,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
       // See https://issues.apache.org/jira/browse/KAFKA-4614 for the details.
       safeForceUnmap()
     }
-    file.delete()
+    Files.delete(file.toPath)
   }
 
   /**

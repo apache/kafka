@@ -16,10 +16,11 @@
  */
 package kafka.log
 
-import java.io.{File, IOException}
+import java.io.{Closeable, File, IOException}
 import java.nio.file.Files
 import java.nio.file.attribute.FileTime
 import java.util.concurrent.TimeUnit
+
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server.epoch.LeaderEpochCache
 import kafka.server.{FetchDataInfo, LogOffsetMetadata}
@@ -27,7 +28,7 @@ import kafka.utils._
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record.FileRecords.LogOffsetPosition
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{Time, Utils}
 
 import scala.collection.JavaConverters._
 import scala.math._
@@ -356,7 +357,7 @@ class LogSegment(val log: FileRecords,
    * Note that this is expensive.
    */
   @threadsafe
-  def nextOffset(): Long = {
+  def readNextOffset: Long = {
     val ms = read(index.lastOffset, None, log.sizeInBytes)
     if (ms == null)
       baseOffset
@@ -488,18 +489,21 @@ class LogSegment(val log: FileRecords,
    * Delete this log segment from the filesystem.
    */
   def delete() {
-    val deletedLog = log.delete()
-    val deletedIndex = index.delete()
-    val deletedTimeIndex = timeIndex.delete()
-    val deletedTxnIndex = txnIndex.delete()
-    if (!deletedLog && log.file.exists)
-      throw new IOException("Delete of log " + log.file.getName + " failed.")
-    if (!deletedIndex && index.file.exists)
-      throw new IOException("Delete of index " + index.file.getName + " failed.")
-    if (!deletedTimeIndex && timeIndex.file.exists)
-      throw new IOException("Delete of time index " + timeIndex.file.getName + " failed.")
-    if (!deletedTxnIndex && txnIndex.file.exists)
-      throw new IOException("Delete of transaction index " + txnIndex.file.getName + " failed.")
+    def closeable(delete: () => Unit, fileType: String, file: File): Closeable = new Closeable {
+      def close(): Unit =
+        try delete()
+        catch {
+          case e: IOException => throw new IOException(s"Delete of $fileType ${file.getName} failed.", e)
+        }
+    }
+
+    val closeables = Seq(
+      closeable(log.delete _, "log", log.file),
+      closeable(index.delete _, "index", index.file),
+      closeable(timeIndex.delete _, "time index", timeIndex.file),
+      closeable(txnIndex.delete _, "transaction index", txnIndex.file),
+    )
+    Utils.closeAll(closeables: _*)
   }
 
   /**

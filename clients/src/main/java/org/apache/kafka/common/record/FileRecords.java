@@ -30,6 +30,7 @@ import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.GatheringByteChannel;
+import java.nio.file.Files;
 import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -178,11 +179,11 @@ public class FileRecords extends AbstractRecords implements Closeable {
 
     /**
      * Delete this message set from the filesystem
-     * @return True iff this message set was deleted.
+     * @throws IOException if the delete fails
      */
-    public boolean delete() {
+    public void delete() throws IOException {
         Utils.closeQuietly(channel, "FileChannel");
-        return file.delete();
+        Files.delete(file.toPath());
     }
 
     /**
