@@ -27,7 +27,18 @@ public class CommonFields {
     public static final Field.Int16 ERROR_CODE = new Field.Int16("error_code", "Response error code");
     public static final Field.NullableStr ERROR_MESSAGE = new Field.NullableStr("error_message", "Response error message");
 
-    // ACL Apis
+    // Group APIs
+    public static final Field.Str GROUP_ID = new Field.Str("group_id", "The unique group identifier");
+    public static final Field.Int32 GENERATION_ID = new Field.Int32("generation_id", "The generation of the group.");
+    public static final Field.Str MEMBER_ID = new Field.Str("member_id", "The member id assigned by the group " +
+            "coordinator or null if joining for the first time.");
+
+    // Transactional APIs
+    public static final Field.Str TRANSACTIONAL_ID = new Field.Str("transactional_id", "The transactional id corresponding to the transaction.");
+    public static final Field.Int64 PRODUCER_ID = new Field.Int64("producer_id", "Current producer id in use by the transactional id.");
+    public static final Field.Int16 PRODUCER_EPOCH = new Field.Int16("producer_epoch", "Current epoch associated with the producer id.");
+
+    // ACL APIs
     public static final Field.Int8 RESOURCE_TYPE = new Field.Int8("resource_type", "The resource type");
     public static final Field.Str RESOURCE_NAME = new Field.Str("resource_name", "The resource name");
     public static final Field.NullableStr RESOURCE_NAME_FILTER = new Field.NullableStr("resource_name", "The resource name filter");
