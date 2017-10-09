@@ -41,6 +41,11 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         self.topic = "test_topic"
         self.num_partitions = 20
         self.zk = ZookeeperService(test_context, num_nodes=1)
+        # We set the min.insync.replicas to match the replication factor because
+        # it makes the test more stringent. If min.isr = 2 and
+        # replication.factor=3, then the test would tolerate the failure of
+        # reassignment for upto one replica per partition, which is not
+        # desirable for this test in particular.
         self.kafka = KafkaService(test_context, num_nodes=4, zk=self.zk,
                                   server_prop_overides=[
                                       [config_property.LOG_ROLL_TIME_MS, "5000"],
@@ -118,7 +123,9 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
                          producer.num_acked)
         # Since the configured check interval is 5 seconds, we wait another
         # 6 seconds to ensure that at least one more cleaning so that the last
-        # segment is deleted.
+        # segment is deleted. An altenate to using timeouts is to poll each
+        # partition untill the log start offset matches the end offset. The
+        # latter is more robust.
         time.sleep(6)
 
     @cluster(num_nodes=8)
