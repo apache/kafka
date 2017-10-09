@@ -169,7 +169,7 @@ class GroupCoordinator(val brokerId: Int,
               updateMemberAndRebalance(group, member, protocols, responseCallback)
             }
 
-          case AwaitingSync =>
+          case CompletingRebalance =>
             if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
               addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, clientId, clientHost, protocolType, protocols, group, responseCallback)
             } else {
@@ -261,7 +261,7 @@ class GroupCoordinator(val brokerId: Int,
           case PreparingRebalance =>
             responseCallback(Array.empty, Errors.REBALANCE_IN_PROGRESS)
 
-          case AwaitingSync =>
+          case CompletingRebalance =>
             group.get(memberId).awaitingSyncCallback = responseCallback
 
             // if this is the leader, then we can attempt to persist state and transition to stable
@@ -275,9 +275,9 @@ class GroupCoordinator(val brokerId: Int,
               groupManager.storeGroup(group, assignment, (error: Errors) => {
                 group synchronized {
                   // another member may have joined the group while we were awaiting this callback,
-                  // so we must ensure we are still in the AwaitingSync state and the same generation
+                  // so we must ensure we are still in the CompletingRebalance state and the same generation
                   // when it gets invoked. if we have transitioned to another state, then do nothing
-                  if (group.is(AwaitingSync) && generationId == group.generationId) {
+                  if (group.is(CompletingRebalance) && generationId == group.generationId) {
                     if (error != Errors.NONE) {
                       resetAndPropagateAssignmentError(group, error)
                       maybePrepareRebalance(group)
@@ -361,7 +361,7 @@ class GroupCoordinator(val brokerId: Int,
               case Empty =>
                 responseCallback(Errors.UNKNOWN_MEMBER_ID)
 
-              case AwaitingSync =>
+              case CompletingRebalance =>
                 if (!group.has(memberId))
                   responseCallback(Errors.UNKNOWN_MEMBER_ID)
                 else
@@ -456,7 +456,7 @@ class GroupCoordinator(val brokerId: Int,
         // the group is only using Kafka to store offsets
         // Also, for transactional offset commits we don't need to validate group membership and the generation.
         groupManager.storeOffsets(group, memberId, offsetMetadata, responseCallback, producerId, producerEpoch)
-      } else if (group.is(AwaitingSync)) {
+      } else if (group.is(CompletingRebalance)) {
         responseCallback(offsetMetadata.mapValues(_ => Errors.REBALANCE_IN_PROGRESS))
       } else if (!group.has(memberId)) {
         responseCallback(offsetMetadata.mapValues(_ => Errors.UNKNOWN_MEMBER_ID))
@@ -545,7 +545,7 @@ class GroupCoordinator(val brokerId: Int,
           }
           joinPurgatory.checkAndComplete(GroupKey(group.groupId))
 
-        case Stable | AwaitingSync =>
+        case Stable | CompletingRebalance =>
           for (member <- group.allMemberMetadata) {
             if (member.awaitingSyncCallback != null) {
               member.awaitingSyncCallback(Array.empty[Byte], Errors.NOT_COORDINATOR)
@@ -574,13 +574,13 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   private def setAndPropagateAssignment(group: GroupMetadata, assignment: Map[String, Array[Byte]]) {
-    assert(group.is(AwaitingSync))
+    assert(group.is(CompletingRebalance))
     group.allMemberMetadata.foreach(member => member.assignment = assignment(member.memberId))
     propagateAssignment(group, Errors.NONE)
   }
 
   private def resetAndPropagateAssignmentError(group: GroupMetadata, error: Errors) {
-    assert(group.is(AwaitingSync))
+    assert(group.is(CompletingRebalance))
     group.allMemberMetadata.foreach(_.assignment = Array.empty[Byte])
     propagateAssignment(group, error)
   }
@@ -674,7 +674,7 @@ class GroupCoordinator(val brokerId: Int,
 
   private def prepareRebalance(group: GroupMetadata) {
     // if any members are awaiting sync, cancel their request and have them rejoin
-    if (group.is(AwaitingSync))
+    if (group.is(CompletingRebalance))
       resetAndPropagateAssignmentError(group, Errors.REBALANCE_IN_PROGRESS)
 
     val delayedRebalance = if (group.is(Empty))
@@ -700,7 +700,7 @@ class GroupCoordinator(val brokerId: Int,
     group.remove(member.memberId)
     group.currentState match {
       case Dead | Empty =>
-      case Stable | AwaitingSync => maybePrepareRebalance(group)
+      case Stable | CompletingRebalance => maybePrepareRebalance(group)
       case PreparingRebalance => joinPurgatory.checkAndComplete(GroupKey(group.groupId))
     }
   }
