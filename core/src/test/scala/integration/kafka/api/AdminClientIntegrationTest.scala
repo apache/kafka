@@ -173,7 +173,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertTrue(results.containsKey("mytopic2"))
     assertFutureExceptionTypeEquals(results.get("mytopic2"), classOf[TopicExistsException])
 
-    val topicToDescription = client.describeTopics(topics.asJava).all.get()
+    var topicToDescription = client.describeTopics(topics.asJava).all.get()
     assertEquals(topics.toSet, topicToDescription.keySet.asScala)
 
     val topic0 = topicToDescription.get("mytopic")
@@ -209,6 +209,11 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       assertEquals(partition.replicas, partition.isr)
       assertTrue(partition.replicas.contains(partition.leader))
     }
+
+    client.deleteTopics(topics.asJava, new DeleteTopicsOptions().validateOnly(true)).all.get()
+    topicToDescription = client.describeTopics(topics.asJava).all.get()
+    assertNotNull(topicToDescription.get("mytopic"))
+    assertNotNull(topicToDescription.get("mytopic2"))
 
     client.deleteTopics(topics.asJava).all.get()
     waitForTopics(client, List(), topics)
