@@ -703,8 +703,6 @@ class ReplicaManager(val config: KafkaConfig,
       case None =>
     }
 
-
-
     val localDeleteRecordsResults = deleteRecordsOnLocalLog(offsetPerPartition, validateOnly)
     debug("Delete records on local log in %d ms".format(time.milliseconds - timeBeforeLocalDeleteRecords))
 
