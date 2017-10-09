@@ -220,6 +220,13 @@ public class ThreadCache {
         long sizeInBytes = 0;
         for (final NamedCache namedCache : caches.values()) {
             sizeInBytes += namedCache.sizeInBytes();
+            if (isOverflowing(sizeInBytes)) {
+                return Long.MAX_VALUE;
+            }
+        }
+
+        if (isOverflowing(sizeInBytes)) {
+            return Long.MAX_VALUE;
         }
         return sizeInBytes;
     }
