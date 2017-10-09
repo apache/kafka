@@ -31,31 +31,30 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
+import static org.apache.kafka.common.protocol.CommonFields.GENERATION_ID;
+import static org.apache.kafka.common.protocol.CommonFields.MEMBER_ID;
 import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 import static org.apache.kafka.common.protocol.types.Type.BYTES;
-import static org.apache.kafka.common.protocol.types.Type.INT32;
 import static org.apache.kafka.common.protocol.types.Type.STRING;
 
 public class JoinGroupResponse extends AbstractResponse {
 
-    private static final String GENERATION_ID_KEY_NAME = "generation_id";
     private static final String GROUP_PROTOCOL_KEY_NAME = "group_protocol";
     private static final String LEADER_ID_KEY_NAME = "leader_id";
-    private static final String MEMBER_ID_KEY_NAME = "member_id";
     private static final String MEMBERS_KEY_NAME = "members";
 
     private static final String MEMBER_METADATA_KEY_NAME = "member_metadata";
 
     private static final Schema JOIN_GROUP_RESPONSE_MEMBER_V0 = new Schema(
-            new Field(MEMBER_ID_KEY_NAME, STRING),
+            MEMBER_ID,
             new Field(MEMBER_METADATA_KEY_NAME, BYTES));
 
     private static final Schema JOIN_GROUP_RESPONSE_V0 = new Schema(
             ERROR_CODE,
-            new Field(GENERATION_ID_KEY_NAME, INT32, "The generation of the consumer group."),
+            GENERATION_ID,
             new Field(GROUP_PROTOCOL_KEY_NAME, STRING, "The group protocol selected by the coordinator"),
             new Field(LEADER_ID_KEY_NAME, STRING, "The leader of the group"),
-            new Field(MEMBER_ID_KEY_NAME, STRING, "The consumer id assigned by the group coordinator."),
+            MEMBER_ID,
             new Field(MEMBERS_KEY_NAME, new ArrayOf(JOIN_GROUP_RESPONSE_MEMBER_V0)));
 
     private static final Schema JOIN_GROUP_RESPONSE_V1 = JOIN_GROUP_RESPONSE_V0;
@@ -63,10 +62,10 @@ public class JoinGroupResponse extends AbstractResponse {
     private static final Schema JOIN_GROUP_RESPONSE_V2 = new Schema(
             THROTTLE_TIME_MS,
             ERROR_CODE,
-            new Field(GENERATION_ID_KEY_NAME, INT32, "The generation of the consumer group."),
+            GENERATION_ID,
             new Field(GROUP_PROTOCOL_KEY_NAME, STRING, "The group protocol selected by the coordinator"),
             new Field(LEADER_ID_KEY_NAME, STRING, "The leader of the group"),
-            new Field(MEMBER_ID_KEY_NAME, STRING, "The consumer id assigned by the group coordinator."),
+            MEMBER_ID,
             new Field(MEMBERS_KEY_NAME, new ArrayOf(JOIN_GROUP_RESPONSE_MEMBER_V0)));
 
 
@@ -129,14 +128,14 @@ public class JoinGroupResponse extends AbstractResponse {
 
         for (Object memberDataObj : struct.getArray(MEMBERS_KEY_NAME)) {
             Struct memberData = (Struct) memberDataObj;
-            String memberId = memberData.getString(MEMBER_ID_KEY_NAME);
+            String memberId = memberData.get(MEMBER_ID);
             ByteBuffer memberMetadata = memberData.getBytes(MEMBER_METADATA_KEY_NAME);
             members.put(memberId, memberMetadata);
         }
         error = Errors.forCode(struct.get(ERROR_CODE));
-        generationId = struct.getInt(GENERATION_ID_KEY_NAME);
+        generationId = struct.get(GENERATION_ID);
         groupProtocol = struct.getString(GROUP_PROTOCOL_KEY_NAME);
-        memberId = struct.getString(MEMBER_ID_KEY_NAME);
+        memberId = struct.get(MEMBER_ID);
         leaderId = struct.getString(LEADER_ID_KEY_NAME);
     }
 
@@ -187,15 +186,15 @@ public class JoinGroupResponse extends AbstractResponse {
         struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
 
         struct.set(ERROR_CODE, error.code());
-        struct.set(GENERATION_ID_KEY_NAME, generationId);
+        struct.set(GENERATION_ID, generationId);
         struct.set(GROUP_PROTOCOL_KEY_NAME, groupProtocol);
-        struct.set(MEMBER_ID_KEY_NAME, memberId);
+        struct.set(MEMBER_ID, memberId);
         struct.set(LEADER_ID_KEY_NAME, leaderId);
 
         List<Struct> memberArray = new ArrayList<>();
         for (Map.Entry<String, ByteBuffer> entries : members.entrySet()) {
             Struct memberData = struct.instance(MEMBERS_KEY_NAME);
-            memberData.set(MEMBER_ID_KEY_NAME, entries.getKey());
+            memberData.set(MEMBER_ID, entries.getKey());
             memberData.set(MEMBER_METADATA_KEY_NAME, entries.getValue());
             memberArray.add(memberData);
         }
