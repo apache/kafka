@@ -1948,7 +1948,7 @@ public class KafkaAdminClient extends AdminClient {
 
                         @Override
                         AbstractRequest.Builder createRequest(int timeoutMs) {
-                            return new DeleteRecordsRequest.Builder(timeoutMs, entry.getValue());
+                            return new DeleteRecordsRequest.Builder(timeoutMs, entry.getValue(), options.validateOnly());
                         }
 
                         @Override
@@ -1957,7 +1957,7 @@ public class KafkaAdminClient extends AdminClient {
                             for (Map.Entry<TopicPartition, DeleteRecordsResponse.PartitionResponse> result: response.responses().entrySet()) {
 
                                 KafkaFutureImpl<DeletedRecords> future = futures.get(result.getKey());
-                                if (result.getValue().error == Errors.NONE) {
+                                if (result.getValue().error.error() == Errors.NONE) {
                                     future.complete(new DeletedRecords(result.getValue().lowWatermark));
                                 } else {
                                     future.completeExceptionally(result.getValue().error.exception());

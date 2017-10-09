@@ -19,6 +19,8 @@ package kafka.server
 
 import kafka.admin.AdminUtils
 import kafka.log.LogConfig
+import kafka.utils.ZkUtils
+import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.config.ConfigDef
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.ListenerName
@@ -27,13 +29,16 @@ import org.apache.kafka.server.policy.TopicState
 
 import scala.collection.JavaConverters._
 
-class ClusterStateImpl(adminManager: AdminManager, listenerName: ListenerName) extends ClusterState {
+class ClusterStateImpl(metadataCache: MetadataCache,
+                       zkClient: KafkaZkClient,
+                       listenerName: ListenerName,
+                       config: KafkaConfig) extends ClusterState {
 
   /**
     * Returns the current state of the given topic, or null if the topic does not exist.
     */
   override def topicState(topicName: String) = {
-    new TopicStateImpl(topicName, adminManager, listenerName)
+    new TopicStateImpl(topicName, metadataCache, zkClient, listenerName, config)
   }
 
   /**
@@ -43,11 +48,11 @@ class ClusterStateImpl(adminManager: AdminManager, listenerName: ListenerName) e
     */
   override def topics(includeInternal: Boolean, includeMarkedForDeletion: Boolean) = {
     if (includeInternal && includeMarkedForDeletion)
-      adminManager.metadataCache.getAllTopics().asJava
+      metadataCache.getAllTopics().asJava
     else {
-      adminManager.metadataCache.getAllTopics().filter { case (topic) =>
-        val topicMeta = adminManager.metadataCache.getTopicMetadata(Set(topic), null).head
-        (includeInternal || !topicMeta.isInternal) && (includeMarkedForDeletion || adminManager.zkUtils.isTopicMarkedForDeletion(topic))
+      metadataCache.getAllTopics().filter { case (topic) =>
+        val topicMeta = metadataCache.getTopicMetadata(Set(topic), null).head
+        (includeInternal || !topicMeta.isInternal) && (includeMarkedForDeletion || zkClient.isTopicMarkedForDeletion(topic))
       }.asJava
     }
   }
@@ -56,13 +61,17 @@ class ClusterStateImpl(adminManager: AdminManager, listenerName: ListenerName) e
     * The number of brokers in the cluster.
     */
   override def clusterSize() = {
-    adminManager.zkUtils.getAllBrokersInCluster().size
+    zkClient.getAllBrokersInCluster.size
   }
 }
 
-class TopicStateImpl(topicName: String, adminManager: AdminManager, listenerName: ListenerName) extends TopicState {
+class TopicStateImpl(topicName: String,
+                     metadataCache: MetadataCache,
+                     zkClient: KafkaZkClient,
+                     listenerName: ListenerName,
+                     config: KafkaConfig) extends TopicState {
   Topic.validate(topicName)
-  val topicMeta = adminManager.metadataCache.getTopicMetadata(Set(topicName), listenerName).head // TODO this fugly null
+  val topicMeta = metadataCache.getTopicMetadata(Set(topicName), listenerName).head
   /**
     * The number of partitions of the topic.
     */
@@ -96,8 +105,8 @@ class TopicStateImpl(topicName: String, adminManager: AdminManager, listenerName
   override def configs() = {
     // TODO Copied from adminManager: Factor out a common method
     // Consider optimizing this by caching the configs or retrieving them from the `Log` when possible
-    val topicProps = AdminUtils.fetchEntityConfig(adminManager.zkUtils, ConfigType.Topic, topicName)
-    val logConfig = LogConfig.fromProps(KafkaServer.copyKafkaConfigToLog(adminManager.config), topicProps)
+    val topicProps = zkClient.getEntityConfigs(ConfigType.Topic, topicName)
+    val logConfig = LogConfig.fromProps(KafkaServer.copyKafkaConfigToLog(config), topicProps)
     logConfig.values.asScala.map { case (key, value) =>
       val configEntryType = logConfig.typeOf(key)
       // if there were passwords in the topic config, we shouldn't leak them to the policy.
@@ -112,7 +121,7 @@ class TopicStateImpl(topicName: String, adminManager: AdminManager, listenerName
   /**
     * Returns whether the topic is marked for deletion.
     */
-  override def markedForDeletion() = adminManager.zkUtils.isTopicMarkedForDeletion(topicName)
+  override def markedForDeletion() = zkClient.isTopicMarkedForDeletion(topicName)
 
   /**
     * Returns whether the topic is an internal topic.

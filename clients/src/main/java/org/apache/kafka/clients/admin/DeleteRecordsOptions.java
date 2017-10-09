@@ -29,4 +29,15 @@ import java.util.Map;
 @InterfaceStability.Evolving
 public class DeleteRecordsOptions extends AbstractOptions<DeleteRecordsOptions> {
 
+    private boolean validateOnly;
+
+    public DeleteRecordsOptions validateOnly(boolean validateOnly) {
+        this.validateOnly = validateOnly;
+        return this;
+    }
+
+    public boolean validateOnly() {
+        return validateOnly;
+    }
+
 }

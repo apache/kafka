@@ -1421,6 +1421,8 @@ class KafkaApis(val requestChannel: RequestChannel,
           deleteTopicRequest.timeout.toInt,
           authorizedForDeleteTopics,
           deleteTopicRequest.validateOnly,
+          request.context.listenerName,
+          request.session.principal,
           sendResponseCallback
         )
       }
@@ -1465,11 +1467,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (authorizedForDeleteTopicOffsets.isEmpty)
       sendResponseCallback(Map.empty)
     else {
-      // call the replica manager to append messages to the replicas
+      // call the replica manager to delete messages from the replicas
       replicaManager.deleteRecords(
         deleteRecordsRequest.timeout.toLong,
         authorizedForDeleteTopicOffsets,
         deleteRecordsRequest.validateOnly,
+        request.context.listenerName,
+        request.session.principal,
         sendResponseCallback)
     }
   }

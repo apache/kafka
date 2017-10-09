@@ -25,7 +25,7 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.NewPartitions
-import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource}
+import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException}
 import org.apache.kafka.common.errors.{ApiException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, PolicyViolationException, ReassignmentInProgressException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
@@ -34,8 +34,8 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.CreateTopicsRequest._
 import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError, DescribeConfigsResponse, Resource, ResourceType}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy, RequestTopicState, TopicManagementPolicy, TopicManagementPolicyAdapter, TopicState}
-import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
+import org.apache.kafka.server.policy.{RequestTopicState, TopicManagementPolicy, TopicManagementPolicyAdapter}
+import org.apache.kafka.server.policy.TopicManagementPolicy.DeleteTopicRequest
 
 import scala.collection._
 import scala.collection.JavaConverters._
@@ -43,40 +43,13 @@ import scala.collection.JavaConverters._
 class AdminManager(val config: KafkaConfig,
                    val metrics: Metrics,
                    val metadataCache: MetadataCache,
-                   val zkClient: KafkaZkClient) extends Logging with KafkaMetricsGroup {
+                   val zkClient: KafkaZkClient,
+                   val topicManagementPolicy: Option[TopicManagementPolicy]) extends Logging with KafkaMetricsGroup {
 
   this.logIdent = "[Admin Manager on Broker " + config.brokerId + "]: "
 
   private val topicPurgatory = DelayedOperationPurgatory[DelayedOperation]("topic", config.brokerId)
   private val adminZkClient = new AdminZkClient(zkClient)
-
-  val topicManagementPolicy = if (config.values.get(KafkaConfig.CreateTopicPolicyClassNameProp) != null ||
-        config.values.get(KafkaConfig.AlterConfigPolicyClassNameProp) != null) {
-    if (config.values.get(KafkaConfig.TopicManagementPolicyClassNameProp) != null) {
-      error(s"Use of config ${KafkaConfig.TopicManagementPolicyClassNameProp} " +
-        s"precludes use of ${KafkaConfig.CreateTopicPolicyClassNameProp} " +
-        s"and ${KafkaConfig.AlterConfigPolicyClassNameProp}.")
-      // TODO how do we die here?
-    }
-    val createTopicPolicy =
-      Option(config.getConfiguredInstance(KafkaConfig.CreateTopicPolicyClassNameProp, classOf[CreateTopicPolicy]))
-
-    val alterConfigPolicy =
-      Option(config.getConfiguredInstance(KafkaConfig.AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
-
-    if (createTopicPolicy.isDefined) {
-        warn(s"Use of config ${KafkaConfig.CreateTopicPolicyClassNameProp} is deprecated. Use ${KafkaConfig.TopicManagementPolicyClassNameProp} instead.")
-    }
-    if (alterConfigPolicy.isDefined) {
-      warn(s"Use of config ${KafkaConfig.AlterConfigPolicyClassNameProp} is deprecated. Use ${KafkaConfig.TopicManagementPolicyClassNameProp} instead.")
-    }
-    Some(new TopicManagementPolicyAdapter(
-      config.getConfiguredInstance(KafkaConfig.CreateTopicPolicyClassNameProp, classOf[CreateTopicPolicy]),
-      config.getConfiguredInstance(KafkaConfig.AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy])
-    ))
-  } else {
-    Option(config.getConfiguredInstance(KafkaConfig.TopicManagementPolicyClassNameProp, classOf[TopicManagementPolicy]))
-  }
 
   def hasDelayedTopicOperations = topicPurgatory.delayed != 0
 
@@ -218,7 +191,7 @@ class AdminManager(val config: KafkaConfig,
                 * The authenticated principal making the request, or null if the session is not authenticated.
                 */
               override def principal() = principal
-            }, new ClusterStateImpl(this, listenerName))
+            }, new ClusterStateImpl(metadataCache, zkClient, listenerName, config))
 
             if (!validateOnly)
               adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, assignments, configs, update = false)
@@ -268,11 +241,25 @@ class AdminManager(val config: KafkaConfig,
   def deleteTopics(timeout: Int,
                    topics: Set[String],
                    validateOnly: Boolean,
+                   listenerName: ListenerName,
+                   requestPrincipal: KafkaPrincipal,
                    responseCallback: Map[String, ApiError] => Unit) {
 
     // 1. map over topics calling the asynchronous delete
     val metadata = topics.map { topic =>
         try {
+          topicManagementPolicy match {
+            case Some(policy) =>
+              val requestTopic = topic
+              policy.validateDeleteTopic(new DeleteTopicRequest {
+
+                override def topic() = requestTopic
+
+                override def principal() = requestPrincipal
+              }, new ClusterStateImpl(metadataCache, zkClient, listenerName, config))
+            case None =>
+          }
+
           adminZkClient.deleteTopic(topic, validateOnly)
           DeleteTopicMetadata(topic, ApiError.NONE)
         } catch {
@@ -468,7 +455,7 @@ class AdminManager(val config: KafkaConfig,
                   /**
                     * The state the topic will have after the alteration.
                     */
-                  override def requestedState() = new TopicStateImpl(topic, AdminManager.this, listenerName) with RequestTopicState {
+                  override def requestedState() = new TopicStateImpl(topic, metadataCache, zkClient, listenerName, AdminManager.this.config) with RequestTopicState {
                     override def configs() = configEntriesMap.asJava
 
                     /**
@@ -488,7 +475,7 @@ class AdminManager(val config: KafkaConfig,
                     * The authenticated principal making the request, or null if the session is not authenticated.
                     */
                   override def principal() = requestPrincipal
-                }, new ClusterStateImpl(this, listenerName))
+                }, new ClusterStateImpl(metadataCache, zkClient, listenerName, AdminManager.this.config))
 
                 if (!validateOnly)
                   adminZkClient.changeTopicConfig(topic, properties)
@@ -521,8 +508,5 @@ class AdminManager(val config: KafkaConfig,
 
   def shutdown() {
     topicPurgatory.shutdown()
-    CoreUtils.swallow(createTopicPolicy.foreach(_.close()), this)
-    CoreUtils.swallow(alterConfigPolicy.foreach(_.close()), this)
-    CoreUtils.swallow(topicManagementPolicy.foreach(_.close()), this)
   }
 }

@@ -616,7 +616,7 @@ class ReplicaManagerTest {
     new ReplicaManager(config, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time, ""), new BrokerTopicStats,
       metadataCache, new LogDirFailureChannel(config.logDirs.size), mockProducePurgatory, mockFetchPurgatory,
-      mockDeleteRecordsPurgatory, Option(this.getClass.getName))
+      mockDeleteRecordsPurgatory, Option(this.getClass.getName), None)
   }
 
 }

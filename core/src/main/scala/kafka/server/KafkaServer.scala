@@ -47,6 +47,7 @@ import org.apache.kafka.common.requests.{ControlledShutdownRequest, ControlledSh
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, Node}
+import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy, TopicManagementPolicy, TopicManagementPolicyAdapter}
 
 import scala.collection.JavaConverters._
 import scala.collection.{Map, Seq, mutable}
@@ -141,6 +142,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   val correlationId: AtomicInteger = new AtomicInteger(0)
   val brokerMetaPropsFile = "meta.properties"
   val brokerMetadataCheckpoints = config.logDirs.map(logDir => (logDir, new BrokerMetadataCheckpoint(new File(logDir + File.separator + brokerMetaPropsFile)))).toMap
+
+  var topicManagementPolicy: Option[TopicManagementPolicy] = None
 
   private var _clusterId: String = null
   private var _brokerTopicStats: BrokerTopicStats = null
@@ -238,6 +241,34 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         socketServer = new SocketServer(config, metrics, time, credentialProvider)
         socketServer.startup()
 
+        topicManagementPolicy = if (config.values.get(KafkaConfig.CreateTopicPolicyClassNameProp) != null ||
+          config.values.get(KafkaConfig.AlterConfigPolicyClassNameProp) != null) {
+          if (config.values.get(KafkaConfig.TopicManagementPolicyClassNameProp) != null) {
+            error(s"Use of config ${KafkaConfig.TopicManagementPolicyClassNameProp} " +
+              s"precludes use of ${KafkaConfig.CreateTopicPolicyClassNameProp} " +
+              s"and ${KafkaConfig.AlterConfigPolicyClassNameProp}.")
+            // TODO how do we die here?
+          }
+          val createTopicPolicy =
+            Option(config.getConfiguredInstance(KafkaConfig.CreateTopicPolicyClassNameProp, classOf[CreateTopicPolicy]))
+
+          val alterConfigPolicy =
+            Option(config.getConfiguredInstance(KafkaConfig.AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
+
+          if (createTopicPolicy.isDefined) {
+            warn(s"Use of config ${KafkaConfig.CreateTopicPolicyClassNameProp} is deprecated. Use ${KafkaConfig.TopicManagementPolicyClassNameProp} instead.")
+          }
+          if (alterConfigPolicy.isDefined) {
+            warn(s"Use of config ${KafkaConfig.AlterConfigPolicyClassNameProp} is deprecated. Use ${KafkaConfig.TopicManagementPolicyClassNameProp} instead.")
+          }
+          Some(new TopicManagementPolicyAdapter(
+            config.getConfiguredInstance(KafkaConfig.CreateTopicPolicyClassNameProp, classOf[CreateTopicPolicy]),
+            config.getConfiguredInstance(KafkaConfig.AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy])
+          ))
+        } else {
+          Option(config.getConfiguredInstance(KafkaConfig.TopicManagementPolicyClassNameProp, classOf[TopicManagementPolicy]))
+        }
+
         /* start replica manager */
         replicaManager = createReplicaManager(isShuttingDown)
         replicaManager.startup()
@@ -246,7 +277,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         kafkaController = new KafkaController(config, zkClient, time, metrics, threadNamePrefix)
         kafkaController.startup()
 
-        adminManager = new AdminManager(config, metrics, metadataCache, zkClient)
+        adminManager = new AdminManager(config, metrics, metadataCache, zkClient, topicManagementPolicy)
 
         /* start group coordinator */
         // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
@@ -324,7 +355,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   protected def createReplicaManager(isShuttingDown: AtomicBoolean): ReplicaManager =
     new ReplicaManager(config, metrics, time, zkClient, kafkaScheduler, logManager, isShuttingDown, quotaManagers,
-      brokerTopicStats, metadataCache, logDirFailureChannel)
+      brokerTopicStats, metadataCache, logDirFailureChannel, topicManagementPolicy = topicManagementPolicy)
 
   private def initZk(): ZkUtils = {
     info(s"Connecting to zookeeper on ${config.zkConnect}")
@@ -573,6 +604,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           CoreUtils.swallow(metrics.close(), this)
         if (brokerTopicStats != null)
           CoreUtils.swallow(brokerTopicStats.close(), this)
+
+        CoreUtils.swallow(topicManagementPolicy.foreach(_.close()), this)
 
         brokerState.newState(NotRunning)
 

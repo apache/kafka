@@ -35,6 +35,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION
 import org.apache.kafka.common.protocol.Errors.KAFKA_STORAGE_ERROR
@@ -45,7 +46,9 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
+import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.policy.TopicManagementPolicy
 
 import scala.collection.JavaConverters._
 import scala.collection._
@@ -144,7 +147,8 @@ class ReplicaManager(val config: KafkaConfig,
                      val delayedProducePurgatory: DelayedOperationPurgatory[DelayedProduce],
                      val delayedFetchPurgatory: DelayedOperationPurgatory[DelayedFetch],
                      val delayedDeleteRecordsPurgatory: DelayedOperationPurgatory[DelayedDeleteRecords],
-                     threadNamePrefix: Option[String]) extends Logging with KafkaMetricsGroup {
+                     threadNamePrefix: Option[String],
+                     topicManagementPolicy: Option[TopicManagementPolicy]) extends Logging with KafkaMetricsGroup {
 
   def this(config: KafkaConfig,
            metrics: Metrics,
@@ -157,7 +161,8 @@ class ReplicaManager(val config: KafkaConfig,
            brokerTopicStats: BrokerTopicStats,
            metadataCache: MetadataCache,
            logDirFailureChannel: LogDirFailureChannel,
-           threadNamePrefix: Option[String] = None) {
+           threadNamePrefix: Option[String] = None,
+           topicManagementPolicy: Option[TopicManagementPolicy] = None) {
     this(config, metrics, time, zkClient, scheduler, logManager, isShuttingDown,
       quotaManagers, brokerTopicStats, metadataCache, logDirFailureChannel,
       DelayedOperationPurgatory[DelayedProduce](
@@ -169,7 +174,8 @@ class ReplicaManager(val config: KafkaConfig,
       DelayedOperationPurgatory[DelayedDeleteRecords](
         purgatoryName = "DeleteRecords", brokerId = config.brokerId,
         purgeInterval = config.deleteRecordsPurgatoryPurgeIntervalRequests),
-      threadNamePrefix)
+      threadNamePrefix,
+      topicManagementPolicy)
   }
 
   /* epoch of the controller that last changed the leader */
@@ -671,8 +677,34 @@ class ReplicaManager(val config: KafkaConfig,
   def deleteRecords(timeout: Long,
                     offsetPerPartition: Map[TopicPartition, Long],
                     validateOnly: Boolean,
+                    listenerName: ListenerName,
+                    requestPrincipal: KafkaPrincipal,
                     responseCallback: Map[TopicPartition, DeleteRecordsResponse.PartitionResponse] => Unit) {
     val timeBeforeLocalDeleteRecords = time.milliseconds
+
+    topicManagementPolicy match {
+      case Some(policy) =>
+        val groupedByTopic = offsetPerPartition.groupBy{ case (x, y) => x.topic}
+        groupedByTopic.foreach { case (requestTopic, offsetsByPartition) =>
+          policy.validateDeleteRecords(new TopicManagementPolicy.DeleteRecordsRequest {
+
+            override def topic() = requestTopic
+
+            override def principal() = requestPrincipal
+
+            override def deletedMessageOffsets(): java.util.Map[Integer, java.lang.Long] = {
+              offsetsByPartition.map{ case (tp, offset) =>
+                new Integer(tp.partition) -> new  java.lang.Long(offset)
+              }.toMap.asJava
+            }
+
+          }, new ClusterStateImpl(metadataCache, zkClient, listenerName, config))
+        }
+      case None =>
+    }
+
+
+
     val localDeleteRecordsResults = deleteRecordsOnLocalLog(offsetPerPartition, validateOnly)
     debug("Delete records on local log in %d ms".format(time.milliseconds - timeBeforeLocalDeleteRecords))
 
