@@ -104,7 +104,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
                         wrapAndThrow(exception);
                     if (done)
                         return value;
-                    if (delta > waitTimeMs) {
+                    if (delta >= waitTimeMs) {
                         throw new TimeoutException();
                     }
                     this.wait(waitTimeMs - delta);
