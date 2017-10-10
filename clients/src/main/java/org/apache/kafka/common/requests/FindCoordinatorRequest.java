@@ -26,16 +26,15 @@ import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
+import static org.apache.kafka.common.protocol.CommonFields.GROUP_ID;
 import static org.apache.kafka.common.protocol.types.Type.INT8;
 import static org.apache.kafka.common.protocol.types.Type.STRING;
 
 public class FindCoordinatorRequest extends AbstractRequest {
-    private static final String GROUP_ID_KEY_NAME = "group_id";
     private static final String COORDINATOR_KEY_KEY_NAME = "coordinator_key";
     private static final String COORDINATOR_TYPE_KEY_NAME = "coordinator_type";
 
-    private static final Schema FIND_COORDINATOR_REQUEST_V0 = new Schema(
-            new Field("group_id", STRING, "The unique group id."));
+    private static final Schema FIND_COORDINATOR_REQUEST_V0 = new Schema(GROUP_ID);
 
     private static final Schema FIND_COORDINATOR_REQUEST_V1 = new Schema(
             new Field("coordinator_key", STRING, "Id to use for finding the coordinator (for groups, this is the groupId, " +
@@ -102,8 +101,8 @@ public class FindCoordinatorRequest extends AbstractRequest {
             this.coordinatorType = CoordinatorType.forId(struct.getByte(COORDINATOR_TYPE_KEY_NAME));
         else
             this.coordinatorType = CoordinatorType.GROUP;
-        if (struct.hasField(GROUP_ID_KEY_NAME))
-            this.coordinatorKey = struct.getString(GROUP_ID_KEY_NAME);
+        if (struct.hasField(GROUP_ID))
+            this.coordinatorKey = struct.get(GROUP_ID);
         else
             this.coordinatorKey = struct.getString(COORDINATOR_KEY_KEY_NAME);
     }
@@ -138,8 +137,8 @@ public class FindCoordinatorRequest extends AbstractRequest {
     @Override
     protected Struct toStruct() {
         Struct struct = new Struct(ApiKeys.FIND_COORDINATOR.requestSchema(version()));
-        if (struct.hasField(GROUP_ID_KEY_NAME))
-            struct.set(GROUP_ID_KEY_NAME, coordinatorKey);
+        if (struct.hasField(GROUP_ID))
+            struct.set(GROUP_ID, coordinatorKey);
         else
             struct.set(COORDINATOR_KEY_KEY_NAME, coordinatorKey);
         if (struct.hasField(COORDINATOR_TYPE_KEY_NAME))
