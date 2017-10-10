@@ -31,12 +31,18 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
   @Test
   def testValidDeleteTopicRequests() {
     val timeout = 10000
-    // Single topic
+
+    // Single topic (validateOnly)
     TestUtils.createTopic(zkUtils, "topic-1", 1, 1, servers)
-    validateValidDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set("topic-1").asJava, timeout, false).build())
-    // Multi topic
+    validateValidDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set("topic-1").asJava, timeout, true).build())
+    // Multi topic (validateOnly)
     TestUtils.createTopic(zkUtils, "topic-3", 5, 2, servers)
     TestUtils.createTopic(zkUtils, "topic-4", 1, 2, servers)
+    validateValidDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set("topic-3", "topic-4").asJava, timeout, true).build())
+
+    // Single topic
+    validateValidDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set("topic-1").asJava, timeout, false).build())
+    // Multi topic
     validateValidDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set("topic-3", "topic-4").asJava, timeout, false).build())
   }
 
@@ -47,7 +53,11 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
     assertTrue(s"There should be no errors, found ${response.apiErrors.asScala}", error.isEmpty)
 
     request.topics.asScala.foreach { topic =>
-      validateTopicIsDeleted(topic)
+      if (request.validateOnly()) {
+        validateTopicExists(topic)
+      } else {
+        validateTopicIsDeleted(topic)
+      }
     }
   }
 
@@ -87,8 +97,8 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
     assertEquals("The response size should match", expectedResponse.size, response.apiErrors.size)
 
     expectedResponse.foreach { case (topic, expectedError) =>
-      assertEquals("The response error codes should match", expectedResponse(topic).error, errors(topic).error)
-      assertEquals("The response error messages should match", expectedResponse(topic).message, errors(topic).message)
+      assertEquals(errors(topic) + " The response error codes should match", expectedResponse(topic).error, errors(topic).error)
+      assertEquals(errors(topic) + " The response error messages should match", expectedResponse(topic).message, errors(topic).message)
       // If no error validate the topic was deleted
       if (expectedError.isSuccess) {
         validateTopicIsDeleted(topic)
@@ -110,6 +120,13 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
         Builder(List(topic).asJava, true).build).topicMetadata.asScala
     TestUtils.waitUntilTrue (() => !metadata.exists(p => p.topic.equals(topic) && p.error == Errors.NONE),
       s"The topic $topic should not exist")
+  }
+
+  private def validateTopicExists(topic: String): Unit = {
+    val metadata = sendMetadataRequest(new MetadataRequest.
+    Builder(List(topic).asJava, true).build).topicMetadata.asScala
+    TestUtils.waitUntilTrue (() => metadata.exists(p => p.topic.equals(topic) && p.error == Errors.NONE),
+      s"The topic $topic should exist")
   }
 
   private def sendDeleteTopicsRequest(request: DeleteTopicsRequest, socketServer: SocketServer = controllerSocketServer): DeleteTopicsResponse = {

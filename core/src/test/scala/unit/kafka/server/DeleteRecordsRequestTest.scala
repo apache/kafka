@@ -21,11 +21,11 @@ import kafka.network.SocketServer
 import kafka.server.BaseRequestTest
 import kafka.utils._
 import org.apache.kafka.clients.consumer.Consumer
-import org.apache.kafka.clients.producer.{Producer, ProducerRecord}
+import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
-import org.apache.kafka.common.requests.{ApiError, DeleteRecordsRequest, DeleteRecordsResponse, ListOffsetRequest, ListOffsetResponse, MetadataRequest, MetadataResponse}
-import org.apache.kafka.common.serialization.{ByteArraySerializer, IntegerSerializer, StringSerializer}
+import org.apache.kafka.common.requests.{ApiError, DeleteRecordsRequest, DeleteRecordsResponse}
+import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.junit.Assert.{assertEquals, _}
 import org.junit.{After, Before, Test}
 
@@ -37,7 +37,7 @@ class DeleteRecordsRequestTest extends BaseRequestTest {
 
   val topicPartition2 = new TopicPartition("topic2", 0)
 
-  var consumer: Consumer[Array[Byte], Array[Byte]] = null
+  protected var consumer: Consumer[Array[Byte], Array[Byte]] = null
 
   @Before
   override def setUp(): Unit = {
@@ -109,34 +109,34 @@ class DeleteRecordsRequestTest extends BaseRequestTest {
   }
 
   @Test
-  def testErrorDeleteTopicRequests() {
+  def testErrorDeleteRecordsRequests() {
     val timeout = 30000
     val timeoutTopic = new TopicPartition("invalid-timeout", 0)
     val doesNotExist = new TopicPartition("does-not-exist", 0)
     // Basic
-    validateErrorDeleteTopicRequests(new DeleteRecordsRequest.Builder(timeout,
+    validateErrorDeleteRecordsRequests(new DeleteRecordsRequest.Builder(timeout,
       Map[TopicPartition, java.lang.Long](doesNotExist -> 101L).asJava, false).build(),
-      Map(doesNotExist -> new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, "Partition does-not-exist-0 doesn't exist on 1")))
+      Map(doesNotExist -> new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, null)))
 
     // Partial
-    validateErrorDeleteTopicRequests(new DeleteRecordsRequest.Builder(timeout,
+    validateErrorDeleteRecordsRequests(new DeleteRecordsRequest.Builder(timeout,
       Map[TopicPartition, java.lang.Long](
       topicPartition -> 5L,
       doesNotExist -> 101L).asJava, false).build(),
       Map(
         topicPartition -> ApiError.NONE,
-        doesNotExist -> new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, "Partition does-not-exist-0 doesn't exist on 1")
+        doesNotExist -> new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, null)
       )
     )
 
     // offset too large
-    validateErrorDeleteTopicRequests(new DeleteRecordsRequest.Builder(timeout,
+    validateErrorDeleteRecordsRequests(new DeleteRecordsRequest.Builder(timeout,
       Map[TopicPartition, java.lang.Long](topicPartition -> 101L).asJava, false).build(),
       Map(topicPartition -> new ApiError(Errors.OFFSET_OUT_OF_RANGE,
         "Cannot increment the log start offset to 101 of partition topic-0 since it is larger than the high watermark 11")))
 
     // offset invalid
-    validateErrorDeleteTopicRequests(new DeleteRecordsRequest.Builder(timeout,
+    validateErrorDeleteRecordsRequests(new DeleteRecordsRequest.Builder(timeout,
       Map[TopicPartition, java.lang.Long](topicPartition -> -101L).asJava, false).build(),
       Map(topicPartition -> new ApiError(Errors.OFFSET_OUT_OF_RANGE,
         "The offset -101 for partition topic-0 is not valid")))
@@ -151,16 +151,19 @@ class DeleteRecordsRequestTest extends BaseRequestTest {
 
   }
 
-  protected def validateErrorDeleteTopicRequests(request: DeleteRecordsRequest, expectedResponse: Map[TopicPartition, ApiError]): Unit = {
-    val priorOffsets = consumer.beginningOffsets(request.partitionOffsets().keySet())
+  protected def validateErrorDeleteRecordsRequests(request: DeleteRecordsRequest, expectedResponse: Map[TopicPartition, ApiError]): Unit = {
+
+    val expectSuccess = request.partitionOffsets().asScala.filter{ case (tp, offset) => expectedResponse(tp).isSuccess }
+    // don't get prior offsets e.g. if topic not exists -> auto.create.topics.enable kicks in!
+    val priorOffsets = consumer.beginningOffsets(expectSuccess.keySet.asJava)
 
     val response = sendDeleteRecordsRequest(request)
     val errors = response.responses.asScala
     assertEquals("The response size should match", expectedResponse.size, response.responses.size)
 
     expectedResponse.foreach { case (topicPartition, expectedError) =>
-      assertEquals(errors(topicPartition).error + ": The response error codes should match", expectedResponse(topicPartition).error, errors(topicPartition).error.error)
-      assertEquals(errors(topicPartition).error + ": The response error messages should match", expectedResponse(topicPartition).message, errors(topicPartition).error.message)
+      assertEquals(s"The response error codes for $topicPartition should match " + errors(topicPartition).error, expectedResponse(topicPartition).error, errors(topicPartition).error.error)
+      assertEquals(s"The response error messages for $topicPartition should match", expectedResponse(topicPartition).message, errors(topicPartition).error.message)
       // If no error validate the records were deleted
       if (expectedError.isSuccess) {
         if (request.validateOnly()) {
@@ -180,7 +183,7 @@ class DeleteRecordsRequestTest extends BaseRequestTest {
     val response = sendDeleteRecordsRequest(request, brokerSocketServer(0))
 
     val error = response.responses.asScala.head._2.error
-    assertEquals("Expected controller error when routed incorrectly",  Errors.NOT_LEADER_FOR_PARTITION, error.error)
+    assertEquals("Expected controller error when routed incorrectly",  Errors.UNKNOWN_TOPIC_OR_PARTITION, error.error)
   }
 
   private def validateRecordsWereDeleted(topicPartition: TopicPartition, expectedOffset: java.lang.Long): Unit = {

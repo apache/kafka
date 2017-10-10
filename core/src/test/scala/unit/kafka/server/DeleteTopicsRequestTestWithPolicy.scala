@@ -43,41 +43,51 @@ class DeleteTopicsRequestTestWithPolicy extends DeleteTopicsRequestTest {
   }
 
   @Test
-  def testDeleteTopicRequestsViolatePolicy() {
-    val timeout = 10000
-    // TODO TestUtils.createTopic(zkUtils, "marked-for-deletion", 1, 2, servers)
-    // TODO validateValidDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set("marked-for-deletion").asJava, timeout, false).build())
+  def testDeleteTopicRequestsViolatePolicy(): Unit = {
+    deleteTopicRequestsViolatePolicy(2.toShort)
+  }
 
+  @Test
+  def testDeleteTopicRequestsViolatePolicyV1Compat(): Unit = {
+    deleteTopicRequestsViolatePolicy(1.toShort)
+  }
+
+  @Test
+  def testDeleteTopicRequestsViolatePolicyV0Compat(): Unit = {
+    deleteTopicRequestsViolatePolicy(0.toShort)
+  }
+
+  private def deleteTopicRequestsViolatePolicy(requestVersion: Short) {
+    val timeout = 10000
+    val expectedError = if (requestVersion >= 2) Errors.POLICY_VIOLATION else Errors.UNKNOWN_SERVER_ERROR
+    val expectedMessage = if (requestVersion >= 2) "protected" else null
     // Single topic
     TestUtils.createTopic(zkUtils, "policy-protected-topic-1", 1, 1, servers)
     validateErrorDeleteTopicRequests(new DeleteTopicsRequest.Builder(
-      Set("policy-protected-topic-1").asJava, timeout, false).build(),
-      Map("policy-protected-topic-1" -> new ApiError(Errors.POLICY_VIOLATION, "protected")))
+      Set("policy-protected-topic-1").asJava, timeout, false).build(requestVersion),
+      Map("policy-protected-topic-1" -> new ApiError(expectedError, expectedMessage)))
     // Multi topic
     TestUtils.createTopic(zkUtils, "policy-protected-topic-3", 5, 2, servers)
     TestUtils.createTopic(zkUtils, "policy-protected-topic-4", 1, 2, servers)
     validateErrorDeleteTopicRequests(new DeleteTopicsRequest.Builder(
-      Set("policy-protected-topic-3", "policy-protected-topic-4").asJava, timeout, false).build(),
-      Map("policy-protected-topic-3" -> new ApiError(Errors.POLICY_VIOLATION, "protected"),
-        "policy-protected-topic-4" -> new ApiError(Errors.POLICY_VIOLATION, "protected")))
+      Set("policy-protected-topic-3", "policy-protected-topic-4").asJava, timeout, false).build(requestVersion),
+      Map("policy-protected-topic-3" -> new ApiError(expectedError, expectedMessage),
+        "policy-protected-topic-4" -> new ApiError(expectedError, expectedMessage)))
     // Mixed case
     TestUtils.createTopic(zkUtils, "topic-5", 5, 2, servers)
     TestUtils.createTopic(zkUtils, "policy-protected-topic-6", 1, 2, servers)
     validateErrorDeleteTopicRequests(new DeleteTopicsRequest.Builder(
-      Set("topic-5", "policy-protected-topic-6").asJava, timeout, false).build(),
+      Set("topic-5", "policy-protected-topic-6").asJava, timeout, false).build(requestVersion),
       Map("topic-5" -> ApiError.NONE,
-        "policy-protected-topic-6" -> new ApiError(Errors.POLICY_VIOLATION, "protected")))
+        "policy-protected-topic-6" -> new ApiError(expectedError, expectedMessage)))
 
     // test with principal
     TestUtils.createTopic(zkUtils, "not-anonymous-topic", 1, 1, servers)
-    validateErrorDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set("not-anonymous-topic").asJava, timeout, false).build(),
-      Map("not-anonymous-topic" -> new ApiError(Errors.POLICY_VIOLATION, "anonymous user cannot delete")))
-    // TODO test everything wrt the cluster state.
-    // TODO test with old version of protocol
+    validateErrorDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set("not-anonymous-topic").asJava, timeout, false).build(requestVersion),
+      Map("not-anonymous-topic" -> new ApiError(expectedError, if (expectedError == Errors.POLICY_VIOLATION) "anonymous user cannot delete" else null)))
 
     // TODO also need to check the other policy-protected APIs to cover their TopicStateImpls
 
-    // TODO need to test validateOnly
   }
 
 }
@@ -102,6 +112,8 @@ object DeleteTopicsRequestTestWithPolicy {
       assertTrue("policy should be configured", configured)
       assertFalse("policy should not be closed", closed)
       assertEquals(s"Wrong cluster size ${clusterState.clusterSize}", 3, clusterState.clusterSize)
+      // TODO test everything wrt the cluster state: listing internal, marked for deletion topics
+      // TODO test everything about the obtainable topic states: internal, marked for deletion, replication factor, numpartitions, assignments, configs
 
       if (clusterState.topicState("policy-protected-topic-4") != null) {
         assertEquals(1, clusterState.topicState("policy-protected-topic-4").numPartitions)
