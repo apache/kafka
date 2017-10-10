@@ -337,7 +337,7 @@
 
     <pre class="brush: java;">
         KStream&lt;String, String&gt; source = builder.stream("streams-plaintext-input");
-        KStream&lt;String, String&gt; words = builder.flatMapValues(new ValueMapper&lt;String, Iterable&lt;String&gt;&gt;() {
+        KStream&lt;String, String&gt; words = source.flatMapValues(new ValueMapper&lt;String, Iterable&lt;String&gt;&gt;() {
                     @Override
                     public Iterable&lt;String&gt; apply(String value) {
                         return Arrays.asList(value.split("\\W+"));
