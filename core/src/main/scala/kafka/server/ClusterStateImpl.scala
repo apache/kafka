@@ -38,7 +38,11 @@ class ClusterStateImpl(metadataCache: MetadataCache,
     * Returns the current state of the given topic, or null if the topic does not exist.
     */
   override def topicState(topicName: String) = {
-    new TopicStateImpl(topicName, metadataCache, zkClient, listenerName, config)
+    if (metadataCache.contains(topicName)) {
+      new TopicStateImpl(topicName, metadataCache, zkClient, listenerName, config)
+    } else {
+      null
+    }
   }
 
   /**
@@ -51,8 +55,7 @@ class ClusterStateImpl(metadataCache: MetadataCache,
       metadataCache.getAllTopics().asJava
     else {
       metadataCache.getAllTopics().filter { case (topic) =>
-        val topicMeta = metadataCache.getTopicMetadata(Set(topic), listenerName).head
-        (includeInternal || !topicMeta.isInternal) && (includeMarkedForDeletion || zkClient.isTopicMarkedForDeletion(topic))
+        (includeInternal || !Topic.isInternal(topic)) && (includeMarkedForDeletion || zkClient.isTopicMarkedForDeletion(topic))
       }.asJava
     }
   }
