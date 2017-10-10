@@ -276,7 +276,7 @@ class AdminManager(val config: KafkaConfig,
     if (timeout <= 0 || validateOnly || !metadata.exists(_.error.isSuccess)) {
       val results = metadata.map { deleteTopicMetadata =>
         // ignore topics that already have errors
-        if (deleteTopicMetadata.error.isSuccess) {
+        if (!validateOnly && deleteTopicMetadata.error.isSuccess) {
           (deleteTopicMetadata.topic, new ApiError(Errors.REQUEST_TIMED_OUT, null))
         } else {
           (deleteTopicMetadata.topic, deleteTopicMetadata.error)
