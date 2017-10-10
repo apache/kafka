@@ -151,7 +151,7 @@ public class KStreamAggregationIntegrationTest {
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
 
-
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldReduce() throws Exception {
         produceMessages(mockTime.milliseconds());
@@ -259,6 +259,7 @@ public class KStreamAggregationIntegrationTest {
         ));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldAggregate() throws Exception {
         produceMessages(mockTime.milliseconds());
@@ -394,6 +395,7 @@ public class KStreamAggregationIntegrationTest {
         )));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldCount() throws Exception {
         produceMessages(mockTime.milliseconds());
@@ -404,6 +406,7 @@ public class KStreamAggregationIntegrationTest {
         shouldCountHelper();
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldCountWithInternalStore() throws Exception {
         produceMessages(mockTime.milliseconds());
@@ -459,6 +462,7 @@ public class KStreamAggregationIntegrationTest {
 
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldCountSessionWindows() throws Exception {
         final long sessionGap = 5 * 60 * 1000L;
