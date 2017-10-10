@@ -30,6 +30,7 @@ import kafka.utils._
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
 
@@ -264,6 +265,7 @@ class LogCleaner(val config: CleanerConfig,
             endOffset = nextDirtyOffset
           } catch {
             case _: LogCleaningAbortedException => // task can be aborted, let it go.
+            case _: KafkaStorageException => // partition is already offline. let it go.
             case e: IOException =>
               val msg = s"Failed to clean up log for ${cleanable.topicPartition} in dir ${cleanable.log.dir.getParent} due to IOException"
               logDirFailureChannel.maybeAddOfflineLogDir(cleanable.log.dir.getParent, msg, e)
@@ -493,7 +495,7 @@ private[log] class Cleaner(val id: Int,
    * provided
    *
    * @param topicPartition The topic and partition of the log segment to clean
-   * @param source The dirty log segment
+   * @param sourceRecords The dirty log segment
    * @param dest The cleaned log segment
    * @param map The key=>offset mapping
    * @param retainDeletes Should delete tombstones be retained while cleaning this segment

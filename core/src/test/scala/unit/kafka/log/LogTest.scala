@@ -1181,6 +1181,14 @@ class LogTest {
       log.readUncommitted(1, 200, None).records.batches.iterator.next().lastOffset)
   }
 
+  @Test(expected = classOf[KafkaStorageException])
+  def testLogRollAfterLogHandlerClosed() {
+    val logConfig = createLogConfig()
+    val log = createLog(logDir,  logConfig)
+    log.closeHandlers()
+    log.roll(1)
+  }
+
   @Test
   def testReadWithMinMessage() {
     val logConfig = createLogConfig(segmentBytes = 72)

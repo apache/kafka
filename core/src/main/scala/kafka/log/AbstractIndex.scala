@@ -174,7 +174,11 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
     trimToValidSize()
   }
 
-  def closeHandler(): Unit = safeForceUnmap()
+  def closeHandler(): Unit = {
+    inLock(lock) {
+      safeForceUnmap()
+    }
+  }
 
   /**
    * Do a basic sanity check on this index to detect obvious problems
