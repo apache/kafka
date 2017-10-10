@@ -20,8 +20,8 @@ package kafka.server
 import kafka.network.SocketServer
 import kafka.utils._
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{DeleteTopicsRequest, DeleteTopicsResponse, MetadataRequest, MetadataResponse}
-import org.junit.Assert._
+import org.apache.kafka.common.requests.{ApiError, DeleteTopicsRequest, DeleteTopicsResponse, MetadataRequest, MetadataResponse}
+import org.junit.Assert.{assertEquals, _}
 import org.junit.Test
 
 import scala.collection.JavaConverters._
@@ -40,11 +40,11 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
     validateValidDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set("topic-3", "topic-4").asJava, timeout, false).build())
   }
 
-  private def validateValidDeleteTopicRequests(request: DeleteTopicsRequest): Unit = {
+  protected def validateValidDeleteTopicRequests(request: DeleteTopicsRequest): Unit = {
     val response = sendDeleteTopicsRequest(request)
 
-    val error = response.errors.values.asScala.find(_ != Errors.NONE)
-    assertTrue(s"There should be no errors, found ${response.errors.asScala}", error.isEmpty)
+    val error = response.apiErrors.values.asScala.find(_.isFailure)
+    assertTrue(s"There should be no errors, found ${response.apiErrors.asScala}", error.isEmpty)
 
     request.topics.asScala.foreach { topic =>
       validateTopicIsDeleted(topic)
@@ -58,7 +58,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
 
     // Basic
     validateErrorDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set("invalid-topic").asJava, timeout, false).build(),
-      Map("invalid-topic" -> Errors.UNKNOWN_TOPIC_OR_PARTITION))
+      Map("invalid-topic" -> new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, null)))
 
     // Partial
     TestUtils.createTopic(zkUtils, "partial-topic-1", 1, 1, servers)
@@ -66,8 +66,8 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
       "partial-topic-1",
       "partial-invalid-topic").asJava, timeout, false).build(),
       Map(
-        "partial-topic-1" -> Errors.NONE,
-        "partial-invalid-topic" -> Errors.UNKNOWN_TOPIC_OR_PARTITION
+        "partial-topic-1" -> ApiError.NONE,
+        "partial-invalid-topic" -> new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, null)
       )
     )
 
@@ -75,21 +75,22 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
     TestUtils.createTopic(zkUtils, timeoutTopic, 5, 2, servers)
     // Must be a 0ms timeout to avoid transient test failures. Even a timeout of 1ms has succeeded in the past.
     validateErrorDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set(timeoutTopic).asJava, 0, false).build(),
-      Map(timeoutTopic -> Errors.REQUEST_TIMED_OUT))
+      Map(timeoutTopic -> new ApiError(Errors.REQUEST_TIMED_OUT, null)))
     // The topic should still get deleted eventually
     TestUtils.waitUntilTrue(() => !servers.head.metadataCache.contains(timeoutTopic), s"Topic $timeoutTopic is never deleted")
     validateTopicIsDeleted(timeoutTopic)
   }
 
-  private def validateErrorDeleteTopicRequests(request: DeleteTopicsRequest, expectedResponse: Map[String, Errors]): Unit = {
+  protected def validateErrorDeleteTopicRequests(request: DeleteTopicsRequest, expectedResponse: Map[String, ApiError]): Unit = {
     val response = sendDeleteTopicsRequest(request)
-    val errors = response.errors.asScala
-    assertEquals("The response size should match", expectedResponse.size, response.errors.size)
+    val errors = response.apiErrors.asScala
+    assertEquals("The response size should match", expectedResponse.size, response.apiErrors.size)
 
     expectedResponse.foreach { case (topic, expectedError) =>
-      assertEquals("The response error should match", expectedResponse(topic), errors(topic))
+      assertEquals("The response error codes should match", expectedResponse(topic).error, errors(topic).error)
+      assertEquals("The response error messages should match", expectedResponse(topic).message, errors(topic).message)
       // If no error validate the topic was deleted
-      if (expectedError == Errors.NONE) {
+      if (expectedError.isSuccess) {
         validateTopicIsDeleted(topic)
       }
     }
