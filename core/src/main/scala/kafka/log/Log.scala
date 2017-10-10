@@ -163,7 +163,7 @@ class Log(@volatile var dir: File,
       0
   }
 
-  def checkIfLogOffline(): Unit = {
+  private def checkIfLogOffline(): Unit = {
     if (isClosed)
       throw new KafkaStorageException(s"The log for partition $topicPartition is offline")
   }

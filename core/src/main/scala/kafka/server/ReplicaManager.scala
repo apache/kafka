@@ -1368,7 +1368,7 @@ class ReplicaManager(val config: KafkaConfig,
         partition.getReplica(config.brokerId).exists { replica =>
           replica.log.isDefined && replica.log.get.dir.getParent == dir
         }
-      }.map(_.topicPartition)
+      }.map(_.topicPartition).toSet
 
       info(s"Partitions ${newOfflinePartitions.mkString(",")} are offline due to failure on log directory $dir")
 
@@ -1377,13 +1377,13 @@ class ReplicaManager(val config: KafkaConfig,
         partition.removePartitionMetrics()
       }
 
-      newOfflinePartitions.map(_.topic).toSet.foreach { topic: String =>
+      newOfflinePartitions.map(_.topic).foreach { topic: String =>
         val topicHasPartitions = allPartitions.values.exists(partition => topic == partition.topic)
         if (!topicHasPartitions)
           brokerTopicStats.removeMetrics(topic)
       }
 
-      replicaFetcherManager.removeFetcherForPartitions(newOfflinePartitions.toSet)
+      replicaFetcherManager.removeFetcherForPartitions(newOfflinePartitions)
       highWatermarkCheckpoints = highWatermarkCheckpoints.filterKeys(_ != dir)
       info("Broker %d stopped fetcher for partitions %s because they are in the failed log dir %s"
         .format(localBrokerId, newOfflinePartitions.mkString(", "), dir))
