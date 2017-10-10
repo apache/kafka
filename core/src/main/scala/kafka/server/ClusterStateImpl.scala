@@ -51,7 +51,7 @@ class ClusterStateImpl(metadataCache: MetadataCache,
       metadataCache.getAllTopics().asJava
     else {
       metadataCache.getAllTopics().filter { case (topic) =>
-        val topicMeta = metadataCache.getTopicMetadata(Set(topic), null).head
+        val topicMeta = metadataCache.getTopicMetadata(Set(topic), listenerName).head
         (includeInternal || !topicMeta.isInternal) && (includeMarkedForDeletion || zkClient.isTopicMarkedForDeletion(topic))
       }.asJava
     }
