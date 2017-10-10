@@ -516,6 +516,7 @@ class ReplicaManager(val config: KafkaConfig,
               if (p eq ReplicaManager.OfflinePartition)
                 throw new KafkaStorageException("Partition %s is in an offline log directory on broker %d".format(topicPartition, localBrokerId))
               p.leaderReplicaIfLocal match {
+                case Some(_) =>
                 case None =>
                   throw new NotLeaderForPartitionException("Broker %d is not leader for partition %s".format(localBrokerId, topicPartition))
               }
