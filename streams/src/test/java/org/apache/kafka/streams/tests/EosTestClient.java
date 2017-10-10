@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -24,6 +25,9 @@ import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.io.File;
 import java.util.Properties;
@@ -147,9 +151,9 @@ public class EosTestClient extends SmokeTestUtil {
                         return (value < aggregate) ? value : aggregate;
                     }
                 },
-                intSerde,
-                "min")
-            .to(stringSerde, intSerde, "min");
+                Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>with(null, intSerde))
+            .toStream()
+            .to("min", Produced.with(stringSerde, intSerde));
 
         // sum
         groupedData.aggregate(
@@ -167,9 +171,9 @@ public class EosTestClient extends SmokeTestUtil {
                     return (long) value + aggregate;
                 }
             },
-            longSerde,
-            "sum")
-            .to(stringSerde, longSerde, "sum");
+            Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>with(null, longSerde))
+            .toStream()
+            .to("sum", Produced.with(stringSerde, longSerde));
 
         if (withRepartitioning) {
             final KStream<String, Integer> repartitionedData = data.through("repartition");
@@ -194,13 +198,14 @@ public class EosTestClient extends SmokeTestUtil {
                             return (value > aggregate) ? value : aggregate;
                         }
                     },
-                    intSerde,
-                    "max")
-                .to(stringSerde, intSerde, "max");
+                    Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>with(null, intSerde))
+                .toStream()
+                .to("max", Produced.with(stringSerde, intSerde));
 
             // count
-            groupedDataAfterRepartitioning.count("cnt")
-                .to(stringSerde, longSerde, "cnt");
+            groupedDataAfterRepartitioning.count()
+                .toStream()
+                .to("cnt", Produced.with(stringSerde, longSerde));
         }
 
         return new KafkaStreams(builder.build(), props);
