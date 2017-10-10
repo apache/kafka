@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
@@ -173,4 +174,11 @@ public class KafkaFutureTest {
         assertFalse(allFuture.isCompletedExceptionally());
         allFuture.get();
     }
+
+    @Test(expected = TimeoutException.class)
+    public void testFutureTimeoutWithZeroWait() throws Exception {
+        final KafkaFutureImpl<String> future = new KafkaFutureImpl<>();
+        future.get(0, TimeUnit.MILLISECONDS);
+    }
+
 }
