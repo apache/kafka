@@ -131,9 +131,9 @@ abstract class AbstractFetcherThread(name: String,
       inLock(partitionMapLock) {
         //Check no leadership changes happened whilst we were unlocked, fetching epochs
         val leaderEpochs = fetchedEpochs.filter { case (tp, _) => partitionStates.contains(tp) }
-        val ResultWithPartitions(truncationPoints, partitionsWithError) = maybeTruncate(leaderEpochs)
+        val ResultWithPartitions(fetchOffsets, partitionsWithError) = maybeTruncate(leaderEpochs)
         handlePartitionsWithErrors(partitionsWithError)
-        markTruncationComplete(truncationPoints)
+        markTruncationCompleteAndUpdateFetchOffset(fetchOffsets)
       }
     }
   }
@@ -231,29 +231,29 @@ abstract class AbstractFetcherThread(name: String,
     handlePartitionsWithErrors(partitionsWithError)
   }
 
-  def markPartitionsForTruncation(topicPartition: TopicPartition) {
+  def markPartitionsForTruncation(topicPartition: TopicPartition, truncationOffset: Long) {
     partitionMapLock.lockInterruptibly()
     try {
       Option(partitionStates.stateValue(topicPartition)).foreach { state =>
-        val newState = PartitionFetchState(state.fetchOffset, state.delay, truncatingLog = true)
+        val newState = PartitionFetchState(math.min(truncationOffset, state.fetchOffset), state.delay, truncatingLog = true)
         partitionStates.updateAndMoveToEnd(topicPartition, newState)
       }
       partitionMapCond.signalAll()
     } finally partitionMapLock.unlock()
   }
 
-  def addPartitions(partitionAndOffsets: Map[TopicPartition, Long]) {
+  def addPartitions(initialFetchOffsets: Map[TopicPartition, Long]) {
     partitionMapLock.lockInterruptibly()
     try {
       // If the partitionMap already has the topic/partition, then do not update the map with the old offset
-      val newPartitionToState = partitionAndOffsets.filter { case (tp, _) =>
+      val newPartitionToState = initialFetchOffsets.filter { case (tp, _) =>
         !partitionStates.contains(tp)
-      }.map { case (tp, offset) =>
+      }.map { case (tp, initialFetchOffset) =>
         val fetchState =
-          if (offset < 0)
+          if (initialFetchOffset < 0)
             new PartitionFetchState(handleOffsetOutOfRange(tp), includeLogTruncation)
           else
-            new PartitionFetchState(offset, includeLogTruncation)
+            new PartitionFetchState(initialFetchOffset, includeLogTruncation)
         tp -> fetchState
       }
       val existingPartitionToState = states().toMap
@@ -263,14 +263,14 @@ abstract class AbstractFetcherThread(name: String,
   }
 
   /**
-    * Loop through all partitions, marking them as truncation complete and applying the correct offset
+    * Loop through all partitions, marking them as truncation complete and update the fetch offset
     *
-    * @param partitions the partitions to mark truncation complete
+    * @param fetchOffsets the partitions to mark truncation complete
     */
-  private def markTruncationComplete(partitions: Map[TopicPartition, Long]) {
+  private def markTruncationCompleteAndUpdateFetchOffset(fetchOffsets: Map[TopicPartition, Long]) {
     val newStates: Map[TopicPartition, PartitionFetchState] = partitionStates.partitionStates.asScala
       .map { state =>
-        val maybeTruncationComplete = partitions.get(state.topicPartition()) match {
+        val maybeTruncationComplete = fetchOffsets.get(state.topicPartition()) match {
           case Some(offset) => PartitionFetchState(offset, state.value.delay, truncatingLog = false)
           case None => state.value()
         }

@@ -98,9 +98,9 @@ class ReplicaAlterLogDirsThread(name: String,
     val partition = replicaMgr.getPartition(topicPartition).get
     val records = partitionData.toRecords
 
+    // This may happen if markPartitionsForTruncation() is called between buildFetchRequest() and processPartitionData()
     if (fetchOffset != futureReplica.logEndOffset.messageOffset)
-      throw new RuntimeException("Offset mismatch for the future replica %s: fetched offset = %d, log end offset = %d.".format(
-        topicPartition, fetchOffset, futureReplica.logEndOffset.messageOffset))
+      return
 
     // Append the leader's messages to the log
     partition.appendRecordsToFutureReplica(records)
@@ -165,7 +165,7 @@ class ReplicaAlterLogDirsThread(name: String,
   }
 
   def maybeTruncate(fetchedEpochs: Map[TopicPartition, EpochEndOffset]): ResultWithPartitions[Map[TopicPartition, Long]] = {
-    val truncationPoints = scala.collection.mutable.HashMap.empty[TopicPartition, Long]
+    val fetchOffsets = scala.collection.mutable.HashMap.empty[TopicPartition, Long]
     val partitionsWithError = mutable.Set[TopicPartition]()
 
     fetchedEpochs.foreach { case (topicPartition, epochOffset) =>
@@ -177,16 +177,16 @@ class ReplicaAlterLogDirsThread(name: String,
           info(s"Retrying leaderEpoch request for partition $topicPartition as the current replica reported an error: ${epochOffset.error}")
           partitionsWithError += topicPartition
         } else {
-          val truncationOffset =
+          val fetchOffset =
             if (epochOffset.endOffset == UNDEFINED_EPOCH_OFFSET)
-              futureReplica.highWatermark.messageOffset
+              partitionStates.stateValue(topicPartition).fetchOffset
             else if (epochOffset.endOffset >= futureReplica.logEndOffset.messageOffset)
               futureReplica.logEndOffset.messageOffset
             else
               epochOffset.endOffset
 
-          partition.truncateTo(truncationOffset, isFuture = true)
-          truncationPoints.put(topicPartition, truncationOffset)
+          partition.truncateTo(fetchOffset, isFuture = true)
+          fetchOffsets.put(topicPartition, fetchOffset)
         }
       } catch {
         case e: KafkaStorageException =>
@@ -194,7 +194,7 @@ class ReplicaAlterLogDirsThread(name: String,
           partitionsWithError += topicPartition
       }
     }
-    ResultWithPartitions(truncationPoints, partitionsWithError)
+    ResultWithPartitions(fetchOffsets, partitionsWithError)
   }
 
   def buildFetchRequest(partitionMap: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[FetchRequest] = {

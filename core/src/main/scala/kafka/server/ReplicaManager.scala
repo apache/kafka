@@ -612,7 +612,7 @@ class ReplicaManager(val config: KafkaConfig,
             val futureReplica = getPartition(topicPartition).get.getOrCreateReplica(Request.FutureLocalReplicaId)
             logManager.abortAndPauseCleaning(topicPartition)
             replicaAlterLogDirsManager.addFetcherForPartitions(Map(topicPartition -> BrokerAndInitialOffset(
-              BrokerEndPoint(config.brokerId, "localhost", -1), futureReplica.logEndOffset.messageOffset)))
+              BrokerEndPoint(config.brokerId, "localhost", -1), futureReplica.highWatermark.messageOffset)))
           }
 
           (topicPartition, Errors.NONE)
@@ -1120,12 +1120,12 @@ class ReplicaManager(val config: KafkaConfig,
           hwThreadInitialized = true
         }
 
-        val newOnlinePartitions = newPartitions.filter(topicPartition => getPartition(topicPartition).get ne ReplicaManager.OfflinePartition)
+        val newOnlineReplicas = newPartitions.flatMap(topicPartition => getReplica(topicPartition))
         // Add future replica to partition's map
-        val partitionsToAlterLogDirWithLogEndOffset = newOnlinePartitions.flatMap { topicPartition =>
-          logManager.getLog(topicPartition, isFuture = true)
-        }.map { log =>
-          log.topicPartition -> BrokerAndInitialOffset(BrokerEndPoint(config.brokerId, "localhost", -1), log.logEndOffset)
+        val partitionsToAlterLogDirWithLogEndOffset = newOnlineReplicas.filter { replica =>
+          logManager.getLog(replica.topicPartition, isFuture = true).isDefined
+        }.map { replica =>
+          replica.topicPartition -> BrokerAndInitialOffset(BrokerEndPoint(config.brokerId, "localhost", -1), replica.highWatermark.messageOffset)
         }.toMap
         partitionsToAlterLogDirWithLogEndOffset.keys.foreach(tp => getPartition(tp).get.getOrCreateReplica(Request.FutureLocalReplicaId))
 
@@ -1319,7 +1319,7 @@ class ReplicaManager(val config: KafkaConfig,
         val partitionsToMakeFollowerWithLeaderAndOffset = partitionsToMakeFollower.map(partition =>
           partition.topicPartition -> BrokerAndInitialOffset(
             metadataCache.getAliveBrokers.find(_.id == partition.leaderReplicaIdOpt.get).get.getBrokerEndPoint(config.interBrokerListenerName),
-            partition.getReplica().get.logEndOffset.messageOffset)).toMap
+            partition.getReplica().get.highWatermark.messageOffset)).toMap
         replicaFetcherManager.addFetcherForPartitions(partitionsToMakeFollowerWithLeaderAndOffset)
 
         partitionsToMakeFollower.foreach { partition =>

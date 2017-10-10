@@ -162,7 +162,7 @@ class ReplicaFetcherThread(name: String,
       warn(s"Reset fetch offset for partition $topicPartition from ${replica.logEndOffset.messageOffset} to current " +
         s"leader's latest offset $leaderEndOffset")
       partition.truncateTo(leaderEndOffset, isFuture = false)
-      replicaMgr.replicaAlterLogDirsManager.markPartitionsForTruncation(brokerConfig.brokerId, topicPartition)
+      replicaMgr.replicaAlterLogDirsManager.markPartitionsForTruncation(brokerConfig.brokerId, topicPartition, leaderEndOffset)
       leaderEndOffset
     } else {
       /**
@@ -194,7 +194,6 @@ class ReplicaFetcherThread(name: String,
       // Only truncate log when current leader's log start offset is greater than follower's log end offset.
       if (leaderStartOffset > replica.logEndOffset.messageOffset) {
         partition.truncateFullyAndStartAt(leaderStartOffset, isFuture = false)
-        replicaMgr.replicaAlterLogDirsManager.markPartitionsForTruncation(brokerConfig.brokerId, topicPartition)
       }
       offsetToFetch
     }
@@ -266,7 +265,7 @@ class ReplicaFetcherThread(name: String,
     * - If the leader replied with undefined epoch offset we must use the high watermark
     */
   override def maybeTruncate(fetchedEpochs: Map[TopicPartition, EpochEndOffset]): ResultWithPartitions[Map[TopicPartition, Long]] = {
-    val truncationPoints = scala.collection.mutable.HashMap.empty[TopicPartition, Long]
+    val fetchOffsets = scala.collection.mutable.HashMap.empty[TopicPartition, Long]
     val partitionsWithError = mutable.Set[TopicPartition]()
 
     fetchedEpochs.foreach { case (tp, epochOffset) =>
@@ -278,17 +277,19 @@ class ReplicaFetcherThread(name: String,
           info(s"Retrying leaderEpoch request for partition ${replica.topicPartition} as the leader reported an error: ${epochOffset.error}")
           partitionsWithError += tp
         } else {
-          val truncationOffset =
-            if (epochOffset.endOffset == UNDEFINED_EPOCH_OFFSET)
-              highWatermark(replica, epochOffset)
-            else if (epochOffset.endOffset >= replica.logEndOffset.messageOffset)
+          val fetchOffset =
+            if (epochOffset.endOffset == UNDEFINED_EPOCH_OFFSET) {
+              warn(s"Based on follower's leader epoch, leader replied with an unknown offset in ${replica.topicPartition}. " +
+                s"The initial fetch offset ${partitionStates.stateValue(tp).fetchOffset} will be used for truncation.")
+              partitionStates.stateValue(tp).fetchOffset
+            } else if (epochOffset.endOffset >= replica.logEndOffset.messageOffset)
               logEndOffset(replica, epochOffset)
             else
               epochOffset.endOffset
 
-          partition.truncateTo(truncationOffset, isFuture = false)
-          replicaMgr.replicaAlterLogDirsManager.markPartitionsForTruncation(brokerConfig.brokerId, tp)
-          truncationPoints.put(tp, truncationOffset)
+          partition.truncateTo(fetchOffset, isFuture = false)
+          replicaMgr.replicaAlterLogDirsManager.markPartitionsForTruncation(brokerConfig.brokerId, tp, fetchOffset)
+          fetchOffsets.put(tp, fetchOffset)
         }
       } catch {
         case e: KafkaStorageException =>
@@ -297,7 +298,7 @@ class ReplicaFetcherThread(name: String,
       }
     }
 
-    ResultWithPartitions(truncationPoints, partitionsWithError)
+    ResultWithPartitions(fetchOffsets, partitionsWithError)
   }
 
   override def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[Map[TopicPartition, Int]] = {
@@ -345,12 +346,6 @@ class ReplicaFetcherThread(name: String,
     info(s"Based on follower's leader epoch, leader replied with an offset ${epochOffset.endOffset} >= the " +
       s"follower's log end offset $logEndOffset in ${replica.topicPartition}. No truncation needed.")
     logEndOffset
-  }
-
-  private def highWatermark(replica: Replica, epochOffset: EpochEndOffset): Long = {
-    warn(s"Based on follower's leader epoch, leader replied with an unknown offset in ${replica.topicPartition}. " +
-      s"High watermark ${replica.highWatermark.messageOffset} will be used for truncation.")
-    replica.highWatermark.messageOffset
   }
 
   /**
