@@ -48,7 +48,7 @@ public class EosTestClient extends SmokeTestUtil {
         this.withRepartitioning = withRepartitioning;
     }
 
-    private boolean isRunning = true;
+    private volatile boolean isRunning = true;
 
     public void start() {
         Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
