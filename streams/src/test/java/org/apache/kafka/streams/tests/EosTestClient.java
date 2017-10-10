@@ -28,6 +28,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import java.io.File;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class EosTestClient extends SmokeTestUtil {
 
@@ -35,6 +36,7 @@ public class EosTestClient extends SmokeTestUtil {
     private final String kafka;
     private final File stateDir;
     private final boolean withRepartitioning;
+    private final AtomicBoolean notRunningCallbackReceived = new AtomicBoolean(false);
 
     private KafkaStreams streams;
     private boolean uncaughtException;
@@ -46,7 +48,7 @@ public class EosTestClient extends SmokeTestUtil {
         this.withRepartitioning = withRepartitioning;
     }
 
-    private boolean isRunning = true;
+    private volatile boolean isRunning = true;
 
     public void start() {
         Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
@@ -54,12 +56,18 @@ public class EosTestClient extends SmokeTestUtil {
             public void run() {
                 isRunning = false;
                 streams.close(TimeUnit.SECONDS.toMillis(300), TimeUnit.SECONDS);
+
+                // need to wait for callback to avoid race condition
+                // -> make sure the callback printout to stdout is there as it is expected test output
+                waitForStateTransitionCallback();
+
                 // do not remove these printouts since they are needed for health scripts
                 if (!uncaughtException) {
                     System.out.println(System.currentTimeMillis());
                     System.out.println("EOS-TEST-CLIENT-CLOSED");
                     System.out.flush();
                 }
+
             }
         }));
 
@@ -85,6 +93,9 @@ public class EosTestClient extends SmokeTestUtil {
                         System.out.println(System.currentTimeMillis());
                         System.out.println("StateChange: " + oldState + " -> " + newState);
                         System.out.flush();
+                        if (newState == KafkaStreams.State.NOT_RUNNING) {
+                            notRunningCallbackReceived.set(true);
+                        }
                     }
                 });
                 streams.start();
@@ -195,4 +206,16 @@ public class EosTestClient extends SmokeTestUtil {
         return new KafkaStreams(builder.build(), props);
     }
 
+    private void waitForStateTransitionCallback() {
+        final long maxWaitTime = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(300);
+        while (!notRunningCallbackReceived.get() && System.currentTimeMillis() < maxWaitTime) {
+            try {
+                Thread.sleep(500);
+            } catch (final InterruptedException ignoreAndSwallow) { /* just keep waiting */ }
+        }
+        if (!notRunningCallbackReceived.get()) {
+            System.err.println("State transition callback to NOT_RUNNING never received. Timed out after 5 minutes.");
+            System.err.flush();
+        }
+    }
 }
