@@ -160,7 +160,7 @@ public class EosTestClient extends SmokeTestUtil {
                     return (long) value + aggregate;
                 }
             },
-            Materialized.<String, Long, KeyValueStore<Bytes, byte[]>> with(null, longSerde))
+            Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>with(null, longSerde))
             .toStream()
             .to("sum", Produced.with(stringSerde, longSerde));
 
