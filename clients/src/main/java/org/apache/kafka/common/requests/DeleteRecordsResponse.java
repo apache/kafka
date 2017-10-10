@@ -109,9 +109,9 @@ public class DeleteRecordsResponse extends AbstractResponse {
         public String toString() {
             StringBuilder builder = new StringBuilder();
             builder.append('{')
-                   .append(",low_watermark: ")
+                   .append("low_watermark: ")
                    .append(lowWatermark)
-                   .append("error: ")
+                   .append(", error: ")
                    .append(error.toString())
                    .append('}');
             return builder.toString();
