@@ -442,7 +442,18 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
         return offsetsByTimes;
     }
-
+    
+    private long getHeartbeatExpiryMs(long now) {
+        long remaining = client.heartbeatIsInitialized() && client.isJoined() ?
+                client.getHeartbeatExpiryMs(now) : Long.MAX_VALUE;
+        if (remaining == 0) {
+            client.pollHeartbeat(now);
+            return client.isJoined() && client.heartbeatIsInitialized() ? 
+                    client.interval() : Long.MAX_VALUE;
+        }
+        return remaining;
+    }
+    
     private Map<TopicPartition, OffsetData> retrieveOffsetsByTimes(
             Map<TopicPartition, Long> timestampsToSearch, long timeout, boolean requireTimestamps) {
         if (timestampsToSearch.isEmpty())
@@ -451,9 +462,17 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         long startMs = time.milliseconds();
         long remaining = timeout;
         do {
+            long heartbeatExpiryMs = getHeartbeatExpiryMs(time.milliseconds());
             RequestFuture<Map<TopicPartition, OffsetData>> future =
                     sendListOffsetRequests(requireTimestamps, timestampsToSearch);
-            client.poll(future, remaining);
+            while (remaining > heartbeatExpiryMs && !future.isDone()) {
+                client.poll(future, heartbeatExpiryMs);
+                client.pollHeartbeat(time.milliseconds());
+                remaining -= heartbeatExpiryMs;
+                heartbeatExpiryMs = getHeartbeatExpiryMs(time.milliseconds());
+            }
+            if (!future.isDone() && remaining > 0) client.poll(future, remaining);
+            
 
             if (!future.isDone())
                 break;

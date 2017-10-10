@@ -137,6 +137,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         this.metadata.requestUpdate();
         addMetadataListener();
+        this.client.setHeartbeat(heartbeat);
     }
 
     @Override
@@ -209,6 +210,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                   String assignmentStrategy,
                                   ByteBuffer assignmentBuffer) {
         // only the leader is responsible for monitoring for metadata changes (i.e. partition changes)
+        client.setJoined(true);
         if (!isLeader)
             assignmentSnapshot = null;
 
@@ -304,9 +306,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             // When group management is used, metadata wait is already performed for this scenario as
             // coordinator is unknown, hence this check is not required.
             if (metadata.updateRequested() && !client.hasReadyNodes()) {
-                boolean metadataUpdated = client.awaitMetadataUpdate(remainingMs);
-                if (!metadataUpdated && !client.hasReadyNodes())
-                    return;
+                client.awaitMetadataUpdate(remainingMs);
                 now = time.milliseconds();
             }
         }
