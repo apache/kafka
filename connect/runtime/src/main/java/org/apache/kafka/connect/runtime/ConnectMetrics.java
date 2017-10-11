@@ -64,7 +64,7 @@ public class ConnectMetrics {
      * @param time     the time; may not be null
      */
     public ConnectMetrics(String workerId, WorkerConfig config, Time time) {
-        this.workerId = makeValidName(workerId);
+        this.workerId = workerId;
         this.time = time;
 
         MetricConfig metricConfig = new MetricConfig().samples(config.getInt(CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG))
@@ -111,8 +111,7 @@ public class ConnectMetrics {
      * Get or create a {@link MetricGroup} with the specified group name and the given tags.
      * Each group is uniquely identified by the name and tags.
      *
-     * @param groupName    the name of the metric group; may not be null and must be a
-     *                     {@link #checkNameIsValid(String) valid name}
+     * @param groupName    the name of the metric group; may not be null
      * @param tagKeyValues pairs of tag name and values
      * @return the {@link MetricGroup} that can be used to create metrics; never null
      * @throws IllegalArgumentException if the group name is not valid
@@ -130,7 +129,6 @@ public class ConnectMetrics {
     }
 
     protected MetricGroupId groupId(String groupName, String... tagKeyValues) {
-        checkNameIsValid(groupName);
         Map<String, String> tags = tags(tagKeyValues);
         return new MetricGroupId(groupName, tags);
     }
@@ -262,7 +260,6 @@ public class ConnectMetrics {
          * @throws IllegalArgumentException if the name is not valid
          */
         public MetricName metricName(MetricNameTemplate template) {
-            checkNameIsValid(template.name());
             return metrics.metricInstance(template, groupId.tags());
         }
 
@@ -428,8 +425,7 @@ public class ConnectMetrics {
     }
 
     /**
-     * Create a set of tags using the supplied key and value pairs. Every tag name and value will be
-     * {@link #makeValidName(String) made valid} before it is used. The order of the tags will be kept.
+     * Create a set of tags using the supplied key and value pairs. The order of the tags will be kept.
      *
      * @param keyValue the key and value pairs for the tags; must be an even number
      * @return the map of tags that can be supplied to the {@link Metrics} methods; never null
@@ -439,39 +435,9 @@ public class ConnectMetrics {
             throw new IllegalArgumentException("keyValue needs to be specified in pairs");
         Map<String, String> tags = new LinkedHashMap<>();
         for (int i = 0; i < keyValue.length; i += 2) {
-            tags.put(makeValidName(keyValue[i]), makeValidName(keyValue[i + 1]));
+            tags.put(keyValue[i], keyValue[i + 1]);
         }
         return tags;
-    }
-
-    /**
-     * Utility to ensure the supplied name contains valid characters, replacing with a single '-' sequences of
-     * 1 or more characters <em>other than</em> word characters (e.g., "[a-zA-Z_0-9]").
-     *
-     * @param name the name; may not be null
-     * @return the validated name; never null
-     */
-    static String makeValidName(String name) {
-        Objects.requireNonNull(name);
-        name = name.trim();
-        if (!name.isEmpty()) {
-            name = name.replaceAll("[^\\w]+", "-");
-        }
-        return name;
-    }
-
-    /**
-     * Utility method that determines whether the supplied name contains only "[a-zA-Z0-9_-]" characters and thus
-     * would be unchanged by {@link #makeValidName(String)}.
-     *
-     * @param name the name; may not be null
-     * @return true if the name is valid, or false otherwise
-     * @throws IllegalArgumentException if the name is not valid
-     */
-    static void checkNameIsValid(String name) {
-        if (!name.equals(makeValidName(name))) {
-            throw new IllegalArgumentException("The name '" + name + "' contains at least one invalid character");
-        }
     }
 
     /**
@@ -481,7 +447,6 @@ public class ConnectMetrics {
      */
     public static void main(String[] args) {
         ConnectMetricsRegistry metrics = new ConnectMetricsRegistry();
-        System.out.println(Metrics.toHtmlTable("kafka.connect", metrics.getAllTemplates()));
+        System.out.println(Metrics.toHtmlTable(JMX_PREFIX, metrics.getAllTemplates()));
     }
-
 }

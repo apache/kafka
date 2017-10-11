@@ -29,8 +29,9 @@ import kafka.utils.Implicits._
 import kafka.utils.Logging
 import org.apache.kafka.common.config.ConfigDef.Validator
 import org.apache.kafka.common.config.ConfigException
-import org.apache.kafka.common.metrics.{Quota, Sanitizer}
+import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
+import org.apache.kafka.common.utils.Sanitizer
 
 import scala.collection.JavaConverters._
 
@@ -118,24 +119,25 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
 class QuotaConfigHandler(private val quotaManagers: QuotaManagers) {
 
   def updateQuotaConfig(sanitizedUser: Option[String], sanitizedClientId: Option[String], config: Properties) {
+    val clientId = sanitizedClientId.map(Sanitizer.desanitize)
     val producerQuota =
       if (config.containsKey(DynamicConfig.Client.ProducerByteRateOverrideProp))
         Some(new Quota(config.getProperty(DynamicConfig.Client.ProducerByteRateOverrideProp).toLong, true))
       else
         None
-    quotaManagers.produce.updateQuota(sanitizedUser, sanitizedClientId, producerQuota)
+    quotaManagers.produce.updateQuota(sanitizedUser, clientId, sanitizedClientId, producerQuota)
     val consumerQuota =
       if (config.containsKey(DynamicConfig.Client.ConsumerByteRateOverrideProp))
         Some(new Quota(config.getProperty(DynamicConfig.Client.ConsumerByteRateOverrideProp).toLong, true))
       else
         None
-    quotaManagers.fetch.updateQuota(sanitizedUser, sanitizedClientId, consumerQuota)
+    quotaManagers.fetch.updateQuota(sanitizedUser, clientId, sanitizedClientId, consumerQuota)
     val requestQuota =
       if (config.containsKey(DynamicConfig.Client.RequestPercentageOverrideProp))
         Some(new Quota(config.getProperty(DynamicConfig.Client.RequestPercentageOverrideProp).toDouble, true))
       else
         None
-    quotaManagers.request.updateQuota(sanitizedUser, sanitizedClientId, requestQuota)
+    quotaManagers.request.updateQuota(sanitizedUser, clientId, sanitizedClientId, requestQuota)
   }
 }
 

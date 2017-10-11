@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.metrics;
+package org.apache.kafka.common.utils;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
@@ -25,7 +25,7 @@ import org.apache.kafka.common.KafkaException;
 
 /**
  * Utility class for sanitizing/desanitizing user principal and client-ids
- * to a safe value for use in MetricName and as Zookeeper node name
+ * to a safe value for use in JMX metric names and as Zookeeper node name
  */
 public class Sanitizer {
 

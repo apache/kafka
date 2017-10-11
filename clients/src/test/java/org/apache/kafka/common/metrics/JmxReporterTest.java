@@ -20,19 +20,80 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Total;
 import org.junit.Test;
 
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
+import java.lang.management.ManagementFactory;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
 public class JmxReporterTest {
 
     @Test
     public void testJmxRegistration() throws Exception {
         Metrics metrics = new Metrics();
+        MBeanServer server = ManagementFactory.getPlatformMBeanServer();
         try {
             metrics.addReporter(new JmxReporter());
+
+            assertFalse(server.isRegistered(new ObjectName(":type=grp1")));
+
             Sensor sensor = metrics.sensor("kafka.requests");
             sensor.add(metrics.metricName("pack.bean1.avg", "grp1"), new Avg());
             sensor.add(metrics.metricName("pack.bean2.total", "grp2"), new Total());
-            Sensor sensor2 = metrics.sensor("kafka.blah");
-            sensor2.add(metrics.metricName("pack.bean1.some", "grp1"), new Total());
-            sensor2.add(metrics.metricName("pack.bean2.some", "grp1"), new Total());
+
+            assertTrue(server.isRegistered(new ObjectName(":type=grp1")));
+            assertEquals(0.0, server.getAttribute(new ObjectName(":type=grp1"), "pack.bean1.avg"));
+            assertTrue(server.isRegistered(new ObjectName(":type=grp2")));
+            assertEquals(0.0, server.getAttribute(new ObjectName(":type=grp2"), "pack.bean2.total"));
+
+            metrics.removeMetric(metrics.metricName("pack.bean1.avg", "grp1"));
+
+            assertFalse(server.isRegistered(new ObjectName(":type=grp1")));
+            assertTrue(server.isRegistered(new ObjectName(":type=grp2")));
+            assertEquals(0.0, server.getAttribute(new ObjectName(":type=grp2"), "pack.bean2.total"));
+
+            metrics.removeMetric(metrics.metricName("pack.bean2.total", "grp2"));
+
+            assertFalse(server.isRegistered(new ObjectName(":type=grp1")));
+            assertFalse(server.isRegistered(new ObjectName(":type=grp2")));
+        } finally {
+            metrics.close();
+        }
+    }
+
+    @Test
+    public void testJmxRegistrationSanitization() throws Exception {
+        Metrics metrics = new Metrics();
+        MBeanServer server = ManagementFactory.getPlatformMBeanServer();
+        try {
+            metrics.addReporter(new JmxReporter());
+
+            Sensor sensor = metrics.sensor("kafka.requests");
+            sensor.add(metrics.metricName("name", "group", "desc", "id", "foo*"), new Total());
+            sensor.add(metrics.metricName("name", "group", "desc", "id", "foo+"), new Total());
+            sensor.add(metrics.metricName("name", "group", "desc", "id", "foo?"), new Total());
+            sensor.add(metrics.metricName("name", "group", "desc", "id", "foo:"), new Total());
+
+            assertTrue(server.isRegistered(new ObjectName(":type=group,id=foo%2A")));
+            assertEquals(0.0, server.getAttribute(new ObjectName(":type=group,id=foo%2A"), "name"));
+            assertTrue(server.isRegistered(new ObjectName(":type=group,id=foo%2B")));
+            assertEquals(0.0, server.getAttribute(new ObjectName(":type=group,id=foo%2B"), "name"));
+            assertTrue(server.isRegistered(new ObjectName(":type=group,id=foo%3F")));
+            assertEquals(0.0, server.getAttribute(new ObjectName(":type=group,id=foo%3F"), "name"));
+            assertTrue(server.isRegistered(new ObjectName(":type=group,id=foo%3A")));
+            assertEquals(0.0, server.getAttribute(new ObjectName(":type=group,id=foo%3A"), "name"));
+
+            metrics.removeMetric(metrics.metricName("name", "group", "desc", "id", "foo*"));
+            metrics.removeMetric(metrics.metricName("name", "group", "desc", "id", "foo+"));
+            metrics.removeMetric(metrics.metricName("name", "group", "desc", "id", "foo?"));
+            metrics.removeMetric(metrics.metricName("name", "group", "desc", "id", "foo:"));
+
+            assertFalse(server.isRegistered(new ObjectName(":type=group,id=foo%2A")));
+            assertFalse(server.isRegistered(new ObjectName(":type=group,id=foo%2B")));
+            assertFalse(server.isRegistered(new ObjectName(":type=group,id=foo%3F")));
+            assertFalse(server.isRegistered(new ObjectName(":type=group,id=foo%3A")));
         } finally {
             metrics.close();
         }

@@ -57,30 +57,6 @@ public class ConnectMetricsTest {
     }
 
     @Test
-    public void testValidatingNameWithAllValidCharacters() {
-        String name = "abcdefghijklmnopqrstuvwxyz_ABCDEFGHIJKLMNOPQRSTUVWXYZ-0123456789";
-        assertEquals(name, ConnectMetrics.makeValidName(name));
-    }
-
-    @Test
-    public void testValidatingEmptyName() {
-        String name = "";
-        assertSame(name, ConnectMetrics.makeValidName(name));
-    }
-
-    @Test(expected = NullPointerException.class)
-    public void testValidatingNullName() {
-        ConnectMetrics.makeValidName(null);
-    }
-
-    @Test
-    public void testValidatingNameWithInvalidCharacters() {
-        assertEquals("a-b-c-d-e-f-g-h-i-j-k", ConnectMetrics.makeValidName("a:b;c/d\\e,f*.--..;;g?h[i]j=k"));
-        assertEquals("-a-b-c-d-e-f-g-h-", ConnectMetrics.makeValidName(":a:b;c/d\\e,f*g?[]=h:"));
-        assertEquals("a-f-h", ConnectMetrics.makeValidName("a:;/\\,f*?h"));
-    }
-
-    @Test
     public void testKafkaMetricsNotNull() {
         assertNotNull(metrics.metrics());
     }
