@@ -51,17 +51,21 @@ public class ShellTest {
     @Test
     public void testAttemptToRunNonExistentProgram() throws Exception {
         assumeTrue(!OperatingSystem.IS_WINDOWS);
+
         try {
             Shell.execCommand(NONEXISTENT_PATH);
             fail("Expected to get an exception when trying to run a program that does not exist");
         } catch (IOException e) {
-            assertTrue(e.getMessage().contains("No such file"));
+            String message = e.getMessage();
+            assertTrue("Unexpected error message '" + message + "'",
+                    message.contains("No such file") || message.contains("error=2"));
         }
     }
 
     @Test
     public void testRunProgramWithErrorReturn() throws Exception {
         assumeTrue(!OperatingSystem.IS_WINDOWS);
+
         try {
             Shell.execCommand("head", "-c", "0", NONEXISTENT_PATH);
             fail("Expected to get an exception when trying to head a nonexistent file");
