@@ -112,7 +112,6 @@ object ConsoleProducer {
   }
 
   def getNewProducerProps(config: ProducerConfig): Properties = {
-    //    val props = producerProps(config)
     val props = new Properties
     props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.brokerList) 
     props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, config.compressionCodec) 
