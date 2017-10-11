@@ -91,7 +91,7 @@ public class Stores {
      * to build a persistent store
      */
     public static KeyValueBytesStoreSupplier persistentKeyValueStore(final String name) {
-        Objects.requireNonNull(name);
+        Objects.requireNonNull(name, "name cannot be null");
         return new RocksDbKeyValueBytesStoreSupplier(name);
     }
 
@@ -102,7 +102,7 @@ public class Stores {
      * build an in-memory store
      */
     public static KeyValueBytesStoreSupplier inMemoryKeyValueStore(final String name) {
-        Objects.requireNonNull(name);
+        Objects.requireNonNull(name, "name cannot be null");
         return new KeyValueBytesStoreSupplier() {
             @Override
             public String name() {
@@ -129,7 +129,7 @@ public class Stores {
      * an LRU Map based store
      */
     public static KeyValueBytesStoreSupplier lruMap(final String name, final int maxCacheSize) {
-        Objects.requireNonNull(name);
+        Objects.requireNonNull(name, "name cannot be null");
         if (maxCacheSize < 0) {
             throw new IllegalArgumentException("maxCacheSize cannot be negative");
         }
@@ -165,7 +165,7 @@ public class Stores {
                                                                  final int numSegments,
                                                                  final long windowSize,
                                                                  final boolean retainDuplicates) {
-        Objects.requireNonNull(name);
+        Objects.requireNonNull(name, "name cannot be null");
         if (retentionPeriod < 0) {
             throw new IllegalArgumentException("retentionPeriod cannot be negative");
         }
@@ -186,7 +186,7 @@ public class Stores {
      */
     public static SessionBytesStoreSupplier persistentSessionStore(final String name,
                                                                    final long retentionPeriod) {
-        Objects.requireNonNull(name);
+        Objects.requireNonNull(name, "name cannot be null");
         if (retentionPeriod < 0) {
             throw new IllegalArgumentException("retentionPeriod cannot be negative");
         }
@@ -206,7 +206,7 @@ public class Stores {
     public static <K, V> StoreBuilder<WindowStore<K, V>> windowStoreBuilder(final WindowBytesStoreSupplier supplier,
                                                                             final Serde<K> keySerde,
                                                                             final Serde<V> valueSerde) {
-        Objects.requireNonNull(supplier);
+        Objects.requireNonNull(supplier, "supplier cannot be null");
         return new WindowStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
     }
 
@@ -222,7 +222,7 @@ public class Stores {
     public static <K, V> StoreBuilder<KeyValueStore<K, V>> keyValueStoreBuilder(final KeyValueBytesStoreSupplier supplier,
                                                                                 final Serde<K> keySerde,
                                                                                 final Serde<V> valueSerde) {
-        Objects.requireNonNull(supplier);
+        Objects.requireNonNull(supplier, "supplier cannot be null");
         return new KeyValueStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
     }
 
@@ -238,7 +238,7 @@ public class Stores {
     public static <K, V> StoreBuilder<SessionStore<K, V>> sessionStoreBuilder(final SessionBytesStoreSupplier supplier,
                                                                               final Serde<K> keySerde,
                                                                               final Serde<V> valueSerde) {
-        Objects.requireNonNull(supplier);
+        Objects.requireNonNull(supplier, "supplier cannot be null");
         return new SessionStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
     }
 
