@@ -229,9 +229,18 @@ public class VerifiableProducer {
 
     /** Produce a message with given key and value. */
     public void send(String key, String value) {
-        ProducerRecord<String, String> record = new ProducerRecord<>(topic, null, createTime, key, value);
-        if (createTime != null)
+        ProducerRecord<String, String> record;
+
+        // Older versions of ProducerRecord don't include the message create time in the constructor. So including
+        // even a 'null' argument results in a NoSuchMethodException. Thus we only include the create time if it is
+        // explicitly specified to remain fully backward compatible with older clients.
+        if (createTime != null) {
+            record = new ProducerRecord<>(topic, null, createTime, key, value);
             createTime += System.currentTimeMillis() - startTime;
+        } else {
+            record = new ProducerRecord<>(topic, key, value);
+        }
+
         numSent++;
         try {
             producer.send(record, new PrintInfoCallback(key, value));
