@@ -37,6 +37,7 @@ import javax.management.ReflectionException;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.utils.Sanitizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -133,7 +134,7 @@ public class JmxReporter implements MetricsReporter {
             mBeanName.append(",");
             mBeanName.append(entry.getKey());
             mBeanName.append("=");
-            mBeanName.append(entry.getValue());
+            mBeanName.append(Sanitizer.sanitize(entry.getValue()));
         }
         return mBeanName.toString();
     }
