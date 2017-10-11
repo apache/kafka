@@ -36,6 +36,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation
 import org.apache.kafka.common.requests.{Resource => RResource, ResourceType => RResourceType, _}
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder, SecurityProtocol}
+import org.apache.kafka.common.utils.Sanitizer
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
@@ -82,7 +83,7 @@ class RequestQuotaTest extends BaseRequestTest {
     quotaProps.put(DynamicConfig.Client.RequestPercentageOverrideProp, "0.01")
     AdminUtils.changeClientIdConfig(zkUtils, "<default>", quotaProps)
     quotaProps.put(DynamicConfig.Client.RequestPercentageOverrideProp, "2000")
-    AdminUtils.changeClientIdConfig(zkUtils, unthrottledClientId, quotaProps)
+    AdminUtils.changeClientIdConfig(zkUtils, Sanitizer.sanitize(unthrottledClientId), quotaProps)
 
     TestUtils.retry(10000) {
       val quotaManager = servers.head.apis.quotas.request
