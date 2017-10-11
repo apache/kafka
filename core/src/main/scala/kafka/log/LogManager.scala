@@ -727,9 +727,9 @@ class LogManager(logDirs: Seq[File],
       val destLog = futureLogs.get(topicPartition)
 
       if (sourceLog == null)
-        throw new KafkaStorageException(s"The current replica for $topicPartition in ${sourceLog.dir.getParent} is offline")
+        throw new KafkaStorageException(s"The current replica for $topicPartition is offline")
       if (destLog == null)
-        throw new KafkaStorageException(s"The future replica for $topicPartition in ${destLog.dir.getParent} is offline")
+        throw new KafkaStorageException(s"The future replica for $topicPartition is offline")
 
       destLog.renameDir(Log.logDirName(topicPartition))
       // Now that future replica has been successfully renamed to be the current replica

@@ -98,9 +98,9 @@ class ReplicaAlterLogDirsThread(name: String,
     val partition = replicaMgr.getPartition(topicPartition).get
     val records = partitionData.toRecords
 
-    // This may happen if markPartitionsForTruncation() is called between buildFetchRequest() and processPartitionData()
     if (fetchOffset != futureReplica.logEndOffset.messageOffset)
-      return
+      throw new IllegalStateException("Offset mismatch for the future replica %s: fetched offset = %d, log end offset = %d.".format(
+        topicPartition, fetchOffset, futureReplica.logEndOffset.messageOffset))
 
     // Append the leader's messages to the log
     partition.appendRecordsToFutureReplica(records)

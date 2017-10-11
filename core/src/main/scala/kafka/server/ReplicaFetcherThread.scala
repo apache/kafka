@@ -93,8 +93,9 @@ class ReplicaFetcherThread(name: String,
     maybeWarnIfOversizedRecords(records, topicPartition)
 
     if (fetchOffset != replica.logEndOffset.messageOffset)
-      throw new RuntimeException("Offset mismatch for partition %s: fetched offset = %d, log end offset = %d.".format(
+      new IllegalStateException("Offset mismatch for partition %s: fetched offset = %d, log end offset = %d.".format(
         topicPartition, fetchOffset, replica.logEndOffset.messageOffset))
+
     if (logger.isTraceEnabled)
       trace("Follower has replica log end offset %d for partition %s. Received %d messages and leader hw %d"
         .format(replica.logEndOffset.messageOffset, topicPartition, records.sizeInBytes, partitionData.highWatermark))

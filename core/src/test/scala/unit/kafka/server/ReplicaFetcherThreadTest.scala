@@ -205,7 +205,7 @@ class ReplicaFetcherThreadTest {
   }
 
   @Test
-  def shouldTruncateToHighWatermarkIfLeaderReturnsUndefinedOffset(): Unit = {
+  def shouldTruncateToInitialFetchOffsetIfLeaderReturnsUndefinedOffset(): Unit = {
 
     //Create a capture to track what partitions/offsets are truncated
     val truncated: Capture[Long] = newCapture(CaptureType.ALL)
@@ -220,11 +220,10 @@ class ReplicaFetcherThreadTest {
     val partition = createMock(classOf[Partition])
     val replicaManager = createMock(classOf[ReplicaManager])
 
-    val highWaterMark = 100
+    val initialFetchOffset = 100
     val initialLeo = 300
 
     //Stubs
-    expect(replica.highWatermark).andReturn(new LogOffsetMetadata(highWaterMark)).anyTimes()
     expect(partition.truncateTo(capture(truncated), anyBoolean())).anyTimes()
     expect(replica.epochs).andReturn(Some(leaderEpochs)).anyTimes()
     expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(initialLeo)).anyTimes()
@@ -241,13 +240,13 @@ class ReplicaFetcherThreadTest {
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
     val mockNetwork = new ReplicaFetcherMockBlockingSend(offsetsReply, endPoint, new SystemTime())
     val thread = new ReplicaFetcherThread("bob", 0, endPoint, configs(0), replicaManager, new Metrics(), new SystemTime(), quota, Some(mockNetwork))
-    thread.addPartitions(Map(t1p0 -> 0))
+    thread.addPartitions(Map(t1p0 -> initialFetchOffset))
 
     //Run it
     thread.doWork()
 
     //We should have truncated to the highwatermark for partitino 2 only
-    assertEquals(highWaterMark, truncated.getValue)
+    assertEquals(initialFetchOffset, truncated.getValue)
   }
 
   @Test

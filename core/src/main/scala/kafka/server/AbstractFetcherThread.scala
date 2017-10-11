@@ -169,8 +169,9 @@ abstract class AbstractFetcherThread(name: String,
           val topic = topicPartition.topic
           val partitionId = topicPartition.partition
           Option(partitionStates.stateValue(topicPartition)).foreach(currentPartitionFetchState =>
-            // we append to the log if the current offset is defined and it is the same as the offset requested during fetch
-            if (fetchRequest.offset(topicPartition) == currentPartitionFetchState.fetchOffset) {
+            // we append to the log if the current offset is the same as the offset requested and if the partition state is ready for fetch
+            if (fetchRequest.offset(topicPartition) == currentPartitionFetchState.fetchOffset &&
+                currentPartitionFetchState.isReadyForFetch) {
               partitionData.error match {
                 case Errors.NONE =>
                   try {
@@ -232,6 +233,8 @@ abstract class AbstractFetcherThread(name: String,
   }
 
   def markPartitionsForTruncation(topicPartition: TopicPartition, truncationOffset: Long) {
+    if (!includeLogTruncation)
+      throw new IllegalStateException("Truncation should not be requested if includeLogTruncation is disabled")
     partitionMapLock.lockInterruptibly()
     try {
       Option(partitionStates.stateValue(topicPartition)).foreach { state =>

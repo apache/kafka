@@ -566,7 +566,6 @@ class Log(@volatile var dir: File,
   def close() {
     debug(s"Closing log $name")
     lock synchronized {
-      checkIfLogOffline()
       isClosed = true
       // We take a snapshot at the last written offset to hopefully avoid the need to scan the log
       // after restarting and to ensure that we cannot inadvertently hit the upgrade optimization

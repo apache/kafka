@@ -1122,16 +1122,16 @@ class ReplicaManager(val config: KafkaConfig,
 
         val newOnlineReplicas = newPartitions.flatMap(topicPartition => getReplica(topicPartition))
         // Add future replica to partition's map
-        val partitionsToAlterLogDirWithLogEndOffset = newOnlineReplicas.filter { replica =>
+        val futureReplicasAndInitialOffset = newOnlineReplicas.filter { replica =>
           logManager.getLog(replica.topicPartition, isFuture = true).isDefined
         }.map { replica =>
           replica.topicPartition -> BrokerAndInitialOffset(BrokerEndPoint(config.brokerId, "localhost", -1), replica.highWatermark.messageOffset)
         }.toMap
-        partitionsToAlterLogDirWithLogEndOffset.keys.foreach(tp => getPartition(tp).get.getOrCreateReplica(Request.FutureLocalReplicaId))
+        futureReplicasAndInitialOffset.keys.foreach(tp => getPartition(tp).get.getOrCreateReplica(Request.FutureLocalReplicaId))
 
         // pause cleaning for partitions that are being moved and start ReplicaAlterDirThread to move replica from source dir to destination dir
-        partitionsToAlterLogDirWithLogEndOffset.keys.foreach(logManager.abortAndPauseCleaning)
-        replicaAlterLogDirsManager.addFetcherForPartitions(partitionsToAlterLogDirWithLogEndOffset)
+        futureReplicasAndInitialOffset.keys.foreach(logManager.abortAndPauseCleaning)
+        replicaAlterLogDirsManager.addFetcherForPartitions(futureReplicasAndInitialOffset)
 
         replicaFetcherManager.shutdownIdleFetcherThreads()
         replicaAlterLogDirsManager.shutdownIdleFetcherThreads()

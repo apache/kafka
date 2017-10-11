@@ -116,12 +116,12 @@ object ReassignPartitionsCommand extends Logging {
 
   private[admin] def removeThrottle(zkUtils: ZkUtils,
                                     reassignedPartitionsStatus: Map[TopicAndPartition, ReassignmentStatus],
-                                    replicaReassignmentStatus: Map[TopicPartitionReplica, ReassignmentStatus],
+                                    replicasReassignmentStatus: Map[TopicPartitionReplica, ReassignmentStatus],
                                     admin: AdminUtilities = AdminUtils): Unit = {
 
     //If both partition assignment and replica reassignment have completed remove both the inter-broker and replica-alter-dir throttle
     if (reassignedPartitionsStatus.forall { case (_, status) => status == ReassignmentCompleted } &&
-        replicaReassignmentStatus.forall { case (_, status) => status == ReassignmentCompleted }) {
+        replicasReassignmentStatus.forall { case (_, status) => status == ReassignmentCompleted }) {
       var changed = false
       //Remove the throttle limit from all brokers in the cluster
       //(as we no longer know which specific brokers were involved in the move)
@@ -137,7 +137,7 @@ object ReassignPartitionsCommand extends Logging {
       }
 
       //Remove the list of throttled replicas from all topics with partitions being moved
-      val topics = (reassignedPartitionsStatus.keySet.map(tp => tp.topic) ++ replicaReassignmentStatus.keySet.map(replica => replica.topic)).toSeq.distinct
+      val topics = (reassignedPartitionsStatus.keySet.map(tp => tp.topic) ++ replicasReassignmentStatus.keySet.map(replica => replica.topic)).toSeq.distinct
       for (topic <- topics) {
         val configs = admin.fetchEntityConfig(zkUtils, ConfigType.Topic, topic)
         // bitwise OR as we don't want to short-circuit
