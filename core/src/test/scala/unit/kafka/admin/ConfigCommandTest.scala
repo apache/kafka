@@ -23,14 +23,14 @@ import kafka.common.InvalidConfigException
 import kafka.server.ConfigEntityName
 import kafka.utils.{Logging, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
-
 import org.apache.kafka.common.security.scram.ScramCredentialUtils
+import org.apache.kafka.common.utils.Sanitizer
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
+
 import scala.collection.mutable
 import scala.collection.JavaConverters._
-import org.apache.kafka.common.metrics.Sanitizer
 
 class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   @Test
