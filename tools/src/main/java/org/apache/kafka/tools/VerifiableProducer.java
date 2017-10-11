@@ -229,9 +229,15 @@ public class VerifiableProducer {
 
     /** Produce a message with given key and value. */
     public void send(String key, String value) {
-        ProducerRecord<String, String> record = new ProducerRecord<>(topic, null, createTime, key, value);
-        if (createTime != null)
+        ProducerRecord<String, String> record;
+
+        if (createTime != null) {
+            record = new ProducerRecord<>(topic, null, createTime, key, value);
             createTime += System.currentTimeMillis() - startTime;
+        } else {
+            record = new ProducerRecord<>(topic, key, value);
+        }
+
         numSent++;
         try {
             producer.send(record, new PrintInfoCallback(key, value));
