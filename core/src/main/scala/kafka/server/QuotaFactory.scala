@@ -16,7 +16,7 @@
   */
 package kafka.server
 
-import kafka.server.QuotaType.{AlterLogDirsReplication, _}
+import kafka.server.QuotaType._
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics

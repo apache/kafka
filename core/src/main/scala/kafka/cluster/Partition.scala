@@ -672,7 +672,7 @@ class Partition(val topic: String,
     partitionString.append("Topic: " + topic)
     partitionString.append("; Partition: " + partitionId)
     partitionString.append("; Leader: " + leaderReplicaIdOpt)
-    partitionString.append("; allReplicas: " + allReplicasMap.keys.mkString(","))
+    partitionString.append("; AllReplicas: " + allReplicasMap.keys.mkString(","))
     partitionString.append("; InSyncReplicas: " + inSyncReplicas.map(_.brokerId).mkString(","))
     partitionString.toString
   }

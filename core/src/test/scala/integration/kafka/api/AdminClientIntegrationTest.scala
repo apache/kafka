@@ -333,7 +333,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
           TestUtils.getBrokerListStrFromServers(servers, protocol = securityProtocol),
           securityProtocol = securityProtocol,
           trustStoreFile = trustStoreFile,
-          retries = 5,
+          retries = 0, // Producer should not have to retry when broker is moving replica between log directories.
           requestTimeoutMs = 2000,
           acks = -1
         )
@@ -364,7 +364,6 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
 
     // Verify that all messages that are produced can be consumed
     val consumerRecords = TestUtils.consumeTopicRecords(servers, topic, numMessages, securityProtocol, trustStoreFile)
-    assertEquals(numMessages, consumerRecords.size)
     consumerRecords.zipWithIndex.foreach { case (consumerRecord, index) =>
       assertEquals(s"xxxxxxxxxxxxxxxxxxxx-$index", new String(consumerRecord.value()))
     }

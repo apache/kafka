@@ -260,9 +260,9 @@ class LogManager(logDirs: Seq[File],
       }
       if (previous != null) {
         if (log.isFuture)
-          throw new IllegalArgumentException("Duplicate log directories found: %s, %s!".format(log.dir.getAbsolutePath, previous.dir.getAbsolutePath))
+          throw new IllegalStateException("Duplicate log directories found: %s, %s!".format(log.dir.getAbsolutePath, previous.dir.getAbsolutePath))
         else
-          throw new IllegalArgumentException(s"Duplicate log directories for $topicPartition are found in both ${log.dir.getAbsolutePath} " +
+          throw new IllegalStateException(s"Duplicate log directories for $topicPartition are found in both ${log.dir.getAbsolutePath} " +
             s"and ${previous.dir.getAbsolutePath}. It is likely because log directory failure happened while broker was " +
             s"replacing current replica with future replica. Recover broker from this failure by manually deleting one of the two directories " +
             s"for this partition. It is recommended to delete the partition in the log directory that is known to have failed recently.")
