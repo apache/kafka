@@ -76,9 +76,12 @@ class ReplicaFetcherThread(name: String,
 
   private def epochCache(tp: TopicPartition): LeaderEpochCache =  replicaMgr.getReplica(tp).get.epochs.get
 
-  override def shutdown(): Unit = {
-    super.shutdown()
-    leaderEndpoint.close()
+  override def initiateShutdown(): Boolean = {
+    val justShutdown = super.initiateShutdown()
+    if (justShutdown) {
+      leaderEndpoint.close()
+    }
+    justShutdown
   }
 
   // process fetched data
