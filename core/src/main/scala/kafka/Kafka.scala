@@ -18,13 +18,13 @@
 package kafka
 
 import java.util.Properties
-import sun.misc.{Signal, SignalHandler}
 
+import sun.misc.{Signal, SignalHandler}
 import joptsimple.OptionParser
 import kafka.utils.Implicits._
 import kafka.server.{KafkaServer, KafkaServerStartable}
 import kafka.utils.{CommandLineUtils, Exit, Logging}
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{OperatingSystem, Utils}
 
 import scala.collection.mutable
 import scala.collection.JavaConverters._
@@ -68,9 +68,12 @@ object Kafka extends Logging {
       if (oldHandler != null)
         jvmSignalHandlers.put(signalName, oldHandler)
     }
-    registerHandler("TERM")
-    registerHandler("INT")
-    registerHandler("HUP")
+
+    if (!OperatingSystem.IS_WINDOWS) {
+      registerHandler("TERM")
+      registerHandler("INT")
+      registerHandler("HUP")
+    }
   }
 
   def main(args: Array[String]): Unit = {
