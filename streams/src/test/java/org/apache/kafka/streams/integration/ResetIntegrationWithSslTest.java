@@ -57,7 +57,7 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
         // expiration of connections by the brokers to avoid errors when `AdminClient` sends requests after potentially
         // very long sleep times
         props.put(KafkaConfig$.MODULE$.ConnectionsMaxIdleMsProp(), -1L);
-        props.put(KafkaConfig$.MODULE$.ListenersProp(), "SSL://localhost:9092");
+        props.put(KafkaConfig$.MODULE$.ListenersProp(), "SSL://localhost:0");
         props.put(KafkaConfig$.MODULE$.InterBrokerListenerNameProp(), "SSL");
         props.putAll(sslConfig);
         // we align time to seconds to get clean window boundaries and thus ensure the same result for each run
