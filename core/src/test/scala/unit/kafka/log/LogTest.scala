@@ -238,7 +238,6 @@ class LogTest {
 
             override def read(startOffset: Long, maxOffset: Option[Long], maxSize: Int, maxPosition: Long,
                               minOneMessage: Boolean): FetchDataInfo = {
-              new Exception().printStackTrace()
               segmentsWithReads += this
               super.read(startOffset, maxOffset, maxSize, maxPosition, minOneMessage)
             }
