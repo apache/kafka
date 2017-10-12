@@ -601,15 +601,16 @@ class ReplicaManager(val config: KafkaConfig,
           //    when broker receives LeaderAndIsrRequest for this partition later.
           // 2) Respond with ReplicaNotAvailableException for this partition in the AlterReplicaLogDirsResponse
           logManager.maybeUpdatePreferredLogDir(topicPartition, destinationDir)
-          val replica = getReplicaOrException(topicPartition)
+          // throw ReplicaNotAvailableException if replica does not exit for the given partition
+          getReplicaOrException(topicPartition)
 
           // If the destinationLDir is different from the current log directory of the replica:
           // - If there is no offline log directory, create the future log in the destinationDir (if it does not exist) and
           //   start ReplicaAlterDirThread to move data of this partition from the current log to the future log
           // - Otherwise, return KafkaStorageException. We do not create the future log while there is offline log directory
           //   so that we can avoid creating future log for the same partition in multiple log directories.
-          if (replica.log.get.dir.getParent != destinationDir) {
-            val futureReplica = getPartition(topicPartition).get.getOrCreateReplica(Request.FutureLocalReplicaId)
+          if (getPartition(topicPartition).get.maybeCreateFutureReplica(destinationDir)) {
+            val futureReplica = getReplicaOrException(topicPartition, Request.FutureLocalReplicaId)
             logManager.abortAndPauseCleaning(topicPartition)
             replicaAlterLogDirsManager.addFetcherForPartitions(Map(topicPartition -> BrokerAndInitialOffset(
               BrokerEndPoint(config.brokerId, "localhost", -1), futureReplica.highWatermark.messageOffset)))

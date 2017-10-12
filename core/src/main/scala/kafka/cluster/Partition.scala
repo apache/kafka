@@ -141,6 +141,30 @@ class Partition(val topic: String,
     }
   }
 
+  /**
+    * Create the future replica if 1) the current replica is not in the given log directory and 2) the future replica
+    * does not exist. This method assumes that the current replica has already been created.
+    *
+    * @param logDir log directory
+    * @return true iff the future replica is created
+    */
+  def maybeCreateFutureReplica(logDir: String): Boolean = {
+    // The readLock is needed to make sure that while the caller checks the log directory of the
+    // current replica and the existence of the future replica, no other thread can update the log directory of the
+    // current replica or remove the future replica.
+    inReadLock(leaderIsrUpdateLock) {
+      val currentReplica = getReplica().get
+      if (currentReplica.log.get.dir.getParent == logDir)
+        false
+      else if (getReplica(Request.FutureLocalReplicaId).isDefined)
+        false
+      else {
+        getOrCreateReplica(Request.FutureLocalReplicaId)
+        true
+      }
+    }
+  }
+
   def getOrCreateReplica(replicaId: Int = localBrokerId, isNew: Boolean = false): Replica = {
     allReplicasMap.getAndMaybePut(replicaId, {
       if (isReplicaLocal(replicaId)) {

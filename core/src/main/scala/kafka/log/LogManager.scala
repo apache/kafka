@@ -741,17 +741,22 @@ class LogManager(logDirs: Seq[File],
         cleaner.resumeCleaning(topicPartition)
       }
 
-      // Close handlers of log files in the source log directory in advance before renaming source log for deletion
-      sourceLog.closeHandlers()
-      sourceLog.removeLogMetrics()
-      sourceLog.renameDir(Log.logDeleteDirName(topicPartition))
-
-      // Now that replica in source log directory has been successfully renamed for deletion.
-      // Close the log, update checkpoint files, and enqueue this log to be deleted.
-      sourceLog.close()
-      checkpointLogRecoveryOffsetsInDir(sourceLog.dir.getParentFile)
-      checkpointLogStartOffsetsInDir(sourceLog.dir.getParentFile)
-      logsToBeDeleted.add(sourceLog)
+      try {
+        sourceLog.renameDir(Log.logDeleteDirName(topicPartition))
+        // Now that replica in source log directory has been successfully renamed for deletion.
+        // Close the log, update checkpoint files, and enqueue this log to be deleted.
+        sourceLog.close()
+        checkpointLogRecoveryOffsetsInDir(sourceLog.dir.getParentFile)
+        checkpointLogStartOffsetsInDir(sourceLog.dir.getParentFile)
+        logsToBeDeleted.add(sourceLog)
+      } catch {
+        case e: KafkaStorageException =>
+          // If sourceLog's log directory is offline, we need close its handlers here.
+          // handleLogDirFailure() will not close handlers of sourceLog because it has been removed from currentLogs map
+          sourceLog.closeHandlers()
+          sourceLog.removeLogMetrics()
+          throw e
+      }
 
       info(s"The current replica is successfully replaced with the future replica for $topicPartition")
     }
