@@ -93,8 +93,6 @@ public class RecordQueue {
                 continue;
             }
 
-            System.out.println("Got record " + record);
-
             final long timestamp;
             try {
                 timestamp = timestampExtractor.extract(record, timeTracker.get());

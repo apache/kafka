@@ -18,7 +18,6 @@ package org.apache.kafka.streams.integration;
 
 import kafka.admin.AdminClient;
 import kafka.tools.StreamsResetter;
-import kafka.utils.MockTime;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.clients.admin.ListTopicsOptions;
@@ -29,6 +28,7 @@ import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -109,7 +109,11 @@ abstract class AbstractResetIntegrationTest {
     void beforePrepareTest() throws Exception {
         ++testNo;
         bootstrapServers = cluster.bootstrapServers();
-        mockTime = cluster.time;
+
+        // we align time to seconds to get clean window boundaries and thus ensure the same result for each run
+        // otherwise, input records could fall into different windows for different runs depending on the initial mock time
+        final long alignedTime = (System.currentTimeMillis() / 1000) * 1000;
+        mockTime = new MockTime(0, alignedTime, System.nanoTime());
 
         Properties sslConfig = getClientSslConfig();
         if (sslConfig == null) {
