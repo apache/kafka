@@ -40,6 +40,7 @@ import org.slf4j.LoggerFactory;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Factory for creating state stores in Kafka Streams.
@@ -85,21 +86,23 @@ public class Stores {
 
     /**
      * Create a persistent {@link KeyValueBytesStoreSupplier}.
-     * @param name  name of the store
+     * @param name  name of the store (cannot be {@code null})
      * @return  an instance of a {@link KeyValueBytesStoreSupplier} that can be used
      * to build a persistent store
      */
     public static KeyValueBytesStoreSupplier persistentKeyValueStore(final String name) {
+        Objects.requireNonNull(name, "name cannot be null");
         return new RocksDbKeyValueBytesStoreSupplier(name);
     }
 
     /**
      * Create an in-memory {@link KeyValueBytesStoreSupplier}.
-     * @param name  name of the store
+     * @param name  name of the store (cannot be {@code null})
      * @return  an instance of a {@link KeyValueBytesStoreSupplier} than can be used to
      * build an in-memory store
      */
     public static KeyValueBytesStoreSupplier inMemoryKeyValueStore(final String name) {
+        Objects.requireNonNull(name, "name cannot be null");
         return new KeyValueBytesStoreSupplier() {
             @Override
             public String name() {
@@ -120,12 +123,16 @@ public class Stores {
 
     /**
      * Create a LRU Map {@link KeyValueBytesStoreSupplier}.
-     * @param name          name of the store
-     * @param maxCacheSize  maximum number of items in the LRU
+     * @param name          name of the store (cannot be {@code null})
+     * @param maxCacheSize  maximum number of items in the LRU (cannot be negative)
      * @return an instance of a {@link KeyValueBytesStoreSupplier} that can be used to build
      * an LRU Map based store
      */
     public static KeyValueBytesStoreSupplier lruMap(final String name, final int maxCacheSize) {
+        Objects.requireNonNull(name, "name cannot be null");
+        if (maxCacheSize < 0) {
+            throw new IllegalArgumentException("maxCacheSize cannot be negative");
+        }
         return new KeyValueBytesStoreSupplier() {
             @Override
             public String name() {
@@ -146,10 +153,10 @@ public class Stores {
 
     /**
      * Create a persistent {@link WindowBytesStoreSupplier}.
-     * @param name                  name of the store
-     * @param retentionPeriod       length of time to retain data in the store
-     * @param numSegments           number of db segments
-     * @param windowSize            size of the windows
+     * @param name                  name of the store (cannot be {@code null})
+     * @param retentionPeriod       length of time to retain data in the store (cannot be negative)
+     * @param numSegments           number of db segments (cannot be zero or negative)
+     * @param windowSize            size of the windows (cannot be negative)
      * @param retainDuplicates      whether or not to retain duplicates.
      * @return an instance of {@link WindowBytesStoreSupplier}
      */
@@ -158,24 +165,38 @@ public class Stores {
                                                                  final int numSegments,
                                                                  final long windowSize,
                                                                  final boolean retainDuplicates) {
+        Objects.requireNonNull(name, "name cannot be null");
+        if (retentionPeriod < 0) {
+            throw new IllegalArgumentException("retentionPeriod cannot be negative");
+        }
+        if (numSegments < 1) {
+            throw new IllegalArgumentException("numSegments cannot must smaller than 1");
+        }
+        if (windowSize < 0) {
+            throw new IllegalArgumentException("windowSize cannot be negative");
+        }
         return new RocksDbWindowBytesStoreSupplier(name, retentionPeriod, numSegments, windowSize, retainDuplicates);
     }
 
     /**
      * Create a persistent {@link SessionBytesStoreSupplier}.
-     * @param name              name of the store
-     * @param retentionPeriod   length ot time to retain data in the store
+     * @param name              name of the store (cannot be {@code null})
+     * @param retentionPeriod   length ot time to retain data in the store (cannot be negative)
      * @return an instance of a {@link  SessionBytesStoreSupplier}
      */
     public static SessionBytesStoreSupplier persistentSessionStore(final String name,
                                                                    final long retentionPeriod) {
+        Objects.requireNonNull(name, "name cannot be null");
+        if (retentionPeriod < 0) {
+            throw new IllegalArgumentException("retentionPeriod cannot be negative");
+        }
         return new RocksDbSessionBytesStoreSupplier(name, retentionPeriod);
     }
 
 
     /**
      * Creates a {@link StoreBuilder} that can be used to build a {@link WindowStore}.
-     * @param supplier      a {@link WindowBytesStoreSupplier}
+     * @param supplier      a {@link WindowBytesStoreSupplier} (cannot be {@code null})
      * @param keySerde      the key serde to use
      * @param valueSerde    the value serde to use
      * @param <K>           key type
@@ -185,12 +206,13 @@ public class Stores {
     public static <K, V> StoreBuilder<WindowStore<K, V>> windowStoreBuilder(final WindowBytesStoreSupplier supplier,
                                                                             final Serde<K> keySerde,
                                                                             final Serde<V> valueSerde) {
+        Objects.requireNonNull(supplier, "supplier cannot be null");
         return new WindowStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
     }
 
     /**
      * Creates a {@link StoreBuilder} than can be used to build a {@link KeyValueStore}.
-     * @param supplier      a {@link KeyValueBytesStoreSupplier}
+     * @param supplier      a {@link KeyValueBytesStoreSupplier} (cannot be {@code null})
      * @param keySerde      the key serde to use
      * @param valueSerde    the value serde to use
      * @param <K>           key type
@@ -200,12 +222,13 @@ public class Stores {
     public static <K, V> StoreBuilder<KeyValueStore<K, V>> keyValueStoreBuilder(final KeyValueBytesStoreSupplier supplier,
                                                                                 final Serde<K> keySerde,
                                                                                 final Serde<V> valueSerde) {
+        Objects.requireNonNull(supplier, "supplier cannot be null");
         return new KeyValueStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
     }
 
     /**
      * Creates a {@link StoreBuilder} that can be used to build a {@link SessionStore}.
-     * @param supplier      a {@link SessionBytesStoreSupplier}
+     * @param supplier      a {@link SessionBytesStoreSupplier} (cannot be {@code null})
      * @param keySerde      the key serde to use
      * @param valueSerde    the value serde to use
      * @param <K>           key type
@@ -215,6 +238,7 @@ public class Stores {
     public static <K, V> StoreBuilder<SessionStore<K, V>> sessionStoreBuilder(final SessionBytesStoreSupplier supplier,
                                                                               final Serde<K> keySerde,
                                                                               final Serde<V> valueSerde) {
+        Objects.requireNonNull(supplier, "supplier cannot be null");
         return new SessionStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
     }
 
