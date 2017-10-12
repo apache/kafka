@@ -18,6 +18,7 @@
 package kafka
 
 import java.util.Properties
+import java.util.concurrent.ConcurrentHashMap
 
 import sun.misc.{Signal, SignalHandler}
 import joptsimple.OptionParser
@@ -26,7 +27,6 @@ import kafka.server.{KafkaServer, KafkaServerStartable}
 import kafka.utils.{CommandLineUtils, Exit, Logging}
 import org.apache.kafka.common.utils.{OperatingSystem, Utils}
 
-import scala.collection.mutable
 import scala.collection.JavaConverters._
 
 object Kafka extends Logging {
@@ -56,7 +56,7 @@ object Kafka extends Logging {
   }
 
   private def registerLoggingSignalHandler(): Unit = {
-    val jvmSignalHandlers = mutable.Map[String, SignalHandler]()
+    val jvmSignalHandlers = new ConcurrentHashMap[String, SignalHandler]().asScala
     val handler = new SignalHandler() {
       override def handle(signal: Signal) {
         info(s"Terminating process due to signal $signal")
