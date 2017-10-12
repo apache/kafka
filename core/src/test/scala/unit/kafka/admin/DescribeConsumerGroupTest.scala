@@ -40,6 +40,8 @@ import scala.collection.mutable.ArrayBuffer
 class DescribeConsumerGroupTest extends KafkaServerTestHarness {
   private val topic = "foo"
   private val group = "test.group"
+  private val overridingProps = new Properties()
+  overridingProps.setProperty("delete.topic.enable", "true")
 
   @deprecated("This field will be removed in a future release", "0.11.0.0")
   private val oldConsumers = new ArrayBuffer[OldConsumer]
@@ -49,7 +51,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
   // configure the servers and clients
   override def generateConfigs = {
     TestUtils.createBrokerConfigs(1, zkConnect, enableControlledShutdown = false).map { props =>
-      KafkaConfig.fromProps(props)
+      KafkaConfig.fromProps(props, overridingProps)
     }
   }
 
@@ -133,6 +135,47 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
       assignments.get.count { x => x.group == group && x.partition.isDefined } == 1 &&
       assignments.get.count { x => x.group == group && x.partition.isEmpty } == 1
     }, "Expected rows for consumers with no assigned partitions in describe group results.")
+  }
+
+  @Test
+  @deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.1")
+  def testDescribeConsumersAfterDeletingTopic() {
+    val topic2 = "foo2"
+    AdminUtils.createTopic(zkUtils, topic2, 1, 1)
+
+    TestUtils.createOffsetsTopic(zkUtils, servers)
+    createOldConsumer()
+    createOldConsumer(Some(topic2))
+    val opts = new ConsumerGroupCommandOptions(Array("--zookeeper", zkConnect, "--describe", "--group", group))
+    consumerGroupService = new ZkConsumerGroupService(opts)
+    TestUtils.waitUntilTrue(() => {
+        val (_, assignments) = consumerGroupService.describeGroup()
+        assignments.isDefined && assignments.get.count(_.group == group) == 2
+      }, "Expected two rows in describe group results.")
+
+    oldConsumers.foreach(_.stop())
+    oldConsumers.clear()
+
+    // deleting the topic should not remove the group (since there is still an existing topic the group consumes from)
+    AdminUtils.deleteTopic(zkUtils, topic2)
+    TestUtils.waitUntilTrue(() => {
+      !AdminUtils.topicExists(zkUtils, topic2)
+      }, "The first topic deletion did not succeed.")
+
+    TestUtils.waitUntilTrue(() => {
+        val (_, assignments) = consumerGroupService.describeGroup()
+        assignments.isDefined && assignments.get.count(_.group == group) == 1
+      }, "Expected one row in describe group results.")
+
+    // deleting the topic should cause the group to be removed (since the group now consumes from no existing topic)
+    AdminUtils.deleteTopic(zkUtils, topic)
+    TestUtils.waitUntilTrue(() => {
+      !AdminUtils.topicExists(zkUtils, topic)
+      }, "The second topic deletion did not succeed.")
+
+    TestUtils.waitUntilTrue(() => {
+        !consumerGroupService.describeGroup()._2.isDefined
+      }, "Expected no rows in describe group results after deleting all topics the group has consumed from.")
   }
 
   @Test
@@ -275,11 +318,13 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
   }
 
   @deprecated("This test has been deprecated and will be removed in a future release.", "0.11.1.0")
-  private def createOldConsumer(): Unit = {
+  private def createOldConsumer(subscribedTopic: Option[String] = None): OldConsumer = {
     val consumerProps = new Properties
     consumerProps.setProperty("group.id", group)
     consumerProps.setProperty("zookeeper.connect", zkConnect)
-    oldConsumers += new OldConsumer(Whitelist(topic), consumerProps)
+    val consumer = new OldConsumer(Whitelist(subscribedTopic.getOrElse(topic)), consumerProps)
+    oldConsumers += consumer
+    consumer
   }
 }
 
