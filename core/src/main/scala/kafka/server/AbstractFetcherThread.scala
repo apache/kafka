@@ -169,7 +169,8 @@ abstract class AbstractFetcherThread(name: String,
           val topic = topicPartition.topic
           val partitionId = topicPartition.partition
           Option(partitionStates.stateValue(topicPartition)).foreach(currentPartitionFetchState =>
-            // we append to the log if the current offset is the same as the offset requested and if the partition state is ready for fetch
+            // It's possible that a partition is removed and re-added or truncated when there is a pending fetch request.
+            // In this case, we only want to process the fetch response if the partition state is ready for fetch and the current offset is the same as the offset requested.
             if (fetchRequest.offset(topicPartition) == currentPartitionFetchState.fetchOffset &&
                 currentPartitionFetchState.isReadyForFetch) {
               partitionData.error match {

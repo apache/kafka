@@ -522,8 +522,8 @@ class Partition(val topic: String,
   }
 
   def appendRecordsToFollower(records: MemoryRecords) {
-    // The read lock is needed to avoid race condition while ReplicaAlterDirThread is executing
-    // maybeDeleteAndSwapFutureReplica() to replace follower replica with the future replica
+    // The read lock is needed to prevent the follower replica from being updated while ReplicaAlterDirThread
+    // is executing maybeDeleteAndSwapFutureReplica() to replace follower replica with the future replica.
     inReadLock(leaderIsrUpdateLock) {
       getReplica().get.log.get.appendAsFollower(records)
     }
@@ -596,8 +596,8 @@ class Partition(val topic: String,
     * @param isFuture True iff the truncation should be performed on the future log of this partition
     */
   def truncateTo(offset: Long, isFuture: Boolean) {
-    // The read lock is needed to avoid race condition while ReplicaAlterDirThread is executing
-    // maybeDeleteAndSwapFutureReplica() to replace follower replica with the future replica
+    // The read lock is needed to prevent the follower replica from being truncated while ReplicaAlterDirThread
+    // is executing maybeDeleteAndSwapFutureReplica() to replace follower replica with the future replica.
     inReadLock(leaderIsrUpdateLock) {
       logManager.truncateTo(Map(topicPartition -> offset), isFuture = isFuture)
     }
@@ -610,8 +610,8 @@ class Partition(val topic: String,
     * @param isFuture True iff the truncation should be performed on the future log of this partition
     */
   def truncateFullyAndStartAt(newOffset: Long, isFuture: Boolean) {
-    // The read lock is needed to avoid race condition while ReplicaAlterDirThread is executing
-    // maybeDeleteAndSwapFutureReplica() to replace follower replica with the future replica
+    // The read lock is needed to prevent the follower replica from being truncated while ReplicaAlterDirThread
+    // is executing maybeDeleteAndSwapFutureReplica() to replace follower replica with the future replica.
     inReadLock(leaderIsrUpdateLock) {
       logManager.truncateFullyAndStartAt(topicPartition, newOffset, isFuture = isFuture)
     }
