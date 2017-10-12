@@ -103,7 +103,7 @@ abstract class AbstractFetcherThread(name: String,
     val fetchRequest = inLock(partitionMapLock) {
       val ResultWithPartitions(fetchRequest, partitionsWithError) = buildFetchRequest(states)
       if (fetchRequest.isEmpty) {
-        trace("There are no active partitions. Back off for %d ms before sending a fetch request".format(fetchBackOffMs))
+        trace(s"There are no active partitions. Back off for $fetchBackOffMs ms before sending a fetch request")
         partitionMapCond.await(fetchBackOffMs, TimeUnit.MILLISECONDS)
       }
       handlePartitionsWithErrors(partitionsWithError)
@@ -217,7 +217,7 @@ abstract class AbstractFetcherThread(name: String,
                   }
                 case _ =>
                   if (isRunning.get) {
-                    error(s"Error for partition $topicPartition to broker %${sourceBroker.id}:${partitionData.exception.get}")
+                    error(s"Error for partition $topicPartition to broker ${sourceBroker.id}:${partitionData.exception.get}")
                     partitionsWithError += topicPartition
                   }
               }
@@ -227,7 +227,7 @@ abstract class AbstractFetcherThread(name: String,
     }
 
     if (partitionsWithError.nonEmpty)
-      debug("handling partitions with error for %s".format(partitionsWithError))
+      debug(s"handling partitions with error for $partitionsWithError")
     handlePartitionsWithErrors(partitionsWithError)
   }
 
