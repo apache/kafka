@@ -237,8 +237,10 @@ public class SslTransportLayer implements TransportLayer {
     */
     @Override
     public void handshake() throws IOException {
-        if (state != State.HANDSHAKE)
+        if (state == State.READY)
             throw renegotiationException();
+        if (state == State.CLOSING)
+            throw closingException();
 
         int read = 0;
         try {
@@ -369,6 +371,9 @@ public class SslTransportLayer implements TransportLayer {
         return new SSLHandshakeException("Renegotiation is not supported");
     }
 
+    private IllegalStateException closingException() {
+        throw new IllegalStateException("Channel is in closing state");
+    }
 
     /**
      * Executes the SSLEngine tasks needed.
@@ -609,8 +614,10 @@ public class SslTransportLayer implements TransportLayer {
     @Override
     public int write(ByteBuffer src) throws IOException {
         int written = 0;
-        if (state == State.CLOSING) throw new IllegalStateException("Channel is in closing state");
-        if (state != State.READY) return written;
+        if (state == State.CLOSING)
+            throw closingException();
+        if (state != State.READY)
+            return written;
 
         if (!flush(netWriteBuffer))
             return written;
