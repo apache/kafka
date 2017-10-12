@@ -67,7 +67,7 @@ public final class StateSerdes<K, V> {
                        final Serde<K> keySerde,
                        final Serde<V> valueSerde) {
         Objects.requireNonNull(topic, "topic cannot be null");
-        Objects.requireNonNull(keySerde,"key serde cannot be null");
+        Objects.requireNonNull(keySerde, "key serde cannot be null");
         Objects.requireNonNull(valueSerde, "value serde cannot be null");
 
         this.topic = topic;
