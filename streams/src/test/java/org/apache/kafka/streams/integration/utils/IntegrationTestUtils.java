@@ -317,8 +317,12 @@ public class IntegrationTestUtils {
             continueConsuming(consumedValues.size(), maxMessages)) {
             totalPollTimeMs += pollIntervalMs;
             final ConsumerRecords<K, V> records = consumer.poll(pollIntervalMs);
+
+            System.out.println("At " + totalPollTimeMs + " " + records.count() + " records: ");
+
             for (final ConsumerRecord<K, V> record : records) {
                 consumedValues.add(new KeyValue<>(record.key(), record.value()));
+                System.out.println("\t" + record);
             }
         }
         return consumedValues;
