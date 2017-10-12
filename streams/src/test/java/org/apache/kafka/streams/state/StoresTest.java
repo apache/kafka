@@ -39,6 +39,71 @@ import static org.junit.Assert.fail;
 
 public class StoresTest {
 
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowIfPersistentKeyValueStoreStoreNameIsNull() {
+        Stores.persistentKeyValueStore(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowIfIMemoryKeyValueStoreStoreNameIsNull() {
+        Stores.inMemoryKeyValueStore(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowIfILruMapStoreNameIsNull() {
+        Stores.lruMap(null, 0);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldThrowIfILruMapStoreCapacityIsNegative() {
+        Stores.lruMap("anyName", -1);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowIfIPersistentWindowStoreStoreNameIsNull() {
+        Stores.persistentWindowStore(null, 0, 1, 0, false);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldThrowIfIPersistentWindowStoreRetentionPeriodIsNegative() {
+        Stores.persistentWindowStore("anyName", -1, 1, 0, false);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldThrowIfIPersistentWindowStoreIfNumberOfSegmentsSmallerThanOne() {
+        Stores.persistentWindowStore("anyName", 0, 0, 0, false);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldThrowIfIPersistentWindowStoreIfWindowSizeIsNegative() {
+        Stores.persistentWindowStore("anyName", 0, 1, -1, false);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowIfIPersistentSessionStoreStoreNameIsNull() {
+        Stores.persistentSessionStore(null, 0);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldThrowIfIPersistentSessionStoreRetentionPeriodIsNegative() {
+        Stores.persistentSessionStore("anyName", -1);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowIfSupplierIsNullForWindowStoreBuilder() {
+        Stores.windowStoreBuilder(null, Serdes.ByteArray(), Serdes.ByteArray());
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowIfSupplierIsNullForKeyValueStoreBuilder() {
+        Stores.keyValueStoreBuilder(null, Serdes.ByteArray(), Serdes.ByteArray());
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowIfSupplierIsNullForSessionStoreBuilder() {
+        Stores.sessionStoreBuilder(null, Serdes.ByteArray(), Serdes.ByteArray());
+    }
+
     @SuppressWarnings("deprecation")
     @Test
     public void shouldCreateInMemoryStoreSupplierWithLoggedConfig() {
