@@ -416,6 +416,11 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   def getLeaderReplicaIfLocal(topicPartition: TopicPartition): Replica =  {
+    val (_, replica) = getPartitionAndLeaderReplicaIfLocal(topicPartition)
+    replica
+  }
+
+  def getPartitionAndLeaderReplicaIfLocal(topicPartition: TopicPartition): (Partition, Replica) =  {
     val partitionOpt = getPartition(topicPartition)
     partitionOpt match {
       case None =>
@@ -424,7 +429,7 @@ class ReplicaManager(val config: KafkaConfig,
         if (partition eq ReplicaManager.OfflinePartition)
           throw new KafkaStorageException(s"Partition $topicPartition is in an offline log directory on broker $localBrokerId")
         else partition.leaderReplicaIfLocal match {
-          case Some(leaderReplica) => leaderReplica
+          case Some(leaderReplica) => (partition, leaderReplica)
           case None =>
             throw new NotLeaderForPartitionException(s"Leader not local for partition $topicPartition on broker $localBrokerId")
         }
@@ -515,11 +520,8 @@ class ReplicaManager(val config: KafkaConfig,
             case Some(p) =>
               if (p eq ReplicaManager.OfflinePartition)
                 throw new KafkaStorageException("Partition %s is in an offline log directory on broker %d".format(topicPartition, localBrokerId))
-              p.leaderReplicaIfLocal match {
-                case Some(_) => p
-                case None =>
-                  throw new NotLeaderForPartitionException(s"Broker $localBrokerId is not leader for partition $topicPartition")
-              }
+              val (partition, _) = getPartitionAndLeaderReplicaIfLocal(topicPartition)
+              partition
             case None =>
               throw new UnknownTopicOrPartitionException("Partition %s doesn't exist on %d".format(topicPartition, localBrokerId))
           }
