@@ -22,7 +22,7 @@ package org.apache.kafka.streams.processor;
 public interface Punctuator {
 
     /**
-     * Perform the scheduled periodic operation
+     * Perform the scheduled periodic operation.
      *
      * @param timestamp when the operation is being called, depending on {@link PunctuationType}
      */
