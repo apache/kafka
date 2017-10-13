@@ -1,231 +1,191 @@
-package unit.kafka.admin
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package kafka.admin
 
 import scala.collection.JavaConversions._
-
 import org.junit.Assert._
 import org.junit.Test
-
-import kafka.admin.{BrokerCommand, RackAwareTest}
-import kafka.admin.BrokerCommand.BrokerCommandOptions
+import kafka.admin.BrokerCommand.{BrokerCommandOptions, NodeWithTopicPartitions}
+import org.apache.kafka.clients.admin.TopicDescription
 import kafka.cluster.Broker
 import kafka.utils.Logging
+
+import scala.collection.Map
 //import kafka.utils.ZkUtils._
-import kafka.zk.ZooKeeperTestHarness
+//import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.Node
-import org.apache.kafka.common.requests.MetadataResponse.{TopicMetadata, PartitionMetadata}
+import org.apache.kafka.common.{Node, PartitionInfo, TopicPartitionInfo}
+//import org.apache.kafka.common.requests.MetadataResponse.{TopicMetadata, PartitionMetadata}
 
 import scala.collection.JavaConverters._
 
 import scala.collection.Seq
 
-class BrokerCommandTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
+//class BrokerCommandTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
+class BrokerCommandTest extends Logging with RackAwareTest {
 
   @Test
   def testApplyBrokerFilter() = {
-    val allBrokers = getTestBrokers()
-    assertEquals(3, allBrokers.size)
+    val allNodes = getTestNodes()
 
     val cmdOptions0 = new BrokerCommandOptions(Array[String]("--broker", "99"))
-    val filteredBrokers0 = BrokerCommand.applyBrokerFilter(allBrokers, cmdOptions0)
-    assertEquals(0, filteredBrokers0.size)
+    assertEquals(cmdOptions0.brokers.size, 1)
+    val filteredBrokers0 = BrokerCommand.filterNodes(allNodes, cmdOptions0.brokers, List[String](), List[String]())
+    assertEquals(filteredBrokers0.size, 0)
 
     val cmdOptions1 = new BrokerCommandOptions(Array[String]("--broker", "1"))
-    val filteredBrokers1 = BrokerCommand.applyBrokerFilter(allBrokers, cmdOptions1)
-    assertEquals(1, filteredBrokers1.size)
+    assertEquals(cmdOptions1.brokers.size, 1)
+    val filteredBrokers1 = BrokerCommand.filterNodes(allNodes, cmdOptions1.brokers, List[String](), List[String]())
+    assertEquals(filteredBrokers1.size, 1)
 
     val cmdOptions2 = new BrokerCommandOptions(Array[String]("--broker", "1", "--broker", "2"))
-    val filteredBrokers2 = BrokerCommand.applyBrokerFilter(allBrokers, cmdOptions2)
-    assertEquals(2, filteredBrokers2.size)
+    assertEquals(cmdOptions2.brokers.size, 2)
+    val filteredBrokers2 = BrokerCommand.filterNodes(allNodes, cmdOptions2.brokers, List[String](), List[String]())
+    assertEquals(filteredBrokers2.size, 2)
 
     val cmdOptions3 = new BrokerCommandOptions(Array[String]("--broker", "1", "--broker", "2", "--broker", "99"))
-    val filteredBrokers3 = BrokerCommand.applyBrokerFilter(allBrokers, cmdOptions3)
-    assertEquals(2, filteredBrokers3.size)
+    assertEquals(cmdOptions3.brokers.size, 3)
+    val filteredBrokers3 = BrokerCommand.filterNodes(allNodes, cmdOptions3.brokers, List[String](), List[String]())
+    assertEquals(filteredBrokers3.size, 2)
   }
 
   @Test
   def testApplyHostFilter() = {
-    val allBrokers = getTestBrokers()
-    assertEquals(3, allBrokers.size)
+    val allNodes = getTestNodes()
 
     val cmdOptions0 = new BrokerCommandOptions(Array[String]("--host", "unknown"))
-    val filteredBrokers0 = BrokerCommand.applyHostFilter(allBrokers, cmdOptions0)
-    assertEquals(0, filteredBrokers0.size)
+    assertEquals(cmdOptions0.hosts.size, 1)
+    val filteredHosts0 = BrokerCommand.filterNodes(allNodes, List[Int](), cmdOptions0.hosts, List[String]())
+    assertEquals(filteredHosts0.size, 0)
 
     val cmdOptions1 = new BrokerCommandOptions(Array[String]("--host", "host1"))
-    val filteredBrokers1 = BrokerCommand.applyHostFilter(allBrokers, cmdOptions1)
-    assertEquals(1, filteredBrokers1.size)
+    assertEquals(cmdOptions1.hosts.size, 1)
+    val filteredHosts1 = BrokerCommand.filterNodes(allNodes, List[Int](), cmdOptions1.hosts, List[String]())
+    assertEquals(filteredHosts1.size, 1)
 
     val cmdOptions2 = new BrokerCommandOptions(Array[String]("--host", "host1", "--host", "host2"))
-    val filteredBrokers2 = BrokerCommand.applyHostFilter(allBrokers, cmdOptions2)
-    assertEquals(2, filteredBrokers2.size)
+    assertEquals(cmdOptions2.hosts.size, 2)
+    val filteredHosts2 = BrokerCommand.filterNodes(allNodes, List[Int](), cmdOptions2.hosts, List[String]())
+    assertEquals(filteredHosts2.size, 2)
+
+    val cmdOptions3 = new BrokerCommandOptions(Array[String]("--host", "host1", "--host", "host2", "--host", "unknown"))
+    assertEquals(cmdOptions3.hosts.size, 3)
+    val filteredHosts3 = BrokerCommand.filterNodes(allNodes, List[Int](), cmdOptions3.hosts, List[String]())
+    assertEquals(filteredHosts3.size, 2)
   }
 
   @Test
   def testApplyRackFilter() = {
-    val allBrokers = getTestBrokers()
-    assertEquals(3, allBrokers.size)
+    val allNodes = getTestNodes()
 
     val cmdOptions0 = new BrokerCommandOptions(Array[String]("--rack", "unknown"))
-    val filteredBrokers0 = BrokerCommand.applyRackFilter(allBrokers, cmdOptions0)
-    assertEquals(0, filteredBrokers0.size)
+    assertEquals(cmdOptions0.racks.size, 1)
+    val filteredRacks0 = BrokerCommand.filterNodes(allNodes, List[Int](), List[String](), cmdOptions0.racks)
+    assertEquals(filteredRacks0.size, 0)
 
     val cmdOptions1 = new BrokerCommandOptions(Array[String]("--rack", "rack1"))
-    val filteredBrokers1 = BrokerCommand.applyRackFilter(allBrokers, cmdOptions1)
-    assertEquals(1, filteredBrokers1.size)
+    assertEquals(cmdOptions1.racks.size, 1)
+    val filteredRacks1 = BrokerCommand.filterNodes(allNodes, List[Int](), List[String](), cmdOptions1.racks)
+    assertEquals(filteredRacks1.size, 1)
 
     val cmdOptions2 = new BrokerCommandOptions(Array[String]("--rack", "rack1", "--rack", "rack2"))
-    val filteredBrokers2 = BrokerCommand.applyRackFilter(allBrokers, cmdOptions2)
-    assertEquals(2, filteredBrokers2.size)
+    assertEquals(cmdOptions2.racks.size, 2)
+    val filteredRacks2 = BrokerCommand.filterNodes(allNodes, List[Int](), List[String](), cmdOptions2.racks)
+    assertEquals(filteredRacks2.size, 2)
+
+    val cmdOptions3 = new BrokerCommandOptions(Array[String]("--rack", "rack1", "--rack", "rack2", "--rack", "unknown"))
+    assertEquals(cmdOptions3.racks.size, 3)
+    val filteredRacks3 = BrokerCommand.filterNodes(allNodes, List[Int](), List[String](), cmdOptions3.racks)
+    assertEquals(filteredRacks3.size, 2)
   }
 
   @Test
   def testApplyTopicFilter() = {
-    val topicMetadata = getTestTopicMetadata()
-    assertEquals(2, topicMetadata.size)
+    val allTopics = getTopicDescriptions()
 
     val cmdOptions0 = new BrokerCommandOptions(Array[String]("--topic", "unknown"))
-    val filteredTopicMetadata = BrokerCommand.applyTopicFilter(topicMetadata, cmdOptions0)
-    assertEquals(0, filteredTopicMetadata.size)
+    assertEquals(cmdOptions0.topics.size, 1)
+    val filteredTopics0 = BrokerCommand.filterTopicDescriptions(allTopics, cmdOptions0.topics)
+    assertEquals(filteredTopics0.size, 0)
 
-    val cmdOptions1 = new BrokerCommandOptions(Array[String]("--topic", "topic1"))
-    val filteredTopicMetadata1 = BrokerCommand.applyTopicFilter(topicMetadata, cmdOptions1)
-    assertEquals(1, filteredTopicMetadata1.size)
+    val cmdOptions1 = new BrokerCommandOptions(Array[String]("--topic", "topicA"))
+    assertEquals(cmdOptions1.topics.size, 1)
+    val filteredTopics1 = BrokerCommand.filterTopicDescriptions(allTopics, cmdOptions1.topics)
+    assertEquals(filteredTopics1.size, 1)
 
-    val cmdOptions2 = new BrokerCommandOptions(Array[String]("--topic", "topic1", "--topic", "topic2"))
-    val filteredTopicMetadata2 = BrokerCommand.applyTopicFilter(topicMetadata, cmdOptions2)
-    assertEquals(2, filteredTopicMetadata2.size)
+    val cmdOptions2 = new BrokerCommandOptions(Array[String]("--topic", "topicA", "--topic", "topicB"))
+    assertEquals(cmdOptions2.topics.size, 2)
+    val filteredTopics2 = BrokerCommand.filterTopicDescriptions(allTopics, cmdOptions2.topics)
+    assertEquals(filteredTopics2.size, 2)
+
+    val cmdOptions3 = new BrokerCommandOptions(Array[String]("--topic", "topicA", "--topic", "topicB", "--topic", "unknown"))
+    assertEquals(cmdOptions3.topics.size, 3)
+    val filteredTopics3 = BrokerCommand.filterTopicDescriptions(allTopics, cmdOptions3.topics)
+    assertEquals(filteredTopics3.size, 2)
   }
 
   @Test
-  def testMergeBrokerTopicMetadata() = {
-    val allBrokers = getTestBrokers()
-    val allTopicMetadata = getTestTopicMetadata()
-    allTopicMetadata.foreach(tm => tm.topic())
-    val merged = BrokerCommand.mergeBrokerTopicMetadata(allBrokers, allTopicMetadata)
-    assertEquals(3, merged.size)
-    // Check that the keys of merged data is the set of broker-ids
-    val inputBrokerIds = allBrokers.map(b => b.id)
-    val mergedBrokerIds = merged.keys.toSet
-    assertEquals(inputBrokerIds, mergedBrokerIds)
-    val inputTopics = allTopicMetadata.map(topicMeta => topicMeta.topic())
-    val mergedTopics = merged.values.map(m => m.topicPartitions.keys).flatten.toSet
-    // Check that the topics before and after merge is identical
-    assertEquals(inputTopics, mergedTopics)
-    val sampleTopicMetada = merged(1)
-    val leaderPartitions = sampleTopicMetada.topicPartitions("topic1").toList.collect{case p:BrokerCommand.LeaderPartition => p}
-    assertEquals(2, leaderPartitions.size)
+  def testmergeNodeTopicDescriptions() = {
+    val allNodes = getTestNodes()
+    val topicDescriptions = getTopicDescriptions()
+    val mergedInfo: Map[Int, NodeWithTopicPartitions] = BrokerCommand.mergeNodeTopicDescriptions(allNodes, topicDescriptions)
+    assertEquals(mergedInfo.keys.size, 3)
+    val leaders = mergedInfo.values.map(m => m.topicPartitions.values)
+    assertEquals(leaders.size, 3)
+    val broker3Info = mergedInfo(3)
+    assertEquals(broker3Info.node.id, 3)
+    assertEquals(broker3Info.topicPartitions.keySet, Set[String]("topicA", "topicB", "topicC"))
+    val topicAData = broker3Info.topicPartitions("topicA")
+    // Checking if broker3/node3 topicA has 3 partitions (viz. 0, 1, 2) and that partition #1 as being the leader)
+    assert(topicAData.mkString(" ").equals("0 +1 2"))
   }
 
-  @Test
-  def testPrintInfo() = {
-    val LINE_SEPARATOR = String.format("%n")
-    val allBrokers = getTestBrokers()
-    val allTopicMetadata = getTestTopicMetadata()
-    allTopicMetadata.foreach(tm => tm.topic())
-    val merged = BrokerCommand.mergeBrokerTopicMetadata(allBrokers, allTopicMetadata)
-    val cmdOptions0 = new BrokerCommandOptions(Array[String](""))
-    val output0 = BrokerCommand.printInfo(merged, cmdOptions0)
-    assertEquals(450 + merged.keys.size*(LINE_SEPARATOR.length) ,output0.length)
-    val cmdOptions1 = new BrokerCommandOptions(Array[String]("--topic-details"))
-    val output1 = BrokerCommand.printInfo(merged, cmdOptions1)
-    assertEquals(648 + merged.keys.size*(LINE_SEPARATOR.length) ,output1.length)
-    val cmdOptions2 = new BrokerCommandOptions(Array[String]("--partition-details"))
-    val output2 = BrokerCommand.printInfo(merged, cmdOptions2)
-    assertEquals(654 + merged.keys.size*(LINE_SEPARATOR.length) ,output2.length)
-    val cmdOptions3 = new BrokerCommandOptions(Array[String]("--details"))
-    val output3 = BrokerCommand.printInfo(merged, cmdOptions3)
-    assertEquals(852 + merged.keys.size*(LINE_SEPARATOR.length) ,output3.length)
-  }
 
-  def getTestBrokers(): Set[Broker] = {
-    val broker1 =
-      """{
-        "version": 3,
-        "host": "host1",
-        "port": 1234,
-        "jmx_port": 4321,
-        "timestamp": "123456789",
-        "endpoints": ["PLAINTEXT://host1:9092", "SSL://host1:9093"],
-        "rack": "rack1"
-        }""".stripMargin
-
-    val broker2 =
-      """{
-        "version": 3,
-        "host": "host2",
-        "port": 1234,
-        "jmx_port": 4321,
-        "timestamp": "123456789",
-        "endpoints": ["PLAINTEXT://host2:9092", "SSL://host2:9093"],
-        "rack": "rack2"
-        }""".stripMargin
-
-    val broker3 =
-      """{
-        "version": 3,
-        "host": "host3",
-        "port": 1234,
-        "jmx_port": 4321,
-        "timestamp": "123456789",
-        "endpoints": ["PLAINTEXT://host3:9092", "SSL://host3:9093"],
-        "rack": "rack3"
-        }""".stripMargin
-    val b1 = Broker.createBroker(1, broker1)
-    val b2 = Broker.createBroker(2, broker2)
-    val b3 = Broker.createBroker(3, broker3)
-    Set[Broker](b1, b2, b3)
-  }
-
-  def getTestNodes(): Seq[Node] = {
+  def getTestNodes(): List[Node] = {
     val node1 = new Node(1, "host1", 9092, "rack1")
     val node2 = new Node(2, "host2", 9092, "rack2")
     val node3 = new Node(3, "host3", 9092, "rack3")
-    Seq[Node](node1, node2, node3)
+    List[Node](node1, node2, node3)
   }
 
-//  def getTestPartitionMetadata(): Seq[PartitionMetadata] = {
-  def getTestPartitionMetadata():Seq[PartitionMetadata] = {
-  val nodes = getTestNodes()
-  val partition0 = new PartitionMetadata(Errors.NONE,
-      0, nodes(0),
-      List(nodes(0), nodes(1), nodes(2)),
-      List(nodes(0), nodes(1),  nodes(2)))
-  val partition1 = new PartitionMetadata(Errors.NONE,
-      1,
-      nodes(1),
-    List(nodes(0), nodes(1), nodes(2)),
-    List(nodes(0), nodes(1),  nodes(2)))
-  val partition2 = new PartitionMetadata(Errors.NONE,
-      2,
-      nodes(2),
-    List(nodes(0), nodes(1), nodes(2)),
-    List(nodes(0), nodes(1),  nodes(2)))
-  val partition3 = new PartitionMetadata(Errors.NONE,
-      3,
-      nodes(0),
-    List(nodes(0), nodes(1), nodes(2)),
-    List(nodes(0), nodes(1),  nodes(2)))
-  val partition4 = new PartitionMetadata(Errors.NONE,
-      4,
-      nodes(1),
-    List(nodes(0), nodes(1), nodes(2)),
-    List(nodes(0), nodes(1),  nodes(2)))
-  val partition5 = new PartitionMetadata(Errors.NONE,
-      5,
-      nodes(2),
-    List(nodes(0), nodes(1), nodes(2)),
-    List(nodes(0), nodes(1),  nodes(2)))
-  Seq[PartitionMetadata](partition0, partition1, partition2, partition3, partition4, partition5)
-  }
+  def getTopicDescriptions(): Seq[TopicDescription] = {
+    val allNodes = getTestNodes()
+    val nodes123: List[Node] = List[Node](allNodes(0), allNodes(1), allNodes(2))
 
-  def getTestTopicMetadata(): Set[TopicMetadata] = {
-    val partitions = getTestPartitionMetadata()
-    val topic1 = "topic1"
-    val topic2 = "topic2"
-    val topic1meta = new TopicMetadata(Errors.NONE, topic1, false, partitions.asJava)
-    val topic2meta = new TopicMetadata(Errors.NONE, topic2, false, partitions.asJava)
-    Set[TopicMetadata](topic1meta, topic2meta)
- }
+    val nodes321: List[Node] = List[Node](allNodes(2), allNodes(1), allNodes(0))
+
+    val nodes231: List[Node] = List[Node](allNodes(1), allNodes(2), allNodes(0))
+
+    val partition0: TopicPartitionInfo = new TopicPartitionInfo(0, nodes123(0), nodes123, nodes123)
+    val partition1: TopicPartitionInfo = new TopicPartitionInfo(1, nodes321(0), nodes321, nodes321)
+    val partition2: TopicPartitionInfo = new TopicPartitionInfo(2, nodes231(0), nodes231, nodes231)
+
+    // Each topic consists of 3 partitions as defined above
+    val topicDescritionA: TopicDescription = new TopicDescription("topicA", false,
+      List[TopicPartitionInfo](partition0, partition1, partition2))
+
+    val topicDescritionB: TopicDescription = new TopicDescription("topicB", false,
+      List[TopicPartitionInfo](partition0, partition1, partition2))
+
+    val topicDescritionC: TopicDescription = new TopicDescription("topicC", false,
+      List[TopicPartitionInfo](partition0, partition1, partition2))
+
+    Seq[TopicDescription](topicDescritionA, topicDescritionB, topicDescritionC)
+  }
 
 }
