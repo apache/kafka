@@ -21,6 +21,10 @@ package org.apache.kafka.streams.processor;
  */
 public interface Punctuator {
 
+    /**
+     * Perform the scheduled periodic operation
+     *
+     * @param timestamp the stream time when the operation is being called
+     */
     void punctuate(long timestamp);
-
 }
