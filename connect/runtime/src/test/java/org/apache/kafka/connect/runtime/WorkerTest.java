@@ -790,7 +790,7 @@ public class WorkerTest extends ThreadedTest {
 
     @Test
     public void testStopHungConnectorTask() throws Exception {
-        expectConverters();
+        expectConverters(true);
         expectStartStorage();
 
         EasyMock.expect(plugins.currentThreadLoader()).andReturn(delegatingLoader).times(2);
