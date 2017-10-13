@@ -67,8 +67,6 @@ JIRA_BASE = "https://issues.apache.org/jira/browse"
 JIRA_API_BASE = "https://issues.apache.org/jira"
 # Prefix added to temporary branches
 TEMP_BRANCH_PREFIX = "PR_TOOL"
-# TODO Introduce a convention as this is too brittle
-RELEASE_BRANCH_PREFIX = "0."
 
 DEV_BRANCH_NAME = "trunk"
 
@@ -154,17 +152,7 @@ def merge_pr(pr_num, target_ref, title, body, pr_repo_desc):
     reviewers = raw_input(
         "Enter reviewers in the format of \"name1 <email1>, name2 <email2>\": ").strip()
 
-    commits = run_cmd(['git', 'log', 'HEAD..%s' % pr_branch_name,
-                      '--pretty=format:%h [%an] %s']).split("\n")
-    
-    if len(commits) > 1:
-        result = raw_input("List pull request commits in squashed commit message? (y/n): ")
-        if result.lower() == "y":
-          should_list_commits = True
-        else:
-          should_list_commits = False
-    else:
-        should_list_commits = False
+    run_cmd(['git', 'log', 'HEAD..%s' % pr_branch_name, '--pretty=format:%h [%an] %s']).split("\n")
 
     merge_message_flags = []
 
@@ -190,12 +178,7 @@ def merge_pr(pr_num, target_ref, title, body, pr_repo_desc):
 
     # The string "Closes #%s" string is required for GitHub to correctly close the PR
     close_line = "Closes #%s from %s" % (pr_num, pr_repo_desc)
-    if should_list_commits:
-        close_line += " and squashes the following commits:"
     merge_message_flags += ["-m", close_line]
-
-    if should_list_commits:
-        merge_message_flags += ["-m", "\n".join(commits)]
 
     run_cmd(['git', 'commit', '--author="%s"' % primary_author] + merge_message_flags)
 
@@ -394,7 +377,7 @@ def main():
     original_head = get_current_branch()
 
     branches = get_json("%s/branches" % GITHUB_API_BASE)
-    branch_names = filter(lambda x: x.startswith(RELEASE_BRANCH_PREFIX), [x['name'] for x in branches])
+    branch_names = filter(lambda x: x[0].isdigit(), [x['name'] for x in branches])
     # Assumes branch names can be sorted lexicographically
     latest_branch = sorted(branch_names, reverse=True)[0]
 
