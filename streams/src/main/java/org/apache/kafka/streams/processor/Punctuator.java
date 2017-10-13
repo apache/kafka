@@ -24,7 +24,7 @@ public interface Punctuator {
     /**
      * Perform the scheduled periodic operation
      *
-     * @param timestamp the stream time when the operation is being called
+     * @param timestamp when the operation is being called, depending on {@link PunctuationType}
      */
     void punctuate(long timestamp);
 }
