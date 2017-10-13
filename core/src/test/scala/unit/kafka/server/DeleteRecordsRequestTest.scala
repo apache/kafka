@@ -178,6 +178,8 @@ class DeleteRecordsRequestTest extends BaseRequestTest {
 
   @Test
   def testNotLeader() {
+    TestUtils.waitUntilMetadataIsPropagated(servers, topicPartition.topic, topicPartition.partition)
+
     val request = new DeleteRecordsRequest.Builder(1000,
       Map[TopicPartition, java.lang.Long](topicPartition -> 5L).asJava, false).build()
     val response = sendDeleteRecordsRequest(request, brokerSocketServer(0))
