@@ -374,7 +374,7 @@ public class KafkaStreams {
         if (state == State.CREATED) {
             this.globalStateRestoreListener = globalStateRestoreListener;
         } else {
-            throw new IllegalStateException("Can only set StateRestoreListener in CREATED state. " +
+            throw new IllegalStateException("Can only set GlobalStateRestoreListener in CREATED state. " +
                     "Current state is: " + state);
         }
     }
