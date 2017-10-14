@@ -152,7 +152,7 @@ class Log(@volatile var dir: File,
   /* A lock that guards all modifications to the log */
   private val lock = new Object
   // File handler is closed with either delete() or closeHandlers()
-  // After handler is closed, no disk IO operation should performed for this log
+  // After handler is closed, no disk IO operation should be performed for this log
   @volatile private var isFileHandlerClosed = false
 
   /* last time it was flushed */
@@ -570,11 +570,13 @@ class Log(@volatile var dir: File,
     debug(s"Closing log $name")
     lock synchronized {
       checkIfFileHandlerClosed()
-      // We take a snapshot at the last written offset to hopefully avoid the need to scan the log
-      // after restarting and to ensure that we cannot inadvertently hit the upgrade optimization
-      // (the clean shutdown file is written after the logs are all closed).
-      producerStateManager.takeSnapshot()
-      logSegments.foreach(_.close())
+      maybeHandleIOException(s"Error while renaming dir for $topicPartition in dir ${dir.getParent}") {
+        // We take a snapshot at the last written offset to hopefully avoid the need to scan the log
+        // after restarting and to ensure that we cannot inadvertently hit the upgrade optimization
+        // (the clean shutdown file is written after the logs are all closed).
+        producerStateManager.takeSnapshot()
+        logSegments.foreach(_.close())
+      }
     }
   }
 
