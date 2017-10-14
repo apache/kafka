@@ -20,6 +20,8 @@ import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import kafka.utils.json.JsonValue
 
+import scala.collection._
+import scala.util.Try
 import scala.reflect.ClassTag
 
 /**
@@ -63,6 +65,16 @@ object Json {
     try Right(mapper.readValue(input, tag.runtimeClass).asInstanceOf[T])
     catch { case e: JsonProcessingException => Left(e) }
   }
+
+  /**
+   * Parse a JSON string into a JsonValue if possible. It returns a `Try` in case any exception happens.
+   * @param input a JSON string to parse
+   * @return A `Try` which in case of `Success` contains either `None` if the parsing was unsuccessful or `Some(x)` if
+   *         the parsing was successful where `x` is a `JsonValue`.
+   */
+  def tryParseFull(input: String): Try[Option[JsonValue]] = Try(doParseFull(input))
+
+  private def doParseFull(input: String): Option[JsonValue] = Option(mapper.readTree(input)).map(JsonValue(_))
 
   /**
    * Encode an object into a JSON string. This method accepts any type supported by Jackson's ObjectMapper in
