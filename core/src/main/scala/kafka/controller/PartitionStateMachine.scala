@@ -323,7 +323,7 @@ class PartitionStateMachine(controller: KafkaController, stateChangeLogger: Stat
         stateChangeLog.error(failMsg)
         throw new StateChangeFailedException(stateChangeLog.messageWithPrefix(failMsg), sce)
     }
-    debug(s"After leader election, leader cache is updated to ${controllerContext.partitionLeadershipInfo}")
+    debug(s"After leader election, leader cache for $topicAndPartition is updated to ${controllerContext.partitionLeadershipInfo(topicAndPartition)}")
   }
 
   private def getLeaderIsrAndEpochOrThrowException(topic: String, partition: Int): LeaderIsrAndControllerEpoch = {
