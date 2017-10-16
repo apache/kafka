@@ -103,21 +103,31 @@
     </ul>
 
     <p>
-        Deprecated methods in <code>KafkaStreams</code>:
+        Deprecated / modified methods in <code>KafkaStreams</code>:
     </p>
     <ul>
-        <li><code>toString()</code>, <code>toString(final String indent)</code> were previously used to return static and runtime information.
+        <li>
+            <code>toString()</code>, <code>toString(final String indent)</code> were previously used to return static and runtime information.
             They have been deprecated in favor of using the new classes/methods <code>#localThreadsMetadata()</code> / <code>ThreadMetadata</code> (returning runtime information) and
             <code>TopologyDescription</code> / <code>Topology#describe()</code> (returning static information).
         </li>
-        <li>With the introduction of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-182%3A+Reduce+Streams+DSL+overloads+and+allow+easier+use+of+custom+storage+engines">KIP-182</a>
+        <li>
+            With the introduction of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-182%3A+Reduce+Streams+DSL+overloads+and+allow+easier+use+of+custom+storage+engines">KIP-182</a>
             you should no longer pass in <code>Serde</code> to <code>KStream#print</code> operations.
             If you can't rely on using <code>toString</code> to print your keys an values, you should instead you provide a custom <code>KeyValueMapper</code> via the <code>Printed#withKeyValueMapper</code> call.
         </li>
         <li>
-            Windowed aggregations have moved from <code>KGroupedStream</code> to <code>WindowedKStream</code>.
+            <code>setStateListener()</code> now can only be set before the application start running, i.e. before <code>KafkaStreams.start()</code> is called.
+        </li>
+    </ul>
+
+    <p>
+        Deprecated methods in <code>KGroupedStream</code>
+    </p>
+    <ul>
+        <li>
+            Windowed aggregations have been deprecated from <code>KGroupedStream</code> and moved to <code>WindowedKStream</code>.
             You can now perform a windowed aggregation by, for example, using <code>KGroupedStream#windowedBy(Windows)#reduce(Reducer)</code>.
-            Note: the previous aggregate functions on <code>KGroupedStream</code> still work, but have been deprecated.
         </li>
     </ul>
 
@@ -216,7 +226,7 @@
         <li> Then make a call to <code>ReadOnlyKeyValueStore.all()</code> to iterate over the keys of a <code>KTable</code>. </li>
     </ul>
     <p>
-        If you want to view the changelog stream of the  <code>KTable</code> then you could call <code>KTable.toStream().print()</code>.
+        If you want to view the changelog stream of the <code>KTable</code> then you could call <code>KTable.toStream().print(Printed.toSysOut)</code>.
     </p>
 
     <p> Metrics using exactly-once semantics: </p>
