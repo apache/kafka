@@ -266,7 +266,7 @@ public class KafkaStreamsTest {
             streams.setGlobalStateRestoreListener(new MockStateRestoreListener());
             fail("Should throw an IllegalStateException");
         } catch (final IllegalStateException e) {
-            Assert.assertEquals("Can only set the GlobalRestoreListener in the CREATED state", e.getMessage());
+            // expected
         } finally {
             streams.close();
         }
@@ -279,7 +279,7 @@ public class KafkaStreamsTest {
             streams.setUncaughtExceptionHandler(null);
             fail("Should throw IllegalStateException");
         } catch (final IllegalStateException e) {
-            Assert.assertEquals("Can only set UncaughtExceptionHandler in CREATED state.", e.getMessage());
+            // expected
         } finally {
             streams.close();
         }
@@ -292,7 +292,7 @@ public class KafkaStreamsTest {
             streams.setStateListener(null);
             fail("Should throw IllegalStateException");
         } catch (final IllegalStateException e) {
-            Assert.assertEquals("Can only set StateListener in CREATED state.", e.getMessage());
+            // expected
         } finally {
             streams.close();
         }
