@@ -336,7 +336,8 @@ public class KafkaStreams {
         if (state == State.CREATED) {
             stateListener = listener;
         } else {
-            throw new IllegalStateException("Can only set StateListener in CREATED state.");
+            throw new IllegalStateException("Can only set StateListener in CREATED state. " +
+                    "Current state is: " + state);
         }
     }
 
@@ -357,7 +358,8 @@ public class KafkaStreams {
                 globalStreamThread.setUncaughtExceptionHandler(eh);
             }
         } else {
-            throw new IllegalStateException("Can only set UncaughtExceptionHandler in CREATED state.");
+            throw new IllegalStateException("Can only set UncaughtExceptionHandler in CREATED state. " +
+                    "Current state is: " + state);
         }
     }
 
@@ -372,7 +374,8 @@ public class KafkaStreams {
         if (state == State.CREATED) {
             this.globalStateRestoreListener = globalStateRestoreListener;
         } else {
-            throw new IllegalStateException("Can only set the GlobalRestoreListener in the CREATED state");
+            throw new IllegalStateException("Can only set GlobalStateRestoreListener in CREATED state. " +
+                    "Current state is: " + state);
         }
     }
 
