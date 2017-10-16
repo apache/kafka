@@ -18,6 +18,8 @@ package org.apache.kafka.streams.processor;
 
 /**
  * A functional interface used as an argument to {@link ProcessorContext#schedule(long, PunctuationType, Punctuator)}.
+ *
+ * @see Cancellable
  */
 public interface Punctuator {
 
