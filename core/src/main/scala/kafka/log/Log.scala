@@ -151,9 +151,9 @@ class Log(@volatile var dir: File,
 
   /* A lock that guards all modifications to the log */
   private val lock = new Object
-  // File handler is closed with either delete() or closeHandlers()
-  // After handler is closed, no disk IO operation should be performed for this log
-  @volatile private var isFileHandlerClosed = false
+  // The memory mapped buffer for index files of this log will be closed for index files of this log will be closed with either delete() or closeHandlers()
+  // After memory mapped buffer is closed, no disk IO operation should be performed for this log
+  @volatile private var isMemoryMappedBufferClosed = false
 
   /* last time it was flushed */
   private val lastFlushedTime = new AtomicLong(time.milliseconds)
@@ -165,9 +165,9 @@ class Log(@volatile var dir: File,
       0
   }
 
-  private def checkIfFileHandlerClosed(): Unit = {
-    if (isFileHandlerClosed)
-      throw new KafkaStorageException(s"The log for partition $topicPartition is already offline")
+  private def checkIfMemoryMappedBufferClosed(): Unit = {
+    if (isMemoryMappedBufferClosed)
+      throw new KafkaStorageException(s"The memory mapped buffer for log of $topicPartition is already offline")
   }
 
   @volatile private var nextOffsetMetadata: LogOffsetMetadata = _
@@ -477,7 +477,7 @@ class Log(@volatile var dir: File,
   }
 
   private def loadProducerState(lastOffset: Long, reloadFromCleanShutdown: Boolean): Unit = lock synchronized {
-    checkIfFileHandlerClosed()
+    checkIfMemoryMappedBufferClosed()
     val messageFormatVersion = config.messageFormatVersion.messageFormatVersion
     info(s"Loading producer state from offset $lastOffset for partition $topicPartition with message " +
       s"format version $messageFormatVersion")
@@ -564,12 +564,12 @@ class Log(@volatile var dir: File,
 
   /**
    * Close this log.
-   * File handlers of this log will be left open so that the log can be deleted after it is closed.
+   * The memory mapped buffer for index files of this log will be left open until the log is deleted.
    */
   def close() {
     debug(s"Closing log $name")
     lock synchronized {
-      checkIfFileHandlerClosed()
+      checkIfMemoryMappedBufferClosed()
       maybeHandleIOException(s"Error while renaming dir for $topicPartition in dir ${dir.getParent}") {
         // We take a snapshot at the last written offset to hopefully avoid the need to scan the log
         // after restarting and to ensure that we cannot inadvertently hit the upgrade optimization
@@ -609,7 +609,7 @@ class Log(@volatile var dir: File,
     debug(s"Closing handlers of log $name")
     lock synchronized {
       logSegments.foreach(_.closeHandlers())
-      isFileHandlerClosed = true
+      isMemoryMappedBufferClosed = true
     }
   }
 
@@ -662,7 +662,7 @@ class Log(@volatile var dir: File,
 
       // they are valid, insert them in the log
       lock synchronized {
-        checkIfFileHandlerClosed()
+        checkIfMemoryMappedBufferClosed()
         if (assignOffsets) {
           // assign offsets to the message set
           val offset = new LongRef(nextOffsetMetadata.messageOffset)
@@ -794,7 +794,7 @@ class Log(@volatile var dir: File,
   }
 
   private def updateFirstUnstableOffset(): Unit = lock synchronized {
-    checkIfFileHandlerClosed()
+    checkIfMemoryMappedBufferClosed()
     val updatedFirstStableOffset = producerStateManager.firstUnstableOffset match {
       case Some(logOffsetMetadata) if logOffsetMetadata.messageOffsetOnly || logOffsetMetadata.messageOffset < logStartOffset =>
         val offset = math.max(logOffsetMetadata.messageOffset, logStartOffset)
@@ -819,7 +819,7 @@ class Log(@volatile var dir: File,
     // in an unclean manner within log.flush.start.offset.checkpoint.interval.ms. The chance of this happening is low.
     maybeHandleIOException(s"Exception while increasing log start offset for $topicPartition to $newLogStartOffset in dir ${dir.getParent}") {
       lock synchronized {
-        checkIfFileHandlerClosed()
+        checkIfMemoryMappedBufferClosed()
         if (newLogStartOffset > logStartOffset) {
           info(s"Incrementing log start offset of partition $topicPartition to $newLogStartOffset in dir ${dir.getParent}")
           logStartOffset = newLogStartOffset
@@ -1175,7 +1175,7 @@ class Log(@volatile var dir: File,
         if (segments.size == numToDelete)
           roll()
         lock synchronized {
-          checkIfFileHandlerClosed()
+          checkIfMemoryMappedBufferClosed()
           // remove the segments for lookups
           deletable.foreach(deleteSegment)
           maybeIncrementLogStartOffset(segments.firstEntry.getValue.baseOffset)
@@ -1327,7 +1327,7 @@ class Log(@volatile var dir: File,
     maybeHandleIOException(s"Error while rolling log segment for $topicPartition in dir ${dir.getParent}") {
       val start = time.nanoseconds
       lock synchronized {
-        checkIfFileHandlerClosed()
+        checkIfMemoryMappedBufferClosed()
         val newOffset = math.max(expectedNextOffset, logEndOffset)
         val logFile = Log.logFile(dir, newOffset)
         val offsetIdxFile = offsetIndexFile(dir, newOffset)
@@ -1404,7 +1404,7 @@ class Log(@volatile var dir: File,
         segment.flush()
 
       lock synchronized {
-        checkIfFileHandlerClosed()
+        checkIfMemoryMappedBufferClosed()
         if (offset > this.recoveryPoint) {
           this.recoveryPoint = offset
           lastFlushedTime.set(time.milliseconds)
@@ -1455,21 +1455,21 @@ class Log(@volatile var dir: File,
   private[log] def delete() {
     maybeHandleIOException(s"Error while deleting log for $topicPartition in dir ${dir.getParent}") {
       lock synchronized {
-        checkIfFileHandlerClosed()
+        checkIfMemoryMappedBufferClosed()
         removeLogMetrics()
         logSegments.foreach(_.delete())
         segments.clear()
         _leaderEpochCache.clear()
         Utils.delete(dir)
         // File handlers will be closed if this log is deleted
-        isFileHandlerClosed = true
+        isMemoryMappedBufferClosed = true
       }
     }
   }
 
   // visible for testing
   private[log] def takeProducerSnapshot(): Unit = lock synchronized {
-    checkIfFileHandlerClosed()
+    checkIfMemoryMappedBufferClosed()
     producerStateManager.takeSnapshot()
   }
 
@@ -1504,7 +1504,7 @@ class Log(@volatile var dir: File,
       } else {
         info("Truncating log %s to offset %d.".format(name, targetOffset))
         lock synchronized {
-          checkIfFileHandlerClosed()
+          checkIfMemoryMappedBufferClosed()
           if (segments.firstEntry.getValue.baseOffset > targetOffset) {
             truncateFullyAndStartAt(targetOffset)
           } else {
@@ -1532,7 +1532,7 @@ class Log(@volatile var dir: File,
     maybeHandleIOException(s"Error while truncating the entire log for $topicPartition in dir ${dir.getParent}") {
       debug(s"Truncate and start log '$name' at offset $newOffset")
       lock synchronized {
-        checkIfFileHandlerClosed()
+        checkIfMemoryMappedBufferClosed()
         val segmentsToDelete = logSegments.toList
         segmentsToDelete.foreach(deleteSegment)
         addSegment(new LogSegment(dir,
@@ -1659,7 +1659,7 @@ class Log(@volatile var dir: File,
    */
   private[log] def replaceSegments(newSegment: LogSegment, oldSegments: Seq[LogSegment], isRecoveredSwapFile: Boolean = false) {
     lock synchronized {
-      checkIfFileHandlerClosed()
+      checkIfMemoryMappedBufferClosed()
       // need to do this in two phases to be crash safe AND do the delete asynchronously
       // if we crash in the middle of this we complete the swap in loadSegments()
       if (!isRecoveredSwapFile)
