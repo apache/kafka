@@ -65,7 +65,7 @@ object ConsumerPerformance {
       val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](config.props)
       consumer.subscribe(Collections.singletonList(config.topic))
       startMs = System.currentTimeMillis
-      consume(consumer, List(config.topic), config.numMessages, 1000, config, totalMessagesRead, totalBytesRead, joinGroupTimeInMs, startMs)
+      consume(consumer, List(config.topic), config.numMessages, 1000, config, totalMessagesRead, totalBytesRead, joinGroupTimeInMs, startMs, config.runContinuously)
       endMs = System.currentTimeMillis
 
       if (config.printMetrics) {
@@ -141,7 +141,9 @@ object ConsumerPerformance {
               totalMessagesRead: AtomicLong,
               totalBytesRead: AtomicLong,
               joinTime: AtomicLong,
-              testStartTime: Long) {
+              testStartTime: Long,
+              readContinuously: Boolean
+             ) {
     var bytesRead = 0L
     var messagesRead = 0L
     var lastBytesRead = 0L
@@ -166,7 +168,23 @@ object ConsumerPerformance {
     var lastConsumedTime = System.currentTimeMillis
     var currentTimeMillis = lastConsumedTime
 
-    while (messagesRead < count && currentTimeMillis - lastConsumedTime <= timeout) {
+    def maybeReport = {
+      if (currentTimeMillis - lastReportTime >= config.reportingInterval) {
+        if (config.showDetailedStats)
+          printNewConsumerProgress(0, bytesRead, lastBytesRead, messagesRead, lastMessagesRead,
+            lastReportTime, currentTimeMillis, config.dateFormat, joinTimeMsInSingleRound)
+        joinTimeMsInSingleRound = 0L
+        lastReportTime = currentTimeMillis
+        lastMessagesRead = messagesRead
+        lastBytesRead = bytesRead
+      }
+    }
+
+    var moreToRead = true
+    var timeSinceLastConsume = 0L
+    var withinTimeout = true
+
+    while (moreToRead && withinTimeout || readContinuously) {
       val records = consumer.poll(100).asScala
       currentTimeMillis = System.currentTimeMillis
       if (records.nonEmpty)
@@ -178,16 +196,13 @@ object ConsumerPerformance {
         if (record.value != null)
           bytesRead += record.value.size
 
-        if (currentTimeMillis - lastReportTime >= config.reportingInterval) {
-          if (config.showDetailedStats)
-            printNewConsumerProgress(0, bytesRead, lastBytesRead, messagesRead, lastMessagesRead,
-              lastReportTime, currentTimeMillis, config.dateFormat, joinTimeMsInSingleRound)
-          joinTimeMsInSingleRound = 0L
-          lastReportTime = currentTimeMillis
-          lastMessagesRead = messagesRead
-          lastBytesRead = bytesRead
-        }
+        maybeReport
       }
+      moreToRead = messagesRead < count
+      timeSinceLastConsume = currentTimeMillis - lastConsumedTime
+      withinTimeout = timeSinceLastConsume <= timeout
+
+      maybeReport
     }
 
     totalMessagesRead.set(messagesRead)
@@ -304,6 +319,7 @@ object ConsumerPerformance {
     val printMetricsOpt = parser.accepts("print-metrics", "Print out the metrics. This only applies to new consumer.")
     val showDetailedStatsOpt = parser.accepts("show-detailed-stats", "If set, stats are reported for each reporting " +
       "interval as configured by reporting-interval")
+    val runContinuouslyOpt = parser.accepts("run-continuously", "Consume messages continuously, without end. Overrides message-count")
 
     val options = parser.parse(args: _*)
 
@@ -311,6 +327,7 @@ object ConsumerPerformance {
 
     val useOldConsumer = options.has(zkConnectOpt)
     val printMetrics = options.has(printMetricsOpt)
+    val runContinuously = options.has(runContinuouslyOpt)
 
     val props = if (options.has(consumerConfigOpt))
       Utils.loadProps(options.valueOf(consumerConfigOpt))
@@ -374,10 +391,11 @@ object ConsumerPerformance {
       var lastReportTime: Long = startMs
       var lastBytesRead = 0L
       var lastMessagesRead = 0L
+      var runContinuously = true
 
       try {
         val iter = stream.iterator
-        while (iter.hasNext && messagesRead < config.numMessages) {
+        while ((iter.hasNext && messagesRead < config.numMessages) || runContinuously) {
           val messageAndMetadata = iter.next()
           messagesRead += 1
           bytesRead += messageAndMetadata.message.length
