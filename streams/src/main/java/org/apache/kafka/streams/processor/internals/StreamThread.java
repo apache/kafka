@@ -488,10 +488,13 @@ public class StreamThread extends Thread {
     long runOnce(long recordsProcessedBeforeCommit) {
         timerStartedMs = time.milliseconds();
 
-        // try to fetch some records if necessary
-        final ConsumerRecords<byte[], byte[]> records = pollRequests();
+        ConsumerRecords<byte[], byte[]> records;
 
         if (state == State.PARTITIONS_ASSIGNED) {
+            // try to fetch some records with zero poll millis
+            // to unblock the restoration as soon as possible
+            records = pollRequests(0L);
+
             active.initializeNewTasks();
             standby.initializeNewTasks();
 
@@ -507,6 +510,9 @@ public class StreamThread extends Thread {
                 assignStandbyPartitions();
                 setState(State.RUNNING);
             }
+        } else {
+            // try to fetch some records if necessary
+            records = pollRequests(pollTimeMs);
         }
 
         if (records != null && !records.isEmpty() && active.hasRunningTasks()) {
@@ -529,9 +535,12 @@ public class StreamThread extends Thread {
 
     /**
      * Get the next batch of records by polling.
+     *
+     * @param pollTimeMs poll time millis parameter for the consumer poll
+     *
      * @return Next batch of records or null if no records available.
      */
-    private ConsumerRecords<byte[], byte[]> pollRequests() {
+    private ConsumerRecords<byte[], byte[]> pollRequests(final long pollTimeMs) {
         ConsumerRecords<byte[], byte[]> records = null;
 
         try {
