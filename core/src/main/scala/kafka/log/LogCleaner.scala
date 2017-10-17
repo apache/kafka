@@ -158,6 +158,10 @@ class LogCleaner(val config: CleanerConfig,
     cleanerManager.updateCheckpoints(dataDir, update=None)
   }
 
+  def alterCheckpointDir(topicPartition: TopicPartition, sourceLogDir: File, destLogDir: File): Unit = {
+    cleanerManager.alterCheckpointDir(topicPartition, sourceLogDir, destLogDir)
+  }
+
   def handleLogDirFailure(dir: String) {
     cleanerManager.handleLogDirFailure(dir)
   }
