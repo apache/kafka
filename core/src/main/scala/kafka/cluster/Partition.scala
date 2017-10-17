@@ -156,9 +156,12 @@ class Partition(val topic: String,
       val currentReplica = getReplica().get
       if (currentReplica.log.get.dir.getParent == logDir)
         false
-      else if (getReplica(Request.FutureLocalReplicaId).isDefined)
+      else if (getReplica(Request.FutureLocalReplicaId).isDefined) {
+        val futureReplicaLogDir = getReplica(Request.FutureLocalReplicaId).get.log.get.dir.getParent
+        if (futureReplicaLogDir != logDir)
+          throw new IllegalStateException(s"The future log dir $futureReplicaLogDir of $topicPartition is different from the requested log dir $logDir")
         false
-      else {
+      } else {
         getOrCreateReplica(Request.FutureLocalReplicaId)
         true
       }
