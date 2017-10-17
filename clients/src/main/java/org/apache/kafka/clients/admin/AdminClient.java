@@ -247,7 +247,7 @@ public abstract class AdminClient implements AutoCloseable {
     public abstract DescribeAclsResult describeAcls(AclBindingFilter filter, DescribeAclsOptions options);
 
     /**
-     * This is a convenience method for #{@link AdminClient#createAcls(Collection<AclBinding>, CreateAclsOptions)} with
+     * This is a convenience method for #{@link AdminClient#createAcls(Collection, CreateAclsOptions)} with
      * default options. See the overload for more details.
      *
      * This operation is supported by brokers with version 0.11.0.0 or higher.
@@ -276,7 +276,7 @@ public abstract class AdminClient implements AutoCloseable {
     public abstract CreateAclsResult createAcls(Collection<AclBinding> acls, CreateAclsOptions options);
 
     /**
-     * This is a convenience method for #{@link AdminClient#deleteAcls(Collection<AclBinding>, DeleteAclsOptions)} with default options.
+     * This is a convenience method for #{@link AdminClient#deleteAcls(Collection, DeleteAclsOptions)} with default options.
      * See the overload for more details.
      *
      * This operation is supported by brokers with version 0.11.0.0 or higher.
