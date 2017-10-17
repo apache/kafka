@@ -21,7 +21,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import java.util.Collection;
 
 /**
- * Options for {@link AdminClient#describeReplicaLogDirs(Collection<org.apache.kafka.common.TopicPartitionReplica>)}.
+ * Options for {@link AdminClient#describeReplicaLogDirs(Collection)}.
  *
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
