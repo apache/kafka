@@ -862,7 +862,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                 if (originalReset == null || (!originalReset.equals("earliest") && !originalReset.equals("latest"))) {
                     final String errorMessage = "No valid committed offset found for input topic %s (partition %s) and no valid reset policy configured." +
                         " You need to set configuration parameter \"auto.offset.reset\" or specify a topic specific reset " +
-                        "policy via KStreamBuilder#stream(StreamsConfig.AutoOffsetReset offsetReset, ...) or KStreamBuilder#table(StreamsConfig.AutoOffsetReset offsetReset, ...)";
+                        "policy via StreamsBuilder#stream(..., Consumed.with(Topology.AutoOffsetReset)) or StreamsBuilder#table(..., Consumed.with(Topology.AutoOffsetReset))";
                     throw new StreamsException(String.format(errorMessage, partition.topic(), partition.partition()), e);
                 }
 
