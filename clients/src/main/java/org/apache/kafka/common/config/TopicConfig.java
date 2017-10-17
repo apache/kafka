@@ -63,9 +63,11 @@ public class TopicConfig {
         "flush capabilities as it is more efficient.";
 
     public static final String RETENTION_BYTES_CONFIG = "retention.bytes";
-    public static final String RETENTION_BYTES_DOC = "This configuration controls the maximum size a log can grow " +
-        "to before we will discard old log segments to free up space if we are using the " +
-        "\"delete\" retention policy. By default there is no size limit only a time limit.";
+    public static final String RETENTION_BYTES_DOC = "This configuration controls the maximum size a partition " +
+        "(which consists of log segments) can grow to before we will discard old log segments to free up space if we " +
+        "are using the \"delete\" retention policy. By default there is no size limit only a time limit. " +
+        "Since this limit is enforced at the partition level, multiply it by the number of partitions to compute " +
+        "the topic retention in bytes.";
 
     public static final String RETENTION_MS_CONFIG = "retention.ms";
     public static final String RETENTION_MS_DOC = "This configuration controls the maximum time we will retain a " +
