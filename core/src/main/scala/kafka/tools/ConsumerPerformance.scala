@@ -142,7 +142,7 @@ object ConsumerPerformance {
               totalBytesRead: AtomicLong,
               joinTime: AtomicLong,
               testStartTime: Long,
-              readContinuously: Boolean
+              readContinuously: Boolean = false
              ) {
     var bytesRead = 0L
     var messagesRead = 0L
