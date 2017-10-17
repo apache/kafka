@@ -23,6 +23,7 @@ import java.util.Properties
 
 import org.apache.kafka.common.errors._
 import kafka.common.KafkaException
+import kafka.log.Log.DeleteDirSuffix
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import kafka.utils._
@@ -1959,7 +1960,7 @@ class LogTest {
   def testParseTopicPartitionNameWithPeriodForDeletedTopic() {
     val topic = "foo.bar-testtopic"
     val partition = "42"
-    val dir = new File(logDir, Log.logDeleteDirName(topicPartitionName(topic, partition)))
+    val dir = new File(logDir, Log.logDeleteDirName(new TopicPartition(topic, partition.toInt)))
     val topicPartition = Log.parseTopicPartitionName(dir)
     assertEquals("Unexpected topic name parsed", topic, topicPartition.topic)
     assertEquals("Unexpected partition number parsed", partition.toInt, topicPartition.partition)
@@ -1999,7 +2000,7 @@ class LogTest {
       case _: KafkaException => // expected
     }
     // also test the "-delete" marker case
-    val deleteMarkerDir = new File(logDir, Log.logDeleteDirName(topic + partition))
+    val deleteMarkerDir = new File(logDir, topic + partition + "." + DeleteDirSuffix)
     try {
       Log.parseTopicPartitionName(deleteMarkerDir)
       fail("KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath)
@@ -2020,7 +2021,7 @@ class LogTest {
       case _: KafkaException => // expected
     }
     // also test the "-delete" marker case
-    val deleteMarkerDir = new File(logDir, Log.logDeleteDirName(topicPartitionName(topic, partition)))
+    val deleteMarkerDir = new File(logDir, Log.logDeleteDirName(new TopicPartition(topic, partition.toInt)))
     try {
       Log.parseTopicPartitionName(deleteMarkerDir)
       fail("KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath)
@@ -2042,7 +2043,7 @@ class LogTest {
       case _: KafkaException => // expected
     }
     // also test the "-delete" marker case
-    val deleteMarkerDir = new File(logDir, Log.logDeleteDirName(topicPartitionName(topic, partition)))
+    val deleteMarkerDir = new File(logDir, topicPartitionName(topic, partition) + "." + DeleteDirSuffix)
     try {
       Log.parseTopicPartitionName(deleteMarkerDir)
       fail("KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath)
@@ -2063,7 +2064,7 @@ class LogTest {
       case _: KafkaException => // expected
     }
     // also test the "-delete" marker case
-    val deleteMarkerDir = new File(logDir, Log.logDeleteDirName(topic + partition))
+    val deleteMarkerDir = new File(logDir, topic + partition + "." + DeleteDirSuffix)
     try {
       Log.parseTopicPartitionName(deleteMarkerDir)
       fail("KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath)

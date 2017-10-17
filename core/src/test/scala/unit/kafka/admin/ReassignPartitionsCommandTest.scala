@@ -328,7 +328,6 @@ class ReassignPartitionsCommandTest extends Logging {
   def shouldRemoveThrottleLimitFromAllBrokers(): Unit = {
     //Given 3 brokers, but with assignment only covering 2 of them
     val brokers = Seq(100, 101, 102)
-    val proposed = mutable.Map(TopicAndPartition("topic1", 0) -> Seq(100, 101))
     val status = mutable.Map(TopicAndPartition("topic1", 0) -> ReassignmentCompleted)
     val existingBrokerConfigs = propsWith(
       (DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "10"),
@@ -349,7 +348,7 @@ class ReassignPartitionsCommandTest extends Logging {
     replay(admin)
 
     //When
-    ReassignPartitionsCommand.removeThrottle(zk, proposed, status, admin)
+    ReassignPartitionsCommand.removeThrottle(zk, status, Map.empty, admin)
 
     //Then props should have gone (dummy remains)
     for (capture <- propsCapture.getValues) {
@@ -362,13 +361,9 @@ class ReassignPartitionsCommandTest extends Logging {
 
   @Test
   def shouldRemoveThrottleReplicaListBasedOnProposedAssignment(): Unit = {
-
     //Given two topics with existing config
-    val proposed = mutable.Map(
-      TopicAndPartition("topic1", 0) -> Seq(100, 101),
-      TopicAndPartition("topic2", 0) -> Seq(100, 101)
-    )
-    val status = mutable.Map(TopicAndPartition("topic1", 0) -> ReassignmentCompleted)
+    val status = mutable.Map(TopicAndPartition("topic1", 0) -> ReassignmentCompleted,
+                             TopicAndPartition("topic2", 0) -> ReassignmentCompleted)
     val existingConfigs = CoreUtils.propsWith(
       (LogConfig.LeaderReplicationThrottledReplicasProp, "1:100:2:100"),
       (LogConfig.FollowerReplicationThrottledReplicasProp, "1:101,2:101"),
@@ -390,7 +385,7 @@ class ReassignPartitionsCommandTest extends Logging {
     replay(admin)
 
     //When
-    ReassignPartitionsCommand.removeThrottle(zk, proposed, status, admin)
+    ReassignPartitionsCommand.removeThrottle(zk, status, Map.empty, admin)
 
     //Then props should have gone (dummy remains)
     for (actual <- propsCapture.getValues) {
