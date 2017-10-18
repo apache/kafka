@@ -488,7 +488,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     alterResult = client.createPartitions(Map(topic2 ->
       NewPartitions.increaseTo(3, newPartition2Assignments)).asJava, actuallyDoIt)
     altered = alterResult.values.get(topic2).get
-    var actualPartitions2 = partitions(topic2)
+    val actualPartitions2 = partitions(topic2)
     assertEquals(3, actualPartitions2.size)
     assertEquals(Seq(0, 1), actualPartitions2.get(1).replicas.asScala.map(_.id).toList)
     assertEquals(Seq(1, 2), actualPartitions2.get(2).replicas.asScala.map(_.id).toList)
