@@ -19,6 +19,7 @@ package kafka.controller
 import kafka.api.LeaderAndIsr
 import kafka.common.{StateChangeFailedException, TopicAndPartition}
 import kafka.controller.Callbacks.CallbackBuilder
+import kafka.controller.KafkaControllerZkUtils.UpdateLeaderAndIsrResult
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import org.apache.zookeeper.KeeperException.Code
@@ -291,7 +292,8 @@ class ReplicaStateMachine(config: KafkaConfig,
       val adjustedIsr = if (leaderAndIsr.isr.size == 1) leaderAndIsr.isr else leaderAndIsr.isr.filter(_ != replicaId)
       leaderAndIsr.newLeaderAndIsr(newLeader, adjustedIsr)
     }
-    val (successfulUpdates, updatesToRetry, failedUpdates) = zkUtils.updateLeaderAndIsr(adjustedLeaderAndIsrs, controllerContext.epoch)
+    val UpdateLeaderAndIsrResult(successfulUpdates, updatesToRetry, failedUpdates) = zkUtils.updateLeaderAndIsr(
+      adjustedLeaderAndIsrs, controllerContext.epoch)
     val exceptionsForPartitionsWithNoLeaderAndIsrInZk = partitionsWithNoLeaderAndIsrInZk.flatMap { partition =>
       if (!topicDeletionManager.isPartitionToBeDeleted(partition)) {
         val exception = new StateChangeFailedException(s"Failed to change state of replica $replicaId for partition $partition since the leader and isr path in zookeeper is empty")

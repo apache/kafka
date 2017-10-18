@@ -22,6 +22,7 @@ import com.yammer.metrics.core.Gauge
 import kafka.admin.AdminOperationException
 import kafka.api._
 import kafka.common._
+import kafka.controller.KafkaControllerZkUtils.UpdateLeaderAndIsrResult
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server._
 import kafka.utils._
@@ -883,7 +884,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: KafkaControllerZkUtils, 
           // assigned replica list
           val newLeaderAndIsr = leaderAndIsr.newEpochAndZkVersion
           // update the new leadership decision in zookeeper or retry
-          val (successfulUpdates, updatesToRetry, failedUpdates) =
+          val UpdateLeaderAndIsrResult(successfulUpdates, updatesToRetry, failedUpdates) =
             zkUtils.updateLeaderAndIsr(immutable.Map(partition -> newLeaderAndIsr), epoch)
           if (successfulUpdates.contains(partition)) {
             val finalLeaderAndIsr = successfulUpdates(partition)
@@ -1396,6 +1397,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: KafkaControllerZkUtils, 
     }
   }
 
+  // We can't make this a case object due to the countDownLatch field
   class Expire extends ControllerEvent {
     private val countDownLatch = new CountDownLatch(1)
     override def state = ControllerState.ControllerChange

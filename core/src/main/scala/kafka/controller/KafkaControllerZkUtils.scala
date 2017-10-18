@@ -29,8 +29,11 @@ import org.apache.zookeeper.data.Stat
 import org.apache.zookeeper.{CreateMode, KeeperException}
 
 import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
 
 class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean) extends Logging {
+  import KafkaControllerZkUtils._
+
   /**
    * Gets topic partition states for the given partitions.
    * @param partitions the partitions for which we want ot get states.
@@ -99,16 +102,9 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * Try to update the partition states of multiple partitions in zookeeper.
    * @param leaderAndIsrs The partition states to update.
    * @param controllerEpoch The current controller epoch.
-   * @return A tuple of three values:
-   *         1. The successfully updated partition states with adjusted znode versions.
-   *         2. The partitions that we should retry due to a zookeeper BADVERSION conflict. Version conflicts can occur if
-   *         the partition leader updated partition state while the controller attempted to update partition state.
-   *         3. Exceptions corresponding to failed partition state updates.
+   * @return UpdateLeaderAndIsrResult instance containing per partition results.
    */
-  def updateLeaderAndIsr(leaderAndIsrs: Map[TopicAndPartition, LeaderAndIsr], controllerEpoch: Int):
-  (Map[TopicAndPartition, LeaderAndIsr],
-    Seq[TopicAndPartition],
-    Map[TopicAndPartition, Exception]) = {
+  def updateLeaderAndIsr(leaderAndIsrs: Map[TopicAndPartition, LeaderAndIsr], controllerEpoch: Int): UpdateLeaderAndIsrResult = {
     val successfulUpdates = mutable.Map.empty[TopicAndPartition, LeaderAndIsr]
     val updatesToRetry = mutable.Buffer.empty[TopicAndPartition]
     val failed = mutable.Map.empty[TopicAndPartition, Exception]
@@ -118,7 +114,7 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
     } catch {
       case e: Exception =>
         leaderAndIsrs.keys.foreach(partition => failed.put(partition, e))
-        return (successfulUpdates.toMap, updatesToRetry, failed.toMap)
+        return UpdateLeaderAndIsrResult(successfulUpdates.toMap, updatesToRetry, failed.toMap)
     }
     setDataResponses.foreach { setDataResponse =>
       val partition = setDataResponse.ctx.get.asInstanceOf[TopicAndPartition]
@@ -131,7 +127,7 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
         failed.put(partition, setDataResponse.resultException.get)
       }
     }
-    (successfulUpdates.toMap, updatesToRetry, failed.toMap)
+    UpdateLeaderAndIsrResult(successfulUpdates.toMap, updatesToRetry, failed.toMap)
   }
 
   /**
@@ -630,17 +626,21 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
   }
 
   private def retryRequestsUntilConnected[Req <: AsyncRequest](requests: Seq[Req]): Seq[Req#Response] = {
-    var remaining = requests
-    var responses: Seq[Req#Response] = Seq.empty[Req#Response]
-    while (remaining.nonEmpty) {
-      responses = zookeeperClient.handleRequests(remaining)
-      val requestResponsePairs = remaining.zip(responses)
-      val (passed, connectionLoss) = requestResponsePairs.partition { case (_, response) =>
-        response.resultCode != Code.CONNECTIONLOSS
+    val remainingRequests = ArrayBuffer(requests: _*)
+    val responses = new ArrayBuffer[Req#Response]
+    while (remainingRequests.nonEmpty) {
+      val batchResponses = zookeeperClient.handleRequests(remainingRequests)
+      val requestResponsePairs = remainingRequests.zip(batchResponses)
+
+      remainingRequests.clear()
+      requestResponsePairs.foreach { case (request, response) =>
+        if (response.resultCode == Code.CONNECTIONLOSS)
+          remainingRequests += request
+        else
+          responses += response
       }
-      responses ++= passed.map { case (_, response) => response }
-      remaining = connectionLoss.map { case (request, _) => request }
-      if (remaining.nonEmpty)
+
+      if (remainingRequests.nonEmpty)
         zookeeperClient.waitUntilConnected()
     }
     responses
@@ -692,4 +692,18 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
       }
     }
   }
+}
+
+object KafkaControllerZkUtils {
+
+  /**
+   * @param successfulPartitions The successfully updated partition states with adjusted znode versions.
+   * @param partitionsToRetry The partitions that we should retry due to a zookeeper BADVERSION conflict. Version conflicts
+   *                      can occur if the partition leader updated partition state while the controller attempted to
+   *                      update partition state.
+   * @param failedPartitions Exceptions corresponding to failed partition state updates.
+   */
+  case class UpdateLeaderAndIsrResult(successfulPartitions: Map[TopicAndPartition, LeaderAndIsr],
+                                      partitionsToRetry: Seq[TopicAndPartition],
+                                      failedPartitions: Map[TopicAndPartition, Exception])
 }

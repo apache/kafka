@@ -18,6 +18,7 @@ package kafka.controller
 
 import kafka.api.LeaderAndIsr
 import kafka.common.{StateChangeFailedException, TopicAndPartition}
+import kafka.controller.KafkaControllerZkUtils.UpdateLeaderAndIsrResult
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import org.apache.zookeeper.KeeperException
@@ -275,9 +276,7 @@ class PartitionStateMachine(config: KafkaConfig,
    *         3. Exceptions corresponding to failed elections that should not be retried.
    */
   private def doElectLeaderForPartitions(partitions: Seq[TopicAndPartition], partitionLeaderElectionStrategy: PartitionLeaderElectionStrategy):
-  (Seq[TopicAndPartition],
-    Seq[TopicAndPartition],
-    Map[TopicAndPartition, Exception]) = {
+  (Seq[TopicAndPartition], Seq[TopicAndPartition], Map[TopicAndPartition, Exception]) = {
     val getDataResponses = try {
       zkUtils.getTopicPartitionStatesRaw(partitions)
     } catch {
@@ -332,7 +331,8 @@ class PartitionStateMachine(config: KafkaConfig,
     }
     val recipientsPerPartition = partitionsWithLeaders.map { case (partition, leaderAndIsrOpt, recipients) => partition -> recipients }.toMap
     val adjustedLeaderAndIsrs = partitionsWithLeaders.map { case (partition, leaderAndIsrOpt, recipients) => partition -> leaderAndIsrOpt.get }.toMap
-    val (successfulUpdates, updatesToRetry, failedUpdates) = zkUtils.updateLeaderAndIsr(adjustedLeaderAndIsrs, controllerContext.epoch)
+    val UpdateLeaderAndIsrResult(successfulUpdates, updatesToRetry, failedUpdates) = zkUtils.updateLeaderAndIsr(
+      adjustedLeaderAndIsrs, controllerContext.epoch)
     successfulUpdates.foreach { case (partition, leaderAndIsr) =>
       val replicas = controllerContext.partitionReplicaAssignment(partition)
       val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerContext.epoch)
