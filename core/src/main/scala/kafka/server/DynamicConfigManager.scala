@@ -28,7 +28,7 @@ import kafka.admin.AdminUtils
 import kafka.utils.json.JsonObject
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.security.scram.ScramMechanism
-import org.apache.kafka.common.utils.{Sanitizer, Time}
+import org.apache.kafka.common.utils.Time
 
 /**
  * Represents all the entities that can be configured via ZK
