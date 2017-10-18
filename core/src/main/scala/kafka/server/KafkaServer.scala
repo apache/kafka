@@ -219,21 +219,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
 
-        /* start log manager */
-        logManager = LogManager(config, initialOfflineDirs, zkUtils, brokerState, kafkaScheduler, time, brokerTopicStats, logDirFailureChannel)
-        logManager.startup()
-
-        metadataCache = new MetadataCache(config.brokerId)
-        credentialProvider = new CredentialProvider(config.saslEnabledMechanisms)
-
-        socketServer = new SocketServer(config, metrics, time, credentialProvider)
-        socketServer.startup()
-
-        /* start replica manager */
-        replicaManager = createReplicaManager(isShuttingDown)
-        replicaManager.startup()
-
-        /* start kafka controller */
         val zookeeperClient = new ZookeeperClient(config.zkConnect, config.zkSessionTimeoutMs,
           config.zkConnectionTimeoutMs, new StateChangeHandler {
             override def onReconnectionTimeout(): Unit = {
@@ -249,6 +234,22 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
             override def beforeInitializingSession(): Unit = kafkaController.expire()
           })
         kafkaControllerZkUtils = new KafkaControllerZkUtils(zookeeperClient, zkUtils.isSecure)
+
+        /* start log manager */
+        logManager = LogManager(config, initialOfflineDirs, kafkaControllerZkUtils, brokerState, kafkaScheduler, time, brokerTopicStats, logDirFailureChannel)
+        logManager.startup()
+
+        metadataCache = new MetadataCache(config.brokerId)
+        credentialProvider = new CredentialProvider(config.saslEnabledMechanisms)
+
+        socketServer = new SocketServer(config, metrics, time, credentialProvider)
+        socketServer.startup()
+
+        /* start replica manager */
+        replicaManager = createReplicaManager(isShuttingDown)
+        replicaManager.startup()
+
+        /* start kafka controller */
         kafkaController = new KafkaController(config, kafkaControllerZkUtils, time, metrics, threadNamePrefix)
         kafkaController.startup()
 
