@@ -193,7 +193,11 @@ public class PluginUtils {
 
                 Path adjacent = neighbors.next();
                 if (Files.isSymbolicLink(adjacent)) {
-                    Path absolute = Files.readSymbolicLink(adjacent).toRealPath();
+                    Path symlink = Files.readSymbolicLink(adjacent);
+                    if (!symlink.isAbsolute()) {
+                        symlink = topPath.resolve(symlink);
+                    }
+                    Path absolute = symlink.toRealPath();
                     if (Files.exists(absolute)) {
                         adjacent = absolute;
                     } else {
