@@ -1114,7 +1114,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: KafkaControllerZkUtils, 
   }
 
   def expire(): Unit = {
-    val expireEvent = Expire()
+    val expireEvent = new Expire
     eventManager.clearAndPut(expireEvent)
     expireEvent.waitUntilProcessed()
   }
@@ -1396,7 +1396,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: KafkaControllerZkUtils, 
     }
   }
 
-  case class Expire() extends ControllerEvent {
+  class Expire extends ControllerEvent {
     private val countDownLatch = new CountDownLatch(1)
     override def state = ControllerState.ControllerChange
 
