@@ -229,17 +229,18 @@ class ZookeeperClientTest extends ZooKeeperTestHarness {
     val zookeeperClient = new ZookeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, null)
     val znodeChangeHandlerCountDownLatch = new CountDownLatch(1)
     val zNodeChangeHandler = new ZNodeChangeHandler {
-      override def handleCreation = {
+      override def handleCreation(): Unit = {
         znodeChangeHandlerCountDownLatch.countDown()
       }
-      override def handleDeletion = {}
-      override def handleDataChange = {}
       override val path: String = mockPath
     }
 
     zookeeperClient.registerZNodeChangeHandler(zNodeChangeHandler)
-    val createResponse = zookeeperClient.handle(CreateRequest(mockPath, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT, null))
-    assertEquals("Response code for create should be OK", Code.OK, Code.get(createResponse.rc))
+    val existsRequest = ExistsRequest(mockPath, null)
+    val createRequest = CreateRequest(mockPath, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT, null)
+    val responses = zookeeperClient.handle(Seq(existsRequest, createRequest))
+    assertEquals("Response code for exists should be NONODE", Code.NONODE, Code.get(responses.head.rc))
+    assertEquals("Response code for create should be OK", Code.OK, Code.get(responses.last.rc))
     assertTrue("Failed to receive create notification", znodeChangeHandlerCountDownLatch.await(5, TimeUnit.SECONDS))
   }
 
@@ -249,17 +250,18 @@ class ZookeeperClientTest extends ZooKeeperTestHarness {
     val zookeeperClient = new ZookeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, null)
     val znodeChangeHandlerCountDownLatch = new CountDownLatch(1)
     val zNodeChangeHandler = new ZNodeChangeHandler {
-      override def handleCreation = {}
-      override def handleDeletion = {
+      override def handleDeletion(): Unit = {
         znodeChangeHandlerCountDownLatch.countDown()
       }
-      override def handleDataChange = {}
       override val path: String = mockPath
     }
 
-    val createResponse = zookeeperClient.handle(CreateRequest(mockPath, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT, null))
-    assertEquals("Response code for create should be OK", Code.OK, Code.get(createResponse.rc))
     zookeeperClient.registerZNodeChangeHandler(zNodeChangeHandler)
+    val existsRequest = ExistsRequest(mockPath, null)
+    val createRequest = CreateRequest(mockPath, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT, null)
+    val responses = zookeeperClient.handle(Seq(createRequest, existsRequest))
+    assertEquals("Response code for create should be OK", Code.OK, Code.get(responses.last.rc))
+    assertEquals("Response code for exists should be OK", Code.OK, Code.get(responses.head.rc))
     val deleteResponse = zookeeperClient.handle(DeleteRequest(mockPath, -1, null)).asInstanceOf[DeleteResponse]
     assertEquals("Response code for delete should be OK", Code.OK, Code.get(deleteResponse.rc))
     assertTrue("Failed to receive delete notification", znodeChangeHandlerCountDownLatch.await(5, TimeUnit.SECONDS))
@@ -271,17 +273,18 @@ class ZookeeperClientTest extends ZooKeeperTestHarness {
     val zookeeperClient = new ZookeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, null)
     val znodeChangeHandlerCountDownLatch = new CountDownLatch(1)
     val zNodeChangeHandler = new ZNodeChangeHandler {
-      override def handleCreation = {}
-      override def handleDeletion = {}
-      override def handleDataChange = {
+      override def handleDataChange(): Unit = {
         znodeChangeHandlerCountDownLatch.countDown()
       }
       override val path: String = mockPath
     }
 
-    val createResponse = zookeeperClient.handle(CreateRequest(mockPath, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT, null))
-    assertEquals("Response code for create should be OK", Code.OK, Code.get(createResponse.rc))
     zookeeperClient.registerZNodeChangeHandler(zNodeChangeHandler)
+    val existsRequest = ExistsRequest(mockPath, null)
+    val createRequest = CreateRequest(mockPath, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT, null)
+    val responses = zookeeperClient.handle(Seq(createRequest, existsRequest))
+    assertEquals("Response code for create should be OK", Code.OK, Code.get(responses.last.rc))
+    assertEquals("Response code for exists should be OK", Code.OK, Code.get(responses.head.rc))
     val setDataResponse = zookeeperClient.handle(SetDataRequest(mockPath, Array.empty[Byte], -1, null)).asInstanceOf[SetDataResponse]
     assertEquals("Response code for setData should be OK", Code.OK, Code.get(setDataResponse.rc))
     assertTrue("Failed to receive data change notification", znodeChangeHandlerCountDownLatch.await(5, TimeUnit.SECONDS))
@@ -293,7 +296,7 @@ class ZookeeperClientTest extends ZooKeeperTestHarness {
     val zookeeperClient = new ZookeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, null)
     val zNodeChildChangeHandlerCountDownLatch = new CountDownLatch(1)
     val zNodeChildChangeHandler = new ZNodeChildChangeHandler {
-      override def handleChildChange = {
+      override def handleChildChange(): Unit = {
         zNodeChildChangeHandlerCountDownLatch.countDown()
       }
       override val path: String = mockPath
@@ -304,6 +307,8 @@ class ZookeeperClientTest extends ZooKeeperTestHarness {
     val createResponse = zookeeperClient.handle(CreateRequest(mockPath, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT, null))
     assertEquals("Response code for create should be OK", Code.OK, Code.get(createResponse.rc))
     zookeeperClient.registerZNodeChildChangeHandler(zNodeChildChangeHandler)
+    val getChildrenResponse = zookeeperClient.handle(GetChildrenRequest(mockPath, null)).asInstanceOf[GetChildrenResponse]
+    assertEquals("Response code for getChildren should be OK", Code.OK, Code.get(getChildrenResponse.rc))
     val createResponseChild1 = zookeeperClient.handle(CreateRequest(child1Path, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT, null))
     assertEquals("Response code for create child1 should be OK", Code.OK, Code.get(createResponseChild1.rc))
     assertTrue("Failed to receive child change notification", zNodeChildChangeHandlerCountDownLatch.await(5, TimeUnit.SECONDS))
@@ -314,12 +319,9 @@ class ZookeeperClientTest extends ZooKeeperTestHarness {
     System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, "no-such-file-exists.conf")
     val stateChangeHandlerCountDownLatch = new CountDownLatch(1)
     val stateChangeHandler = new StateChangeHandler {
-      override def beforeInitializingSession = {}
-      override def afterInitializingSession = {}
-      override def onAuthFailure = {
+      override def onAuthFailure(): Unit = {
         stateChangeHandlerCountDownLatch.countDown()
       }
-      override def onConnectionTimeout = {}
     }
     new ZookeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, stateChangeHandler)
     assertTrue("Failed to receive auth failed notification", stateChangeHandlerCountDownLatch.await(5, TimeUnit.SECONDS))

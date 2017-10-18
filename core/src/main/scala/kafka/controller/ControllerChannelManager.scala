@@ -314,7 +314,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
 
   def addLeaderAndIsrRequestForBrokers(brokerIds: Seq[Int], topic: String, partition: Int,
                                        leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch,
-                                       replicas: Seq[Int], isNew: Boolean = false) {
+                                       replicas: Seq[Int], isNew: Boolean) {
     val topicPartition = new TopicPartition(topic, partition)
 
     brokerIds.filter(_ >= 0).foreach { brokerId =>
@@ -334,7 +334,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
   }
 
   def addStopReplicaRequestForBrokers(brokerIds: Seq[Int], topic: String, partition: Int, deletePartition: Boolean,
-                                      callback: (AbstractResponse, Int) => Unit = null) {
+                                      callback: (AbstractResponse, Int) => Unit) {
     brokerIds.filter(b => b >= 0).foreach { brokerId =>
       stopReplicaRequestMap.getOrElseUpdate(brokerId, Seq.empty[StopReplicaRequestInfo])
       val v = stopReplicaRequestMap(brokerId)
@@ -349,7 +349,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
 
   /** Send UpdateMetadataRequest to the given brokers for the given partitions and partitions that are being deleted */
   def addUpdateMetadataRequestForBrokers(brokerIds: Seq[Int],
-                                         partitions: collection.Set[TopicAndPartition] = Set.empty[TopicAndPartition]) {
+                                         partitions: collection.Set[TopicAndPartition]) {
 
     def updateMetadataRequestPartitionInfo(partition: TopicAndPartition, beingDeleted: Boolean) {
       val leaderIsrAndControllerEpochOpt = controllerContext.partitionLeadershipInfo.get(partition)

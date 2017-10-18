@@ -29,13 +29,13 @@ import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, WatchedEvent, Watcher, ZooKeeper}
 
 /**
-  * ZookeeperClient is a zookeeper client that encourages pipelined requests to zookeeper.
-  *
-  * @param connectString comma separated host:port pairs, each corresponding to a zk server
-  * @param sessionTimeoutMs session timeout in milliseconds
-  * @param connectionTimeoutMs connection timeout in milliseconds
-  * @param stateChangeHandler state change handler callbacks called by the underlying zookeeper client's EventThread.
-  */
+ * ZookeeperClient is a zookeeper client that encourages pipelined requests to zookeeper.
+ *
+ * @param connectString comma separated host:port pairs, each corresponding to a zk server
+ * @param sessionTimeoutMs session timeout in milliseconds
+ * @param connectionTimeoutMs connection timeout in milliseconds
+ * @param stateChangeHandler state change handler callbacks called by the underlying zookeeper client's EventThread.
+ */
 class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTimeoutMs: Int, stateChangeHandler: StateChangeHandler) extends Logging {
   this.logIdent = "[ZookeeperClient]: "
   private val initializationLock = new ReentrantReadWriteLock()
@@ -49,21 +49,29 @@ class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTi
   waitUntilConnected(connectionTimeoutMs, TimeUnit.MILLISECONDS)
 
   /**
-    * Take an AsyncRequest and wait for its AsyncResponse.
-    * @param request a single AsyncRequest to wait on.
-    * @return the request's AsyncReponse.
-    */
+   * Take an AsyncRequest and wait for its AsyncResponse. See handle(Seq[AsyncRequest]) for details.
+   *
+   * @param request a single AsyncRequest to wait on.
+   * @return the request's AsyncResponse.
+   */
   def handle(request: AsyncRequest): AsyncResponse = {
     handle(Seq(request)).head
   }
 
   /**
-    * Pipeline a sequence of AsyncRequests and wait for all of their AsyncResponses.
-    * @param requests a sequence of AsyncRequests to wait on.
-    * @return the AsyncResponses.
-    */
+   * Pipeline a sequence of AsyncRequests and wait for all of their AsyncResponses.
+   *
+   * The watch flag on each outgoing request will be set if we've already registered a handler for the
+   * path associated with the AsyncRequest.
+   *
+   * @param requests a sequence of AsyncRequests to wait on.
+   * @return the AsyncResponses.
+   */
   def handle(requests: Seq[AsyncRequest]): Seq[AsyncResponse] = inReadLock(initializationLock) {
     import scala.collection.JavaConverters._
+    if (requests.isEmpty) {
+      return Seq.empty
+    }
     val countDownLatch = new CountDownLatch(requests.size)
     val responseQueue = new ArrayBlockingQueue[AsyncResponse](requests.size)
     requests.foreach {
@@ -113,10 +121,10 @@ class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTi
   }
 
   /**
-    * Wait indefinitely until the underlying zookeeper client to reaches the CONNECTED state.
-    * @throws ZookeeperClientAuthFailedException if the authentication failed either before or while waiting for connection.
-    * @throws ZookeeperClientExpiredException if the session expired either before or while waiting for connection.
-    */
+   * Wait indefinitely until the underlying zookeeper client to reaches the CONNECTED state.
+   * @throws ZookeeperClientAuthFailedException if the authentication failed either before or while waiting for connection.
+   * @throws ZookeeperClientExpiredException if the session expired either before or while waiting for connection.
+   */
   def waitUntilConnected(): Unit = inLock(isConnectedOrExpiredLock) {
     waitUntilConnected(Long.MaxValue, TimeUnit.MILLISECONDS)
   }
@@ -142,30 +150,43 @@ class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTi
     info("Connected.")
   }
 
-  def registerZNodeChangeHandler(zNodeChangeHandler: ZNodeChangeHandler): ExistsResponse = {
-    registerZNodeChangeHandlers(Seq(zNodeChangeHandler)).head
+  /**
+   * Register the handler to ZookeeperClient. This is just a local operation. This does not actually register a watcher.
+   *
+   * The watcher is only registered once the user calls handle(AsyncRequest) or handle(Seq[AsyncRequest])
+   * with either a GetDataRequest or ExistsRequest.
+   *
+   * NOTE: zookeeper only allows registration to a nonexistent znode with ExistsRequest.
+   *
+   * @param zNodeChangeHandler the handler to register
+   */
+  def registerZNodeChangeHandler(zNodeChangeHandler: ZNodeChangeHandler): Unit = {
+    zNodeChangeHandlers.put(zNodeChangeHandler.path, zNodeChangeHandler)
   }
 
-  def registerZNodeChangeHandlers(handlers: Seq[ZNodeChangeHandler]): Seq[ExistsResponse] = {
-    handlers.foreach(handler => zNodeChangeHandlers.put(handler.path, handler))
-    val asyncRequests = handlers.map(handler => ExistsRequest(handler.path, null))
-    handle(asyncRequests).asInstanceOf[Seq[ExistsResponse]]
-  }
-
+  /**
+   * Unregister the handler from ZookeeperClient. This is just a local operation.
+   * @param path the path of the handler to unregister
+   */
   def unregisterZNodeChangeHandler(path: String): Unit = {
     zNodeChangeHandlers.remove(path)
   }
 
-  def registerZNodeChildChangeHandler(zNodeChildChangeHandler: ZNodeChildChangeHandler): GetChildrenResponse = {
-    registerZNodeChildChangeHandlers(Seq(zNodeChildChangeHandler)).head
+  /**
+   * Register the handler to ZookeeperClient. This is just a local operation. This does not actually register a watcher.
+   *
+   * The watcher is only registered once the user calls handle(AsyncRequest) or handle(Seq[AsyncRequest]) with a GetChildrenRequest.
+   *
+   * @param zNodeChildChangeHandler the handler to register
+   */
+  def registerZNodeChildChangeHandler(zNodeChildChangeHandler: ZNodeChildChangeHandler): Unit = {
+    zNodeChildChangeHandlers.put(zNodeChildChangeHandler.path, zNodeChildChangeHandler)
   }
 
-  def registerZNodeChildChangeHandlers(handlers: Seq[ZNodeChildChangeHandler]): Seq[GetChildrenResponse] = {
-    handlers.foreach(handler => zNodeChildChangeHandlers.put(handler.path, handler))
-    val asyncRequests = handlers.map(handler => GetChildrenRequest(handler.path, null))
-    handle(asyncRequests).asInstanceOf[Seq[GetChildrenResponse]]
-  }
-
+  /**
+   * Unregister the handler from ZookeeperClient. This is just a local operation.
+   * @param path the path of the handler to unregister
+   */
   def unregisterZNodeChildChangeHandler(path: String): Unit = {
     zNodeChildChangeHandlers.remove(path)
   }
@@ -176,6 +197,10 @@ class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTi
     zNodeChildChangeHandlers.clear()
     zooKeeper.close()
     info("Closed.")
+  }
+
+  def sessionId = inReadLock(initializationLock) {
+    zooKeeper.getSessionId
   }
 
   private def initialize(): Unit = {
@@ -199,7 +224,7 @@ class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTi
         }
       }
       info(s"Timed out waiting for connection during session initialization while in state: ${zooKeeper.getState}")
-      stateChangeHandler.onConnectionTimeout
+      stateChangeHandler.onReconnectionTimeout()
     }
   }
 
@@ -212,45 +237,45 @@ class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTi
         }
         if (event.getState == KeeperState.AuthFailed) {
           info("Auth failed.")
-          stateChangeHandler.onAuthFailure
+          stateChangeHandler.onAuthFailure()
         } else if (event.getState == KeeperState.Expired) {
           inWriteLock(initializationLock) {
             info("Session expired.")
-            stateChangeHandler.beforeInitializingSession
+            stateChangeHandler.beforeInitializingSession()
             initialize()
-            stateChangeHandler.afterInitializingSession
+            stateChangeHandler.afterInitializingSession()
           }
         }
       } else if (event.getType == EventType.NodeCreated) {
-        Option(zNodeChangeHandlers.get(event.getPath)).foreach(_.handleCreation)
+        Option(zNodeChangeHandlers.get(event.getPath)).foreach(_.handleCreation())
       } else if (event.getType == EventType.NodeDeleted) {
-        Option(zNodeChangeHandlers.get(event.getPath)).foreach(_.handleDeletion)
+        Option(zNodeChangeHandlers.get(event.getPath)).foreach(_.handleDeletion())
       } else if (event.getType == EventType.NodeDataChanged) {
-        Option(zNodeChangeHandlers.get(event.getPath)).foreach(_.handleDataChange)
+        Option(zNodeChangeHandlers.get(event.getPath)).foreach(_.handleDataChange())
       } else if (event.getType == EventType.NodeChildrenChanged) {
-        Option(zNodeChildChangeHandlers.get(event.getPath)).foreach(_.handleChildChange)
+        Option(zNodeChildChangeHandlers.get(event.getPath)).foreach(_.handleChildChange())
       }
     }
   }
 }
 
 trait StateChangeHandler {
-  def beforeInitializingSession: Unit
-  def afterInitializingSession: Unit
-  def onAuthFailure: Unit
-  def onConnectionTimeout: Unit
+  def beforeInitializingSession(): Unit = {}
+  def afterInitializingSession(): Unit = {}
+  def onAuthFailure(): Unit = {}
+  def onReconnectionTimeout(): Unit = {}
 }
 
 trait ZNodeChangeHandler {
   val path: String
-  def handleCreation: Unit
-  def handleDeletion: Unit
-  def handleDataChange: Unit
+  def handleCreation(): Unit = {}
+  def handleDeletion(): Unit = {}
+  def handleDataChange(): Unit = {}
 }
 
 trait ZNodeChildChangeHandler {
   val path: String
-  def handleChildChange: Unit
+  def handleChildChange(): Unit = {}
 }
 
 sealed trait AsyncRequest {
