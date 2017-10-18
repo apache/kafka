@@ -18,7 +18,6 @@
 package kafka.server
 
 import java.util.concurrent.{Executors, Future}
-import java.util.concurrent.locks.ReentrantLock
 
 import kafka.utils.CoreUtils.inLock
 

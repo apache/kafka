@@ -28,7 +28,6 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.utils._
 import kafka.admin.{AdminOperationException, AdminUtils}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.utils.Sanitizer
 
 import scala.collection.Map
 

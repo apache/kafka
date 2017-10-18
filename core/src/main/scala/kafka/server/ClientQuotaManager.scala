@@ -318,7 +318,6 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     }
     val quotaUser = if (quotaId == clientQuotaId) "" else sanitizedUser
     val quotaClientId = if (quotaId == userQuotaId) "" else clientId
-    val quotaSanitizedClientId = if (quotaId == userQuotaId) "" else sanitizerClientId
     QuotaEntity(quotaId, quotaUser, quotaClientId, sanitizerClientId, quota)
   }
 
