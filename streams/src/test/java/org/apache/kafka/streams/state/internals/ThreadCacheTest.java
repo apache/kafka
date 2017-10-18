@@ -511,6 +511,14 @@ public class ThreadCacheTest {
         assertNull(threadCache.get(namespace, null));
     }
 
+    @Test
+    public void shouldCalculateSizeInBytes() {
+        final ThreadCache cache = new ThreadCache(logContext, 100000, new MockStreamsMetrics(new Metrics()));
+        NamedCache.LRUNode node = new NamedCache.LRUNode(Bytes.wrap(new byte[]{1}), dirtyEntry(new byte[]{0}));
+        cache.put(namespace1, Bytes.wrap(new byte[]{1}), cleanEntry(new byte[]{0}));
+        assertEquals(cache.sizeBytes(), node.size());
+    }
+
     private LRUCacheEntry dirtyEntry(final byte[] key) {
         return new LRUCacheEntry(key, true, -1, -1, -1, "");
     }
