@@ -145,7 +145,7 @@ class PartitionStateMachine(config: KafkaConfig,
    * @param targetState The end state that the partition should be moved to
    */
   private def doHandleStateChanges(partitions: Seq[TopicAndPartition], targetState: PartitionState,
-                           partitionLeaderElectionStrategyOpt: Option[PartitionLeaderElectionStrategy] = None): Unit = {
+                           partitionLeaderElectionStrategyOpt: Option[PartitionLeaderElectionStrategy]): Unit = {
     val stateChangeLog = stateChangeLogger.withControllerEpoch(controllerContext.epoch)
     partitions.foreach(partition => partitionState.getOrElseUpdate(partition, NonExistentPartition))
     val (validPartitions, invalidPartitions) = partitions.partition(partition => isValidTransition(partition, targetState))
@@ -223,8 +223,8 @@ class PartitionStateMachine(config: KafkaConfig,
         Seq.empty
     }
     createResponses.foreach { createResponse =>
-      val code = Code.get(createResponse.rc)
-      val partition = createResponse.ctx.asInstanceOf[TopicAndPartition]
+      val code = createResponse.resultCode
+      val partition = createResponse.ctx.get.asInstanceOf[TopicAndPartition]
       val leaderIsrAndControllerEpoch = leaderIsrAndControllerEpochs(partition)
       if (code == Code.OK) {
         controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
@@ -287,20 +287,20 @@ class PartitionStateMachine(config: KafkaConfig,
     val failedElections = mutable.Map.empty[TopicAndPartition, Exception]
     val leaderIsrAndControllerEpochPerPartition = mutable.Buffer.empty[(TopicAndPartition, LeaderIsrAndControllerEpoch)]
     getDataResponses.foreach { getDataResponse =>
-      val partition = getDataResponse.ctx.asInstanceOf[TopicAndPartition]
+      val partition = getDataResponse.ctx.get.asInstanceOf[TopicAndPartition]
       val currState = partitionState(partition)
-      if (Code.get(getDataResponse.rc) == Code.OK) {
+      if (getDataResponse.resultCode == Code.OK) {
         val leaderIsrAndControllerEpochOpt = TopicPartitionStateZNode.decode(getDataResponse.data, getDataResponse.stat)
         if (leaderIsrAndControllerEpochOpt.isEmpty) {
           val exception = new StateChangeFailedException(s"LeaderAndIsr information doesn't exist for partition $partition in $currState state")
           failedElections.put(partition, exception)
         }
         leaderIsrAndControllerEpochPerPartition += partition -> leaderIsrAndControllerEpochOpt.get
-      } else if (Code.get(getDataResponse.rc) == Code.NONODE) {
+      } else if (getDataResponse.resultCode == Code.NONODE) {
         val exception = new StateChangeFailedException(s"LeaderAndIsr information doesn't exist for partition $partition in $currState state")
         failedElections.put(partition, exception)
       } else {
-        failedElections.put(partition, KeeperException.create(Code.get(getDataResponse.rc)))
+        failedElections.put(partition, getDataResponse.resultException.get)
       }
     }
     val (invalidPartitionsForElection, validPartitionsForElection) = leaderIsrAndControllerEpochPerPartition.partition { case (partition, leaderIsrAndControllerEpoch) =>

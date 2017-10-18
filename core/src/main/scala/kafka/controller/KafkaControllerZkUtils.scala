@@ -38,9 +38,9 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    */
   def getTopicPartitionStatesRaw(partitions: Seq[TopicAndPartition]): Seq[GetDataResponse] = {
     val getDataRequests = partitions.map { partition =>
-      GetDataRequest(TopicPartitionStateZNode.path(partition), partition)
+      GetDataRequest(TopicPartitionStateZNode.path(partition), ctx = Some(partition))
     }
-    retryUntilConnected(getDataRequests).map(_.asInstanceOf[GetDataResponse])
+    retryRequestsUntilConnected(getDataRequests)
   }
 
   /**
@@ -52,9 +52,9 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
     val setDataRequests = leaderIsrAndControllerEpochs.map { case (partition, leaderIsrAndControllerEpoch) =>
       val path = TopicPartitionStateZNode.path(partition)
       val data = TopicPartitionStateZNode.encode(leaderIsrAndControllerEpoch)
-      SetDataRequest(path, data, leaderIsrAndControllerEpoch.leaderAndIsr.zkVersion, partition)
+      SetDataRequest(path, data, leaderIsrAndControllerEpoch.leaderAndIsr.zkVersion, Some(partition))
     }
-    retryUntilConnected(setDataRequests.toSeq).map(_.asInstanceOf[SetDataResponse])
+    retryRequestsUntilConnected(setDataRequests.toSeq)
   }
 
   /**
@@ -68,9 +68,9 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
     val createRequests = leaderIsrAndControllerEpochs.map { case (partition, leaderIsrAndControllerEpoch) =>
       val path = TopicPartitionStateZNode.path(partition)
       val data = TopicPartitionStateZNode.encode(leaderIsrAndControllerEpoch)
-      CreateRequest(path, data, acls(path), CreateMode.PERSISTENT, partition)
+      CreateRequest(path, data, acls(path), CreateMode.PERSISTENT, Some(partition))
     }
-    retryUntilConnected(createRequests.toSeq).map(_.asInstanceOf[CreateResponse])
+    retryRequestsUntilConnected(createRequests.toSeq)
   }
 
   /**
@@ -80,8 +80,8 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * @return SetDataResponse
    */
   def setControllerEpochRaw(epoch: Int, epochZkVersion: Int): SetDataResponse = {
-    val setDataRequest = SetDataRequest(ControllerEpochZNode.path, ControllerEpochZNode.encode(epoch), epochZkVersion, null)
-    retryUntilConnected(setDataRequest).asInstanceOf[SetDataResponse]
+    val setDataRequest = SetDataRequest(ControllerEpochZNode.path, ControllerEpochZNode.encode(epoch), epochZkVersion)
+    retryRequestUntilConnected(setDataRequest)
   }
 
   /**
@@ -90,8 +90,9 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * @return CreateResponse
    */
   def createControllerEpochRaw(epoch: Int): CreateResponse = {
-    val createRequest = CreateRequest(ControllerEpochZNode.path, ControllerEpochZNode.encode(epoch), acls(ControllerEpochZNode.path), CreateMode.PERSISTENT, null)
-    retryUntilConnected(createRequest).asInstanceOf[CreateResponse]
+    val createRequest = CreateRequest(ControllerEpochZNode.path, ControllerEpochZNode.encode(epoch),
+      acls(ControllerEpochZNode.path), CreateMode.PERSISTENT)
+    retryRequestUntilConnected(createRequest)
   }
 
   /**
@@ -120,14 +121,14 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
         return (successfulUpdates.toMap, updatesToRetry, failed.toMap)
     }
     setDataResponses.foreach { setDataResponse =>
-      val partition = setDataResponse.ctx.asInstanceOf[TopicAndPartition]
-      if (Code.get(setDataResponse.rc) == Code.OK) {
+      val partition = setDataResponse.ctx.get.asInstanceOf[TopicAndPartition]
+      if (setDataResponse.resultCode == Code.OK) {
         val updatedLeaderAndIsr = leaderAndIsrs(partition).withZkVersion(setDataResponse.stat.getVersion)
         successfulUpdates.put(partition, updatedLeaderAndIsr)
-      } else if (Code.get(setDataResponse.rc) == Code.BADVERSION) {
+      } else if (setDataResponse.resultCode == Code.BADVERSION) {
         updatesToRetry += partition
       } else {
-        failed.put(partition, KeeperException.create(Code.get(setDataResponse.rc)))
+        failed.put(partition, setDataResponse.resultException.get)
       }
     }
     (successfulUpdates.toMap, updatesToRetry, failed.toMap)
@@ -153,16 +154,16 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
         return (logConfigs.toMap, failed.toMap)
     }
     configResponses.foreach { configResponse =>
-      val topic = configResponse.ctx.asInstanceOf[String]
-      if (Code.get(configResponse.rc) == Code.OK) {
+      val topic = configResponse.ctx.get.asInstanceOf[String]
+      if (configResponse.resultCode == Code.OK) {
         val overrides = ConfigEntityZNode.decode(configResponse.data)
         val logConfig = LogConfig.fromProps(config, overrides.getOrElse(new Properties))
         logConfigs.put(topic, logConfig)
-      } else if (Code.get(configResponse.rc) == Code.NONODE) {
+      } else if (configResponse.resultCode == Code.NONODE) {
         val logConfig = LogConfig.fromProps(config, new Properties)
         logConfigs.put(topic, logConfig)
       } else {
-        failed.put(topic, KeeperException.create(Code.get(configResponse.rc)))
+        failed.put(topic, configResponse.resultException.get)
       }
     }
     (logConfigs.toMap, failed.toMap)
@@ -173,25 +174,25 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * @return sequence of brokers in the cluster.
    */
   def getAllBrokersInCluster: Seq[Broker] = {
-    val getChildrenResponse = retryUntilConnected(GetChildrenRequest(BrokerIdsZNode.path, null)).asInstanceOf[GetChildrenResponse]
-    if (Code.get(getChildrenResponse.rc) == Code.OK) {
+    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(BrokerIdsZNode.path))
+    if (getChildrenResponse.resultCode == Code.OK) {
       val brokerIds = getChildrenResponse.children.map(_.toInt)
-      val getDataRequests = brokerIds.map(brokerId => GetDataRequest(BrokerIdZNode.path(brokerId), brokerId))
-      val getDataResponses = retryUntilConnected(getDataRequests).map(_.asInstanceOf[GetDataResponse])
+      val getDataRequests = brokerIds.map(brokerId => GetDataRequest(BrokerIdZNode.path(brokerId), ctx = Some(brokerId)))
+      val getDataResponses = retryRequestsUntilConnected(getDataRequests)
       getDataResponses.flatMap { getDataResponse =>
-        val brokerId = getDataResponse.ctx.asInstanceOf[Int]
-        if (Code.get(getDataResponse.rc) == Code.OK) {
+        val brokerId = getDataResponse.ctx.get.asInstanceOf[Int]
+        if (getDataResponse.resultCode == Code.OK) {
           Option(BrokerIdZNode.decode(brokerId, getDataResponse.data))
-        } else if (Code.get(getDataResponse.rc) == Code.NONODE) {
+        } else if (getDataResponse.resultCode == Code.NONODE) {
           None
         } else {
-          throw KeeperException.create(Code.get(getDataResponse.rc))
+          throw getDataResponse.resultException.get
         }
       }
-    } else if (Code.get(getChildrenResponse.rc) == Code.NONODE) {
+    } else if (getChildrenResponse.resultCode == Code.NONODE) {
       Seq.empty
     } else {
-      throw KeeperException.create(Code.get(getChildrenResponse.rc))
+      throw getChildrenResponse.resultException.get
     }
   }
 
@@ -200,13 +201,13 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * @return sequence of topics in the cluster.
    */
   def getAllTopicsInCluster: Seq[String] = {
-    val getChildrenResponse = retryUntilConnected(GetChildrenRequest(TopicsZNode.path, null)).asInstanceOf[GetChildrenResponse]
-    if (Code.get(getChildrenResponse.rc) == Code.OK) {
+    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(TopicsZNode.path))
+    if (getChildrenResponse.resultCode == Code.OK) {
       getChildrenResponse.children
-    } else if (Code.get(getChildrenResponse.rc) == Code.NONODE) {
+    } else if (getChildrenResponse.resultCode == Code.NONODE) {
       Seq.empty
     } else {
-      throw KeeperException.create(Code.get(getChildrenResponse.rc))
+      throw getChildrenResponse.resultException.get
     }
   }
 
@@ -217,8 +218,8 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * @return SetDataResponse
    */
   def setTopicAssignmentRaw(topic: String, assignment: Map[TopicAndPartition, Seq[Int]]): SetDataResponse = {
-    val setDataRequest = SetDataRequest(TopicZNode.path(topic), TopicZNode.encode(assignment), -1, null)
-    retryUntilConnected(setDataRequest).asInstanceOf[SetDataResponse]
+    val setDataRequest = SetDataRequest(TopicZNode.path(topic), TopicZNode.encode(assignment), -1)
+    retryRequestUntilConnected(setDataRequest)
   }
 
   /**
@@ -226,13 +227,13 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * @return sequence of znode names and not the absolute znode path.
    */
   def getAllLogDirEventNotifications: Seq[String] = {
-    val getChildrenResponse = retryUntilConnected(GetChildrenRequest(LogDirEventNotificationZNode.path, null)).asInstanceOf[GetChildrenResponse]
-    if (Code.get(getChildrenResponse.rc) == Code.OK) {
+    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(LogDirEventNotificationZNode.path))
+    if (getChildrenResponse.resultCode == Code.OK) {
       getChildrenResponse.children.map(LogDirEventNotificationSequenceZNode.sequenceNumber)
-    } else if (Code.get(getChildrenResponse.rc) == Code.NONODE) {
+    } else if (getChildrenResponse.resultCode == Code.NONODE) {
       Seq.empty
     } else {
-      throw KeeperException.create(Code.get(getChildrenResponse.rc))
+      throw getChildrenResponse.resultException.get
     }
   }
 
@@ -242,15 +243,17 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * @return broker ids associated with the given log dir event notifications.
    */
   def getBrokerIdsFromLogDirEvents(sequenceNumbers: Seq[String]): Seq[Int] = {
-    val getDataRequests = sequenceNumbers.map(sequenceNumber => GetDataRequest(LogDirEventNotificationSequenceZNode.path(sequenceNumber), null))
-    val getDataResponses = retryUntilConnected(getDataRequests).map(_.asInstanceOf[GetDataResponse])
+    val getDataRequests = sequenceNumbers.map { sequenceNumber =>
+      GetDataRequest(LogDirEventNotificationSequenceZNode.path(sequenceNumber))
+    }
+    val getDataResponses = retryRequestsUntilConnected(getDataRequests)
     getDataResponses.flatMap { getDataResponse =>
-      if (Code.get(getDataResponse.rc) == Code.OK) {
+      if (getDataResponse.resultCode == Code.OK) {
         LogDirEventNotificationSequenceZNode.decode(getDataResponse.data)
-      } else if (Code.get(getDataResponse.rc) == Code.NONODE) {
+      } else if (getDataResponse.resultCode == Code.NONODE) {
         None
       } else {
-        throw KeeperException.create(Code.get(getDataResponse.rc))
+        throw getDataResponse.resultException.get
       }
     }
   }
@@ -259,11 +262,11 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * Deletes all log dir event notifications.
    */
   def deleteLogDirEventNotifications(): Unit = {
-    val getChildrenResponse = retryUntilConnected(GetChildrenRequest(LogDirEventNotificationZNode.path, null)).asInstanceOf[GetChildrenResponse]
-    if (Code.get(getChildrenResponse.rc) == Code.OK) {
+    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(LogDirEventNotificationZNode.path))
+    if (getChildrenResponse.resultCode == Code.OK) {
       deleteLogDirEventNotifications(getChildrenResponse.children)
-    } else if (Code.get(getChildrenResponse.rc) != Code.NONODE) {
-      throw KeeperException.create(Code.get(getChildrenResponse.rc))
+    } else if (getChildrenResponse.resultCode != Code.NONODE) {
+      throw getChildrenResponse.resultException.get
     }
   }
 
@@ -272,8 +275,10 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * @param sequenceNumbers the sequence numbers associated with the log dir event notifications to be deleted.
    */
   def deleteLogDirEventNotifications(sequenceNumbers: Seq[String]): Unit = {
-    val deleteRequests = sequenceNumbers.map(sequenceNumber => DeleteRequest(LogDirEventNotificationSequenceZNode.path(sequenceNumber), -1, null))
-    retryUntilConnected(deleteRequests)
+    val deleteRequests = sequenceNumbers.map { sequenceNumber =>
+      DeleteRequest(LogDirEventNotificationSequenceZNode.path(sequenceNumber), -1)
+    }
+    retryRequestsUntilConnected(deleteRequests)
   }
 
   /**
@@ -282,16 +287,16 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * @return the replica assignment for each partition from the given topics.
    */
   def getReplicaAssignmentForTopics(topics: Set[String]): Map[TopicAndPartition, Seq[Int]] = {
-    val getDataRequests = topics.map(topic => GetDataRequest(TopicZNode.path(topic), topic))
-    val getDataResponses = retryUntilConnected(getDataRequests.toSeq).map(_.asInstanceOf[GetDataResponse])
+    val getDataRequests = topics.map(topic => GetDataRequest(TopicZNode.path(topic), ctx = Some(topic)))
+    val getDataResponses = retryRequestsUntilConnected(getDataRequests.toSeq)
     getDataResponses.flatMap { getDataResponse =>
-      val topic = getDataResponse.ctx.asInstanceOf[String]
-      if (Code.get(getDataResponse.rc) == Code.OK) {
+      val topic = getDataResponse.ctx.get.asInstanceOf[String]
+      if (getDataResponse.resultCode == Code.OK) {
         TopicZNode.decode(topic, getDataResponse.data)
-      } else if (Code.get(getDataResponse.rc) == Code.NONODE) {
+      } else if (getDataResponse.resultCode == Code.NONODE) {
         Map.empty[TopicAndPartition, Seq[Int]]
       } else {
-        throw KeeperException.create(Code.get(getDataResponse.rc))
+        throw getDataResponse.resultException.get
       }
     }.toMap
   }
@@ -301,13 +306,13 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * @return sequence of topics marked for deletion.
    */
   def getTopicDeletions: Seq[String] = {
-    val getChildrenResponse = retryUntilConnected(GetChildrenRequest(DeleteTopicsZNode.path, null)).asInstanceOf[GetChildrenResponse]
-    if (Code.get(getChildrenResponse.rc) == Code.OK) {
+    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(DeleteTopicsZNode.path))
+    if (getChildrenResponse.resultCode == Code.OK) {
       getChildrenResponse.children
-    } else if (Code.get(getChildrenResponse.rc) == Code.NONODE) {
+    } else if (getChildrenResponse.resultCode == Code.NONODE) {
       Seq.empty
     } else {
-      throw KeeperException.create(Code.get(getChildrenResponse.rc))
+      throw getChildrenResponse.resultException.get
     }
   }
 
@@ -316,8 +321,8 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * @param topics the topics to remove.
    */
   def deleteTopicDeletions(topics: Seq[String]): Unit = {
-    val deleteRequests = topics.map(topic => DeleteRequest(DeleteTopicsTopicZNode.path(topic), -1, null))
-    retryUntilConnected(deleteRequests)
+    val deleteRequests = topics.map(topic => DeleteRequest(DeleteTopicsTopicZNode.path(topic), -1))
+    retryRequestsUntilConnected(deleteRequests)
   }
 
   /**
@@ -325,14 +330,14 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * @return the reassignments for each partition.
    */
   def getPartitionReassignment: Map[TopicAndPartition, Seq[Int]] = {
-    val getDataRequest = GetDataRequest(ReassignPartitionsZNode.path, null)
-    val getDataResponse = retryUntilConnected(getDataRequest).asInstanceOf[GetDataResponse]
-    if (Code.get(getDataResponse.rc) == Code.OK) {
+    val getDataRequest = GetDataRequest(ReassignPartitionsZNode.path)
+    val getDataResponse = retryRequestUntilConnected(getDataRequest)
+    if (getDataResponse.resultCode == Code.OK) {
       ReassignPartitionsZNode.decode(getDataResponse.data)
-    } else if (Code.get(getDataResponse.rc) == Code.NONODE) {
+    } else if (getDataResponse.resultCode == Code.NONODE) {
       Map.empty[TopicAndPartition, Seq[Int]]
     } else {
-      throw KeeperException.create(Code.get(getDataResponse.rc))
+      throw getDataResponse.resultException.get
     }
   }
 
@@ -342,8 +347,8 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * @return SetDataResponse
    */
   def setPartitionReassignmentRaw(reassignment: Map[TopicAndPartition, Seq[Int]]): SetDataResponse = {
-    val setDataRequest = SetDataRequest(ReassignPartitionsZNode.path, ReassignPartitionsZNode.encode(reassignment), -1, null)
-    retryUntilConnected(setDataRequest).asInstanceOf[SetDataResponse]
+    val setDataRequest = SetDataRequest(ReassignPartitionsZNode.path, ReassignPartitionsZNode.encode(reassignment), -1)
+    retryRequestUntilConnected(setDataRequest)
   }
 
   /**
@@ -352,16 +357,17 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * @return CreateResponse
    */
   def createPartitionReassignment(reassignment: Map[TopicAndPartition, Seq[Int]]): CreateResponse = {
-    val createRequest = CreateRequest(ReassignPartitionsZNode.path, ReassignPartitionsZNode.encode(reassignment), acls(ReassignPartitionsZNode.path), CreateMode.PERSISTENT, null)
-    retryUntilConnected(createRequest).asInstanceOf[CreateResponse]
+    val createRequest = CreateRequest(ReassignPartitionsZNode.path, ReassignPartitionsZNode.encode(reassignment),
+      acls(ReassignPartitionsZNode.path), CreateMode.PERSISTENT)
+    retryRequestUntilConnected(createRequest)
   }
 
   /**
    * Deletes the partition reassignment znode.
    */
   def deletePartitionReassignment(): Unit = {
-    val deleteRequest = DeleteRequest(ReassignPartitionsZNode.path, -1, null)
-    retryUntilConnected(deleteRequest)
+    val deleteRequest = DeleteRequest(ReassignPartitionsZNode.path, -1)
+    retryRequestUntilConnected(deleteRequest)
   }
 
   /**
@@ -372,13 +378,13 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
   def getTopicPartitionStates(partitions: Seq[TopicAndPartition]): Map[TopicAndPartition, LeaderIsrAndControllerEpoch] = {
     val getDataResponses = getTopicPartitionStatesRaw(partitions)
     getDataResponses.flatMap { getDataResponse =>
-      val partition = getDataResponse.ctx.asInstanceOf[TopicAndPartition]
-      if (Code.get(getDataResponse.rc) == Code.OK) {
+      val partition = getDataResponse.ctx.get.asInstanceOf[TopicAndPartition]
+      if (getDataResponse.resultCode == Code.OK) {
         TopicPartitionStateZNode.decode(getDataResponse.data, getDataResponse.stat).map(partition -> _)
-      } else if (Code.get(getDataResponse.rc) == Code.NONODE) {
+      } else if (getDataResponse.resultCode == Code.NONODE) {
         None
       } else {
-        throw KeeperException.create(Code.get(getDataResponse.rc))
+        throw getDataResponse.resultException.get
       }
     }.toMap
   }
@@ -388,13 +394,13 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * @return sequence of znode names and not the absolute znode path.
    */
   def getAllIsrChangeNotifications: Seq[String] = {
-    val getChildrenResponse = retryUntilConnected(GetChildrenRequest(IsrChangeNotificationZNode.path, null)).asInstanceOf[GetChildrenResponse]
-    if (Code.get(getChildrenResponse.rc) == Code.OK) {
+    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(IsrChangeNotificationZNode.path))
+    if (getChildrenResponse.resultCode == Code.OK) {
       getChildrenResponse.children.map(IsrChangeNotificationSequenceZNode.sequenceNumber)
-    } else if (Code.get(getChildrenResponse.rc) == Code.NONODE) {
+    } else if (getChildrenResponse.resultCode == Code.NONODE) {
       Seq.empty
     } else {
-      throw KeeperException.create(Code.get(getChildrenResponse.rc))
+      throw getChildrenResponse.resultException.get
     }
   }
 
@@ -404,15 +410,17 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * @return partitions associated with the given isr change notifications.
    */
   def getPartitionsFromIsrChangeNotifications(sequenceNumbers: Seq[String]): Seq[TopicAndPartition] = {
-    val getDataRequests = sequenceNumbers.map(sequenceNumber => GetDataRequest(IsrChangeNotificationSequenceZNode.path(sequenceNumber), null))
-    val getDataResponses = retryUntilConnected(getDataRequests).map(_.asInstanceOf[GetDataResponse])
+    val getDataRequests = sequenceNumbers.map { sequenceNumber =>
+      GetDataRequest(IsrChangeNotificationSequenceZNode.path(sequenceNumber))
+    }
+    val getDataResponses = retryRequestsUntilConnected(getDataRequests)
     getDataResponses.flatMap { getDataResponse =>
-      if (Code.get(getDataResponse.rc) == Code.OK) {
+      if (getDataResponse.resultCode == Code.OK) {
         IsrChangeNotificationSequenceZNode.decode(getDataResponse.data)
-      } else if (Code.get(getDataResponse.rc) == Code.NONODE) {
+      } else if (getDataResponse.resultCode == Code.NONODE) {
         None
       } else {
-        throw KeeperException.create(Code.get(getDataResponse.rc))
+        throw getDataResponse.resultException.get
       }
     }
   }
@@ -421,11 +429,11 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * Deletes all isr change notifications.
    */
   def deleteIsrChangeNotifications(): Unit = {
-    val getChildrenResponse = retryUntilConnected(GetChildrenRequest(IsrChangeNotificationZNode.path, null)).asInstanceOf[GetChildrenResponse]
-    if (Code.get(getChildrenResponse.rc) == Code.OK) {
+    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(IsrChangeNotificationZNode.path))
+    if (getChildrenResponse.resultCode == Code.OK) {
       deleteIsrChangeNotifications(getChildrenResponse.children)
-    } else if (Code.get(getChildrenResponse.rc) != Code.NONODE) {
-      throw KeeperException.create(Code.get(getChildrenResponse.rc))
+    } else if (getChildrenResponse.resultCode != Code.NONODE) {
+      throw getChildrenResponse.resultException.get
     }
   }
 
@@ -434,8 +442,10 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * @param sequenceNumbers the sequence numbers associated with the isr change notifications to be deleted.
    */
   def deleteIsrChangeNotifications(sequenceNumbers: Seq[String]): Unit = {
-    val deleteRequests = sequenceNumbers.map(sequenceNumber => DeleteRequest(IsrChangeNotificationSequenceZNode.path(sequenceNumber), -1, null))
-    retryUntilConnected(deleteRequests)
+    val deleteRequests = sequenceNumbers.map { sequenceNumber =>
+      DeleteRequest(IsrChangeNotificationSequenceZNode.path(sequenceNumber), -1)
+    }
+    retryRequestsUntilConnected(deleteRequests)
   }
 
   /**
@@ -443,14 +453,14 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * @return sequence of partitions.
    */
   def getPreferredReplicaElection: Set[TopicAndPartition] = {
-    val getDataRequest = GetDataRequest(PreferredReplicaElectionZNode.path, null)
-    val getDataResponse = retryUntilConnected(getDataRequest).asInstanceOf[GetDataResponse]
-    if (Code.get(getDataResponse.rc) == Code.OK) {
+    val getDataRequest = GetDataRequest(PreferredReplicaElectionZNode.path)
+    val getDataResponse = retryRequestUntilConnected(getDataRequest)
+    if (getDataResponse.resultCode == Code.OK) {
       PreferredReplicaElectionZNode.decode(getDataResponse.data)
-    } else if (Code.get(getDataResponse.rc) == Code.NONODE) {
+    } else if (getDataResponse.resultCode == Code.NONODE) {
       Set.empty[TopicAndPartition]
     } else {
-      throw KeeperException.create(Code.get(getDataResponse.rc))
+      throw getDataResponse.resultException.get
     }
   }
 
@@ -458,8 +468,8 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * Deletes the preferred replica election znode.
    */
   def deletePreferredReplicaElection(): Unit = {
-    val deleteRequest = DeleteRequest(PreferredReplicaElectionZNode.path, -1, null)
-    retryUntilConnected(deleteRequest)
+    val deleteRequest = DeleteRequest(PreferredReplicaElectionZNode.path, -1)
+    retryRequestUntilConnected(deleteRequest)
   }
 
   /**
@@ -467,14 +477,14 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * @return optional integer that is Some if the controller znode exists and can be parsed and None otherwise.
    */
   def getControllerId: Option[Int] = {
-    val getDataRequest = GetDataRequest(ControllerZNode.path, null)
-    val getDataResponse = retryUntilConnected(getDataRequest).asInstanceOf[GetDataResponse]
-    if (Code.get(getDataResponse.rc) == Code.OK) {
+    val getDataRequest = GetDataRequest(ControllerZNode.path)
+    val getDataResponse = retryRequestUntilConnected(getDataRequest)
+    if (getDataResponse.resultCode == Code.OK) {
       ControllerZNode.decode(getDataResponse.data)
-    } else if (Code.get(getDataResponse.rc) == Code.NONODE) {
+    } else if (getDataResponse.resultCode == Code.NONODE) {
       None
     } else {
-      throw KeeperException.create(Code.get(getDataResponse.rc))
+      throw getDataResponse.resultException.get
     }
   }
 
@@ -482,8 +492,8 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * Deletes the controller znode.
    */
   def deleteController(): Unit = {
-    val deleteRequest = DeleteRequest(ControllerZNode.path, -1, null)
-    retryUntilConnected(deleteRequest)
+    val deleteRequest = DeleteRequest(ControllerZNode.path, -1)
+    retryRequestUntilConnected(deleteRequest)
   }
 
   /**
@@ -491,15 +501,15 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * @return optional (Int, Stat) that is Some if the controller epoch path exists and None otherwise.
    */
   def getControllerEpoch: Option[(Int, Stat)] = {
-    val getDataRequest = GetDataRequest(ControllerEpochZNode.path, null)
-    val getDataResponse = retryUntilConnected(getDataRequest).asInstanceOf[GetDataResponse]
-    if (Code.get(getDataResponse.rc) == Code.OK) {
+    val getDataRequest = GetDataRequest(ControllerEpochZNode.path)
+    val getDataResponse = retryRequestUntilConnected(getDataRequest)
+    if (getDataResponse.resultCode == Code.OK) {
       val epoch = ControllerEpochZNode.decode(getDataResponse.data)
       Option(epoch, getDataResponse.stat)
-    } else if (Code.get(getDataResponse.rc) == Code.NONODE) {
+    } else if (getDataResponse.resultCode == Code.NONODE) {
       None
     } else {
-      throw KeeperException.create(Code.get(getDataResponse.rc))
+      throw getDataResponse.resultException.get
     }
   }
 
@@ -516,8 +526,8 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * @param topics the topics whose configs we wish to delete.
    */
   def deleteTopicConfigs(topics: Seq[String]): Unit = {
-    val deleteRequests = topics.map(topic => DeleteRequest(ConfigEntityZNode.path(ConfigType.Topic, topic), -1, null))
-    retryUntilConnected(deleteRequests)
+    val deleteRequests = topics.map(topic => DeleteRequest(ConfigEntityZNode.path(ConfigType.Topic, topic), -1))
+    retryRequestsUntilConnected(deleteRequests)
   }
 
   /**
@@ -528,9 +538,9 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    */
   def registerZNodeChangeHandlerAndCheckExistence(zNodeChangeHandler: ZNodeChangeHandler): Unit = {
     zookeeperClient.registerZNodeChangeHandler(zNodeChangeHandler)
-    val existsResponse = retryUntilConnected(ExistsRequest(zNodeChangeHandler.path, null)).asInstanceOf[ExistsResponse]
-    if (Code.get(existsResponse.rc) != Code.OK && Code.get(existsResponse.rc) != Code.NONODE) {
-      throw KeeperException.create(Code.get(existsResponse.rc))
+    val existsResponse = retryRequestUntilConnected(ExistsRequest(zNodeChangeHandler.path))
+    if (existsResponse.resultCode != Code.OK && existsResponse.resultCode != Code.NONODE) {
+      throw existsResponse.resultException.get
     }
   }
 
@@ -574,40 +584,40 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
   }
 
   private def deleteRecursive(path: String): Unit = {
-    val getChildrenResponse = retryUntilConnected(GetChildrenRequest(path, null)).asInstanceOf[GetChildrenResponse]
-    if (Code.get(getChildrenResponse.rc) == Code.OK) {
+    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(path))
+    if (getChildrenResponse.resultCode == Code.OK) {
       getChildrenResponse.children.foreach(child => deleteRecursive(s"$path/$child"))
-      val deleteResponse = retryUntilConnected(DeleteRequest(path, -1, null))
-      if (Code.get(deleteResponse.rc) != Code.OK && Code.get(deleteResponse.rc) != Code.NONODE) {
-        throw KeeperException.create(Code.get(deleteResponse.rc))
+      val deleteResponse = retryRequestUntilConnected(DeleteRequest(path, -1))
+      if (deleteResponse.resultCode != Code.OK && deleteResponse.resultCode != Code.NONODE) {
+        throw deleteResponse.resultException.get
       }
-    } else if (Code.get(getChildrenResponse.rc) != Code.NONODE) {
-      throw KeeperException.create(Code.get(getChildrenResponse.rc))
+    } else if (getChildrenResponse.resultCode != Code.NONODE) {
+      throw getChildrenResponse.resultException.get
     }
   }
   private def createTopicPartition(partitions: Seq[TopicAndPartition]) = {
     val createRequests = partitions.map { partition =>
       val path = TopicPartitionZNode.path(partition)
       val data = TopicPartitionZNode.encode
-      CreateRequest(path, data, acls(path), CreateMode.PERSISTENT, partition)
+      CreateRequest(path, data, acls(path), CreateMode.PERSISTENT, Some(partition))
     }
-    retryUntilConnected(createRequests).map(_.asInstanceOf[CreateResponse])
+    retryRequestsUntilConnected(createRequests)
   }
 
   private def createTopicPartitions(topics: Seq[String]) = {
     val createRequests = topics.map { topic =>
       val path = TopicPartitionsZNode.path(topic)
       val data = TopicPartitionsZNode.encode
-      CreateRequest(path, data, acls(path), CreateMode.PERSISTENT, topic)
+      CreateRequest(path, data, acls(path), CreateMode.PERSISTENT, Some(topic))
     }
-    retryUntilConnected(createRequests).map(_.asInstanceOf[CreateResponse])
+    retryRequestsUntilConnected(createRequests)
   }
 
   private def getTopicConfigs(topics: Seq[String]) = {
     val getDataRequests = topics.map { topic =>
-      GetDataRequest(ConfigEntityZNode.path(ConfigType.Topic, topic), topic)
+      GetDataRequest(ConfigEntityZNode.path(ConfigType.Topic, topic), ctx = Some(topic))
     }
-    retryUntilConnected(getDataRequests).map(_.asInstanceOf[GetDataResponse])
+    retryRequestsUntilConnected(getDataRequests)
   }
 
   private def acls(path: String) = {
@@ -615,22 +625,23 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
     ZkUtils.defaultAcls(isSecure, path).asScala
   }
 
-  private def retryUntilConnected(request: AsyncRequest): AsyncResponse = {
-    retryUntilConnected(Seq(request)).head
+  private def retryRequestUntilConnected[Req <: AsyncRequest](request: Req): Req#Response = {
+    retryRequestsUntilConnected(Seq(request)).head
   }
 
-  private def retryUntilConnected(requests: Seq[AsyncRequest]): Seq[AsyncResponse] = {
+  private def retryRequestsUntilConnected[Req <: AsyncRequest](requests: Seq[Req]): Seq[Req#Response] = {
     var remaining = requests
-    var responses: Seq[AsyncResponse] = Seq.empty[AsyncResponse]
+    var responses: Seq[Req#Response] = Seq.empty[Req#Response]
     while (remaining.nonEmpty) {
-      responses = zookeeperClient.handle(remaining)
+      responses = zookeeperClient.handleRequests(remaining)
       val requestResponsePairs = remaining.zip(responses)
       val (passed, connectionLoss) = requestResponsePairs.partition { case (_, response) =>
-        Code.get(response.rc) != Code.CONNECTIONLOSS
+        response.resultCode != Code.CONNECTIONLOSS
       }
       responses ++= passed.map { case (_, response) => response }
       remaining = connectionLoss.map { case (request, _) => request }
-      if (remaining.nonEmpty) zookeeperClient.waitUntilConnected()
+      if (remaining.nonEmpty)
+        zookeeperClient.waitUntilConnected()
     }
     responses
   }
@@ -648,9 +659,9 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
 
   private class CheckedEphemeral(path: String, data: Array[Byte]) extends Logging {
     def create(): Code = {
-      val createRequest = CreateRequest(path, data, acls(path), CreateMode.EPHEMERAL, null)
-      val createResponse = retryUntilConnected(createRequest)
-      val code = Code.get(createResponse.rc)
+      val createRequest = CreateRequest(path, data, acls(path), CreateMode.EPHEMERAL)
+      val createResponse = retryRequestUntilConnected(createRequest)
+      val code = createResponse.resultCode
       if (code == Code.OK) {
         code
       } else if (code == Code.NODEEXISTS) {
@@ -662,9 +673,9 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
     }
 
     private def get(): Code = {
-      val getDataRequest = GetDataRequest(path, null)
-      val getDataResponse = retryUntilConnected(getDataRequest).asInstanceOf[GetDataResponse]
-      val code = Code.get(getDataResponse.rc)
+      val getDataRequest = GetDataRequest(path)
+      val getDataResponse = retryRequestUntilConnected(getDataRequest)
+      val code = getDataResponse.resultCode
       if (code == Code.OK) {
         if (getDataResponse.stat.getEphemeralOwner != zookeeperClient.sessionId) {
           error(s"Error while creating ephemeral at $path with return code: $code")

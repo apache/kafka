@@ -21,7 +21,6 @@ import kafka.common.{StateChangeFailedException, TopicAndPartition}
 import kafka.controller.Callbacks.CallbackBuilder
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
-import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
 
 import scala.collection.mutable
@@ -331,8 +330,8 @@ class ReplicaStateMachine(config: KafkaConfig,
         return (leaderAndIsrs.toMap, partitionsWithNoLeaderAndIsrInZk, failed.toMap)
     }
     getDataResponses.foreach { getDataResponse =>
-      val partition = getDataResponse.ctx.asInstanceOf[TopicAndPartition]
-      if (Code.get(getDataResponse.rc) == Code.OK) {
+      val partition = getDataResponse.ctx.get.asInstanceOf[TopicAndPartition]
+      if (getDataResponse.resultCode == Code.OK) {
         val leaderIsrAndControllerEpochOpt = TopicPartitionStateZNode.decode(getDataResponse.data, getDataResponse.stat)
         if (leaderIsrAndControllerEpochOpt.isEmpty) {
           partitionsWithNoLeaderAndIsrInZk += partition
@@ -347,10 +346,10 @@ class ReplicaStateMachine(config: KafkaConfig,
             leaderAndIsrs.put(partition, leaderIsrAndControllerEpoch.leaderAndIsr)
           }
         }
-      } else if (Code.get(getDataResponse.rc) == Code.NONODE) {
+      } else if (getDataResponse.resultCode == Code.NONODE) {
         partitionsWithNoLeaderAndIsrInZk += partition
       } else {
-        failed.put(partition, KeeperException.create(Code.get(getDataResponse.rc)))
+        failed.put(partition, getDataResponse.resultException.get)
       }
     }
     (leaderAndIsrs.toMap, partitionsWithNoLeaderAndIsrInZk, failed.toMap)

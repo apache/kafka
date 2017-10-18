@@ -178,7 +178,7 @@ class ReplicaStateMachineTest extends JUnitSuite {
     val updatedLeaderAndIsr = adjustedLeaderAndIsr.withZkVersion(adjustedLeaderAndIsr .zkVersion + 1)
     val updatedLeaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(updatedLeaderAndIsr, controllerEpoch)
     EasyMock.expect(mockZkUtils.getTopicPartitionStatesRaw(partitions))
-      .andReturn(Seq(GetDataResponse(Code.OK.intValue(), null, partition,
+      .andReturn(Seq(GetDataResponse(Code.OK, null, Some(partition),
         TopicPartitionStateZNode.encode(leaderIsrAndControllerEpoch), stat)))
     EasyMock.expect(mockZkUtils.updateLeaderAndIsr(Map(partition -> adjustedLeaderAndIsr), controllerEpoch))
       .andReturn(Map(partition -> updatedLeaderAndIsr), Seq.empty, Map.empty)

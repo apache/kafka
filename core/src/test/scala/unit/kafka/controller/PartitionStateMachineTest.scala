@@ -82,7 +82,7 @@ class PartitionStateMachineTest extends JUnitSuite {
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(brokerId, List(brokerId)), controllerEpoch)
     EasyMock.expect(mockControllerBrokerRequestBatch.newBatch())
     EasyMock.expect(mockZkUtils.createTopicPartitionStatesRaw(Map(partition -> leaderIsrAndControllerEpoch)))
-      .andReturn(Seq(CreateResponse(Code.OK.intValue(), null, partition, null)))
+      .andReturn(Seq(CreateResponse(Code.OK, null, Some(partition), null)))
     EasyMock.expect(mockControllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(Seq(brokerId),
       partition.topic, partition.partition, leaderIsrAndControllerEpoch, Seq(brokerId), isNew = true))
     EasyMock.expect(mockControllerBrokerRequestBatch.sendRequestsToBrokers(controllerEpoch))
@@ -116,7 +116,7 @@ class PartitionStateMachineTest extends JUnitSuite {
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(brokerId, List(brokerId)), controllerEpoch)
     EasyMock.expect(mockControllerBrokerRequestBatch.newBatch())
     EasyMock.expect(mockZkUtils.createTopicPartitionStatesRaw(Map(partition -> leaderIsrAndControllerEpoch)))
-      .andReturn(Seq(CreateResponse(Code.NODEEXISTS.intValue(), null, partition, null)))
+      .andReturn(Seq(CreateResponse(Code.NODEEXISTS, null, Some(partition), null)))
     EasyMock.expect(mockControllerBrokerRequestBatch.sendRequestsToBrokers(controllerEpoch))
     EasyMock.replay(mockZkUtils, mockControllerBrokerRequestBatch)
     partitionStateMachine.handleStateChanges(partitions, OnlinePartition, Option(OfflinePartitionLeaderElectionStrategy))
@@ -150,7 +150,7 @@ class PartitionStateMachineTest extends JUnitSuite {
     val stat = new Stat(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
     EasyMock.expect(mockControllerBrokerRequestBatch.newBatch())
     EasyMock.expect(mockZkUtils.getTopicPartitionStatesRaw(partitions))
-      .andReturn(Seq(GetDataResponse(Code.OK.intValue(), null, partition,
+      .andReturn(Seq(GetDataResponse(Code.OK, null, Some(partition),
         TopicPartitionStateZNode.encode(leaderIsrAndControllerEpoch), stat)))
 
     val leaderAndIsrAfterElection = leaderAndIsr.newLeader(brokerId)
@@ -182,7 +182,7 @@ class PartitionStateMachineTest extends JUnitSuite {
     val stat = new Stat(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
     EasyMock.expect(mockControllerBrokerRequestBatch.newBatch())
     EasyMock.expect(mockZkUtils.getTopicPartitionStatesRaw(partitions))
-      .andReturn(Seq(GetDataResponse(Code.OK.intValue(), null, partition,
+      .andReturn(Seq(GetDataResponse(Code.OK, null, Some(partition),
         TopicPartitionStateZNode.encode(leaderIsrAndControllerEpoch), stat)))
 
     val leaderAndIsrAfterElection = leaderAndIsr.newLeaderAndIsr(otherBrokerId, List(otherBrokerId))
@@ -233,7 +233,8 @@ class PartitionStateMachineTest extends JUnitSuite {
     val stat = new Stat(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
     EasyMock.expect(mockControllerBrokerRequestBatch.newBatch())
     EasyMock.expect(mockZkUtils.getTopicPartitionStatesRaw(partitions))
-      .andReturn(Seq(GetDataResponse(Code.OK.intValue(), null, partition, TopicPartitionStateZNode.encode(leaderIsrAndControllerEpoch), stat)))
+      .andReturn(Seq(GetDataResponse(Code.OK, null, Some(partition),
+        TopicPartitionStateZNode.encode(leaderIsrAndControllerEpoch), stat)))
 
     EasyMock.expect(mockZkUtils.getLogConfigs(Seq.empty, config.originals()))
       .andReturn((Map(partition.topic -> LogConfig()), Map.empty))
@@ -284,7 +285,8 @@ class PartitionStateMachineTest extends JUnitSuite {
     val stat = new Stat(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
     EasyMock.expect(mockControllerBrokerRequestBatch.newBatch())
     EasyMock.expect(mockZkUtils.getTopicPartitionStatesRaw(partitions))
-      .andReturn(Seq(GetDataResponse(Code.NONODE.intValue(), null, partition, TopicPartitionStateZNode.encode(leaderIsrAndControllerEpoch), stat)))
+      .andReturn(Seq(GetDataResponse(Code.NONODE, null, Some(partition),
+        TopicPartitionStateZNode.encode(leaderIsrAndControllerEpoch), stat)))
 
     EasyMock.expect(mockControllerBrokerRequestBatch.sendRequestsToBrokers(controllerEpoch))
     EasyMock.replay(mockZkUtils, mockControllerBrokerRequestBatch)
