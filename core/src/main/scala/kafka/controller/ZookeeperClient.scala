@@ -364,9 +364,11 @@ case class GetChildrenRequest(path: String, shouldWatch: Option[Boolean] = None,
 }
 
 sealed trait AsyncResponse {
-  val resultCode: Code
-  val path: String
-  val ctx: Option[Any]
+  def resultCode: Code
+  def path: String
+  def ctx: Option[Any]
+
+  /** Return None if the result code is OK and KeeperException otherwise. */
   def resultException: Option[KeeperException] =
     if (resultCode == Code.OK) None else Some(KeeperException.create(resultCode, path))
 }
