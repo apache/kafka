@@ -197,8 +197,7 @@ public class ProducerPerformance {
             }
         } catch (ArgumentParserException e) {
 
-            opts.parser.handleError(e);
-            Exit.exit(1);
+            CommandLineUtils.printErrorAndDie(opts.parser, e);
         }
     }
 

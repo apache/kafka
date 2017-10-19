@@ -26,50 +26,40 @@ import static org.junit.Assert.assertEquals;
 public class ProducerPerformanceTest {
 
     @Test
-    public void testBootstrapServerOption() {
+    public void testBootstrapServerOption() throws Exception {
 
-        try {
-            String[] args = {
-                "--bootstrap-server", "server:9092",
-                "--topic", "test",
-                "--throughput", "10",
-                "--num-records", "10",
-                "--record-size", "10",
-                "--producer-props", "acks=1"
-            };
+        String[] args = {
+            "--bootstrap-server", "server:9092",
+            "--topic", "test",
+            "--throughput", "10",
+            "--num-records", "10",
+            "--record-size", "10",
+            "--producer-props", "acks=1"
+        };
 
-            ProducerPerformance producerPerformance = new ProducerPerformance();
-            ProducerPerformance.ProducerPerformanceOptions opts = new ProducerPerformance.ProducerPerformanceOptions(args);
-            Properties props = producerPerformance.getProducerProps(opts);
+        ProducerPerformance producerPerformance = new ProducerPerformance();
+        ProducerPerformance.ProducerPerformanceOptions opts = new ProducerPerformance.ProducerPerformanceOptions(args);
+        Properties props = producerPerformance.getProducerProps(opts);
 
-            assertEquals(props.get(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG), "server:9092");
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        assertEquals(props.get(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG), "server:9092");
     }
 
     @Test
-    public void testBootstrapServerOverriddenOption() {
+    public void testBootstrapServerOverriddenOption() throws Exception {
 
-        try {
-            String[] args = {
-                "--bootstrap-server", "server:9092",
-                "--topic", "test",
-                "--throughput", "10",
-                "--num-records", "10",
-                "--record-size", "10",
-                "--producer-props", "acks=1", "bootstrap.servers=differentserver:9092"
-            };
+        String[] args = {
+            "--bootstrap-server", "server:9092",
+            "--topic", "test",
+            "--throughput", "10",
+            "--num-records", "10",
+            "--record-size", "10",
+            "--producer-props", "acks=1", "bootstrap.servers=differentserver:9092"
+        };
 
-            ProducerPerformance producerPerformance = new ProducerPerformance();
-            ProducerPerformance.ProducerPerformanceOptions opts = new ProducerPerformance.ProducerPerformanceOptions(args);
-            Properties props = producerPerformance.getProducerProps(opts);
+        ProducerPerformance producerPerformance = new ProducerPerformance();
+        ProducerPerformance.ProducerPerformanceOptions opts = new ProducerPerformance.ProducerPerformanceOptions(args);
+        Properties props = producerPerformance.getProducerProps(opts);
 
-            assertEquals(props.get(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG), "differentserver:9092");
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        assertEquals(props.get(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG), "differentserver:9092");
     }
 }
