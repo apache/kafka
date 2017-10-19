@@ -24,6 +24,7 @@ import kafka.common.TopicAndPartition
 import kafka.log.LogConfig
 import kafka.server.ConfigType
 import kafka.utils.{Logging, ZkUtils}
+import kafka.zookeeper._
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.Stat
 import org.apache.zookeeper.{CreateMode, KeeperException}
