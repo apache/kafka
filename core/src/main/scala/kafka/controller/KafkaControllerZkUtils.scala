@@ -631,18 +631,25 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
     val responses = new ArrayBuffer[Req#Response]
     while (remainingRequests.nonEmpty) {
       val batchResponses = zookeeperClient.handleRequests(remainingRequests)
-      val requestResponsePairs = remainingRequests.zip(batchResponses)
 
-      remainingRequests.clear()
-      requestResponsePairs.foreach { case (request, response) =>
-        if (response.resultCode == Code.CONNECTIONLOSS)
-          remainingRequests += request
-        else
-          responses += response
+      // Only execute slow path if we find a response with CONNECTIONLOSS
+      if (batchResponses.exists(_.resultCode == Code.CONNECTIONLOSS)) {
+        val requestResponsePairs = remainingRequests.zip(batchResponses)
+
+        remainingRequests.clear()
+        requestResponsePairs.foreach { case (request, response) =>
+          if (response.resultCode == Code.CONNECTIONLOSS)
+            remainingRequests += request
+          else
+            responses += response
+        }
+
+        if (remainingRequests.nonEmpty)
+          zookeeperClient.waitUntilConnected()
+      } else {
+        remainingRequests.clear()
+        responses ++= batchResponses
       }
-
-      if (remainingRequests.nonEmpty)
-        zookeeperClient.waitUntilConnected()
     }
     responses
   }
