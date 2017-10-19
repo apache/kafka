@@ -885,7 +885,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: KafkaControllerZkUtils, 
           // assigned replica list
           val newLeaderAndIsr = leaderAndIsr.newEpochAndZkVersion
           // update the new leadership decision in zookeeper or retry
-          val UpdateLeaderAndIsrResult(successfulUpdates, updatesToRetry, failedUpdates) =
+          val UpdateLeaderAndIsrResult(successfulUpdates, _, failedUpdates) =
             zkUtils.updateLeaderAndIsr(immutable.Map(partition -> newLeaderAndIsr), epoch)
           if (successfulUpdates.contains(partition)) {
             val finalLeaderAndIsr = successfulUpdates(partition)
@@ -979,10 +979,10 @@ class KafkaController(val config: KafkaConfig, zkUtils: KafkaControllerZkUtils, 
       val partitionsToActOn = controllerContext.partitionsOnBroker(id).filter { partition =>
         controllerContext.partitionReplicaAssignment(partition).size > 1 && controllerContext.partitionLeadershipInfo.contains(partition)
       }
-      val (partitionsLeadByBroker, partitionsFollowedByBroker) = partitionsToActOn.partition { partition =>
+      val (partitionsLedByBroker, partitionsFollowedByBroker) = partitionsToActOn.partition { partition =>
         controllerContext.partitionLeadershipInfo(partition).leaderAndIsr.leader == id
       }
-      partitionStateMachine.handleStateChanges(partitionsLeadByBroker.toSeq, OnlinePartition, Option(ControlledShutdownPartitionLeaderElectionStrategy))
+      partitionStateMachine.handleStateChanges(partitionsLedByBroker.toSeq, OnlinePartition, Option(ControlledShutdownPartitionLeaderElectionStrategy))
       try {
         brokerRequestBatch.newBatch()
         partitionsFollowedByBroker.foreach { partition =>
