@@ -513,6 +513,26 @@ public class StreamThread extends Thread {
         } else {
             // try to fetch some records if necessary
             records = pollRequests(pollTimeMs);
+
+            // if state changed after the poll call,
+            // try to initialize the assigned tasks again
+            if (state == State.PARTITIONS_ASSIGNED) {
+                active.initializeNewTasks();
+                standby.initializeNewTasks();
+
+                final Collection<TopicPartition> restored = storeChangelogReader.restore();
+                final Set<TopicPartition> resumed = active.updateRestored(restored);
+
+                if (!resumed.isEmpty()) {
+                    log.trace("{} resuming partitions {}", logPrefix, resumed);
+                    consumer.resume(resumed);
+                }
+
+                if (active.allTasksRunning()) {
+                    assignStandbyPartitions();
+                    setState(State.RUNNING);
+                }
+            }
         }
 
         if (records != null && !records.isEmpty() && active.hasRunningTasks()) {
