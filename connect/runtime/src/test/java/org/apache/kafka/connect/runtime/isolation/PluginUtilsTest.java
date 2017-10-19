@@ -262,8 +262,9 @@ public class PluginUtilsTest {
     }
 
     private void assertUrls(List<Path> expected, List<Path> actual) {
+        List<Path> actualCopy = new ArrayList<>(actual);
         Collections.sort(expected);
-        Collections.sort(actual);
-        assertEquals(expected, actual);
+        Collections.sort(actualCopy);
+        assertEquals(expected, actualCopy);
     }
 }
