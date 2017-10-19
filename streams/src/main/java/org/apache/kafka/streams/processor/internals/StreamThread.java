@@ -806,6 +806,14 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         } else {
             // try to fetch some records if necessary
             records = pollRequests(pollTimeMs);
+
+            // if state changed after the poll call,
+            // try to initialize the assigned tasks again
+            if (state == State.PARTITIONS_ASSIGNED) {
+                if (taskManager.updateNewAndRestoringTasks()) {
+                    setState(State.RUNNING);
+                }
+            }
         }
 
         if (records != null && !records.isEmpty() && taskManager.hasActiveRunningTasks()) {
