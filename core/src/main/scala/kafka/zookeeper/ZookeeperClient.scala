@@ -79,19 +79,20 @@ class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTi
     val countDownLatch = new CountDownLatch(requests.size)
     val responseQueue = new ArrayBlockingQueue[Req#Response](requests.size)
 
+    def processResponse(response: Req#Response): Unit = {
+      responseQueue.add(response)
+      countDownLatch.countDown()
+    }
+
     requests.foreach { request =>
-      val processedRequest: Req = request match {
-        case r: WatchableAsyncRequest if r.shouldWatch.isEmpty =>
-          val shouldWatch = r match {
-            case _: GetChildrenRequest => zNodeChildChangeHandlers.contains(r.path)
-            case _: ExistsRequest | _: GetDataRequest => zNodeChangeHandlers.contains(r.path)
+      request match {
+        case watchableRequest: WatchableAsyncRequest =>
+          val shouldWatch = watchableRequest match {
+            case _: GetChildrenRequest => zNodeChildChangeHandlers.contains(watchableRequest.path)
+            case _: ExistsRequest | _: GetDataRequest => zNodeChangeHandlers.contains(watchableRequest.path)
           }
-          r.withWatch(Some(shouldWatch)).asInstanceOf[Req]
-        case r => r
-      }
-      processedRequest.send(zooKeeper) { response =>
-        responseQueue.add(response)
-        countDownLatch.countDown()
+          watchableRequest.send(zooKeeper, shouldWatch)(response => processResponse(response.asInstanceOf[Req#Response]))
+        case _ => request.send(zooKeeper)(processResponse)
       }
     }
     countDownLatch.await()
@@ -260,18 +261,22 @@ sealed trait AsyncRequest {
   type Response <: AsyncResponse
   def path: String
   def ctx: Option[Any]
-  def send(zooKeeper: ZooKeeper)(processResponse: Response => Unit)
+
+  protected[zookeeper] def send(zooKeeper: ZooKeeper)(processResponse: Response => Unit)
 }
 
 sealed trait WatchableAsyncRequest extends AsyncRequest {
-  def shouldWatch: Option[Boolean]
-  def withWatch(b: Option[Boolean]): WatchableAsyncRequest
+
+  final protected[zookeeper] def send(zooKeeper: ZooKeeper)(processResponse: Response => Unit) =
+    send(zooKeeper, false)(processResponse)
+
+  protected[zookeeper] def send(zooKeeper: ZooKeeper, watch: Boolean)(processResponse: Response => Unit)
 }
 
 case class CreateRequest(path: String, data: Array[Byte], acl: Seq[ACL], createMode: CreateMode, ctx: Option[Any] = None) extends AsyncRequest {
   type Response = CreateResponse
 
-  def send(zooKeeper: ZooKeeper)(processResponse: Response => Unit): Unit = {
+  protected[zookeeper] def send(zooKeeper: ZooKeeper)(processResponse: Response => Unit): Unit = {
     zooKeeper.create(path, data, acl.asJava, createMode, new StringCallback {
       override def processResult(rc: Int, path: String, ctx: Any, name: String): Unit =
         processResponse(CreateResponse(Code.get(rc), path, Option(ctx), name))
@@ -282,7 +287,7 @@ case class CreateRequest(path: String, data: Array[Byte], acl: Seq[ACL], createM
 case class DeleteRequest(path: String, version: Int, ctx: Option[Any] = None) extends AsyncRequest {
   type Response = DeleteResponse
 
-  def send(zooKeeper: ZooKeeper)(processResponse: Response => Unit): Unit = {
+  protected[zookeeper] def send(zooKeeper: ZooKeeper)(processResponse: Response => Unit): Unit = {
     zooKeeper.delete(path, version, new VoidCallback {
       override def processResult(rc: Int, path: String, ctx: Any): Unit =
         processResponse(DeleteResponse(Code.get(rc), path, Option(ctx)))
@@ -290,13 +295,11 @@ case class DeleteRequest(path: String, version: Int, ctx: Option[Any] = None) ex
   }
 }
 
-case class ExistsRequest(path: String, shouldWatch: Option[Boolean] = None, ctx: Option[Any] = None) extends WatchableAsyncRequest {
+case class ExistsRequest(path: String, ctx: Option[Any] = None) extends WatchableAsyncRequest {
   type Response = ExistsResponse
 
-  def withWatch(b: Option[Boolean]): ExistsRequest = copy(shouldWatch = b)
-
-  def send(zooKeeper: ZooKeeper)(processResponse: Response => Unit): Unit = {
-    zooKeeper.exists(path, shouldWatch.getOrElse(false), new StatCallback {
+  protected[zookeeper] def send(zooKeeper: ZooKeeper, watch: Boolean)(processResponse: Response => Unit): Unit = {
+    zooKeeper.exists(path, watch, new StatCallback {
       override def processResult(rc: Int, path: String, ctx: Any, stat: Stat) =
         processResponse(ExistsResponse(Code.get(rc), path, Option(ctx), stat))
     }, ctx.orNull)
@@ -306,10 +309,8 @@ case class ExistsRequest(path: String, shouldWatch: Option[Boolean] = None, ctx:
 case class GetDataRequest(path: String, shouldWatch: Option[Boolean] = None, ctx: Option[Any] = None) extends WatchableAsyncRequest {
   type Response = GetDataResponse
 
-  def withWatch(b: Option[Boolean]): GetDataRequest = copy(shouldWatch = b)
-
-  def send(zooKeeper: ZooKeeper)(processResponse: Response => Unit): Unit = {
-    zooKeeper.getData(path, shouldWatch.getOrElse(false), new DataCallback {
+  protected[zookeeper] def send(zooKeeper: ZooKeeper, watch: Boolean)(processResponse: Response => Unit): Unit = {
+    zooKeeper.getData(path, watch, new DataCallback {
       override def processResult(rc: Int, path: String, ctx: Any, data: Array[Byte], stat: Stat) =
         processResponse(GetDataResponse(Code.get(rc), path, Option(ctx), data, stat))
     }, ctx.orNull)
@@ -319,7 +320,7 @@ case class GetDataRequest(path: String, shouldWatch: Option[Boolean] = None, ctx
 case class SetDataRequest(path: String, data: Array[Byte], version: Int, ctx: Option[Any] = None) extends AsyncRequest {
   type Response = SetDataResponse
 
-  def send(zooKeeper: ZooKeeper)(processResponse: Response => Unit): Unit = {
+  protected[zookeeper] def send(zooKeeper: ZooKeeper)(processResponse: Response => Unit): Unit = {
     zooKeeper.setData(path, data, version, new StatCallback {
       override def processResult(rc: Int, path: String, ctx: Any, stat: Stat) =
         processResponse(SetDataResponse(Code.get(rc), path, Option(ctx), stat))
@@ -330,7 +331,7 @@ case class SetDataRequest(path: String, data: Array[Byte], version: Int, ctx: Op
 case class GetAclRequest(path: String, ctx: Option[Any] = None) extends AsyncRequest {
   type Response = GetAclResponse
 
-  def send(zooKeeper: ZooKeeper)(processResponse: Response => Unit): Unit = {
+  protected[zookeeper] def send(zooKeeper: ZooKeeper)(processResponse: Response => Unit): Unit = {
     zooKeeper.getACL(path, null, new ACLCallback {
       override def processResult(rc: Int, path: String, ctx: Any, acl: java.util.List[ACL], stat: Stat): Unit = {
         processResponse(GetAclResponse(Code.get(rc), path, Option(ctx), Option(acl).map(_.asScala).getOrElse(Seq.empty),
@@ -342,7 +343,7 @@ case class GetAclRequest(path: String, ctx: Option[Any] = None) extends AsyncReq
 case class SetAclRequest(path: String, acl: Seq[ACL], version: Int, ctx: Option[Any] = None) extends AsyncRequest {
   type Response = SetAclResponse
 
-  def send(zooKeeper: ZooKeeper)(processResponse: Response => Unit): Unit = {
+  protected[zookeeper] def send(zooKeeper: ZooKeeper)(processResponse: Response => Unit): Unit = {
     zooKeeper.setACL(path, acl.asJava, version, new StatCallback {
       override def processResult(rc: Int, path: String, ctx: Any, stat: Stat) =
         processResponse(SetAclResponse(Code.get(rc), path, Option(ctx), stat))
@@ -353,10 +354,8 @@ case class SetAclRequest(path: String, acl: Seq[ACL], version: Int, ctx: Option[
 case class GetChildrenRequest(path: String, shouldWatch: Option[Boolean] = None, ctx: Option[Any] = None) extends WatchableAsyncRequest {
   type Response = GetChildrenResponse
 
-  def withWatch(b: Option[Boolean]): GetChildrenRequest = copy(shouldWatch = b)
-
-  def send(zooKeeper: ZooKeeper)(processResponse: Response => Unit): Unit = {
-    zooKeeper.getChildren(path, shouldWatch.getOrElse(false), new Children2Callback {
+  protected[zookeeper] def send(zooKeeper: ZooKeeper, watch: Boolean)(processResponse: Response => Unit): Unit = {
+    zooKeeper.getChildren(path, watch, new Children2Callback {
       override def processResult(rc: Int, path: String, ctx: Any, children: java.util.List[String], stat: Stat) =
         processResponse(GetChildrenResponse(Code.get(rc), path, Option(ctx),
           Option(children).map(_.asScala).getOrElse(Seq.empty), stat))
