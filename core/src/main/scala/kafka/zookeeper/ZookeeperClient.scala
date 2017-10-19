@@ -327,25 +327,25 @@ case class SetDataRequest(path: String, data: Array[Byte], version: Int, ctx: Op
   }
 }
 
-case class GetACLRequest(path: String, ctx: Option[Any] = None) extends AsyncRequest {
-  type Response = GetACLResponse
+case class GetAclRequest(path: String, ctx: Option[Any] = None) extends AsyncRequest {
+  type Response = GetAclResponse
 
   def send(zooKeeper: ZooKeeper)(processResponse: Response => Unit): Unit = {
     zooKeeper.getACL(path, null, new ACLCallback {
       override def processResult(rc: Int, path: String, ctx: Any, acl: java.util.List[ACL], stat: Stat): Unit = {
-        processResponse(GetACLResponse(Code.get(rc), path, Option(ctx), Option(acl).map(_.asScala).getOrElse(Seq.empty),
+        processResponse(GetAclResponse(Code.get(rc), path, Option(ctx), Option(acl).map(_.asScala).getOrElse(Seq.empty),
           stat))
       }}, ctx.orNull)
   }
 }
 
-case class SetACLRequest(path: String, acl: Seq[ACL], version: Int, ctx: Option[Any] = None) extends AsyncRequest {
-  type Response = SetACLResponse
+case class SetAclRequest(path: String, acl: Seq[ACL], version: Int, ctx: Option[Any] = None) extends AsyncRequest {
+  type Response = SetAclResponse
 
   def send(zooKeeper: ZooKeeper)(processResponse: Response => Unit): Unit = {
     zooKeeper.setACL(path, acl.asJava, version, new StatCallback {
       override def processResult(rc: Int, path: String, ctx: Any, stat: Stat) =
-        processResponse(SetACLResponse(Code.get(rc), path, Option(ctx), stat))
+        processResponse(SetAclResponse(Code.get(rc), path, Option(ctx), stat))
       }, ctx.orNull)
   }
 }
@@ -378,8 +378,8 @@ case class DeleteResponse(resultCode: Code, path: String, ctx: Option[Any]) exte
 case class ExistsResponse(resultCode: Code, path: String, ctx: Option[Any], stat: Stat) extends AsyncResponse
 case class GetDataResponse(resultCode: Code, path: String, ctx: Option[Any], data: Array[Byte], stat: Stat) extends AsyncResponse
 case class SetDataResponse(resultCode: Code, path: String, ctx: Option[Any], stat: Stat) extends AsyncResponse
-case class GetACLResponse(resultCode: Code, path: String, ctx: Option[Any], acl: Seq[ACL], stat: Stat) extends AsyncResponse
-case class SetACLResponse(resultCode: Code, path: String, ctx: Option[Any], stat: Stat) extends AsyncResponse
+case class GetAclResponse(resultCode: Code, path: String, ctx: Option[Any], acl: Seq[ACL], stat: Stat) extends AsyncResponse
+case class SetAclResponse(resultCode: Code, path: String, ctx: Option[Any], stat: Stat) extends AsyncResponse
 case class GetChildrenResponse(resultCode: Code, path: String, ctx: Option[Any], children: Seq[String], stat: Stat) extends AsyncResponse
 
 class ZookeeperClientException(message: String) extends RuntimeException(message)

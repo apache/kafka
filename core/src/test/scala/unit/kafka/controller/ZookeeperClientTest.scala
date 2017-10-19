@@ -133,29 +133,29 @@ class ZookeeperClientTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testGetACLNonExistentZNode(): Unit = {
+  def testGetAclNonExistentZNode(): Unit = {
     val zookeeperClient = new ZookeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, null)
-    val getACLResponse = zookeeperClient.handleRequest(GetACLRequest(mockPath))
-    assertEquals("Response code should be NONODE", Code.NONODE, getACLResponse.resultCode)
+    val getAclResponse = zookeeperClient.handleRequest(GetAclRequest(mockPath))
+    assertEquals("Response code should be NONODE", Code.NONODE, getAclResponse.resultCode)
   }
 
   @Test
-  def testGetACLExistingZNode(): Unit = {
+  def testGetAclExistingZNode(): Unit = {
     import scala.collection.JavaConverters._
     val zookeeperClient = new ZookeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, null)
     val createResponse = zookeeperClient.handleRequest(CreateRequest(mockPath, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT))
     assertEquals("Response code for create should be OK", Code.OK, createResponse.resultCode)
-    val getACLResponse = zookeeperClient.handleRequest(GetACLRequest(mockPath))
-    assertEquals("Response code for getACL should be OK", Code.OK, getACLResponse.resultCode)
-    assertEquals("ACL should be " + ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, getACLResponse.acl)
+    val getAclResponse = zookeeperClient.handleRequest(GetAclRequest(mockPath))
+    assertEquals("Response code for getAcl should be OK", Code.OK, getAclResponse.resultCode)
+    assertEquals("ACL should be " + ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, getAclResponse.acl)
   }
 
   @Test
-  def testSetACLNonExistentZNode(): Unit = {
+  def testSetAclNonExistentZNode(): Unit = {
     import scala.collection.JavaConverters._
     val zookeeperClient = new ZookeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, null)
-    val setACLResponse = zookeeperClient.handleRequest(SetACLRequest(mockPath, ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, -1))
-    assertEquals("Response code should be NONODE", Code.NONODE, setACLResponse.resultCode)
+    val setAclResponse = zookeeperClient.handleRequest(SetAclRequest(mockPath, ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, -1))
+    assertEquals("Response code should be NONODE", Code.NONODE, setAclResponse.resultCode)
   }
 
   @Test
