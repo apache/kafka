@@ -202,11 +202,11 @@ public class ProducerConfig extends AbstractConfig {
     /** <code>enable.idempotence</code> */
     public static final String ENABLE_IDEMPOTENCE_CONFIG = "enable.idempotence";
     public static final String ENABLE_IDEMPOTENCE_DOC = "When set to 'true', the producer will ensure that exactly one copy of each message is written in the stream. If 'false', producer "
-                                                        + "retries due to broker failures, etc., may write duplicates of the retried message in the stream. This is set to 'false' by default. "
-                                                        + "Note that enabling idempotence requires <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to be set to 1 and "
-                                                        + "<code>" + RETRIES_CONFIG + "</code> cannot be zero. Additionally " + ACKS_CONFIG + " must be set to 'all'. If these values "
-                                                        + "are left at their defaults, we will override the default to be suitable. "
-                                                        + "If the values are set to something incompatible with the idempotent producer, a ConfigException will be thrown.";
+                                                        + "retries due to broker failures, etc., may write duplicates of the retried message in the stream. "
+                                                        + "Note that enabling idempotence requires <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to be less than or equal to 5, "
+                                                        + "<code>" + RETRIES_CONFIG + "</code> to be greater than 0 and " + ACKS_CONFIG + " must be 'all'. If these values "
+                                                        + "are not explicitly set by the user, suitable values will be chosen. If incompatible values are set, "
+                                                        + "a ConfigException will be thrown.";
 
     /** <code> transaction.timeout.ms </code> */
     public static final String TRANSACTION_TIMEOUT_CONFIG = "transaction.timeout.ms";
