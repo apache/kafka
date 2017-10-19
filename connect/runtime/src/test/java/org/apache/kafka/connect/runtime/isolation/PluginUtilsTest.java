@@ -21,6 +21,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -144,59 +145,36 @@ public class PluginUtilsTest {
 
     @Test
     public void testEmptyStructurePluginUrls() throws Exception {
-        Files.createDirectories(pluginPath.resolve("connectorA"));
-        Files.createDirectories(pluginPath.resolve("connectorB/deps"));
-        Files.createDirectories(pluginPath.resolve("transformC/deps"));
-        Files.createDirectories(pluginPath.resolve("transformC/more-deps"));
-        Files.createFile(pluginPath.resolve("transformC/more-deps/README.txt"));
+        createBasicDirectoryLayout();
         assertEquals(Collections.<Path>emptyList(), PluginUtils.pluginUrls(pluginPath));
     }
 
     @Test
     public void testPluginUrlsWithJars() throws Exception {
-        List<Path> expectedUrls = new ArrayList<>();
-        Files.createDirectories(pluginPath.resolve("connectorA"));
-        Files.createDirectories(pluginPath.resolve("connectorB/deps"));
-        Files.createDirectories(pluginPath.resolve("transformC/deps"));
-        Files.createDirectories(pluginPath.resolve("transformC/more-deps"));
-        Files.createFile(pluginPath.resolve("transformC/more-deps/README.txt"));
+        createBasicDirectoryLayout();
 
-        expectedUrls.add(Files.createFile(pluginPath.resolve("connectorA/my-sink.jar")));
-        expectedUrls.add(Files.createFile(pluginPath.resolve("connectorB/a-source.jar")));
-        expectedUrls.add(Files.createFile(pluginPath.resolve("transformC/simple-transform.jar")));
-        expectedUrls.add(Files.createFile(
-                pluginPath.resolve("transformC/deps/another-transform.jar"))
-        );
-        Collections.sort(expectedUrls);
-        List<Path> actual = PluginUtils.pluginUrls(pluginPath);
-        Collections.sort(actual);
-        assertEquals(expectedUrls, actual);
+        List<Path> expectedUrls = createBasicExpectedUrls();
+
+        assertUrls(expectedUrls, PluginUtils.pluginUrls(pluginPath));
     }
 
     @Test
     public void testPluginUrlsWithZips() throws Exception {
-        List<Path> expectedUrls = new ArrayList<>();
-        Files.createDirectories(pluginPath.resolve("connectorA"));
-        Files.createDirectories(pluginPath.resolve("connectorB/deps"));
-        Files.createDirectories(pluginPath.resolve("transformC/deps"));
-        Files.createDirectories(pluginPath.resolve("transformC/more-deps"));
-        Files.createFile(pluginPath.resolve("transformC/more-deps/README.txt"));
+        createBasicDirectoryLayout();
 
+        List<Path> expectedUrls = new ArrayList<>();
         expectedUrls.add(Files.createFile(pluginPath.resolve("connectorA/my-sink.zip")));
         expectedUrls.add(Files.createFile(pluginPath.resolve("connectorB/a-source.zip")));
-        expectedUrls.add(Files.createFile(pluginPath.resolve("transformC/simple-transform.jar")));
+        expectedUrls.add(Files.createFile(pluginPath.resolve("transformC/simple-transform.zip")));
         expectedUrls.add(Files.createFile(
                 pluginPath.resolve("transformC/deps/another-transform.zip"))
         );
-        Collections.sort(expectedUrls);
-        List<Path> actual = PluginUtils.pluginUrls(pluginPath);
-        Collections.sort(actual);
-        assertEquals(expectedUrls, actual);
+
+        assertUrls(expectedUrls, PluginUtils.pluginUrls(pluginPath));
     }
 
     @Test
     public void testPluginUrlsWithClasses() throws Exception {
-        List<Path> expectedUrls = new ArrayList<>();
         Files.createDirectories(pluginPath.resolve("org/apache/kafka/converters"));
         Files.createDirectories(pluginPath.resolve("com/mycompany/transforms"));
         Files.createDirectories(pluginPath.resolve("edu/research/connectors"));
@@ -205,101 +183,87 @@ public class PluginUtilsTest {
         Files.createDirectories(pluginPath.resolve("com/mycompany/transforms/Blackhole.class"));
         Files.createDirectories(pluginPath.resolve("edu/research/connectors/HalSink.class"));
 
+        List<Path> expectedUrls = new ArrayList<>();
         expectedUrls.add(pluginPath);
-        Collections.sort(expectedUrls);
-        List<Path> actual = PluginUtils.pluginUrls(pluginPath);
-        Collections.sort(actual);
-        assertEquals(expectedUrls, actual);
+
+        assertUrls(expectedUrls, PluginUtils.pluginUrls(pluginPath));
     }
 
     @Test
     public void testPluginUrlsWithAbsoluteSymlink() throws Exception {
-        Path anotherPath = rootDir.newFolder("moreplugins").toPath().toRealPath();
-        List<Path> expectedUrls = new ArrayList<>();
-        Files.createDirectories(pluginPath.resolve("connectorA"));
-        Files.createDirectories(pluginPath.resolve("connectorB/deps"));
-        Files.createDirectories(pluginPath.resolve("transformC/deps"));
-        Files.createDirectories(pluginPath.resolve("transformC/more-deps"));
-        Files.createFile(pluginPath.resolve("transformC/more-deps/README.txt"));
+        createBasicDirectoryLayout();
 
+        Path anotherPath = rootDir.newFolder("moreplugins").toPath().toRealPath();
         Files.createDirectories(anotherPath.resolve("connectorB-deps"));
-        expectedUrls.add(Files.createFile(anotherPath.resolve("connectorB-deps/converter.jar")));
         Files.createSymbolicLink(
                 pluginPath.resolve("connectorB/deps/symlink"),
                 anotherPath.resolve("connectorB-deps")
         );
 
-        expectedUrls.add(Files.createFile(pluginPath.resolve("connectorA/my-sink.jar")));
-        expectedUrls.add(Files.createFile(pluginPath.resolve("connectorB/a-source.jar")));
-        expectedUrls.add(Files.createFile(pluginPath.resolve("transformC/simple-transform.jar")));
-        expectedUrls.add(Files.createFile(
-                pluginPath.resolve("transformC/deps/another-transform.jar"))
-        );
-        Collections.sort(expectedUrls);
-        List<Path> actual = PluginUtils.pluginUrls(pluginPath);
-        Collections.sort(actual);
-        assertEquals(expectedUrls, actual);
+        List<Path> expectedUrls = createBasicExpectedUrls();
+        expectedUrls.add(Files.createFile(anotherPath.resolve("connectorB-deps/converter.jar")));
+
+        assertUrls(expectedUrls, PluginUtils.pluginUrls(pluginPath));
     }
 
     @Test
     public void testPluginUrlsWithRelativeSymlinkBackwards() throws Exception {
-        Path anotherPath = rootDir.newFolder("moreplugins").toPath().toRealPath();
-        List<Path> expectedUrls = new ArrayList<>();
-        Files.createDirectories(pluginPath.resolve("connectorA"));
-        Files.createDirectories(pluginPath.resolve("connectorB/deps"));
-        Files.createDirectories(pluginPath.resolve("transformC/deps"));
-        Files.createDirectories(pluginPath.resolve("transformC/more-deps"));
-        Files.createFile(pluginPath.resolve("transformC/more-deps/README.txt"));
+        createBasicDirectoryLayout();
 
+        Path anotherPath = rootDir.newFolder("moreplugins").toPath().toRealPath();
         Files.createDirectories(anotherPath.resolve("connectorB-deps"));
-        expectedUrls.add(Files.createFile(anotherPath.resolve("connectorB-deps/converter.jar")));
         Files.createSymbolicLink(
                 pluginPath.resolve("connectorB/deps/symlink"),
                 Paths.get("../../../moreplugins/connectorB-deps")
         );
 
-        expectedUrls.add(Files.createFile(pluginPath.resolve("connectorA/my-sink.jar")));
-        expectedUrls.add(Files.createFile(pluginPath.resolve("connectorB/a-source.jar")));
-        expectedUrls.add(Files.createFile(pluginPath.resolve("transformC/simple-transform.jar")));
-        expectedUrls.add(Files.createFile(
-                pluginPath.resolve("transformC/deps/another-transform.jar"))
-        );
-        Collections.sort(expectedUrls);
-        List<Path> actual = PluginUtils.pluginUrls(pluginPath);
-        Collections.sort(actual);
-        assertEquals(expectedUrls, actual);
+        List<Path> expectedUrls = createBasicExpectedUrls();
+        expectedUrls.add(Files.createFile(anotherPath.resolve("connectorB-deps/converter.jar")));
+
+        assertUrls(expectedUrls, PluginUtils.pluginUrls(pluginPath));
     }
 
     @Test
     public void testPluginUrlsWithRelativeSymlinkForwards() throws Exception {
         // Since this test case defines a relative symlink within an already included path, the main
         // assertion of this test is absence of exceptions and correct resolution of paths.
-        List<Path> expectedUrls = new ArrayList<>();
-        Files.createDirectories(pluginPath.resolve("connectorA"));
-        Files.createDirectories(pluginPath.resolve("connectorB/deps"));
+        createBasicDirectoryLayout();
         Files.createDirectories(pluginPath.resolve("connectorB/deps/more"));
-        Files.createDirectories(pluginPath.resolve("transformC/deps"));
-        Files.createDirectories(pluginPath.resolve("transformC/more-deps"));
-        Files.createFile(pluginPath.resolve("transformC/more-deps/README.txt"));
-
-        expectedUrls.add(
-                Files.createFile(pluginPath.resolve("connectorB/deps/more/converter.jar"))
-        );
         Files.createSymbolicLink(
                 pluginPath.resolve("connectorB/deps/symlink"),
                 Paths.get("more")
         );
 
+        List<Path> expectedUrls = createBasicExpectedUrls();
+        expectedUrls.add(
+                Files.createFile(pluginPath.resolve("connectorB/deps/more/converter.jar"))
+        );
+
+        assertUrls(expectedUrls, PluginUtils.pluginUrls(pluginPath));
+    }
+
+    private void createBasicDirectoryLayout() throws IOException {
+        Files.createDirectories(pluginPath.resolve("connectorA"));
+        Files.createDirectories(pluginPath.resolve("connectorB/deps"));
+        Files.createDirectories(pluginPath.resolve("transformC/deps"));
+        Files.createDirectories(pluginPath.resolve("transformC/more-deps"));
+        Files.createFile(pluginPath.resolve("transformC/more-deps/README.txt"));
+    }
+
+    private List<Path> createBasicExpectedUrls() throws IOException {
+        List<Path> expectedUrls = new ArrayList<>();
         expectedUrls.add(Files.createFile(pluginPath.resolve("connectorA/my-sink.jar")));
         expectedUrls.add(Files.createFile(pluginPath.resolve("connectorB/a-source.jar")));
         expectedUrls.add(Files.createFile(pluginPath.resolve("transformC/simple-transform.jar")));
         expectedUrls.add(Files.createFile(
                 pluginPath.resolve("transformC/deps/another-transform.jar"))
         );
-        Collections.sort(expectedUrls);
-        List<Path> actual = PluginUtils.pluginUrls(pluginPath);
-        Collections.sort(actual);
-        assertEquals(expectedUrls, actual);
+        return expectedUrls;
     }
 
+    private void assertUrls(List<Path> expected, List<Path> actual) {
+        Collections.sort(expected);
+        Collections.sort(actual);
+        assertEquals(expected, actual);
+    }
 }
