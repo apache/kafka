@@ -151,7 +151,7 @@ import static org.apache.kafka.common.serialization.ExtendedSerializer.Wrapper.e
  * <p>
  * To enable idempotence, the <code>enable.idempotence</code> configuration must be set to true. If set, the
  * <code>retries</code> config will be defaulted to <code>Integer.MAX_VALUE</code>, the
- * <code>max.inflight.requests.per.connection</code> config will be defaulted to <code>1</code>,
+ * <code>max.in.flight.requests.per.connection</code> config will be defaulted to <code>1</code>,
  * and <code>acks</code> config will be defaulted to <code>all</code>. There are no API changes for the idempotent
  * producer, so existing applications will not need to be modified to take advantage of this feature.
  * </p>
