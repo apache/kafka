@@ -111,7 +111,8 @@ public class StreamsKafkaClient {
         final Time time = new SystemTime();
 
         final Map<String, String> metricTags = new LinkedHashMap<>();
-        metricTags.put("client-id", StreamsConfig.CLIENT_ID_CONFIG);
+        final String clientId = streamsConfig.getString(StreamsConfig.CLIENT_ID_CONFIG);
+        metricTags.put("client-id", clientId);
 
         final Metadata metadata = new Metadata(streamsConfig.getLong(
                 StreamsConfig.RETRY_BACKOFF_MS_CONFIG),
@@ -129,7 +130,6 @@ public class StreamsKafkaClient {
         final Metrics metrics = new Metrics(metricConfig, reporters, time);
 
         final ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(streamsConfig);
-        final String clientId = streamsConfig.getString(StreamsConfig.CLIENT_ID_CONFIG);
         final LogContext logContext = createLogContext(clientId);
 
         final Selector selector = new Selector(
