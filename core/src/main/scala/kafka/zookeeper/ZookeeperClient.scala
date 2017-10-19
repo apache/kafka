@@ -306,7 +306,7 @@ case class ExistsRequest(path: String, ctx: Option[Any] = None) extends Watchabl
   }
 }
 
-case class GetDataRequest(path: String, shouldWatch: Option[Boolean] = None, ctx: Option[Any] = None) extends WatchableAsyncRequest {
+case class GetDataRequest(path: String, ctx: Option[Any] = None) extends WatchableAsyncRequest {
   type Response = GetDataResponse
 
   protected[zookeeper] def send(zooKeeper: ZooKeeper, watch: Boolean)(processResponse: Response => Unit): Unit = {
@@ -351,7 +351,7 @@ case class SetAclRequest(path: String, acl: Seq[ACL], version: Int, ctx: Option[
   }
 }
 
-case class GetChildrenRequest(path: String, shouldWatch: Option[Boolean] = None, ctx: Option[Any] = None) extends WatchableAsyncRequest {
+case class GetChildrenRequest(path: String, ctx: Option[Any] = None) extends WatchableAsyncRequest {
   type Response = GetChildrenResponse
 
   protected[zookeeper] def send(zooKeeper: ZooKeeper, watch: Boolean)(processResponse: Response => Unit): Unit = {
