@@ -898,9 +898,7 @@ object LogManager {
     val defaultLogConfig = LogConfig(defaultProps)
 
     val (topicConfigs, failed) = zkUtils.getLogConfigs(zkUtils.getAllTopicsInCluster, defaultProps)
-    if (!failed.isEmpty)
-      throw new IllegalArgumentException("Failed to get configs for topics :" + failed.keys)
-
+    if (!failed.isEmpty) throw failed.head._2
 
     // read the log configurations from zookeeper
     val cleanerConfig = CleanerConfig(numThreads = config.logCleanerThreads,
