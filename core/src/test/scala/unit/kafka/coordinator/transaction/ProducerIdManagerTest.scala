@@ -17,14 +17,14 @@
 package kafka.coordinator.transaction
 
 import kafka.common.KafkaException
-import kafka.utils.ZkUtils
+import kafka.controller.KafkaControllerZkUtils
 import org.easymock.{Capture, EasyMock, IAnswer}
 import org.junit.{After, Test}
 import org.junit.Assert._
 
 class ProducerIdManagerTest {
 
-  private val zkUtils = EasyMock.createNiceMock(classOf[ZkUtils])
+  private val zkUtils = EasyMock.createNiceMock(classOf[KafkaControllerZkUtils])
 
   @After
   def tearDown(): Unit = {
@@ -35,7 +35,7 @@ class ProducerIdManagerTest {
   def testGetProducerId() {
     var zkVersion: Option[Int] = None
     var data: String = null
-    EasyMock.expect(zkUtils.readDataAndVersionMaybeNull(EasyMock.anyString)).andAnswer(new IAnswer[(Option[String], Int)] {
+    EasyMock.expect(zkUtils.getDataAndVersionMaybeNull(EasyMock.anyString)).andAnswer(new IAnswer[(Option[String], Int)] {
       override def answer(): (Option[String], Int) = zkVersion.map(Some(data) -> _).getOrElse(None, 0)
     }).anyTimes()
 
@@ -44,7 +44,7 @@ class ProducerIdManagerTest {
     EasyMock.expect(zkUtils.conditionalUpdatePersistentPath(EasyMock.anyString(),
       EasyMock.capture(capturedData),
       EasyMock.capture(capturedVersion),
-      EasyMock.anyObject[Option[(ZkUtils, String, String) => (Boolean, Int)]])).andAnswer(new IAnswer[(Boolean, Int)] {
+      EasyMock.anyObject[Option[(KafkaControllerZkUtils, String, String) => (Boolean, Int)]])).andAnswer(new IAnswer[(Boolean, Int)] {
         override def answer(): (Boolean, Int) = {
           val newZkVersion = capturedVersion.getValue + 1
           zkVersion = Some(newZkVersion)
@@ -76,7 +76,7 @@ class ProducerIdManagerTest {
 
   @Test(expected = classOf[KafkaException])
   def testExceedProducerIdLimit() {
-    EasyMock.expect(zkUtils.readDataAndVersionMaybeNull(EasyMock.anyString)).andAnswer(new IAnswer[(Option[String], Int)] {
+    EasyMock.expect(zkUtils.getDataAndVersionMaybeNull(EasyMock.anyString)).andAnswer(new IAnswer[(Option[String], Int)] {
       override def answer(): (Option[String], Int) = {
         val json = ProducerIdManager.generateProducerIdBlockJson(
           ProducerIdBlock(0, Long.MaxValue - ProducerIdManager.PidBlockSize, Long.MaxValue))

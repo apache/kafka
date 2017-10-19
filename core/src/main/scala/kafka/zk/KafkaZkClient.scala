@@ -310,6 +310,65 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     }.toMap
   }
 
+  def getTopicPartitionCount(topic: String): Option[Int] = {
+    val topicData = getReplicaAssignmentForTopics(Set(topic))
+    if (topicData.nonEmpty)
+      Some(topicData.size)
+    else
+      None
+  }
+
+  def getDataAndVersionMaybeNull(path: String): (Option[String], Int) = {
+    val getDataRequest = GetDataRequest(path)
+    val getDataResponse = retryRequestUntilConnected(getDataRequest)
+
+    if (getDataResponse.resultCode == Code.OK) {
+      val data = getDataResponse.ctx
+      if (data.isEmpty)
+        (None, getDataResponse.stat.getVersion)
+      else
+        (Some(data.get.asInstanceOf[String]), getDataResponse.stat.getVersion)
+    } else
+      (None, -1)
+  }
+
+  /**
+   * Conditional update the persistent path data, return (true, newVersion) if it succeeds, otherwise (the path doesn't
+   * exist, the current version is not the expected version, etc.) return (false, -1)
+   *
+   * When there is a ConnectionLossException during the conditional update, zkClient will retry the update and may fail
+   * since the previous update may have succeeded (but the stored zkVersion no longer matches the expected one).
+   * In this case, we will run the optionalChecker to further check if the previous write did indeed succeeded.
+   */
+  def conditionalUpdatePersistentPath(path: String, data: String, expectVersion: Int,
+    optionalChecker:Option[(KafkaControllerZkUtils, String, String) => (Boolean,Int)] = None): (Boolean, Int) = {
+
+    val setDataRequest = SetDataRequest(path, data.getBytes("UTF-8"), expectVersion)
+    val setDataResponse = retryRequestUntilConnected(setDataRequest)
+
+    setDataResponse.resultCode match {
+      case Code.OK =>
+        debug("Conditional update of path %s with value %s and expected version %d succeeded, returning the new version: %d"
+          .format(path, data, expectVersion, setDataResponse.stat.getVersion))
+        (true, setDataResponse.stat.getVersion)
+
+      case Code.BADVERSION =>
+        optionalChecker match {
+          case Some(checker) => checker(this, path, data)
+          case _ =>
+            debug("Checker method is not passed skipping zkData match")
+            debug("Conditional update of path %s with data %s and expected version %d failed due to %s"
+              .format(path, data, expectVersion, setDataResponse.resultException.get.getMessage))
+            (false, -1)
+        }
+
+      case _ =>
+        debug("Conditional update of path %s with data %s and expected version %d failed due to %s".format(path, data,
+          expectVersion, setDataResponse.resultException.get.getMessage))
+        (false, -1)
+    }
+  }
+
   /**
    * Get all topics marked for deletion.
    * @return sequence of topics marked for deletion.

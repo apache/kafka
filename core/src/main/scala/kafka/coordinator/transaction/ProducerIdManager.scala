@@ -17,6 +17,7 @@
 package kafka.coordinator.transaction
 
 import kafka.common.KafkaException
+import kafka.controller.KafkaControllerZkUtils
 import kafka.utils.{Json, Logging, ZkUtils}
 
 /**
@@ -65,7 +66,7 @@ case class ProducerIdBlock(brokerId: Int, blockStartId: Long, blockEndId: Long) 
   }
 }
 
-class ProducerIdManager(val brokerId: Int, val zkUtils: ZkUtils) extends Logging {
+class ProducerIdManager(val brokerId: Int, val zkUtils: KafkaControllerZkUtils) extends Logging {
 
   this.logIdent = "[ProducerId Manager " + brokerId + "]: "
 
@@ -82,7 +83,7 @@ class ProducerIdManager(val brokerId: Int, val zkUtils: ZkUtils) extends Logging
     var zkWriteComplete = false
     while (!zkWriteComplete) {
       // refresh current producerId block from zookeeper again
-      val (dataOpt, zkVersion) = zkUtils.readDataAndVersionMaybeNull(ZkUtils.ProducerIdBlockPath)
+      val (dataOpt, zkVersion) = zkUtils.getDataAndVersionMaybeNull(ZkUtils.ProducerIdBlockPath)
 
       // generate the new producerId block
       currentProducerIdBlock = dataOpt match {
@@ -114,10 +115,10 @@ class ProducerIdManager(val brokerId: Int, val zkUtils: ZkUtils) extends Logging
     }
   }
 
-  private def checkProducerIdBlockZkData(zkUtils: ZkUtils, path: String, expectedData: String): (Boolean, Int) = {
+  private def checkProducerIdBlockZkData(zkUtils: KafkaControllerZkUtils, path: String, expectedData: String): (Boolean, Int) = {
     try {
       val expectedPidBlock = ProducerIdManager.parseProducerIdBlockData(expectedData)
-      val (dataOpt, zkVersion) = zkUtils.readDataAndVersionMaybeNull(ZkUtils.ProducerIdBlockPath)
+      val (dataOpt, zkVersion) = zkUtils.getDataAndVersionMaybeNull(ZkUtils.ProducerIdBlockPath)
       dataOpt match {
         case Some(data) =>
           val currProducerIdBLock = ProducerIdManager.parseProducerIdBlockData(data)

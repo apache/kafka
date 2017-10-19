@@ -20,10 +20,11 @@ import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.common.OffsetAndMetadata
+import kafka.controller.KafkaControllerZkUtils
 import kafka.log.LogConfig
 import kafka.message.ProducerCompressionCodec
 import kafka.server._
-import kafka.utils._
+import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.Errors
@@ -819,7 +820,7 @@ object GroupCoordinator {
   val DeadGroup = GroupSummary(Dead.toString, NoProtocolType, NoProtocol, NoMembers)
 
   def apply(config: KafkaConfig,
-            zkUtils: ZkUtils,
+            zkUtils: KafkaControllerZkUtils,
             replicaManager: ReplicaManager,
             time: Time): GroupCoordinator = {
     val heartbeatPurgatory = DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", config.brokerId)
@@ -841,7 +842,7 @@ object GroupCoordinator {
   )
 
   def apply(config: KafkaConfig,
-            zkUtils: ZkUtils,
+            zkUtils: KafkaControllerZkUtils,
             replicaManager: ReplicaManager,
             heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat],
             joinPurgatory: DelayedOperationPurgatory[DelayedJoin],

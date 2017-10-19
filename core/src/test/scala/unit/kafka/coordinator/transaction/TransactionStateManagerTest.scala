@@ -19,9 +19,10 @@ package kafka.coordinator.transaction
 import java.nio.ByteBuffer
 import java.util.concurrent.locks.ReentrantLock
 
+import kafka.controller.KafkaControllerZkUtils
 import kafka.log.Log
 import kafka.server.{FetchDataInfo, LogOffsetMetadata, ReplicaManager}
-import kafka.utils.{MockScheduler, Pool, ZkUtils}
+import kafka.utils.{MockScheduler, Pool}
 import kafka.utils.TestUtils.fail
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
@@ -51,7 +52,7 @@ class TransactionStateManagerTest {
 
   val time = new MockTime()
   val scheduler = new MockScheduler(time)
-  val zkUtils: ZkUtils = EasyMock.createNiceMock(classOf[ZkUtils])
+  val zkUtils: KafkaControllerZkUtils = EasyMock.createNiceMock(classOf[KafkaControllerZkUtils])
   val replicaManager: ReplicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
 
   EasyMock.expect(zkUtils.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME))
