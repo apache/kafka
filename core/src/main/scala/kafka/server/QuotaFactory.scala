@@ -28,6 +28,7 @@ object QuotaType  {
   case object Request extends QuotaType
   case object LeaderReplication extends QuotaType
   case object FollowerReplication extends QuotaType
+  case object AlterLogDirsReplication extends QuotaType
 }
 sealed trait QuotaType
 
@@ -38,7 +39,12 @@ object QuotaFactory extends Logging {
     override def isQuotaExceeded(): Boolean = false
   }
 
-  case class QuotaManagers(fetch: ClientQuotaManager, produce: ClientQuotaManager, request: ClientRequestQuotaManager, leader: ReplicationQuotaManager, follower: ReplicationQuotaManager) {
+  case class QuotaManagers(fetch: ClientQuotaManager,
+                           produce: ClientQuotaManager,
+                           request: ClientRequestQuotaManager,
+                           leader: ReplicationQuotaManager,
+                           follower: ReplicationQuotaManager,
+                           alterLogDirs: ReplicationQuotaManager) {
     def shutdown() {
       fetch.shutdown
       produce.shutdown
@@ -52,7 +58,8 @@ object QuotaFactory extends Logging {
       new ClientQuotaManager(clientProduceConfig(cfg), metrics, Produce, time),
       new ClientRequestQuotaManager(clientRequestConfig(cfg), metrics, time),
       new ReplicationQuotaManager(replicationConfig(cfg), metrics, LeaderReplication, time),
-      new ReplicationQuotaManager(replicationConfig(cfg), metrics, FollowerReplication, time)
+      new ReplicationQuotaManager(replicationConfig(cfg), metrics, FollowerReplication, time),
+      new ReplicationQuotaManager(alterLogDirsReplicationConfig(cfg), metrics, AlterLogDirsReplication, time)
     )
   }
 
@@ -83,9 +90,18 @@ object QuotaFactory extends Logging {
     )
   }
 
-  def replicationConfig(cfg: KafkaConfig): ReplicationQuotaManagerConfig =
+  def replicationConfig(cfg: KafkaConfig): ReplicationQuotaManagerConfig = {
     ReplicationQuotaManagerConfig(
       numQuotaSamples = cfg.numReplicationQuotaSamples,
       quotaWindowSizeSeconds = cfg.replicationQuotaWindowSizeSeconds
     )
+  }
+
+  def alterLogDirsReplicationConfig(cfg: KafkaConfig): ReplicationQuotaManagerConfig = {
+    ReplicationQuotaManagerConfig(
+      numQuotaSamples = cfg.numAlterLogDirsReplicationQuotaSamples,
+      quotaWindowSizeSeconds = cfg.alterLogDirsReplicationQuotaWindowSizeSeconds
+    )
+  }
+
 }

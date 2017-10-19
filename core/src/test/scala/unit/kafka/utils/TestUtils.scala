@@ -1357,10 +1357,14 @@ object TestUtils extends Logging {
 
   }
 
-  def consumeTopicRecords[K, V](servers: Seq[KafkaServer], topic: String, numMessages: Int,
+  def consumeTopicRecords[K, V](servers: Seq[KafkaServer],
+                                topic: String,
+                                numMessages: Int,
+                                securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
+                                trustStoreFile: Option[File] = None,
                                 waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[Array[Byte], Array[Byte]]] = {
-    val consumer = createNewConsumer(TestUtils.getBrokerListStrFromServers(servers),
-      securityProtocol = SecurityProtocol.PLAINTEXT)
+    val consumer = createNewConsumer(TestUtils.getBrokerListStrFromServers(servers, securityProtocol),
+      securityProtocol = securityProtocol, trustStoreFile = trustStoreFile)
     try {
       consumer.subscribe(Collections.singleton(topic))
       consumeRecords(consumer, numMessages, waitTime)
