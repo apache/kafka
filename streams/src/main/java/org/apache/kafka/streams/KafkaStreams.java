@@ -723,7 +723,7 @@ public class KafkaStreams {
      * Start the {@code KafkaStreams} instance by starting all its threads.
      * This function is expected to be called only once during the life cycle of the client.
      * <p>
-     * Because threads are started in the background this method does not block.
+     * Because threads are started in the background, this method does not block.
      * As a consequence, any fatal exception that happens during processing is by default only logged.
      * If you want to be notified about dying threads, you can
      * {@link #setUncaughtExceptionHandler(Thread.UncaughtExceptionHandler) register an uncaught exception handler}
