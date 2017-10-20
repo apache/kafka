@@ -184,7 +184,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
 
         // Make each poll() take the offset commit interval
         Capture<Collection<SinkRecord>> capturedRecords
-                = expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
+                = expectPolls(WorkerConfig.OFFSET_FLUSH_INTERVAL_MS_DEFAULT);
         expectOffsetCommit(1L, null, null, 0, true);
         expectStopTask();
 
@@ -215,7 +215,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         expectInitializeTask();
         expectPollInitialAssignment();
 
-        Capture<Collection<SinkRecord>> capturedRecords = expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
+        Capture<Collection<SinkRecord>> capturedRecords = expectPolls(WorkerConfig.OFFSET_FLUSH_INTERVAL_MS_DEFAULT);
         expectOffsetCommit(1L, new RuntimeException(), null, 0, true);
         // Should rewind to last known good positions, which in this case will be the offsets loaded during initialization
         // for all topic partitions
@@ -253,7 +253,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
 
         expectInitializeTask();
         expectPollInitialAssignment();
-        Capture<Collection<SinkRecord>> capturedRecords = expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
+        Capture<Collection<SinkRecord>> capturedRecords = expectPolls(WorkerConfig.OFFSET_FLUSH_INTERVAL_MS_DEFAULT);
         expectOffsetCommit(1L, null, null, 0, true);
         expectOffsetCommit(2L, new RuntimeException(), null, 0, true);
         // Should rewind to last known committed positions
@@ -293,7 +293,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         expectPollInitialAssignment();
 
         Capture<Collection<SinkRecord>> capturedRecords
-                = expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
+                = expectPolls(WorkerConfig.OFFSET_FLUSH_INTERVAL_MS_DEFAULT);
         expectOffsetCommit(1L, null, new Exception(), 0, true);
         expectStopTask();
 
@@ -325,8 +325,8 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
 
         // Cut down amount of time to pass in each poll so we trigger exactly 1 offset commit
         Capture<Collection<SinkRecord>> capturedRecords
-                = expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT / 2);
-        expectOffsetCommit(2L, null, null, WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_DEFAULT, false);
+                = expectPolls(WorkerConfig.OFFSET_FLUSH_INTERVAL_MS_DEFAULT / 2);
+        expectOffsetCommit(2L, null, null, WorkerConfig.OFFSET_FLUSH_TIMEOUT_MS_DEFAULT, false);
         expectStopTask();
 
         PowerMock.replayAll();

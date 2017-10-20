@@ -622,7 +622,7 @@ public class WorkerSinkTaskTest {
         assertEquals(workerStartingOffsets, Whitebox.<Map<TopicPartition, OffsetAndMetadata>>getInternalState(workerTask, "currentOffsets"));
         assertEquals(workerStartingOffsets, Whitebox.<Map<TopicPartition, OffsetAndMetadata>>getInternalState(workerTask, "lastCommittedOffsets"));
 
-        time.sleep(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_DEFAULT);
+        time.sleep(WorkerConfig.OFFSET_FLUSH_TIMEOUT_MS_DEFAULT);
         workerTask.iteration(); // iter 2 -- deliver 2 records
 
         sinkTaskContext.getValue().requestCommit();
@@ -801,7 +801,7 @@ public class WorkerSinkTaskTest {
         assertEquals(workerStartingOffsets, Whitebox.getInternalState(workerTask, "currentOffsets"));
         assertEquals(workerStartingOffsets, Whitebox.getInternalState(workerTask, "lastCommittedOffsets"));
 
-        time.sleep(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_DEFAULT);
+        time.sleep(WorkerConfig.OFFSET_FLUSH_TIMEOUT_MS_DEFAULT);
         workerTask.iteration(); // iter 2 -- deliver 2 records
 
         sinkTaskContext.getValue().requestCommit();
@@ -814,7 +814,7 @@ public class WorkerSinkTaskTest {
         assertEquals(postRebalanceCurrentOffsets, Whitebox.getInternalState(workerTask, "currentOffsets"));
         assertEquals(rebalanceOffsets, Whitebox.getInternalState(workerTask, "lastCommittedOffsets"));
 
-        time.sleep(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_DEFAULT);
+        time.sleep(WorkerConfig.OFFSET_FLUSH_TIMEOUT_MS_DEFAULT);
         sinkTaskContext.getValue().requestCommit();
         workerTask.iteration(); // iter 4 -- commit in progress
 

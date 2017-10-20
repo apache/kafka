@@ -34,9 +34,7 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.IdentityHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -62,6 +60,8 @@ class WorkerSourceTask extends WorkerTask {
     private final Time time;
 
     private List<SourceRecord> toSend;
+    private List<SourceRecord> offsetsWrittenButNotFlushed;
+    private List<SourceRecord> offsetsFlushing;
     private boolean lastSendFailed; // Whether the last send failed *synchronously*, i.e. never made it into the producer's RecordAccumulator
     // Use IdentityHashMap to ensure correctness with duplicate records. This is a HashMap because
     // there is no IdentityHashSet.
@@ -101,6 +101,8 @@ class WorkerSourceTask extends WorkerTask {
         this.time = time;
 
         this.toSend = null;
+        this.offsetsWrittenButNotFlushed = new ArrayList<>();
+        this.offsetsFlushing = null;
         this.lastSendFailed = false;
         this.outstandingMessages = new IdentityHashMap<>();
         this.outstandingMessagesBacklog = new IdentityHashMap<>();
@@ -171,11 +173,11 @@ class WorkerSourceTask extends WorkerTask {
         } catch (InterruptedException e) {
             // Ignore and allow to exit.
         } finally {
-            // It should still be safe to commit offsets since any exception would have
+            // It should still be safe to flush offsets since any exception would have
             // simply resulted in not getting more records but all the existing records should be ok to flush
-            // and commit offsets. Worst case, task.flush() will also throw an exception causing the offset commit
+            // and flush offsets. Worst case, task.flush() will also throw an exception causing the offset flush
             // to fail.
-            commitOffsets();
+            flushOffsets();
         }
     }
 
@@ -190,7 +192,7 @@ class WorkerSourceTask extends WorkerTask {
             final SourceRecord record = transformationChain.apply(preTransformRecord);
 
             if (record == null) {
-                commitTaskRecord(preTransformRecord);
+                acknowledgeTaskRecord(preTransformRecord);
                 continue;
             }
 
@@ -212,6 +214,7 @@ class WorkerSourceTask extends WorkerTask {
                     }
                     // Offsets are converted & serialized in the OffsetWriter
                     offsetWriter.offset(record.sourcePartition(), record.sourceOffset());
+                    offsetsWrittenButNotFlushed.add(preTransformRecord);
                 }
             }
             try {
@@ -234,7 +237,7 @@ class WorkerSourceTask extends WorkerTask {
                                             this,
                                             recordMetadata.topic(), recordMetadata.partition(),
                                             recordMetadata.offset());
-                                    commitTaskRecord(preTransformRecord);
+                                    acknowledgeTaskRecord(preTransformRecord);
                                 }
                                 recordSent(producerRecord);
                             }
@@ -254,11 +257,11 @@ class WorkerSourceTask extends WorkerTask {
         return true;
     }
 
-    private void commitTaskRecord(SourceRecord record) {
+    private void acknowledgeTaskRecord(SourceRecord record) {
         try {
-            task.commitRecord(record);
+            task.recordSentAndAcknowledged(record);
         } catch (Throwable t) {
-            log.error("{} Exception thrown while calling task.commitRecord()", this, t);
+            log.error("{} Exception thrown while calling task.recordSentAndAcknowledged()", this, t);
         }
     }
 
@@ -276,13 +279,13 @@ class WorkerSourceTask extends WorkerTask {
         }
     }
 
-    public boolean commitOffsets() {
-        long commitTimeoutMs = workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
+    public boolean flushOffsets() {
+        long flushTimeoutMs = workerConfig.getLong(WorkerConfig.OFFSET_FLUSH_TIMEOUT_MS_CONFIG);
 
-        log.info("{} Committing offsets", this);
+        log.info("{} Flushing offsets", this);
 
         long started = time.milliseconds();
-        long timeout = started + commitTimeoutMs;
+        long timeout = started + flushTimeoutMs;
 
         synchronized (this) {
             // First we need to make sure we snapshot everything in exactly the current state. This
@@ -296,7 +299,7 @@ class WorkerSourceTask extends WorkerTask {
             // to persistent storage
 
             // Next we need to wait for all outstanding messages to finish sending
-            log.info("{} flushing {} outstanding messages for offset commit", this, outstandingMessages.size());
+            log.info("{} flushing {} outstanding messages for offset flush", this, outstandingMessages.size());
             while (!outstandingMessages.isEmpty()) {
                 try {
                     long timeoutMs = timeout - time.milliseconds();
@@ -307,10 +310,10 @@ class WorkerSourceTask extends WorkerTask {
                     }
                     this.wait(timeoutMs);
                 } catch (InterruptedException e) {
-                    // We can get interrupted if we take too long committing when the work thread shutdown is requested,
-                    // requiring a forcible shutdown. Give up since we can't safely commit any offsets, but also need
+                    // We can get interrupted if we take too long flushing when the work thread shutdown is requested,
+                    // requiring a forcible shutdown. Give up since we can't safely flush any offsets, but also need
                     // to stop immediately
-                    log.error("{} Interrupted while flushing messages, offsets will not be committed", this);
+                    log.error("{} Interrupted while flushing messages, offsets will not be flushed", this);
                     finishFailedFlush();
                     return false;
                 }
@@ -322,12 +325,15 @@ class WorkerSourceTask extends WorkerTask {
                 // flush time, which can be used for monitoring even if the connector doesn't record any
                 // offsets.
                 finishSuccessfulFlush();
-                log.debug("{} Finished offset commitOffsets successfully in {} ms",
+                log.debug("{} Finished offset flushOffsets successfully in {} ms",
                         this, time.milliseconds() - started);
 
-                commitSourceTask();
+                acknowledgeSourceTask();
                 return true;
             }
+
+            offsetsFlushing = offsetsWrittenButNotFlushed;
+            offsetsWrittenButNotFlushed = new ArrayList<>();
         }
 
         // Now we can actually flush the offsets to user storage.
@@ -368,19 +374,21 @@ class WorkerSourceTask extends WorkerTask {
         }
 
         finishSuccessfulFlush();
-        log.info("{} Finished commitOffsets successfully in {} ms",
+        log.info("{} Finished flushOffsets successfully in {} ms",
                 this, time.milliseconds() - started);
 
-        commitSourceTask();
+        acknowledgeSourceTask();
 
         return true;
     }
 
-    private void commitSourceTask() {
+    private void acknowledgeSourceTask() {
         try {
-            this.task.commit();
+            this.task.offsetsFlushedAndAcknowledged(offsetsFlushing);
         } catch (Throwable t) {
-            log.error("{} Exception thrown while calling task.commit()", this, t);
+            log.error("{} Exception thrown while calling task.offsetsFlushedAndAcknowledged()", this, t);
+        } finally {
+            offsetsFlushing = null;
         }
     }
 
@@ -388,6 +396,10 @@ class WorkerSourceTask extends WorkerTask {
         offsetWriter.cancelFlush();
         outstandingMessages.putAll(outstandingMessagesBacklog);
         outstandingMessagesBacklog.clear();
+        // Doing offsetsFlushing.addAll(offsetsWrittenButNotFlushed) instead of offsetsWrittenButNotFlushed.addAll(offsetsFlushing) preserves order of records from poll
+        offsetsFlushing.addAll(offsetsWrittenButNotFlushed);
+        offsetsWrittenButNotFlushed = offsetsFlushing;
+        offsetsFlushing = null;
         flushing = false;
     }
 
