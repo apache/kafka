@@ -140,7 +140,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
       val before = epochs
       if (offset >= 0 && earliestOffset() < offset) {
         val earliest = epochs.filter(entry => entry.startOffset < offset)
-        if (earliest.size > 0) {
+        if (earliest.nonEmpty) {
           epochs = epochs --= earliest
           //If the offset is less than the earliest offset remaining, add previous epoch back, but with an updated offset
           if (offset < earliestOffset() || epochs.isEmpty)

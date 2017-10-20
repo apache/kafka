@@ -20,14 +20,16 @@ package kafka.server
 import kafka.network.SocketServer
 import kafka.utils._
 import java.io.File
+
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests._
+import org.apache.kafka.common.requests.{AlterReplicaLogDirsRequest, AlterReplicaLogDirsResponse}
 import org.junit.Assert._
 import org.junit.Test
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
+import scala.util.Random
 
 class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
 
@@ -37,41 +39,76 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
   val topic = "topic"
 
   @Test
-  def testAlterReplicaLogDirsRequestBeforeTopicCreation() {
+  def testAlterReplicaLogDirsRequest() {
     val partitionNum = 5
-    val logDir = new File(servers.head.config.logDirs.head).getAbsolutePath
-    val partitionDirs = (0 until partitionNum).map(partition => new TopicPartition(topic, partition) -> logDir).toMap
-    val alterReplicaDirResponse = sendAlterReplicaLogDirsRequest(partitionDirs)
+
+    // Alter replica dir before topic creation
+    val logDir1 = new File(servers.head.config.logDirs(Random.nextInt(logDirCount))).getAbsolutePath
+    val partitionDirs1 = (0 until partitionNum).map(partition => new TopicPartition(topic, partition) -> logDir1).toMap
+    val alterReplicaLogDirsResponse1 = sendAlterReplicaLogDirsRequest(partitionDirs1)
 
     // The response should show error REPLICA_NOT_AVAILABLE for all partitions
     (0 until partitionNum).foreach { partition =>
       val tp = new TopicPartition(topic, partition)
-      assertEquals(Errors.REPLICA_NOT_AVAILABLE, alterReplicaDirResponse.responses().get(tp))
+      assertEquals(Errors.REPLICA_NOT_AVAILABLE, alterReplicaLogDirsResponse1.responses().get(tp))
       assertTrue(servers.head.logManager.getLog(tp).isEmpty)
     }
 
     TestUtils.createTopic(zkUtils, topic, partitionNum, 1, servers)
     (0 until partitionNum).foreach { partition =>
-      assertEquals(logDir, servers.head.logManager.getLog(new TopicPartition(topic, partition)).get.dir.getParent)
+      assertEquals(logDir1, servers.head.logManager.getLog(new TopicPartition(topic, partition)).get.dir.getParent)
+    }
+
+    // Alter replica dir again after topic creation
+    val logDir2 = new File(servers.head.config.logDirs(Random.nextInt(logDirCount))).getAbsolutePath
+    val partitionDirs2 = (0 until partitionNum).map(partition => new TopicPartition(topic, partition) -> logDir2).toMap
+    val alterReplicaLogDirsResponse2 = sendAlterReplicaLogDirsRequest(partitionDirs2)
+    // The response should succeed for all partitions
+    (0 until partitionNum).foreach { partition =>
+      val tp = new TopicPartition(topic, partition)
+      assertEquals(Errors.NONE, alterReplicaLogDirsResponse2.responses().get(tp))
+      TestUtils.waitUntilTrue(() => {
+        logDir2 == servers.head.logManager.getLog(new TopicPartition(topic, partition)).get.dir.getParent
+      }, "timed out waiting for replica movement")
     }
   }
 
   @Test
   def testAlterReplicaLogDirsRequestErrorCode(): Unit = {
-    val validDir = new File(servers.head.config.logDirs.head).getAbsolutePath
     val offlineDir = new File(servers.head.config.logDirs.tail.head).getAbsolutePath
-    servers.head.logDirFailureChannel.maybeAddOfflineLogDir(offlineDir, "", new java.io.IOException())
+    val validDir1 = new File(servers.head.config.logDirs(1)).getAbsolutePath
+    val validDir2 = new File(servers.head.config.logDirs(2)).getAbsolutePath
+    val validDir3 = new File(servers.head.config.logDirs(3)).getAbsolutePath
+
+    // Test AlterReplicaDirRequest before topic creation
+    val partitionDirs1 = mutable.Map.empty[TopicPartition, String]
+    partitionDirs1.put(new TopicPartition(topic, 0), "invalidDir")
+    partitionDirs1.put(new TopicPartition(topic, 1), validDir1)
+    val alterReplicaDirResponse1 = sendAlterReplicaLogDirsRequest(partitionDirs1.toMap)
+    assertEquals(Errors.LOG_DIR_NOT_FOUND, alterReplicaDirResponse1.responses().get(new TopicPartition(topic, 0)))
+    assertEquals(Errors.REPLICA_NOT_AVAILABLE, alterReplicaDirResponse1.responses().get(new TopicPartition(topic, 1)))
+
     TestUtils.createTopic(zkUtils, topic, 3, 1, servers)
 
-    val partitionDirs = mutable.Map.empty[TopicPartition, String]
-    partitionDirs.put(new TopicPartition(topic, 0), "invalidDir")
-    partitionDirs.put(new TopicPartition(topic, 1), validDir)
-    partitionDirs.put(new TopicPartition(topic, 2), offlineDir)
+    // Test AlterReplicaDirRequest after topic creation
+    val partitionDirs2 = mutable.Map.empty[TopicPartition, String]
+    partitionDirs2.put(new TopicPartition(topic, 0), "invalidDir")
+    partitionDirs2.put(new TopicPartition(topic, 1), validDir2)
+    val alterReplicaDirResponse2 = sendAlterReplicaLogDirsRequest(partitionDirs2.toMap)
+    assertEquals(Errors.LOG_DIR_NOT_FOUND, alterReplicaDirResponse2.responses().get(new TopicPartition(topic, 0)))
+    assertEquals(Errors.NONE, alterReplicaDirResponse2.responses().get(new TopicPartition(topic, 1)))
 
-    val alterReplicaDirResponse = sendAlterReplicaLogDirsRequest(partitionDirs.toMap)
-    assertEquals(Errors.LOG_DIR_NOT_FOUND, alterReplicaDirResponse.responses().get(new TopicPartition(topic, 0)))
-    assertEquals(Errors.NONE, alterReplicaDirResponse.responses().get(new TopicPartition(topic, 1)))
-    assertEquals(Errors.KAFKA_STORAGE_ERROR, alterReplicaDirResponse.responses().get(new TopicPartition(topic, 2)))
+    // Test AlterReplicaDirRequest after topic creation and log directory failure
+    servers.head.logDirFailureChannel.maybeAddOfflineLogDir(offlineDir, "", new java.io.IOException())
+    TestUtils.waitUntilTrue(() => !servers.head.logManager.isLogDirOnline(offlineDir), s"timed out waiting for $offlineDir to be offline", 3000)
+    val partitionDirs3 = mutable.Map.empty[TopicPartition, String]
+    partitionDirs3.put(new TopicPartition(topic, 0), "invalidDir")
+    partitionDirs3.put(new TopicPartition(topic, 1), validDir3)
+    partitionDirs3.put(new TopicPartition(topic, 2), offlineDir)
+    val alterReplicaDirResponse3 = sendAlterReplicaLogDirsRequest(partitionDirs3.toMap)
+    assertEquals(Errors.LOG_DIR_NOT_FOUND, alterReplicaDirResponse3.responses().get(new TopicPartition(topic, 0)))
+    assertEquals(Errors.KAFKA_STORAGE_ERROR, alterReplicaDirResponse3.responses().get(new TopicPartition(topic, 1)))
+    assertEquals(Errors.KAFKA_STORAGE_ERROR, alterReplicaDirResponse3.responses().get(new TopicPartition(topic, 2)))
   }
 
   private def sendAlterReplicaLogDirsRequest(partitionDirs: Map[TopicPartition, String], socketServer: SocketServer = controllerSocketServer): AlterReplicaLogDirsResponse = {
