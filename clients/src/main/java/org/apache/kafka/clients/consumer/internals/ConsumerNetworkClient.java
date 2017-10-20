@@ -51,8 +51,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * are held when they are invoked.
  */
 public class ConsumerNetworkClient implements Closeable {
-    private static final long MAX_POLL_TIMEOUT_MS = 5000L;
-
     // the mutable state of this class is protected by the object's monitor (excluding the wakeup
     // flag and the request completion queue below).
     private final Logger log;
@@ -61,10 +59,9 @@ public class ConsumerNetworkClient implements Closeable {
     private final Metadata metadata;
     private final Time time;
     private final long retryBackoffMs;
+    private final int maxPollTimeoutMs;
     private final long unsentExpiryMs;
     private final AtomicBoolean wakeupDisabled = new AtomicBoolean();
-    private Heartbeat heartbeat = null;
-    private boolean joined = false;
 
     // when requests complete, they are transferred to this queue prior to invocation. The purpose
     // is to avoid invoking them while holding this object's monitor which can open the door for deadlocks.
@@ -79,12 +76,14 @@ public class ConsumerNetworkClient implements Closeable {
                                  Metadata metadata,
                                  Time time,
                                  long retryBackoffMs,
-                                 long requestTimeoutMs) {
+                                 long requestTimeoutMs,
+                                 int maxPollTimeoutMs) {
         this.log = logContext.logger(ConsumerNetworkClient.class);
         this.client = client;
         this.metadata = metadata;
         this.time = time;
         this.retryBackoffMs = retryBackoffMs;
+        this.maxPollTimeoutMs = maxPollTimeoutMs;
         this.unsentExpiryMs = requestTimeoutMs;
     }
 
@@ -166,72 +165,6 @@ public class ConsumerNetworkClient implements Closeable {
     }
 
     /**
-     * Checks if heartbeat had been initialized
-     */
-    protected boolean heartbeatIsInitialized() {
-        return heartbeat != null;
-    }
-
-    /**
-     * @param time at which to 
-     * @returns time left until heartbeat thread expires
-     */
-    protected synchronized long getHeartbeatExpiryMs(long now) {
-        return heartbeat.timeToNextHeartbeat(now);
-    }
-
-    /**
-     * Sets heartbeat to new value.
-     * @param heartbeat, value to be set to
-     */
-    protected void setHeartbeat(Heartbeat heartbeat) {
-        this.heartbeat = heartbeat;
-    }
-    
-    /**
-     * Checks whether or now heartbeat should send a pulse
-     * @return true if time to send heartbeat else returns false
-     */
-    protected boolean shouldHeartbeat(long now) {
-        return heartbeat.shouldHeartbeat(now);
-    }
-
-    /**
-     * Polls heartbeat
-     * 
-     * @param time to which the last poll will be set
-     */
-    protected synchronized void pollHeartbeat(long now) {
-        heartbeat.poll(now);
-    }
-
-    /**
-     * Sets state of consumer: joiner equals true if consumer is joined
-     * else it is false
-     * 
-     * @param joined state of consumer
-     */
-    protected void setJoined(boolean joined) {
-        this.joined = joined;
-    }
-
-    /**
-     * Returns the state of consumer
-     * 
-     * @return true if consumer is joined, else will return false
-     */
-    protected boolean isJoined() {
-        return joined;
-    }
-    
-    /**
-     * Returns heartbeat interval
-     */
-    protected long interval() {
-        return heartbeat.interval();
-    }
-
-    /**
      * Block indefinitely until the given request future has finished.
      * @param future The request future to await.
      * @throws WakeupException if {@link #wakeup()} is called from another thread
@@ -239,9 +172,9 @@ public class ConsumerNetworkClient implements Closeable {
      */
     public void poll(RequestFuture<?> future) {
         while (!future.isDone())
-            poll(MAX_POLL_TIMEOUT_MS, time.milliseconds(), future);
+            poll(Long.MAX_VALUE, time.milliseconds(), future);
     }
-    
+
     /**
      * Block until the provided request future request has finished or the timeout has expired.
      * @param future The request future to wait for
@@ -303,7 +236,7 @@ public class ConsumerNetworkClient implements Closeable {
                 // if there are no requests in flight, do not block longer than the retry backoff
                 if (client.inFlightRequestCount() == 0)
                     timeout = Math.min(timeout, retryBackoffMs);
-                client.poll(Math.min(MAX_POLL_TIMEOUT_MS, timeout), now);
+                client.poll(Math.min(maxPollTimeoutMs, timeout), now);
                 now = time.milliseconds();
             } else {
                 client.poll(0, now);

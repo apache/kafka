@@ -103,7 +103,7 @@ public abstract class AbstractCoordinator implements Closeable {
     private final int sessionTimeoutMs;
     private final boolean leaveGroupOnClose;
     private final GroupCoordinatorMetrics sensors;
-    protected final Heartbeat heartbeat;
+    private final Heartbeat heartbeat;
     protected final int rebalanceTimeoutMs;
     protected final String groupId;
     protected final ConsumerNetworkClient client;
@@ -302,8 +302,7 @@ public abstract class AbstractCoordinator implements Closeable {
         // if we have not joined the group, we don't need to send heartbeats
         if (state == MemberState.UNJOINED)
             return Long.MAX_VALUE;
-        long timeToNextHeartbeat = heartbeat.timeToNextHeartbeat(now);
-        return timeToNextHeartbeat;
+        return heartbeat.timeToNextHeartbeat(now);
     }
 
     /**

@@ -44,7 +44,7 @@ public final class Heartbeat {
         this.retryBackoffMs = retryBackoffMs;
     }
 
-    public synchronized void poll(long now) {
+    public void poll(long now) {
         this.lastPoll = now;
     }
 
@@ -61,7 +61,7 @@ public final class Heartbeat {
         this.lastHeartbeatReceive = now;
     }
 
-    public synchronized boolean shouldHeartbeat(long now) {
+    public boolean shouldHeartbeat(long now) {
         return timeToNextHeartbeat(now) == 0;
     }
     
@@ -69,7 +69,7 @@ public final class Heartbeat {
         return this.lastHeartbeatSend;
     }
 
-    public synchronized long timeToNextHeartbeat(long now) {
+    public long timeToNextHeartbeat(long now) {
         long timeSinceLastHeartbeat = now - Math.max(lastHeartbeatSend, lastSessionReset);
         final long delayToNextHeartbeat;
         if (heartbeatFailed)
