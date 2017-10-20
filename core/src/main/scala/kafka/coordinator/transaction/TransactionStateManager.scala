@@ -196,10 +196,8 @@ class TransactionStateManager(brokerId: Int,
           internalTopicsAllowed = true,
           isFromClient = false,
           recordsPerPartition,
-          removeFromCacheCallback
-          // FIXME: removeFromCacheCallback acquires stateLock and various txnMetadataLocks!!
-          // It is not safe to call removeFromCacheCallback from a delayed callback unless
-          // we can check that all the locks are available
+          removeFromCacheCallback,
+          Some(stateLock.readLock)
         )
       }
 
@@ -589,25 +587,29 @@ class TransactionStateManager(brokerId: Int,
         case Right(Some(epochAndMetadata)) =>
           val metadata = epochAndMetadata.transactionMetadata
 
+          val append: Boolean =
           metadata.inLock {
             if (epochAndMetadata.coordinatorEpoch != coordinatorEpoch) {
               // the coordinator epoch has changed, reply to client immediately with with NOT_COORDINATOR
               responseCallback(Errors.NOT_COORDINATOR)
+              false
             } else {
               // do not need to check the metadata object itself since no concurrent thread should be able to modify it
               // under the same coordinator epoch, so directly append to txn log now
-
-              replicaManager.appendRecords(
+              true
+            }
+          }
+          if (append) {
+            replicaManager.appendRecords(
                 newMetadata.txnTimeoutMs.toLong,
                 TransactionLog.EnforcedRequiredAcks,
                 internalTopicsAllowed = true,
                 isFromClient = false,
                 recordsPerPartition,
                 updateCacheCallback,
-                delayedProduceLock = Some(metadata.lock)) // FIXME: this is not sufficient, we also need to make sure stateLock is available
+                delayedProduceLock = Some(stateLock.readLock))
 
               trace(s"Appending new metadata $newMetadata for transaction id $transactionalId with coordinator epoch $coordinatorEpoch to the local transaction log")
-            }
           }
       }
     }

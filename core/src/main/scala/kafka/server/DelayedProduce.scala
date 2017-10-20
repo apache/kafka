@@ -19,7 +19,7 @@ package kafka.server
 
 
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.locks.ReentrantLock
+import java.util.concurrent.locks.Lock
 
 import com.yammer.metrics.core.Meter
 import kafka.metrics.KafkaMetricsGroup
@@ -56,7 +56,7 @@ class DelayedProduce(delayMs: Long,
                      produceMetadata: ProduceMetadata,
                      replicaManager: ReplicaManager,
                      responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
-                     lockOpt: Option[ReentrantLock] = None)
+                     lockOpt: Option[Lock] = None)
   extends DelayedOperation(delayMs, lockOpt) {
 
   // first update the acks pending variable according to the error code
