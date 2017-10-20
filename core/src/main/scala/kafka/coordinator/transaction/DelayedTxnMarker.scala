@@ -26,10 +26,10 @@ import org.apache.kafka.common.protocol.Errors
   */
 private[transaction] class DelayedTxnMarker(txnMetadata: TransactionMetadata,
                                            completionCallback: Errors => Unit)
-  extends DelayedOperation(TimeUnit.DAYS.toMillis(100 * 365)) {
+  extends DelayedOperation(TimeUnit.DAYS.toMillis(100 * 365), Some(txnMetadata.lock)) {
 
   override def tryComplete(): Boolean = {
-    txnMetadata synchronized {
+    txnMetadata.inLock {
       if (txnMetadata.topicPartitions.isEmpty)
         forceComplete()
       else false

@@ -340,7 +340,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
 
                 val txnMetadata = epochAndMetadata.transactionMetadata
 
-                txnMetadata synchronized {
+                txnMetadata.inLock {
                   topicPartitions.foreach(txnMetadata.removePartition)
                 }
 

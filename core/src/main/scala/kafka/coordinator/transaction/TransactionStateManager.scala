@@ -136,7 +136,7 @@ class TransactionStateManager(brokerId: Int,
             }.filter { case (_, txnMetadata) =>
               txnMetadata.txnLastUpdateTimestamp <= now - config.transactionalIdExpirationMs
             }.map { case (transactionalId, txnMetadata) =>
-              val txnMetadataTransition = txnMetadata synchronized {
+              val txnMetadataTransition = txnMetadata.inLock {
                 txnMetadata.prepareDead()
               }
               TransactionalIdCoordinatorEpochAndMetadata(transactionalId, entry.coordinatorEpoch, txnMetadataTransition)
@@ -166,7 +166,7 @@ class TransactionStateManager(brokerId: Int,
                     .foreach { txnMetadataCacheEntry =>
                       toRemove.foreach { idCoordinatorEpochAndMetadata =>
                         val txnMetadata = txnMetadataCacheEntry.metadataPerTransactionalId.get(idCoordinatorEpochAndMetadata.transactionalId)
-                        txnMetadata synchronized {
+                        txnMetadata.inLock {
                           if (txnMetadataCacheEntry.coordinatorEpoch == idCoordinatorEpochAndMetadata.coordinatorEpoch
                             && txnMetadata.pendingState.contains(Dead)
                             && txnMetadata.producerEpoch == idCoordinatorEpochAndMetadata.transitMetadata.producerEpoch
@@ -197,6 +197,9 @@ class TransactionStateManager(brokerId: Int,
           isFromClient = false,
           recordsPerPartition,
           removeFromCacheCallback
+          // FIXME: removeFromCacheCallback acquires stateLock and various txnMetadataLocks!!
+          // It is not safe to call removeFromCacheCallback from a delayed callback unless
+          // we can check that all the locks are available
         )
       }
 
@@ -376,7 +379,7 @@ class TransactionStateManager(brokerId: Int,
           val transactionsPendingForCompletion = new mutable.ListBuffer[TransactionalIdCoordinatorEpochAndTransitMetadata]
           loadedTransactions.foreach {
             case (transactionalId, txnMetadata) =>
-              txnMetadata synchronized {
+              txnMetadata.inLock {
                 // if state is PrepareCommit or PrepareAbort we need to complete the transaction
                 txnMetadata.state match {
                   case PrepareAbort =>
@@ -509,7 +512,7 @@ class TransactionStateManager(brokerId: Int,
           case Right(Some(epochAndMetadata)) =>
             val metadata = epochAndMetadata.transactionMetadata
 
-            metadata synchronized {
+            metadata.inLock {
               if (epochAndMetadata.coordinatorEpoch != coordinatorEpoch) {
                 // the cache may have been changed due to txn topic partition emigration and immigration,
                 // in this case directly return NOT_COORDINATOR to client and let it to re-discover the transaction coordinator
@@ -536,7 +539,7 @@ class TransactionStateManager(brokerId: Int,
         getTransactionState(transactionalId) match {
           case Right(Some(epochAndTxnMetadata)) =>
             val metadata = epochAndTxnMetadata.transactionMetadata
-            metadata synchronized {
+            metadata.inLock {
               if (epochAndTxnMetadata.coordinatorEpoch == coordinatorEpoch) {
                 if (retryOnError(responseError)) {
                   info(s"TransactionalId ${metadata.transactionalId} append transaction log for $newMetadata transition failed due to $responseError, " +
@@ -586,7 +589,7 @@ class TransactionStateManager(brokerId: Int,
         case Right(Some(epochAndMetadata)) =>
           val metadata = epochAndMetadata.transactionMetadata
 
-          metadata synchronized {
+          metadata.inLock {
             if (epochAndMetadata.coordinatorEpoch != coordinatorEpoch) {
               // the coordinator epoch has changed, reply to client immediately with with NOT_COORDINATOR
               responseCallback(Errors.NOT_COORDINATOR)
@@ -600,7 +603,8 @@ class TransactionStateManager(brokerId: Int,
                 internalTopicsAllowed = true,
                 isFromClient = false,
                 recordsPerPartition,
-                updateCacheCallback)
+                updateCacheCallback,
+                delayedProduceLock = Some(metadata.lock)) // FIXME: this is not sufficient, we also need to make sure stateLock is available
 
               trace(s"Appending new metadata $newMetadata for transaction id $transactionalId with coordinator epoch $coordinatorEpoch to the local transaction log")
             }
