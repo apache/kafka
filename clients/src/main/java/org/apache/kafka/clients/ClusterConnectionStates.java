@@ -240,7 +240,9 @@ final class ClusterConnectionStates {
      * @return the state of our connection
      */
     public ConnectionState connectionState(String id) {
-        return nodeState(id).state;
+        final NodeConnectionState connectionState = nodeState.get(id);
+
+        return connectionState == null ? null : connectionState.state;
     }
 
     /**

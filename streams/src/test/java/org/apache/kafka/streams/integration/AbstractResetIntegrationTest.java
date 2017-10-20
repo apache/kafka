@@ -20,7 +20,6 @@ import kafka.admin.AdminClient;
 import kafka.tools.StreamsResetter;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.KafkaAdminClient;
-import org.apache.kafka.clients.admin.ListTopicsOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -52,10 +51,8 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -458,22 +455,12 @@ abstract class AbstractResetIntegrationTest {
     }
 
     private void assertInternalTopicsGotDeleted(final String intermediateUserTopic) throws Exception {
-        final Set<String> expectedRemainingTopicsAfterCleanup = new HashSet<>();
-        expectedRemainingTopicsAfterCleanup.add(INPUT_TOPIC);
+        // do not use list topics request, but read from the embedded cluster's zookeeper path directly to confirm
         if (intermediateUserTopic != null) {
-            expectedRemainingTopicsAfterCleanup.add(intermediateUserTopic);
+            cluster.waitForRemainingTopics(30000, INPUT_TOPIC, OUTPUT_TOPIC, OUTPUT_TOPIC_2, OUTPUT_TOPIC_2_RERUN, TestUtils.GROUP_METADATA_TOPIC_NAME, intermediateUserTopic);
+        } else {
+            cluster.waitForRemainingTopics(30000, INPUT_TOPIC, OUTPUT_TOPIC, OUTPUT_TOPIC_2, OUTPUT_TOPIC_2_RERUN, TestUtils.GROUP_METADATA_TOPIC_NAME);
         }
-        expectedRemainingTopicsAfterCleanup.add(OUTPUT_TOPIC);
-        expectedRemainingTopicsAfterCleanup.add(OUTPUT_TOPIC_2);
-        expectedRemainingTopicsAfterCleanup.add(OUTPUT_TOPIC_2_RERUN);
-        expectedRemainingTopicsAfterCleanup.add("__consumer_offsets");
-
-        final Set<String> allTopics = new HashSet<>();
-
-        final ListTopicsOptions listTopicsOptions = new ListTopicsOptions();
-        listTopicsOptions.listInternal(true);
-        allTopics.addAll(kafkaAdminClient.listTopics(listTopicsOptions).names().get(30000, TimeUnit.MILLISECONDS));
-        assertThat(allTopics, equalTo(expectedRemainingTopicsAfterCleanup));
     }
 
 }

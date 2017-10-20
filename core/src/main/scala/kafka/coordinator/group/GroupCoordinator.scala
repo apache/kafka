@@ -777,6 +777,9 @@ class GroupCoordinator(val brokerId: Int,
 
   def onExpireHeartbeat(group: GroupMetadata, member: MemberMetadata, heartbeatDeadline: Long) {
     group synchronized {
+
+      warn(s"Member $member has heartbeat expired with $heartbeatDeadline and (${member.latestHeartbeat + member.sessionTimeoutMs}")
+
       if (!shouldKeepMemberAlive(member, heartbeatDeadline)) {
         info(s"Member ${member.memberId} in group ${group.groupId} has failed, removing it from the group")
         removeMemberAndUpdateGroup(group, member)
