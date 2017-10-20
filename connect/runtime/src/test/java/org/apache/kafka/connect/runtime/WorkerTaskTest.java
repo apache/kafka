@@ -20,7 +20,7 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerTask.TaskMetricsGroup;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.apache.kafka.connect.util.MockTime;
+import org.apache.kafka.common.utils.MockTime;
 import org.easymock.EasyMock;
 import org.easymock.IAnswer;
 import org.junit.After;
