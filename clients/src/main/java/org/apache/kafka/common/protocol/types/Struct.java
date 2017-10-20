@@ -127,7 +127,7 @@ public class Struct {
         return alternative;
     }
 
-    public Boolean getOrElse(Field.Boolean field, Boolean alternative) {
+    public Boolean getOrElse(Field.Boolean field, boolean alternative) {
         if (hasField(field.name))
             return getBoolean(field.name);
         return alternative;
@@ -298,7 +298,7 @@ public class Struct {
         return set(def.name, value);
     }
 
-    public Struct set(Field.Boolean def, Boolean value) {
+    public Struct set(Field.Boolean def, boolean value) {
         return set(def.name, value);
     }
 
