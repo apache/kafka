@@ -23,7 +23,6 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 import javax.security.auth.login.Configuration
 
 import kafka.zk.ZooKeeperTestHarness
-import kafka.zookeeper._
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.{CreateMode, ZooDefs}

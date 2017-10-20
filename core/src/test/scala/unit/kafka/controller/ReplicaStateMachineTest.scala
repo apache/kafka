@@ -21,7 +21,6 @@ import kafka.common.TopicAndPartition
 import kafka.controller.KafkaControllerZkUtils.UpdateLeaderAndIsrResult
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import kafka.zookeeper.GetDataResponse
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.Stat
 import org.easymock.EasyMock

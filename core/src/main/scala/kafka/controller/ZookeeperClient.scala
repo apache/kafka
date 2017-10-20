@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.zookeeper
+package kafka.controller
 
 import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
 import java.util.concurrent.{ArrayBlockingQueue, ConcurrentHashMap, CountDownLatch, TimeUnit}

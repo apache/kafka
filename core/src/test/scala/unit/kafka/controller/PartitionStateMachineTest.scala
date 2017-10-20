@@ -22,7 +22,6 @@ import kafka.controller.KafkaControllerZkUtils.UpdateLeaderAndIsrResult
 import kafka.log.LogConfig
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import kafka.zookeeper.{CreateResponse, GetDataResponse, ZookeeperClientException}
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.Stat
 import org.easymock.EasyMock

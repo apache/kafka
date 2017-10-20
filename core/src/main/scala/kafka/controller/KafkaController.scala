@@ -26,7 +26,6 @@ import kafka.controller.KafkaControllerZkUtils.UpdateLeaderAndIsrResult
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server._
 import kafka.utils._
-import kafka.zookeeper.{ZNodeChangeHandler, ZNodeChildChangeHandler}
 import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
