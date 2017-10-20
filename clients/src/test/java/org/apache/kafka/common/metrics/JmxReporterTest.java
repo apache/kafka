@@ -75,25 +75,30 @@ public class JmxReporterTest {
             sensor.add(metrics.metricName("name", "group", "desc", "id", "foo+"), new Total());
             sensor.add(metrics.metricName("name", "group", "desc", "id", "foo?"), new Total());
             sensor.add(metrics.metricName("name", "group", "desc", "id", "foo:"), new Total());
+            sensor.add(metrics.metricName("name", "group", "desc", "id", "foo%"), new Total());
 
-            assertTrue(server.isRegistered(new ObjectName(":type=group,id=foo%2A")));
-            assertEquals(0.0, server.getAttribute(new ObjectName(":type=group,id=foo%2A"), "name"));
-            assertTrue(server.isRegistered(new ObjectName(":type=group,id=foo%2B")));
-            assertEquals(0.0, server.getAttribute(new ObjectName(":type=group,id=foo%2B"), "name"));
-            assertTrue(server.isRegistered(new ObjectName(":type=group,id=foo%3F")));
-            assertEquals(0.0, server.getAttribute(new ObjectName(":type=group,id=foo%3F"), "name"));
-            assertTrue(server.isRegistered(new ObjectName(":type=group,id=foo%3A")));
-            assertEquals(0.0, server.getAttribute(new ObjectName(":type=group,id=foo%3A"), "name"));
+            assertTrue(server.isRegistered(new ObjectName(":type=group,id=\"foo\\*\"")));
+            assertEquals(0.0, server.getAttribute(new ObjectName(":type=group,id=\"foo\\*\""), "name"));
+            assertTrue(server.isRegistered(new ObjectName(":type=group,id=\"foo+\"")));
+            assertEquals(0.0, server.getAttribute(new ObjectName(":type=group,id=\"foo+\""), "name"));
+            assertTrue(server.isRegistered(new ObjectName(":type=group,id=\"foo\\?\"")));
+            assertEquals(0.0, server.getAttribute(new ObjectName(":type=group,id=\"foo\\?\""), "name"));
+            assertTrue(server.isRegistered(new ObjectName(":type=group,id=\"foo:\"")));
+            assertEquals(0.0, server.getAttribute(new ObjectName(":type=group,id=\"foo:\""), "name"));
+            assertTrue(server.isRegistered(new ObjectName(":type=group,id=foo%")));
+            assertEquals(0.0, server.getAttribute(new ObjectName(":type=group,id=foo%"), "name"));
 
             metrics.removeMetric(metrics.metricName("name", "group", "desc", "id", "foo*"));
             metrics.removeMetric(metrics.metricName("name", "group", "desc", "id", "foo+"));
             metrics.removeMetric(metrics.metricName("name", "group", "desc", "id", "foo?"));
             metrics.removeMetric(metrics.metricName("name", "group", "desc", "id", "foo:"));
+            metrics.removeMetric(metrics.metricName("name", "group", "desc", "id", "foo%"));
 
-            assertFalse(server.isRegistered(new ObjectName(":type=group,id=foo%2A")));
-            assertFalse(server.isRegistered(new ObjectName(":type=group,id=foo%2B")));
-            assertFalse(server.isRegistered(new ObjectName(":type=group,id=foo%3F")));
-            assertFalse(server.isRegistered(new ObjectName(":type=group,id=foo%3A")));
+            assertFalse(server.isRegistered(new ObjectName(":type=group,id=\"foo\\*\"")));
+            assertFalse(server.isRegistered(new ObjectName(":type=group,id=foo+")));
+            assertFalse(server.isRegistered(new ObjectName(":type=group,id=\"foo\\?\"")));
+            assertFalse(server.isRegistered(new ObjectName(":type=group,id=\"foo:\"")));
+            assertFalse(server.isRegistered(new ObjectName(":type=group,id=foo%")));
         } finally {
             metrics.close();
         }

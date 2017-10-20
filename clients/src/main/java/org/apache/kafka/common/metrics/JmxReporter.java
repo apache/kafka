@@ -134,7 +134,7 @@ public class JmxReporter implements MetricsReporter {
             mBeanName.append(",");
             mBeanName.append(entry.getKey());
             mBeanName.append("=");
-            mBeanName.append(Sanitizer.sanitize(entry.getValue()));
+            mBeanName.append(Sanitizer.jmxSanitize(entry.getValue()));
         }
         return mBeanName.toString();
     }

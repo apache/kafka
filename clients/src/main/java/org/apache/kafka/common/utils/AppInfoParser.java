@@ -57,7 +57,7 @@ public class AppInfoParser {
 
     public static synchronized void registerAppInfo(String prefix, String id, Metrics metrics) {
         try {
-            ObjectName name = new ObjectName(prefix + ":type=app-info,id=" + Sanitizer.sanitize(id));
+            ObjectName name = new ObjectName(prefix + ":type=app-info,id=" + Sanitizer.jmxSanitize(id));
             AppInfo mBean = new AppInfo();
             ManagementFactory.getPlatformMBeanServer().registerMBean(mBean, name);
 
@@ -70,7 +70,7 @@ public class AppInfoParser {
     public static synchronized void unregisterAppInfo(String prefix, String id, Metrics metrics) {
         MBeanServer server = ManagementFactory.getPlatformMBeanServer();
         try {
-            ObjectName name = new ObjectName(prefix + ":type=app-info,id=" + Sanitizer.sanitize(id));
+            ObjectName name = new ObjectName(prefix + ":type=app-info,id=" + Sanitizer.jmxSanitize(id));
             if (server.isRegistered(name))
                 server.unregisterMBean(name);
 
