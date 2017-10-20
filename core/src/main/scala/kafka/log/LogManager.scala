@@ -22,8 +22,8 @@ import java.nio.file.Files
 import java.util.concurrent._
 
 import com.yammer.metrics.core.Gauge
-import kafka.admin.AdminUtils
 import kafka.common.KafkaException
+import kafka.controller.KafkaControllerZkUtils
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.{BrokerState, RecoveringFromUncleanShutdown, _}
@@ -888,7 +888,7 @@ object LogManager {
 
   def apply(config: KafkaConfig,
             initialOfflineDirs: Seq[String],
-            zkUtils: ZkUtils,
+            zkUtils: KafkaControllerZkUtils,
             brokerState: BrokerState,
             kafkaScheduler: KafkaScheduler,
             time: Time,
@@ -897,9 +897,8 @@ object LogManager {
     val defaultProps = KafkaServer.copyKafkaConfigToLog(config)
     val defaultLogConfig = LogConfig(defaultProps)
 
-    val topicConfigs = AdminUtils.fetchAllTopicConfigs(zkUtils).map { case (topic, configs) =>
-      topic -> LogConfig.fromProps(defaultProps, configs)
-    }
+    val (topicConfigs, failed) = zkUtils.getLogConfigs(zkUtils.getAllTopicsInCluster, defaultProps)
+    if (!failed.isEmpty) throw failed.head._2
 
     // read the log configurations from zookeeper
     val cleanerConfig = CleanerConfig(numThreads = config.logCleanerThreads,
