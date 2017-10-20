@@ -18,8 +18,16 @@ package org.apache.kafka.common.utils;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.io.UnsupportedEncodingException;
+import java.lang.management.ManagementFactory;
+
+import javax.management.MBeanException;
+import javax.management.MBeanServer;
+import javax.management.MalformedObjectNameException;
+import javax.management.ObjectName;
+import javax.management.OperationsException;
 
 import org.junit.Test;
 
@@ -31,5 +39,45 @@ public class SanitizerTest {
         String sanitizedPrincipal = Sanitizer.sanitize(principal);
         assertTrue(sanitizedPrincipal.replace('%', '_').matches("[a-zA-Z0-9\\._\\-]+"));
         assertEquals(principal, Sanitizer.desanitize(sanitizedPrincipal));
+    }
+
+    @Test
+    public void testJmxSanitize() throws MalformedObjectNameException {
+        int unquoted = 0;
+        for (int i = 0; i < 65536; i++) {
+            char c = (char) i;
+            String value = "value" + c;
+            String jmxSanitizedValue = Sanitizer.jmxSanitize(value);
+            if (jmxSanitizedValue.equals(value))
+                unquoted++;
+            verifyJmx(jmxSanitizedValue, i);
+            String encodedValue = Sanitizer.sanitize(value);
+            verifyJmx(encodedValue, i);
+            // jmxSanitize should not sanitize URL-encoded values
+            assertEquals(encodedValue, Sanitizer.jmxSanitize(encodedValue));
+        }
+        assertEquals(68, unquoted); // a-zA-Z0-9-_% space and tab
+    }
+
+    private void verifyJmx(String sanitizedValue, int c) throws MalformedObjectNameException {
+        Object mbean = new TestStat();
+        MBeanServer server = ManagementFactory.getPlatformMBeanServer();
+        ObjectName objectName = new ObjectName("test:key=" + sanitizedValue);
+        try {
+            server.registerMBean(mbean, objectName);
+            server.unregisterMBean(objectName);
+        } catch (OperationsException | MBeanException e) {
+            fail("Could not register char=\\u" + c);
+        }
+    }
+
+    public interface TestStatMBean {
+        int getValue();
+    }
+
+    public class TestStat implements TestStatMBean {
+        public int getValue() {
+            return 1;
+        }
     }
 }
