@@ -20,15 +20,35 @@ import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.regex.Pattern;
+
+import javax.management.ObjectName;
 
 import org.apache.kafka.common.KafkaException;
 
 /**
- * Utility class for sanitizing/desanitizing user principal and client-ids
- * to a safe value for use in JMX metric names and as Zookeeper node name
+ * Utility class for sanitizing/desanitizing/quoting values used in JMX metric names
+ * or as ZooKeeper node name.
+ * <p>
+ * User principals and client-ids are URL-encoded using ({@link #sanitize(String)}
+ * for use as ZooKeeper node names. User principals are URL-encoded in all metric
+ * names as well. All other metric tags including client-id are quoted if they
+ * contain special characters using {@link #jmxSanitize(String)} when
+ * registering in JMX.
  */
 public class Sanitizer {
 
+    /**
+     * Even though only a small number of characters are disallowed in JMX, quote any
+     * string containing special characteres to be safe. All characters in strings sanitized
+     * using {@link #sanitize(String)} are safe for JMX and hence included here.
+     */
+    private static final Pattern MBEAN_PATTERN = Pattern.compile("[\\w-%\\. \t]*");
+
+    /**
+     * Sanitize `name` for safe use as JMX metric name as well as ZooKeeper node name
+     * using URL-encoding.
+     */
     public static String sanitize(String name) {
         String encoded = "";
         try {
@@ -50,6 +70,10 @@ public class Sanitizer {
         }
     }
 
+    /**
+     * Desanitize name that was URL-encoded using {@link #sanitize(String)}. This
+     * is used to obtain the desanitized version of node names in ZooKeeper.
+     */
     public static String desanitize(String name) {
         try {
             return URLDecoder.decode(name, StandardCharsets.UTF_8.name());
@@ -58,4 +82,13 @@ public class Sanitizer {
         }
     }
 
+    /**
+     * Quote `name` using {@link ObjectName#quote(String)} if `name` contains
+     * characters that are not safe for use in JMX. User principals that are
+     * already sanitized using {@link #sanitize(String)} will not be quoted
+     * since they are safe for JMX.
+     */
+    public static String jmxSanitize(String name) {
+        return MBEAN_PATTERN.matcher(name).matches() ? name : ObjectName.quote(name);
+    }
 }
