@@ -241,16 +241,8 @@ public class StreamsKafkaClient {
                     break;
                 }
             }
-
-            System.out.println("INFO: foundNode " + foundNode + " with " + brokerId + " : " + nodes);
-
             try {
-                final List<ClientResponse> responseList = kafkaClient.poll(50, Time.SYSTEM.milliseconds());
-
-                if (!responseList.isEmpty()) {
-                    System.out.println("ERROR: Not expecting " + responseList);
-                }
-
+                kafkaClient.poll(50, Time.SYSTEM.milliseconds());
             } catch (final Exception e) {
                 throw new StreamsException("Could not poll.", e);
             }
@@ -303,9 +295,6 @@ public class StreamsKafkaClient {
             } catch (final IllegalStateException e) {
                 throw new StreamsException("Could not poll.", e);
             }
-
-            System.out.println("INFO: Received " + responseList + " for " + clientRequest);
-
             if (!responseList.isEmpty()) {
                 if (responseList.size() > 1) {
                     throw new StreamsException("Sent one request but received multiple or no responses.");

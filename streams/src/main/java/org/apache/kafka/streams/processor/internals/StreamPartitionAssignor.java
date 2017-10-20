@@ -326,7 +326,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
             clientMetadata.addConsumer(consumerId, info);
         }
 
-        log.warn("Constructed client metadata {} from the member subscriptions.", clientsMetadata);
+        log.debug("Constructed client metadata {} from the member subscriptions.", clientsMetadata);
 
         // ---------------- Step Zero ---------------- //
 
@@ -413,7 +413,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
 
         metadataWithInternalTopics = metadata.withPartitions(allRepartitionTopicPartitions);
 
-        log.warn("Created repartition topics {} from the parsed topology.", allRepartitionTopicPartitions.values());
+        log.debug("Created repartition topics {} from the parsed topology.", allRepartitionTopicPartitions.values());
 
         // ---------------- Step One ---------------- //
 
@@ -488,7 +488,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
 
         prepareTopic(changelogTopicMetadata);
 
-        log.warn("Created state changelog topics {} from the parsed topology.", changelogTopicMetadata.values());
+        log.debug("Created state changelog topics {} from the parsed topology.", changelogTopicMetadata.values());
 
         // ---------------- Step Two ---------------- //
 
@@ -498,13 +498,13 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
             states.put(entry.getKey(), entry.getValue().state);
         }
 
-        log.warn("Assigning tasks {} to clients {} with number of replicas {}",
+        log.debug("Assigning tasks {} to clients {} with number of replicas {}",
                 partitionsForTask.keySet(), states, numStandbyReplicas);
 
         final StickyTaskAssignor<UUID> taskAssignor = new StickyTaskAssignor<>(states, partitionsForTask.keySet());
         taskAssignor.assign(numStandbyReplicas);
 
-        log.warn("Assigned tasks to clients as {}.", states);
+        log.info("Assigned tasks to clients as {}.", states);
 
         // ---------------- Step Three ---------------- //
 
@@ -650,7 +650,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
      */
     @SuppressWarnings("deprecation")
     private void prepareTopic(final Map<String, InternalTopicMetadata> topicPartitions) {
-        log.warn("Starting to validate internal topics in partition assignor.");
+        log.debug("Starting to validate internal topics in partition assignor.");
 
         // first construct the topics to make ready
         Map<InternalTopicConfig, Integer> topicsToMakeReady = new HashMap<>();
@@ -684,7 +684,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
             }
         }
 
-        log.warn("Completed validating internal topics in partition assignor");
+        log.debug("Completed validating internal topics in partition assignor.");
     }
 
     private boolean allTopicsCreated(final Set<String> topicNamesToMakeReady, final Map<InternalTopicConfig, Integer> topicsToMakeReady) {

@@ -44,8 +44,10 @@ public class InternalTopicManager {
     private final int replicationFactor;
     private final StreamsKafkaClient streamsKafkaClient;
 
-    public InternalTopicManager(final StreamsKafkaClient streamsKafkaClient, final int replicationFactor,
-                                final long windowChangeLogAdditionalRetention, final Time time) {
+    public InternalTopicManager(final StreamsKafkaClient streamsKafkaClient,
+                                final int replicationFactor,
+                                final long windowChangeLogAdditionalRetention,
+                                final Time time) {
         this.streamsKafkaClient = streamsKafkaClient;
         this.replicationFactor = replicationFactor;
         this.windowChangeLogAdditionalRetention = windowChangeLogAdditionalRetention;
@@ -80,7 +82,6 @@ public class InternalTopicManager {
                 return;
             } catch (StreamsException ex) {
                 log.warn("Could not create internal topics: {} Retry #{}", ex.getMessage(), i);
-                log.warn("\tError was: ", ex);
             }
             // backoff
             time.sleep(100L);
@@ -101,7 +102,6 @@ public class InternalTopicManager {
                 return existingTopicPartitions;
             } catch (StreamsException ex) {
                 log.warn("Could not get number of partitions: {} Retry #{}", ex.getMessage(), i);
-                log.warn("Error was: ", ex.getCause());
             }
             // backoff
             time.sleep(100L);

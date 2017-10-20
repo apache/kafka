@@ -808,11 +808,11 @@ public class StreamThread extends Thread implements ThreadDataProvider {
             if (totalProcessed > 0) {
                 final long processLatency = computeLatency();
                 streamsMetrics.processTimeSensor.record(processLatency / (double) totalProcessed,
-                        timerStartedMs);
+                                                        timerStartedMs);
                 processedBeforeCommit = adjustRecordsProcessedBeforeCommit(recordsProcessedBeforeCommit,
-                        totalProcessed,
-                        processLatency,
-                        commitTimeMs);
+                                                                           totalProcessed,
+                                                                           processLatency,
+                                                                           commitTimeMs);
             }
         }
 

@@ -222,18 +222,12 @@ public class NetworkClient implements KafkaClient {
         if (node.isEmpty())
             throw new IllegalArgumentException("Cannot connect to empty node " + node);
 
-        log.warn("Checking ready for " + node + ": " + metadataUpdater.isUpdateDue(now) + " " + connectionStates);
-
         if (isReady(node, now))
             return true;
 
-        if (connectionStates.canConnect(node.idString(), now)) {
-            log.warn("Can init connect for " + node + ": " + connectionStates.connectionState(node.idString()));
-
+        if (connectionStates.canConnect(node.idString(), now))
             // if we are interested in sending to a node and we don't have a connection to it, initiate one
             initiateConnect(node, now);
-
-        }
 
         return false;
     }

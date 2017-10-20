@@ -134,8 +134,6 @@ class AdminManager(val config: KafkaConfig,
       }
     }
 
-    warn(s"Deciding to return createTopic with $timeout, $validateOnly and $metadata")
-
     // 2. if timeout <= 0, validateOnly or no topics can proceed return immediately
     if (timeout <= 0 || validateOnly || !metadata.exists(_.error.is(Errors.NONE))) {
       val results = metadata.map { createTopicMetadata =>
@@ -146,15 +144,11 @@ class AdminManager(val config: KafkaConfig,
           (createTopicMetadata.topic, createTopicMetadata.error)
         }
       }.toMap
-      warn(s"\tReturn $results immediately")
       responseCallback(results)
     } else {
       // 3. else pass the assignments and errors to the delayed operation and set the keys
       val delayedCreate = new DelayedCreatePartitions(timeout, metadata.toSeq, this, responseCallback)
       val delayedCreateKeys = createInfo.keys.map(new TopicKey(_)).toSeq
-
-      warn(s"\tPark $delayedCreate with $delayedCreateKeys")
-
       // try to complete the request immediately, otherwise put it into the purgatory
       topicPurgatory.tryCompleteElseWatch(delayedCreate, delayedCreateKeys)
     }
