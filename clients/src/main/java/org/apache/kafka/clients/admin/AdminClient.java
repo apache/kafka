@@ -500,7 +500,7 @@ public abstract class AdminClient implements AutoCloseable {
      * @param partitionsAndOffsets  The topic partitions and related offsets from which records deletion starts.
      * @return                      The DeleteRecordsResult.
      */
-    public DeleteRecordsResult deleteRecords(Map<TopicPartition, Long> partitionsAndOffsets) {
+    public DeleteRecordsResult deleteRecords(Map<TopicPartition, DeleteRecords> partitionsAndOffsets) {
         return deleteRecords(partitionsAndOffsets, new DeleteRecordsOptions());
     }
 
@@ -513,6 +513,6 @@ public abstract class AdminClient implements AutoCloseable {
      * @param options               The options to use when deleting records.
      * @return                      The DeleteRecordsResult.
      */
-    public abstract DeleteRecordsResult deleteRecords(Map<TopicPartition, Long> partitionsAndOffsets,
+    public abstract DeleteRecordsResult deleteRecords(Map<TopicPartition, DeleteRecords> partitionsAndOffsets,
                                                       DeleteRecordsOptions options);
 }

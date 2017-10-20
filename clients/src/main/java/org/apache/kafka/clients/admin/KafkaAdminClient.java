@@ -1877,19 +1877,19 @@ public class KafkaAdminClient extends AdminClient {
         return new CreatePartitionsResult(new HashMap<String, KafkaFuture<Void>>(futures));
     }
 
-    public DeleteRecordsResult deleteRecords(Map<TopicPartition, Long> partitionsAndOffsets,
+    public DeleteRecordsResult deleteRecords(Map<TopicPartition, DeleteRecords> partitionsAndOffsets,
                                              final DeleteRecordsOptions options) {
 
         // requests need to be sent to partitions leader nodes so ...
         // ... from the provided map it's needed to create more maps grouping topic/partition per leader
 
         Map<Node, Map<TopicPartition, Long>> leaders = new HashMap<>();
-        for (Map.Entry<TopicPartition, Long> entry: partitionsAndOffsets.entrySet()) {
+        for (Map.Entry<TopicPartition, DeleteRecords> entry: partitionsAndOffsets.entrySet()) {
 
             Node node = metadata.fetch().leaderFor(entry.getKey());
             if (!leaders.containsKey(node))
                 leaders.put(node, new HashMap<TopicPartition, Long>());
-            leaders.get(node).put(entry.getKey(), entry.getValue());
+            leaders.get(node).put(entry.getKey(), entry.getValue().offset());
         }
 
         final Map<TopicPartition, KafkaFutureImpl<Long>> futures = new HashMap<>(partitionsAndOffsets.size());
