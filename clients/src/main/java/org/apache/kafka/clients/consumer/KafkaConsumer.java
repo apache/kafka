@@ -1199,6 +1199,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void commitSync() {
         acquireAndEnsureOpen();
+
+        log.warn("{} Commit Sync with {}", clientId, subscriptions.allConsumed());
+
         try {
             coordinator.commitOffsetsSync(subscriptions.allConsumed(), Long.MAX_VALUE);
         } finally {

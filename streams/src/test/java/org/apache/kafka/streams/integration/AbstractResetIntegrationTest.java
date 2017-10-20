@@ -273,11 +273,11 @@ abstract class AbstractResetIntegrationTest {
 
         // RESET
         streams = new KafkaStreams(setupTopologyWithIntermediateUserTopic(OUTPUT_TOPIC_2_RERUN), streamsConfiguration);
-        final KafkaStreams handlerReference2 = streams;
+        //final KafkaStreams handlerReference2 = streams;
         streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
             public void uncaughtException(Thread t, Throwable e) {
-                handlerReference2.close(10, TimeUnit.SECONDS);
+                //handlerReference2.close(10, TimeUnit.SECONDS);
                 log.error("Streams application failed: ", e);
             }
         });
@@ -450,6 +450,8 @@ abstract class AbstractResetIntegrationTest {
         final Properties cleanUpConfig = new Properties();
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + CLEANUP_CONSUMER_TIMEOUT);
+
+        log.warn("Running resetter with {} parameters and {} cleanUp Config", parameters, cleanUpConfig);
 
         final int exitCode = new StreamsResetter().run(parameters, cleanUpConfig);
         Assert.assertEquals(0, exitCode);

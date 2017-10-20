@@ -801,19 +801,27 @@ public class StreamThread extends Thread implements ThreadDataProvider {
             }
         }
 
-        if (records != null && !records.isEmpty() && taskManager.hasActiveRunningTasks()) {
-            streamsMetrics.pollTimeSensor.record(computeLatency(), timerStartedMs);
-            addRecordsToTasks(records);
-            final long totalProcessed = processAndMaybeCommit(recordsProcessedBeforeCommit);
-            if (totalProcessed > 0) {
-                final long processLatency = computeLatency();
-                streamsMetrics.processTimeSensor.record(processLatency / (double) totalProcessed,
-                                                        timerStartedMs);
-                processedBeforeCommit = adjustRecordsProcessedBeforeCommit(recordsProcessedBeforeCommit,
-                                                                           totalProcessed,
-                                                                           processLatency,
-                                                                           commitTimeMs);
+        if (records != null) {
+            log.warn("Fetched {} with active running {}", records.count(), taskManager.activeTaskIds());
+            for (ConsumerRecord<byte[], byte[]> record : records) {
+                log.warn("\t{}", record);
             }
+
+            if (!records.isEmpty() && taskManager.hasActiveRunningTasks()) {
+                streamsMetrics.pollTimeSensor.record(computeLatency(), timerStartedMs);
+                addRecordsToTasks(records);
+                final long totalProcessed = processAndMaybeCommit(recordsProcessedBeforeCommit);
+                if (totalProcessed > 0) {
+                    final long processLatency = computeLatency();
+                    streamsMetrics.processTimeSensor.record(processLatency / (double) totalProcessed,
+                            timerStartedMs);
+                    processedBeforeCommit = adjustRecordsProcessedBeforeCommit(recordsProcessedBeforeCommit,
+                            totalProcessed,
+                            processLatency,
+                            commitTimeMs);
+                }
+            }
+
         }
 
         punctuate();
