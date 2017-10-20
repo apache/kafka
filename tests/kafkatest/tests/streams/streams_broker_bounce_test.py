@@ -196,7 +196,7 @@ class StreamsBrokerBounceTest(Test):
         time.sleep(sleep_time_secs)
 
         # Fail brokers
-        self.fail_broker_type(failure_mode, broker_type);
+        self.fail_broker_type(failure_mode, broker_type)
 
         return self.collect_results(sleep_time_secs)
 
@@ -216,7 +216,7 @@ class StreamsBrokerBounceTest(Test):
         time.sleep(sleep_time_secs)
 
         # Fail brokers
-        self.fail_broker_type(failure_mode, broker_type);
+        self.fail_broker_type(failure_mode, broker_type)
 
         return self.collect_results(sleep_time_secs)
 
@@ -234,7 +234,7 @@ class StreamsBrokerBounceTest(Test):
         time.sleep(120)
 
         # Fail brokers
-        self.fail_many_brokers(failure_mode, num_failures);
+        self.fail_many_brokers(failure_mode, num_failures)
 
         return self.collect_results(120)
 
@@ -252,6 +252,6 @@ class StreamsBrokerBounceTest(Test):
         time.sleep(120)
 
         # Fail brokers
-        self.fail_many_brokers(failure_mode, num_failures);
+        self.fail_many_brokers(failure_mode, num_failures)
 
         return self.collect_results(120)

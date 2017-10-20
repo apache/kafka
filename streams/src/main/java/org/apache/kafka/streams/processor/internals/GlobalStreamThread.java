@@ -50,7 +50,7 @@ public class GlobalStreamThread extends Thread {
     private final Logger log;
     private final LogContext logContext;
     private final StreamsConfig config;
-    private final Consumer<byte[], byte[]> consumer;
+    private final Consumer<byte[], byte[]> globalConsumer;
     private final StateDirectory stateDirectory;
     private final Time time;
     private final ThreadCache cache;
@@ -183,7 +183,7 @@ public class GlobalStreamThread extends Thread {
         this.time = time;
         this.config = config;
         this.topology = topology;
-        this.consumer = globalConsumer;
+        this.globalConsumer = globalConsumer;
         this.stateDirectory = stateDirectory;
         long cacheSizeBytes = Math.max(0, config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) /
                 (config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG) + 1));
@@ -197,7 +197,7 @@ public class GlobalStreamThread extends Thread {
     }
 
     static class StateConsumer {
-        private final Consumer<byte[], byte[]> consumer;
+        private final Consumer<byte[], byte[]> globalConsumer;
         private final GlobalStateMaintainer stateMaintainer;
         private final Time time;
         private final long pollMs;
@@ -207,13 +207,13 @@ public class GlobalStreamThread extends Thread {
         private long lastFlush;
 
         StateConsumer(final LogContext logContext,
-                      final Consumer<byte[], byte[]> consumer,
+                      final Consumer<byte[], byte[]> globalConsumer,
                       final GlobalStateMaintainer stateMaintainer,
                       final Time time,
                       final long pollMs,
                       final long flushInterval) {
             this.log = logContext.logger(getClass());
-            this.consumer = consumer;
+            this.globalConsumer = globalConsumer;
             this.stateMaintainer = stateMaintainer;
             this.time = time;
             this.pollMs = pollMs;
@@ -226,15 +226,15 @@ public class GlobalStreamThread extends Thread {
          */
         void initialize() {
             final Map<TopicPartition, Long> partitionOffsets = stateMaintainer.initialize();
-            consumer.assign(partitionOffsets.keySet());
+            globalConsumer.assign(partitionOffsets.keySet());
             for (Map.Entry<TopicPartition, Long> entry : partitionOffsets.entrySet()) {
-                consumer.seek(entry.getKey(), entry.getValue());
+                globalConsumer.seek(entry.getKey(), entry.getValue());
             }
             lastFlush = time.milliseconds();
         }
 
         void pollAndUpdate() {
-            final ConsumerRecords<byte[], byte[]> received = consumer.poll(pollMs);
+            final ConsumerRecords<byte[], byte[]> received = globalConsumer.poll(pollMs);
             for (ConsumerRecord<byte[], byte[]> record : received) {
                 stateMaintainer.update(record);
             }
@@ -247,8 +247,8 @@ public class GlobalStreamThread extends Thread {
 
         public void close() throws IOException {
             try {
-                consumer.close();
-            } catch (Exception e) {
+                globalConsumer.close();
+            } catch (final RuntimeException e) {
                 // just log an error if the consumer throws an exception during close
                 // so we can always attempt to close the state stores.
                 log.error("Failed to close consumer due to the following error:", e);
@@ -291,7 +291,7 @@ public class GlobalStreamThread extends Thread {
 
             try {
                 stateConsumer.close();
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 log.error("Failed to close state maintainer due to the following error:", e);
             }
             setState(DEAD);
@@ -303,12 +303,12 @@ public class GlobalStreamThread extends Thread {
     private StateConsumer initialize() {
         try {
             final GlobalStateManager stateMgr = new GlobalStateManagerImpl(topology,
-                                                                           consumer,
+                                                                           globalConsumer,
                                                                            stateDirectory,
                                                                            stateRestoreListener);
             final StateConsumer stateConsumer
                     = new StateConsumer(this.logContext,
-                                        consumer,
+                                        globalConsumer,
                                         new GlobalStateUpdateTask(topology,
                                                                   new GlobalProcessorContextImpl(
                                                                           config,
@@ -323,9 +323,9 @@ public class GlobalStreamThread extends Thread {
                                         config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));
             stateConsumer.initialize();
             return stateConsumer;
-        } catch (StreamsException e) {
+        } catch (final StreamsException e) {
             startupException = e;
-        } catch (Exception e) {
+        } catch (final Exception e) {
             startupException = new StreamsException("Exception caught during initialization of GlobalStreamThread", e);
         }
         return null;

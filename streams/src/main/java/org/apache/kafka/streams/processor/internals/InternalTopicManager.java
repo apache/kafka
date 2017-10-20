@@ -22,7 +22,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.slf4j.Logger;
 
-import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -110,11 +109,7 @@ public class InternalTopicManager {
     }
 
     public void close() {
-        try {
-            streamsKafkaClient.close();
-        } catch (IOException e) {
-            log.warn("Could not close StreamsKafkaClient.");
-        }
+        streamsKafkaClient.close();
     }
 
     /**
