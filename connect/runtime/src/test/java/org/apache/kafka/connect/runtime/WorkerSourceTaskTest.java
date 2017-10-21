@@ -350,7 +350,6 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         assertThat(recordsReportedHavingOffsetsFlushed.getValues(), equalTo(wantedRecordListsWithOffsetsIncludedInOffsetsFlush));
     }
 
-
     @Test
     public void testPollsInBackground() throws Exception {
         createWorkerTask();
