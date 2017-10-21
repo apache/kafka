@@ -110,9 +110,9 @@ final class ClusterConnectionStates {
      */
     public void connecting(String id, long now) {
         if (nodeState.containsKey(id)) {
-          NodeConnectionState node = nodeState.get(id);
-          node.lastConnectAttemptMs = now;
-          node.state = ConnectionState.CONNECTING;
+            NodeConnectionState node = nodeState.get(id);
+            node.lastConnectAttemptMs = now;
+            node.state = ConnectionState.CONNECTING;
         } else {
             nodeState.put(id, new NodeConnectionState(ConnectionState.CONNECTING, now,
                 this.reconnectBackoffInitMs));
