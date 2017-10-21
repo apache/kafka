@@ -51,6 +51,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * are held when they are invoked.
  */
 public class ConsumerNetworkClient implements Closeable {
+    private static final int MAX_POLL_TIME_MS = 5000;
+
     // the mutable state of this class is protected by the object's monitor (excluding the wakeup
     // flag and the request completion queue below).
     private final Logger log;
@@ -83,7 +85,7 @@ public class ConsumerNetworkClient implements Closeable {
         this.metadata = metadata;
         this.time = time;
         this.retryBackoffMs = retryBackoffMs;
-        this.maxPollTimeoutMs = maxPollTimeoutMs;
+        this.maxPollTimeoutMs = Math.min(maxPollTimeoutMs, MAX_POLL_TIME_MS);
         this.unsentExpiryMs = requestTimeoutMs;
     }
 
