@@ -109,7 +109,7 @@ class WorkerSinkTask extends WorkerTask {
         this.pausedForRedelivery = false;
         this.rebalanceException = null;
         this.nextCommit = time.milliseconds() +
-                workerConfig.getLong(WorkerConfig.OFFSET_FLUSH_INTERVAL_MS_CONFIG);
+                workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
         this.committing = false;
         this.commitSeqno = 0;
         this.commitStarted = -1;
@@ -172,7 +172,7 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     protected void iteration() {
-        final long offsetCommitIntervalMs = workerConfig.getLong(WorkerConfig.OFFSET_FLUSH_INTERVAL_MS_CONFIG);
+        final long offsetCommitIntervalMs = workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
 
         try {
             long now = time.milliseconds();
@@ -184,7 +184,7 @@ class WorkerSinkTask extends WorkerTask {
                 context.clearCommitRequest();
             }
 
-            final long commitTimeoutMs = commitStarted + workerConfig.getLong(WorkerConfig.OFFSET_FLUSH_TIMEOUT_MS_CONFIG);
+            final long commitTimeoutMs = commitStarted + workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
 
             // Check for timed out commits
             if (committing && now >= commitTimeoutMs) {

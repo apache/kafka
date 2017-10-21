@@ -83,7 +83,7 @@ public class Worker {
 
     private final ConcurrentMap<String, WorkerConnector> connectors = new ConcurrentHashMap<>();
     private final ConcurrentMap<ConnectorTaskId, WorkerTask> tasks = new ConcurrentHashMap<>();
-    private SourceTaskOffsetFlusher sourceTaskOffsetFlusher;
+    private SourceTaskOffsetCommitter sourceTaskOffsetCommitter;
 
     public Worker(
             String workerId,
@@ -142,7 +142,7 @@ public class Worker {
         log.info("Worker starting");
 
         offsetBackingStore.start();
-        sourceTaskOffsetFlusher = new SourceTaskOffsetFlusher(config);
+        sourceTaskOffsetCommitter = new SourceTaskOffsetCommitter(config);
 
         log.info("Worker started");
     }
@@ -167,7 +167,7 @@ public class Worker {
         }
 
         long timeoutMs = limit - time.milliseconds();
-        sourceTaskOffsetFlusher.close(timeoutMs);
+        sourceTaskOffsetCommitter.close(timeoutMs);
 
         offsetBackingStore.stop();
         metrics.stop();
@@ -420,7 +420,7 @@ public class Worker {
 
         executor.submit(workerTask);
         if (workerTask instanceof WorkerSourceTask) {
-            sourceTaskOffsetFlusher.schedule(id, (WorkerSourceTask) workerTask);
+            sourceTaskOffsetCommitter.schedule(id, (WorkerSourceTask) workerTask);
         }
         workerMetricsGroup.recordTaskSuccess();
         return true;
@@ -463,7 +463,7 @@ public class Worker {
 
         log.info("Stopping task {}", task.id());
         if (task instanceof WorkerSourceTask)
-            sourceTaskOffsetFlusher.remove(task.id());
+            sourceTaskOffsetCommitter.remove(task.id());
 
         ClassLoader savedLoader = plugins.currentThreadLoader();
         try {

@@ -46,8 +46,8 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest({SourceTaskOffsetFlusher.class, LoggerFactory.class})
-public class SourceTaskOffsetFlusherTest extends ThreadedTest {
+@PrepareForTest({SourceTaskOffsetCommitter.class, LoggerFactory.class})
+public class SourceTaskOffsetCommitterTest extends ThreadedTest {
     @Mock
     private ScheduledExecutorService executor;
     @Mock
@@ -55,7 +55,7 @@ public class SourceTaskOffsetFlusherTest extends ThreadedTest {
     @Mock
     private Logger mockLog;
 
-    private SourceTaskOffsetFlusher flusher;
+    private SourceTaskOffsetCommitter flusher;
 
     private static final long DEFAULT_OFFSET_COMMIT_INTERVAL_MS = 1000;
 
@@ -73,8 +73,8 @@ public class SourceTaskOffsetFlusherTest extends ThreadedTest {
         workerProps.put("offset.flush.interval.ms",
                 Long.toString(DEFAULT_OFFSET_COMMIT_INTERVAL_MS));
         WorkerConfig config = new StandaloneConfig(workerProps);
-        flusher = new SourceTaskOffsetFlusher(config, executor, flushers);
-        Whitebox.setInternalState(SourceTaskOffsetFlusher.class, "log", mockLog);
+        flusher = new SourceTaskOffsetCommitter(config, executor, flushers);
+        Whitebox.setInternalState(SourceTaskOffsetCommitter.class, "log", mockLog);
     }
 
     @Test

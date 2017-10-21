@@ -87,17 +87,17 @@ public class WorkerConfig extends AbstractConfig {
                     + " not per task. All task have shutdown triggered, then they are waited on sequentially.";
     private static final String TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_DEFAULT = "5000";
 
-    public static final String OFFSET_FLUSH_INTERVAL_MS_CONFIG = "offset.flush.interval.ms";
-    private static final String OFFSET_FLUSH_INTERVAL_MS_DOC
-            = "Interval at which to try flushing offsets for tasks.";
-    public static final long OFFSET_FLUSH_INTERVAL_MS_DEFAULT = 60000L;
+    public static final String OFFSET_COMMIT_INTERVAL_MS_CONFIG = "offset.flush.interval.ms";
+    private static final String OFFSET_COMMIT_INTERVAL_MS_DOC
+            = "Interval at which to try committing offsets for tasks.";
+    public static final long OFFSET_COMMIT_INTERVAL_MS_DEFAULT = 60000L;
 
-    public static final String OFFSET_FLUSH_TIMEOUT_MS_CONFIG = "offset.flush.timeout.ms";
-    private static final String OFFSET_FLUSH_TIMEOUT_MS_DOC
+    public static final String OFFSET_COMMIT_TIMEOUT_MS_CONFIG = "offset.flush.timeout.ms";
+    private static final String OFFSET_COMMIT_TIMEOUT_MS_DOC
             = "Maximum number of milliseconds to wait for records to flush and partition offset data to be"
-            + " flushed to offset storage before cancelling the process and restoring the offset "
-            + "data to be flushed in a future attempt.";
-    public static final long OFFSET_FLUSH_TIMEOUT_MS_DEFAULT = 5000L;
+            + " committed to offset storage before cancelling the process and restoring the offset "
+            + "data to be committed in a future attempt.";
+    public static final long OFFSET_COMMIT_TIMEOUT_MS_DEFAULT = 5000L;
 
     public static final String REST_HOST_NAME_CONFIG = "rest.host.name";
     private static final String REST_HOST_NAME_DOC
@@ -167,10 +167,10 @@ public class WorkerConfig extends AbstractConfig {
                 .define(TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG, Type.LONG,
                         TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_DEFAULT, Importance.LOW,
                         TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_DOC)
-                .define(OFFSET_FLUSH_INTERVAL_MS_CONFIG, Type.LONG, OFFSET_FLUSH_INTERVAL_MS_DEFAULT,
-                        Importance.LOW, OFFSET_FLUSH_INTERVAL_MS_DOC)
-                .define(OFFSET_FLUSH_TIMEOUT_MS_CONFIG, Type.LONG, OFFSET_FLUSH_TIMEOUT_MS_DEFAULT,
-                        Importance.LOW, OFFSET_FLUSH_TIMEOUT_MS_DOC)
+                .define(OFFSET_COMMIT_INTERVAL_MS_CONFIG, Type.LONG, OFFSET_COMMIT_INTERVAL_MS_DEFAULT,
+                        Importance.LOW, OFFSET_COMMIT_INTERVAL_MS_DOC)
+                .define(OFFSET_COMMIT_TIMEOUT_MS_CONFIG, Type.LONG, OFFSET_COMMIT_TIMEOUT_MS_DEFAULT,
+                        Importance.LOW, OFFSET_COMMIT_TIMEOUT_MS_DOC)
                 .define(REST_HOST_NAME_CONFIG, Type.STRING, null, Importance.LOW, REST_HOST_NAME_DOC)
                 .define(REST_PORT_CONFIG, Type.INT, REST_PORT_DEFAULT, Importance.LOW, REST_PORT_DOC)
                 .define(REST_ADVERTISED_HOST_NAME_CONFIG, Type.STRING,  null, Importance.LOW, REST_ADVERTISED_HOST_NAME_DOC)

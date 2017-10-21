@@ -322,8 +322,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         // To make test green, move offsetFlushLatch.countDown() here (see above)
         // offsetFlushLatch.countDown();
 
-        // Simulating SourceTaskOffsetFlusher calling flushOffsets at will
-        workerTask.flushOffsets();
+        // Simulating SourceTaskOffsetCommitter calling flushOffsets at will
+        workerTask.commitOffsets();
 
         assertTrue(awaitLatch(offsetFlushLatch));
         workerTask.stop();
@@ -484,7 +484,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         Future<?> taskFuture = executor.submit(workerTask);
 
         assertTrue(awaitLatch(pollLatch));
-        assertTrue(workerTask.flushOffsets());
+        assertTrue(workerTask.commitOffsets());
         workerTask.stop();
         assertTrue(workerTask.awaitStop(1000));
 
@@ -534,7 +534,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         Future<?> taskFuture = executor.submit(workerTask);
 
         assertTrue(awaitLatch(pollLatch));
-        assertTrue(workerTask.flushOffsets());
+        assertTrue(workerTask.commitOffsets());
         workerTask.stop();
         assertTrue(workerTask.awaitStop(1000));
 
@@ -726,7 +726,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         workerTask.initialize(TASK_CONFIG);
         Future<?> workerTaskFuture = executor.submit(workerTask);
 
-        // Stopping immediately while the other thread has work to do should result in no polling, no offset flushes,
+        // Stopping immediately while the other thread has work to do should result in no polling, no offset commits,
         // exiting the work thread immediately, and the stop() method will be invoked in the background thread since it
         // cannot be invoked immediately in the thread trying to stop the task.
         assertTrue(awaitLatch(startupLatch));

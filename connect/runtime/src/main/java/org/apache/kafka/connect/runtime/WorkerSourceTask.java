@@ -195,11 +195,11 @@ class WorkerSourceTask extends WorkerTask {
         } catch (InterruptedException e) {
             // Ignore and allow to exit.
         } finally {
-            // It should still be safe to flush offsets since any exception would have
+            // It should still be safe to commit offsets since any exception would have
             // simply resulted in not getting more records but all the existing records should be ok to flush
-            // and flush offsets. Worst case, task.flush() will also throw an exception causing the offset flush
+            // and commit offsets. Worst case, task.flush() will also throw an exception causing the offset commit
             // to fail.
-            flushOffsets();
+            commitOffsets();
         }
     }
 
@@ -306,13 +306,13 @@ class WorkerSourceTask extends WorkerTask {
         }
     }
 
-    public boolean flushOffsets() {
-        long flushTimeoutMs = workerConfig.getLong(WorkerConfig.OFFSET_FLUSH_TIMEOUT_MS_CONFIG);
+    public boolean commitOffsets() {
+        long commitTimeoutMs = workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
 
-        log.info("{} Flushing offsets", this);
+        log.info("{} Committing offsets", this);
 
         long started = time.milliseconds();
-        long timeout = started + flushTimeoutMs;
+        long timeout = started + commitTimeoutMs;
 
         synchronized (this) {
             // First we need to make sure we snapshot everything in exactly the current state. This
@@ -326,7 +326,7 @@ class WorkerSourceTask extends WorkerTask {
             // to persistent storage
 
             // Next we need to wait for all outstanding messages to finish sending
-            log.info("{} flushing {} outstanding messages for offset flush", this, outstandingMessages.size());
+            log.info("{} flushing {} outstanding messages for offset commit", this, outstandingMessages.size());
             while (!outstandingMessages.isEmpty()) {
                 try {
                     long timeoutMs = timeout - time.milliseconds();
@@ -338,10 +338,10 @@ class WorkerSourceTask extends WorkerTask {
                     }
                     this.wait(timeoutMs);
                 } catch (InterruptedException e) {
-                    // We can get interrupted if we take too long flushing when the work thread shutdown is requested,
-                    // requiring a forcible shutdown. Give up since we can't safely flush any offsets, but also need
+                    // We can get interrupted if we take too long committing when the work thread shutdown is requested,
+                    // requiring a forcible shutdown. Give up since we can't safely commit any offsets, but also need
                     // to stop immediately
-                    log.error("{} Interrupted while flushing messages, offsets will not be flushed", this);
+                    log.error("{} Interrupted while flushing messages, offsets will not be committed", this);
                     finishFailedFlush();
                     recordCommitFailure(time.milliseconds() - started, null);
                     return false;
@@ -356,7 +356,7 @@ class WorkerSourceTask extends WorkerTask {
                 finishSuccessfulFlush();
                 long durationMillis = time.milliseconds() - started;
                 recordCommitSuccess(durationMillis);
-                log.debug("{} Finished offset flushOffsets successfully in {} ms",
+                log.debug("{} Finished offset commitOffsets successfully in {} ms",
                         this, durationMillis);
 
                 acknowledgeSourceTask();
@@ -411,7 +411,7 @@ class WorkerSourceTask extends WorkerTask {
         finishSuccessfulFlush();
         long durationMillis = time.milliseconds() - started;
         recordCommitSuccess(durationMillis);
-        log.info("{} Finished flushOffsets successfully in {} ms",
+        log.info("{} Finished commitOffsets successfully in {} ms",
                 this, durationMillis);
 
         acknowledgeSourceTask();

@@ -32,42 +32,42 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * <p>
- * Manages offset flush scheduling and execution for SourceTasks.
+ * Manages offset commit scheduling and execution for SourceTasks.
  * </p>
  * <p>
- * Unlike sink tasks which directly manage their offset flushes in the main poll() thread since
+ * Unlike sink tasks which directly manage their offset commits in the main poll() thread since
  * they drive the event loop and control (for all intents and purposes) the timeouts, source
  * tasks are at the whim of the connector and cannot be guaranteed to wake up on the necessary
- * schedule. Instead, this class tracks all the active tasks, their schedule for flushes, and
+ * schedule. Instead, this class tracks all the active tasks, their schedule for commits, and
  * ensures they are invoked in a timely fashion.
  * </p>
  */
-class SourceTaskOffsetFlusher {
-    private static final Logger log = LoggerFactory.getLogger(SourceTaskOffsetFlusher.class);
+class SourceTaskOffsetCommitter {
+    private static final Logger log = LoggerFactory.getLogger(SourceTaskOffsetCommitter.class);
 
     private final WorkerConfig config;
-    private final ScheduledExecutorService flushExecutorService;
-    private final ConcurrentMap<ConnectorTaskId, ScheduledFuture<?>> flushers;
+    private final ScheduledExecutorService commitExecutorService;
+    private final ConcurrentMap<ConnectorTaskId, ScheduledFuture<?>> committers;
 
     // visible for testing
-    SourceTaskOffsetFlusher(WorkerConfig config,
-                            ScheduledExecutorService flushExecutorService,
-                            ConcurrentMap<ConnectorTaskId, ScheduledFuture<?>> flushers) {
+    SourceTaskOffsetCommitter(WorkerConfig config,
+                              ScheduledExecutorService commitExecutorService,
+                              ConcurrentMap<ConnectorTaskId, ScheduledFuture<?>> committers) {
         this.config = config;
-        this.flushExecutorService = flushExecutorService;
-        this.flushers = flushers;
+        this.commitExecutorService = commitExecutorService;
+        this.committers = committers;
     }
 
-    public SourceTaskOffsetFlusher(WorkerConfig config) {
+    public SourceTaskOffsetCommitter(WorkerConfig config) {
         this(config, Executors.newSingleThreadScheduledExecutor(),
                 new ConcurrentHashMap<ConnectorTaskId, ScheduledFuture<?>>());
     }
 
     public void close(long timeoutMs) {
-        flushExecutorService.shutdown();
+        commitExecutorService.shutdown();
         try {
-            if (!flushExecutorService.awaitTermination(timeoutMs, TimeUnit.MILLISECONDS)) {
-                log.error("Graceful shutdown of offset flusher thread timed out.");
+            if (!commitExecutorService.awaitTermination(timeoutMs, TimeUnit.MILLISECONDS)) {
+                log.error("Graceful shutdown of offset commitOffsets thread timed out.");
             }
         } catch (InterruptedException e) {
             // ignore and allow to exit immediately
@@ -75,18 +75,18 @@ class SourceTaskOffsetFlusher {
     }
 
     public void schedule(final ConnectorTaskId id, final WorkerSourceTask workerTask) {
-        long flushIntervalMs = config.getLong(WorkerConfig.OFFSET_FLUSH_INTERVAL_MS_CONFIG);
-        ScheduledFuture<?> flushFuture = flushExecutorService.scheduleWithFixedDelay(new Runnable() {
+        long commitIntervalMs = config.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
+        ScheduledFuture<?> commitFuture = commitExecutorService.scheduleWithFixedDelay(new Runnable() {
             @Override
             public void run() {
-                flush(workerTask);
+                commit(workerTask);
             }
-        }, flushIntervalMs, flushIntervalMs, TimeUnit.MILLISECONDS);
-        flushers.put(id, flushFuture);
+        }, commitIntervalMs, commitIntervalMs, TimeUnit.MILLISECONDS);
+        committers.put(id, commitFuture);
     }
 
     public void remove(ConnectorTaskId id) {
-        final ScheduledFuture<?> task = flushers.remove(id);
+        final ScheduledFuture<?> task = committers.remove(id);
         if (task == null)
             return;
 
@@ -96,24 +96,24 @@ class SourceTaskOffsetFlusher {
                 task.get();
         } catch (CancellationException e) {
             // ignore
-            log.trace("Offset flush thread was cancelled by another thread while removing connector task with id: {}", id);
+            log.trace("Offset commit thread was cancelled by another thread while removing connector task with id: {}", id);
         } catch (ExecutionException | InterruptedException e) {
-            throw new ConnectException("Unexpected interruption in SourceTaskOffsetFlusher while removing task with id: " + id, e);
+            throw new ConnectException("Unexpected interruption in SourceTaskOffsetCommitter while removing task with id: " + id, e);
         }
     }
 
-    private void flush(WorkerSourceTask workerTask) {
-        log.debug("{} Flushing offsets", workerTask);
+    private void commit(WorkerSourceTask workerTask) {
+        log.debug("{} Committing offsets", workerTask);
         try {
-            if (workerTask.flushOffsets()) {
+            if (workerTask.commitOffsets()) {
                 return;
             }
-            log.error("{} Failed to flush offsets", workerTask);
+            log.error("{} Failed to commit offsets", workerTask);
         } catch (Throwable t) {
-            // We're very careful about exceptions here since any uncaught exceptions in the flush
+            // We're very careful about exceptions here since any uncaught exceptions in the commit
             // thread would cause the fixed interval schedule on the ExecutorService to stop running
             // for that task
-            log.error("{} Unhandled exception when flushing: ", workerTask, t);
+            log.error("{} Unhandled exception when committing: ", workerTask, t);
         }
     }
 }
