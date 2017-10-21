@@ -99,7 +99,7 @@ public class Struct {
         return getString(field.name);
     }
 
-    public Boolean get(Field.Boolean field) {
+    public boolean get(Field.Boolean field) {
         return getBoolean(field.name);
     }
 
@@ -127,7 +127,7 @@ public class Struct {
         return alternative;
     }
 
-    public Boolean getOrElse(Field.Boolean field, boolean alternative) {
+    public boolean getOrElse(Field.Boolean field, boolean alternative) {
         if (hasField(field.name))
             return getBoolean(field.name);
         return alternative;
@@ -224,12 +224,12 @@ public class Struct {
         return (String) get(name);
     }
 
-    public Boolean getBoolean(BoundField field) {
-        return (Boolean) get(field);
+    public boolean getBoolean(BoundField field) {
+        return (boolean) get(field);
     }
 
-    public Boolean getBoolean(String name) {
-        return (Boolean) get(name);
+    public boolean getBoolean(String name) {
+        return (boolean) get(name);
     }
 
     public ByteBuffer getBytes(BoundField field) {
