@@ -217,7 +217,7 @@ class WorkerSourceTask extends WorkerTask {
 
             if (record == null) {
                 counter.skipRecord();
-                acknowledgeTaskRecord(preTransformRecord);
+                taskAcknowledgeRecord(preTransformRecord);
                 continue;
             }
 
@@ -262,7 +262,7 @@ class WorkerSourceTask extends WorkerTask {
                                             this,
                                             recordMetadata.topic(), recordMetadata.partition(),
                                             recordMetadata.offset());
-                                    acknowledgeTaskRecord(preTransformRecord);
+                                    taskAcknowledgeRecord(preTransformRecord);
                                 }
                                 recordSent(producerRecord);
                                 counter.completeRecord();
@@ -284,7 +284,7 @@ class WorkerSourceTask extends WorkerTask {
         return true;
     }
 
-    private void acknowledgeTaskRecord(SourceRecord record) {
+    private void taskAcknowledgeRecord(SourceRecord record) {
         try {
             task.recordSentAndAcknowledged(record);
         } catch (Throwable t) {
@@ -359,7 +359,7 @@ class WorkerSourceTask extends WorkerTask {
                 log.debug("{} Finished offset commitOffsets successfully in {} ms",
                         this, durationMillis);
 
-                acknowledgeSourceTask();
+                taskAcknowledgeOffsets();
                 return true;
             }
 
@@ -414,12 +414,12 @@ class WorkerSourceTask extends WorkerTask {
         log.info("{} Finished commitOffsets successfully in {} ms",
                 this, durationMillis);
 
-        acknowledgeSourceTask();
+        taskAcknowledgeOffsets();
 
         return true;
     }
 
-    private void acknowledgeSourceTask() {
+    private void taskAcknowledgeOffsets() {
         try {
             this.task.offsetsFlushedAndAcknowledged(offsetsFlushing);
         } catch (Throwable t) {
