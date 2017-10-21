@@ -26,10 +26,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.RetriableException;
+import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
@@ -42,6 +42,7 @@ import org.easymock.Capture;
 import org.easymock.CaptureType;
 import org.easymock.EasyMock;
 import org.easymock.IAnswer;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -106,12 +107,13 @@ public class WorkerSinkTaskTest {
 
     private ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
     private TargetState initialState = TargetState.STARTED;
-    private Time time;
+    private MockTime time;
     private WorkerSinkTask workerTask;
     @Mock
     private SinkTask sinkTask;
     private Capture<WorkerSinkTaskContext> sinkTaskContext = EasyMock.newCapture();
     private WorkerConfig workerConfig;
+    private MockConnectMetrics metrics;
     @Mock
     private PluginClassLoader pluginLoader;
     @Mock
@@ -142,19 +144,25 @@ public class WorkerSinkTaskTest {
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
         workerConfig = new StandaloneConfig(workerProps);
         pluginLoader = PowerMock.createMock(PluginClassLoader.class);
-        workerTask = PowerMock.createPartialMock(
-                WorkerSinkTask.class, new String[]{"createConsumer"},
-                taskId, sinkTask, statusListener, initialState, workerConfig, keyConverter, valueConverter, transformationChain, pluginLoader, time);
-
+        metrics = new MockConnectMetrics(time);
         recordsReturnedTp1 = 0;
         recordsReturnedTp3 = 0;
     }
 
-    @Test
-    public void testStartPaused() throws Exception {
+    private void createTask(TargetState initialState) {
         workerTask = PowerMock.createPartialMock(
                 WorkerSinkTask.class, new String[]{"createConsumer"},
-                taskId, sinkTask, statusListener, TargetState.PAUSED, workerConfig, keyConverter, valueConverter, transformationChain, pluginLoader, time);
+                taskId, sinkTask, statusListener, initialState, workerConfig, metrics, keyConverter, valueConverter, transformationChain, pluginLoader, time);
+    }
+
+    @After
+    public void tearDown() {
+        if (metrics != null) metrics.stop();
+    }
+
+    @Test
+    public void testStartPaused() throws Exception {
+        createTask(TargetState.PAUSED);
 
         expectInitializeTask();
         expectPollInitialAssignment();
@@ -169,12 +177,21 @@ public class WorkerSinkTaskTest {
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
         workerTask.iteration();
+        time.sleep(10000L);
+
+        assertSinkMetricValue("partition-count", 2);
+        assertTaskMetricValue("status", "paused");
+        assertTaskMetricValue("running-ratio", 0.0);
+        assertTaskMetricValue("pause-ratio", 1.0);
+        assertTaskMetricValue("offset-commit-max-time-ms", Double.NEGATIVE_INFINITY);
 
         PowerMock.verifyAll();
     }
 
     @Test
     public void testPause() throws Exception {
+        createTask(initialState);
+
         expectInitializeTask();
         expectPollInitialAssignment();
 
@@ -222,17 +239,53 @@ public class WorkerSinkTaskTest {
         workerTask.iteration(); // initial assignment
         workerTask.iteration(); // fetch some data
         workerTask.transitionTo(TargetState.PAUSED);
+        time.sleep(10000L);
+
+        assertSinkMetricValue("partition-count", 2);
+        assertSinkMetricValue("sink-record-read-total", 1.0);
+        assertSinkMetricValue("sink-record-send-total", 1.0);
+        assertSinkMetricValue("sink-record-active-count", 1.0);
+        assertSinkMetricValue("sink-record-active-count-max", 1.0);
+        assertSinkMetricValue("sink-record-active-count-avg", 0.333333);
+        assertSinkMetricValue("offset-commit-seq-no", 0.0);
+        assertSinkMetricValue("offset-commit-completion-rate", 0.0);
+        assertSinkMetricValue("offset-commit-completion-total", 0.0);
+        assertSinkMetricValue("offset-commit-skip-rate", 0.0);
+        assertSinkMetricValue("offset-commit-skip-total", 0.0);
+        assertTaskMetricValue("status", "running");
+        assertTaskMetricValue("running-ratio", 1.0);
+        assertTaskMetricValue("pause-ratio", 0.0);
+        assertTaskMetricValue("batch-size-max", 1.0);
+        assertTaskMetricValue("batch-size-avg", 0.5);
+        assertTaskMetricValue("offset-commit-max-time-ms", Double.NEGATIVE_INFINITY);
+        assertTaskMetricValue("offset-commit-failure-percentage", 0.0);
+        assertTaskMetricValue("offset-commit-success-percentage", 0.0);
+
         workerTask.iteration(); // wakeup
         workerTask.iteration(); // now paused
+        time.sleep(30000L);
+
+        assertSinkMetricValue("offset-commit-seq-no", 1.0);
+        assertSinkMetricValue("offset-commit-completion-rate", 0.0333);
+        assertSinkMetricValue("offset-commit-completion-total", 1.0);
+        assertSinkMetricValue("offset-commit-skip-rate", 0.0);
+        assertSinkMetricValue("offset-commit-skip-total", 0.0);
+        assertTaskMetricValue("status", "paused");
+        assertTaskMetricValue("running-ratio", 0.25);
+        assertTaskMetricValue("pause-ratio", 0.75);
+
         workerTask.transitionTo(TargetState.STARTED);
         workerTask.iteration(); // wakeup
         workerTask.iteration(); // now unpaused
+        //printMetrics();
 
         PowerMock.verifyAll();
     }
 
     @Test
     public void testPollRedelivery() throws Exception {
+        createTask(initialState);
+
         expectInitializeTask();
         expectPollInitialAssignment();
 
@@ -264,8 +317,41 @@ public class WorkerSinkTaskTest {
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
         workerTask.iteration();
+        time.sleep(10000L);
+
+        assertSinkMetricValue("partition-count", 2);
+        assertSinkMetricValue("sink-record-read-total", 0.0);
+        assertSinkMetricValue("sink-record-send-total", 0.0);
+        assertSinkMetricValue("sink-record-active-count", 0.0);
+        assertSinkMetricValue("sink-record-active-count-max", 0.0);
+        assertSinkMetricValue("sink-record-active-count-avg", 0.0);
+        assertSinkMetricValue("offset-commit-seq-no", 0.0);
+        assertSinkMetricValue("offset-commit-completion-rate", 0.0);
+        assertSinkMetricValue("offset-commit-completion-total", 0.0);
+        assertSinkMetricValue("offset-commit-skip-rate", 0.0);
+        assertSinkMetricValue("offset-commit-skip-total", 0.0);
+        assertTaskMetricValue("status", "running");
+        assertTaskMetricValue("running-ratio", 1.0);
+        assertTaskMetricValue("pause-ratio", 0.0);
+        assertTaskMetricValue("batch-size-max", 0.0);
+        assertTaskMetricValue("batch-size-avg", 0.0);
+        assertTaskMetricValue("offset-commit-max-time-ms", Double.NEGATIVE_INFINITY);
+        assertTaskMetricValue("offset-commit-failure-percentage", 0.0);
+        assertTaskMetricValue("offset-commit-success-percentage", 0.0);
+
         workerTask.iteration();
         workerTask.iteration();
+        time.sleep(30000L);
+
+        assertSinkMetricValue("sink-record-read-total", 1.0);
+        assertSinkMetricValue("sink-record-send-total", 1.0);
+        assertSinkMetricValue("sink-record-active-count", 1.0);
+        assertSinkMetricValue("sink-record-active-count-max", 1.0);
+        assertSinkMetricValue("sink-record-active-count-avg", 0.5);
+        assertTaskMetricValue("status", "running");
+        assertTaskMetricValue("running-ratio", 1.0);
+        assertTaskMetricValue("batch-size-max", 1.0);
+        assertTaskMetricValue("batch-size-avg", 0.5);
 
         PowerMock.verifyAll();
     }
@@ -273,6 +359,8 @@ public class WorkerSinkTaskTest {
     @Test
     public void testErrorInRebalancePartitionRevocation() throws Exception {
         RuntimeException exception = new RuntimeException("Revocation error");
+
+        createTask(initialState);
 
         expectInitializeTask();
         expectPollInitialAssignment();
@@ -297,6 +385,8 @@ public class WorkerSinkTaskTest {
     public void testErrorInRebalancePartitionAssignment() throws Exception {
         RuntimeException exception = new RuntimeException("Assignment error");
 
+        createTask(initialState);
+
         expectInitializeTask();
         expectPollInitialAssignment();
         expectRebalanceAssignmentError(exception);
@@ -318,6 +408,8 @@ public class WorkerSinkTaskTest {
 
     @Test
     public void testWakeupInCommitSyncCausesRetry() throws Exception {
+        createTask(initialState);
+
         expectInitializeTask();
 
         expectPollInitialAssignment();
@@ -376,16 +468,42 @@ public class WorkerSinkTaskTest {
         PowerMock.replayAll();
 
         workerTask.initialize(TASK_CONFIG);
+        time.sleep(30000L);
         workerTask.initializeAndStart();
+        time.sleep(30000L);
+
         workerTask.iteration(); // poll for initial assignment
+        time.sleep(30000L);
         workerTask.iteration(); // first record delivered
         workerTask.iteration(); // now rebalance with the wakeup triggered
+        time.sleep(30000L);
+
+        assertSinkMetricValue("partition-count", 2);
+        assertSinkMetricValue("sink-record-read-total", 1.0);
+        assertSinkMetricValue("sink-record-send-total", 1.0);
+        assertSinkMetricValue("sink-record-active-count", 0.0);
+        assertSinkMetricValue("sink-record-active-count-max", 1.0);
+        assertSinkMetricValue("sink-record-active-count-avg", 0.33333);
+        assertSinkMetricValue("offset-commit-seq-no", 1.0);
+        assertSinkMetricValue("offset-commit-completion-total", 1.0);
+        assertSinkMetricValue("offset-commit-skip-total", 0.0);
+        assertTaskMetricValue("status", "running");
+        assertTaskMetricValue("running-ratio", 1.0);
+        assertTaskMetricValue("pause-ratio", 0.0);
+        assertTaskMetricValue("batch-size-max", 1.0);
+        assertTaskMetricValue("batch-size-avg", 1.0);
+        assertTaskMetricValue("offset-commit-max-time-ms", 0.0);
+        assertTaskMetricValue("offset-commit-avg-time-ms", 0.0);
+        assertTaskMetricValue("offset-commit-failure-percentage", 0.0);
+        assertTaskMetricValue("offset-commit-success-percentage", 1.0);
 
         PowerMock.verifyAll();
     }
 
     @Test
     public void testRequestCommit() throws Exception {
+        createTask(initialState);
+
         expectInitializeTask();
 
         expectPollInitialAssignment();
@@ -420,23 +538,66 @@ public class WorkerSinkTaskTest {
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
 
-        workerTask.iteration(); // initial assignment
+        // Initial assignment
+        time.sleep(30000L);
+        workerTask.iteration();
+        assertSinkMetricValue("partition-count", 2);
 
-        workerTask.iteration(); // first record delivered
+        // First record delivered
+        workerTask.iteration();
+        assertSinkMetricValue("partition-count", 2);
+        assertSinkMetricValue("sink-record-read-total", 1.0);
+        assertSinkMetricValue("sink-record-send-total", 1.0);
+        assertSinkMetricValue("sink-record-active-count", 1.0);
+        assertSinkMetricValue("sink-record-active-count-max", 1.0);
+        assertSinkMetricValue("sink-record-active-count-avg", 0.333333);
+        assertSinkMetricValue("offset-commit-seq-no", 0.0);
+        assertSinkMetricValue("offset-commit-completion-total", 0.0);
+        assertSinkMetricValue("offset-commit-skip-total", 0.0);
+        assertTaskMetricValue("status", "running");
+        assertTaskMetricValue("running-ratio", 1.0);
+        assertTaskMetricValue("pause-ratio", 0.0);
+        assertTaskMetricValue("batch-size-max", 1.0);
+        assertTaskMetricValue("batch-size-avg", 0.5);
+        assertTaskMetricValue("offset-commit-failure-percentage", 0.0);
+        assertTaskMetricValue("offset-commit-success-percentage", 0.0);
 
         sinkTaskContext.getValue().requestCommit();
         assertTrue(sinkTaskContext.getValue().isCommitRequested());
         assertNotEquals(offsets, Whitebox.<Map<TopicPartition, OffsetAndMetadata>>getInternalState(workerTask, "lastCommittedOffsets"));
+        time.sleep(10000L);
         workerTask.iteration(); // triggers the commit
+        time.sleep(10000L);
         assertFalse(sinkTaskContext.getValue().isCommitRequested()); // should have been cleared
         assertEquals(offsets, Whitebox.<Map<TopicPartition, OffsetAndMetadata>>getInternalState(workerTask, "lastCommittedOffsets"));
         assertEquals(0, workerTask.commitFailures());
+
+        assertSinkMetricValue("partition-count", 2);
+        assertSinkMetricValue("sink-record-read-total", 1.0);
+        assertSinkMetricValue("sink-record-send-total", 1.0);
+        assertSinkMetricValue("sink-record-active-count", 0.0);
+        assertSinkMetricValue("sink-record-active-count-max", 1.0);
+        assertSinkMetricValue("sink-record-active-count-avg", 0.2);
+        assertSinkMetricValue("offset-commit-seq-no", 1.0);
+        assertSinkMetricValue("offset-commit-completion-total", 1.0);
+        assertSinkMetricValue("offset-commit-skip-total", 0.0);
+        assertTaskMetricValue("status", "running");
+        assertTaskMetricValue("running-ratio", 1.0);
+        assertTaskMetricValue("pause-ratio", 0.0);
+        assertTaskMetricValue("batch-size-max", 1.0);
+        assertTaskMetricValue("batch-size-avg", 0.33333);
+        assertTaskMetricValue("offset-commit-max-time-ms", 0.0);
+        assertTaskMetricValue("offset-commit-avg-time-ms", 0.0);
+        assertTaskMetricValue("offset-commit-failure-percentage", 0.0);
+        assertTaskMetricValue("offset-commit-success-percentage", 1.0);
 
         PowerMock.verifyAll();
     }
 
     @Test
     public void testPreCommit() throws Exception {
+        createTask(initialState);
+
         expectInitializeTask();
 
         // iter 1
@@ -502,6 +663,8 @@ public class WorkerSinkTaskTest {
 
     @Test
     public void testIgnoredCommit() throws Exception {
+        createTask(initialState);
+
         expectInitializeTask();
 
         // iter 1
@@ -550,6 +713,8 @@ public class WorkerSinkTaskTest {
     // when there is a long running commit in process. See KAFKA-4942 for more information.
     @Test
     public void testLongRunningCommitWithoutTimeout() throws Exception {
+        createTask(initialState);
+
         expectInitializeTask();
 
         // iter 1
@@ -647,6 +812,8 @@ public class WorkerSinkTaskTest {
     // See KAFKA-5731 for more information.
     @Test
     public void testCommitWithOutOfOrderCallback() throws Exception {
+        createTask(initialState);
+
         expectInitializeTask();
 
         // iter 1
@@ -807,6 +974,25 @@ public class WorkerSinkTaskTest {
         sinkTaskContext.getValue().requestCommit();
         workerTask.iteration(); // iter 3 -- commit in progress
 
+        assertSinkMetricValue("partition-count", 3);
+        assertSinkMetricValue("sink-record-read-total", 3.0);
+        assertSinkMetricValue("sink-record-send-total", 3.0);
+        assertSinkMetricValue("sink-record-active-count", 4.0);
+        assertSinkMetricValue("sink-record-active-count-max", 4.0);
+        assertSinkMetricValue("sink-record-active-count-avg", 0.71429);
+        assertSinkMetricValue("offset-commit-seq-no", 2.0);
+        assertSinkMetricValue("offset-commit-completion-total", 1.0);
+        assertSinkMetricValue("offset-commit-skip-total", 1.0);
+        assertTaskMetricValue("status", "running");
+        assertTaskMetricValue("running-ratio", 1.0);
+        assertTaskMetricValue("pause-ratio", 0.0);
+        assertTaskMetricValue("batch-size-max", 2.0);
+        assertTaskMetricValue("batch-size-avg", 1.0);
+        assertTaskMetricValue("offset-commit-max-time-ms", 0.0);
+        assertTaskMetricValue("offset-commit-avg-time-ms", 0.0);
+        assertTaskMetricValue("offset-commit-failure-percentage", 0.0);
+        assertTaskMetricValue("offset-commit-success-percentage", 1.0);
+
         assertTrue(asyncCallbackRan.get());
         assertTrue(rebalanced.get());
 
@@ -822,11 +1008,32 @@ public class WorkerSinkTaskTest {
         assertEquals(postRebalanceCurrentOffsets, Whitebox.getInternalState(workerTask, "currentOffsets"));
         assertEquals(postRebalanceCurrentOffsets, Whitebox.getInternalState(workerTask, "lastCommittedOffsets"));
 
+        assertSinkMetricValue("partition-count", 3);
+        assertSinkMetricValue("sink-record-read-total", 4.0);
+        assertSinkMetricValue("sink-record-send-total", 4.0);
+        assertSinkMetricValue("sink-record-active-count", 0.0);
+        assertSinkMetricValue("sink-record-active-count-max", 4.0);
+        assertSinkMetricValue("sink-record-active-count-avg", 0.5555555);
+        assertSinkMetricValue("offset-commit-seq-no", 3.0);
+        assertSinkMetricValue("offset-commit-completion-total", 2.0);
+        assertSinkMetricValue("offset-commit-skip-total", 1.0);
+        assertTaskMetricValue("status", "running");
+        assertTaskMetricValue("running-ratio", 1.0);
+        assertTaskMetricValue("pause-ratio", 0.0);
+        assertTaskMetricValue("batch-size-max", 2.0);
+        assertTaskMetricValue("batch-size-avg", 1.0);
+        assertTaskMetricValue("offset-commit-max-time-ms", 0.0);
+        assertTaskMetricValue("offset-commit-avg-time-ms", 0.0);
+        assertTaskMetricValue("offset-commit-failure-percentage", 0.0);
+        assertTaskMetricValue("offset-commit-success-percentage", 1.0);
+
         PowerMock.verifyAll();
     }
 
     @Test
     public void testDeliveryWithMutatingTransform() throws Exception {
+        createTask(initialState);
+
         expectInitializeTask();
 
         expectPollInitialAssignment();
@@ -872,13 +1079,17 @@ public class WorkerSinkTaskTest {
         assertFalse(sinkTaskContext.getValue().isCommitRequested()); // should have been cleared
         assertEquals(offsets, Whitebox.<Map<TopicPartition, OffsetAndMetadata>>getInternalState(workerTask, "lastCommittedOffsets"));
         assertEquals(0, workerTask.commitFailures());
+        assertEquals(1.0, metrics.currentMetricValueAsDouble(workerTask.taskMetricsGroup().metricGroup(), "batch-size-max"), 0.0001);
 
         PowerMock.verifyAll();
     }
 
     @Test
     public void testMissingTimestampPropagation() throws Exception {
+        createTask(initialState);
+
         expectInitializeTask();
+        expectPollInitialAssignment();
         expectConsumerPoll(1, RecordBatch.NO_TIMESTAMP, TimestampType.CREATE_TIME);
         expectConversionAndTransformation(1);
 
@@ -890,7 +1101,8 @@ public class WorkerSinkTaskTest {
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
-        workerTask.iteration();
+        workerTask.iteration(); // iter 1 -- initial assignment
+        workerTask.iteration(); // iter 2 -- deliver 1 record
 
         SinkRecord record = records.getValue().iterator().next();
 
@@ -906,19 +1118,22 @@ public class WorkerSinkTaskTest {
         final Long timestamp = System.currentTimeMillis();
         final TimestampType timestampType = TimestampType.CREATE_TIME;
 
+        createTask(initialState);
+
         expectInitializeTask();
+        expectPollInitialAssignment();
         expectConsumerPoll(1, timestamp, timestampType);
         expectConversionAndTransformation(1);
 
         Capture<Collection<SinkRecord>> records = EasyMock.newCapture(CaptureType.ALL);
-
         sinkTask.put(EasyMock.capture(records));
 
         PowerMock.replayAll();
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
-        workerTask.iteration();
+        workerTask.iteration(); // iter 1 -- initial assignment
+        workerTask.iteration(); // iter 2 -- deliver 1 record
 
         SinkRecord record = records.getValue().iterator().next();
 
@@ -1059,6 +1274,82 @@ public class WorkerSinkTaskTest {
                                : origRecord;
                     }
                 }).times(numMessages);
+    }
+
+
+    private void assertSinkMetricValue(String name, double expected) {
+        MetricGroup sinkTaskGroup = workerTask.sinkTaskMetricsGroup().metricGroup();
+        double measured = metrics.currentMetricValueAsDouble(sinkTaskGroup, name);
+        assertEquals(expected, measured, 0.001d);
+    }
+
+    private void assertTaskMetricValue(String name, double expected) {
+        MetricGroup taskGroup = workerTask.taskMetricsGroup().metricGroup();
+        double measured = metrics.currentMetricValueAsDouble(taskGroup, name);
+        assertEquals(expected, measured, 0.001d);
+    }
+
+    private void assertTaskMetricValue(String name, String expected) {
+        MetricGroup taskGroup = workerTask.taskMetricsGroup().metricGroup();
+        String measured = metrics.currentMetricValueAsString(taskGroup, name);
+        assertEquals(expected, measured);
+    }
+
+    private void printMetrics() {
+        System.out.println("");
+        sinkMetricValue("sink-record-read-rate");
+        sinkMetricValue("sink-record-read-total");
+        sinkMetricValue("sink-record-send-rate");
+        sinkMetricValue("sink-record-send-total");
+        sinkMetricValue("sink-record-active-count");
+        sinkMetricValue("sink-record-active-count-max");
+        sinkMetricValue("sink-record-active-count-avg");
+        sinkMetricValue("partition-count");
+        sinkMetricValue("offset-commit-seq-no");
+        sinkMetricValue("offset-commit-completion-rate");
+        sinkMetricValue("offset-commit-completion-total");
+        sinkMetricValue("offset-commit-skip-rate");
+        sinkMetricValue("offset-commit-skip-total");
+        sinkMetricValue("put-batch-max-time-ms");
+        sinkMetricValue("put-batch-avg-time-ms");
+
+        taskMetricValue("status-unassigned");
+        taskMetricValue("status-running");
+        taskMetricValue("status-paused");
+        taskMetricValue("status-failed");
+        taskMetricValue("status-destroyed");
+        taskMetricValue("running-ratio");
+        taskMetricValue("pause-ratio");
+        taskMetricValue("offset-commit-max-time-ms");
+        taskMetricValue("offset-commit-avg-time-ms");
+        taskMetricValue("batch-size-max");
+        taskMetricValue("batch-size-avg");
+        taskMetricValue("offset-commit-failure-percentage");
+        taskMetricValue("offset-commit-success-percentage");
+    }
+
+    private double sinkMetricValue(String metricName) {
+        MetricGroup sinkTaskGroup = workerTask.sinkTaskMetricsGroup().metricGroup();
+        double value = metrics.currentMetricValueAsDouble(sinkTaskGroup, metricName);
+        System.out.println("** " + metricName + "=" + value);
+        return value;
+    }
+
+    private double taskMetricValue(String metricName) {
+        MetricGroup taskGroup = workerTask.taskMetricsGroup().metricGroup();
+        double value = metrics.currentMetricValueAsDouble(taskGroup, metricName);
+        System.out.println("** " + metricName + "=" + value);
+        return value;
+    }
+
+
+    private void assertMetrics(int minimumPollCountExpected) {
+        MetricGroup sinkTaskGroup = workerTask.sinkTaskMetricsGroup().metricGroup();
+        MetricGroup taskGroup = workerTask.taskMetricsGroup().metricGroup();
+        double readRate = metrics.currentMetricValueAsDouble(sinkTaskGroup, "sink-record-read-rate");
+        double readTotal = metrics.currentMetricValueAsDouble(sinkTaskGroup, "sink-record-read-total");
+        double sendRate = metrics.currentMetricValueAsDouble(sinkTaskGroup, "sink-record-send-rate");
+        double sendTotal = metrics.currentMetricValueAsDouble(sinkTaskGroup, "sink-record-send-total");
     }
 
     private abstract static class TestSinkTask extends SinkTask  {

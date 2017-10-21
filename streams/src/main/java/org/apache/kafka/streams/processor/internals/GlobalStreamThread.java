@@ -21,21 +21,22 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Map;
-import java.util.Set;
-import java.util.HashSet;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.DEAD;
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.PENDING_SHUTDOWN;
@@ -46,8 +47,8 @@ import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.St
  */
 public class GlobalStreamThread extends Thread {
 
-    private static final Logger log = LoggerFactory.getLogger(GlobalStreamThread.class);
-
+    private final Logger log;
+    private final LogContext logContext;
     private final StreamsConfig config;
     private final Consumer<byte[], byte[]> consumer;
     private final StateDirectory stateDirectory;
@@ -113,6 +114,7 @@ public class GlobalStreamThread extends Thread {
     private final Object stateLock = new Object();
     private StreamThread.StateListener stateListener = null;
     private final String logPrefix;
+    private final StateRestoreListener stateRestoreListener;
 
     /**
      * Set the {@link StreamThread.StateListener} to be notified when state changes. Note this API is internal to
@@ -147,10 +149,10 @@ public class GlobalStreamThread extends Thread {
                 // will be refused but we do not throw exception here
                 return false;
             } else if (!state.isValidTransition(newState)) {
-                log.error("{} Unexpected state transition from {} to {}", logPrefix, oldState, newState);
-                throw new StreamsException(logPrefix + " Unexpected state transition from " + oldState + " to " + newState);
+                log.error("Unexpected state transition from {} to {}", oldState, newState);
+                throw new StreamsException(logPrefix + "Unexpected state transition from " + oldState + " to " + newState);
             } else {
-                log.info("{} State transition from {} to {}", logPrefix, oldState, newState);
+                log.info("State transition from {} to {}", oldState, newState);
             }
 
             state = newState;
@@ -175,7 +177,8 @@ public class GlobalStreamThread extends Thread {
                               final StateDirectory stateDirectory,
                               final Metrics metrics,
                               final Time time,
-                              final String threadClientId) {
+                              final String threadClientId,
+                              final StateRestoreListener stateRestoreListener) {
         super(threadClientId);
         this.time = time;
         this.config = config;
@@ -185,8 +188,12 @@ public class GlobalStreamThread extends Thread {
         long cacheSizeBytes = Math.max(0, config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) /
                 (config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG) + 1));
         this.streamsMetrics = new StreamsMetricsImpl(metrics, threadClientId, Collections.singletonMap("client-id", threadClientId));
-        this.cache = new ThreadCache(threadClientId, cacheSizeBytes, streamsMetrics);
-        this.logPrefix = String.format("global-stream-thread [%s]", threadClientId);
+        this.logPrefix = String.format("global-stream-thread [%s] ", threadClientId);
+        this.logContext = new LogContext(logPrefix);
+        this.log = logContext.logger(getClass());
+        this.cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
+        this.stateRestoreListener = stateRestoreListener;
+
     }
 
     static class StateConsumer {
@@ -195,17 +202,17 @@ public class GlobalStreamThread extends Thread {
         private final Time time;
         private final long pollMs;
         private final long flushInterval;
-        private final String logPrefix;
+        private final Logger log;
 
         private long lastFlush;
 
-        StateConsumer(final String logPrefix,
+        StateConsumer(final LogContext logContext,
                       final Consumer<byte[], byte[]> consumer,
                       final GlobalStateMaintainer stateMaintainer,
                       final Time time,
                       final long pollMs,
                       final long flushInterval) {
-            this.logPrefix = logPrefix;
+            this.log = logContext.logger(getClass());
             this.consumer = consumer;
             this.stateMaintainer = stateMaintainer;
             this.time = time;
@@ -213,6 +220,10 @@ public class GlobalStreamThread extends Thread {
             this.flushInterval = flushInterval;
         }
 
+        /**
+         * @throws IllegalStateException If store gets registered after initialized is already finished
+         * @throws StreamsException if the store's change log does not contain the partition
+         */
         void initialize() {
             final Map<TopicPartition, Long> partitionOffsets = stateMaintainer.initialize();
             consumer.assign(partitionOffsets.keySet());
@@ -240,7 +251,7 @@ public class GlobalStreamThread extends Thread {
             } catch (Exception e) {
                 // just log an error if the consumer throws an exception during close
                 // so we can always attempt to close the state stores.
-                log.error("{} Failed to close consumer due to the following error:", logPrefix, e);
+                log.error("Failed to close consumer due to the following error:", e);
             }
 
             stateMaintainer.close();
@@ -260,7 +271,7 @@ public class GlobalStreamThread extends Thread {
             setState(State.PENDING_SHUTDOWN);
             setState(State.DEAD);
 
-            log.warn("{} Error happened during initialization of the global state store; this thread has shutdown", logPrefix);
+            log.warn("Error happened during initialization of the global state store; this thread has shutdown");
 
             return;
         }
@@ -276,24 +287,27 @@ public class GlobalStreamThread extends Thread {
             // intentionally do not check the returned flag
             setState(State.PENDING_SHUTDOWN);
 
-            log.info("{} Shutting down", logPrefix);
+            log.info("Shutting down");
 
             try {
                 stateConsumer.close();
             } catch (IOException e) {
-                log.error("{} Failed to close state maintainer due to the following error:", logPrefix, e);
+                log.error("Failed to close state maintainer due to the following error:", e);
             }
             setState(DEAD);
 
-            log.info("{} Shutdown complete", logPrefix);
+            log.info("Shutdown complete");
         }
     }
 
     private StateConsumer initialize() {
         try {
-            final GlobalStateManager stateMgr = new GlobalStateManagerImpl(topology, consumer, stateDirectory);
+            final GlobalStateManager stateMgr = new GlobalStateManagerImpl(topology,
+                                                                           consumer,
+                                                                           stateDirectory,
+                                                                           stateRestoreListener);
             final StateConsumer stateConsumer
-                    = new StateConsumer(logPrefix,
+                    = new StateConsumer(this.logContext,
                                         consumer,
                                         new GlobalStateUpdateTask(topology,
                                                                   new GlobalProcessorContextImpl(
@@ -302,7 +316,8 @@ public class GlobalStreamThread extends Thread {
                                                                           streamsMetrics,
                                                                           cache),
                                                                   stateMgr,
-                                                                  config.defaultDeserializationExceptionHandler()),
+                                                                  config.defaultDeserializationExceptionHandler(),
+                                                                  logContext),
                                         time,
                                         config.getLong(StreamsConfig.POLL_MS_CONFIG),
                                         config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));

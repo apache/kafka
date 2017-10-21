@@ -29,7 +29,7 @@ import java.util.Map;
  * @param <V> the type of values
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
-
+@Deprecated
 public class RocksDBKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, KeyValueStore> {
 
     private final KeyValueStoreBuilder<K, V> builder;

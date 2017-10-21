@@ -39,6 +39,7 @@ import static org.junit.Assert.assertThat;
 
 public class PrintedTest {
 
+    private final PrintStream originalSysOut = System.out;
     private final ByteArrayOutputStream sysOut = new ByteArrayOutputStream();
     private final Printed<String, Integer> sysOutPrinter = Printed.toSysOut();
 
@@ -49,7 +50,7 @@ public class PrintedTest {
 
     @After
     public void after() {
-        System.setOut(null);
+        System.setOut(originalSysOut);
     }
 
     @Test

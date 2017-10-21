@@ -77,7 +77,7 @@ allprojects {
 }
 
 ext {
-  gradleVersion = "4.1"
+  gradleVersion = "4.2.1"
   buildVersionFileName = "kafka-version.properties"
 
   maxPermSizeArgs = []
@@ -193,20 +193,6 @@ subprojects {
   def testShowStandardStreams = false
   def testExceptionFormat = 'full'
 
-  // Exclude PowerMock tests when running with Java 9 until a version of PowerMock that supports Java 9 is released
-  // The relevant issue is https://github.com/powermock/powermock/issues/783
-  String[] testsToExclude = []
-  if (JavaVersion.current().isJava9Compatible()) {
-    testsToExclude = [
-      "**/KafkaProducerTest.*", "**/BufferPoolTest.*",
-      "**/SourceTaskOffsetCommitterTest.*", "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*",
-      "**/WorkerSourceTaskTest.*", "**/WorkerTest.*", "**/DistributedHerderTest.*", "**/WorkerCoordinatorTest.*",
-      "**/RestServerTest.*", "**/ConnectorPluginsResourceTest.*", "**/ConnectorsResourceTest.*",
-      "**/StandaloneHerderTest.*", "**/FileOffsetBakingStoreTest.*", "**/KafkaConfigBackingStoreTest.*",
-      "**/KafkaOffsetBackingStoreTest.*", "**/OffsetStorageWriterTest.*", "**/KafkaBasedLogTest.*"
-    ]
-  }
-
   test {
     maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
 
@@ -220,7 +206,6 @@ subprojects {
       exceptionFormat = testExceptionFormat
     }
 
-    exclude(testsToExclude)
   }
 
   task integrationTest(type: Test, dependsOn: compileJava) {
@@ -240,8 +225,6 @@ subprojects {
       includeCategories 'org.apache.kafka.test.IntegrationTest'
     }
 
-    exclude(testsToExclude)
-
   }
 
   task unitTest(type: Test, dependsOn: compileJava) {
@@ -260,8 +243,7 @@ subprojects {
     useJUnit {
       excludeCategories 'org.apache.kafka.test.IntegrationTest'
     }
-
-    exclude(testsToExclude)
+    
   }
 
   jar {
@@ -699,7 +681,8 @@ project(':core') {
                                'genAdminClientConfigDocs', 'genProducerConfigDocs', 'genConsumerConfigDocs',
                                'genKafkaConfigDocs', 'genTopicConfigDocs',
                                ':connect:runtime:genConnectConfigDocs', ':connect:runtime:genConnectTransformationDocs',
-                               ':streams:genStreamsConfigDocs', 'genConsumerMetricsDocs', 'genProducerMetricsDocs'], type: Tar) {
+                               ':streams:genStreamsConfigDocs', 'genConsumerMetricsDocs', 'genProducerMetricsDocs',
+                               ':connect:runtime:genConnectMetricsDocs'], type: Tar) {
     classifier = 'site-docs'
     compression = Compression.GZIP
     from project.file("$rootDir/docs")
@@ -788,7 +771,7 @@ project(':clients') {
     testCompile libs.bcpkix
     testCompile libs.junit
     testCompile libs.easymock
-    testCompile libs.powermock
+    testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
 
     testRuntime libs.slf4jlog4j
@@ -852,6 +835,7 @@ project(':clients') {
     include "**/org/apache/kafka/common/resource/*"
     include "**/org/apache/kafka/common/serialization/*"
     include "**/org/apache/kafka/common/config/*"
+    include "**/org/apache/kafka/common/security/auth/*"
     include "**/org/apache/kafka/server/policy/*"
   }
 }
@@ -911,6 +895,7 @@ project(':streams') {
     testCompile project(':core').sourceSets.test.output
     testCompile libs.junit
     testCompile libs.easymock
+    testCompile libs.bcpkix
 
     testRuntime libs.slf4jlog4j
   }
@@ -1076,7 +1061,7 @@ project(':connect:transforms') {
 
     testCompile libs.easymock
     testCompile libs.junit
-    testCompile libs.powermock
+    testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
 
     testRuntime libs.slf4jlog4j
@@ -1114,7 +1099,7 @@ project(':connect:json') {
 
     testCompile libs.easymock
     testCompile libs.junit
-    testCompile libs.powermock
+    testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
 
     testRuntime libs.slf4jlog4j
@@ -1163,7 +1148,7 @@ project(':connect:runtime') {
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.easymock
     testCompile libs.junit
-    testCompile libs.powermock
+    testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
 
     testCompile project(":connect:json")
@@ -1205,6 +1190,14 @@ project(':connect:runtime') {
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "connect_transforms.html").newOutputStream()
   }
+
+  task genConnectMetricsDocs(type: JavaExec) {
+    classpath = sourceSets.test.runtimeClasspath
+    main = 'org.apache.kafka.connect.runtime.ConnectMetrics'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "connect_metrics.html").newOutputStream()
+  }
+
 }
 
 project(':connect:file') {
@@ -1216,7 +1209,7 @@ project(':connect:file') {
 
     testCompile libs.easymock
     testCompile libs.junit
-    testCompile libs.powermock
+    testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
 
     testRuntime libs.slf4jlog4j

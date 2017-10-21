@@ -63,43 +63,38 @@ public interface Producer<K, V> extends Closeable {
     void abortTransaction() throws ProducerFencedException;
 
     /**
-     * Send the given record asynchronously and return a future which will eventually contain the response information.
-     *
-     * @param record The record to send
-     * @return A future which will eventually contain the response information
+     * See {@link KafkaProducer#send(ProducerRecord)}
      */
-    public Future<RecordMetadata> send(ProducerRecord<K, V> record);
+    Future<RecordMetadata> send(ProducerRecord<K, V> record);
 
     /**
-     * Send a record and invoke the given callback when the record has been acknowledged by the server
+     * See {@link KafkaProducer#send(ProducerRecord, Callback)}
      */
-    public Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback);
+    Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback);
 
     /**
-     * Flush any accumulated records from the producer. Blocks until all sends are complete.
+     * See {@link KafkaProducer#flush()}
      */
-    public void flush();
+    void flush();
 
     /**
-     * Get a list of partitions for the given topic for custom partition assignment. The partition metadata will change
-     * over time so this list should not be cached.
+     * See {@link KafkaProducer#partitionsFor(String)}
      */
-    public List<PartitionInfo> partitionsFor(String topic);
+    List<PartitionInfo> partitionsFor(String topic);
 
     /**
-     * Return a map of metrics maintained by the producer
+     * See {@link KafkaProducer#metrics()}
      */
-    public Map<MetricName, ? extends Metric> metrics();
+    Map<MetricName, ? extends Metric> metrics();
 
     /**
-     * Close this producer
+     * See {@link KafkaProducer#close()}
      */
-    public void close();
+    void close();
 
     /**
-     * Tries to close the producer cleanly within the specified timeout. If the close does not complete within the
-     * timeout, fail any pending send requests and force close the producer.
+     * See {@link KafkaProducer#close(long, TimeUnit)}
      */
-    public void close(long timeout, TimeUnit unit);
+    void close(long timeout, TimeUnit unit);
 
 }

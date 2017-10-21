@@ -186,6 +186,22 @@ class GroupCoordinatorTest extends JUnitSuite {
   }
 
   @Test
+  def testJoinGroupWithEmptyProtocolType() {
+    val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
+
+    val joinGroupResult = joinGroup(groupId, memberId, "", protocols)
+    assertEquals(Errors.INCONSISTENT_GROUP_PROTOCOL, joinGroupResult.error)
+  }
+
+  @Test
+  def testJoinGroupWithEmptyGroupProtocol() {
+    val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
+
+    val joinGroupResult = joinGroup(groupId, memberId, protocolType, List())
+    assertEquals(Errors.INCONSISTENT_GROUP_PROTOCOL, joinGroupResult.error)
+  }
+
+  @Test
   def testJoinGroupInconsistentGroupProtocol() {
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
 
@@ -1033,7 +1049,7 @@ class GroupCoordinatorTest extends JUnitSuite {
   }
 
   @Test
-  def testCommitOffsetInAwaitingSync() {
+  def testCommitOffsetInCompletingRebalance() {
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
     val tp = new TopicPartition("topic", 0)
     val offset = OffsetAndMetadata(0)
@@ -1216,7 +1232,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     assertEquals(Errors.NONE, error)
     assertEquals(protocolType, summary.protocolType)
     assertEquals(GroupCoordinator.NoProtocol, summary.protocol)
-    assertEquals(AwaitingSync.toString, summary.state)
+    assertEquals(CompletingRebalance.toString, summary.state)
     assertTrue(summary.members.map(_.memberId).contains(joinGroupResult.memberId))
     assertTrue(summary.members.forall(_.metadata.isEmpty))
     assertTrue(summary.members.forall(_.assignment.isEmpty))
@@ -1351,10 +1367,10 @@ class GroupCoordinatorTest extends JUnitSuite {
       isFromClient = EasyMock.eq(false),
       EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
       EasyMock.capture(capturedArgument),
-      EasyMock.anyObject().asInstanceOf[Option[Object]])).andAnswer(new IAnswer[Unit] {
+      EasyMock.anyObject())).andAnswer(new IAnswer[Unit] {
       override def answer = capturedArgument.getValue.apply(
         Map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId) ->
-          new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP)
+          new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)
         )
       )})
     EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(Some(RecordBatch.MAGIC_VALUE_V1)).anyTimes()
@@ -1434,11 +1450,11 @@ class GroupCoordinatorTest extends JUnitSuite {
       isFromClient = EasyMock.eq(false),
       EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
       EasyMock.capture(capturedArgument),
-      EasyMock.anyObject().asInstanceOf[Option[Object]])
+      EasyMock.anyObject())
     ).andAnswer(new IAnswer[Unit] {
       override def answer = capturedArgument.getValue.apply(
           Map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId) ->
-            new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP)
+            new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)
           )
         )
       })
@@ -1463,11 +1479,11 @@ class GroupCoordinatorTest extends JUnitSuite {
       isFromClient = EasyMock.eq(false),
       EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
       EasyMock.capture(capturedArgument),
-      EasyMock.anyObject().asInstanceOf[Option[Object]])
+      EasyMock.anyObject())
     ).andAnswer(new IAnswer[Unit] {
       override def answer = capturedArgument.getValue.apply(
         Map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupCoordinator.partitionFor(groupId)) ->
-          new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP)
+          new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)
         )
       )})
     EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(Some(RecordBatch.MAGIC_VALUE_V2)).anyTimes()

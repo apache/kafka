@@ -22,8 +22,15 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.Max;
+import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.metrics.stats.Total;
+import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.Converter;
@@ -61,6 +68,7 @@ class WorkerSourceTask extends WorkerTask {
     private final OffsetStorageReader offsetReader;
     private final OffsetStorageWriter offsetWriter;
     private final Time time;
+    private final SourceTaskMetricsGroup sourceTaskMetricsGroup;
 
     private List<SourceRecord> toSend;
     private List<SourceRecord> offsetsWrittenButNotFlushed;
@@ -89,9 +97,10 @@ class WorkerSourceTask extends WorkerTask {
                             OffsetStorageReader offsetReader,
                             OffsetStorageWriter offsetWriter,
                             WorkerConfig workerConfig,
+                            ConnectMetrics connectMetrics,
                             ClassLoader loader,
                             Time time) {
-        super(id, statusListener, initialState, loader);
+        super(id, statusListener, initialState, loader, connectMetrics);
 
         this.workerConfig = workerConfig;
         this.task = task;
@@ -111,6 +120,7 @@ class WorkerSourceTask extends WorkerTask {
         this.outstandingMessagesBacklog = new IdentityHashMap<>();
         this.flushing = false;
         this.stopRequestedLatch = new CountDownLatch(1);
+        this.sourceTaskMetricsGroup = new SourceTaskMetricsGroup(id, connectMetrics);
     }
 
     @Override
@@ -126,6 +136,11 @@ class WorkerSourceTask extends WorkerTask {
     protected void close() {
         producer.close(30, TimeUnit.SECONDS);
         transformationChain.close();
+    }
+
+    @Override
+    protected void releaseResources() {
+        sourceTaskMetricsGroup.close();
     }
 
     @Override
@@ -165,7 +180,11 @@ class WorkerSourceTask extends WorkerTask {
 
                 if (toSend == null) {
                     log.trace("{} Nothing to send to Kafka. Polling source for additional records", this);
+                    long start = time.milliseconds();
                     toSend = task.poll();
+                    if (toSend != null) {
+                        recordPollReturned(toSend.size(), time.milliseconds() - start);
+                    }
                 }
                 if (toSend == null)
                     continue;
@@ -191,10 +210,13 @@ class WorkerSourceTask extends WorkerTask {
      */
     private boolean sendRecords() {
         int processed = 0;
+        recordBatch(toSend.size());
+        final SourceRecordWriteCounter counter = new SourceRecordWriteCounter(toSend.size(), sourceTaskMetricsGroup);
         for (final SourceRecord preTransformRecord : toSend) {
             final SourceRecord record = transformationChain.apply(preTransformRecord);
 
             if (record == null) {
+                counter.skipRecord();
                 acknowledgeTaskRecord(preTransformRecord);
                 continue;
             }
@@ -243,6 +265,7 @@ class WorkerSourceTask extends WorkerTask {
                                     acknowledgeTaskRecord(preTransformRecord);
                                 }
                                 recordSent(producerRecord);
+                                counter.completeRecord();
                             }
                         });
                 lastSendFailed = false;
@@ -250,6 +273,7 @@ class WorkerSourceTask extends WorkerTask {
                 log.warn("{} Failed to send {}, backing off before retrying:", this, producerRecord, e);
                 toSend = toSend.subList(processed, toSend.size());
                 lastSendFailed = true;
+                counter.retryRemaining();
                 return false;
             } catch (KafkaException e) {
                 throw new ConnectException("Unrecoverable exception trying to send", e);
@@ -309,6 +333,7 @@ class WorkerSourceTask extends WorkerTask {
                     if (timeoutMs <= 0) {
                         log.error("{} Failed to flush, timed out while waiting for producer to flush outstanding {} messages", this, outstandingMessages.size());
                         finishFailedFlush();
+                        recordCommitFailure(time.milliseconds() - started, null);
                         return false;
                     }
                     this.wait(timeoutMs);
@@ -318,6 +343,7 @@ class WorkerSourceTask extends WorkerTask {
                     // to stop immediately
                     log.error("{} Interrupted while flushing messages, offsets will not be flushed", this);
                     finishFailedFlush();
+                    recordCommitFailure(time.milliseconds() - started, null);
                     return false;
                 }
             }
@@ -328,8 +354,10 @@ class WorkerSourceTask extends WorkerTask {
                 // flush time, which can be used for monitoring even if the connector doesn't record any
                 // offsets.
                 finishSuccessfulFlush();
+                long durationMillis = time.milliseconds() - started;
+                recordCommitSuccess(durationMillis);
                 log.debug("{} Finished offset flushOffsets successfully in {} ms",
-                        this, time.milliseconds() - started);
+                        this, durationMillis);
 
                 acknowledgeSourceTask();
                 return true;
@@ -354,6 +382,7 @@ class WorkerSourceTask extends WorkerTask {
         // any data
         if (flushFuture == null) {
             finishFailedFlush();
+            recordCommitFailure(time.milliseconds() - started, null);
             return false;
         }
         try {
@@ -365,20 +394,25 @@ class WorkerSourceTask extends WorkerTask {
         } catch (InterruptedException e) {
             log.warn("{} Flush of offsets interrupted, cancelling", this);
             finishFailedFlush();
+            recordCommitFailure(time.milliseconds() - started, e);
             return false;
         } catch (ExecutionException e) {
             log.error("{} Flush of offsets threw an unexpected exception: ", this, e);
             finishFailedFlush();
+            recordCommitFailure(time.milliseconds() - started, e);
             return false;
         } catch (TimeoutException e) {
             log.error("{} Timed out waiting to flush offsets to storage", this);
             finishFailedFlush();
+            recordCommitFailure(time.milliseconds() - started, null);
             return false;
         }
 
         finishSuccessfulFlush();
+        long durationMillis = time.milliseconds() - started;
+        recordCommitSuccess(durationMillis);
         log.info("{} Finished flushOffsets successfully in {} ms",
-                this, time.milliseconds() - started);
+                this, durationMillis);
 
         acknowledgeSourceTask();
 
@@ -419,5 +453,101 @@ class WorkerSourceTask extends WorkerTask {
         return "WorkerSourceTask{" +
                 "id=" + id +
                 '}';
+    }
+
+    protected void recordPollReturned(int numRecordsInBatch, long duration) {
+        sourceTaskMetricsGroup.recordPoll(numRecordsInBatch, duration);
+    }
+
+    SourceTaskMetricsGroup sourceTaskMetricsGroup() {
+        return sourceTaskMetricsGroup;
+    }
+
+    static class SourceRecordWriteCounter {
+        private final SourceTaskMetricsGroup metricsGroup;
+        private final int batchSize;
+        private boolean completed = false;
+        private int counter;
+        public SourceRecordWriteCounter(int batchSize, SourceTaskMetricsGroup metricsGroup) {
+            assert batchSize > 0;
+            assert metricsGroup != null;
+            this.batchSize = batchSize;
+            counter = batchSize;
+            this.metricsGroup = metricsGroup;
+        }
+        public void skipRecord() {
+            if (counter > 0 && --counter == 0) {
+                finishedAllWrites();
+            }
+        }
+        public void completeRecord() {
+            if (counter > 0 && --counter == 0) {
+                finishedAllWrites();
+            }
+        }
+        public void retryRemaining() {
+            finishedAllWrites();
+        }
+        private void finishedAllWrites() {
+            if (!completed) {
+                metricsGroup.recordWrite(batchSize - counter);
+                completed = true;
+            }
+        }
+    }
+
+    static class SourceTaskMetricsGroup {
+        private final MetricGroup metricGroup;
+        private final Sensor sourceRecordPoll;
+        private final Sensor sourceRecordWrite;
+        private final Sensor sourceRecordActiveCount;
+        private final Sensor pollTime;
+        private int activeRecordCount;
+
+        public SourceTaskMetricsGroup(ConnectorTaskId id, ConnectMetrics connectMetrics) {
+            ConnectMetricsRegistry registry = connectMetrics.registry();
+            metricGroup = connectMetrics.group(registry.sourceTaskGroupName(),
+                    registry.connectorTagName(), id.connector(),
+                    registry.taskTagName(), Integer.toString(id.task()));
+
+            sourceRecordPoll = metricGroup.sensor("source-record-poll");
+            sourceRecordPoll.add(metricGroup.metricName(registry.sourceRecordPollRate), new Rate());
+            sourceRecordPoll.add(metricGroup.metricName(registry.sourceRecordPollTotal), new Total());
+
+            sourceRecordWrite = metricGroup.sensor("source-record-write");
+            sourceRecordWrite.add(metricGroup.metricName(registry.sourceRecordWriteRate), new Rate());
+            sourceRecordWrite.add(metricGroup.metricName(registry.sourceRecordWriteTotal), new Total());
+
+            pollTime = metricGroup.sensor("poll-batch-time");
+            pollTime.add(metricGroup.metricName(registry.sourceRecordPollBatchTimeMax), new Max());
+            pollTime.add(metricGroup.metricName(registry.sourceRecordPollBatchTimeAvg), new Avg());
+
+            sourceRecordActiveCount = metricGroup.metrics().sensor("sink-record-active-count");
+            sourceRecordActiveCount.add(metricGroup.metricName(registry.sourceRecordActiveCount), new Value());
+            sourceRecordActiveCount.add(metricGroup.metricName(registry.sourceRecordActiveCountMax), new Max());
+            sourceRecordActiveCount.add(metricGroup.metricName(registry.sourceRecordActiveCountAvg), new Avg());
+        }
+
+        void close() {
+            metricGroup.close();
+        }
+
+        void recordPoll(int batchSize, long duration) {
+            sourceRecordPoll.record(batchSize);
+            pollTime.record(duration);
+            activeRecordCount += batchSize;
+            sourceRecordActiveCount.record(activeRecordCount);
+        }
+
+        void recordWrite(int recordCount) {
+            sourceRecordWrite.record(recordCount);
+            activeRecordCount -= recordCount;
+            activeRecordCount = Math.max(0, activeRecordCount);
+            sourceRecordActiveCount.record(activeRecordCount);
+        }
+
+        protected MetricGroup metricGroup() {
+            return metricGroup;
+        }
     }
 }

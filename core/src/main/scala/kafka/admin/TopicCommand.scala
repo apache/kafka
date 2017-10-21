@@ -28,7 +28,7 @@ import kafka.server.ConfigType
 import kafka.utils.ZkUtils._
 import kafka.utils._
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
-import org.apache.kafka.common.errors.TopicExistsException
+import org.apache.kafka.common.errors.{InvalidTopicException, TopicExistsException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Utils
@@ -144,8 +144,19 @@ object TopicCommand extends Logging {
         println("WARNING: If partitions are increased for a topic that has a key, the partition " +
           "logic or ordering of the messages will be affected")
         val nPartitions = opts.options.valueOf(opts.partitionsOpt).intValue
+        val existingAssignment = zkUtils.getReplicaAssignmentForTopics(List(topic)).map {
+          case (topicPartition, replicas) => topicPartition.partition -> replicas
+        }
+        if (existingAssignment.isEmpty)
+          throw new InvalidTopicException(s"The topic $topic does not exist")
         val replicaAssignmentStr = opts.options.valueOf(opts.replicaAssignmentOpt)
-        AdminUtils.addPartitions(zkUtils, topic, nPartitions, replicaAssignmentStr)
+        val newAssignment = Option(replicaAssignmentStr).filter(_.nonEmpty).map { replicaAssignmentString =>
+          val startPartitionId = existingAssignment.size
+          val partitionList = replicaAssignmentString.split(",").drop(startPartitionId)
+          AdminUtils.parseReplicaAssignment(partitionList.mkString(","), startPartitionId)
+        }
+        val allBrokers = AdminUtils.getBrokerMetadatas(zkUtils)
+        AdminUtils.addPartitions(zkUtils, topic, existingAssignment, allBrokers, nPartitions, newAssignment)
         println("Adding partitions succeeded!")
       }
     }

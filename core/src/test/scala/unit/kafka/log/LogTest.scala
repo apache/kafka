@@ -19,16 +19,16 @@ package kafka.log
 
 import java.io._
 import java.nio.ByteBuffer
-import java.nio.file.Files
 import java.util.Properties
 
 import org.apache.kafka.common.errors._
 import kafka.common.KafkaException
+import kafka.log.Log.DeleteDirSuffix
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import kafka.utils._
-import kafka.server.{BrokerTopicStats, KafkaConfig, LogDirFailureChannel}
-import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
+import kafka.server.{BrokerTopicStats, FetchDataInfo, KafkaConfig, LogDirFailureChannel}
+import kafka.server.epoch.{EpochEntry, LeaderEpochCache, LeaderEpochFileCache}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
@@ -39,7 +39,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.easymock.EasyMock
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 class LogTest {
 
@@ -69,20 +69,20 @@ class LogTest {
   }
 
   @Test
-  def testOffsetFromFilename() {
+  def testOffsetFromFile() {
     val offset = 23423423L
 
     val logFile = Log.logFile(tmpDir, offset)
-    assertEquals(offset, Log.offsetFromFilename(logFile.getName))
+    assertEquals(offset, Log.offsetFromFile(logFile))
 
     val offsetIndexFile = Log.offsetIndexFile(tmpDir, offset)
-    assertEquals(offset, Log.offsetFromFilename(offsetIndexFile.getName))
+    assertEquals(offset, Log.offsetFromFile(offsetIndexFile))
 
     val timeIndexFile = Log.timeIndexFile(tmpDir, offset)
-    assertEquals(offset, Log.offsetFromFilename(timeIndexFile.getName))
+    assertEquals(offset, Log.offsetFromFile(timeIndexFile))
 
     val snapshotFile = Log.producerSnapshotFile(tmpDir, offset)
-    assertEquals(offset, Log.offsetFromFilename(snapshotFile.getName))
+    assertEquals(offset, Log.offsetFromFile(snapshotFile))
   }
 
   /**
@@ -156,7 +156,50 @@ class LogTest {
     // simulate the upgrade path by creating a new log with several segments, deleting the
     // snapshot files, and then reloading the log
     val logConfig = createLogConfig(segmentBytes = 64 * 10)
-    val log = createLog(logDir, logConfig)
+    var log = createLog(logDir, logConfig)
+    assertEquals(None, log.oldestProducerSnapshotOffset)
+
+    for (i <- 0 to 100) {
+      val record = new SimpleRecord(mockTime.milliseconds, i.toString.getBytes)
+      log.appendAsLeader(TestUtils.records(List(record)), leaderEpoch = 0)
+    }
+    assertTrue(log.logSegments.size >= 2)
+    val logEndOffset = log.logEndOffset
+    log.close()
+
+    val cleanShutdownFile = createCleanShutdownFile()
+    deleteProducerSnapshotFiles()
+
+    // Reload after clean shutdown
+    log = createLog(logDir, logConfig, recoveryPoint = logEndOffset)
+    var expectedSnapshotOffsets = log.logSegments.map(_.baseOffset).takeRight(2).toVector :+ log.logEndOffset
+    assertEquals(expectedSnapshotOffsets, listProducerSnapshotOffsets)
+    log.close()
+
+    Utils.delete(cleanShutdownFile)
+    deleteProducerSnapshotFiles()
+
+    // Reload after unclean shutdown with recoveryPoint set to log end offset
+    log = createLog(logDir, logConfig, recoveryPoint = logEndOffset)
+    // Note that we don't maintain the guarantee of having a snapshot for the 2 most recent segments in this case
+    expectedSnapshotOffsets = Vector(log.logSegments.last.baseOffset, log.logEndOffset)
+    assertEquals(expectedSnapshotOffsets, listProducerSnapshotOffsets)
+    log.close()
+
+    deleteProducerSnapshotFiles()
+
+    // Reload after unclean shutdown with recoveryPoint set to 0
+    log = createLog(logDir, logConfig, recoveryPoint = 0L)
+    // Is this working as intended?
+    expectedSnapshotOffsets = log.logSegments.map(_.baseOffset).tail.toVector :+ log.logEndOffset
+    assertEquals(expectedSnapshotOffsets, listProducerSnapshotOffsets)
+    log.close()
+  }
+
+  @Test
+  def testProducerSnapshotsRecoveryAfterUncleanShutdown(): Unit = {
+    val logConfig = createLogConfig(segmentBytes = 64 * 10)
+    var log = createLog(logDir, logConfig)
     assertEquals(None, log.oldestProducerSnapshotOffset)
 
     for (i <- 0 to 100) {
@@ -164,18 +207,79 @@ class LogTest {
       log.appendAsLeader(TestUtils.records(List(record)), leaderEpoch = 0)
     }
 
-    assertTrue(log.logSegments.size >= 2)
+    assertTrue(log.logSegments.size >= 5)
+    val segmentOffsets = log.logSegments.toVector.map(_.baseOffset)
+    val activeSegmentOffset = segmentOffsets.last
+
+    // We want the recovery point to be past the segment offset and before the last 2 segments including a gap of
+    // 1 segment. We collect the data before closing the log.
+    val offsetForSegmentAfterRecoveryPoint = segmentOffsets(segmentOffsets.size - 3)
+    val offsetForRecoveryPointSegment = segmentOffsets(segmentOffsets.size - 4)
+    val (segOffsetsBeforeRecovery, segOffsetsAfterRecovery) = segmentOffsets.partition(_ < offsetForRecoveryPointSegment)
+    val recoveryPoint = offsetForRecoveryPointSegment + 1
+    assertTrue(recoveryPoint < offsetForSegmentAfterRecoveryPoint)
     log.close()
 
-    logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(Log.PidSnapshotFileSuffix)).foreach { file =>
-      Files.delete(file.toPath)
+    val segmentsWithReads = ArrayBuffer[LogSegment]()
+    val recoveredSegments = ArrayBuffer[LogSegment]()
+
+    def createLogWithInterceptedReads(recoveryPoint: Long) = {
+      val maxProducerIdExpirationMs = 60 * 60 * 1000
+      val topicPartition = Log.parseTopicPartitionName(logDir)
+      val producerStateManager = new ProducerStateManager(topicPartition, logDir, maxProducerIdExpirationMs)
+
+      // Intercept all segment read calls
+      new Log(logDir, logConfig, logStartOffset = 0, recoveryPoint = recoveryPoint, mockTime.scheduler,
+        brokerTopicStats, mockTime, maxProducerIdExpirationMs, LogManager.ProducerIdExpirationCheckIntervalMs,
+        topicPartition, producerStateManager, new LogDirFailureChannel(10)) {
+
+        override def addSegment(segment: LogSegment): LogSegment = {
+          val wrapper = new LogSegment(segment.log, segment.index, segment.timeIndex, segment.txnIndex, segment.baseOffset,
+            segment.indexIntervalBytes, segment.rollJitterMs, mockTime) {
+
+            override def read(startOffset: Long, maxOffset: Option[Long], maxSize: Int, maxPosition: Long,
+                              minOneMessage: Boolean): FetchDataInfo = {
+              segmentsWithReads += this
+              super.read(startOffset, maxOffset, maxSize, maxPosition, minOneMessage)
+            }
+
+            override def recover(producerStateManager: ProducerStateManager,
+                                 leaderEpochCache: Option[LeaderEpochCache]): Int = {
+              recoveredSegments += this
+              super.recover(producerStateManager, leaderEpochCache)
+            }
+          }
+          super.addSegment(wrapper)
+        }
+      }
     }
 
-    val reloadedLog = createLog(logDir, logConfig)
-    val expectedSnapshotsOffsets = log.logSegments.toSeq.reverse.take(2).map(_.baseOffset) ++ Seq(reloadedLog.logEndOffset)
-    expectedSnapshotsOffsets.foreach { offset =>
-      assertTrue(Log.producerSnapshotFile(logDir, offset).exists)
-    }
+    // Retain snapshots for the last 2 segments
+    ProducerStateManager.deleteSnapshotsBefore(logDir, segmentOffsets(segmentOffsets.size - 2))
+    log = createLogWithInterceptedReads(offsetForRecoveryPointSegment)
+    // We will reload all segments because the recovery point is behind the producer snapshot files (pre KAFKA-5829 behaviour)
+    assertEquals(segOffsetsBeforeRecovery, segmentsWithReads.map(_.baseOffset) -- Seq(activeSegmentOffset))
+    assertEquals(segOffsetsAfterRecovery, recoveredSegments.map(_.baseOffset))
+    var expectedSnapshotOffsets = segmentOffsets.takeRight(4) :+ log.logEndOffset
+    assertEquals(expectedSnapshotOffsets, listProducerSnapshotOffsets)
+    log.close()
+    segmentsWithReads.clear()
+    recoveredSegments.clear()
+
+    // Only delete snapshots before the base offset of the recovery point segment (post KAFKA-5829 behaviour) to
+    // avoid reading all segments
+    ProducerStateManager.deleteSnapshotsBefore(logDir, offsetForRecoveryPointSegment)
+    log = createLogWithInterceptedReads(recoveryPoint = recoveryPoint)
+    assertEquals(Seq(activeSegmentOffset), segmentsWithReads.map(_.baseOffset))
+    assertEquals(segOffsetsAfterRecovery, recoveredSegments.map(_.baseOffset))
+    expectedSnapshotOffsets = log.logSegments.map(_.baseOffset).toVector.takeRight(4) :+ log.logEndOffset
+    assertEquals(expectedSnapshotOffsets, listProducerSnapshotOffsets)
+
+    // Verify that we keep 2 snapshot files if we checkpoint the log end offset
+    log.deleteSnapshotsAfterRecoveryPointCheckpoint()
+    expectedSnapshotOffsets = log.logSegments.map(_.baseOffset).toVector.takeRight(2) :+ log.logEndOffset
+    assertEquals(expectedSnapshotOffsets, listProducerSnapshotOffsets)
+    log.close()
   }
 
   @Test
@@ -192,7 +296,7 @@ class LogTest {
   }
 
   @Test
-  def testPidMapOffsetUpdatedForNonIdempotentData() {
+  def testProducerIdMapOffsetUpdatedForNonIdempotentData() {
     val logConfig = createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig)
     val records = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds, "key".getBytes, "value".getBytes)))
@@ -343,7 +447,7 @@ class LogTest {
       logDirFailureChannel = null)
 
     EasyMock.verify(stateManager)
-    cleanShutdownFile.delete()
+    Utils.delete(cleanShutdownFile)
   }
 
   @Test
@@ -379,11 +483,11 @@ class LogTest {
       logDirFailureChannel = null)
 
     EasyMock.verify(stateManager)
-    cleanShutdownFile.delete()
+    Utils.delete(cleanShutdownFile)
   }
 
   @Test
-  def testRebuildPidMapWithCompactedData() {
+  def testRebuildProducerIdMapWithCompactedData() {
     val logConfig = createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig)
     val pid = 1L
@@ -467,7 +571,7 @@ class LogTest {
   }
 
   @Test
-  def testUpdatePidMapWithCompactedData() {
+  def testUpdateProducerIdMapWithCompactedData() {
     val logConfig = createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig)
     val pid = 1L
@@ -500,7 +604,7 @@ class LogTest {
   }
 
   @Test
-  def testPidMapTruncateTo() {
+  def testProducerIdMapTruncateTo() {
     val logConfig = createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig)
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("a".getBytes))), leaderEpoch = 0)
@@ -520,7 +624,7 @@ class LogTest {
   }
 
   @Test
-  def testPidMapTruncateToWithNoSnapshots() {
+  def testProducerIdMapTruncateToWithNoSnapshots() {
     // This ensures that the upgrade optimization path cannot be hit after initial loading
     val logConfig = createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig)
@@ -532,10 +636,7 @@ class LogTest {
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("b".getBytes)), producerId = pid,
       producerEpoch = epoch, sequence = 1), leaderEpoch = 0)
 
-    // Delete all snapshots prior to truncating
-    logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(Log.PidSnapshotFileSuffix)).foreach { file =>
-      Files.delete(file.toPath)
-    }
+    deleteProducerSnapshotFiles()
 
     log.truncateTo(1L)
     assertEquals(1, log.activeProducersWithLastSequence.size)
@@ -612,7 +713,7 @@ class LogTest {
   }
 
   @Test
-  def testPidMapTruncateFullyAndStartAt() {
+  def testProducerIdMapTruncateFullyAndStartAt() {
     val records = TestUtils.singletonRecords("foo".getBytes)
     val logConfig = createLogConfig(segmentBytes = records.sizeInBytes, retentionBytes = records.sizeInBytes * 2)
     val log = createLog(logDir, logConfig)
@@ -634,7 +735,7 @@ class LogTest {
   }
 
   @Test
-  def testPidExpirationOnSegmentDeletion() {
+  def testProducerIdExpirationOnSegmentDeletion() {
     val pid1 = 1L
     val records = TestUtils.records(Seq(new SimpleRecord("foo".getBytes)), producerId = pid1, producerEpoch = 0, sequence = 0)
     val logConfig = createLogConfig(segmentBytes = records.sizeInBytes, retentionBytes = records.sizeInBytes * 2)
@@ -660,7 +761,7 @@ class LogTest {
   }
 
   @Test
-  def testTakeSnapshotOnRollAndDeleteSnapshotOnFlush() {
+  def testTakeSnapshotOnRollAndDeleteSnapshotOnRecoveryPointCheckpoint() {
     val logConfig = createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig)
     log.appendAsLeader(TestUtils.singletonRecords("a".getBytes), leaderEpoch = 0)
@@ -677,9 +778,11 @@ class LogTest {
     log.roll(3L)
     assertEquals(Some(3L), log.latestProducerSnapshotOffset)
 
-    // roll triggers a flush at the starting offset of the new segment. we should
-    // retain the snapshots from the active segment and the previous segment, but
-    // the oldest one should be gone
+    // roll triggers a flush at the starting offset of the new segment, we should retain all snapshots
+    assertEquals(Some(1L), log.oldestProducerSnapshotOffset)
+
+    // retain the snapshots from the active segment and the previous segment, delete the oldest one
+    log.deleteSnapshotsAfterRecoveryPointCheckpoint()
     assertEquals(Some(2L), log.oldestProducerSnapshotOffset)
 
     // even if we flush within the active segment, the snapshot should remain
@@ -729,7 +832,7 @@ class LogTest {
   }
 
   @Test
-  def testPeriodicPidExpiration() {
+  def testPeriodicProducerIdExpiration() {
     val maxProducerIdExpirationMs = 200
     val producerIdExpirationCheckIntervalMs = 100
 
@@ -824,7 +927,7 @@ class LogTest {
   }
 
   @Test
-  def testMultiplePidsPerMemoryRecord() : Unit = {
+  def testMultipleProducerIdsPerMemoryRecord() : Unit = {
     // create a log
     val log = createLog(logDir, LogConfig())
 
@@ -869,7 +972,7 @@ class LogTest {
     }
   }
 
-  @Test(expected = classOf[DuplicateSequenceException])
+  @Test
   def testDuplicateAppendToFollower() : Unit = {
     val logConfig = createLogConfig(segmentBytes = 1024 * 1024 * 5)
     val log = createLog(logDir, logConfig)
@@ -877,15 +980,20 @@ class LogTest {
     val pid = 1L
     val baseSequence = 0
     val partitionLeaderEpoch = 0
+    // The point of this test is to ensure that validation isn't performed on the follower.
     // this is a bit contrived. to trigger the duplicate case for a follower append, we have to append
     // a batch with matching sequence numbers, but valid increasing offsets
+    assertEquals(0L, log.logEndOffset)
     log.appendAsFollower(MemoryRecords.withIdempotentRecords(0L, CompressionType.NONE, pid, epoch, baseSequence,
       partitionLeaderEpoch, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
     log.appendAsFollower(MemoryRecords.withIdempotentRecords(2L, CompressionType.NONE, pid, epoch, baseSequence,
       partitionLeaderEpoch, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
+
+    // Ensure that even the duplicate sequences are accepted on the follower.
+    assertEquals(4L, log.logEndOffset)
   }
 
-  @Test(expected = classOf[DuplicateSequenceException])
+  @Test
   def testMultipleProducersWithDuplicatesInSingleAppend() : Unit = {
     val logConfig = createLogConfig(segmentBytes = 1024 * 1024 * 5)
     val log = createLog(logDir, logConfig)
@@ -930,9 +1038,11 @@ class LogTest {
 
     val records = MemoryRecords.readableRecords(buffer)
     records.batches.asScala.foreach(_.setPartitionLeaderEpoch(0))
+
+    // Ensure that batches with duplicates are accepted on the follower.
+    assertEquals(0L, log.logEndOffset)
     log.appendAsFollower(records)
-    // Should throw a duplicate sequence exception here.
-    fail("should have thrown a DuplicateSequenceNumberException.")
+    assertEquals(5L, log.logEndOffset)
   }
 
   @Test(expected = classOf[ProducerFencedException])
@@ -1071,6 +1181,14 @@ class LogTest {
       log.readUncommitted(1, 200, None).records.batches.iterator.next().lastOffset)
   }
 
+  @Test(expected = classOf[KafkaStorageException])
+  def testLogRollAfterLogHandlerClosed() {
+    val logConfig = createLogConfig()
+    val log = createLog(logDir,  logConfig)
+    log.closeHandlers()
+    log.roll(1)
+  }
+
   @Test
   def testReadWithMinMessage() {
     val logConfig = createLogConfig(segmentBytes = 72)
@@ -1192,7 +1310,7 @@ class LogTest {
       maxOffset = Some(numMessages + 1)).records
     assertEquals("Should be no more messages", 0, lastRead.records.asScala.size)
 
-    // check that rolling the log forced a flushed the log--the flush is asyn so retry in case of failure
+    // check that rolling the log forced a flushed, the flush is async so retry in case of failure
     TestUtils.retry(1000L){
       assertTrue("Log role should have forced flush", log.recoveryPoint >= log.activeSegment.baseOffset)
     }
@@ -1368,7 +1486,8 @@ class LogTest {
     }
     log.close()
 
-    def verifyRecoveredLog(log: Log) {
+    def verifyRecoveredLog(log: Log, expectedRecoveryPoint: Long) {
+      assertEquals(s"Unexpected recovery point", expectedRecoveryPoint, log.recoveryPoint)
       assertEquals(s"Should have $numMessages messages when log is reopened w/o recovery", numMessages, log.logEndOffset)
       assertEquals("Should have same last index offset as before.", lastIndexOffset, log.activeSegment.index.lastOffset)
       assertEquals("Should have same number of index entries as before.", numIndexEntries, log.activeSegment.index.entries)
@@ -1378,12 +1497,12 @@ class LogTest {
     }
 
     log = createLog(logDir, logConfig, recoveryPoint = lastOffset)
-    verifyRecoveredLog(log)
+    verifyRecoveredLog(log, lastOffset)
     log.close()
 
     // test recovery case
     log = createLog(logDir, logConfig)
-    verifyRecoveredLog(log)
+    verifyRecoveredLog(log, lastOffset)
     log.close()
   }
 
@@ -1820,7 +1939,7 @@ class LogTest {
     recoveryPoint = log.logEndOffset
     log = createLog(logDir, logConfig)
     assertEquals(recoveryPoint, log.logEndOffset)
-    cleanShutdownFile.delete()
+    Utils.delete(cleanShutdownFile)
   }
 
   @Test
@@ -1841,7 +1960,7 @@ class LogTest {
   def testParseTopicPartitionNameWithPeriodForDeletedTopic() {
     val topic = "foo.bar-testtopic"
     val partition = "42"
-    val dir = new File(logDir, Log.logDeleteDirName(topicPartitionName(topic, partition)))
+    val dir = new File(logDir, Log.logDeleteDirName(new TopicPartition(topic, partition.toInt)))
     val topicPartition = Log.parseTopicPartitionName(dir)
     assertEquals("Unexpected topic name parsed", topic, topicPartition.topic)
     assertEquals("Unexpected partition number parsed", partition.toInt, topicPartition.partition)
@@ -1881,7 +2000,7 @@ class LogTest {
       case _: KafkaException => // expected
     }
     // also test the "-delete" marker case
-    val deleteMarkerDir = new File(logDir, Log.logDeleteDirName(topic + partition))
+    val deleteMarkerDir = new File(logDir, topic + partition + "." + DeleteDirSuffix)
     try {
       Log.parseTopicPartitionName(deleteMarkerDir)
       fail("KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath)
@@ -1902,7 +2021,7 @@ class LogTest {
       case _: KafkaException => // expected
     }
     // also test the "-delete" marker case
-    val deleteMarkerDir = new File(logDir, Log.logDeleteDirName(topicPartitionName(topic, partition)))
+    val deleteMarkerDir = new File(logDir, Log.logDeleteDirName(new TopicPartition(topic, partition.toInt)))
     try {
       Log.parseTopicPartitionName(deleteMarkerDir)
       fail("KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath)
@@ -1924,7 +2043,7 @@ class LogTest {
       case _: KafkaException => // expected
     }
     // also test the "-delete" marker case
-    val deleteMarkerDir = new File(logDir, Log.logDeleteDirName(topicPartitionName(topic, partition)))
+    val deleteMarkerDir = new File(logDir, topicPartitionName(topic, partition) + "." + DeleteDirSuffix)
     try {
       Log.parseTopicPartitionName(deleteMarkerDir)
       fail("KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath)
@@ -1945,7 +2064,7 @@ class LogTest {
       case _: KafkaException => // expected
     }
     // also test the "-delete" marker case
-    val deleteMarkerDir = new File(logDir, Log.logDeleteDirName(topic + partition))
+    val deleteMarkerDir = new File(logDir, topic + partition + "." + DeleteDirSuffix)
     try {
       Log.parseTopicPartitionName(deleteMarkerDir)
       fail("KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath)
@@ -2577,10 +2696,7 @@ class LogTest {
     appendPid4(4) // 89
     appendEndTxnMarkerAsLeader(log, pid4, epoch, ControlRecordType.COMMIT) // 90
 
-    // delete all snapshot files
-    logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(Log.PidSnapshotFileSuffix)).foreach { file =>
-      Files.delete(file.toPath)
-    }
+    deleteProducerSnapshotFiles()
 
     // delete the last offset and transaction index files to force recovery. this should force us to rebuild
     // the producer state from the start of the log
@@ -2923,4 +3039,13 @@ class LogTest {
     assertTrue(".kafka_cleanshutdown must exist", cleanShutdownFile.exists())
     cleanShutdownFile
   }
+
+  private def deleteProducerSnapshotFiles(): Unit = {
+    val files = logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(Log.ProducerSnapshotFileSuffix))
+    files.foreach(Utils.delete)
+  }
+
+  private def listProducerSnapshotOffsets: Seq[Long] =
+    ProducerStateManager.listSnapshotFiles(logDir).map(Log.offsetFromFile).sorted
+
 }

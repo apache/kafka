@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -74,7 +75,7 @@ public class CachingSessionStoreTest {
                                                  Serdes.String(),
                                                  Segments.segmentInterval(retention, numSegments)
                                                  );
-        cache = new ThreadCache("testCache", MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
+        cache = new ThreadCache(new LogContext("testCache "), MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
         context = new MockProcessorContext(TestUtils.tempDirectory(), null, null, (RecordCollector) null, cache);
         context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, "topic"));
         cachingStore.init(context, cachingStore);
@@ -236,7 +237,7 @@ public class CachingSessionStoreTest {
                 public void apply(final Windowed<String> key, final String newValue, final String oldValue) {
                     flushed.add(KeyValue.pair(key, new Change<>(newValue, oldValue)));
                 }
-            });
+            }, true);
         
         cachingStore.put(a, "1".getBytes());
         cachingStore.flush();
@@ -250,6 +251,55 @@ public class CachingSessionStoreTest {
         assertEquals(flushed, Arrays.asList(KeyValue.pair(aDeserialized, new Change<>("1", null)),
                                             KeyValue.pair(aDeserialized, new Change<>("2", "1")),
                                             KeyValue.pair(aDeserialized, new Change<>(null, "2"))));
+    }
+
+    @Test
+    public void shouldForwardChangedValuesDuringFlushWhenSendOldValuesDisabledNewRecordIsNull() {
+        final Windowed<Bytes> a = new Windowed<>(keyA, new SessionWindow(0, 0));
+        final Windowed<String> aDeserialized = new Windowed<>("a", new SessionWindow(0, 0));
+        final List<KeyValue<Windowed<String>, Change<String>>> flushed = new ArrayList<>();
+        cachingStore.setFlushListener(new CacheFlushListener<Windowed<String>, String>() {
+            @Override
+            public void apply(final Windowed<String> key, final String newValue, final String oldValue) {
+                flushed.add(KeyValue.pair(key, new Change<>(newValue, oldValue)));
+            }
+        }, false);
+
+        cachingStore.put(a, "1".getBytes());
+        cachingStore.flush();
+
+        cachingStore.put(a, "2".getBytes());
+        cachingStore.flush();
+
+        cachingStore.remove(a);
+        cachingStore.flush();
+
+        assertEquals(flushed, Arrays.asList(KeyValue.pair(aDeserialized, new Change<>("1", null)),
+                                            KeyValue.pair(aDeserialized, new Change<>("2", null)),
+                                            KeyValue.pair(aDeserialized, new Change<>(null, "2"))));
+    }
+
+    @Test
+    public void shouldNotForwardChangedValuesDuringFlushWhenSendOldValuesDisabled() {
+        final Windowed<Bytes> a = new Windowed<>(keyA, new SessionWindow(0, 0));
+        final Windowed<String> aDeserialized = new Windowed<>("a", new SessionWindow(0, 0));
+        final List<KeyValue<Windowed<String>, Change<String>>> flushed = new ArrayList<>();
+        cachingStore.setFlushListener(new CacheFlushListener<Windowed<String>, String>() {
+            @Override
+            public void apply(final Windowed<String> key, final String newValue, final String oldValue) {
+                flushed.add(KeyValue.pair(key, new Change<>(newValue, oldValue)));
+            }
+        }, false);
+
+        cachingStore.put(a, "1".getBytes());
+        cachingStore.flush();
+
+        cachingStore.put(a, "2".getBytes());
+        cachingStore.flush();
+
+
+        assertEquals(flushed, Arrays.asList(KeyValue.pair(aDeserialized, new Change<>("1", null)),
+                                            KeyValue.pair(aDeserialized, new Change<>("2", null))));
     }
 
     @Test

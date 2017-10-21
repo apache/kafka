@@ -17,7 +17,7 @@
 <script><!--#include virtual="../js/templateData.js" --></script>
 
 <script id="content-template" type="text/x-handlebars-template">
-    <h1>Write your own Streams Applications</h1>
+    <h1>Tutorial: Write a Streams Application</h1>
 
     <p>
         In this guide we will start from scratch on setting up your own project to write a stream processing application using Kafka Streams.
@@ -186,7 +186,7 @@
     </pre>
 
     <p>
-        As shown above, it illustrate that the constructed topology has two processor nodes, a source node <code>KSTREAM-SOURCE-0000000000</code> and a sink node <code>KSTREAM-SINK-0000000001</code>.
+        As shown above, it illustrates that the constructed topology has two processor nodes, a source node <code>KSTREAM-SOURCE-0000000000</code> and a sink node <code>KSTREAM-SINK-0000000001</code>.
         <code>KSTREAM-SOURCE-0000000000</code> continuously read records from Kafka topic <code>streams-plaintext-input</code> and pipe them to its downstream node <code>KSTREAM-SINK-0000000001</code>;
         <code>KSTREAM-SINK-0000000001</code> will write each of its received record in order to another Kafka topic <code>streams-pipe-output</code>
         (the <code>--&gt;</code> and <code>&lt;--</code> arrows dictates the downstream and upstream processor nodes of this node, i.e. "children" and "parents" within the topology graph).
@@ -320,7 +320,7 @@
     </p>
 
     <pre class="brush: java;">
-        public class Pipe {
+        public class LineSplit {
 
             public static void main(String[] args) throws Exception {
                 Properties props = new Properties();
@@ -337,7 +337,7 @@
 
     <pre class="brush: java;">
         KStream&lt;String, String&gt; source = builder.stream("streams-plaintext-input");
-        KStream&lt;String, String&gt; words = builder.flatMapValues(new ValueMapper&lt;String, Iterable&lt;String&gt;&gt;() {
+        KStream&lt;String, String&gt; words = source.flatMapValues(new ValueMapper&lt;String, Iterable&lt;String&gt;&gt;() {
                     @Override
                     public Iterable&lt;String&gt; apply(String value) {
                         return Arrays.asList(value.split("\\W+"));
@@ -405,6 +405,7 @@
         import org.apache.kafka.streams.StreamsBuilder;
         import org.apache.kafka.streams.StreamsConfig;
         import org.apache.kafka.streams.Topology;
+        import org.apache.kafka.streams.kstream.KStream;
 
         import java.util.Arrays;
         import java.util.Properties;
@@ -429,7 +430,7 @@
                 final KafkaStreams streams = new KafkaStreams(topology, props);
                 final CountDownLatch latch = new CountDownLatch(1);
 
-                // ... same as Pipe.java below
+                // ... same as Pipe.java above
             }
         }
     </pre>
@@ -484,23 +485,26 @@
                        return value;
                    }
                 })
-              .count("Counts");
+              // Materialize the result into a KeyValueStore named "counts-store".
+              // The Materialized store is always of type &lt;Bytes, byte[]&gt; as this is the format of the inner most store.
+              .count(Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt; as("counts-store"));
     </pre>
 
     <p>
-        Note that the <code>count</code> operator has a <code>String</code> typed parameter <code>Counts</code>,
-        which stores the running counts that keep being updated as more records are piped and processed from the source Kafka topic.
+        Note that the <code>count</code> operator has a <code>Materialized</code> parameter that specifies that the
+        running count should be stored in a state store named <code>counts-store</code>.
         This <code>Counts</code> store can be queried in real-time, with details described in the <a href="/{{version}}/documentation/streams/developer-guide#streams_interactive_queries">Developer Manual</a>.
     </p>
 
     <p>
         We can also write the <code>counts</code> KTable's changelog stream back into another Kafka topic, say <code>streams-wordcount-output</code>.
+        Because the result is a changelog stream, the output topic <code>streams-wordcount-output</code> should be configured with log compaction enabled.
         Note that this time the value type is no longer <code>String</code> but <code>Long</code>, so the default serialization classes are not viable for writing it to Kafka anymore.
         We need to provide overridden serialization methods for <code>Long</code> types, otherwise a runtime exception will be thrown:
     </p>
 
     <pre class="brush: java;">
-        counts.to(Serdes.String(), Serdes.Long(), "streams-wordcount-output");
+        counts.toStream().to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long());
     </pre>
 
     <p>
@@ -514,8 +518,9 @@
         KStream&lt;String, String&gt; source = builder.stream("streams-plaintext-input");
         source.flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
               .groupBy((key, value) -> value)
-              .count("Counts")
-              .to(Serdes.String(), Serdes.Long(), "streams-wordcount-output");
+              .count(Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt;as("counts-store"))
+              .toStream()
+              .to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long());
     </pre>
 
     <p>
@@ -566,6 +571,7 @@
         import org.apache.kafka.streams.StreamsBuilder;
         import org.apache.kafka.streams.StreamsConfig;
         import org.apache.kafka.streams.Topology;
+        import org.apache.kafka.streams.kstream.KStream;
 
         import java.util.Arrays;
         import java.util.Locale;
@@ -586,14 +592,15 @@
                 KStream&lt;String, String&gt; source = builder.stream("streams-plaintext-input");
                 source.flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
                       .groupBy((key, value) -> value)
-                      .count("Counts")
-                      .to(Serdes.String(), Serdes.Long(), "streams-wordcount-output");
+                      .count(Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt;as("counts-store"))
+                      .toStream()
+                      .to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long());
 
                 final Topology topology = builder.build();
                 final KafkaStreams streams = new KafkaStreams(topology, props);
                 final CountDownLatch latch = new CountDownLatch(1);
 
-                // ... same as Pipe.java below
+                // ... same as Pipe.java above
             }
         }
     </pre>

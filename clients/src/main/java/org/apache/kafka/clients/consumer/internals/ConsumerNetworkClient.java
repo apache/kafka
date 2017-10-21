@@ -22,6 +22,7 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -134,6 +135,9 @@ public class ConsumerNetworkClient implements Closeable {
         int version = this.metadata.requestUpdate();
         do {
             poll(timeout);
+            AuthenticationException ex = this.metadata.getAndClearAuthenticationException();
+            if (ex != null)
+                throw ex;
         } while (this.metadata.version() == version && time.milliseconds() - startMs < timeout);
         return this.metadata.version() > version;
     }
@@ -367,9 +371,13 @@ public class ConsumerNetworkClient implements Closeable {
                 Collection<ClientRequest> requests = unsent.remove(node);
                 for (ClientRequest request : requests) {
                     RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) request.callback();
-                    handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().desiredOrLatestVersion()),
-                        request.callback(), request.destination(), request.createdTimeMs(), now, true,
-                        null, null));
+                    AuthenticationException authenticationException = client.authenticationException(node);
+                    if (authenticationException != null)
+                        handler.onFailure(authenticationException);
+                    else
+                        handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().latestAllowedVersion()),
+                            request.callback(), request.destination(), request.createdTimeMs(), now, true,
+                            null, null));
                 }
             }
         }

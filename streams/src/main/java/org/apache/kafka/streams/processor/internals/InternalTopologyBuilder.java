@@ -23,13 +23,11 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor.SubscriptionUpdates;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreSupplier;
 import org.slf4j.Logger;
@@ -179,9 +177,11 @@ public class InternalTopologyBuilder {
     }
 
     private static class StateStoreSupplierFactory extends AbstractStateStoreFactory {
-        private final StateStoreSupplier supplier;
+        @SuppressWarnings("deprecation")
+        private final org.apache.kafka.streams.processor.StateStoreSupplier supplier;
 
-        StateStoreSupplierFactory(final StateStoreSupplier<?> supplier) {
+        @SuppressWarnings("deprecation")
+        StateStoreSupplierFactory(final org.apache.kafka.streams.processor.StateStoreSupplier<?> supplier) {
             super(supplier.name(),
                   supplier.loggingEnabled(),
                   supplier instanceof WindowStoreSupplier,
@@ -195,6 +195,7 @@ public class InternalTopologyBuilder {
             return supplier.get();
         }
 
+        @SuppressWarnings("deprecation")
         @Override
         public long retentionPeriod() {
             if (!isWindowStore()) {
@@ -496,7 +497,8 @@ public class InternalTopologyBuilder {
         nodeGrouper.unite(name, predecessorNames);
     }
 
-    public final void addStateStore(final StateStoreSupplier supplier,
+    @SuppressWarnings("deprecation")
+    public final void addStateStore(final org.apache.kafka.streams.processor.StateStoreSupplier supplier,
                                     final String... processorNames) {
         Objects.requireNonNull(supplier, "supplier can't be null");
         if (stateFactories.containsKey(supplier.name())) {
@@ -528,7 +530,8 @@ public class InternalTopologyBuilder {
         }
     }
 
-    public final void addGlobalStore(final StateStoreSupplier<KeyValueStore> storeSupplier,
+    @SuppressWarnings("deprecation")
+    public final void addGlobalStore(final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier,
                                      final String sourceName,
                                      final TimestampExtractor timestampExtractor,
                                      final Deserializer keyDeserializer,
@@ -557,7 +560,7 @@ public class InternalTopologyBuilder {
     }
 
 
-    public final void addGlobalStore(final KeyValueStoreBuilder storeBuilder,
+    public final void addGlobalStore(final StoreBuilder<KeyValueStore> storeBuilder,
                                      final String sourceName,
                                      final TimestampExtractor timestampExtractor,
                                      final Deserializer keyDeserializer,
@@ -922,6 +925,7 @@ public class InternalTopologyBuilder {
         return new ProcessorTopology(processorNodes, topicSourceMap, topicSinkMap, new ArrayList<>(stateStoreMap.values()), storeToChangelogTopic, new ArrayList<>(globalStateStores.values()));
     }
 
+    @SuppressWarnings("unchecked")
     private void buildSinkNode(final Map<String, ProcessorNode> processorMap,
                                final Map<String, SinkNode> topicSinkMap,
                                final SinkNodeFactory sinkNodeFactory,
@@ -1613,8 +1617,8 @@ public class InternalTopologyBuilder {
             return Collections.unmodifiableSet(nodes);
         }
 
-        // only for testing
-        public Iterator<TopologyDescription.Node> nodesInOrder() {
+        // visible for testing
+        Iterator<TopologyDescription.Node> nodesInOrder() {
             return nodes.iterator();
         }
 
@@ -1745,7 +1749,7 @@ public class InternalTopologyBuilder {
 
         private String subtopologiesAsString() {
             final StringBuilder sb = new StringBuilder();
-            sb.append("Sub-topologies: \n");
+            sb.append("Sub-topologies:\n");
             if (subtopologies.isEmpty()) {
                 sb.append("  none\n");
             } else {

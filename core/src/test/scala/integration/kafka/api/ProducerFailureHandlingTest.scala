@@ -92,7 +92,11 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
 
     // send a too-large record
     val record = new ProducerRecord(topic1, null, "key".getBytes, new Array[Byte](serverMessageMaxBytes + 1))
-    assertEquals("Returned metadata should have offset -1", producer1.send(record).get.offset, -1L)
+
+    val recordMetadata = producer1.send(record).get()
+    assertNotNull(recordMetadata)
+    assertFalse(recordMetadata.hasOffset)
+    assertEquals(-1L, recordMetadata.offset)
   }
 
   /**

@@ -96,7 +96,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
         R await(long timeout, TimeUnit unit)
                 throws InterruptedException, ExecutionException, TimeoutException {
             long startMs = System.currentTimeMillis();
-            long waitTimeMs = (unit.toMillis(timeout) > 0) ? unit.toMillis(timeout) : 1;
+            long waitTimeMs = unit.toMillis(timeout);
             long delta = 0;
             synchronized (this) {
                 while (true) {
@@ -104,7 +104,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
                         wrapAndThrow(exception);
                     if (done)
                         return value;
-                    if (delta > waitTimeMs) {
+                    if (delta >= waitTimeMs) {
                         throw new TimeoutException();
                     }
                     this.wait(waitTimeMs - delta);
@@ -142,7 +142,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
     @Override
     public <R> KafkaFuture<R> thenApply(Function<T, R> function) {
         KafkaFutureImpl<R> future = new KafkaFutureImpl<R>();
-        addWaiter(new Applicant(function, future));
+        addWaiter(new Applicant<>(function, future));
         return future;
     }
 

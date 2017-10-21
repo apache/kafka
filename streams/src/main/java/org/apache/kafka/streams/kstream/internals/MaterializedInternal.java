@@ -25,15 +25,26 @@ import java.util.Map;
 
 public class MaterializedInternal<K, V, S extends StateStore> extends Materialized<K, V, S> {
 
-    public MaterializedInternal(final Materialized<K, V, S> materialized) {
+    private final boolean queryable;
+
+
+    public MaterializedInternal(final Materialized<K, V, S> materialized,
+                                final InternalNameProvider nameProvider,
+                                final String generatedStorePrefix) {
         super(materialized);
+        if (storeName() == null) {
+            queryable = false;
+            storeName = nameProvider.newStoreName(generatedStorePrefix);
+        } else {
+            queryable = true;
+        }
     }
 
     public String storeName() {
-        if (storeName != null) {
-            return storeName;
+        if (storeSupplier != null) {
+            return storeSupplier.name();
         }
-        return storeSupplier.name();
+        return storeName;
     }
 
     public StoreSupplier<S> storeSupplier() {
@@ -56,7 +67,11 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
         return topicConfig;
     }
 
-    public boolean cachingEnabled() {
+    boolean cachingEnabled() {
         return cachingEnabled;
+    }
+
+    boolean isQueryable() {
+        return queryable;
     }
 }

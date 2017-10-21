@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.security.auth;
 
-import org.apache.kafka.common.protocol.SecurityProtocol;
-
 import java.net.InetAddress;
 
 public class PlaintextAuthenticationContext implements AuthenticationContext {
@@ -28,8 +26,8 @@ public class PlaintextAuthenticationContext implements AuthenticationContext {
     }
 
     @Override
-    public String securityProtocolName() {
-        return SecurityProtocol.PLAINTEXT.name;
+    public SecurityProtocol securityProtocol() {
+        return SecurityProtocol.PLAINTEXT;
     }
 
     @Override

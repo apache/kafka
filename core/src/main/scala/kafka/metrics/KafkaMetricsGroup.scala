@@ -17,7 +17,6 @@
 
 package kafka.metrics
 
-
 import java.util.concurrent.TimeUnit
 
 import com.yammer.metrics.Metrics
@@ -28,7 +27,6 @@ import kafka.utils.Logging
 
 import scala.collection.immutable
 import scala.collection.JavaConverters._
-import javax.management.ObjectName
 
 
 trait KafkaMetricsGroup extends Logging {
@@ -40,19 +38,18 @@ trait KafkaMetricsGroup extends Logging {
    * @param tags Additional attributes which mBean will have.
    * @return Sanitized metric name object.
    */
-  private def metricName(name: String, tags: scala.collection.Map[String, String]) = {
+  def metricName(name: String, tags: scala.collection.Map[String, String]): MetricName = {
     val klass = this.getClass
     val pkg = if (klass.getPackage == null) "" else klass.getPackage.getName
     val simpleName = klass.getSimpleName.replaceAll("\\$$", "")
-    // Tags may contain ipv6 address with ':', which is not valid in JMX ObjectName
-    def quoteIfRequired(value: String) = if (value.contains(':')) ObjectName.quote(value) else value
-    val metricTags = tags.map(kv => (kv._1, quoteIfRequired(kv._2)))
 
-    explicitMetricName(pkg, simpleName, name, metricTags)
+    explicitMetricName(pkg, simpleName, name, tags)
   }
 
 
-  private def explicitMetricName(group: String, typeName: String, name: String, tags: scala.collection.Map[String, String]) = {
+  protected def explicitMetricName(group: String, typeName: String, name: String,
+                                   tags: scala.collection.Map[String, String]): MetricName = {
+
     val nameBuilder: StringBuilder = new StringBuilder
 
     nameBuilder.append(group)
@@ -70,7 +67,7 @@ trait KafkaMetricsGroup extends Logging {
     val tagsName = KafkaMetricsGroup.toMBeanName(tags)
     tagsName.foreach(nameBuilder.append(",").append(_))
 
-    new MetricName(group, typeName, name, scope, nameBuilder.toString())
+    new MetricName(group, typeName, name, scope, nameBuilder.toString)
   }
 
   def newGauge[T](name: String, metric: Gauge[T], tags: scala.collection.Map[String, String] = Map.empty) =

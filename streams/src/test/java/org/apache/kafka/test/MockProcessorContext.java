@@ -147,7 +147,9 @@ public class MockProcessorContext extends AbstractProcessorContext implements Re
     }
 
     @Override
-    public void register(final StateStore store, final boolean loggingEnabled, final StateRestoreCallback func) {
+    public void register(final StateStore store,
+                         final boolean deprecatedAndIgnoredLoggingEnabled,
+                         final StateRestoreCallback func) {
         storeMap.put(store.name(), store);
         restoreFuncs.put(store.name(), func);
     }
@@ -162,14 +164,10 @@ public class MockProcessorContext extends AbstractProcessorContext implements Re
     }
 
     @Override
-    public void schedule(final long interval) {
-        throw new UnsupportedOperationException("schedule() not supported.");
-    }
+    public void schedule(final long interval) { }
 
     @Override
-    public void commit() {
-        throw new UnsupportedOperationException("commit() not supported.");
-    }
+    public void commit() { }
 
     @Override
     @SuppressWarnings("unchecked")

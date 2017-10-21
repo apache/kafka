@@ -211,7 +211,8 @@ public class KStreamKTableJoinIntegrationTest {
         // subsequently processed in the `leftJoin`, the latest region update for "alice" is "europe"
         // (which overrides her previous region value of "asia").
         final KTable<String, String> userRegionsTable =
-            builder.table(stringSerde, stringSerde, userRegionsTopic, userRegionsStoreName);
+            builder.table(userRegionsTopic,
+                          Consumed.with(Serdes.String(), Serdes.String()));
 
 
         // Compute the number of clicks per region, e.g. "europe" -> 13L.

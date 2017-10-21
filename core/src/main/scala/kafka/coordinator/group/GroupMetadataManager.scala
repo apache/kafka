@@ -36,7 +36,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.types.Type._
-import org.apache.kafka.common.protocol.types.{ArrayOf, Field, Schema, Struct}
+import org.apache.kafka.common.protocol.types._
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{IsolationLevel, OffsetFetchResponse}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
@@ -80,21 +80,59 @@ class GroupMetadataManager(brokerId: Int,
    * We use this structure to quickly find the groups which need to be updated by the commit/abort marker. */
   private val openGroupsForProducer = mutable.HashMap[Long, mutable.Set[String]]()
 
-  this.logIdent = "[Group Metadata Manager on Broker " + brokerId + "]: "
+  this.logIdent = s"[GroupMetadataManager brokerId=$brokerId] "
 
-  newGauge("NumOffsets",
+  private def recreateGauge[T](name: String, gauge: Gauge[T]): Gauge[T] = {
+    removeMetric(name)
+    newGauge(name, gauge)
+  }
+
+  recreateGauge("NumOffsets",
     new Gauge[Int] {
       def value = groupMetadataCache.values.map(group => {
         group synchronized { group.numOffsets }
       }).sum
-    }
-  )
+    })
 
-  newGauge("NumGroups",
+  recreateGauge("NumGroups",
     new Gauge[Int] {
       def value = groupMetadataCache.size
-    }
-  )
+    })
+
+  recreateGauge("NumGroupsPreparingRebalance",
+    new Gauge[Int] {
+      def value(): Int = groupMetadataCache.values.count(group => {
+        group synchronized { group.is(PreparingRebalance) }
+      })
+    })
+
+  recreateGauge("NumGroupsCompletingRebalance",
+    new Gauge[Int] {
+      def value(): Int = groupMetadataCache.values.count(group => {
+        group synchronized { group.is(CompletingRebalance) }
+      })
+    })
+
+  recreateGauge("NumGroupsStable",
+    new Gauge[Int] {
+      def value(): Int = groupMetadataCache.values.count(group => {
+        group synchronized { group.is(Stable) }
+      })
+    })
+
+  recreateGauge("NumGroupsDead",
+    new Gauge[Int] {
+      def value(): Int = groupMetadataCache.values.count(group => {
+        group synchronized { group.is(Dead) }
+      })
+    })
+
+  recreateGauge("NumGroupsEmpty",
+    new Gauge[Int] {
+      def value(): Int = groupMetadataCache.values.count(group => {
+        group synchronized { group.is(Empty) }
+      })
+    })
 
   def enableMetadataExpiration() {
     scheduler.startup()
@@ -243,8 +281,7 @@ class GroupMetadataManager(brokerId: Int,
       internalTopicsAllowed = true,
       isFromClient = false,
       entriesPerPartition = records,
-      responseCallback = callback,
-      delayedProduceLock = Some(group))
+      responseCallback = callback)
   }
 
   /**
@@ -697,8 +734,7 @@ class GroupMetadataManager(brokerId: Int,
           val timestampType = TimestampType.CREATE_TIME
           val timestamp = time.milliseconds()
 
-          val partitionOpt = replicaManager.getPartition(appendPartition).filter(_ ne ReplicaManager.OfflinePartition)
-          partitionOpt.foreach { partition =>
+          replicaManager.nonOfflinePartition(appendPartition).foreach { partition =>
             val tombstones = ListBuffer.empty[SimpleRecord]
             removedOffsets.foreach { case (topicPartition, offsetAndMetadata) =>
               trace(s"Removing expired/deleted offset and metadata for $groupId, $topicPartition: $offsetAndMetadata")

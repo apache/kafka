@@ -25,6 +25,7 @@ import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -38,6 +39,7 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.Serialized;
@@ -48,6 +50,7 @@ import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
+import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.TestUtils;
@@ -110,6 +113,8 @@ public class KStreamAggregationIntegrationTest {
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfiguration.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
 
         final KeyValueMapper<Integer, String, String> mapper = MockKeyValueMapper.SelectValueMapper();
         stream = builder.stream(streamOneInput, Consumed.with(Serdes.Integer(), Serdes.String()));
@@ -146,7 +151,7 @@ public class KStreamAggregationIntegrationTest {
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
 
-
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldReduce() throws Exception {
         produceMessages(mockTime.milliseconds());
@@ -254,6 +259,7 @@ public class KStreamAggregationIntegrationTest {
         ));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldAggregate() throws Exception {
         produceMessages(mockTime.milliseconds());
@@ -307,7 +313,8 @@ public class KStreamAggregationIntegrationTest {
                 .aggregate(
                         initializer,
                         aggregator,
-                        Serdes.Integer())
+                        Materialized.<String, Integer, WindowStore<Bytes, byte[]>>with(null, Serdes.Integer())
+                )
                 .toStream(new KeyValueMapper<Windowed<String>, Integer, String>() {
                     @Override
                     public String apply(final Windowed<String> windowedKey, final Integer value) {
@@ -388,6 +395,7 @@ public class KStreamAggregationIntegrationTest {
         )));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldCount() throws Exception {
         produceMessages(mockTime.milliseconds());
@@ -398,6 +406,7 @@ public class KStreamAggregationIntegrationTest {
         shouldCountHelper();
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldCountWithInternalStore() throws Exception {
         produceMessages(mockTime.milliseconds());
@@ -453,6 +462,7 @@ public class KStreamAggregationIntegrationTest {
 
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldCountSessionWindows() throws Exception {
         final long sessionGap = 5 * 60 * 1000L;
@@ -519,7 +529,7 @@ public class KStreamAggregationIntegrationTest {
 
         builder.stream(userSessionsStream, Consumed.with(Serdes.String(), Serdes.String()))
                 .groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
-                .count(SessionWindows.with(sessionGap).until(maintainMillis), "UserSessionsStore")
+                .count(SessionWindows.with(sessionGap).until(maintainMillis))
                 .toStream()
                 .foreach(new ForeachAction<Windowed<String>, Long>() {
                     @Override

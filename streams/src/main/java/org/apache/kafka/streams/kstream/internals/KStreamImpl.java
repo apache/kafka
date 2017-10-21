@@ -38,9 +38,10 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.WindowStore;
 
 import java.lang.reflect.Array;
 import java.util.Collections;
@@ -122,7 +123,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     @Override
     public KStream<K, V> filter(final Predicate<? super K, ? super V> predicate) {
         Objects.requireNonNull(predicate, "predicate can't be null");
-        String name = builder.newName(FILTER_NAME);
+        String name = builder.newProcessorName(FILTER_NAME);
 
         builder.internalTopologyBuilder.addProcessor(name, new KStreamFilter<>(predicate, false), this.name);
 
@@ -132,7 +133,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     @Override
     public KStream<K, V> filterNot(final Predicate<? super K, ? super V> predicate) {
         Objects.requireNonNull(predicate, "predicate can't be null");
-        String name = builder.newName(FILTER_NAME);
+        String name = builder.newProcessorName(FILTER_NAME);
 
         builder.internalTopologyBuilder.addProcessor(name, new KStreamFilter<>(predicate, true), this.name);
 
@@ -146,7 +147,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     private <K1> String internalSelectKey(final KeyValueMapper<? super K, ? super V, ? extends K1> mapper) {
-        String name = builder.newName(KEY_SELECT_NAME);
+        String name = builder.newProcessorName(KEY_SELECT_NAME);
         builder.internalTopologyBuilder.addProcessor(
             name,
             new KStreamMap<>(
@@ -165,7 +166,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     @Override
     public <K1, V1> KStream<K1, V1> map(final KeyValueMapper<? super K, ? super V, ? extends KeyValue<? extends K1, ? extends V1>> mapper) {
         Objects.requireNonNull(mapper, "mapper can't be null");
-        String name = builder.newName(MAP_NAME);
+        String name = builder.newProcessorName(MAP_NAME);
 
         builder.internalTopologyBuilder.addProcessor(name, new KStreamMap<>(mapper), this.name);
 
@@ -176,29 +177,33 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     @Override
     public <V1> KStream<K, V1> mapValues(final ValueMapper<? super V, ? extends V1> mapper) {
         Objects.requireNonNull(mapper, "mapper can't be null");
-        String name = builder.newName(MAPVALUES_NAME);
+        String name = builder.newProcessorName(MAPVALUES_NAME);
 
         builder.internalTopologyBuilder.addProcessor(name, new KStreamMapValues<>(mapper), this.name);
 
         return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void print() {
         print(defaultKeyValueMapper, null, null, this.name);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void print(final String label) {
         print(defaultKeyValueMapper, null, null, label);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void print(final Serde<K> keySerde,
                       final Serde<V> valSerde) {
         print(defaultKeyValueMapper, keySerde, valSerde, this.name);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void print(final Serde<K> keySerde,
                       final Serde<V> valSerde,
@@ -206,17 +211,20 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         print(defaultKeyValueMapper, keySerde, valSerde, label);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void print(final KeyValueMapper<? super K, ? super V, String> mapper) {
         print(mapper, null, null, this.name);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void print(final KeyValueMapper<? super K, ? super V, String> mapper,
                       final String label) {
         print(mapper, null, null, label);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void print(final KeyValueMapper<? super K, ? super V, String> mapper,
                       final Serde<K> keySerde,
@@ -224,6 +232,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         print(mapper, keySerde, valSerde, this.name);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void print(final KeyValueMapper<? super K, ? super V, String> mapper,
                       final Serde<K> keySerde,
@@ -238,21 +247,24 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public void print(final Printed<K, V> printed) {
         Objects.requireNonNull(printed, "printed can't be null");
         final PrintedInternal<K, V> printedInternal = new PrintedInternal<>(printed);
-        final String name = builder.newName(PRINTING_NAME);
+        final String name = builder.newProcessorName(PRINTING_NAME);
         builder.internalTopologyBuilder.addProcessor(name, printedInternal.build(this.name), this.name);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void writeAsText(final String filePath) {
         writeAsText(filePath, this.name, null, null, defaultKeyValueMapper);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void writeAsText(final String filePath,
                             final String label) {
         writeAsText(filePath, label, null, null, defaultKeyValueMapper);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void writeAsText(final String filePath,
                             final Serde<K> keySerde,
@@ -260,6 +272,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         writeAsText(filePath, this.name, keySerde, valSerde, defaultKeyValueMapper);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void writeAsText(final String filePath,
                             final String label,
@@ -268,12 +281,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         writeAsText(filePath, label, keySerde, valSerde, defaultKeyValueMapper);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void writeAsText(final String filePath,
                             final KeyValueMapper<? super K, ? super V, String> mapper) {
         writeAsText(filePath, this.name, null, null, mapper);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void writeAsText(final String filePath,
                             final String label,
@@ -281,6 +296,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         writeAsText(filePath, label, null, null, mapper);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void writeAsText(final String filePath,
                             final Serde<K> keySerde,
@@ -289,6 +305,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         writeAsText(filePath, this.name, keySerde, valSerde, mapper);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void writeAsText(final String filePath,
                             final String label,
@@ -303,7 +320,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     @Override
     public <K1, V1> KStream<K1, V1> flatMap(final KeyValueMapper<? super K, ? super V, ? extends Iterable<? extends KeyValue<? extends K1, ? extends V1>>> mapper) {
         Objects.requireNonNull(mapper, "mapper can't be null");
-        String name = builder.newName(FLATMAP_NAME);
+        String name = builder.newProcessorName(FLATMAP_NAME);
 
         builder.internalTopologyBuilder.addProcessor(name, new KStreamFlatMap<>(mapper), this.name);
 
@@ -313,7 +330,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     @Override
     public <V1> KStream<K, V1> flatMapValues(final ValueMapper<? super V, ? extends Iterable<? extends V1>> mapper) {
         Objects.requireNonNull(mapper, "mapper can't be null");
-        String name = builder.newName(FLATMAPVALUES_NAME);
+        String name = builder.newProcessorName(FLATMAPVALUES_NAME);
 
         builder.internalTopologyBuilder.addProcessor(name, new KStreamFlatMapValues<>(mapper), this.name);
 
@@ -329,13 +346,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         for (final Predicate<? super K, ? super V> predicate : predicates) {
             Objects.requireNonNull(predicate, "predicates can't have null values");
         }
-        String branchName = builder.newName(BRANCH_NAME);
+        String branchName = builder.newProcessorName(BRANCH_NAME);
 
         builder.internalTopologyBuilder.addProcessor(branchName, new KStreamBranch(predicates.clone()), this.name);
 
         KStream<K, V>[] branchChildren = (KStream<K, V>[]) Array.newInstance(KStream.class, predicates.length);
         for (int i = 0; i < predicates.length; i++) {
-            String childName = builder.newName(BRANCHCHILD_NAME);
+            String childName = builder.newProcessorName(BRANCHCHILD_NAME);
 
             builder.internalTopologyBuilder.addProcessor(childName, new KStreamPassThrough<K, V>(), branchName);
 
@@ -345,30 +362,29 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         return branchChildren;
     }
 
-    public static <K, V> KStream<K, V> merge(final InternalStreamsBuilder builder,
-                                             final KStream<K, V>[] streams) {
-        if (streams == null || streams.length == 0) {
-            throw new IllegalArgumentException("Parameter <streams> must not be null or has length zero");
-        }
-
-        String name = builder.newName(MERGE_NAME);
-        String[] parentNames = new String[streams.length];
+    @Override 
+    public KStream<K, V> merge(final KStream<K, V> stream) {
+        Objects.requireNonNull(stream);
+        return merge(builder, stream);
+    }
+    
+    private KStream<K, V> merge(final InternalStreamsBuilder builder,
+                                final KStream<K, V> stream) {
+        KStreamImpl<K, V> streamImpl = (KStreamImpl<K, V>) stream;
+        String name = builder.newProcessorName(MERGE_NAME);
+        String[] parentNames = {this.name, streamImpl.name};
         Set<String> allSourceNodes = new HashSet<>();
-        boolean requireRepartitioning = false;
 
-        for (int i = 0; i < streams.length; i++) {
-            KStreamImpl<K, V> stream = (KStreamImpl<K, V>) streams[i];
-
-            parentNames[i] = stream.name;
-            requireRepartitioning |= stream.repartitionRequired;
-            allSourceNodes.addAll(stream.sourceNodes);
-        }
+        boolean requireRepartitioning = streamImpl.repartitionRequired || repartitionRequired;
+        allSourceNodes.addAll(sourceNodes);
+        allSourceNodes.addAll(streamImpl.sourceNodes);
 
         builder.internalTopologyBuilder.addProcessor(name, new KStreamPassThrough<>(), parentNames);
 
         return new KStreamImpl<>(builder, name, allSourceNodes, requireRepartitioning);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public KStream<K, V> through(final Serde<K> keySerde,
                                  final Serde<V> valSerde,
@@ -390,7 +406,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     @Override
     public void foreach(final ForeachAction<? super K, ? super V> action) {
         Objects.requireNonNull(action, "action can't be null");
-        String name = builder.newName(FOREACH_NAME);
+        String name = builder.newProcessorName(FOREACH_NAME);
 
         builder.internalTopologyBuilder.addProcessor(name, new KStreamPeek<>(action, false), this.name);
     }
@@ -398,13 +414,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     @Override
     public KStream<K, V> peek(final ForeachAction<? super K, ? super V> action) {
         Objects.requireNonNull(action, "action can't be null");
-        final String name = builder.newName(PEEK_NAME);
+        final String name = builder.newProcessorName(PEEK_NAME);
 
         builder.internalTopologyBuilder.addProcessor(name, new KStreamPeek<>(action, true), this.name);
 
         return new KStreamImpl<>(builder, name, sourceNodes, repartitionRequired);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public KStream<K, V> through(final Serde<K> keySerde,
                                  final Serde<V> valSerde,
@@ -412,6 +429,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         return through(topic, Produced.with(keySerde, valSerde));
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public KStream<K, V> through(final StreamPartitioner<? super K, ? super V> partitioner,
                                  final String topic) {
@@ -428,12 +446,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         to(topic, Produced.<K, V>with(null, null, null));
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void to(final StreamPartitioner<? super K, ? super V> partitioner,
                    final String topic) {
         to(topic, Produced.streamPartitioner(partitioner));
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void to(final Serde<K> keySerde,
                    final Serde<V> valSerde,
@@ -441,7 +461,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         to(topic, Produced.with(keySerde, valSerde));
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "deprecation"})
     @Override
     public void to(final Serde<K> keySerde,
                    final Serde<V> valSerde,
@@ -460,8 +480,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     }
 
+    @SuppressWarnings("unchecked")
     private void to(final String topic, final ProducedInternal<K, V> produced) {
-        final String name = builder.newName(SINK_NAME);
+        final String name = builder.newProcessorName(SINK_NAME);
         final Serializer<K> keySerializer = produced.keySerde() == null ? null : produced.keySerde().serializer();
         final Serializer<V> valSerializer = produced.valueSerde() == null ? null : produced.valueSerde().serializer();
         final StreamPartitioner<? super K, ? super V> partitioner = produced.streamPartitioner();
@@ -479,7 +500,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public <K1, V1> KStream<K1, V1> transform(final TransformerSupplier<? super K, ? super V, KeyValue<K1, V1>> transformerSupplier,
                                               final String... stateStoreNames) {
         Objects.requireNonNull(transformerSupplier, "transformerSupplier can't be null");
-        String name = builder.newName(TRANSFORM_NAME);
+        String name = builder.newProcessorName(TRANSFORM_NAME);
 
         builder.internalTopologyBuilder.addProcessor(name, new KStreamTransform<>(transformerSupplier), this.name);
         if (stateStoreNames != null && stateStoreNames.length > 0) {
@@ -493,7 +514,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public <V1> KStream<K, V1> transformValues(final ValueTransformerSupplier<? super V, ? extends V1> valueTransformerSupplier,
                                                final String... stateStoreNames) {
         Objects.requireNonNull(valueTransformerSupplier, "valueTransformSupplier can't be null");
-        String name = builder.newName(TRANSFORMVALUES_NAME);
+        String name = builder.newProcessorName(TRANSFORMVALUES_NAME);
 
         builder.internalTopologyBuilder.addProcessor(name, new KStreamTransformValues<>(valueTransformerSupplier), this.name);
         if (stateStoreNames != null && stateStoreNames.length > 0) {
@@ -506,7 +527,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     @Override
     public void process(final ProcessorSupplier<? super K, ? super V> processorSupplier,
                         final String... stateStoreNames) {
-        final String name = builder.newName(PROCESSOR_NAME);
+        final String name = builder.newProcessorName(PROCESSOR_NAME);
 
         builder.internalTopologyBuilder.addProcessor(name, processorSupplier, this.name);
         if (stateStoreNames != null && stateStoreNames.length > 0) {
@@ -514,6 +535,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public <V1, R> KStream<K, R> join(final KStream<K, V1> other,
                                       final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
@@ -541,6 +563,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                              new KStreamImplJoin(false, false));
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public <V1, R> KStream<K, R> outerJoin(final KStream<K, V1> other,
                                            final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
@@ -605,42 +628,44 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
      */
     private KStreamImpl<K, V> repartitionForJoin(final Serde<K> keySerde,
                                                  final Serde<V> valSerde) {
-        String repartitionedSourceName = createReparitionedSource(this, keySerde, valSerde, null);
+        String repartitionedSourceName = createReparitionedSource(builder, keySerde, valSerde, null, name);
         return new KStreamImpl<>(builder, repartitionedSourceName, Collections
             .singleton(repartitionedSourceName), false);
     }
 
-    static <K1, V1> String createReparitionedSource(final AbstractStream<K1> stream,
+    static <K1, V1> String createReparitionedSource(final InternalStreamsBuilder builder,
                                                     final Serde<K1> keySerde,
                                                     final Serde<V1> valSerde,
-                                                    final String topicNamePrefix) {
+                                                    final String topicNamePrefix,
+                                                    final String name) {
         Serializer<K1> keySerializer = keySerde != null ? keySerde.serializer() : null;
         Serializer<V1> valSerializer = valSerde != null ? valSerde.serializer() : null;
         Deserializer<K1> keyDeserializer = keySerde != null ? keySerde.deserializer() : null;
         Deserializer<V1> valDeserializer = valSerde != null ? valSerde.deserializer() : null;
-        String baseName = topicNamePrefix != null ? topicNamePrefix : stream.name;
+        String baseName = topicNamePrefix != null ? topicNamePrefix : name;
 
         String repartitionTopic = baseName + REPARTITION_TOPIC_SUFFIX;
-        String sinkName = stream.builder.newName(SINK_NAME);
-        String filterName = stream.builder.newName(FILTER_NAME);
-        String sourceName = stream.builder.newName(SOURCE_NAME);
+        String sinkName = builder.newProcessorName(SINK_NAME);
+        String filterName = builder.newProcessorName(FILTER_NAME);
+        String sourceName = builder.newProcessorName(SOURCE_NAME);
 
-        stream.builder.internalTopologyBuilder.addInternalTopic(repartitionTopic);
-        stream.builder.internalTopologyBuilder.addProcessor(filterName, new KStreamFilter<>(new Predicate<K1, V1>() {
+        builder.internalTopologyBuilder.addInternalTopic(repartitionTopic);
+        builder.internalTopologyBuilder.addProcessor(filterName, new KStreamFilter<>(new Predicate<K1, V1>() {
             @Override
             public boolean test(final K1 key, final V1 value) {
                 return key != null;
             }
-        }, false), stream.name);
+        }, false), name);
 
-        stream.builder.internalTopologyBuilder.addSink(sinkName, repartitionTopic, keySerializer, valSerializer,
+        builder.internalTopologyBuilder.addSink(sinkName, repartitionTopic, keySerializer, valSerializer,
             null, filterName);
-        stream.builder.internalTopologyBuilder.addSource(null, sourceName, new FailOnInvalidTimestamp(),
+        builder.internalTopologyBuilder.addSource(null, sourceName, new FailOnInvalidTimestamp(),
             keyDeserializer, valDeserializer, repartitionTopic);
 
         return sourceName;
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public <V1, R> KStream<K, R> leftJoin(final KStream<K, V1> other,
                                           final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
@@ -696,6 +721,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public <V1, R> KStream<K, R> join(final KTable<K, V1> other,
                                       final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
@@ -727,11 +753,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         Objects.requireNonNull(joiner, "joiner can't be null");
 
         final KTableValueGetterSupplier<K1, V1> valueGetterSupplier = ((GlobalKTableImpl<K1, V1>) globalTable).valueGetterSupplier();
-        final String name = builder.newName(LEFTJOIN_NAME);
+        final String name = builder.newProcessorName(LEFTJOIN_NAME);
         builder.internalTopologyBuilder.addProcessor(name, new KStreamGlobalKTableJoin<>(valueGetterSupplier, joiner, keyMapper, leftJoin), this.name);
         return new KStreamImpl<>(builder, name, sourceNodes, false);
     }
 
+    @SuppressWarnings("unchecked")
     private <V1, R> KStream<K, R> doStreamTableJoin(final KTable<K, V1> other,
                                                     final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
                                                     final boolean leftJoin) {
@@ -740,7 +767,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         final Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K>) other);
 
-        final String name = builder.newName(leftJoin ? LEFTJOIN_NAME : JOIN_NAME);
+        final String name = builder.newProcessorName(leftJoin ? LEFTJOIN_NAME : JOIN_NAME);
         builder.internalTopologyBuilder.addProcessor(name, new KStreamKTableJoin<>(((KTableImpl<K, ?, V1>) other).valueGetterSupplier(), joiner, leftJoin), this.name);
         builder.internalTopologyBuilder.connectProcessorAndStateStores(name, ((KTableImpl<K, ?, V1>) other).internalStoreName());
         builder.internalTopologyBuilder.connectProcessors(this.name, ((KTableImpl<K, ?, V1>) other).name);
@@ -768,6 +795,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         }
     }
 
+    @SuppressWarnings("deprecation")
+    @Override
     public <V1, R> KStream<K, R> leftJoin(final KTable<K, V1> other,
                                           final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
                                           final Serde<K> keySerde,
@@ -795,6 +824,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                         true);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public <K1> KGroupedStream<K1, V> groupBy(final KeyValueMapper<? super K, ? super V, K1> selector,
                                               final Serde<K1> keySerde,
@@ -820,22 +850,23 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public KGroupedStream<K, V> groupByKey(final Serde<K> keySerde,
                                            final Serde<V> valSerde) {
         return groupByKey(Serialized.with(keySerde, valSerde));
     }
 
-    private static <K, V> StateStoreSupplier createWindowedStateStore(final JoinWindows windows,
-                                                                      final Serde<K> keySerde,
-                                                                      final Serde<V> valueSerde,
-                                                                      final String storeName) {
-        return Stores.create(storeName)
-            .withKeys(keySerde)
-            .withValues(valueSerde)
-            .persistent()
-            .windowed(windows.size(), windows.maintainMs(), windows.segments, true)
-            .build();
+    private static <K, V> StoreBuilder<WindowStore<K, V>> createWindowedStateStore(final JoinWindows windows,
+                                                                                   final Serde<K> keySerde,
+                                                                                   final Serde<V> valueSerde,
+                                                                                   final String storeName) {
+        return Stores.windowStoreBuilder(Stores.persistentWindowStore(storeName,
+                                                                      windows.maintainMs(),
+                                                                      windows.segments,
+                                                                      windows.size(),
+                                                                      true), keySerde, valueSerde);
+
     }
 
     private class KStreamImplJoin {
@@ -849,21 +880,22 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             this.rightOuter = rightOuter;
         }
 
+        @SuppressWarnings("unchecked")
         public <K1, R, V1, V2> KStream<K1, R> join(final KStream<K1, V1> lhs,
                                                    final KStream<K1, V2> other,
                                                    final ValueJoiner<? super V1, ? super V2, ? extends R> joiner,
                                                    final JoinWindows windows,
-                                                   final Joined joined) {
-            String thisWindowStreamName = builder.newName(WINDOWED_NAME);
-            String otherWindowStreamName = builder.newName(WINDOWED_NAME);
-            String joinThisName = rightOuter ? builder.newName(OUTERTHIS_NAME) : builder.newName(JOINTHIS_NAME);
-            String joinOtherName = leftOuter ? builder.newName(OUTEROTHER_NAME) : builder.newName(JOINOTHER_NAME);
-            String joinMergeName = builder.newName(MERGE_NAME);
+                                                   final Joined<K1, V1, V2> joined) {
+            String thisWindowStreamName = builder.newProcessorName(WINDOWED_NAME);
+            String otherWindowStreamName = builder.newProcessorName(WINDOWED_NAME);
+            String joinThisName = rightOuter ? builder.newProcessorName(OUTERTHIS_NAME) : builder.newProcessorName(JOINTHIS_NAME);
+            String joinOtherName = leftOuter ? builder.newProcessorName(OUTEROTHER_NAME) : builder.newProcessorName(JOINOTHER_NAME);
+            String joinMergeName = builder.newProcessorName(MERGE_NAME);
 
-            StateStoreSupplier thisWindow =
+            final StoreBuilder<WindowStore<K1, V1>> thisWindow =
                 createWindowedStateStore(windows, joined.keySerde(), joined.valueSerde(), joinThisName + "-store");
 
-            StateStoreSupplier otherWindow =
+            final StoreBuilder<WindowStore<K1, V2>> otherWindow =
                 createWindowedStateStore(windows, joined.keySerde(), joined.otherValueSerde(), joinOtherName + "-store");
 
 

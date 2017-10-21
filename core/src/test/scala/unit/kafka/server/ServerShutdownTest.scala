@@ -24,6 +24,7 @@ import kafka.api.FetchRequestBuilder
 import kafka.message.ByteBufferMessageSet
 import java.io.File
 
+import kafka.log.LogManager
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.serialization.{IntegerSerializer, StringSerializer}
 import org.junit.{Before, Test}
@@ -67,7 +68,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     // do a clean shutdown and check that offset checkpoint file exists
     server.shutdown()
     for (logDir <- config.logDirs) {
-      val OffsetCheckpointFile = new File(logDir, server.logManager.RecoveryPointCheckpointFile)
+      val OffsetCheckpointFile = new File(logDir, LogManager.RecoveryPointCheckpointFile)
       assertTrue(OffsetCheckpointFile.exists)
       assertTrue(OffsetCheckpointFile.length() > 0)
     }
