@@ -242,3 +242,13 @@ object PreferredReplicaElectionZNode {
     }
   }.map(_.toSet).getOrElse(Set.empty)
 }
+
+object ConsumerOffset {
+  def path(group: String, topic: String, partition: Integer) = s"/consumers/${group}/offset/${topic}/${partition}"
+  def encode(offset: Long): Array[Byte] = offset.toString.getBytes("UTF-8")
+  def decode(bytes: Array[Byte]) : Option[Long] = Option(new String(bytes, "UTF-8").toLong)
+}
+
+object Version {
+  def noVersion = -1
+}
