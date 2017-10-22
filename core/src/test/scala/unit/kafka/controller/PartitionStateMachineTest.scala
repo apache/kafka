@@ -22,7 +22,7 @@ import kafka.controller.KafkaControllerZkUtils.UpdateLeaderAndIsrResult
 import kafka.log.LogConfig
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import kafka.zookeeper.{CreateResponse, GetDataResponse, ZookeeperClientException}
+import kafka.zookeeper.{CreateResponse, GetDataResponse, ZooKeeperClientException}
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.Stat
 import org.easymock.EasyMock
@@ -102,7 +102,7 @@ class PartitionStateMachineTest extends JUnitSuite {
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(brokerId, List(brokerId)), controllerEpoch)
     EasyMock.expect(mockControllerBrokerRequestBatch.newBatch())
     EasyMock.expect(mockZkUtils.createTopicPartitionStatesRaw(Map(partition -> leaderIsrAndControllerEpoch)))
-      .andThrow(new ZookeeperClientException("test"))
+      .andThrow(new ZooKeeperClientException("test"))
     EasyMock.expect(mockControllerBrokerRequestBatch.sendRequestsToBrokers(controllerEpoch))
     EasyMock.replay(mockZkUtils, mockControllerBrokerRequestBatch)
     partitionStateMachine.handleStateChanges(partitions, OnlinePartition, Option(OfflinePartitionLeaderElectionStrategy))
@@ -265,7 +265,7 @@ class PartitionStateMachineTest extends JUnitSuite {
 
     EasyMock.expect(mockControllerBrokerRequestBatch.newBatch())
     EasyMock.expect(mockZkUtils.getTopicPartitionStatesRaw(partitions))
-      .andThrow(new ZookeeperClientException(""))
+      .andThrow(new ZooKeeperClientException(""))
 
     EasyMock.expect(mockControllerBrokerRequestBatch.sendRequestsToBrokers(controllerEpoch))
     EasyMock.replay(mockZkUtils, mockControllerBrokerRequestBatch)

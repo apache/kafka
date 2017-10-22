@@ -44,7 +44,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
     new ZooKeeperClient("some.invalid.hostname.foo.bar.local", -1, -1, null)
   }
 
-  @Test(expected = classOf[ZookeeperClientTimeoutException])
+  @Test(expected = classOf[ZooKeeperClientTimeoutException])
   def testConnectionTimeout(): Unit = {
     zookeeper.shutdown()
     new ZooKeeperClient(zkConnect, zkSessionTimeout, connectionTimeoutMs = 100, null)

@@ -542,7 +542,7 @@ class KafkaControllerZkUtils(zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   }
 
   /**
-   * See ZookeeperClient.registerZNodeChangeHandler
+   * See ZooKeeperClient.registerZNodeChangeHandler
    * @param zNodeChangeHandler
    */
   def registerZNodeChangeHandler(zNodeChangeHandler: ZNodeChangeHandler): Unit = {
@@ -550,7 +550,7 @@ class KafkaControllerZkUtils(zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   }
 
   /**
-   * See ZookeeperClient.unregisterZNodeChangeHandler
+   * See ZooKeeperClient.unregisterZNodeChangeHandler
    * @param path
    */
   def unregisterZNodeChangeHandler(path: String): Unit = {
@@ -558,7 +558,7 @@ class KafkaControllerZkUtils(zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   }
 
   /**
-   * See ZookeeperClient.registerZNodeChildChangeHandler
+   * See ZooKeeperClient.registerZNodeChildChangeHandler
    * @param zNodeChildChangeHandler
    */
   def registerZNodeChildChangeHandler(zNodeChildChangeHandler: ZNodeChildChangeHandler): Unit = {
@@ -566,7 +566,7 @@ class KafkaControllerZkUtils(zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   }
 
   /**
-   * See ZookeeperClient.unregisterZNodeChildChangeHandler
+   * See ZooKeeperClient.unregisterZNodeChildChangeHandler
    * @param path
    */
   def unregisterZNodeChildChangeHandler(path: String): Unit = {
@@ -574,7 +574,7 @@ class KafkaControllerZkUtils(zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   }
 
   /**
-   * Close the underlying ZookeeperClient.
+   * Close the underlying ZooKeeperClient.
    */
   def close(): Unit = {
     zooKeeperClient.close()
