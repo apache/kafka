@@ -17,9 +17,10 @@
 package kafka.coordinator.group
 
 import java.util.UUID
+import java.util.concurrent.locks.ReentrantLock
 
 import kafka.common.OffsetAndMetadata
-import kafka.utils.{Logging, nonthreadsafe}
+import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
 import org.apache.kafka.common.TopicPartition
 
 import scala.collection.{Seq, immutable, mutable}
@@ -154,6 +155,8 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   private var state: GroupState = initialState
 
+  private[group] val lock = new ReentrantLock
+
   private val members = new mutable.HashMap[String, MemberMetadata]
 
   private val offsets = new mutable.HashMap[TopicPartition, CommitRecordMetadataAndOffset]
@@ -171,6 +174,8 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   var leaderId: String = null
   var protocol: String = null
   var newMemberAdded: Boolean = false
+
+  def inLock[T](fun: => T): T = CoreUtils.inLock(lock)(fun)
 
   def is(groupState: GroupState) = state == groupState
   def not(groupState: GroupState) = state != groupState

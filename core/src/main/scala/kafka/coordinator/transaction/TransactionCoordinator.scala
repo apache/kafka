@@ -137,7 +137,7 @@ class TransactionCoordinator(brokerId: Int,
           val coordinatorEpoch = existingEpochAndMetadata.coordinatorEpoch
           val txnMetadata = existingEpochAndMetadata.transactionMetadata
 
-          txnMetadata synchronized {
+          txnMetadata.inLock {
             prepareInitProduceIdTransit(transactionalId, transactionTimeoutMs, coordinatorEpoch, txnMetadata)
           }
       }
@@ -241,7 +241,7 @@ class TransactionCoordinator(brokerId: Int,
           val txnMetadata = epochAndMetadata.transactionMetadata
 
           // generate the new transaction metadata with added partitions
-          txnMetadata synchronized {
+          txnMetadata.inLock {
             if (txnMetadata.producerId != producerId) {
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
             } else if (txnMetadata.producerEpoch != producerEpoch) {
@@ -304,7 +304,7 @@ class TransactionCoordinator(brokerId: Int,
           val txnMetadata = epochAndTxnMetadata.transactionMetadata
           val coordinatorEpoch = epochAndTxnMetadata.coordinatorEpoch
 
-          txnMetadata synchronized {
+          txnMetadata.inLock {
             if (txnMetadata.producerId != producerId)
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
             else if (txnMetadata.producerEpoch != producerEpoch)
@@ -368,7 +368,7 @@ class TransactionCoordinator(brokerId: Int,
                 case Some(epochAndMetadata) =>
                   if (epochAndMetadata.coordinatorEpoch == coordinatorEpoch) {
                     val txnMetadata = epochAndMetadata.transactionMetadata
-                    txnMetadata synchronized {
+                    txnMetadata.inLock {
                       if (txnMetadata.producerId != producerId)
                         Left(Errors.INVALID_PRODUCER_ID_MAPPING)
                       else if (txnMetadata.producerEpoch != producerEpoch)

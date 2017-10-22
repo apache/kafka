@@ -16,6 +16,8 @@
  */
 package kafka.coordinator.transaction
 
+import java.util.concurrent.locks.ReentrantReadWriteLock
+
 import kafka.server.{DelayedOperationPurgatory, KafkaConfig, MetadataCache}
 import kafka.utils.timer.MockTimer
 import kafka.utils.TestUtils
@@ -86,7 +88,10 @@ class TransactionMarkerChannelManagerTest {
     EasyMock.expect(txnStateManager.getTransactionState(EasyMock.eq(transactionalId2)))
       .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata2))))
       .anyTimes()
-
+    val stateLock = new ReentrantReadWriteLock
+    EasyMock.expect(txnStateManager.stateReadLock)
+      .andReturn(stateLock.readLock)
+      .anyTimes()
   }
 
   @Test
