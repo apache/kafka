@@ -40,6 +40,12 @@ import scala.math.max
  *
  * Each Kafka server instantiates a coordinator which is responsible for a set of
  * groups. Groups are assigned to coordinators based on their group names.
+ * <p>
+ * <b>Delayed operation locking notes:</b>
+ * Delayed operations in GroupCoordinator use `group` as the delayed operation
+ * lock. ReplicaManager.appendRecords may be invoked while holding the group lock
+ * used by its callback.  The delayed callback may acquire the group lock
+ * since the delayed operation is completed only if the group lock can be acquired.
  */
 class GroupCoordinator(val brokerId: Int,
                        val groupConfig: GroupConfig,
@@ -142,7 +148,7 @@ class GroupCoordinator(val brokerId: Int,
                           protocolType: String,
                           protocols: List[(String, Array[Byte])],
                           responseCallback: JoinCallback) {
-    group synchronized {
+    group.inLock {
       if (!group.is(Empty) && (!group.protocolType.contains(protocolType) || !group.supportsProtocols(protocols.map(_._1).toSet))) {
         // if the new member does not support the group protocol, reject it
         responseCallback(joinError(memberId, Errors.INCONSISTENT_GROUP_PROTOCOL))
@@ -248,7 +254,7 @@ class GroupCoordinator(val brokerId: Int,
                           memberId: String,
                           groupAssignment: Map[String, Array[Byte]],
                           responseCallback: SyncCallback) {
-    group synchronized {
+    group.inLock {
       if (!group.has(memberId)) {
         responseCallback(Array.empty, Errors.UNKNOWN_MEMBER_ID)
       } else if (generationId != group.generationId) {
@@ -273,7 +279,7 @@ class GroupCoordinator(val brokerId: Int,
               val assignment = groupAssignment ++ missing.map(_ -> Array.empty[Byte]).toMap
 
               groupManager.storeGroup(group, assignment, (error: Errors) => {
-                group synchronized {
+                group.inLock {
                   // another member may have joined the group while we were awaiting this callback,
                   // so we must ensure we are still in the CompletingRebalance state and the same generation
                   // when it gets invoked. if we have transitioned to another state, then do nothing
@@ -317,7 +323,7 @@ class GroupCoordinator(val brokerId: Int,
           responseCallback(Errors.UNKNOWN_MEMBER_ID)
 
         case Some(group) =>
-          group synchronized {
+          group.inLock {
             if (group.is(Dead) || !group.has(memberId)) {
               responseCallback(Errors.UNKNOWN_MEMBER_ID)
             } else {
@@ -349,7 +355,7 @@ class GroupCoordinator(val brokerId: Int,
           responseCallback(Errors.UNKNOWN_MEMBER_ID)
 
         case Some(group) =>
-          group synchronized {
+          group.inLock {
             group.currentState match {
               case Dead =>
                 // if the group is marked as dead, it means some other thread has just removed the group
@@ -449,7 +455,7 @@ class GroupCoordinator(val brokerId: Int,
                               producerEpoch: Short,
                               offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
                               responseCallback: immutable.Map[TopicPartition, Errors] => Unit) {
-    group synchronized {
+    group.inLock {
       if (group.is(Dead)) {
         responseCallback(offsetMetadata.mapValues(_ => Errors.UNKNOWN_MEMBER_ID))
       } else if ((generationId < 0 && group.is(Empty)) || (producerId != NO_PRODUCER_ID)) {
@@ -506,7 +512,7 @@ class GroupCoordinator(val brokerId: Int,
       groupManager.getGroup(groupId) match {
         case None => (Errors.NONE, GroupCoordinator.DeadGroup)
         case Some(group) =>
-          group synchronized {
+          group.inLock {
             (Errors.NONE, group.summary)
           }
       }
@@ -529,7 +535,7 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   private def onGroupUnloaded(group: GroupMetadata) {
-    group synchronized {
+    group.inLock {
       info(s"Unloading group metadata for ${group.groupId} with generation ${group.generationId}")
       val previousState = group.currentState
       group.transitionTo(Dead)
@@ -558,7 +564,7 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   private def onGroupLoaded(group: GroupMetadata) {
-    group synchronized {
+    group.inLock {
       info(s"Loading group metadata for ${group.groupId} with generation ${group.generationId}")
       assert(group.is(Stable) || group.is(Empty))
       group.allMemberMetadata.foreach(completeAndScheduleNextHeartbeatExpiration(group, _))
@@ -666,7 +672,7 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   private def maybePrepareRebalance(group: GroupMetadata) {
-    group synchronized {
+    group.inLock {
       if (group.canRebalance)
         prepareRebalance(group)
     }
@@ -706,7 +712,7 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   def tryCompleteJoin(group: GroupMetadata, forceComplete: () => Boolean) = {
-    group synchronized {
+    group.inLock {
       if (group.notYetRejoinedMembers.isEmpty)
         forceComplete()
       else false
@@ -718,7 +724,7 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   def onCompleteJoin(group: GroupMetadata) {
-    group synchronized {
+    group.inLock {
       // remove any members who haven't joined the group yet
       group.notYetRejoinedMembers.foreach { failedMember =>
         group.remove(failedMember.memberId)
@@ -768,7 +774,7 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   def tryCompleteHeartbeat(group: GroupMetadata, member: MemberMetadata, heartbeatDeadline: Long, forceComplete: () => Boolean) = {
-    group synchronized {
+    group.inLock {
       if (shouldKeepMemberAlive(member, heartbeatDeadline) || member.isLeaving)
         forceComplete()
       else false
@@ -776,7 +782,7 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   def onExpireHeartbeat(group: GroupMetadata, member: MemberMetadata, heartbeatDeadline: Long) {
-    group synchronized {
+    group.inLock {
       if (!shouldKeepMemberAlive(member, heartbeatDeadline)) {
         info(s"Member ${member.memberId} in group ${group.groupId} has failed, removing it from the group")
         removeMemberAndUpdateGroup(group, member)
