@@ -156,9 +156,9 @@ class KafkaController(val config: KafkaConfig, zkUtils: KafkaControllerZkUtils, 
    * This ensures another controller election will be triggered and there will always be an actively serving controller
    */
   def onControllerFailover() {
-    info("Reading controller epoch from zookeeper")
-    readControllerEpochFromZookeeper()
-    info("Incrementing controller epoch in zookeeper")
+    info("Reading controller epoch from ZooKeeper")
+    readControllerEpochFromZooKeeper()
+    info("Incrementing controller epoch in ZooKeeper")
     incrementControllerEpoch()
     info("Registering handlers")
 
@@ -789,7 +789,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: KafkaControllerZkUtils, 
     }
   }
 
-  private def readControllerEpochFromZookeeper() {
+  private def readControllerEpochFromZooKeeper() {
     // initialize the controller epoch and zk version by reading from zookeeper
     val epochAndStatOpt = zkUtils.getControllerEpoch
     epochAndStatOpt.foreach { case (epoch, stat) =>
