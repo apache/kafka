@@ -58,42 +58,42 @@ class ZookeeperClientTest extends ZooKeeperTestHarness {
   @Test
   def testDeleteNonExistentZNode(): Unit = {
     val zookeeperClient = new ZookeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, null)
-    val deleteResponse = zookeeperClient.handle(DeleteRequest(mockPath, -1, null)).asInstanceOf[DeleteResponse]
-    assertEquals("Response code should be NONODE", Code.NONODE, Code.get(deleteResponse.rc))
+    val deleteResponse = zookeeperClient.handleRequest(DeleteRequest(mockPath, -1))
+    assertEquals("Response code should be NONODE", Code.NONODE, deleteResponse.resultCode)
   }
 
   @Test
   def testDeleteExistingZNode(): Unit = {
     import scala.collection.JavaConverters._
     val zookeeperClient = new ZookeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, null)
-    val createResponse = zookeeperClient.handle(CreateRequest(mockPath, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT, null))
-    assertEquals("Response code for create should be OK", Code.OK, Code.get(createResponse.rc))
-    val deleteResponse = zookeeperClient.handle(DeleteRequest(mockPath, -1, null)).asInstanceOf[DeleteResponse]
-    assertEquals("Response code for delete should be OK", Code.OK, Code.get(deleteResponse.rc))
+    val createResponse = zookeeperClient.handleRequest(CreateRequest(mockPath, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT))
+    assertEquals("Response code for create should be OK", Code.OK, createResponse.resultCode)
+    val deleteResponse = zookeeperClient.handleRequest(DeleteRequest(mockPath, -1))
+    assertEquals("Response code for delete should be OK", Code.OK, deleteResponse.resultCode)
   }
 
   @Test
   def testExistsNonExistentZNode(): Unit = {
     val zookeeperClient = new ZookeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, null)
-    val existsResponse = zookeeperClient.handle(ExistsRequest(mockPath, null)).asInstanceOf[ExistsResponse]
-    assertEquals("Response code should be NONODE", Code.NONODE, Code.get(existsResponse.rc))
+    val existsResponse = zookeeperClient.handleRequest(ExistsRequest(mockPath))
+    assertEquals("Response code should be NONODE", Code.NONODE, existsResponse.resultCode)
   }
 
   @Test
   def testExistsExistingZNode(): Unit = {
     import scala.collection.JavaConverters._
     val zookeeperClient = new ZookeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, null)
-    val createResponse = zookeeperClient.handle(CreateRequest(mockPath, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT, null))
-    assertEquals("Response code for create should be OK", Code.OK, Code.get(createResponse.rc))
-    val existsResponse = zookeeperClient.handle(ExistsRequest(mockPath, null)).asInstanceOf[ExistsResponse]
-    assertEquals("Response code for exists should be OK", Code.OK, Code.get(existsResponse.rc))
+    val createResponse = zookeeperClient.handleRequest(CreateRequest(mockPath, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT))
+    assertEquals("Response code for create should be OK", Code.OK, createResponse.resultCode)
+    val existsResponse = zookeeperClient.handleRequest(ExistsRequest(mockPath))
+    assertEquals("Response code for exists should be OK", Code.OK, existsResponse.resultCode)
   }
 
   @Test
   def testGetDataNonExistentZNode(): Unit = {
     val zookeeperClient = new ZookeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, null)
-    val getDataResponse = zookeeperClient.handle(GetDataRequest(mockPath, null)).asInstanceOf[GetDataResponse]
-    assertEquals("Response code should be NONODE", Code.NONODE, Code.get(getDataResponse.rc))
+    val getDataResponse = zookeeperClient.handleRequest(GetDataRequest(mockPath))
+    assertEquals("Response code should be NONODE", Code.NONODE, getDataResponse.resultCode)
   }
 
   @Test
@@ -101,18 +101,19 @@ class ZookeeperClientTest extends ZooKeeperTestHarness {
     import scala.collection.JavaConverters._
     val data = bytes
     val zookeeperClient = new ZookeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, null)
-    val createResponse = zookeeperClient.handle(CreateRequest(mockPath, data, ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT, null))
-    assertEquals("Response code for create should be OK", Code.OK, Code.get(createResponse.rc))
-    val getDataResponse = zookeeperClient.handle(GetDataRequest(mockPath, null)).asInstanceOf[GetDataResponse]
-    assertEquals("Response code for getData should be OK", Code.OK, Code.get(getDataResponse.rc))
+    val createResponse = zookeeperClient.handleRequest(CreateRequest(mockPath, data, ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala,
+      CreateMode.PERSISTENT))
+    assertEquals("Response code for create should be OK", Code.OK, createResponse.resultCode)
+    val getDataResponse = zookeeperClient.handleRequest(GetDataRequest(mockPath))
+    assertEquals("Response code for getData should be OK", Code.OK, getDataResponse.resultCode)
     assertArrayEquals("Data for getData should match created znode data", data, getDataResponse.data)
   }
 
   @Test
   def testSetDataNonExistentZNode(): Unit = {
     val zookeeperClient = new ZookeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, null)
-    val setDataResponse = zookeeperClient.handle(SetDataRequest(mockPath, Array.empty[Byte], -1, null)).asInstanceOf[SetDataResponse]
-    assertEquals("Response code should be NONODE", Code.NONODE, Code.get(setDataResponse.rc))
+    val setDataResponse = zookeeperClient.handleRequest(SetDataRequest(mockPath, Array.empty[Byte], -1))
+    assertEquals("Response code should be NONODE", Code.NONODE, setDataResponse.resultCode)
   }
 
   @Test
@@ -120,56 +121,58 @@ class ZookeeperClientTest extends ZooKeeperTestHarness {
     import scala.collection.JavaConverters._
     val data = bytes
     val zookeeperClient = new ZookeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, null)
-    val createResponse = zookeeperClient.handle(CreateRequest(mockPath, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT, null))
-    assertEquals("Response code for create should be OK", Code.OK, Code.get(createResponse.rc))
-    val setDataResponse = zookeeperClient.handle(SetDataRequest(mockPath, data, -1, null)).asInstanceOf[SetDataResponse]
-    assertEquals("Response code for setData should be OK", Code.OK, Code.get(setDataResponse.rc))
-    val getDataResponse = zookeeperClient.handle(GetDataRequest(mockPath, null)).asInstanceOf[GetDataResponse]
-    assertEquals("Response code for getData should be OK", Code.OK, Code.get(getDataResponse.rc))
+    val createResponse = zookeeperClient.handleRequest(CreateRequest(mockPath, Array.empty[Byte],
+      ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT))
+    assertEquals("Response code for create should be OK", Code.OK, createResponse.resultCode)
+    val setDataResponse = zookeeperClient.handleRequest(SetDataRequest(mockPath, data, -1))
+    assertEquals("Response code for setData should be OK", Code.OK, setDataResponse.resultCode)
+    val getDataResponse = zookeeperClient.handleRequest(GetDataRequest(mockPath))
+    assertEquals("Response code for getData should be OK", Code.OK, getDataResponse.resultCode)
     assertArrayEquals("Data for getData should match setData's data", data, getDataResponse.data)
   }
 
   @Test
-  def testGetACLNonExistentZNode(): Unit = {
+  def testGetAclNonExistentZNode(): Unit = {
     val zookeeperClient = new ZookeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, null)
-    val getACLResponse = zookeeperClient.handle(GetACLRequest(mockPath, null)).asInstanceOf[GetACLResponse]
-    assertEquals("Response code should be NONODE", Code.NONODE, Code.get(getACLResponse.rc))
+    val getAclResponse = zookeeperClient.handleRequest(GetAclRequest(mockPath))
+    assertEquals("Response code should be NONODE", Code.NONODE, getAclResponse.resultCode)
   }
 
   @Test
-  def testGetACLExistingZNode(): Unit = {
+  def testGetAclExistingZNode(): Unit = {
     import scala.collection.JavaConverters._
     val zookeeperClient = new ZookeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, null)
-    val createResponse = zookeeperClient.handle(CreateRequest(mockPath, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT, null))
-    assertEquals("Response code for create should be OK", Code.OK, Code.get(createResponse.rc))
-    val getACLResponse = zookeeperClient.handle(GetACLRequest(mockPath, null)).asInstanceOf[GetACLResponse]
-    assertEquals("Response code for getACL should be OK", Code.OK, Code.get(getACLResponse.rc))
-    assertEquals("ACL should be " + ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, getACLResponse.acl)
+    val createResponse = zookeeperClient.handleRequest(CreateRequest(mockPath, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT))
+    assertEquals("Response code for create should be OK", Code.OK, createResponse.resultCode)
+    val getAclResponse = zookeeperClient.handleRequest(GetAclRequest(mockPath))
+    assertEquals("Response code for getAcl should be OK", Code.OK, getAclResponse.resultCode)
+    assertEquals("ACL should be " + ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, getAclResponse.acl)
   }
 
   @Test
-  def testSetACLNonExistentZNode(): Unit = {
+  def testSetAclNonExistentZNode(): Unit = {
     import scala.collection.JavaConverters._
     val zookeeperClient = new ZookeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, null)
-    val setACLResponse = zookeeperClient.handle(SetACLRequest(mockPath, ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, -1, null)).asInstanceOf[SetACLResponse]
-    assertEquals("Response code should be NONODE", Code.NONODE, Code.get(setACLResponse.rc))
+    val setAclResponse = zookeeperClient.handleRequest(SetAclRequest(mockPath, ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, -1))
+    assertEquals("Response code should be NONODE", Code.NONODE, setAclResponse.resultCode)
   }
 
   @Test
   def testGetChildrenNonExistentZNode(): Unit = {
     val zookeeperClient = new ZookeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, null)
-    val getChildrenResponse = zookeeperClient.handle(GetChildrenRequest(mockPath, null)).asInstanceOf[GetChildrenResponse]
-    assertEquals("Response code should be NONODE", Code.NONODE, Code.get(getChildrenResponse.rc))
+    val getChildrenResponse = zookeeperClient.handleRequest(GetChildrenRequest(mockPath))
+    assertEquals("Response code should be NONODE", Code.NONODE, getChildrenResponse.resultCode)
   }
 
   @Test
   def testGetChildrenExistingZNode(): Unit = {
     import scala.collection.JavaConverters._
     val zookeeperClient = new ZookeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, null)
-    val createResponse = zookeeperClient.handle(CreateRequest(mockPath, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT, null))
-    assertEquals("Response code for create should be OK", Code.OK, Code.get(createResponse.rc))
-    val getChildrenResponse = zookeeperClient.handle(GetChildrenRequest(mockPath, null)).asInstanceOf[GetChildrenResponse]
-    assertEquals("Response code for getChildren should be OK", Code.OK, Code.get(getChildrenResponse.rc))
+    val createResponse = zookeeperClient.handleRequest(CreateRequest(mockPath, Array.empty[Byte],
+      ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT))
+    assertEquals("Response code for create should be OK", Code.OK, createResponse.resultCode)
+    val getChildrenResponse = zookeeperClient.handleRequest(GetChildrenRequest(mockPath))
+    assertEquals("Response code for getChildren should be OK", Code.OK, getChildrenResponse.resultCode)
     assertEquals("getChildren should return no children", Seq.empty[String], getChildrenResponse.children)
   }
 
@@ -181,15 +184,18 @@ class ZookeeperClientTest extends ZooKeeperTestHarness {
     val child1Path = mockPath + "/" + child1
     val child2Path = mockPath + "/" + child2
     val zookeeperClient = new ZookeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, null)
-    val createResponse = zookeeperClient.handle(CreateRequest(mockPath, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT, null))
-    assertEquals("Response code for create should be OK", Code.OK, Code.get(createResponse.rc))
-    val createResponseChild1 = zookeeperClient.handle(CreateRequest(child1Path, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT, null))
-    assertEquals("Response code for create child1 should be OK", Code.OK, Code.get(createResponseChild1.rc))
-    val createResponseChild2 = zookeeperClient.handle(CreateRequest(child2Path, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT, null))
-    assertEquals("Response code for create child2 should be OK", Code.OK, Code.get(createResponseChild2.rc))
+    val createResponse = zookeeperClient.handleRequest(CreateRequest(mockPath, Array.empty[Byte],
+      ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT))
+    assertEquals("Response code for create should be OK", Code.OK, createResponse.resultCode)
+    val createResponseChild1 = zookeeperClient.handleRequest(CreateRequest(child1Path, Array.empty[Byte],
+      ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT))
+    assertEquals("Response code for create child1 should be OK", Code.OK, createResponseChild1.resultCode)
+    val createResponseChild2 = zookeeperClient.handleRequest(CreateRequest(child2Path, Array.empty[Byte],
+      ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT))
+    assertEquals("Response code for create child2 should be OK", Code.OK, createResponseChild2.resultCode)
 
-    val getChildrenResponse = zookeeperClient.handle(GetChildrenRequest(mockPath, null)).asInstanceOf[GetChildrenResponse]
-    assertEquals("Response code for getChildren should be OK", Code.OK, Code.get(getChildrenResponse.rc))
+    val getChildrenResponse = zookeeperClient.handleRequest(GetChildrenRequest(mockPath))
+    assertEquals("Response code for getChildren should be OK", Code.OK, getChildrenResponse.resultCode)
     assertEquals("getChildren should return two children", Seq(child1, child2), getChildrenResponse.children.sorted)
   }
 
@@ -197,15 +203,16 @@ class ZookeeperClientTest extends ZooKeeperTestHarness {
   def testPipelinedGetData(): Unit = {
     import scala.collection.JavaConverters._
     val zookeeperClient = new ZookeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, null)
-    val createRequests = (1 to 3).map(x => CreateRequest("/" + x, (x * 2).toString.getBytes, ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT, null))
-    val createResponses = createRequests.map(zookeeperClient.handle)
-    createResponses.foreach(createResponse => assertEquals("Response code for create should be OK", Code.OK, Code.get(createResponse.rc)))
-    val getDataRequests = (1 to 3).map(x => GetDataRequest("/" + x, null))
-    val getDataResponses = zookeeperClient.handle(getDataRequests)
-    getDataResponses.foreach(getDataResponse => assertEquals("Response code for getData should be OK", Code.OK, Code.get(getDataResponse.rc)))
+    val createRequests = (1 to 3).map(x => CreateRequest("/" + x, (x * 2).toString.getBytes, ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT))
+    val createResponses = createRequests.map(zookeeperClient.handleRequest)
+    createResponses.foreach(createResponse => assertEquals("Response code for create should be OK", Code.OK, createResponse.resultCode))
+    val getDataRequests = (1 to 3).map(x => GetDataRequest("/" + x))
+    val getDataResponses = zookeeperClient.handleRequests(getDataRequests)
+    getDataResponses.foreach(getDataResponse => assertEquals("Response code for getData should be OK", Code.OK,
+      getDataResponse.resultCode))
     getDataResponses.zipWithIndex.foreach { case (getDataResponse, i) =>
-      assertEquals("Response code for getData should be OK", Code.OK, Code.get(getDataResponse.rc))
-      assertEquals("Data for getData should match", ((i + 1) * 2), Integer.valueOf(new String(getDataResponse.asInstanceOf[GetDataResponse].data)))
+      assertEquals("Response code for getData should be OK", Code.OK, getDataResponse.resultCode)
+      assertEquals("Data for getData should match", ((i + 1) * 2), Integer.valueOf(new String(getDataResponse.data)))
     }
   }
 
@@ -213,14 +220,15 @@ class ZookeeperClientTest extends ZooKeeperTestHarness {
   def testMixedPipeline(): Unit = {
     import scala.collection.JavaConverters._
     val zookeeperClient = new ZookeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, null)
-    val createResponse = zookeeperClient.handle(CreateRequest(mockPath, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT, null))
-    assertEquals("Response code for create should be OK", Code.OK, Code.get(createResponse.rc))
-    val getDataRequest = GetDataRequest(mockPath, null)
-    val setDataRequest = SetDataRequest("/nonexistent", Array.empty[Byte], -1, null)
-    val responses = zookeeperClient.handle(Seq(getDataRequest, setDataRequest))
-    assertEquals("Response code for getData should be OK", Code.OK, Code.get(responses.head.rc))
+    val createResponse = zookeeperClient.handleRequest(CreateRequest(mockPath, Array.empty[Byte],
+      ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT))
+    assertEquals("Response code for create should be OK", Code.OK, createResponse.resultCode)
+    val getDataRequest = GetDataRequest(mockPath)
+    val setDataRequest = SetDataRequest("/nonexistent", Array.empty[Byte], -1)
+    val responses = zookeeperClient.handleRequests(Seq(getDataRequest, setDataRequest))
+    assertEquals("Response code for getData should be OK", Code.OK, responses.head.resultCode)
     assertArrayEquals("Data for getData should be empty", Array.empty[Byte], responses.head.asInstanceOf[GetDataResponse].data)
-    assertEquals("Response code for setData should be NONODE", Code.NONODE, Code.get(responses.last.rc))
+    assertEquals("Response code for setData should be NONODE", Code.NONODE, responses.last.resultCode)
   }
 
   @Test
@@ -236,11 +244,11 @@ class ZookeeperClientTest extends ZooKeeperTestHarness {
     }
 
     zookeeperClient.registerZNodeChangeHandler(zNodeChangeHandler)
-    val existsRequest = ExistsRequest(mockPath, null)
-    val createRequest = CreateRequest(mockPath, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT, null)
-    val responses = zookeeperClient.handle(Seq(existsRequest, createRequest))
-    assertEquals("Response code for exists should be NONODE", Code.NONODE, Code.get(responses.head.rc))
-    assertEquals("Response code for create should be OK", Code.OK, Code.get(responses.last.rc))
+    val existsRequest = ExistsRequest(mockPath)
+    val createRequest = CreateRequest(mockPath, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT)
+    val responses = zookeeperClient.handleRequests(Seq(existsRequest, createRequest))
+    assertEquals("Response code for exists should be NONODE", Code.NONODE, responses.head.resultCode)
+    assertEquals("Response code for create should be OK", Code.OK, responses.last.resultCode)
     assertTrue("Failed to receive create notification", znodeChangeHandlerCountDownLatch.await(5, TimeUnit.SECONDS))
   }
 
@@ -257,13 +265,13 @@ class ZookeeperClientTest extends ZooKeeperTestHarness {
     }
 
     zookeeperClient.registerZNodeChangeHandler(zNodeChangeHandler)
-    val existsRequest = ExistsRequest(mockPath, null)
-    val createRequest = CreateRequest(mockPath, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT, null)
-    val responses = zookeeperClient.handle(Seq(createRequest, existsRequest))
-    assertEquals("Response code for create should be OK", Code.OK, Code.get(responses.last.rc))
-    assertEquals("Response code for exists should be OK", Code.OK, Code.get(responses.head.rc))
-    val deleteResponse = zookeeperClient.handle(DeleteRequest(mockPath, -1, null)).asInstanceOf[DeleteResponse]
-    assertEquals("Response code for delete should be OK", Code.OK, Code.get(deleteResponse.rc))
+    val existsRequest = ExistsRequest(mockPath)
+    val createRequest = CreateRequest(mockPath, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT)
+    val responses = zookeeperClient.handleRequests(Seq(createRequest, existsRequest))
+    assertEquals("Response code for create should be OK", Code.OK, responses.last.resultCode)
+    assertEquals("Response code for exists should be OK", Code.OK, responses.head.resultCode)
+    val deleteResponse = zookeeperClient.handleRequest(DeleteRequest(mockPath, -1))
+    assertEquals("Response code for delete should be OK", Code.OK, deleteResponse.resultCode)
     assertTrue("Failed to receive delete notification", znodeChangeHandlerCountDownLatch.await(5, TimeUnit.SECONDS))
   }
 
@@ -280,13 +288,13 @@ class ZookeeperClientTest extends ZooKeeperTestHarness {
     }
 
     zookeeperClient.registerZNodeChangeHandler(zNodeChangeHandler)
-    val existsRequest = ExistsRequest(mockPath, null)
-    val createRequest = CreateRequest(mockPath, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT, null)
-    val responses = zookeeperClient.handle(Seq(createRequest, existsRequest))
-    assertEquals("Response code for create should be OK", Code.OK, Code.get(responses.last.rc))
-    assertEquals("Response code for exists should be OK", Code.OK, Code.get(responses.head.rc))
-    val setDataResponse = zookeeperClient.handle(SetDataRequest(mockPath, Array.empty[Byte], -1, null)).asInstanceOf[SetDataResponse]
-    assertEquals("Response code for setData should be OK", Code.OK, Code.get(setDataResponse.rc))
+    val existsRequest = ExistsRequest(mockPath)
+    val createRequest = CreateRequest(mockPath, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT)
+    val responses = zookeeperClient.handleRequests(Seq(createRequest, existsRequest))
+    assertEquals("Response code for create should be OK", Code.OK, responses.last.resultCode)
+    assertEquals("Response code for exists should be OK", Code.OK, responses.head.resultCode)
+    val setDataResponse = zookeeperClient.handleRequest(SetDataRequest(mockPath, Array.empty[Byte], -1))
+    assertEquals("Response code for setData should be OK", Code.OK, setDataResponse.resultCode)
     assertTrue("Failed to receive data change notification", znodeChangeHandlerCountDownLatch.await(5, TimeUnit.SECONDS))
   }
 
@@ -304,13 +312,13 @@ class ZookeeperClientTest extends ZooKeeperTestHarness {
 
     val child1 = "child1"
     val child1Path = mockPath + "/" + child1
-    val createResponse = zookeeperClient.handle(CreateRequest(mockPath, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT, null))
-    assertEquals("Response code for create should be OK", Code.OK, Code.get(createResponse.rc))
+    val createResponse = zookeeperClient.handleRequest(CreateRequest(mockPath, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT))
+    assertEquals("Response code for create should be OK", Code.OK, createResponse.resultCode)
     zookeeperClient.registerZNodeChildChangeHandler(zNodeChildChangeHandler)
-    val getChildrenResponse = zookeeperClient.handle(GetChildrenRequest(mockPath, null)).asInstanceOf[GetChildrenResponse]
-    assertEquals("Response code for getChildren should be OK", Code.OK, Code.get(getChildrenResponse.rc))
-    val createResponseChild1 = zookeeperClient.handle(CreateRequest(child1Path, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT, null))
-    assertEquals("Response code for create child1 should be OK", Code.OK, Code.get(createResponseChild1.rc))
+    val getChildrenResponse = zookeeperClient.handleRequest(GetChildrenRequest(mockPath))
+    assertEquals("Response code for getChildren should be OK", Code.OK, getChildrenResponse.resultCode)
+    val createResponseChild1 = zookeeperClient.handleRequest(CreateRequest(child1Path, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT))
+    assertEquals("Response code for create child1 should be OK", Code.OK, createResponseChild1.resultCode)
     assertTrue("Failed to receive child change notification", zNodeChildChangeHandlerCountDownLatch.await(5, TimeUnit.SECONDS))
   }
 
