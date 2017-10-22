@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.controller
+package kafka.zookeeper
 
 import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
 import java.util.concurrent.{ArrayBlockingQueue, ConcurrentHashMap, CountDownLatch, TimeUnit}
@@ -32,14 +32,14 @@ import org.apache.zookeeper.{CreateMode, KeeperException, WatchedEvent, Watcher,
 import scala.collection.JavaConverters._
 
 /**
- * ZookeeperClient is a zookeeper client that encourages pipelined requests to zookeeper.
+ * A ZooKeeper client that encourages pipelined requests.
  *
  * @param connectString comma separated host:port pairs, each corresponding to a zk server
  * @param sessionTimeoutMs session timeout in milliseconds
  * @param connectionTimeoutMs connection timeout in milliseconds
  * @param stateChangeHandler state change handler callbacks called by the underlying zookeeper client's EventThread.
  */
-class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTimeoutMs: Int,
+class ZooKeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTimeoutMs: Int,
                       stateChangeHandler: StateChangeHandler) extends Logging {
   this.logIdent = "[ZookeeperClient] "
   private val initializationLock = new ReentrantReadWriteLock()

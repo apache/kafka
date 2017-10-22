@@ -24,6 +24,7 @@ import kafka.common.TopicAndPartition
 import kafka.log.LogConfig
 import kafka.server.ConfigType
 import kafka.utils.{Logging, ZkUtils}
+import kafka.zookeeper._
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.Stat
 import org.apache.zookeeper.{CreateMode, KeeperException}
@@ -31,7 +32,7 @@ import org.apache.zookeeper.{CreateMode, KeeperException}
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
-class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean) extends Logging {
+class KafkaControllerZkUtils(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends Logging {
   import KafkaControllerZkUtils._
 
   /**
@@ -533,7 +534,7 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * @param zNodeChangeHandler
    */
   def registerZNodeChangeHandlerAndCheckExistence(zNodeChangeHandler: ZNodeChangeHandler): Unit = {
-    zookeeperClient.registerZNodeChangeHandler(zNodeChangeHandler)
+    zooKeeperClient.registerZNodeChangeHandler(zNodeChangeHandler)
     val existsResponse = retryRequestUntilConnected(ExistsRequest(zNodeChangeHandler.path))
     if (existsResponse.resultCode != Code.OK && existsResponse.resultCode != Code.NONODE) {
       throw existsResponse.resultException.get
@@ -545,7 +546,7 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * @param zNodeChangeHandler
    */
   def registerZNodeChangeHandler(zNodeChangeHandler: ZNodeChangeHandler): Unit = {
-    zookeeperClient.registerZNodeChangeHandler(zNodeChangeHandler)
+    zooKeeperClient.registerZNodeChangeHandler(zNodeChangeHandler)
   }
 
   /**
@@ -553,7 +554,7 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * @param path
    */
   def unregisterZNodeChangeHandler(path: String): Unit = {
-    zookeeperClient.unregisterZNodeChangeHandler(path)
+    zooKeeperClient.unregisterZNodeChangeHandler(path)
   }
 
   /**
@@ -561,7 +562,7 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * @param zNodeChildChangeHandler
    */
   def registerZNodeChildChangeHandler(zNodeChildChangeHandler: ZNodeChildChangeHandler): Unit = {
-    zookeeperClient.registerZNodeChildChangeHandler(zNodeChildChangeHandler)
+    zooKeeperClient.registerZNodeChildChangeHandler(zNodeChildChangeHandler)
   }
 
   /**
@@ -569,14 +570,14 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * @param path
    */
   def unregisterZNodeChildChangeHandler(path: String): Unit = {
-    zookeeperClient.unregisterZNodeChildChangeHandler(path)
+    zooKeeperClient.unregisterZNodeChildChangeHandler(path)
   }
 
   /**
    * Close the underlying ZookeeperClient.
    */
   def close(): Unit = {
-    zookeeperClient.close()
+    zooKeeperClient.close()
   }
 
   private def deleteRecursive(path: String): Unit = {
@@ -629,7 +630,7 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
     val remainingRequests = ArrayBuffer(requests: _*)
     val responses = new ArrayBuffer[Req#Response]
     while (remainingRequests.nonEmpty) {
-      val batchResponses = zookeeperClient.handleRequests(remainingRequests)
+      val batchResponses = zooKeeperClient.handleRequests(remainingRequests)
 
       // Only execute slow path if we find a response with CONNECTIONLOSS
       if (batchResponses.exists(_.resultCode == Code.CONNECTIONLOSS)) {
@@ -644,7 +645,7 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
         }
 
         if (remainingRequests.nonEmpty)
-          zookeeperClient.waitUntilConnected()
+          zooKeeperClient.waitUntilConnected()
       } else {
         remainingRequests.clear()
         responses ++= batchResponses
@@ -684,7 +685,7 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
       val getDataResponse = retryRequestUntilConnected(getDataRequest)
       val code = getDataResponse.resultCode
       if (code == Code.OK) {
-        if (getDataResponse.stat.getEphemeralOwner != zookeeperClient.sessionId) {
+        if (getDataResponse.stat.getEphemeralOwner != zooKeeperClient.sessionId) {
           error(s"Error while creating ephemeral at $path with return code: $code")
           Code.NODEEXISTS
         } else {

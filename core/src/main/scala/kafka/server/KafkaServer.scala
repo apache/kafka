@@ -27,7 +27,7 @@ import com.yammer.metrics.core.Gauge
 import kafka.api.KAFKA_0_9_0
 import kafka.cluster.Broker
 import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException}
-import kafka.controller.{KafkaController, KafkaControllerZkUtils, StateChangeHandler, ZookeeperClient}
+import kafka.controller.{KafkaController, KafkaControllerZkUtils}
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.{LogConfig, LogManager}
@@ -36,6 +36,7 @@ import kafka.network.SocketServer
 import kafka.security.CredentialProvider
 import kafka.security.auth.Authorizer
 import kafka.utils._
+import kafka.zookeeper.{StateChangeHandler, ZooKeeperClient}
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClient, NetworkClientUtils}
 import org.apache.kafka.common.internals.ClusterResourceListeners
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics, _}
@@ -219,7 +220,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
 
-        val zookeeperClient = new ZookeeperClient(config.zkConnect, config.zkSessionTimeoutMs,
+        val zooKeeperClient = new ZooKeeperClient(config.zkConnect, config.zkSessionTimeoutMs,
           config.zkConnectionTimeoutMs, new StateChangeHandler {
             override def onReconnectionTimeout(): Unit = {
               error("Reconnection timeout.")
@@ -233,7 +234,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
             override def beforeInitializingSession(): Unit = kafkaController.expire()
           })
-        kafkaControllerZkUtils = new KafkaControllerZkUtils(zookeeperClient, zkUtils.isSecure)
+        kafkaControllerZkUtils = new KafkaControllerZkUtils(zooKeeperClient, zkUtils.isSecure)
 
         /* start log manager */
         logManager = LogManager(config, initialOfflineDirs, kafkaControllerZkUtils, brokerState, kafkaScheduler, time, brokerTopicStats, logDirFailureChannel)
