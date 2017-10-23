@@ -790,14 +790,29 @@ public class StreamThread extends Thread implements ThreadDataProvider {
     // Visible for testing
     long runOnce(final long recordsProcessedBeforeCommit) {
         long processedBeforeCommit = recordsProcessedBeforeCommit;
+
+        ConsumerRecords<byte[], byte[]> records;
+
         timerStartedMs = time.milliseconds();
 
-        // try to fetch some records if necessary
-        final ConsumerRecords<byte[], byte[]> records = pollRequests();
-
         if (state == State.PARTITIONS_ASSIGNED) {
+            // try to fetch some records with zero poll millis
+            // to unblock the restoration as soon as possible
+            records = pollRequests(0L);
+
             if (taskManager.updateNewAndRestoringTasks()) {
                 setState(State.RUNNING);
+            }
+        } else {
+            // try to fetch some records if necessary
+            records = pollRequests(pollTimeMs);
+
+            // if state changed after the poll call,
+            // try to initialize the assigned tasks again
+            if (state == State.PARTITIONS_ASSIGNED) {
+                if (taskManager.updateNewAndRestoringTasks()) {
+                    setState(State.RUNNING);
+                }
             }
         }
 
@@ -824,10 +839,12 @@ public class StreamThread extends Thread implements ThreadDataProvider {
 
     /**
      * Get the next batch of records by polling.
+     *
+     * @param pollTimeMs poll time millis parameter for the consumer poll
      * @return Next batch of records or null if no records available.
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    private ConsumerRecords<byte[], byte[]> pollRequests() {
+    private ConsumerRecords<byte[], byte[]> pollRequests(final long pollTimeMs) {
         ConsumerRecords<byte[], byte[]> records = null;
 
         try {
