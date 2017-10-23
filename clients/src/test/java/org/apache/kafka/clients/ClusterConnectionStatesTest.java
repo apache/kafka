@@ -18,10 +18,7 @@
 package org.apache.kafka.clients;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 
-import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.Before;
 import org.junit.Test;
@@ -45,15 +42,17 @@ public class ClusterConnectionStatesTest {
     @Test
     public void testExponentialReconnectBackoff() {
         // Calculate fixed components for backoff process
-        int RECONNECT_BACKOFF_EXP_BASE = 2;
-        double reconnectBackoffMaxExp = Math.log(reconnectBackoffMaxTest / (double) Math.max(reconnectBackoffMsTest, 1)) / Math.log(RECONNECT_BACKOFF_EXP_BASE);
+        final int reconnectBackoffExpBase = 2;
+        double reconnectBackoffMaxExp = Math.log(reconnectBackoffMaxTest / (double) Math.max(reconnectBackoffMsTest, 1))
+            / Math.log(reconnectBackoffExpBase);
 
         // Run through 10 disconnects and check that reconnect backoff value is within expected range for every attempt
         for (int i = 0; i < 10; i++) {
             connectionStates.connecting(nodeId1, time.milliseconds());
             connectionStates.disconnected(nodeId1, time.milliseconds());
             // Calculate expected backoff value without jitter
-            long expectedBackoff = Math.round(Math.pow(RECONNECT_BACKOFF_EXP_BASE, Math.min(i, reconnectBackoffMaxExp)) * reconnectBackoffMsTest);
+            long expectedBackoff = Math.round(Math.pow(reconnectBackoffExpBase, Math.min(i, reconnectBackoffMaxExp))
+                * reconnectBackoffMsTest);
             long currentBackoff = connectionStates.connectionDelay(nodeId1, time.milliseconds());
             assertEquals(expectedBackoff, currentBackoff, reconnectBackoffJitter * expectedBackoff);
             time.sleep(connectionStates.connectionDelay(nodeId1, time.milliseconds()) + 1);
