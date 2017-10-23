@@ -73,10 +73,7 @@ public class ResetIntegrationTest {
         // expiration of connections by the brokers to avoid errors when `AdminClient` sends requests after potentially
         // very long sleep times
         props.put(KafkaConfig$.MODULE$.ConnectionsMaxIdleMsProp(), -1L);
-        // we align time to seconds to get clean window boundaries and thus ensure the same result for each run
-        // otherwise, input records could fall into different windows for different runs depending on the initial mock time
-        final long alignedTime = (System.currentTimeMillis() / 1000) * 1000;
-        CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, props, alignedTime);
+        CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, props);
     }
 
     private static final String APP_ID = "cleanup-integration-test";
@@ -93,7 +90,7 @@ public class ResetIntegrationTest {
     private static int testNo = 0;
     private static AdminClient adminClient = null;
 
-    private final MockTime mockTime = CLUSTER.time;
+    private MockTime mockTime;
     private final WaitUntilConsumerGroupGotClosed consumerGroupInactive = new WaitUntilConsumerGroupGotClosed();
 
     @AfterClass
@@ -107,6 +104,7 @@ public class ResetIntegrationTest {
     @Before
     public void cleanup() throws Exception {
         ++testNo;
+        mockTime = CLUSTER.time;
 
         if (adminClient == null) {
             adminClient = AdminClient.createSimplePlaintext(CLUSTER.bootstrapServers());

@@ -154,9 +154,7 @@ public class IntegrationTestUtils {
                     return accumData.size() >= expectedNumRecords;
                 }
             };
-            final String conditionDetails =
-                "Expecting " + expectedNumRecords + " records from topic " + topic +
-                    " while only received " + accumData.size() + ": " + accumData;
+            final String conditionDetails = "Did not receive all " + expectedNumRecords + " records from topic " + topic;
             TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
         }
         return accumData;
@@ -195,9 +193,7 @@ public class IntegrationTestUtils {
                     return accumData.size() >= expectedNumRecords;
                 }
             };
-            final String conditionDetails =
-                "Expecting " + expectedNumRecords + " records from topic " + topic +
-                    " while only received " + accumData.size() + ": " + accumData;
+            final String conditionDetails = "Did not receive all " + expectedNumRecords + " records from topic " + topic;
             TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
         }
         return accumData;
@@ -317,12 +313,8 @@ public class IntegrationTestUtils {
             continueConsuming(consumedValues.size(), maxMessages)) {
             totalPollTimeMs += pollIntervalMs;
             final ConsumerRecords<K, V> records = consumer.poll(pollIntervalMs);
-
-            System.out.println("At " + totalPollTimeMs + " " + records.count() + " records: ");
-
             for (final ConsumerRecord<K, V> record : records) {
                 consumedValues.add(new KeyValue<>(record.key(), record.value()));
-                System.out.println("\t" + record);
             }
         }
         return consumedValues;
