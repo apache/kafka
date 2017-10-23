@@ -54,17 +54,17 @@ public class NetworkClientTest {
     protected final Cluster cluster = TestUtils.singletonCluster("test", nodeId);
     protected final Node node = cluster.nodes().get(0);
     protected final long reconnectBackoffMsTest = 10 * 1000;
-    protected final long reconnectBackoffMaxTest = 10 * 1000;
-    protected final NetworkClient client = createNetworkClient();
+    protected final long reconnectBackoffMaxMsTest = 10 * 10000;
 
+    private final NetworkClient client = createNetworkClient(reconnectBackoffMaxMsTest);
+    private final NetworkClient clientWithNoExponentialBackoff = createNetworkClient(reconnectBackoffMsTest);
     private final NetworkClient clientWithStaticNodes = createNetworkClientWithStaticNodes();
-
     private final NetworkClient clientWithNoVersionDiscovery = createNetworkClientWithNoVersionDiscovery();
 
-    private NetworkClient createNetworkClient() {
+    private NetworkClient createNetworkClient(long reconnectBackoffMaxMs) {
         return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
-                reconnectBackoffMsTest, reconnectBackoffMaxTest,
-                64 * 1024, 64 * 1024, requestTimeoutMs, time, true, new ApiVersions(), new LogContext());
+                reconnectBackoffMsTest, reconnectBackoffMaxMs, 64 * 1024, 64 * 1024,
+                requestTimeoutMs, time, true, new ApiVersions(), new LogContext());
     }
 
     private NetworkClient createNetworkClientWithStaticNodes() {
@@ -75,7 +75,7 @@ public class NetworkClientTest {
 
     private NetworkClient createNetworkClientWithNoVersionDiscovery() {
         return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
-                reconnectBackoffMsTest, reconnectBackoffMaxTest,
+                reconnectBackoffMsTest, reconnectBackoffMaxMsTest,
                 64 * 1024, 64 * 1024, requestTimeoutMs, time, false, new ApiVersions(), new LogContext());
     }
 
@@ -217,6 +217,47 @@ public class NetworkClientTest {
     }
 
     @Test
+    public void testConnectionDelayWithNoExponentialBackoff() {
+        long now = time.milliseconds();
+        long delay = clientWithNoExponentialBackoff.connectionDelay(node, now);
+
+        assertEquals(0, delay);
+    }
+
+    @Test
+    public void testConnectionDelayConnectedWithNoExponentialBackoff() {
+        awaitReady(clientWithNoExponentialBackoff, node);
+
+        long now = time.milliseconds();
+        long delay = clientWithNoExponentialBackoff.connectionDelay(node, now);
+
+        assertEquals(Long.MAX_VALUE, delay);
+    }
+
+    @Test
+    public void testConnectionDelayDisconnectedWithNoExponentialBackoff() {
+        awaitReady(clientWithNoExponentialBackoff, node);
+
+        selector.close(node.idString());
+        clientWithNoExponentialBackoff.poll(requestTimeoutMs, time.milliseconds());
+        long delay = clientWithNoExponentialBackoff.connectionDelay(node, time.milliseconds());
+
+        assertEquals(reconnectBackoffMsTest, delay);
+
+        // Sleep until there is no connection delay
+        time.sleep(delay);
+        assertEquals(0, clientWithNoExponentialBackoff.connectionDelay(node, time.milliseconds()));
+
+        // Start connecting and disconnect before the connection is established
+        client.ready(node, time.milliseconds());
+        selector.close(node.idString());
+        client.poll(requestTimeoutMs, time.milliseconds());
+
+        // Second attempt should have the same behaviour as exponential backoff is disabled
+        assertEquals(reconnectBackoffMsTest, delay);
+    }
+
+    @Test
     public void testConnectionDelay() {
         long now = time.milliseconds();
         long delay = client.connectionDelay(node, now);
@@ -238,11 +279,28 @@ public class NetworkClientTest {
     public void testConnectionDelayDisconnected() {
         awaitReady(client, node);
 
+        // First disconnection
         selector.close(node.idString());
         client.poll(requestTimeoutMs, time.milliseconds());
         long delay = client.connectionDelay(node, time.milliseconds());
+        long expectedDelay = reconnectBackoffMsTest;
+        double jitter = 0.2;
+        assertEquals(expectedDelay, delay, expectedDelay * jitter);
 
-        assertEquals(reconnectBackoffMsTest, delay);
+        // Sleep until there is no connection delay
+        time.sleep(delay);
+        assertEquals(0, client.connectionDelay(node, time.milliseconds()));
+
+        // Start connecting and disconnect before the connection is established
+        client.ready(node, time.milliseconds());
+        selector.close(node.idString());
+        client.poll(requestTimeoutMs, time.milliseconds());
+
+        // Second attempt should take twice as long with twice the jitter
+        expectedDelay = Math.round(delay * 2);
+        delay = client.connectionDelay(node, time.milliseconds());
+        jitter = 0.4;
+        assertEquals(expectedDelay, delay, expectedDelay * jitter);
     }
 
     @Test
@@ -281,7 +339,7 @@ public class NetworkClientTest {
         assertFalse(client.canConnect(node, time.milliseconds()));
 
         // ensure disconnect does not reset blackout period if already disconnected
-        time.sleep(reconnectBackoffMsTest);
+        time.sleep(reconnectBackoffMaxMsTest);
         assertTrue(client.canConnect(node, time.milliseconds()));
         client.disconnect(node.idString());
         assertTrue(client.canConnect(node, time.milliseconds()));
