@@ -226,7 +226,6 @@ while [ $# -gt 0 ]; do
   case $COMMAND in
     -name)
       DAEMON_NAME=$2
-      CONSOLE_OUTPUT_FILE=$LOG_DIR/$DAEMON_NAME.out
       shift 2
       ;;
     -loggc)
@@ -245,6 +244,10 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+if [ "CONSOLE_OUTPUT_FILE" = "x" ]; then 
+  CONSOLE_OUTPUT_FILE=$LOG_DIR/$DAEMON_NAME.out
+fi
+ 
 # GC options
 GC_FILE_SUFFIX='-gc.log'
 GC_LOG_FILE_NAME=''
