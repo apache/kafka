@@ -163,14 +163,6 @@ abstract class AbstractResetIntegrationTest {
 
         // RUN
         KafkaStreams streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfiguration);
-        final KafkaStreams handlerReference = streams;
-        streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
-            @Override
-            public void uncaughtException(Thread t, Throwable e) {
-                handlerReference.close(10, TimeUnit.SECONDS);
-                log.error("Streams application failed: ", e);
-            }
-        });
         streams.start();
         final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
             resultTopicConsumerConfig,
@@ -183,14 +175,6 @@ abstract class AbstractResetIntegrationTest {
 
         // RESET
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfiguration);
-        final KafkaStreams handlerReference2 = streams;
-        streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
-            @Override
-            public void uncaughtException(Thread t, Throwable e) {
-                handlerReference2.close(10, TimeUnit.SECONDS);
-                log.error("Streams application failed: ", e);
-            }
-        });
         streams.cleanUp();
         cleanGlobal(null, sslConfig);
         TestUtils.waitForCondition(consumerGroupInactive, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
@@ -231,14 +215,6 @@ abstract class AbstractResetIntegrationTest {
 
         // RUN
         KafkaStreams streams = new KafkaStreams(setupTopologyWithIntermediateUserTopic(OUTPUT_TOPIC_2), streamsConfiguration);
-        final KafkaStreams handlerReference = streams;
-        streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
-            @Override
-            public void uncaughtException(Thread t, Throwable e) {
-                handlerReference.close(10, TimeUnit.SECONDS);
-                log.error("Streams application failed: ", e);
-            }
-        });
         streams.start();
         final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
             resultTopicConsumerConfig,
@@ -271,12 +247,6 @@ abstract class AbstractResetIntegrationTest {
 
         // RESET
         streams = new KafkaStreams(setupTopologyWithIntermediateUserTopic(OUTPUT_TOPIC_2_RERUN), streamsConfiguration);
-        streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
-            @Override
-            public void uncaughtException(Thread t, Throwable e) {
-                log.error("Streams application failed: ", e);
-            }
-        });
         streams.cleanUp();
         cleanGlobal(INTERMEDIATE_USER_TOPIC, sslConfig);
         TestUtils.waitForCondition(consumerGroupInactive, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
@@ -446,6 +416,8 @@ abstract class AbstractResetIntegrationTest {
         final Properties cleanUpConfig = new Properties();
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + CLEANUP_CONSUMER_TIMEOUT);
+
+        log.info("Calling StreamsResetter with parameters {} and configs {}", parameters, cleanUpConfig);
 
         final int exitCode = new StreamsResetter().run(parameters, cleanUpConfig);
         Assert.assertEquals(0, exitCode);
