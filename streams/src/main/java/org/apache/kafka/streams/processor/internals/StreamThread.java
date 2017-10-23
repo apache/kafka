@@ -495,21 +495,7 @@ public class StreamThread extends Thread {
             // to unblock the restoration as soon as possible
             records = pollRequests(0L);
 
-            active.initializeNewTasks();
-            standby.initializeNewTasks();
-
-            final Collection<TopicPartition> restored = storeChangelogReader.restore();
-            final Set<TopicPartition> resumed = active.updateRestored(restored);
-
-            if (!resumed.isEmpty()) {
-                log.trace("{} resuming partitions {}", logPrefix, resumed);
-                consumer.resume(resumed);
-            }
-
-            if (active.allTasksRunning()) {
-                assignStandbyPartitions();
-                setState(State.RUNNING);
-            }
+            tryTransitToRunning();
         } else {
             // try to fetch some records if necessary
             records = pollRequests(pollTimeMs);
@@ -517,21 +503,7 @@ public class StreamThread extends Thread {
             // if state changed after the poll call,
             // try to initialize the assigned tasks again
             if (state == State.PARTITIONS_ASSIGNED) {
-                active.initializeNewTasks();
-                standby.initializeNewTasks();
-
-                final Collection<TopicPartition> restored = storeChangelogReader.restore();
-                final Set<TopicPartition> resumed = active.updateRestored(restored);
-
-                if (!resumed.isEmpty()) {
-                    log.trace("{} resuming partitions {}", logPrefix, resumed);
-                    consumer.resume(resumed);
-                }
-
-                if (active.allTasksRunning()) {
-                    assignStandbyPartitions();
-                    setState(State.RUNNING);
-                }
+                tryTransitToRunning();
             }
         }
 
@@ -551,6 +523,27 @@ public class StreamThread extends Thread {
         maybeCommit(timerStartedMs);
         maybeUpdateStandbyTasks(timerStartedMs);
         return recordsProcessedBeforeCommit;
+    }
+
+    /**
+     * Retry to restore the assigned records and transit to RUNNING state if all restoration is done
+     */
+    private void tryTransitToRunning() {
+        active.initializeNewTasks();
+        standby.initializeNewTasks();
+
+        final Collection<TopicPartition> restored = storeChangelogReader.restore();
+        final Set<TopicPartition> resumed = active.updateRestored(restored);
+
+        if (!resumed.isEmpty()) {
+            log.trace("{} resuming partitions {}", logPrefix, resumed);
+            consumer.resume(resumed);
+        }
+
+        if (active.allTasksRunning()) {
+            assignStandbyPartitions();
+            setState(State.RUNNING);
+        }
     }
 
     /**
