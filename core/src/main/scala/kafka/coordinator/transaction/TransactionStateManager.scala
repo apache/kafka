@@ -58,9 +58,10 @@ object TransactionStateManager {
  * 3. the background expiration of the transaction as well as the transactional id.
  *
  * <b>Delayed operation locking notes:</b>
- * Delayed operations in TransactionStateManager use `stateLock.readLock` as the delayed operation
- * lock. Delayed operations are completed only if `stateLock.readLock` can be acquired.
- * Delayed callbacks may acquire `stateLock.readLock` or any of the `txnMetadata` locks.
+ * Delayed operations in TransactionStateManager use `stateLock.writeLock` as the delayed operation
+ * lock. Delayed operations are completed only if `stateLock.writeLock` can be acquired.
+ * Delayed callbacks may acquire `stateLock.readLock`, `stateLock.writeLock` or any of the
+ * `txnMetadata` locks.
  * <ul>
  * <li>`stateLock.readLock` must never be acquired while holding `txnMetadata` lock.</li>
  * <li>`txnMetadata` lock must never be acquired while holding `stateLock.writeLock`.</li>
@@ -105,7 +106,7 @@ class TransactionStateManager(brokerId: Int,
       loadingPartitions.add(partitionAndLeaderEpoch)
     }
   }
-  private[transaction] def stateReadLock = stateLock.readLock
+  private[transaction] def stateWriteLock = stateLock.writeLock
 
   // this is best-effort expiration of an ongoing transaction which has been open for more than its
   // txn timeout value, we do not need to grab the lock on the metadata object upon checking its state
@@ -208,7 +209,7 @@ class TransactionStateManager(brokerId: Int,
           isFromClient = false,
           recordsPerPartition,
           removeFromCacheCallback,
-          Some(stateLock.readLock)
+          Some(stateLock.writeLock)
         )
       }
 
@@ -617,7 +618,7 @@ class TransactionStateManager(brokerId: Int,
                 isFromClient = false,
                 recordsPerPartition,
                 updateCacheCallback,
-                delayedProduceLock = Some(stateLock.readLock))
+                delayedProduceLock = Some(stateLock.writeLock))
 
               trace(s"Appending new metadata $newMetadata for transaction id $transactionalId with coordinator epoch $coordinatorEpoch to the local transaction log")
           }
