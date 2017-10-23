@@ -313,9 +313,6 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         public boolean conditionMet() {
             final Set<String> allTopics = new HashSet<>();
             allTopics.addAll(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics()));
-
-            System.out.println("Read topics " + allTopics + "\nExpected topics " + remainingTopics);
-
             return allTopics.equals(remainingTopics);
         }
     }
