@@ -106,6 +106,11 @@ public class ResetIntegrationTest {
         ++testNo;
         mockTime = CLUSTER.time;
 
+        // we align time to seconds to get clean window boundaries and thus ensure the same result for each run
+        // otherwise, input records could fall into different windows for different runs depending on the initial mock time
+        final long alignedTime = (System.currentTimeMillis() / 1000 + 1) * 1000;
+        mockTime.setCurrentTimeMs(alignedTime);
+
         if (adminClient == null) {
             adminClient = AdminClient.createSimplePlaintext(CLUSTER.bootstrapServers());
         }
