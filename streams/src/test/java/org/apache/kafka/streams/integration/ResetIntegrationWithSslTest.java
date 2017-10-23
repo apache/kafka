@@ -60,10 +60,7 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
         props.put(KafkaConfig$.MODULE$.ListenersProp(), "SSL://localhost:0");
         props.put(KafkaConfig$.MODULE$.InterBrokerListenerNameProp(), "SSL");
         props.putAll(sslConfig);
-        // we align time to seconds to get clean window boundaries and thus ensure the same result for each run
-        // otherwise, input records could fall into different windows for different runs depending on the initial mock time
-        final long alignedTime = (System.currentTimeMillis() / 1000) * 1000;
-        CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, props, alignedTime);
+        CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, props);
         cluster = CLUSTER;
     }
 
