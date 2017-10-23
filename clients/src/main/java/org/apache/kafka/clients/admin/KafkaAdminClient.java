@@ -1877,24 +1877,44 @@ public class KafkaAdminClient extends AdminClient {
         return new CreatePartitionsResult(new HashMap<String, KafkaFuture<Void>>(futures));
     }
 
-    public DeleteRecordsResult deleteRecords(Map<TopicPartition, DeleteRecords> partitionsAndOffsets,
+    public DeleteRecordsResult deleteRecords(Map<TopicPartition, DeleteRecordsTarget> partitionsAndOffsets,
                                              final DeleteRecordsOptions options) {
 
         // requests need to be sent to partitions leader nodes so ...
         // ... from the provided map it's needed to create more maps grouping topic/partition per leader
 
-        Map<Node, Map<TopicPartition, Long>> leaders = new HashMap<>();
-        for (Map.Entry<TopicPartition, DeleteRecords> entry: partitionsAndOffsets.entrySet()) {
-
-            Node node = metadata.fetch().leaderFor(entry.getKey());
-            if (!leaders.containsKey(node))
-                leaders.put(node, new HashMap<TopicPartition, Long>());
-            leaders.get(node).put(entry.getKey(), entry.getValue().offset());
-        }
-
         final Map<TopicPartition, KafkaFutureImpl<Long>> futures = new HashMap<>(partitionsAndOffsets.size());
         for (TopicPartition topicPartition: partitionsAndOffsets.keySet()) {
             futures.put(topicPartition, new KafkaFutureImpl<Long>());
+        }
+
+        // adding topics to metadata for executing a single request for them
+        for (Map.Entry<TopicPartition, DeleteRecordsTarget> entry: partitionsAndOffsets.entrySet()) {
+            metadata.add(entry.getKey().topic());
+        }
+
+        // updating metadata for specified topics
+        int version = metadata.requestUpdate();
+        client.wakeup();
+        try {
+            // TODO: making timeout configurable
+            metadata.awaitUpdate(version, 10000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        // checking leaders for topic partitions
+        Map<Node, Map<TopicPartition, Long>> leaders = new HashMap<>();
+        for (Map.Entry<TopicPartition, DeleteRecordsTarget> entry: partitionsAndOffsets.entrySet()) {
+            Node node = metadata.fetch().leaderFor(entry.getKey());
+            if (node != null) {
+                if (!leaders.containsKey(node))
+                    leaders.put(node, new HashMap<TopicPartition, Long>());
+                leaders.get(node).put(entry.getKey(), entry.getValue().offset());
+            } else {
+                KafkaFutureImpl<Long> future = futures.get(entry.getKey());
+                future.completeExceptionally(Errors.LEADER_NOT_AVAILABLE.exception());
+            }
         }
 
         final long now = time.milliseconds();
