@@ -73,4 +73,13 @@ public class MockTime implements Time {
         highResTimeNs.addAndGet(TimeUnit.MILLISECONDS.toNanos(ms));
     }
 
+    public void setCurrentTimeMs(long newMs) {
+        long oldMs = timeMs.getAndSet(newMs);
+
+        // does not allow to set to an older timestamp
+        if (oldMs > newMs)
+            throw new IllegalArgumentException("Setting the time to " + newMs + " while current time " + oldMs + " is newer; this is not allowed");
+
+        highResTimeNs.set(TimeUnit.MILLISECONDS.toNanos(newMs));
+    }
 }
