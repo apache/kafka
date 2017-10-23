@@ -76,7 +76,6 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         brokers = new KafkaEmbedded[numBrokers];
         this.brokerConfig = brokerConfig;
         time = new MockTime(mockTimeMillisStart, mockTimeNanoStart);
-
     }
 
     /**
@@ -122,7 +121,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     /**
      * Stop the Kafka cluster.
      */
-    public void stop() {
+    private void stop() {
         for (final KafkaEmbedded broker : brokers) {
             broker.stop();
         }
@@ -284,22 +283,41 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         createTopics(topics);
     }
 
+    public void waitForRemainingTopics(final long timeoutMs, final String... topics) throws InterruptedException {
+        TestUtils.waitForCondition(new TopicsRemainingCondition(topics), timeoutMs, "Topics are not expected after " + timeoutMs + " milli seconds.");
+    }
+
     private final class TopicsDeletedCondition implements TestCondition {
-        final Set<String> deletedTopic = new HashSet<>();
+        final Set<String> deletedTopics = new HashSet<>();
 
         private TopicsDeletedCondition(final String... topics) {
-            Collections.addAll(deletedTopic, topics);
+            Collections.addAll(deletedTopics, topics);
         }
 
         @Override
         public boolean conditionMet() {
             final Set<String> allTopics = new HashSet<>();
             allTopics.addAll(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics()));
-            return !allTopics.removeAll(deletedTopic);
+            return !allTopics.removeAll(deletedTopics);
         }
     }
 
-    public List<KafkaServer> brokers() {
+    private final class TopicsRemainingCondition implements TestCondition {
+        final Set<String> remainingTopics = new HashSet<>();
+
+        private TopicsRemainingCondition(final String... topics) {
+            Collections.addAll(remainingTopics, topics);
+        }
+
+        @Override
+        public boolean conditionMet() {
+            final Set<String> allTopics = new HashSet<>();
+            allTopics.addAll(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics()));
+            return allTopics.equals(remainingTopics);
+        }
+    }
+
+    private List<KafkaServer> brokers() {
         final List<KafkaServer> servers = new ArrayList<>();
         for (final KafkaEmbedded broker : brokers) {
             servers.add(broker.kafkaServer());

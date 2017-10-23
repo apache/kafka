@@ -18,10 +18,8 @@ package org.apache.kafka.streams.integration;
 
 import kafka.admin.AdminClient;
 import kafka.tools.StreamsResetter;
-import kafka.utils.MockTime;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.KafkaAdminClient;
-import org.apache.kafka.clients.admin.ListTopicsOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -29,6 +27,7 @@ import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -52,10 +51,8 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -108,8 +105,13 @@ abstract class AbstractResetIntegrationTest {
 
     void beforePrepareTest() throws Exception {
         ++testNo;
-        bootstrapServers = cluster.bootstrapServers();
         mockTime = cluster.time;
+        bootstrapServers = cluster.bootstrapServers();
+
+        // we align time to seconds to get clean window boundaries and thus ensure the same result for each run
+        // otherwise, input records could fall into different windows for different runs depending on the initial mock time
+        final long alignedTime = (System.currentTimeMillis() / 1000) * 1000;
+        mockTime.setCurrentTimeMs(alignedTime);
 
         Properties sslConfig = getClientSslConfig();
         if (sslConfig == null) {
@@ -161,14 +163,6 @@ abstract class AbstractResetIntegrationTest {
 
         // RUN
         KafkaStreams streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfiguration);
-        final KafkaStreams handlerReference = streams;
-        streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
-            @Override
-            public void uncaughtException(Thread t, Throwable e) {
-                handlerReference.close(10, TimeUnit.SECONDS);
-                log.error("Streams application failed: ", e);
-            }
-        });
         streams.start();
         final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
             resultTopicConsumerConfig,
@@ -181,14 +175,6 @@ abstract class AbstractResetIntegrationTest {
 
         // RESET
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfiguration);
-        final KafkaStreams handlerReference2 = streams;
-        streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
-            @Override
-            public void uncaughtException(Thread t, Throwable e) {
-                handlerReference2.close(10, TimeUnit.SECONDS);
-                log.error("Streams application failed: ", e);
-            }
-        });
         streams.cleanUp();
         cleanGlobal(null, sslConfig);
         TestUtils.waitForCondition(consumerGroupInactive, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
@@ -229,14 +215,6 @@ abstract class AbstractResetIntegrationTest {
 
         // RUN
         KafkaStreams streams = new KafkaStreams(setupTopologyWithIntermediateUserTopic(OUTPUT_TOPIC_2), streamsConfiguration);
-        final KafkaStreams handlerReference = streams;
-        streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
-            @Override
-            public void uncaughtException(Thread t, Throwable e) {
-                handlerReference.close(10, TimeUnit.SECONDS);
-                log.error("Streams application failed: ", e);
-            }
-        });
         streams.start();
         final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
             resultTopicConsumerConfig,
@@ -269,14 +247,6 @@ abstract class AbstractResetIntegrationTest {
 
         // RESET
         streams = new KafkaStreams(setupTopologyWithIntermediateUserTopic(OUTPUT_TOPIC_2_RERUN), streamsConfiguration);
-        final KafkaStreams handlerReference2 = streams;
-        streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
-            @Override
-            public void uncaughtException(Thread t, Throwable e) {
-                handlerReference2.close(10, TimeUnit.SECONDS);
-                log.error("Streams application failed: ", e);
-            }
-        });
         streams.cleanUp();
         cleanGlobal(INTERMEDIATE_USER_TOPIC, sslConfig);
         TestUtils.waitForCondition(consumerGroupInactive, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
@@ -447,27 +417,19 @@ abstract class AbstractResetIntegrationTest {
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + CLEANUP_CONSUMER_TIMEOUT);
 
+        log.info("Calling StreamsResetter with parameters {} and configs {}", parameters, cleanUpConfig);
+
         final int exitCode = new StreamsResetter().run(parameters, cleanUpConfig);
         Assert.assertEquals(0, exitCode);
     }
 
     private void assertInternalTopicsGotDeleted(final String intermediateUserTopic) throws Exception {
-        final Set<String> expectedRemainingTopicsAfterCleanup = new HashSet<>();
-        expectedRemainingTopicsAfterCleanup.add(INPUT_TOPIC);
+        // do not use list topics request, but read from the embedded cluster's zookeeper path directly to confirm
         if (intermediateUserTopic != null) {
-            expectedRemainingTopicsAfterCleanup.add(intermediateUserTopic);
+            cluster.waitForRemainingTopics(30000, INPUT_TOPIC, OUTPUT_TOPIC, OUTPUT_TOPIC_2, OUTPUT_TOPIC_2_RERUN, TestUtils.GROUP_METADATA_TOPIC_NAME, intermediateUserTopic);
+        } else {
+            cluster.waitForRemainingTopics(30000, INPUT_TOPIC, OUTPUT_TOPIC, OUTPUT_TOPIC_2, OUTPUT_TOPIC_2_RERUN, TestUtils.GROUP_METADATA_TOPIC_NAME);
         }
-        expectedRemainingTopicsAfterCleanup.add(OUTPUT_TOPIC);
-        expectedRemainingTopicsAfterCleanup.add(OUTPUT_TOPIC_2);
-        expectedRemainingTopicsAfterCleanup.add(OUTPUT_TOPIC_2_RERUN);
-        expectedRemainingTopicsAfterCleanup.add("__consumer_offsets");
-
-        final Set<String> allTopics = new HashSet<>();
-
-        final ListTopicsOptions listTopicsOptions = new ListTopicsOptions();
-        listTopicsOptions.listInternal(true);
-        allTopics.addAll(kafkaAdminClient.listTopics(listTopicsOptions).names().get(30000, TimeUnit.MILLISECONDS));
-        assertThat(allTopics, equalTo(expectedRemainingTopicsAfterCleanup));
     }
 
 }
