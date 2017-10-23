@@ -89,8 +89,8 @@ class TransactionMarkerChannelManagerTest {
       .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata2))))
       .anyTimes()
     val stateLock = new ReentrantReadWriteLock
-    EasyMock.expect(txnStateManager.stateReadLock)
-      .andReturn(stateLock.readLock)
+    EasyMock.expect(txnStateManager.stateWriteLock)
+      .andReturn(stateLock.writeLock)
       .anyTimes()
   }
 
