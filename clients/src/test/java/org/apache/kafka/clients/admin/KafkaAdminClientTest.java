@@ -443,9 +443,9 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(new DeleteRecordsResponse(0, m));
 
-            Map<TopicPartition, Long> partitionsAndOffsets = new HashMap<>();
-            partitionsAndOffsets.put(new TopicPartition("my_topic", 0), (long)3);
-            partitionsAndOffsets.put(new TopicPartition("other_topic", 0), (long)10);
+            Map<TopicPartition, DeleteRecordsTarget> partitionsAndOffsets = new HashMap<>();
+            partitionsAndOffsets.put(new TopicPartition("my_topic", 0), DeleteRecordsTarget.deleteBefore(3L));
+            partitionsAndOffsets.put(new TopicPartition("other_topic", 0), DeleteRecordsTarget.deleteBefore(10L));
             
             DeleteRecordsResult results = env.adminClient().deleteRecords(partitionsAndOffsets);
 

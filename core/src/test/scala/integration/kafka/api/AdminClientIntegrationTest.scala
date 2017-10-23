@@ -24,25 +24,28 @@ import java.io.File
 
 import org.apache.kafka.clients.admin.KafkaAdminClientTest
 import org.apache.kafka.common.utils.{Time, Utils}
-import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
 import kafka.server.{Defaults, KafkaConfig, KafkaServer}
 import org.apache.kafka.clients.admin._
 import kafka.utils.{Logging, TestUtils, ZkUtils}
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.admin.NewTopic
+import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.{KafkaFuture, TopicPartition, TopicPartitionReplica}
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
 import org.junit.{After, Before, Rule, Test}
-import org.apache.kafka.common.requests.MetadataResponse
+import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{Resource, ResourceType}
 import org.junit.rules.Timeout
 import org.junit.Assert._
 
 import scala.util.Random
 import scala.collection.JavaConverters._
+import java.lang.{Long => JLong}
+
 
 /**
  * An integration test of the KafkaAdminClient.
@@ -545,6 +548,205 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
         assertEquals("The topic is queued for deletion.", e.getCause.getMessage)
     }
 
+  }
+
+  val topic = "topic"
+  val partition = 0
+  val topicPartition = new TopicPartition(topic, partition)
+
+  @Test
+  def testSeekToBeginningAfterDeleteRecords(): Unit = {
+    TestUtils.createTopic(zkUtils, topic, 2, serverCount, servers)
+
+    client = AdminClient.create(createConfig)
+
+    val consumer = consumers.head
+    subscribeAndWaitForAssignment(topic, consumer)
+
+    sendRecords(producers.head, 10, topicPartition)
+    consumer.seekToBeginning(Collections.singleton(topicPartition))
+    assertEquals(0L, consumer.position(topicPartition))
+
+    val result = client.deleteRecords(Map[TopicPartition, DeleteRecordsTarget](topicPartition -> DeleteRecordsTarget.deleteBefore(5L)).asJava)
+    val lowWatermark = result.values().get(topicPartition).get()
+    assertEquals(5L, lowWatermark)
+    consumer.seekToBeginning(Collections.singletonList(topicPartition))
+    assertEquals(5L, consumer.position(topicPartition))
+
+    client.close()
+  }
+
+  @Test
+  def testConsumeAfterDeleteRecords(): Unit = {
+    TestUtils.createTopic(zkUtils, topic, 2, serverCount, servers)
+
+    client = AdminClient.create(createConfig)
+
+    val consumer = consumers.head
+    subscribeAndWaitForAssignment(topic, consumer)
+
+    sendRecords(producers.head, 10, topicPartition)
+    var messageCount = 0
+    TestUtils.waitUntilTrue(() => {
+      messageCount += consumer.poll(0).count()
+      messageCount == 10
+    }, "Expected 10 messages", 3000L)
+
+    var result = client.deleteRecords(Map[TopicPartition, DeleteRecordsTarget](topicPartition -> DeleteRecordsTarget.deleteBefore(3L)).asJava)
+    var lowWatermark = result.values().get(topicPartition).get()
+    assertEquals(3L, lowWatermark)
+    consumer.seek(topicPartition, 1L)
+    messageCount = 0
+    TestUtils.waitUntilTrue(() => {
+      messageCount += consumer.poll(0).count()
+      messageCount == 7
+    }, "Expected 7 messages", 3000L)
+
+    result = client.deleteRecords(Map[TopicPartition, DeleteRecordsTarget](topicPartition -> DeleteRecordsTarget.deleteBefore(8L)).asJava)
+    lowWatermark = result.values().get(topicPartition).get()
+    assertEquals(8L, lowWatermark)
+    consumer.seek(topicPartition, 1L)
+    messageCount = 0
+    TestUtils.waitUntilTrue(() => {
+      messageCount += consumer.poll(0).count()
+      messageCount == 2
+    }, "Expected 2 messages", 3000L)
+
+    client.close()
+  }
+
+  @Test
+  def testLogStartOffsetCheckpoint(): Unit = {
+    TestUtils.createTopic(zkUtils, topic, 2, serverCount, servers)
+
+    client = AdminClient.create(createConfig)
+
+    val consumer = consumers.head
+    subscribeAndWaitForAssignment(topic, consumer)
+
+    sendRecords(producers.head, 10, topicPartition)
+    var result = client.deleteRecords(Map[TopicPartition, DeleteRecordsTarget](topicPartition -> DeleteRecordsTarget.deleteBefore(5L)).asJava)
+    var lowWatermark = result.values().get(topicPartition).get()
+    assertEquals(5L, lowWatermark)
+
+    for (i <- 0 until serverCount) {
+      killBroker(i)
+    }
+    restartDeadBrokers()
+
+    client.close()
+    brokerList = TestUtils.bootstrapServers(servers, listenerName)
+    client = AdminClient.create(createConfig)
+
+    TestUtils.waitUntilTrue(() => {
+      result = client.deleteRecords(Map[TopicPartition, DeleteRecordsTarget](topicPartition -> DeleteRecordsTarget.deleteBefore(0L)).asJava)
+      lowWatermark = result.values().get(topicPartition).get(1000L, TimeUnit.MILLISECONDS)
+      lowWatermark == 5L
+    }, "Expected low watermark of the partition to be 5L")
+
+    client.close()
+  }
+
+  @Test
+  def testLogStartOffsetAfterDeleteRecords(): Unit = {
+    TestUtils.createTopic(zkUtils, topic, 2, serverCount, servers)
+
+    client = AdminClient.create(createConfig)
+
+    val consumer = consumers.head
+    subscribeAndWaitForAssignment(topic, consumer)
+
+    sendRecords(producers.head, 10, topicPartition)
+    val result = client.deleteRecords(Map[TopicPartition, DeleteRecordsTarget](topicPartition -> DeleteRecordsTarget.deleteBefore(3L)).asJava)
+    val lowWatermark = result.values().get(topicPartition).get()
+    assertEquals(3L, lowWatermark)
+
+    for (i <- 0 until serverCount)
+      assertEquals(3, servers(i).replicaManager.getReplica(topicPartition).get.logStartOffset)
+
+    client.close()
+  }
+
+  @Test
+  def testOffsetsForTimesAfterDeleteRecords(): Unit = {
+    TestUtils.createTopic(zkUtils, topic, 2, serverCount, servers)
+
+    client = AdminClient.create(createConfig)
+
+    val consumer = consumers.head
+    subscribeAndWaitForAssignment(topic, consumer)
+
+    sendRecords(producers.head, 10, topicPartition)
+    assertEquals(0L, consumer.offsetsForTimes(Map(topicPartition -> new JLong(0L)).asJava).get(topicPartition).offset())
+
+    var result = client.deleteRecords(Map((topicPartition, DeleteRecordsTarget.deleteBefore(5L))).asJava)
+    result.all().get()
+    assertEquals(5L, consumer.offsetsForTimes(Map(topicPartition -> new JLong(0L)).asJava).get(topicPartition).offset())
+
+    result = client.deleteRecords(Map((topicPartition, DeleteRecordsTarget.deleteBefore(DeleteRecordsRequest.HIGH_WATERMARK))).asJava)
+    result.all().get()
+    assertNull(consumer.offsetsForTimes(Map(topicPartition -> new JLong(0L)).asJava).get(topicPartition))
+
+    client.close()
+  }
+
+  @Test
+  def testDeleteRecordsWithException(): Unit = {
+    TestUtils.createTopic(zkUtils, topic, 2, serverCount, servers)
+
+    client = AdminClient.create(createConfig)
+
+    val consumer = consumers.head
+    subscribeAndWaitForAssignment(topic, consumer)
+
+    sendRecords(producers.head, 10, topicPartition)
+    // Should get success result
+    var result = client.deleteRecords(Map((topicPartition, DeleteRecordsTarget.deleteBefore(5L))).asJava)
+    var lowWatermark = result.values().get(topicPartition).get()
+    assertEquals(5L, lowWatermark)
+
+    // OffsetOutOfRangeException if offset > high_watermark
+    result = client.deleteRecords(Map((topicPartition, DeleteRecordsTarget.deleteBefore(20L))).asJava)
+    try {
+      result.values().get(topicPartition).get()
+      fail("Expected failure with an OffsetOutOfRangeException")
+    } catch {
+      case e: ExecutionException =>
+        assertTrue(e.getCause.isInstanceOf[OffsetOutOfRangeException])
+    }
+
+    // LeaderNotAvailableException if user tries to delete records of a non-existent partition
+    val nonExistPartition = new TopicPartition(topic, 3)
+    result = client.deleteRecords(Map((nonExistPartition, DeleteRecordsTarget.deleteBefore(20L))).asJava)
+    try {
+      result.values().get(nonExistPartition).get()
+      fail("Expected failure with an LeaderNotAvailableException")
+    } catch {
+      case e: ExecutionException =>
+        assertTrue(e.getCause.isInstanceOf[LeaderNotAvailableException])
+    }
+
+    client.close()
+  }
+
+  private def subscribeAndWaitForAssignment(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit = {
+    consumer.subscribe(Collections.singletonList(topic))
+    TestUtils.waitUntilTrue(() => {
+      consumer.poll(0)
+      !consumer.assignment.isEmpty
+    }, "Expected non-empty assignment")
+  }
+
+  private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]],
+                          numRecords: Int,
+                          topicPartition: TopicPartition): Unit = {
+    val futures = (0 until numRecords).map( i => {
+      val record = new ProducerRecord(topicPartition.topic, topicPartition.partition, s"$i".getBytes, s"$i".getBytes)
+      debug(s"Sending this record: $record")
+      producer.send(record)
+    })
+
+    futures.foreach(_.get)
   }
 
   @Test
