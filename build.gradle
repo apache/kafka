@@ -28,19 +28,21 @@ buildscript {
     classpath 'com.github.ben-manes:gradle-versions-plugin:0.15.0'
     classpath 'org.scoverage:gradle-scoverage:2.1.0'
     classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.1'
+    classpath 'org.owasp:dependency-check-gradle:3.0.1'
   }
 }
 
 apply from: "$rootDir/gradle/dependencies.gradle"
 
 allprojects {
-  apply plugin: 'idea'
-  apply plugin: "jacoco"
 
   repositories {
     mavenCentral()
   }
-
+  
+  apply plugin: 'idea'
+  apply plugin: "jacoco"
+  apply plugin: 'org.owasp.dependencycheck'
   apply plugin: 'com.github.ben-manes.versions'
 
   dependencyUpdates {
