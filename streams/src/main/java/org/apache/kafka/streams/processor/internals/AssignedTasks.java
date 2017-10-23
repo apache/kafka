@@ -71,9 +71,7 @@ class AssignedTasks implements RestoringTasks {
                 if (task.commitNeeded()) {
                     committed++;
                     task.commit();
-                    if (log.isDebugEnabled()) {
-                        log.debug("Committed active task {} per user request in", task.id());
-                    }
+                    log.debug("Committed active task {} per user request in", task.id());
                 }
             }
         };
@@ -149,6 +147,10 @@ class AssignedTasks implements RestoringTasks {
             if (restoredPartitions.containsAll(task.changelogPartitions())) {
                 transitionToRunning(task, resume);
                 it.remove();
+                log.trace("{} {} completed restoration as all its changelog partitions {} have been applied to restore state",
+                        taskTypeName,
+                        task.id(),
+                        task.changelogPartitions());
             } else {
                 if (log.isTraceEnabled()) {
                     final HashSet<TopicPartition> outstandingPartitions = new HashSet<>(task.changelogPartitions());
