@@ -178,4 +178,24 @@ public class ClusterConnectionStatesTest {
             connectionStates.disconnected(nodeId1, time.milliseconds());
         }
     }
+
+    @Test
+    public void testExponentialReconnectBackoff() {
+        // Calculate fixed components for backoff process
+        final int reconnectBackoffExpBase = 2;
+        double reconnectBackoffMaxExp = Math.log(reconnectBackoffMax / (double) Math.max(reconnectBackoffMs, 1))
+            / Math.log(reconnectBackoffExpBase);
+
+        // Run through 10 disconnects and check that reconnect backoff value is within expected range for every attempt
+        for (int i = 0; i < 10; i++) {
+            connectionStates.connecting(nodeId1, time.milliseconds());
+            connectionStates.disconnected(nodeId1, time.milliseconds());
+            // Calculate expected backoff value without jitter
+            long expectedBackoff = Math.round(Math.pow(reconnectBackoffExpBase, Math.min(i, reconnectBackoffMaxExp))
+                * reconnectBackoffMs);
+            long currentBackoff = connectionStates.connectionDelay(nodeId1, time.milliseconds());
+            assertEquals(expectedBackoff, currentBackoff, reconnectBackoffJitter * expectedBackoff);
+            time.sleep(connectionStates.connectionDelay(nodeId1, time.milliseconds()) + 1);
+        }
+    }
 }
