@@ -723,6 +723,12 @@ public class KafkaStreams {
      * Start the {@code KafkaStreams} instance by starting all its threads.
      * This function is expected to be called only once during the life cycle of the client.
      * <p>
+     * Because threads are started in the background, this method does not block.
+     * As a consequence, any fatal exception that happens during processing is by default only logged.
+     * If you want to be notified about dying threads, you can
+     * {@link #setUncaughtExceptionHandler(Thread.UncaughtExceptionHandler) register an uncaught exception handler}
+     * before starting the {@code KafkaStreams} instance.
+     * <p>
      * Note, for brokers with version {@code 0.9.x} or lower, the broker version cannot be checked.
      * There will be no error and the client will hang and retry to verify the broker version until it
      * {@link StreamsConfig#REQUEST_TIMEOUT_MS_CONFIG times out}.
