@@ -105,12 +105,13 @@ abstract class AbstractResetIntegrationTest {
 
     void beforePrepareTest() throws Exception {
         ++testNo;
+        mockTime = cluster.time;
         bootstrapServers = cluster.bootstrapServers();
 
         // we align time to seconds to get clean window boundaries and thus ensure the same result for each run
         // otherwise, input records could fall into different windows for different runs depending on the initial mock time
         final long alignedTime = (System.currentTimeMillis() / 1000) * 1000;
-        mockTime = new MockTime(0, alignedTime, System.nanoTime());
+        mockTime.setCurrentTimeMs(alignedTime);
 
         Properties sslConfig = getClientSslConfig();
         if (sslConfig == null) {

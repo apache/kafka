@@ -73,4 +73,8 @@ public class MockTime implements Time {
         highResTimeNs.addAndGet(TimeUnit.MILLISECONDS.toNanos(ms));
     }
 
+    public void setCurrentTimeMs(long ms) {
+        timeMs.set(ms);
+        highResTimeNs.set(TimeUnit.MILLISECONDS.toNanos(ms));
+    }
 }
