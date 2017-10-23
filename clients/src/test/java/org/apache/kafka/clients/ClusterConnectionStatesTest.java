@@ -17,19 +17,23 @@
 
 package org.apache.kafka.clients;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.Before;
 import org.junit.Test;
 
 public class ClusterConnectionStatesTest {
+
     protected final MockTime time = new MockTime();
     protected final long reconnectBackoffMsTest = 10 * 1000;
     protected final long reconnectBackoffMaxTest = 60 * 1000;
     protected final double reconnectBackoffJitter = 0.2;
-    private final String nodeId = "1001";
+    private final String nodeId1 = "1001";
+    private final String nodeId2 = "2002";
 
     private ClusterConnectionStates connectionStates;
 
@@ -39,22 +43,20 @@ public class ClusterConnectionStatesTest {
     }
 
     @Test
-    public void testMaxReconnectBackoff() {
-        Long effectiveMaxReconnectBackoff = Math.round(reconnectBackoffMaxTest * (1 + reconnectBackoffJitter));
-        connectionStates.connecting(nodeId, time.milliseconds());
-        time.sleep(1000);
-        connectionStates.disconnected(nodeId, time.milliseconds());
+    public void testExponentialReconnectBackoff() {
+        // Calculate fixed components for backoff process
+        int RECONNECT_BACKOFF_EXP_BASE = 2;
+        double reconnectBackoffMaxExp = Math.log(reconnectBackoffMaxTest / (double) Math.max(reconnectBackoffMsTest, 1)) / Math.log(RECONNECT_BACKOFF_EXP_BASE);
 
-        // Do 100 reconnect attempts and check that MaxReconnectBackoff (plus jitter) is not exceeded
-        for (int i = 0; i < 100; i++) {
-            long reconnectBackoff = connectionStates.connectionDelay(nodeId, time.milliseconds());
-            assertTrue("Expected reconnect backoff to be below 'reconnect.backoff.max.ms' (with 20% jitter).", reconnectBackoff <= effectiveMaxReconnectBackoff);
-            assertFalse("Expected connection to be blocked immediately after disconnect.", connectionStates.canConnect(nodeId, time.milliseconds()));
-            time.sleep(reconnectBackoff + 1);
-            assertTrue("Expected connection to be ready for reconnect after waiting for backoff time to pass.", connectionStates.canConnect(nodeId, time.milliseconds()));
-            connectionStates.connecting(nodeId, time.milliseconds());
-            time.sleep(10);
-            connectionStates.disconnected(nodeId, time.milliseconds());
+        // Run through 10 disconnects and check that reconnect backoff value is within expected range for every attempt
+        for (int i = 0; i < 10; i++) {
+            connectionStates.connecting(nodeId1, time.milliseconds());
+            connectionStates.disconnected(nodeId1, time.milliseconds());
+            // Calculate expected backoff value without jitter
+            long expectedBackoff = Math.round(Math.pow(RECONNECT_BACKOFF_EXP_BASE, Math.min(i, reconnectBackoffMaxExp)) * reconnectBackoffMsTest);
+            long currentBackoff = connectionStates.connectionDelay(nodeId1, time.milliseconds());
+            assertEquals(expectedBackoff, currentBackoff, reconnectBackoffJitter * expectedBackoff);
+            time.sleep(connectionStates.connectionDelay(nodeId1, time.milliseconds()) + 1);
         }
     }
 }
