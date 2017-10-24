@@ -17,6 +17,7 @@ from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
 from collections import defaultdict, namedtuple
 import json
 from threading import Thread
+from select import select
 import socket
 
 MetricKey = namedtuple('MetricKey', ['host', 'client_id', 'name', 'group', 'tags'])
@@ -34,6 +35,9 @@ class HttpMetricsCollector(object):
     to automatically report metrics data to this server. It also provides basic functionality for querying the
     recorded metrics. This class can be used either as a mixin or standalone object.
     """
+
+    # The port to listen on on the worker node, which will be forwarded to the port listening on this driver node
+    REMOTE_PORT = 6789
 
     def __init__(self, **kwargs):
         """
@@ -55,22 +59,18 @@ class HttpMetricsCollector(object):
         self._httpd.parent = self
         self._httpd.metrics = self._http_metrics
 
-        self._http_metrics_thread = Thread(target=self._run_http_metrics_httpd, name='http-metrics-thread[%s]' % str(self))
+        self._http_metrics_thread = Thread(target=self._run_http_metrics_httpd,
+                                           name='http-metrics-thread[%s]' % str(self))
         self._http_metrics_thread.start()
 
-    @property
-    def http_metrics_port(self):
-        """
-        :return: the port the HTTP server that collects metrics is listening on
-        """
-        return self._httpd.socket.getsockname()[1]
+        self._forwarders = {}
 
     @property
     def http_metrics_url(self):
         """
         :return: the URL to use when reporting metrics
         """
-        return "http://%s:%d" % (socket.getfqdn(), self.http_metrics_port)
+        return "http://%s:%d" % ("localhost", self.REMOTE_PORT)
 
     @property
     def http_metrics_client_configs(self):
@@ -85,6 +85,13 @@ class HttpMetricsCollector(object):
             "metrics.period": self._http_metrics_period,
         }
 
+    def start_node(self, node):
+        local_port = self._httpd.socket.getsockname()[1]
+        self.logger.debug('HttpMetricsCollector listening on %s', local_port)
+        self._forwarders[self.idx(node)] = _ReverseForwarder(self.logger, node, self.REMOTE_PORT, local_port)
+
+        super(HttpMetricsCollector, self).start_node(node)
+
     def stop(self):
         super(HttpMetricsCollector, self).stop()
 
@@ -93,6 +100,13 @@ class HttpMetricsCollector(object):
             self._httpd.shutdown()
             self._http_metrics_thread.join()
             self.logger.debug("Finished shutting down metrics httpd")
+
+    def stop_node(self, node):
+        super(HttpMetricsCollector, self).stop_node(node)
+
+        idx = self.idx(node)
+        self._forwarders[idx].stop()
+        del self._forwarders[idx]
 
     def metrics(self, host=None, client_id=None, name=None, group=None, tags=None):
         """
@@ -125,9 +139,8 @@ class _MetricsReceiver(BaseHTTPRequestHandler):
     def do_POST(self):
         data = self.rfile.read(int(self.headers['Content-Length']))
         data = json.loads(data)
-        if self.server.parent.logger.isEnabledFor(TRACE):
-            self.server.parent.logger.debug("POST %s\n\n%s\n%s", self.path, self.headers,
-                                            json.dumps(data, indent=4, separators=(',', ': ')))
+        self.server.parent.logger.log(TRACE, "POST %s\n\n%s\n%s", self.path, self.headers,
+                                      json.dumps(data, indent=4, separators=(',', ': ')))
         self.send_response(204)
         self.end_headers()
 
@@ -147,3 +160,66 @@ class _MetricsReceiver(BaseHTTPRequestHandler):
             metric_value = MetricValue(time=ts, value=value)
 
             self.server.metrics[key].append(metric_value)
+
+
+class _ReverseForwarder(object):
+    """
+    Runs reverse forwarding of a port on a node to a local port. This allows you to setup a server on the test driver
+    that only assumes we have basic SSH access that ducktape guarantees is available for worker nodes.
+    """
+
+    def __init__(self, logger, node, remote_port, local_port):
+        self.logger = logger
+        self._node = node
+        self._local_port = local_port
+
+        self.logger.debug('Forwarding %s port %d to driver port %d', node, remote_port, local_port)
+
+        self._stopping = False
+
+        self._transport = node.account.ssh_client.get_transport()
+        self._transport.request_port_forward('', remote_port)
+
+        self._accept_thread = Thread(target=self._accept)
+        self._accept_thread.start()
+
+    def stop(self):
+        self._stopping = True
+        self._accept_thread.join(30)
+        if self._accept_thread.isAlive():
+            raise RuntimeError("Failed to stop reverse forwarder on %s", self._node)
+
+    def _accept(self):
+        while not self._stopping:
+            chan = self._transport.accept(1)
+            if chan is None:
+                continue
+            thr = Thread(target=self._handler, args=(chan,))
+            thr.setDaemon(True)
+            thr.start()
+
+    def _handler(self, chan):
+        sock = socket.socket()
+        try:
+            sock.connect(("localhost", self._local_port))
+        except Exception as e:
+            self.logger.error('Forwarding request to port %d failed: %r', self._local_port, e)
+            return
+
+        self.logger.log(TRACE, 'Connected! Tunnel open %r -> %r -> %d', chan.origin_addr, chan.getpeername(),
+                        self._local_port)
+        while True:
+            r, w, x = select([sock, chan], [], [])
+            if sock in r:
+                data = sock.recv(1024)
+                if len(data) == 0:
+                    break
+                chan.send(data)
+            if chan in r:
+                data = chan.recv(1024)
+                if len(data) == 0:
+                    break
+                sock.send(data)
+        chan.close()
+        sock.close()
+        self.logger.log(TRACE, 'Tunnel closed from %r', chan.origin_addr)
