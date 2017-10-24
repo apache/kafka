@@ -18,7 +18,7 @@
 package kafka.utils
 
 import kafka.api.LeaderAndIsr
-import kafka.controller.{IsrChangeNotificationListener, LeaderIsrAndControllerEpoch}
+import kafka.controller.{IsrChangeNotificationListener, KafkaControllerZkUtils, LeaderIsrAndControllerEpoch}
 import kafka.utils.ZkUtils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.zookeeper.data.Stat
@@ -29,7 +29,7 @@ object ReplicationUtils extends Logging {
 
   private val IsrChangeNotificationPrefix = "isr_change_"
 
-  def updateLeaderAndIsr(zkUtils: ZkUtils, topic: String, partitionId: Int, newLeaderAndIsr: LeaderAndIsr, controllerEpoch: Int,
+  def updateLeaderAndIsr(zkUtils: KafkaControllerZkUtils, topic: String, partitionId: Int, newLeaderAndIsr: LeaderAndIsr, controllerEpoch: Int,
     zkVersion: Int): (Boolean,Int) = {
     debug(s"Updated ISR for $topic-$partitionId to ${newLeaderAndIsr.isr.mkString(",")}")
     val path = getTopicPartitionLeaderAndIsrPath(topic, partitionId)
@@ -39,7 +39,7 @@ object ReplicationUtils extends Logging {
     updatePersistentPath
   }
 
-  def propagateIsrChanges(zkUtils: ZkUtils, isrChangeSet: Set[TopicPartition]): Unit = {
+  def propagateIsrChanges(zkUtils: KafkaControllerZkUtils, isrChangeSet: Set[TopicPartition]): Unit = {
     val isrChangeNotificationPath: String = zkUtils.createSequentialPersistentPath(
       ZkUtils.IsrChangeNotificationPath + "/" + IsrChangeNotificationPrefix,
       generateIsrChangeJson(isrChangeSet))

@@ -23,9 +23,9 @@ import kafka.cluster.Broker
 import kafka.common.TopicAndPartition
 import kafka.log.LogConfig
 import kafka.server.ConfigType
-import kafka.utils.{Logging, ZkUtils}
+import kafka.utils.{Json, Logging, ZkUtils}
 import org.apache.zookeeper.KeeperException.Code
-import org.apache.zookeeper.data.Stat
+import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException}
 
 import scala.collection.mutable
@@ -33,6 +33,8 @@ import scala.collection.mutable.ArrayBuffer
 
 class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean) extends Logging {
   import KafkaControllerZkUtils._
+
+  private val UseDefaultAcls = new java.util.ArrayList[ACL]
 
   /**
    * Gets topic partition states for the given partitions.
@@ -96,6 +98,11 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
     val createRequest = CreateRequest(ControllerEpochZNode.path, ControllerEpochZNode.encode(epoch),
       acls(ControllerEpochZNode.path), CreateMode.PERSISTENT)
     retryRequestUntilConnected(createRequest)
+  }
+
+  def leaderAndIsrZkData(leaderAndIsr: LeaderAndIsr, controllerEpoch: Int): String = {
+    Json.encode(Map("version" -> 1, "leader" -> leaderAndIsr.leader, "leader_epoch" -> leaderAndIsr.leaderEpoch,
+                    "controller_epoch" -> controllerEpoch, "isr" -> leaderAndIsr.isr))
   }
 
   /**
@@ -347,6 +354,18 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
     retryRequestUntilConnected(setDataRequest)
   }
 
+  def createSequentialPersistentPath(path: String, data: String = ""): String = {
+    val createRequest = CreateRequest(path, data.getBytes("UTF-8"), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
+    val createResponse = retryRequestUntilConnected(createRequest)
+    createResponse.path
+  }
+
+  def conditionalUpdatePersistentPath(path: String, data: String, expectVersion: Int,
+    optionalChecker:Option[(ZkUtils, String, String) => (Boolean,Int)] = None): (Boolean, Int) = {
+    val req = WriteDataReturnStatRequest(path, data, expectVersion)
+    val response = retryRequestUntilConnected(req)
+    (true, response.stat.getVersion)
+  }
   /**
    * Creates the partition reassignment znode with the given reassignment.
    * @param reassignment the reassignment to set on the reassignment znode.

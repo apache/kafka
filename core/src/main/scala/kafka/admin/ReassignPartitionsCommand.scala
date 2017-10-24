@@ -31,6 +31,7 @@ import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.TopicPartitionReplica
 import org.apache.kafka.common.errors.ReplicaNotAvailableException
 import org.apache.kafka.clients.admin.{AdminClientConfig, AlterReplicaLogDirsOptions, AdminClient => JAdminClient}
+import kafka.controller.KafkaControllerZkUtils
 import LogConfig._
 import joptsimple.OptionParser
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo
@@ -114,7 +115,7 @@ object ReassignPartitionsCommand extends Logging {
     removeThrottle(zkUtils, reassignedPartitionsStatus, replicasReassignmentStatus)
   }
 
-  private[admin] def removeThrottle(zkUtils: ZkUtils,
+  private[admin] def removeThrottle(zkUtils: KafkaControllerZkUtils,
                                     reassignedPartitionsStatus: Map[TopicAndPartition, ReassignmentStatus],
                                     replicasReassignmentStatus: Map[TopicPartitionReplica, ReassignmentStatus],
                                     admin: AdminUtilities = AdminUtils): Unit = {
