@@ -147,11 +147,6 @@ public class StandbyTask extends AbstractTask {
         close(clean, isZombie);
     }
 
-    @Override
-    public boolean commitNeeded() {
-        return false;
-    }
-
     /**
      * Updates a state store using records from one change log partition
      *
@@ -163,28 +158,8 @@ public class StandbyTask extends AbstractTask {
         return stateMgr.updateStandbyStates(partition, records);
     }
 
-    @Override
-    public int addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
-        throw new UnsupportedOperationException("add records not supported by StandbyTasks");
-    }
-
     public Map<TopicPartition, Long> checkpointedOffsets() {
         return checkpointedOffsets;
-    }
-
-    @Override
-    public boolean maybePunctuateStreamTime() {
-        throw new UnsupportedOperationException("maybePunctuateStreamTime not supported by StandbyTask");
-    }
-
-    @Override
-    public boolean maybePunctuateSystemTime() {
-        throw new UnsupportedOperationException("maybePunctuateSystemTime not supported by StandbyTask");
-    }
-
-    @Override
-    public boolean process() {
-        throw new UnsupportedOperationException("process not supported by StandbyTasks");
     }
 
 }
