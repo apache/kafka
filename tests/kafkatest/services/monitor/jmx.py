@@ -43,6 +43,8 @@ class JmxMixin(object):
     def clean_node(self, node):
         node.account.kill_java_processes(self.jmx_class_name(), clean_shutdown=False,
                                          allow_fail=True)
+        idx = self.idx(node)
+        self.started[idx-1] = False
         node.account.ssh("rm -f -- %s %s" % (self.jmx_tool_log, self.jmx_tool_err_log), allow_fail=False)
 
     def start_jmx_tool(self, idx, node):
