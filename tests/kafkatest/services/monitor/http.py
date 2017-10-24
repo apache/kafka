@@ -30,7 +30,7 @@ TRACE = 5
 class HttpMetricsCollector(object):
     """
     HttpMetricsCollector enables collection of metrics from various Kafka clients instrumented with the
-    push-based HttpMetricsReporter. It starts a web server locally and provides the necessary configuration for clients
+    PushHttpMetricsReporter. It starts a web server locally and provides the necessary configuration for clients
     to automatically report metrics data to this server. It also provides basic functionality for querying the
     recorded metrics. This class can be used either as a mixin or standalone object.
     """
@@ -80,12 +80,14 @@ class HttpMetricsCollector(object):
         :return: a dictionary of client configurations that will direct a client to report metrics to this collector
         """
         return {
-            "metric.reporters": "org.apache.kafka.tools.HttpMetricsReporter",
+            "metric.reporters": "org.apache.kafka.tools.PushHttpMetricsReporter",
             "metrics.url": self.http_metrics_url,
             "metrics.period": self._http_metrics_period,
         }
 
-    def http_metrics_stop(self):
+    def stop(self):
+        super(HttpMetricsCollector, self).stop()
+
         if self._http_metrics_thread:
             self.logger.debug("Shutting down metrics httpd")
             self._httpd.shutdown()
@@ -111,7 +113,7 @@ class HttpMetricsCollector(object):
 
 class _MetricsReceiver(BaseHTTPRequestHandler):
     """
-    HTTP request handler that accepts requests from the HttpMetricsReporter and stores them back into the parent
+    HTTP request handler that accepts requests from the PushHttpMetricsReporter and stores them back into the parent
     HttpMetricsCollector
     """
 

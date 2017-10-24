@@ -158,8 +158,6 @@ class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
         except:
             raise Exception("Unable to parse aggregate performance statistics on node %d: %s" % (idx, last))
 
-        self.http_metrics_stop()
-
     def parse_stats(self, line):
 
         parts = line.split(',')
