@@ -349,9 +349,10 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
     retryRequestUntilConnected(setDataRequest)
   }
 
-  def createSequentialPersistentPath(path: String, data: String = ""): CreateResponse = {
+  def createSequentialPersistentPath(path: String, data: String = ""): String = {
     val createRequest = CreateRequest(path, data.getBytes("UTF-8"), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
-    retryRequestUntilConnected(createRequest)
+    val createResponse = retryRequestUntilConnected(createRequest)
+    createResponse.path
   }
 
 
