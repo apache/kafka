@@ -958,8 +958,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (pattern == null)
                 throw new IllegalArgumentException("Topic pattern to subscribe to cannot be null");
 
-            acquireAndEnsureOpen();
             throwIfNoAssignorsConfigured();
+            acquireAndEnsureOpen();
 
             log.debug("Subscribed to pattern: {}", pattern);
             this.subscriptions.subscribe(pattern, listener);
