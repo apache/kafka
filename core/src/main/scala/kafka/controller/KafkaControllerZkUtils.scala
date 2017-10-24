@@ -25,7 +25,7 @@ import kafka.log.LogConfig
 import kafka.server.ConfigType
 import kafka.utils.{Logging, ZkUtils}
 import org.apache.zookeeper.KeeperException.Code
-import org.apache.zookeeper.data.Stat
+import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException}
 
 import scala.collection.mutable
@@ -33,6 +33,8 @@ import scala.collection.mutable.ArrayBuffer
 
 class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean) extends Logging {
   import KafkaControllerZkUtils._
+
+  private val UseDefaultAcls = new java.util.ArrayList[ACL]
 
   /**
    * Gets topic partition states for the given partitions.
@@ -346,6 +348,12 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
     val setDataRequest = SetDataRequest(ReassignPartitionsZNode.path, ReassignPartitionsZNode.encode(reassignment), -1)
     retryRequestUntilConnected(setDataRequest)
   }
+
+  def createSequentialPersistentPath(path: String, data: String = ""): CreateResponse = {
+    val createRequest = CreateRequest(path, data.getBytes("UTF-8"), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
+    retryRequestUntilConnected(createRequest)
+  }
+
 
   /**
    * Creates the partition reassignment znode with the given reassignment.
