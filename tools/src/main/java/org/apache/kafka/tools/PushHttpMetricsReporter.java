@@ -17,7 +17,6 @@
 package org.apache.kafka.tools;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaException;
@@ -32,6 +31,7 @@ import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
@@ -39,12 +39,13 @@ import java.net.InetAddress;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.UnknownHostException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Scanner;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -53,14 +54,14 @@ import java.util.concurrent.TimeUnit;
  * MetricsReporter that aggregates metrics data and reports it via HTTP requests to a configurable
  * webhook endpoint in JSON format.
  */
-public class HttpMetricsReporter implements MetricsReporter {
-    private static final Logger log = LoggerFactory.getLogger(HttpMetricsReporter.class);
+public class PushHttpMetricsReporter implements MetricsReporter {
+    private static final Logger log = LoggerFactory.getLogger(PushHttpMetricsReporter.class);
 
     private static final String METRICS_PREFIX = "metrics.";
-    private static final String METRICS_URL_CONFIG = METRICS_PREFIX + "url";
-    private static final String METRICS_PERIOD_CONFIG = METRICS_PREFIX + "period";
-    private static final String METRICS_HOST_CONFIG = METRICS_PREFIX + "host";
-    private static final String CLIENT_ID_CONFIG = ProducerConfig.CLIENT_ID_CONFIG;
+    static final String METRICS_URL_CONFIG = METRICS_PREFIX + "url";
+    static final String METRICS_PERIOD_CONFIG = METRICS_PREFIX + "period";
+    static final String METRICS_HOST_CONFIG = METRICS_PREFIX + "host";
+    static final String CLIENT_ID_CONFIG = ProducerConfig.CLIENT_ID_CONFIG;
 
     private static final Map<String, String> HEADERS = new LinkedHashMap<>();
     static {
@@ -68,11 +69,12 @@ public class HttpMetricsReporter implements MetricsReporter {
     }
 
     private final Object lock = new Object();
-    private ScheduledExecutorService executor;
+    private final Time time;
+    private final ScheduledExecutorService executor;
     private URL url;
     private String host;
     private String clientId;
-    private final Map<MetricName, KafkaMetric> metrics = new HashMap<>();
+    private final Map<MetricName, KafkaMetric> metrics = new LinkedHashMap<>();
     private final ObjectMapper json = new ObjectMapper();
 
     private static final ConfigDef CONFIG_DEF = new ConfigDef()
@@ -83,9 +85,19 @@ public class HttpMetricsReporter implements MetricsReporter {
             .define(METRICS_HOST_CONFIG, ConfigDef.Type.STRING, null, ConfigDef.Importance.LOW,
                     "The hostname to report with each metric; if null, defaults to the FQDN that can be automatically" +
                             "determined")
-            .define(CLIENT_ID_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.LOW,
+            .define(CLIENT_ID_CONFIG, ConfigDef.Type.STRING, "", ConfigDef.Importance.LOW,
                     "Client ID to identify the application, generally inherited from the " +
                             "producer/consumer/streams/connect instance");
+
+    public PushHttpMetricsReporter() {
+        time = Time.SYSTEM;
+        executor = Executors.newSingleThreadScheduledExecutor();
+    }
+
+    PushHttpMetricsReporter(Time mockTime, ScheduledExecutorService mockExecutor) {
+        time = mockTime;
+        executor = mockExecutor;
+    }
 
     @Override
     public void configure(Map<String, ?> configs) {
@@ -107,10 +119,9 @@ public class HttpMetricsReporter implements MetricsReporter {
             }
         }
 
-        executor = Executors.newSingleThreadScheduledExecutor();
         executor.scheduleAtFixedRate(new HttpReporter(), period, period, TimeUnit.SECONDS);
 
-        log.info("Configured HttpMetricsReporter for {} to report every {} seconds", url, period);
+        log.info("Configured PushHttpMetricsReporter for {} to report every {} seconds", url, period);
     }
 
     @Override
@@ -145,14 +156,14 @@ public class HttpMetricsReporter implements MetricsReporter {
         try {
             executor.awaitTermination(30, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
-            throw new InterruptException("Interrupted when shutting down HttpMetricsReporter", e);
+            throw new InterruptException("Interrupted when shutting down PushHttpMetricsReporter", e);
         }
     }
 
     private class HttpReporter implements Runnable {
         @Override
         public void run() {
-            long now = Time.SYSTEM.milliseconds();
+            long now = time.milliseconds();
             final List<MetricValue> samples;
             synchronized (lock) {
                 samples = new ArrayList<>(metrics.size());
@@ -168,7 +179,7 @@ public class HttpMetricsReporter implements MetricsReporter {
             log.trace("Reporting {} metrics to {}", samples.size(), url);
             HttpURLConnection connection = null;
             try {
-                connection = (HttpURLConnection) url.openConnection();
+                connection = newHttpConnection(url);
                 connection.setRequestMethod("POST");
                 // connection.getResponseCode() implicitly calls getInputStream, so always set to true.
                 // On the other hand, leaving this out breaks nothing.
@@ -192,11 +203,10 @@ public class HttpMetricsReporter implements MetricsReporter {
                 int responseCode = connection.getResponseCode();
                 if (responseCode >= 400) {
                     InputStream is = connection.getErrorStream();
-                    JsonNode msg = json.readTree(is);
-                    is.close();
+                    String msg = readResponse(is);
                     log.error("Error reporting metrics, {}: {}", responseCode, msg);
                 } else if (responseCode >= 300) {
-                    log.error("HttpMetricsReporter does not currently support redirects, saw {}", responseCode);
+                    log.error("PushHttpMetricsReporter does not currently support redirects, saw {}", responseCode);
                 } else {
                     log.info("Finished reporting metrics with response code {}", responseCode);
                 }
@@ -208,6 +218,18 @@ public class HttpMetricsReporter implements MetricsReporter {
                     connection.disconnect();
                 }
             }
+        }
+    }
+
+    // Static package-private so unit tests can use a mock connection
+    static HttpURLConnection newHttpConnection(URL url) throws IOException {
+        return (HttpURLConnection) url.openConnection();
+    }
+
+    // Static package-private so unit tests can mock reading response
+    static String readResponse(InputStream is) {
+        try (Scanner s = new Scanner(is, StandardCharsets.UTF_8.name()).useDelimiter("\\A")) {
+            return s.hasNext() ? s.next() : "";
         }
     }
 
