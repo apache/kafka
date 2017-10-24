@@ -599,47 +599,46 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    * @return optional long that is Some if there was an offset committed for group/topicPartition and None otherwise.
    */
   def getConsumerOffset(group: String, topicPartition: TopicPartition): Option[Long] = {
-    val getDataRequest = GetDataRequest(ConsumerOffset.path(group, topicPartition.topic, topicPartition.partition), null)
+    val getDataRequest = GetDataRequest(ConsumerOffset.path(group, topicPartition.topic, topicPartition.partition))
     val getDataResponse = retryRequestUntilConnected(getDataRequest)
     if (getDataResponse.resultCode == Code.OK) {
       ConsumerOffset.decode(getDataResponse.data)
     } else if (getDataResponse.resultCode == Code.NONODE) {
       None
     } else {
-      throw KeeperException.create(getDataResponse.resultCode)
+      throw getDataResponse.resultException.get
     }
   }
 
    /**
    * Sets the committed offset for a group/topicPartition
    * @param group the topic whose offset is being set
-   * @param topic the topic whose offset is being set
+   * @param topicPartition the topic/partition whose offset is being set
    * @param offset the offset value
-   * @return SetDataResponse
    */
-  def setOrCreateConsumerOffset(group: String, topicPartition: TopicPartition, offset: Long) {
+  def setOrCreateConsumerOffset(group: String, topicPartition: TopicPartition, offset: Long): Unit = {
     val setDataResponse = setConsumerOffset(group, topicPartition, offset)
     if (setDataResponse.resultCode == Code.NONODE) {
       val createResponse = createConsumerOffset(group, topicPartition, offset)
       if (createResponse.resultCode != Code.OK) {
-        throw KeeperException.create(createResponse.resultCode)
+        throw createResponse.resultException.get
       }
     } else if (setDataResponse.resultCode != Code.OK) {
-      throw KeeperException.create(setDataResponse.resultCode)
+      throw setDataResponse.resultException.get
     }
   }
 
   private def setConsumerOffset(group: String, topicPartition: TopicPartition, offset: Long): SetDataResponse = {
-    val setDataRequest = SetDataRequest(ConsumerOffset.path(group, topicPartition.topic, topicPartition.partition), ConsumerOffset.encode(offset), Version.noVersion, null)
+    val setDataRequest = SetDataRequest(ConsumerOffset.path(group, topicPartition.topic, topicPartition.partition), ConsumerOffset.encode(offset), Version.noVersion)
     retryRequestUntilConnected(setDataRequest)
   }
 
   private def createConsumerOffset(group: String, topicPartition: TopicPartition, offset: Long): CreateResponse = {
     val path = ConsumerOffset.path(group, topicPartition.topic, topicPartition.partition)
-    val createRequest = CreateRequest(path, ConsumerOffset.encode(offset), acls(path), CreateMode.PERSISTENT, null)
+    val createRequest = CreateRequest(path, ConsumerOffset.encode(offset), acls(path), CreateMode.PERSISTENT)
     var createResponse = retryRequestUntilConnected(createRequest)
     if (createResponse.resultCode == Code.NONODE) {
-      createRecursive(path.substring(0, path.lastIndexOf('/')))
+      createRecursive(path.substring(0, path.lastIndexOf("/")))
       createResponse = retryRequestUntilConnected(createRequest)
     }
     createResponse
@@ -659,16 +658,18 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
   }
 
   private def createRecursive(path: String): Unit = {
-    val createRequest = CreateRequest(path, null, acls(path), CreateMode.PERSISTENT, null)
+    val createRequest = CreateRequest(path, null, acls(path), CreateMode.PERSISTENT)
     var createResponse = retryRequestUntilConnected(createRequest)
     if (createResponse.resultCode == Code.NONODE) {
-      val parentPath = path.substring(0, path.lastIndexOf('/'))
+      if (!path.contains("/")) throw new IllegalArgumentException(s"Invalid path ${path}")
+      val parentPath = path.substring(0, path.lastIndexOf("/"))
       createRecursive(parentPath)
       createResponse = retryRequestUntilConnected(createRequest)
-      val rc = createResponse.resultCode
-      if (rc != Code.OK && rc != Code.NODEEXISTS) {
-        throw KeeperException.create(rc)
+      if (createResponse.resultCode != Code.OK && createResponse.resultCode != Code.NODEEXISTS) {
+        throw createResponse.resultException.get
       }
+    } else if (createResponse.resultCode != Code.OK) {
+      throw createResponse.resultException.get
     }
   }
 
