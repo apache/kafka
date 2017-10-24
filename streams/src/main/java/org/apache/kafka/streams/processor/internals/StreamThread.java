@@ -488,24 +488,22 @@ public class StreamThread extends Thread {
     long runOnce(long recordsProcessedBeforeCommit) {
         timerStartedMs = time.milliseconds();
 
-        // try to fetch some records if necessary
-        final ConsumerRecords<byte[], byte[]> records = pollRequests();
+        ConsumerRecords<byte[], byte[]> records;
 
         if (state == State.PARTITIONS_ASSIGNED) {
-            active.initializeNewTasks();
-            standby.initializeNewTasks();
+            // try to fetch some records with zero poll millis
+            // to unblock the restoration as soon as possible
+            records = pollRequests(0L);
 
-            final Collection<TopicPartition> restored = storeChangelogReader.restore();
-            final Set<TopicPartition> resumed = active.updateRestored(restored);
+            tryTransitToRunning();
+        } else {
+            // try to fetch some records if necessary
+            records = pollRequests(pollTimeMs);
 
-            if (!resumed.isEmpty()) {
-                log.trace("{} resuming partitions {}", logPrefix, resumed);
-                consumer.resume(resumed);
-            }
-
-            if (active.allTasksRunning()) {
-                assignStandbyPartitions();
-                setState(State.RUNNING);
+            // if state changed after the poll call,
+            // try to initialize the assigned tasks again
+            if (state == State.PARTITIONS_ASSIGNED) {
+                tryTransitToRunning();
             }
         }
 
@@ -528,10 +526,34 @@ public class StreamThread extends Thread {
     }
 
     /**
+     * Retry to restore the assigned records and transit to RUNNING state if all restoration is done
+     */
+    private void tryTransitToRunning() {
+        active.initializeNewTasks();
+        standby.initializeNewTasks();
+
+        final Collection<TopicPartition> restored = storeChangelogReader.restore();
+        final Set<TopicPartition> resumed = active.updateRestored(restored);
+
+        if (!resumed.isEmpty()) {
+            log.trace("{} resuming partitions {}", logPrefix, resumed);
+            consumer.resume(resumed);
+        }
+
+        if (active.allTasksRunning()) {
+            assignStandbyPartitions();
+            setState(State.RUNNING);
+        }
+    }
+
+    /**
      * Get the next batch of records by polling.
+     *
+     * @param pollTimeMs poll time millis parameter for the consumer poll
+     *
      * @return Next batch of records or null if no records available.
      */
-    private ConsumerRecords<byte[], byte[]> pollRequests() {
+    private ConsumerRecords<byte[], byte[]> pollRequests(final long pollTimeMs) {
         ConsumerRecords<byte[], byte[]> records = null;
 
         try {

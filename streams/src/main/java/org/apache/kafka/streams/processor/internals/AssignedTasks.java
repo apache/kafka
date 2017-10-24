@@ -113,6 +113,11 @@ class AssignedTasks<T extends AbstractTask> {
                 transitionToRunning(task);
                 resume.addAll(task.partitions());
                 it.remove();
+                log.trace("{} {} {} completed restoration as all its changelog partitions {} have been applied to restore state",
+                        logPrefix,
+                        taskTypeName,
+                        task.id(),
+                        task.changelogPartitions());
             } else {
                 if (log.isTraceEnabled()) {
                     final HashSet<TopicPartition> outstandingPartitions = new HashSet<>(task.changelogPartitions());

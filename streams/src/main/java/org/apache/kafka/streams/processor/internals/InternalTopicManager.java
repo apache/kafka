@@ -17,10 +17,10 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.requests.MetadataResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -37,8 +37,10 @@ public class InternalTopicManager {
     public static final String RETENTION_MS = "retention.ms";
     private static final int MAX_TOPIC_READY_TRY = 5;
 
-    private final Logger log;
+    private static final Logger log = LoggerFactory.getLogger(InternalTopicManager.class);
+
     private final Time time;
+    private final String logPrefix;
     private final long windowChangeLogAdditionalRetention;
 
     private final int replicationFactor;
@@ -53,8 +55,7 @@ public class InternalTopicManager {
         this.windowChangeLogAdditionalRetention = windowChangeLogAdditionalRetention;
         this.time = time;
 
-        LogContext logContext = new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName()));
-        this.log = logContext.logger(getClass());
+        this.logPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
     }
 
     /**
@@ -81,7 +82,7 @@ public class InternalTopicManager {
                 }
                 return;
             } catch (StreamsException ex) {
-                log.warn("Could not create internal topics: " + ex.getMessage() + " Retry #" + i);
+                log.warn(logPrefix + "Could not create internal topics: " + ex.getMessage() + " Retry #" + i);
             }
             // backoff
             time.sleep(100L);
@@ -101,7 +102,7 @@ public class InternalTopicManager {
 
                 return existingTopicPartitions;
             } catch (StreamsException ex) {
-                log.warn("Could not get number of partitions: " + ex.getMessage() + " Retry #" + i);
+                log.warn(logPrefix + "Could not get number of partitions: " + ex.getMessage() + " Retry #" + i);
             }
             // backoff
             time.sleep(100L);
@@ -113,7 +114,7 @@ public class InternalTopicManager {
         try {
             streamsKafkaClient.close();
         } catch (IOException e) {
-            log.warn("Could not close StreamsKafkaClient.");
+            log.warn(logPrefix + "Could not close StreamsKafkaClient.");
         }
     }
 
