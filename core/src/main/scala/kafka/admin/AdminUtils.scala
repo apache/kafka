@@ -17,6 +17,7 @@
 
 package kafka.admin
 
+import kafka.controller.KafkaControllerZkUtils
 import kafka.log.LogConfig
 import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig}
 import kafka.utils._
@@ -57,7 +58,7 @@ trait AdminUtilities {
     }
   }
 
-  def fetchEntityConfig(zkUtils: ZkUtils,entityType: String, entityName: String): Properties
+  def fetchEntityConfig(zkUtils: KafkaControllerZkUtils, entityType: String, entityName: String): Properties
 }
 
 object AdminUtils extends Logging with AdminUtilities {
