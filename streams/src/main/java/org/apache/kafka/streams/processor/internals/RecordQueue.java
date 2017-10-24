@@ -82,9 +82,6 @@ public class RecordQueue {
     public int addRawRecords(Iterable<ConsumerRecord<byte[], byte[]>> rawRecords) {
         for (ConsumerRecord<byte[], byte[]> rawRecord : rawRecords) {
             ConsumerRecord<Object, Object> record = recordDeserializer.deserialize(rawRecord);
-
-            System.out.println("Got record " + record);
-
             long timestamp = timestampExtractor.extract(record, timeTracker.get());
             log.trace("Source node {} extracted timestamp {} for record {}", source.name(), timestamp, record);
 

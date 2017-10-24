@@ -117,8 +117,6 @@ public class RecordCollectorImpl implements RecordCollector {
                     }
                 });
 
-                System.out.println("Send record " + serializedRecord);
-
                 return;
             } catch (final TimeoutException e) {
                 if (attempt == MAX_SEND_ATTEMPTS) {
