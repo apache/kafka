@@ -330,6 +330,10 @@ case class ExistsRequest(path: String, ctx: Option[Any] = None) extends AsyncReq
   type Response = ExistsResponse
 }
 
+case class WriteDataReturnStatRequest(path: String, data: String, expectVersion: Int, ctx: Option[Any] = None) extends AsyncRequest {
+  type Response = WriteDataReturnStatResponse
+}
+
 case class GetDataRequest(path: String, ctx: Option[Any] = None) extends AsyncRequest {
   type Response = GetDataResponse
 }
@@ -361,6 +365,7 @@ sealed trait AsyncResponse {
 }
 case class CreateResponse(resultCode: Code, path: String, ctx: Option[Any], name: String) extends AsyncResponse
 case class DeleteResponse(resultCode: Code, path: String, ctx: Option[Any]) extends AsyncResponse
+case class WriteDataReturnStatResponse(resultCode: Code, path: String, ctx: Option[Any], stat: Stat) extends AsyncResponse
 case class ExistsResponse(resultCode: Code, path: String, ctx: Option[Any], stat: Stat) extends AsyncResponse
 case class GetDataResponse(resultCode: Code, path: String, ctx: Option[Any], data: Array[Byte], stat: Stat) extends AsyncResponse
 case class SetDataResponse(resultCode: Code, path: String, ctx: Option[Any], stat: Stat) extends AsyncResponse
