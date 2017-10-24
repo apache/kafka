@@ -48,7 +48,7 @@ class EmbeddedZookeeper() {
     }
 
     Iterator.continually(isDown()).exists(identity)
-
+    CoreUtils.swallow(zookeeper.getZKDatabase.close())
     Utils.delete(logDir)
     Utils.delete(snapshotDir)
   }
