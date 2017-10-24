@@ -46,6 +46,7 @@ import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
 import org.apache.kafka.common.requests.DeleteRecordsResponse;
 import org.apache.kafka.common.requests.DescribeAclsResponse;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
+import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.resource.ResourceFilter;
 import org.apache.kafka.common.resource.ResourceType;
@@ -441,11 +442,23 @@ public class KafkaAdminClientTest {
             m.put(new TopicPartition("other_topic", 0),
                     new DeleteRecordsResponse.PartitionResponse(-1, Errors.OFFSET_OUT_OF_RANGE));
 
+            List<MetadataResponse.TopicMetadata> t = new ArrayList<>();
+            t.add(new MetadataResponse.TopicMetadata(Errors.NONE, "my_topic", false,
+                    Collections.singletonList(
+                            new MetadataResponse.PartitionMetadata(Errors.NONE, 0, nodes.get(0),
+                                    Collections.singletonList(nodes.get(0)), Collections.singletonList(nodes.get(0)), Collections.<Node>emptyList()))));
+            t.add(new MetadataResponse.TopicMetadata(Errors.NONE, "other_topic", false,
+                    Collections.singletonList(
+                            new MetadataResponse.PartitionMetadata(Errors.NONE, 0, nodes.get(0),
+                                    Collections.singletonList(nodes.get(0)), Collections.singletonList(nodes.get(0)), Collections.<Node>emptyList()))));
+
+
+            env.kafkaClient().prepareResponse(new MetadataResponse(cluster.nodes(), cluster.clusterResource().clusterId(), cluster.controller().id(), t));
             env.kafkaClient().prepareResponse(new DeleteRecordsResponse(0, m));
 
-            Map<TopicPartition, DeleteRecordsTarget> partitionsAndOffsets = new HashMap<>();
-            partitionsAndOffsets.put(new TopicPartition("my_topic", 0), DeleteRecordsTarget.deleteBefore(3L));
-            partitionsAndOffsets.put(new TopicPartition("other_topic", 0), DeleteRecordsTarget.deleteBefore(10L));
+            Map<TopicPartition, RecordsToDelete> partitionsAndOffsets = new HashMap<>();
+            partitionsAndOffsets.put(new TopicPartition("my_topic", 0), RecordsToDelete.beforeOffset(3L));
+            partitionsAndOffsets.put(new TopicPartition("other_topic", 0), RecordsToDelete.beforeOffset(10L));
             
             DeleteRecordsResult results = env.adminClient().deleteRecords(partitionsAndOffsets);
 

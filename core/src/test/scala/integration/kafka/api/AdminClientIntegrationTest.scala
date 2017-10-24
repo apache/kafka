@@ -567,7 +567,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     consumer.seekToBeginning(Collections.singleton(topicPartition))
     assertEquals(0L, consumer.position(topicPartition))
 
-    val result = client.deleteRecords(Map(topicPartition -> DeleteRecordsTarget.deleteBefore(5L)).asJava)
+    val result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(5L)).asJava)
     val lowWatermark = result.values().get(topicPartition).get()
     assertEquals(5L, lowWatermark)
     consumer.seekToBeginning(Collections.singletonList(topicPartition))
@@ -592,7 +592,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       messageCount == 10
     }, "Expected 10 messages", 3000L)
 
-    var result = client.deleteRecords(Map(topicPartition -> DeleteRecordsTarget.deleteBefore(3L)).asJava)
+    var result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(3L)).asJava)
     var lowWatermark = result.values().get(topicPartition).get()
     assertEquals(3L, lowWatermark)
     consumer.seek(topicPartition, 1L)
@@ -602,7 +602,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       messageCount == 7
     }, "Expected 7 messages", 3000L)
 
-    result = client.deleteRecords(Map(topicPartition -> DeleteRecordsTarget.deleteBefore(8L)).asJava)
+    result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(8L)).asJava)
     lowWatermark = result.values().get(topicPartition).get()
     assertEquals(8L, lowWatermark)
     consumer.seek(topicPartition, 1L)
@@ -625,7 +625,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     subscribeAndWaitForAssignment(topic, consumer)
 
     sendRecords(producers.head, 10, topicPartition)
-    var result = client.deleteRecords(Map(topicPartition -> DeleteRecordsTarget.deleteBefore(5L)).asJava)
+    var result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(5L)).asJava)
     var lowWatermark = result.values().get(topicPartition).get()
     assertEquals(5L, lowWatermark)
 
@@ -639,7 +639,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     client = AdminClient.create(createConfig)
 
     TestUtils.waitUntilTrue(() => {
-      result = client.deleteRecords(Map(topicPartition -> DeleteRecordsTarget.deleteBefore(0L)).asJava)
+      result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(0L)).asJava)
       lowWatermark = result.values().get(topicPartition).get(1000L, TimeUnit.MILLISECONDS)
       lowWatermark == 5L
     }, "Expected low watermark of the partition to be 5L")
@@ -657,7 +657,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     subscribeAndWaitForAssignment(topic, consumer)
 
     sendRecords(producers.head, 10, topicPartition)
-    val result = client.deleteRecords(Map(topicPartition -> DeleteRecordsTarget.deleteBefore(3L)).asJava)
+    val result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(3L)).asJava)
     val lowWatermark = result.values().get(topicPartition).get()
     assertEquals(3L, lowWatermark)
 
@@ -679,11 +679,11 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     sendRecords(producers.head, 10, topicPartition)
     assertEquals(0L, consumer.offsetsForTimes(Map(topicPartition -> new JLong(0L)).asJava).get(topicPartition).offset())
 
-    var result = client.deleteRecords(Map(topicPartition -> DeleteRecordsTarget.deleteBefore(5L)).asJava)
+    var result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(5L)).asJava)
     result.all().get()
     assertEquals(5L, consumer.offsetsForTimes(Map(topicPartition -> new JLong(0L)).asJava).get(topicPartition).offset())
 
-    result = client.deleteRecords(Map(topicPartition -> DeleteRecordsTarget.deleteBefore(DeleteRecordsRequest.HIGH_WATERMARK)).asJava)
+    result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(DeleteRecordsRequest.HIGH_WATERMARK)).asJava)
     result.all().get()
     assertNull(consumer.offsetsForTimes(Map(topicPartition -> new JLong(0L)).asJava).get(topicPartition))
 
@@ -701,12 +701,12 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     sendRecords(producers.head, 10, topicPartition)
     // Should get success result
-    var result = client.deleteRecords(Map(topicPartition -> DeleteRecordsTarget.deleteBefore(5L)).asJava)
+    var result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(5L)).asJava)
     var lowWatermark = result.values().get(topicPartition).get()
     assertEquals(5L, lowWatermark)
 
     // OffsetOutOfRangeException if offset > high_watermark
-    result = client.deleteRecords(Map(topicPartition -> DeleteRecordsTarget.deleteBefore(20L)).asJava)
+    result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(20L)).asJava)
     try {
       result.values().get(topicPartition).get()
       fail("Expected failure with an OffsetOutOfRangeException")
@@ -717,7 +717,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     // LeaderNotAvailableException if user tries to delete records of a non-existent partition
     val nonExistPartition = new TopicPartition(topic, 3)
-    result = client.deleteRecords(Map(nonExistPartition -> DeleteRecordsTarget.deleteBefore(20L)).asJava)
+    result = client.deleteRecords(Map(nonExistPartition -> RecordsToDelete.beforeOffset(20L)).asJava)
     try {
       result.values().get(nonExistPartition).get()
       fail("Expected failure with an LeaderNotAvailableException")

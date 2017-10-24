@@ -27,11 +27,11 @@ import java.util.Map;
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
 @InterfaceStability.Evolving
-public class DeleteRecordsTarget {
+public class RecordsToDelete {
 
     private long offset;
 
-    private DeleteRecordsTarget(long offset) {
+    private RecordsToDelete(long offset) {
         this.offset = offset;
     }
 
@@ -40,8 +40,8 @@ public class DeleteRecordsTarget {
      *
      * @param offset    the offset before which all records will be deleted
      */
-    public static DeleteRecordsTarget deleteBefore(long offset) {
-        return new DeleteRecordsTarget(offset);
+    public static RecordsToDelete beforeOffset(long offset) {
+        return new RecordsToDelete(offset);
     }
 
     /**
