@@ -53,6 +53,8 @@ import java.util.concurrent.TimeUnit;
 /**
  * MetricsReporter that aggregates metrics data and reports it via HTTP requests to a configurable
  * webhook endpoint in JSON format.
+ *
+ * This is an internal class used for system tests and does not provide any compatibility guarantees.
  */
 public class PushHttpMetricsReporter implements MetricsReporter {
     private static final Logger log = LoggerFactory.getLogger(PushHttpMetricsReporter.class);
@@ -71,11 +73,14 @@ public class PushHttpMetricsReporter implements MetricsReporter {
     private final Object lock = new Object();
     private final Time time;
     private final ScheduledExecutorService executor;
+    // The set of metrics are updated in init/metricChange/metricRemoval
+    private final Map<MetricName, KafkaMetric> metrics = new LinkedHashMap<>();
+    private final ObjectMapper json = new ObjectMapper();
+
+    // Non-final because these are set via configure()
     private URL url;
     private String host;
     private String clientId;
-    private final Map<MetricName, KafkaMetric> metrics = new LinkedHashMap<>();
-    private final ObjectMapper json = new ObjectMapper();
 
     private static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(METRICS_URL_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH,
@@ -191,13 +196,10 @@ public class PushHttpMetricsReporter implements MetricsReporter {
                 connection.setUseCaches(false);
 
                 connection.setDoOutput(true);
-                OutputStream os = null;
-                try {
-                    os = connection.getOutputStream();
+
+                try (OutputStream os = connection.getOutputStream()) {
                     os.write(data);
                     os.flush();
-                } finally {
-                    if (os != null) os.close();
                 }
 
                 int responseCode = connection.getResponseCode();

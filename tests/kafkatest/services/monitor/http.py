@@ -75,8 +75,9 @@ class HttpMetricsCollector(object):
     @property
     def http_metrics_client_configs(self):
         """
-        Get client configurations that can be used to report data to this collector. Note that in some cases
-        (e.g. streams, connect) these settings may need to be prefixed
+        Get client configurations that can be used to report data to this collector. Put these in a properties file for
+        clients (e.g. console producer or consumer) to have them push metrics to this driver. Note that in some cases
+        (e.g. streams, connect) these settings may need to be prefixed.
         :return: a dictionary of client configurations that will direct a client to report metrics to this collector
         """
         return {
