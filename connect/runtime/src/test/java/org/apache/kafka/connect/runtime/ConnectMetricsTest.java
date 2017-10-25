@@ -52,31 +52,8 @@ public class ConnectMetricsTest {
 
     @After
     public void tearDown() {
-        if (metrics != null) metrics.stop();
-    }
-
-    @Test
-    public void testValidatingNameWithAllValidCharacters() {
-        String name = "abcdefghijklmnopqrstuvwxyz_ABCDEFGHIJKLMNOPQRSTUVWXYZ-0123456789";
-        assertEquals(name, ConnectMetrics.makeValidName(name));
-    }
-
-    @Test
-    public void testValidatingEmptyName() {
-        String name = "";
-        assertSame(name, ConnectMetrics.makeValidName(name));
-    }
-
-    @Test(expected = NullPointerException.class)
-    public void testValidatingNullName() {
-        ConnectMetrics.makeValidName(null);
-    }
-
-    @Test
-    public void testValidatingNameWithInvalidCharacters() {
-        assertEquals("a-b-c-d-e-f-g-h-i-j-k", ConnectMetrics.makeValidName("a:b;c/d\\e,f*.--..;;g?h[i]j=k"));
-        assertEquals("-a-b-c-d-e-f-g-h-", ConnectMetrics.makeValidName(":a:b;c/d\\e,f*g?[]=h:"));
-        assertEquals("a-f-h", ConnectMetrics.makeValidName("a:;/\\,f*?h"));
+        if (metrics != null)
+            metrics.stop();
     }
 
     @Test
@@ -85,53 +62,29 @@ public class ConnectMetricsTest {
     }
 
     @Test
-    public void testCreatingTagsWithNonNullWorkerId() {
-        Map<String, String> tags = ConnectMetrics.tags("name", "k1", "v1", "k2", "v2");
+    public void testCreatingTags() {
+        Map<String, String> tags = ConnectMetrics.tags("k1", "v1", "k2", "v2");
         assertEquals("v1", tags.get("k1"));
         assertEquals("v2", tags.get("k2"));
-        assertEquals("name", tags.get(ConnectMetrics.WORKER_ID_TAG_NAME));
-    }
-
-    @Test
-    public void testCreatingTagsWithNullWorkerId() {
-        Map<String, String> tags = ConnectMetrics.tags(null, "k1", "v1", "k2", "v2");
-        assertEquals("v1", tags.get("k1"));
-        assertEquals("v2", tags.get("k2"));
-        assertEquals(null, tags.get(ConnectMetrics.WORKER_ID_TAG_NAME));
-    }
-
-    @Test
-    public void testCreatingTagsWithEmptyWorkerId() {
-        Map<String, String> tags = ConnectMetrics.tags("", "k1", "v1", "k2", "v2");
-        assertEquals("v1", tags.get("k1"));
-        assertEquals("v2", tags.get("k2"));
-        assertEquals(null, tags.get(ConnectMetrics.WORKER_ID_TAG_NAME));
+        assertEquals(2, tags.size());
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void testCreatingTagsWithOddNumberOfTags() {
-        ConnectMetrics.tags("name", "k1", "v1", "k2", "v2", "extra");
+        ConnectMetrics.tags("k1", "v1", "k2", "v2", "extra");
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void testGettingGroupWithOddNumberOfTags() {
-        metrics.group("name", false, "k1", "v1", "k2", "v2", "extra");
+        metrics.group("name", "k1", "v1", "k2", "v2", "extra");
     }
 
     @Test
     public void testGettingGroupWithTags() {
-        MetricGroup group1 = metrics.group("name", false, "k1", "v1", "k2", "v2");
+        MetricGroup group1 = metrics.group("name", "k1", "v1", "k2", "v2");
         assertEquals("v1", group1.tags().get("k1"));
         assertEquals("v2", group1.tags().get("k2"));
-        assertEquals(null, group1.tags().get(ConnectMetrics.WORKER_ID_TAG_NAME));
-    }
-
-    @Test
-    public void testGettingGroupWithWorkerIdAndTags() {
-        MetricGroup group1 = metrics.group("name", true, "k1", "v1", "k2", "v2");
-        assertEquals("v1", group1.tags().get("k1"));
-        assertEquals("v2", group1.tags().get("k2"));
-        assertEquals(metrics.workerId(), group1.tags().get(ConnectMetrics.WORKER_ID_TAG_NAME));
+        assertEquals(2, group1.tags().size());
     }
 
     @Test
@@ -156,9 +109,9 @@ public class ConnectMetricsTest {
 
     @Test
     public void testMetricGroupIdIdentity() {
-        MetricGroupId id1 = metrics.groupId("name", false, "k1", "v1");
-        MetricGroupId id2 = metrics.groupId("name", false, "k1", "v1");
-        MetricGroupId id3 = metrics.groupId("name", false, "k1", "v1", "k2", "v2");
+        MetricGroupId id1 = metrics.groupId("name", "k1", "v1");
+        MetricGroupId id2 = metrics.groupId("name", "k1", "v1");
+        MetricGroupId id3 = metrics.groupId("name", "k1", "v1", "k2", "v2");
 
         assertEquals(id1.hashCode(), id2.hashCode());
         assertEquals(id1, id2);
@@ -172,8 +125,8 @@ public class ConnectMetricsTest {
 
     @Test
     public void testMetricGroupIdWithoutTags() {
-        MetricGroupId id1 = metrics.groupId("name", false);
-        MetricGroupId id2 = metrics.groupId("name", false);
+        MetricGroupId id1 = metrics.groupId("name");
+        MetricGroupId id2 = metrics.groupId("name");
 
         assertEquals(id1.hashCode(), id2.hashCode());
         assertEquals(id1, id2);
@@ -183,16 +136,4 @@ public class ConnectMetricsTest {
         assertNotNull(id1.tags());
         assertNotNull(id2.tags());
     }
-
-    @Test
-    public void testMetricGroupIdWithWorkerId() {
-        MetricGroupId id1 = metrics.groupId("name", true);
-        assertNotNull(metrics.workerId(), id1.tags().get(ConnectMetrics.WORKER_ID_TAG_NAME));
-        assertEquals("name;worker-id=worker1", id1.toString());
-
-        id1 = metrics.groupId("name", true, "k1", "v1", "k2", "v2");
-        assertNotNull(metrics.workerId(), id1.tags().get(ConnectMetrics.WORKER_ID_TAG_NAME));
-        assertEquals("name;worker-id=worker1;k1=v1;k2=v2", id1.toString()); // maintain order of tags
-    }
-
 }

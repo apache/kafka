@@ -528,8 +528,8 @@ public class Sender implements Runnable {
                 } else if (transactionManager.hasProducerIdAndEpoch(batch.producerId(), batch.producerEpoch())) {
                     // If idempotence is enabled only retry the request if the current producer id is the same as
                     // the producer id of the batch.
-                    log.debug("Retrying batch to topic-partition {}. Sequence number : {}", batch.topicPartition,
-                            batch.baseSequence());
+                    log.debug("Retrying batch to topic-partition {}. ProducerId: {}; Sequence number : {}",
+                            batch.topicPartition, batch.producerId(), batch.baseSequence());
                     reenqueueBatch(batch, now);
                 } else {
                     failBatch(batch, response, new OutOfOrderSequenceException("Attempted to retry sending a " +

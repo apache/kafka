@@ -71,9 +71,7 @@ class AssignedTasks implements RestoringTasks {
                 if (task.commitNeeded()) {
                     committed++;
                     task.commit();
-                    if (log.isDebugEnabled()) {
-                        log.debug("Committed active task {} per user request in", task.id());
-                    }
+                    log.debug("Committed active task {} per user request in", task.id());
                 }
             }
         };
@@ -109,10 +107,12 @@ class AssignedTasks implements RestoringTasks {
     }
 
     /**
+     * @return partitions that are ready to be resumed
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
      */
-    void initializeNewTasks() {
+    Set<TopicPartition> initializeNewTasks() {
+        final Set<TopicPartition> readyPartitions = new HashSet<>();
         if (!created.isEmpty()) {
             log.debug("Initializing {}s {}", taskTypeName, created.keySet());
         }
@@ -120,10 +120,10 @@ class AssignedTasks implements RestoringTasks {
             final Map.Entry<TaskId, Task> entry = it.next();
             try {
                 if (!entry.getValue().initialize()) {
-                    log.debug("transitioning {} {} to restoring", taskTypeName, entry.getKey());
+                    log.debug("Transitioning {} {} to restoring", taskTypeName, entry.getKey());
                     addToRestoring(entry.getValue());
                 } else {
-                    transitionToRunning(entry.getValue());
+                    transitionToRunning(entry.getValue(), readyPartitions);
                 }
                 it.remove();
             } catch (final LockException e) {
@@ -131,30 +131,34 @@ class AssignedTasks implements RestoringTasks {
                 log.trace("Could not create {} {} due to {}; will retry", taskTypeName, entry.getKey(), e.getMessage());
             }
         }
+        return readyPartitions;
     }
 
     Set<TopicPartition> updateRestored(final Collection<TopicPartition> restored) {
         if (restored.isEmpty()) {
             return Collections.emptySet();
         }
-        log.trace("{} partitions restored for {}", taskTypeName, restored);
+        log.trace("{} changelog partitions that have completed restoring so far: {}", taskTypeName, restored);
         final Set<TopicPartition> resume = new HashSet<>();
         restoredPartitions.addAll(restored);
         for (final Iterator<Map.Entry<TaskId, Task>> it = restoring.entrySet().iterator(); it.hasNext(); ) {
             final Map.Entry<TaskId, Task> entry = it.next();
             final Task task = entry.getValue();
             if (restoredPartitions.containsAll(task.changelogPartitions())) {
-                transitionToRunning(task);
-                resume.addAll(task.partitions());
+                transitionToRunning(task, resume);
                 it.remove();
+                log.trace("{} {} completed restoration as all its changelog partitions {} have been applied to restore state",
+                        taskTypeName,
+                        task.id(),
+                        task.changelogPartitions());
             } else {
                 if (log.isTraceEnabled()) {
                     final HashSet<TopicPartition> outstandingPartitions = new HashSet<>(task.changelogPartitions());
                     outstandingPartitions.removeAll(restoredPartitions);
-                    log.trace("partition restoration not complete for {} {} partitions: {}",
+                    log.trace("{} {} cannot resume processing yet since some of its changelog partitions have not completed restoring: {}",
                               taskTypeName,
                               task.id(),
-                              task.changelogPartitions());
+                              outstandingPartitions);
                 }
             }
         }
@@ -208,7 +212,7 @@ class AssignedTasks implements RestoringTasks {
     }
 
     private RuntimeException suspendTasks(final Collection<Task> tasks) {
-        RuntimeException exception = null;
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
         for (Iterator<Task> it = tasks.iterator(); it.hasNext(); ) {
             final Task task = it.next();
             try {
@@ -216,30 +220,30 @@ class AssignedTasks implements RestoringTasks {
                 suspended.put(task.id(), task);
             } catch (final TaskMigratedException closeAsZombieAndSwallow) {
                 // as we suspend a task, we are either shutting down or rebalancing, thus, we swallow and move on
-                closeZombieTask(task);
+                firstException.compareAndSet(null, closeZombieTask(task));
                 it.remove();
             } catch (final RuntimeException e) {
                 log.error("Suspending {} {} failed due to the following error:", taskTypeName, task.id(), e);
+                firstException.compareAndSet(null, e);
                 try {
                     task.close(false, false);
-                } catch (final Exception f) {
+                } catch (final RuntimeException f) {
                     log.error("After suspending failed, closing the same {} {} failed again due to the following error:", taskTypeName, task.id(), f);
-                }
-                if (exception == null) {
-                    exception = e;
                 }
             }
         }
-        return exception;
+        return firstException.get();
     }
 
-    private void closeZombieTask(final Task task) {
+    private RuntimeException closeZombieTask(final Task task) {
         log.warn("{} {} got migrated to another thread already. Closing it as zombie.", taskTypeName, task.id());
         try {
             task.close(false, true);
-        } catch (final Exception e) {
+        } catch (final RuntimeException e) {
             log.warn("Failed to close zombie {} {} due to {}; ignore and proceed.", taskTypeName, task.id(), e.getMessage());
+            return e;
         }
+        return null;
     }
 
     boolean hasRunningTasks() {
@@ -258,15 +262,18 @@ class AssignedTasks implements RestoringTasks {
                 try {
                     task.resume();
                 } catch (final TaskMigratedException e) {
-                    closeZombieTask(task);
+                    final RuntimeException fatalException = closeZombieTask(task);
+                    if (fatalException != null) {
+                        throw fatalException;
+                    }
                     suspended.remove(taskId);
                     throw e;
                 }
-                transitionToRunning(task);
+                transitionToRunning(task, new HashSet<TopicPartition>());
                 log.trace("resuming suspended {} {}", taskTypeName, task.id());
                 return true;
             } else {
-                log.trace("couldn't resume task {} assigned partitions {}, task partitions {}", taskId, partitions, task.partitions());
+                log.warn("couldn't resume task {} assigned partitions {}, task partitions {}", taskId, partitions, task.partitions());
             }
         }
         return false;
@@ -282,11 +289,14 @@ class AssignedTasks implements RestoringTasks {
         }
     }
 
-    private void transitionToRunning(final Task task) {
+    private void transitionToRunning(final Task task, final Set<TopicPartition> readyPartitions) {
         log.debug("transitioning {} {} to running", taskTypeName, task.id());
         running.put(task.id(), task);
         for (TopicPartition topicPartition : task.partitions()) {
             runningByPartition.put(topicPartition, task);
+            if (task.hasStateStores()) {
+                readyPartitions.add(topicPartition);
+            }
         }
         for (TopicPartition topicPartition : task.changelogPartitions()) {
             runningByPartition.put(topicPartition, task);
@@ -397,7 +407,10 @@ class AssignedTasks implements RestoringTasks {
                     processed++;
                 }
             } catch (final TaskMigratedException e) {
-                closeZombieTask(task);
+                final RuntimeException fatalException = closeZombieTask(task);
+                if (fatalException != null) {
+                    throw fatalException;
+                }
                 it.remove();
                 throw e;
             } catch (final RuntimeException e) {
@@ -424,7 +437,10 @@ class AssignedTasks implements RestoringTasks {
                     punctuated++;
                 }
             } catch (final TaskMigratedException e) {
-                closeZombieTask(task);
+                final RuntimeException fatalException = closeZombieTask(task);
+                if (fatalException != null) {
+                    throw fatalException;
+                }
                 it.remove();
                 throw e;
             } catch (final KafkaException e) {
@@ -443,7 +459,10 @@ class AssignedTasks implements RestoringTasks {
             try {
                 action.apply(task);
             } catch (final TaskMigratedException e) {
-                closeZombieTask(task);
+                final RuntimeException fatalException = closeZombieTask(task);
+                if (fatalException != null) {
+                    throw fatalException;
+                }
                 it.remove();
                 if (firstException == null) {
                     firstException = e;
@@ -483,20 +502,47 @@ class AssignedTasks implements RestoringTasks {
     }
 
     void close(final boolean clean) {
-        close(allTasks(), clean);
-        clear();
-    }
-
-    private void close(final Collection<Task> tasks, final boolean clean) {
-        for (final Task task : tasks) {
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
+        for (final Task task : allTasks()) {
             try {
                 task.close(clean, false);
-            } catch (final Throwable t) {
+            } catch (final TaskMigratedException e) {
+                firstException.compareAndSet(null, closeZombieTask(task));
+            } catch (final RuntimeException t) {
                 log.error("Failed while closing {} {} due to the following error:",
                           task.getClass().getSimpleName(),
                           task.id(),
                           t);
+                if (clean) {
+                    if (!closeUnclean(task)) {
+                        firstException.compareAndSet(null, t);
+                    }
+                } else {
+                    firstException.compareAndSet(null, t);
+                }
             }
         }
+
+        clear();
+
+        final RuntimeException fatalException = firstException.get();
+        if (fatalException != null) {
+            throw fatalException;
+        }
+    }
+
+    private boolean closeUnclean(final Task task) {
+        log.info("Try to close {} {} unclean.", task.getClass().getSimpleName(), task.id());
+        try {
+            task.close(false, false);
+        } catch (final RuntimeException fatalException) {
+            log.error("Failed while closing {} {} due to the following error:",
+                task.getClass().getSimpleName(),
+                task.id(),
+                fatalException);
+            return false;
+        }
+
+        return true;
     }
 }

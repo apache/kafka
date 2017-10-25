@@ -114,7 +114,7 @@ object DumpLogSegments {
           dumpIndex(file, indexSanityOnly, verifyOnly, misMatchesForIndexFilesMap, maxMessageSize)
         case Log.TimeIndexFileSuffix =>
           dumpTimeIndex(file, indexSanityOnly, verifyOnly, timeIndexDumpErrors, maxMessageSize)
-        case Log.PidSnapshotFileSuffix =>
+        case Log.ProducerSnapshotFileSuffix =>
           dumpProducerIdSnapshot(file)
         case Log.TxnIndexFileSuffix =>
           dumpTxnIndex(file)
@@ -145,7 +145,7 @@ object DumpLogSegments {
   }
 
   private def dumpTxnIndex(file: File): Unit = {
-    val index = new TransactionIndex(Log.offsetFromFilename(file.getName), file)
+    val index = new TransactionIndex(Log.offsetFromFile(file), file)
     for (abortedTxn <- index.allAbortedTxns) {
       println(s"version: ${abortedTxn.version} producerId: ${abortedTxn.producerId} firstOffset: ${abortedTxn.firstOffset} " +
         s"lastOffset: ${abortedTxn.lastOffset} lastStableOffset: ${abortedTxn.lastStableOffset}")
@@ -334,8 +334,12 @@ object DumpLogSegments {
         }
       }.mkString("{", ",", "}")
 
-      val keyString = s"metadata::$groupId"
-      val valueString = s"$protocolType:${group.protocol}:${group.generationId}:$assignment"
+      val keyString = Json.encode(Map("metadata" -> groupId))
+      val valueString = Json.encode(Map(
+          "protocolType" -> protocolType,
+          "protocol" -> group.protocol,
+          "generationId" -> group.generationId,
+          "assignment" -> assignment))
 
       (Some(keyString), Some(valueString))
     }
@@ -436,7 +440,7 @@ object DumpLogSegments {
     val shallowOffsetNotFound = new mutable.HashMap[String, ArrayBuffer[(Long, Long)]]
 
     def recordMismatchTimeIndex(file: File, indexTimestamp: Long, logTimestamp: Long) {
-      var misMatchesSeq = misMatchesForTimeIndexFilesMap.getOrElse(file.getAbsolutePath, new ArrayBuffer[(Long, Long)]())
+      val misMatchesSeq = misMatchesForTimeIndexFilesMap.getOrElse(file.getAbsolutePath, new ArrayBuffer[(Long, Long)]())
       if (misMatchesSeq.isEmpty)
         misMatchesForTimeIndexFilesMap.put(file.getAbsolutePath, misMatchesSeq)
       misMatchesSeq += ((indexTimestamp, logTimestamp))

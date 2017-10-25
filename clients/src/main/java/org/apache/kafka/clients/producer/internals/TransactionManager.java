@@ -26,6 +26,7 @@ import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.AddOffsetsToTxnRequest;
@@ -435,6 +436,24 @@ public class TransactionManager {
         inflightBatchesBySequence.get(batch.topicPartition).offer(batch);
     }
 
+    /**
+     * Returns the first inflight sequence for a given partition. This is the base sequence of an inflight batch with
+     * the lowest sequence number.
+     * @return the lowest inflight sequence if the transaction manager is tracking inflight requests for this partition.
+     *         If there are no inflight requests being tracked for this partition, this method will return
+     *         RecordBatch.NO_SEQUENCE.
+     */
+    synchronized int firstInFlightSequence(TopicPartition topicPartition) {
+        PriorityQueue<ProducerBatch> inFlightBatches = inflightBatchesBySequence.get(topicPartition);
+        if (inFlightBatches == null)
+            return RecordBatch.NO_SEQUENCE;
+
+        ProducerBatch firstInFlightBatch = inFlightBatches.peek();
+        if (firstInFlightBatch == null)
+            return RecordBatch.NO_SEQUENCE;
+
+        return firstInFlightBatch.baseSequence();
+    }
 
     synchronized ProducerBatch nextBatchBySequence(TopicPartition topicPartition) {
         PriorityQueue<ProducerBatch> queue = inflightBatchesBySequence.get(topicPartition);

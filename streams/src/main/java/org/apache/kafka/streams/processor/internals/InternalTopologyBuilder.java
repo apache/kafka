@@ -23,7 +23,6 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor.SubscriptionUpdates;
@@ -179,10 +178,10 @@ public class InternalTopologyBuilder {
 
     private static class StateStoreSupplierFactory extends AbstractStateStoreFactory {
         @SuppressWarnings("deprecation")
-        private final StateStoreSupplier supplier;
+        private final org.apache.kafka.streams.processor.StateStoreSupplier supplier;
 
         @SuppressWarnings("deprecation")
-        StateStoreSupplierFactory(final StateStoreSupplier<?> supplier) {
+        StateStoreSupplierFactory(final org.apache.kafka.streams.processor.StateStoreSupplier<?> supplier) {
             super(supplier.name(),
                   supplier.loggingEnabled(),
                   supplier instanceof WindowStoreSupplier,
@@ -196,6 +195,7 @@ public class InternalTopologyBuilder {
             return supplier.get();
         }
 
+        @SuppressWarnings("deprecation")
         @Override
         public long retentionPeriod() {
             if (!isWindowStore()) {
@@ -498,7 +498,7 @@ public class InternalTopologyBuilder {
     }
 
     @SuppressWarnings("deprecation")
-    public final void addStateStore(final StateStoreSupplier supplier,
+    public final void addStateStore(final org.apache.kafka.streams.processor.StateStoreSupplier supplier,
                                     final String... processorNames) {
         Objects.requireNonNull(supplier, "supplier can't be null");
         if (stateFactories.containsKey(supplier.name())) {
@@ -531,7 +531,7 @@ public class InternalTopologyBuilder {
     }
 
     @SuppressWarnings("deprecation")
-    public final void addGlobalStore(final StateStoreSupplier<KeyValueStore> storeSupplier,
+    public final void addGlobalStore(final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier,
                                      final String sourceName,
                                      final TimestampExtractor timestampExtractor,
                                      final Deserializer keyDeserializer,
@@ -925,6 +925,7 @@ public class InternalTopologyBuilder {
         return new ProcessorTopology(processorNodes, topicSourceMap, topicSinkMap, new ArrayList<>(stateStoreMap.values()), storeToChangelogTopic, new ArrayList<>(globalStateStores.values()));
     }
 
+    @SuppressWarnings("unchecked")
     private void buildSinkNode(final Map<String, ProcessorNode> processorMap,
                                final Map<String, SinkNode> topicSinkMap,
                                final SinkNodeFactory sinkNodeFactory,

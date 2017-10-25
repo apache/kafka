@@ -19,7 +19,6 @@ package kafka.admin
 
 import kafka.api.TopicMetadata
 import org.junit.Assert._
-import org.apache.kafka.common.protocol.SecurityProtocol
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.TestUtils._
 import kafka.utils.TestUtils
@@ -28,6 +27,7 @@ import kafka.client.ClientUtils
 import kafka.server.{KafkaConfig, KafkaServer}
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.{After, Before, Test}
 
 class AddPartitionsTest extends ZooKeeperTestHarness {

@@ -194,7 +194,7 @@ public class StoreChangelogReader implements ChangelogReader {
     private Collection<TopicPartition> completed() {
         final Set<TopicPartition> completed = new HashSet<>(stateRestorers.keySet());
         completed.removeAll(needsRestoring.keySet());
-        log.debug("completed partitions {}", completed);
+        log.trace("The set of restoration completed partitions so far: {}", completed);
         return completed;
     }
 

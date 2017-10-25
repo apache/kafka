@@ -32,20 +32,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.common.protocol.CommonFields.GENERATION_ID;
+import static org.apache.kafka.common.protocol.CommonFields.GROUP_ID;
+import static org.apache.kafka.common.protocol.CommonFields.MEMBER_ID;
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
-import static org.apache.kafka.common.protocol.types.Type.INT32;
 import static org.apache.kafka.common.protocol.types.Type.INT64;
 import static org.apache.kafka.common.protocol.types.Type.NULLABLE_STRING;
-import static org.apache.kafka.common.protocol.types.Type.STRING;
 
 /**
  * This wrapper supports both v0 and v1 of OffsetCommitRequest.
  */
 public class OffsetCommitRequest extends AbstractRequest {
-    private static final String GROUP_ID_KEY_NAME = "group_id";
-    private static final String GENERATION_ID_KEY_NAME = "group_generation_id";
-    private static final String MEMBER_ID_KEY_NAME = "member_id";
     private static final String TOPICS_KEY_NAME = "topics";
     private static final String RETENTION_TIME_KEY_NAME = "retention_time";
 
@@ -89,19 +87,19 @@ public class OffsetCommitRequest extends AbstractRequest {
             new Field(PARTITIONS_KEY_NAME, new ArrayOf(OFFSET_COMMIT_REQUEST_PARTITION_V2), "Partitions to commit offsets."));
 
     private static final Schema OFFSET_COMMIT_REQUEST_V0 = new Schema(
-            new Field(GROUP_ID_KEY_NAME, STRING, "The group id."),
+            GROUP_ID,
             new Field(TOPICS_KEY_NAME, new ArrayOf(OFFSET_COMMIT_REQUEST_TOPIC_V0), "Topics to commit offsets."));
 
     private static final Schema OFFSET_COMMIT_REQUEST_V1 = new Schema(
-            new Field(GROUP_ID_KEY_NAME, STRING, "The group id."),
-            new Field(GENERATION_ID_KEY_NAME, INT32, "The generation of the group."),
-            new Field(MEMBER_ID_KEY_NAME, STRING, "The member id assigned by the group coordinator."),
+            GROUP_ID,
+            GENERATION_ID,
+            MEMBER_ID,
             new Field(TOPICS_KEY_NAME, new ArrayOf(OFFSET_COMMIT_REQUEST_TOPIC_V1), "Topics to commit offsets."));
 
     private static final Schema OFFSET_COMMIT_REQUEST_V2 = new Schema(
-            new Field(GROUP_ID_KEY_NAME, STRING, "The group id."),
-            new Field(GENERATION_ID_KEY_NAME, INT32, "The generation of the consumer group."),
-            new Field(MEMBER_ID_KEY_NAME, STRING, "The consumer id assigned by the group coordinator."),
+            GROUP_ID,
+            GENERATION_ID,
+            MEMBER_ID,
             new Field(RETENTION_TIME_KEY_NAME, INT64, "Time period in ms to retain the offset."),
             new Field(TOPICS_KEY_NAME, new ArrayOf(OFFSET_COMMIT_REQUEST_TOPIC_V2), "Topics to commit offsets."));
 
@@ -229,18 +227,11 @@ public class OffsetCommitRequest extends AbstractRequest {
     public OffsetCommitRequest(Struct struct, short versionId) {
         super(versionId);
 
-        groupId = struct.getString(GROUP_ID_KEY_NAME);
-        // This field only exists in v1.
-        if (struct.hasField(GENERATION_ID_KEY_NAME))
-            generationId = struct.getInt(GENERATION_ID_KEY_NAME);
-        else
-            generationId = DEFAULT_GENERATION_ID;
+        groupId = struct.get(GROUP_ID);
 
-        // This field only exists in v1.
-        if (struct.hasField(MEMBER_ID_KEY_NAME))
-            memberId = struct.getString(MEMBER_ID_KEY_NAME);
-        else
-            memberId = DEFAULT_MEMBER_ID;
+        // These fields only exists in v1.
+        generationId = struct.getOrElse(GENERATION_ID, DEFAULT_GENERATION_ID);
+        memberId = struct.getOrElse(MEMBER_ID, DEFAULT_MEMBER_ID);
 
         // This field only exists in v2
         if (struct.hasField(RETENTION_TIME_KEY_NAME))
@@ -274,7 +265,7 @@ public class OffsetCommitRequest extends AbstractRequest {
     public Struct toStruct() {
         short version = version();
         Struct struct = new Struct(ApiKeys.OFFSET_COMMIT.requestSchema(version));
-        struct.set(GROUP_ID_KEY_NAME, groupId);
+        struct.set(GROUP_ID, groupId);
 
         Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupDataByTopic(offsetData);
         List<Struct> topicArray = new ArrayList<>();
@@ -297,10 +288,8 @@ public class OffsetCommitRequest extends AbstractRequest {
             topicArray.add(topicData);
         }
         struct.set(TOPICS_KEY_NAME, topicArray.toArray());
-        if (struct.hasField(GENERATION_ID_KEY_NAME))
-            struct.set(GENERATION_ID_KEY_NAME, generationId);
-        if (struct.hasField(MEMBER_ID_KEY_NAME))
-            struct.set(MEMBER_ID_KEY_NAME, memberId);
+        struct.setIfExists(GENERATION_ID, generationId);
+        struct.setIfExists(MEMBER_ID, memberId);
         if (struct.hasField(RETENTION_TIME_KEY_NAME))
             struct.set(RETENTION_TIME_KEY_NAME, retentionTime);
         return struct;

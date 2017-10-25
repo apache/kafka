@@ -45,7 +45,6 @@
     </p>
 
     <h3><a id="streams_api_changes_100" href="#streams_api_changes_100">Streams API changes in 1.0.0</a></h3>
-    <!-- TODO: 161, 167, 173, 182 -->
 
     <p>
         With 1.0 a major API refactoring was accomplished and the new API is cleaner and easier to use.
@@ -84,46 +83,54 @@
         and can be obtained by calling <code>Topology#describe()</code>.
         An example using this new API is shown in the <a href="/{{version}}/documentation/streams/quickstart">quickstart section</a>.
     </p>
-    
+
     <p>
-        With the introduction of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-202+Move+merge%28%29+from+StreamsBuilder+to+KStream">KIP-202</a>
-        a new method <code>merge()</code> has been created in <code>KStream</code> as the StreamsBuilder class's <code>StreamsBuilder#merge()</code> has been removed. 
-        The method signature was also changed, too: instead of providing multiple <code>KStream</code>s into the method at the once, only a single <code>KStream</code> is accepted.
+        New methods in <code>KStream</code>:
     </p>
-    
+    <ul>
+        <li>With the introduction of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-202+Move+merge%28%29+from+StreamsBuilder+to+KStream">KIP-202</a>
+            a new method <code>merge()</code> has been created in <code>KStream</code> as the StreamsBuilder class's <code>StreamsBuilder#merge()</code> has been removed.
+            The method signature was also changed, too: instead of providing multiple <code>KStream</code>s into the method at the once, only a single <code>KStream</code> is accepted.
+        </li>
+    </ul>
+
     <p>
         New methods in <code>KafkaStreams</code>:
     </p>
     <ul>
-        <li> retrieve the current runtime information about the local threads via <code>#localThreadsMetadata()</code> </li>
+        <li>retrieve the current runtime information about the local threads via <code>#localThreadsMetadata()</code> </li>
+        <li>observe the restoration of all state stores via <code>#setGlobalStateRestoreListener()</code>, in which users can provide their customized implementation of the <code>org.apache.kafka.streams.processor.StateRestoreListener</code> interface</li>
     </ul>
-    <p>
-        Deprecated methods in <code>KafkaStreams</code>:
-    </p>
-    <ul>
-        <li><code>toString()</code></li>
-        <li><code>toString(final String indent)</code></li>
-    </ul>
-    <p>
-        Previously the above methods were used to return static and runtime information.
-        They have been deprecated in favor of using the new classes/methods <code>#localThreadsMetadata()</code> / <code>ThreadMetadata</code> (returning runtime information) and
-        <code>TopologyDescription</code> / <code>Topology#describe()</code> (returning static information).
-    </p>
 
     <p>
-        More deprecated methods in <code>KafkaStreams</code>:
+        Deprecated / modified methods in <code>KafkaStreams</code>:
     </p>
     <ul>
-        <li>With the introduction of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-182%3A+Reduce+Streams+DSL+overloads+and+allow+easier+use+of+custom+storage+engines">KIP-182</a>
+        <li>
+            <code>toString()</code>, <code>toString(final String indent)</code> were previously used to return static and runtime information.
+            They have been deprecated in favor of using the new classes/methods <code>#localThreadsMetadata()</code> / <code>ThreadMetadata</code> (returning runtime information) and
+            <code>TopologyDescription</code> / <code>Topology#describe()</code> (returning static information).
+        </li>
+        <li>
+            With the introduction of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-182%3A+Reduce+Streams+DSL+overloads+and+allow+easier+use+of+custom+storage+engines">KIP-182</a>
             you should no longer pass in <code>Serde</code> to <code>KStream#print</code> operations.
             If you can't rely on using <code>toString</code> to print your keys an values, you should instead you provide a custom <code>KeyValueMapper</code> via the <code>Printed#withKeyValueMapper</code> call.
         </li>
         <li>
-            Windowed aggregations have moved from <code>KGroupedStream</code> to <code>WindowedKStream</code>.
-            You can now perform a windowed aggregation by, for example, using <code>KGroupedStream#windowedBy(Windows)#reduce(Reducer)</code>.
-            Note: the previous aggregate functions on <code>KGroupedStream</code> still work, but have been deprecated.
+            <code>setStateListener()</code> now can only be set before the application start running, i.e. before <code>KafkaStreams.start()</code> is called.
         </li>
     </ul>
+
+    <p>
+        Deprecated methods in <code>KGroupedStream</code>
+    </p>
+    <ul>
+        <li>
+            Windowed aggregations have been deprecated from <code>KGroupedStream</code> and moved to <code>WindowedKStream</code>.
+            You can now perform a windowed aggregation by, for example, using <code>KGroupedStream#windowedBy(Windows)#reduce(Reducer)</code>.
+        </li>
+    </ul>
+
     <p>
         Modified methods in <code>Processor</code>:
     </p>
@@ -152,6 +159,13 @@
         The task ids, store names and processor names are no longer in the sensor metrics names, but instead are added as tags of the sensors to achieve consistent metrics hierarchy.
         As a result you may need to make corresponding code changes on your metrics reporting and monitoring tools when upgrading to 1.0.0.
         Detailed metrics sensor can be found in the <a href="#kafka_streams_monitoring">Streams Monitoring</a> section.
+    </p>
+
+    <p>
+        The introduction of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-161%3A+streams+deserialization+exception+handlers">KIP-161</a>
+        enables you to provide a default exception handler for deserialization errors when reading data from Kafka rather than throwing the exception all the way out of your streams application.
+        You can provide the configs via the <code>StreamsConfig</code> as <code>StreamsConfig#DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG</code>.
+        The specified handler must implement the <code>org.apache.kafka.streams.errors.DeserializationExceptionHandler</code> interface.
     </p>
 
     <p>
@@ -212,7 +226,7 @@
         <li> Then make a call to <code>ReadOnlyKeyValueStore.all()</code> to iterate over the keys of a <code>KTable</code>. </li>
     </ul>
     <p>
-        If you want to view the changelog stream of the  <code>KTable</code> then you could call <code>KTable.toStream().print()</code>.
+        If you want to view the changelog stream of the <code>KTable</code> then you could call <code>KTable.toStream().print(Printed.toSysOut)</code>.
     </p>
 
     <p> Metrics using exactly-once semantics: </p>
@@ -256,7 +270,7 @@
         Parameter updates in <code>StreamsConfig</code>:
     </p>
     <ul>
-        <li> parameter <code>zookeeper.connect</code> was deprecated; a Kafka Streams application does no longer interact with Zookeeper for topic management but uses the new broker admin protocol
+        <li> parameter <code>zookeeper.connect</code> was deprecated; a Kafka Streams application does no longer interact with ZooKeeper for topic management but uses the new broker admin protocol
             (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-4+-+Command+line+and+centralized+administrative+operations#KIP-4-Commandlineandcentralizedadministrativeoperations-TopicAdminSchema.1">KIP-4, Section "Topic Admin Schema"</a>) </li>
         <li> added many new parameters for metrics, security, and client configurations </li>
     </ul>

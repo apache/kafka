@@ -14,22 +14,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.metrics;
+package org.apache.kafka.common.security.authenticator;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import java.util.Map;
 
-import java.io.UnsupportedEncodingException;
+import org.apache.kafka.common.network.Mode;
 
-import org.junit.Test;
+import javax.security.auth.Subject;
+import javax.security.auth.callback.CallbackHandler;
 
-public class SanitizerTest {
+/*
+ * Callback handler for SASL-based authentication
+ */
+public interface AuthCallbackHandler extends CallbackHandler {
 
-    @Test
-    public void testSanitize() throws UnsupportedEncodingException {
-        String principal = "CN=Some characters !@#$%&*()_-+=';:,/~";
-        String sanitizedPrincipal = Sanitizer.sanitize(principal);
-        assertTrue(sanitizedPrincipal.replace('%', '_').matches("[a-zA-Z0-9\\._\\-]+"));
-        assertEquals(principal, Sanitizer.desanitize(sanitizedPrincipal));
-    }
+    /**
+     * Configures this callback handler.
+     *
+     * @param configs Configuration
+     * @param mode The mode that indicates if this is a client or server connection
+     * @param subject Subject from login context
+     * @param saslMechanism Negotiated SASL mechanism
+     */
+    void configure(Map<String, ?> configs, Mode mode, Subject subject, String saslMechanism);
+
+    /**
+     * Closes this instance.
+     */
+    void close();
 }

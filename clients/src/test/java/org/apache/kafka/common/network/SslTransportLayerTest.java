@@ -22,7 +22,7 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.protocol.SecurityProtocol;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.utils.LogContext;
@@ -595,7 +595,7 @@ public class SslTransportLayerTest {
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
-        String message = TestUtils.randomString(10 * 1024);
+        String message = TestUtils.randomString(1024 * 1024);
         NetworkTestUtils.waitForChannelReady(selector, node);
         KafkaChannel channel = selector.channel(node);
         assertTrue("SSL handshake time not recorded", channel.getAndResetNetworkThreadTimeNanos() > 0);
@@ -606,7 +606,8 @@ public class SslTransportLayerTest {
         while (selector.completedSends().isEmpty()) {
             selector.poll(100L);
         }
-        assertTrue("Send time not recorded", channel.getAndResetNetworkThreadTimeNanos() > 0);
+        long sendTimeNanos = channel.getAndResetNetworkThreadTimeNanos();
+        assertTrue("Send time not recorded: " + sendTimeNanos, sendTimeNanos > 0);
         assertEquals("Time not reset", 0, channel.getAndResetNetworkThreadTimeNanos());
         assertFalse("Unexpected bytes buffered", channel.hasBytesBuffered());
         assertEquals(0, selector.completedReceives().size());
@@ -616,7 +617,8 @@ public class SslTransportLayerTest {
             selector.poll(100L);
             assertEquals(0, selector.numStagedReceives(channel));
         }
-        assertTrue("Receive time not recorded", channel.getAndResetNetworkThreadTimeNanos() > 0);
+        long receiveTimeNanos = channel.getAndResetNetworkThreadTimeNanos();
+        assertTrue("Receive time not recorded: " + receiveTimeNanos, receiveTimeNanos > 0);
     }
 
     /**
