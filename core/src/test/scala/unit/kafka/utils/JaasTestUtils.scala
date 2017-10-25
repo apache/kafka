@@ -72,14 +72,14 @@ object JaasTestUtils {
 
   case class ScramLoginModule(username: String,
                               password: String,
-                              debug: Boolean = false) extends JaasModule {
+                              debug: Boolean = false, tokenProps: Map[String, String] = Map.empty) extends JaasModule {
 
     def name = "org.apache.kafka.common.security.scram.ScramLoginModule"
 
     def entries: Map[String, String] = Map(
       "username" -> username,
       "password" -> password
-    )
+    ) ++ tokenProps.map { case (user, pass) => user -> pass }
   }
 
   sealed trait JaasModule {
@@ -156,6 +156,16 @@ object JaasTestUtils {
   // Returns the dynamic configuration, using credentials for user #1
   def clientLoginModule(mechanism: String, keytabLocation: Option[File]): String =
     kafkaClientModule(mechanism, keytabLocation, KafkaClientPrincipal, KafkaPlainUser, KafkaPlainPassword, KafkaScramUser, KafkaScramPassword).toString
+
+  def tokenClientLoginModule(tokenId: String, password: String): String = {
+    ScramLoginModule(
+      tokenId,
+      password,
+      debug = false,
+      Map(
+        "tokenauth" -> "true"
+      )).toString
+  }
 
   def zkSections: Seq[JaasSection] = Seq(
     JaasSection(ZkServerContextName, Seq(ZkDigestModule(debug = false,

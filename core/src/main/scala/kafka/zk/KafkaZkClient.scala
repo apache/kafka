@@ -31,6 +31,7 @@ import kafka.server.ConfigType
 import kafka.utils.Logging
 import kafka.zookeeper._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.security.token.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.KeeperException.{Code, NodeExistsException}
 import org.apache.zookeeper.data.{ACL, Stat}
@@ -1076,6 +1077,78 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    */
   def deletePath(path: String): Boolean = {
     deleteRecursive(path)
+  }
+
+  /**
+   * Creates the required zk nodes for Token storage
+   */
+  def createTokenPaths(): Unit = {
+    createRecursive(TokenAuthZNode.path, throwIfPathExists = false)
+    createRecursive(TokenChangeNotificationZNode.path, throwIfPathExists = false)
+    createRecursive(TokensZNode.path, throwIfPathExists = false)
+  }
+
+  /**
+   * Creates Token change notification message
+   * @param tokenId token name
+   */
+  def createTokenChangeNotification(tokenId: String): Unit = {
+    val path = TokenChangeNotificationSequenceZNode.createPath
+    val createRequest = CreateRequest(path, TokenChangeNotificationSequenceZNode.encode(tokenId), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
+    val createResponse = retryRequestUntilConnected(createRequest)
+    createResponse.resultException.foreach(e => throw e)
+  }
+
+  /**
+   * Sets or creates token info znode with the given token details depending on whether it already
+   * exists or not.
+   *
+   * @param token the token to set on the token znode
+   * @throws KeeperException if there is an error while setting or creating the znode
+   */
+  def setOrCreateToken(token: DelegationToken): Unit = {
+
+    def set(tokenData: Array[Byte]): SetDataResponse = {
+      val setDataRequest = SetDataRequest(TokenInfoZNode.path(token.tokenInfo().tokenId()), tokenData, ZkVersion.NoVersion)
+      retryRequestUntilConnected(setDataRequest)
+    }
+
+    def create(tokenData: Array[Byte]): CreateResponse = {
+      val path = TokenInfoZNode.path(token.tokenInfo().tokenId())
+      val createRequest = CreateRequest(path, tokenData, acls(path), CreateMode.PERSISTENT)
+      retryRequestUntilConnected(createRequest)
+    }
+
+    val reassignmentData = TokenInfoZNode.encode(token)
+    val setDataResponse = set(reassignmentData)
+    setDataResponse.resultCode match {
+      case Code.NONODE =>
+        val createDataResponse = create(reassignmentData)
+        createDataResponse.resultException.foreach(e => throw e)
+      case _ => setDataResponse.resultException.foreach(e => throw e)
+    }
+  }
+
+  /**
+   * Gets the Token Info
+   * @return optional TokenInfo that is Some if the token znode exists and can be parsed and None otherwise.
+   */
+  def getTokenInfo(tokenId: String): Option[TokenInformation] = {
+    val getDataRequest = GetDataRequest(TokenInfoZNode.path(tokenId))
+    val getDataResponse = retryRequestUntilConnected(getDataRequest)
+    getDataResponse.resultCode match {
+      case Code.OK => TokenInfoZNode.decode(getDataResponse.data)
+      case Code.NONODE => None
+      case _ => throw getDataResponse.resultException.get
+    }
+  }
+  /**
+   * Deletes the given Token node
+   * @param tokenId
+   * @return delete status
+   */
+  def deleteToken(tokenId: String): Boolean = {
+    deleteRecursive(TokenInfoZNode.path(tokenId))
   }
 
   /**

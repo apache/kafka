@@ -674,6 +674,12 @@ class KafkaConfigTest {
         case KafkaConfig.SaslKerberosTicketRenewJitterProp =>
         case KafkaConfig.SaslKerberosMinTimeBeforeReloginProp =>
         case KafkaConfig.SaslKerberosPrincipalToLocalRulesProp => // ignore string
+
+        //delegation token configs
+        case KafkaConfig.DelegationTokenMasterKeyProp => // ignore
+        case KafkaConfig.DelegationTokenMaxLifeTimeProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
+        case KafkaConfig.DelegationTokenExpiryTimeMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
+        case KafkaConfig.DelegationTokenExpiryCheckIntervalMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case _ => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
       }
     })
@@ -718,6 +724,14 @@ class KafkaConfigTest {
     assertEquals(123L, config.logFlushIntervalMs)
     assertEquals(SnappyCompressionCodec, config.offsetsTopicCompressionCodec)
     assertEquals(Sensor.RecordingLevel.DEBUG.toString, config.metricRecordingLevel)
+    assertEquals(false, config.tokenAuthEnabled)
+    assertEquals(7 * 24 * 60L * 60L * 1000L, config.delegationTokenMaxLifeMs)
+    assertEquals(24 * 60L * 60L * 1000L, config.delegationTokenExpiryTimeMs)
+    assertEquals(1 * 60L * 1000L * 60, config.delegationTokenExpiryCheckIntervalMs)
+
+    defaults.put(KafkaConfig.DelegationTokenMasterKeyProp, "1234567890")
+    val config1 = KafkaConfig.fromProps(defaults)
+    assertEquals(true, config1.tokenAuthEnabled)
   }
 
   @Test

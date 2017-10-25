@@ -62,6 +62,10 @@ public class CredentialCache {
             return credentials.remove(username);
         }
 
+        public void clear() {
+            credentials.clear();
+        }
+
         public Class<C> credentialClass() {
             return credentialClass;
         }

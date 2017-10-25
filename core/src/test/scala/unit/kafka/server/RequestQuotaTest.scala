@@ -36,6 +36,7 @@ import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation
 import org.apache.kafka.common.requests.{Resource => RResource, ResourceType => RResourceType, _}
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder, SecurityProtocol}
 import org.apache.kafka.common.utils.Sanitizer
+import org.apache.kafka.common.utils.SecurityUtils
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
@@ -305,6 +306,18 @@ class RequestQuotaTest extends BaseRequestTest {
             Collections.singletonMap("topic-2", NewPartitions.increaseTo(1)), 0, false
           )
 
+        case ApiKeys.CREATE_TOKEN =>
+          new CreateTokenRequest.Builder(Collections.singletonList(SecurityUtils.parseKafkaPrincipal("User:test")), 1000)
+
+        case ApiKeys.EXPIRE_TOKEN =>
+          new ExpireTokenRequest.Builder(ByteBuffer.allocate(10), 1000)
+
+        case ApiKeys.DESCRIBE_TOKENS=>
+          new DescribeTokenRequest.Builder(Collections.singletonList(SecurityUtils.parseKafkaPrincipal("User:test")))
+
+        case ApiKeys.RENEW_TOKEN=>
+          new RenewTokenRequest.Builder(ByteBuffer.allocate(10), 1000)
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }
@@ -399,6 +412,10 @@ class RequestQuotaTest extends BaseRequestTest {
       case ApiKeys.ALTER_REPLICA_LOG_DIRS => new AlterReplicaLogDirsResponse(response).throttleTimeMs
       case ApiKeys.DESCRIBE_LOG_DIRS => new DescribeLogDirsResponse(response).throttleTimeMs
       case ApiKeys.CREATE_PARTITIONS => new CreatePartitionsResponse(response).throttleTimeMs
+      case ApiKeys.CREATE_TOKEN => new CreateTokenResponse(response).throttleTimeMs
+      case ApiKeys.DESCRIBE_TOKENS=> new DescribeTokenResponse(response).throttleTimeMs
+      case ApiKeys.EXPIRE_TOKEN => new ExpireTokenResponse(response).throttleTimeMs
+      case ApiKeys.RENEW_TOKEN => new RenewTokenResponse(response).throttleTimeMs
       case requestId => throw new IllegalArgumentException(s"No throttle time for $requestId")
     }
   }

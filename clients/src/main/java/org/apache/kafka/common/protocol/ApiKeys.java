@@ -37,6 +37,8 @@ import org.apache.kafka.common.requests.CreateAclsRequest;
 import org.apache.kafka.common.requests.CreateAclsResponse;
 import org.apache.kafka.common.requests.CreatePartitionsRequest;
 import org.apache.kafka.common.requests.CreatePartitionsResponse;
+import org.apache.kafka.common.requests.CreateTokenRequest;
+import org.apache.kafka.common.requests.CreateTokenResponse;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.DeleteAclsRequest;
@@ -53,8 +55,12 @@ import org.apache.kafka.common.requests.DescribeGroupsRequest;
 import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.requests.DescribeLogDirsRequest;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
+import org.apache.kafka.common.requests.DescribeTokenRequest;
+import org.apache.kafka.common.requests.DescribeTokenResponse;
 import org.apache.kafka.common.requests.EndTxnRequest;
 import org.apache.kafka.common.requests.EndTxnResponse;
+import org.apache.kafka.common.requests.ExpireTokenRequest;
+import org.apache.kafka.common.requests.ExpireTokenResponse;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
@@ -83,6 +89,8 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
+import org.apache.kafka.common.requests.RenewTokenRequest;
+import org.apache.kafka.common.requests.RenewTokenResponse;
 import org.apache.kafka.common.requests.SaslAuthenticateRequest;
 import org.apache.kafka.common.requests.SaslAuthenticateResponse;
 import org.apache.kafka.common.requests.SaslHandshakeRequest;
@@ -171,7 +179,11 @@ public enum ApiKeys {
     SASL_AUTHENTICATE(36, "SaslAuthenticate", SaslAuthenticateRequest.schemaVersions(),
             SaslAuthenticateResponse.schemaVersions()),
     CREATE_PARTITIONS(37, "CreatePartitions", CreatePartitionsRequest.schemaVersions(),
-            CreatePartitionsResponse.schemaVersions());
+            CreatePartitionsResponse.schemaVersions()),
+    CREATE_TOKEN(38, "CreateToken", CreateTokenRequest.schemaVersions(), CreateTokenResponse.schemaVersions()),
+    RENEW_TOKEN(39, "RenewToken", RenewTokenRequest.schemaVersions(), RenewTokenResponse.schemaVersions()),
+    EXPIRE_TOKEN(40, "ExpireToken", ExpireTokenRequest.schemaVersions(), ExpireTokenResponse.schemaVersions()),
+    DESCRIBE_TOKENS(41, "DescribeTokens", DescribeTokenRequest.schemaVersions(), DescribeTokenResponse.schemaVersions());
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;

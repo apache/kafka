@@ -98,7 +98,8 @@ class KafkaApisTest {
       quotas,
       brokerTopicStats,
       clusterId,
-      time
+      time,
+      null
     )
   }
 

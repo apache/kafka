@@ -437,7 +437,7 @@ private[kafka] class Processor(val id: Int,
   )
 
   private val selector = createSelector(
-      ChannelBuilders.serverChannelBuilder(listenerName, securityProtocol, config, credentialProvider.credentialCache))
+      ChannelBuilders.serverChannelBuilder(listenerName, securityProtocol, config, credentialProvider.credentialCache, credentialProvider.tokenCache))
   // Visible to override for testing
   protected[network] def createSelector(channelBuilder: ChannelBuilder): KSelector = new KSelector(
     maxRequestSize,

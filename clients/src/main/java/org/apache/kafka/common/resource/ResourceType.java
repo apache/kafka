@@ -58,7 +58,12 @@ public enum ResourceType {
     /**
      * A transactional ID.
      */
-    TRANSACTIONAL_ID((byte) 5);
+    TRANSACTIONAL_ID((byte) 5),
+
+    /**
+     * A token ID.
+     */
+    TOKEN((byte) 6);
 
     private final static HashMap<Byte, ResourceType> CODE_TO_VALUE = new HashMap<>();
 

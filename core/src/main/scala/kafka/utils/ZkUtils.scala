@@ -27,18 +27,18 @@ import kafka.common.{KafkaException, NoEpochForPartitionException, TopicAndParti
 import kafka.consumer.{ConsumerThreadId, TopicCount}
 import kafka.controller.{LeaderIsrAndControllerEpoch, ReassignedPartitionsContext}
 import kafka.zk.{BrokerIdZNode, ZkData}
-import org.I0Itec.zkclient.exception.{ZkBadVersionException, ZkException, ZkMarshallingError, ZkNoNodeException, ZkNodeExistsException}
+import org.I0Itec.zkclient.exception._
 import org.I0Itec.zkclient.serialize.ZkSerializer
-import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener, ZkClient, ZkConnection}
+import org.I0Itec.zkclient._
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigException
 import org.apache.zookeeper.AsyncCallback.{DataCallback, StringCallback}
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException, ZooDefs, ZooKeeper}
 
-import scala.collection._
 import scala.collection.JavaConverters._
-import org.apache.kafka.common.TopicPartition
+import scala.collection._
 
 object ZkUtils {
 
@@ -67,6 +67,7 @@ object ZkUtils {
   val ConfigChangesPath = s"$ConfigPath/changes"
   val ConfigUsersPath = s"$ConfigPath/users"
   val ProducerIdBlockPath = "/latest_producer_id_block"
+
 
   val SecureZkRootPaths = ZkData.SecureRootPaths
 

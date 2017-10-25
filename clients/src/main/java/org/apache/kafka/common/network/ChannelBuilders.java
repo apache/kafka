@@ -26,6 +26,7 @@ import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuild
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
+import org.apache.kafka.common.security.token.TokenCache;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.Map;
@@ -59,7 +60,7 @@ public class ChannelBuilders {
                 throw new IllegalArgumentException("`clientSaslMechanism` must be non-null in client mode if `securityProtocol` is `" + securityProtocol + "`");
         }
         return create(securityProtocol, Mode.CLIENT, contextType, config, listenerName, clientSaslMechanism,
-                saslHandshakeRequestEnable, null);
+                saslHandshakeRequestEnable, null, null);
     }
 
     /**
@@ -72,9 +73,10 @@ public class ChannelBuilders {
     public static ChannelBuilder serverChannelBuilder(ListenerName listenerName,
                                                       SecurityProtocol securityProtocol,
                                                       AbstractConfig config,
-                                                      CredentialCache credentialCache) {
+                                                      CredentialCache credentialCache,
+                                                      TokenCache tokenCache) {
         return create(securityProtocol, Mode.SERVER, JaasContext.Type.SERVER, config, listenerName, null,
-                true, credentialCache);
+                true, credentialCache, tokenCache);
     }
 
     private static ChannelBuilder create(SecurityProtocol securityProtocol,
@@ -84,7 +86,8 @@ public class ChannelBuilders {
                                          ListenerName listenerName,
                                          String clientSaslMechanism,
                                          boolean saslHandshakeRequestEnable,
-                                         CredentialCache credentialCache) {
+                                         CredentialCache credentialCache,
+                                         TokenCache tokenCache) {
         Map<String, ?> configs;
         if (listenerName == null)
             configs = config.values();
@@ -102,7 +105,7 @@ public class ChannelBuilders {
                 requireNonNullMode(mode, securityProtocol);
                 JaasContext jaasContext = JaasContext.load(contextType, listenerName, configs);
                 channelBuilder = new SaslChannelBuilder(mode, jaasContext, securityProtocol, listenerName,
-                        clientSaslMechanism, saslHandshakeRequestEnable, credentialCache);
+                        clientSaslMechanism, saslHandshakeRequestEnable, credentialCache, tokenCache);
                 break;
             case PLAINTEXT:
                 channelBuilder = new PlaintextChannelBuilder();

@@ -49,6 +49,12 @@ case object TransactionalId extends ResourceType {
   val toJava = JResourceType.TRANSACTIONAL_ID
 }
 
+case object Token extends ResourceType {
+  val name = "Token"
+  val error = Errors.TOKEN_AUTHORIZATION_FAILED
+  val toJava = JResourceType.TOKEN;
+}
+
 object ResourceType {
 
   def fromString(resourceType: String): ResourceType = {
@@ -56,7 +62,7 @@ object ResourceType {
     rType.getOrElse(throw new KafkaException(resourceType + " not a valid resourceType name. The valid names are " + values.mkString(",")))
   }
 
-  def values: Seq[ResourceType] = List(Topic, Group, Cluster, TransactionalId)
+  def values: Seq[ResourceType] = List(Topic, Group, Cluster, TransactionalId, Token)
 
   def fromJava(operation: JResourceType): ResourceType = fromString(operation.toString.replaceAll("_", ""))
 }

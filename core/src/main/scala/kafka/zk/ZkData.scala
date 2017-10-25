@@ -23,13 +23,14 @@ import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.common.KafkaException
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch}
-import kafka.security.auth.{Acl, Resource}
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
-import kafka.server.ConfigType
+import kafka.security.auth.{Acl, Resource}
+import kafka.server.{ConfigType, TokenManager}
 import kafka.utils.Json
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.security.token.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.ZooDefs
 import org.apache.zookeeper.data.{ACL, Stat}
@@ -490,6 +491,32 @@ object ProducerIdBlockZNode {
   def path = "/latest_producer_id_block"
 }
 
+object TokenAuthZNode {
+  def path = "/tokenauth"
+}
+
+object TokenChangeNotificationZNode {
+  def path =  s"${TokenAuthZNode.path}/token_changes"
+}
+
+object TokenChangeNotificationSequenceZNode {
+  val SequenceNumberPrefix = "token_changes_"
+  def createPath = s"${TokenChangeNotificationZNode.path}/$SequenceNumberPrefix"
+  def deletePath(sequenceNode: String) = s"${TokenChangeNotificationZNode.path}/${sequenceNode}"
+  def encode(tokenId : String): Array[Byte] = tokenId.getBytes(UTF_8)
+  def decode(bytes: Array[Byte]): String = new String(bytes, UTF_8)
+}
+
+object TokensZNode {
+  def path = s"${TokenAuthZNode.path}/tokens"
+}
+
+object TokenInfoZNode {
+  def path(tokenId: String) =  s"${TokensZNode.path}/$tokenId"
+  def encode(token: DelegationToken): Array[Byte] =  Json.encodeAsBytes(TokenManager.toJsonCompatibleMap(token).asJava)
+  def decode(bytes: Array[Byte]): Option[TokenInformation] = TokenManager.fromBytes(bytes)
+}
+
 object ZkData {
 
   // Important: it is necessary to add any new top level Zookeeper path to the Seq
@@ -503,11 +530,12 @@ object ZkData {
     AclZNode.path,
     AclChangeNotificationZNode.path,
     ProducerIdBlockZNode.path,
-    LogDirEventNotificationZNode.path)
+    LogDirEventNotificationZNode.path,
+    TokenAuthZNode.path)
 
   // These are persistent ZK paths that should exist on kafka broker startup.
   val PersistentZkPaths = Seq(
-    "/consumers",  // old consumer path
+    "/consumers", // old consumer path
     BrokerIdsZNode.path,
     TopicsZNode.path,
     ConfigEntityChangeNotificationZNode.path,
@@ -518,7 +546,7 @@ object ZkData {
     LogDirEventNotificationZNode.path
   ) ++ ConfigType.all.map(ConfigEntityTypeZNode.path)
 
-  val SensitiveRootPaths = Seq(ConfigEntityTypeZNode.path(ConfigType.User))
+  val SensitiveRootPaths = Seq(ConfigEntityTypeZNode.path(ConfigType.User), TokensZNode.path)
 
   def sensitivePath(path: String): Boolean = {
     path != null && SensitiveRootPaths.exists(path.startsWith)
@@ -534,3 +562,4 @@ object ZkData {
     } else ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala
   }
 }
+

@@ -72,6 +72,10 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     val producerSecurityProps = clientSecurityProps("producer")
     val consumerSecurityProps = clientSecurityProps("consumer")
     super.setUp()
+    initClients(producerSecurityProps, consumerSecurityProps)
+  }
+
+  def initClients(producerSecurityProps: Properties, consumerSecurityProps: Properties) = {
     producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
     producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
     producerConfig ++= producerSecurityProps

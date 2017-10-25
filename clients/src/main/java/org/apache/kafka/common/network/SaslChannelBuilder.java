@@ -22,11 +22,12 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.JaasContext;
+import org.apache.kafka.common.security.token.TokenCache;
+import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.authenticator.LoginManager;
 import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
 import org.apache.kafka.common.security.authenticator.SaslServerAuthenticator;
-import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.utils.Java;
 import org.slf4j.Logger;
@@ -53,6 +54,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
     private final JaasContext jaasContext;
     private final boolean handshakeRequestEnable;
     private final CredentialCache credentialCache;
+    private final TokenCache tokenCache;
 
     private LoginManager loginManager;
     private SslFactory sslFactory;
@@ -65,7 +67,8 @@ public class SaslChannelBuilder implements ChannelBuilder {
                               ListenerName listenerName,
                               String clientSaslMechanism,
                               boolean handshakeRequestEnable,
-                              CredentialCache credentialCache) {
+                              CredentialCache credentialCache,
+                              TokenCache tokenCache) {
         this.mode = mode;
         this.jaasContext = jaasContext;
         this.securityProtocol = securityProtocol;
@@ -73,6 +76,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
         this.handshakeRequestEnable = handshakeRequestEnable;
         this.clientSaslMechanism = clientSaslMechanism;
         this.credentialCache = credentialCache;
+        this.tokenCache = tokenCache;
     }
 
     @Override
@@ -153,7 +157,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
     protected SaslServerAuthenticator buildServerAuthenticator(Map<String, ?> configs, String id,
             TransportLayer transportLayer, Subject subject) throws IOException {
         return new SaslServerAuthenticator(configs, id, jaasContext, subject,
-                kerberosShortNamer, credentialCache, listenerName, securityProtocol, transportLayer);
+                kerberosShortNamer, credentialCache, listenerName, securityProtocol, transportLayer, tokenCache);
     }
 
     // Visible to override for testing

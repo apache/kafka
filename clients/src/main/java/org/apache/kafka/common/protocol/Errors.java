@@ -17,6 +17,7 @@
 package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.InvalidPrincipalTypeException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
@@ -27,6 +28,9 @@ import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.LogDirNotFoundException;
 import org.apache.kafka.common.errors.DuplicateSequenceException;
+import org.apache.kafka.common.errors.DelegationTokenDisabledException;
+import org.apache.kafka.common.errors.DelegationTokenNotFoundException;
+import org.apache.kafka.common.errors.DelegationTokenOwnerMismatchException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
@@ -68,6 +72,8 @@ import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.TokenAuthorizationException;
+import org.apache.kafka.common.errors.TokenExpiredException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
@@ -76,6 +82,7 @@ import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.errors.UnsupportedByAuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -545,6 +552,48 @@ public enum Errors {
             public ApiException build(String message) {
                 return new ReassignmentInProgressException(message);
             }
+        }),
+    TOKEN_AUTH_DISABLED(61, "Delegation Token feature is not enabled.", new ApiExceptionBuilder() {
+        @Override
+        public ApiException build(String message) {
+            return new DelegationTokenDisabledException(message);
+        }
+    }),
+    TOKEN_NOT_FOUND(62, "Delegation Token is not found on server.", new ApiExceptionBuilder() {
+        @Override
+        public ApiException build(String message) {
+            return new DelegationTokenNotFoundException(message);
+        }
+    }),
+    TOKEN_OWNER_MISMATCH(63, "Specified Principal is not valid Owner/Renewer.", new ApiExceptionBuilder() {
+        @Override
+        public ApiException build(String message) {
+            return new DelegationTokenOwnerMismatchException(message);
+        }
+    }),
+    TOKEN_REQUEST_NOT_ALLOWED(64, "Delegation Token requests are not allowed on PLAINTEXT/SSL channels and " + "on delegation token authenticated channels.", new ApiExceptionBuilder() {
+        @Override
+        public ApiException build(String message) {
+            return new UnsupportedByAuthenticationException(message);
+        }
+    }),
+    TOKEN_AUTHORIZATION_FAILED(65, "Delegation Token authorization failed.", new ApiExceptionBuilder() {
+        @Override
+        public ApiException build(String message) {
+            return new TokenAuthorizationException(message);
+        }
+    }),
+    TOKEN_EXPIRED(66, "Delegation Token is expired.", new ApiExceptionBuilder() {
+        @Override
+        public ApiException build(String message) {
+            return new TokenExpiredException(message);
+        }
+    }),
+    INVALID_PRINCIPAL_TYPE(67, "Supplied principalType is not supported", new ApiExceptionBuilder() {
+        @Override
+        public ApiException build(String message) {
+            return new InvalidPrincipalTypeException(message);
+        }
     });
 
     private interface ApiExceptionBuilder {
