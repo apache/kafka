@@ -17,7 +17,7 @@
 package kafka.controller
 
 import kafka.zk.ZooKeeperTestHarness
-import org.junit.{Before, Test}
+import org.junit.{After, Before, Test}
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.apache.kafka.common.TopicPartition
 
@@ -28,7 +28,6 @@ class KafkaControllerZkUtilsTest extends ZooKeeperTestHarness {
 
   private val group = "my-group"
   private val topicPartition = new TopicPartition("topic", 0)
-  private val offset = 123L
 
   @Before
   override def setUp() {
@@ -37,8 +36,16 @@ class KafkaControllerZkUtilsTest extends ZooKeeperTestHarness {
     newZkUtils = new KafkaControllerZkUtils(zookeeperClient, false)
   }
 
+  @After
+  override def tearDown() {
+    newZkUtils.close()
+    zookeeperClient.close()
+    super.tearDown()
+  }
+
   @Test
   def testSetAndGetConsumerOffset() {
+    val offset = 123L
     // None if no committed offsets
     assertTrue(newZkUtils.getConsumerOffset(group, topicPartition).isEmpty)
     // Set and retrieve an offset

@@ -249,6 +249,6 @@ object ConsumerOffset {
   def decode(bytes: Array[Byte]) : Option[Long] = Option(new String(bytes, "UTF-8").toLong)
 }
 
-object Version {
+object ZkVersion {
   def noVersion = -1
 }

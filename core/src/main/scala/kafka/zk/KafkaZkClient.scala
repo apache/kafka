@@ -227,7 +227,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    * @return SetDataResponse
    */
   def setTopicAssignmentRaw(topic: String, assignment: Map[TopicAndPartition, Seq[Int]]): SetDataResponse = {
-    val setDataRequest = SetDataRequest(TopicZNode.path(topic), TopicZNode.encode(assignment), Version.noVersion)
+    val setDataRequest = SetDataRequest(TopicZNode.path(topic), TopicZNode.encode(assignment), ZkVersion.noVersion)
     retryRequestUntilConnected(setDataRequest)
   }
 
@@ -285,7 +285,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    */
   def deleteLogDirEventNotifications(sequenceNumbers: Seq[String]): Unit = {
     val deleteRequests = sequenceNumbers.map { sequenceNumber =>
-      DeleteRequest(LogDirEventNotificationSequenceZNode.path(sequenceNumber), Version.noVersion)
+      DeleteRequest(LogDirEventNotificationSequenceZNode.path(sequenceNumber), ZkVersion.noVersion)
     }
     retryRequestsUntilConnected(deleteRequests)
   }
@@ -330,7 +330,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    * @param topics the topics to remove.
    */
   def deleteTopicDeletions(topics: Seq[String]): Unit = {
-    val deleteRequests = topics.map(topic => DeleteRequest(DeleteTopicsTopicZNode.path(topic), Version.noVersion))
+    val deleteRequests = topics.map(topic => DeleteRequest(DeleteTopicsTopicZNode.path(topic), ZkVersion.noVersion))
     retryRequestsUntilConnected(deleteRequests)
   }
 
@@ -356,7 +356,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    * @return SetDataResponse
    */
   def setPartitionReassignmentRaw(reassignment: Map[TopicAndPartition, Seq[Int]]): SetDataResponse = {
-    val setDataRequest = SetDataRequest(ReassignPartitionsZNode.path, ReassignPartitionsZNode.encode(reassignment), Version.noVersion)
+    val setDataRequest = SetDataRequest(ReassignPartitionsZNode.path, ReassignPartitionsZNode.encode(reassignment), ZkVersion.noVersion)
     retryRequestUntilConnected(setDataRequest)
   }
 
@@ -375,7 +375,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    * Deletes the partition reassignment znode.
    */
   def deletePartitionReassignment(): Unit = {
-    val deleteRequest = DeleteRequest(ReassignPartitionsZNode.path, Version.noVersion)
+    val deleteRequest = DeleteRequest(ReassignPartitionsZNode.path, ZkVersion.noVersion)
     retryRequestUntilConnected(deleteRequest)
   }
 
@@ -452,7 +452,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    */
   def deleteIsrChangeNotifications(sequenceNumbers: Seq[String]): Unit = {
     val deleteRequests = sequenceNumbers.map { sequenceNumber =>
-      DeleteRequest(IsrChangeNotificationSequenceZNode.path(sequenceNumber), Version.noVersion)
+      DeleteRequest(IsrChangeNotificationSequenceZNode.path(sequenceNumber), ZkVersion.noVersion)
     }
     retryRequestsUntilConnected(deleteRequests)
   }
@@ -477,7 +477,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    * Deletes the preferred replica election znode.
    */
   def deletePreferredReplicaElection(): Unit = {
-    val deleteRequest = DeleteRequest(PreferredReplicaElectionZNode.path, Version.noVersion)
+    val deleteRequest = DeleteRequest(PreferredReplicaElectionZNode.path, ZkVersion.noVersion)
     retryRequestUntilConnected(deleteRequest)
   }
 
@@ -501,7 +501,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    * Deletes the controller znode.
    */
   def deleteController(): Unit = {
-    val deleteRequest = DeleteRequest(ControllerZNode.path, Version.noVersion)
+    val deleteRequest = DeleteRequest(ControllerZNode.path, ZkVersion.noVersion)
     retryRequestUntilConnected(deleteRequest)
   }
 
@@ -535,7 +535,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    * @param topics the topics whose configs we wish to delete.
    */
   def deleteTopicConfigs(topics: Seq[String]): Unit = {
-    val deleteRequests = topics.map(topic => DeleteRequest(ConfigEntityZNode.path(ConfigType.Topic, topic), Version.noVersion))
+    val deleteRequests = topics.map(topic => DeleteRequest(ConfigEntityZNode.path(ConfigType.Topic, topic), ZkVersion.noVersion))
     retryRequestsUntilConnected(deleteRequests)
   }
 
@@ -593,10 +593,10 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
   }
 
   /**
-   * Get the committed offset for a topic and group
+   * Get the committed offset for a topic partition and group
    * @param group the group we wish to get offset for
-   * @param topicPartition the topic/partition we wish to get the offset for
-   * @return optional long that is Some if there was an offset committed for group/topicPartition and None otherwise.
+   * @param topicPartition the topic partition we wish to get the offset for
+   * @return optional long that is Some if there was an offset committed for topic partition, group and None otherwise.
    */
   def getConsumerOffset(group: String, topicPartition: TopicPartition): Option[Long] = {
     val getDataRequest = GetDataRequest(ConsumerOffset.path(group, topicPartition.topic, topicPartition.partition))
@@ -611,9 +611,9 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
   }
 
    /**
-   * Sets the committed offset for a group/topicPartition
-   * @param group the topic whose offset is being set
-   * @param topicPartition the topic/partition whose offset is being set
+   * Set the committed offset for a topic partition and group
+   * @param group the group whose offset is being set
+   * @param topicPartition the topic partition whose offset is being set
    * @param offset the offset value
    */
   def setOrCreateConsumerOffset(group: String, topicPartition: TopicPartition, offset: Long): Unit = {
@@ -629,7 +629,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
   }
 
   private def setConsumerOffset(group: String, topicPartition: TopicPartition, offset: Long): SetDataResponse = {
-    val setDataRequest = SetDataRequest(ConsumerOffset.path(group, topicPartition.topic, topicPartition.partition), ConsumerOffset.encode(offset), Version.noVersion)
+    val setDataRequest = SetDataRequest(ConsumerOffset.path(group, topicPartition.topic, topicPartition.partition), ConsumerOffset.encode(offset), ZkVersion.noVersion)
     retryRequestUntilConnected(setDataRequest)
   }
 
@@ -648,7 +648,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(path))
     if (getChildrenResponse.resultCode == Code.OK) {
       getChildrenResponse.children.foreach(child => deleteRecursive(s"$path/$child"))
-      val deleteResponse = retryRequestUntilConnected(DeleteRequest(path, Version.noVersion))
+      val deleteResponse = retryRequestUntilConnected(DeleteRequest(path, ZkVersion.noVersion))
       if (deleteResponse.resultCode != Code.OK && deleteResponse.resultCode != Code.NONODE) {
         throw deleteResponse.resultException.get
       }
@@ -661,8 +661,9 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     val createRequest = CreateRequest(path, null, acls(path), CreateMode.PERSISTENT)
     var createResponse = retryRequestUntilConnected(createRequest)
     if (createResponse.resultCode == Code.NONODE) {
-      if (!path.contains("/")) throw new IllegalArgumentException(s"Invalid path ${path}")
-      val parentPath = path.substring(0, path.lastIndexOf("/"))
+      val indexOfLastSlash = path.lastIndexOf("/")
+      if (indexOfLastSlash == -1) throw new IllegalArgumentException(s"Invalid path ${path}")
+      val parentPath = path.substring(0, indexOfLastSlash)
       createRecursive(parentPath)
       createResponse = retryRequestUntilConnected(createRequest)
       if (createResponse.resultCode != Code.OK && createResponse.resultCode != Code.NODEEXISTS) {
