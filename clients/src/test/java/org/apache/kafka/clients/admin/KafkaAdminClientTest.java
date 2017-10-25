@@ -425,8 +425,8 @@ public class KafkaAdminClientTest {
         HashMap<Integer, Node> nodes = new HashMap<>();
         nodes.put(0, new Node(0, "localhost", 8121));
         List<PartitionInfo> partitionInfos = new ArrayList<>();
-        partitionInfos.add(new PartitionInfo("my_topic", 0, nodes.get(0), new Node[] { nodes.get(0) }, new Node[] { nodes.get(0) }));
-        partitionInfos.add(new PartitionInfo("other_topic", 0, nodes.get(0), new Node[] { nodes.get(0) }, new Node[] { nodes.get(0) }));
+        partitionInfos.add(new PartitionInfo("my_topic", 0, nodes.get(0), new Node[] {nodes.get(0)}, new Node[] {nodes.get(0)}));
+        partitionInfos.add(new PartitionInfo("other_topic", 0, nodes.get(0), new Node[] {nodes.get(0)}, new Node[] {nodes.get(0)}));
         Cluster cluster = new Cluster("mockClusterId", nodes.values(),
                 partitionInfos, Collections.<String>emptySet(),
                 Collections.<String>emptySet(), nodes.get(0));
@@ -468,7 +468,7 @@ public class KafkaAdminClientTest {
             Map<TopicPartition, KafkaFuture<Long>> values = results.values();
             KafkaFuture<Long> myTopicResult = values.get(myTopicPartition);
             long lowWatermark = myTopicResult.get();
-            assertEquals(lowWatermark,3);
+            assertEquals(lowWatermark, 3);
             KafkaFuture<Long> otherTopicResult = values.get(otherTopicPartition);
             try {
                 otherTopicResult.get();
