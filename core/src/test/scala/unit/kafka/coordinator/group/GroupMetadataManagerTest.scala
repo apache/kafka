@@ -36,12 +36,13 @@ import java.nio.ByteBuffer
 
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Gauge
-import kafka.controller.KafkaControllerZkUtils
 import org.apache.kafka.common.internals.Topic
 
 import scala.collection.JavaConverters._
 import scala.collection._
 import java.util.concurrent.locks.ReentrantLock
+
+import kafka.zk.KafkaZkClient
 
 class GroupMetadataManagerTest {
 
@@ -49,7 +50,7 @@ class GroupMetadataManagerTest {
   var replicaManager: ReplicaManager = null
   var groupMetadataManager: GroupMetadataManager = null
   var scheduler: KafkaScheduler = null
-  var zkUtils: KafkaControllerZkUtils = null
+  var zkClient: KafkaZkClient = null
   var partition: Partition = null
 
   val groupId = "foo"
@@ -75,13 +76,13 @@ class GroupMetadataManagerTest {
       offsetCommitRequiredAcks = config.offsetCommitRequiredAcks)
 
     // make two partitions of the group topic to make sure some partitions are not owned by the coordinator
-    zkUtils = EasyMock.createNiceMock(classOf[KafkaControllerZkUtils])
-    EasyMock.expect(zkUtils.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME)).andReturn(Some(2))
-    EasyMock.replay(zkUtils)
+    zkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
+    EasyMock.expect(zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME)).andReturn(Some(2))
+    EasyMock.replay(zkClient)
 
     time = new MockTime
     replicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
-    groupMetadataManager = new GroupMetadataManager(0, ApiVersion.latestVersion, offsetConfig, replicaManager, zkUtils, time)
+    groupMetadataManager = new GroupMetadataManager(0, ApiVersion.latestVersion, offsetConfig, replicaManager, zkClient, time)
     partition = EasyMock.niceMock(classOf[Partition])
   }
 
