@@ -17,7 +17,6 @@ import org.ajoberstar.grgit.Grgit
 
 buildscript {
   repositories {
-    mavenCentral()
     jcenter()
   }
   apply from: file('gradle/buildscript.gradle'), to: buildscript
@@ -37,7 +36,7 @@ apply from: "$rootDir/gradle/dependencies.gradle"
 allprojects {
 
   repositories {
-    mavenCentral()
+    jcenter()
   }
   
   apply plugin: 'idea'
