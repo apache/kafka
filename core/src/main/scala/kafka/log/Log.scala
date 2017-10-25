@@ -281,13 +281,17 @@ class Log(@volatile var dir: File,
         // if an index just delete it, it will be rebuilt
         val baseFile = new File(CoreUtils.replaceSuffix(file.getPath, SwapFileSuffix, ""))
         if (isIndexFile(baseFile)) {
-          file.delete()
+          if (!file.delete())
+            info(s"Index file ${file.getAbsolutePath} not deleted")
         } else if (isLogFile(baseFile)) {
           // delete the index files
           val offset = offsetFromFile(baseFile)
-          Log.offsetIndexFile(dir, offset).delete
-          Log.timeIndexFile(dir, offset).delete
-          Log.transactionIndexFile(dir, offset).delete
+          if (!Log.offsetIndexFile(dir, offset).delete)
+            info(s"Index file ${Log.offsetIndexFile(dir, offset).getAbsolutePath} not deleted")
+          if (!Log.timeIndexFile(dir, offset).delete)
+            info(s"Index file ${Log.timeIndexFile(dir, offset).getAbsolutePath} not deleted")
+          if (!Log.transactionIndexFile(dir, offset).delete)
+            info(s"Index file ${Log.transactionIndexFile(dir, offset).getAbsolutePath} not deleted")
           swapFiles += file
         }
       }
@@ -306,7 +310,8 @@ class Log(@volatile var dir: File,
         val logFile = Log.logFile(dir, offset)
         if (!logFile.exists) {
           warn("Found an orphaned index file, %s, with no corresponding log file.".format(file.getAbsolutePath))
-          file.delete()
+          if (!file.delete())
+            info(s"Index file ${file.getAbsolutePath} not deleted")
         }
       } else if (isLogFile(file)) {
         // if it's a log file, load the corresponding log segment
@@ -337,9 +342,12 @@ class Log(@volatile var dir: File,
             case e: java.lang.IllegalArgumentException =>
               warn(s"Found a corrupted index file due to ${e.getMessage}}. deleting ${timeIndexFile.getAbsolutePath}, " +
                 s"${indexFile.getAbsolutePath}, and ${txnIndexFile.getAbsolutePath} and rebuilding index...")
-              timeIndexFile.delete()
-              indexFile.delete()
-              segment.txnIndex.delete()
+              if (!timeIndexFile.delete())
+                info(s"Index file ${timeIndexFile.getAbsolutePath} not deleted")
+              if (!indexFile.delete())
+                info(s"Index file ${indexFile.getAbsolutePath} not deleted")
+              if (!segment.txnIndex.delete())
+                info(s"Segment index file not deleted")
               recoverSegment(segment)
           }
         } else {
