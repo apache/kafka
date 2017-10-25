@@ -431,15 +431,18 @@ public class KafkaAdminClientTest {
                 partitionInfos, Collections.<String>emptySet(),
                 Collections.<String>emptySet(), nodes.get(0));
 
+        TopicPartition myTopicPartition = new TopicPartition("my_topic", 0);
+        TopicPartition otherTopicPartition = new TopicPartition("other_topic", 0);
+
         try (MockKafkaAdminClientEnv env = new MockKafkaAdminClientEnv(cluster)) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
             env.kafkaClient().setNode(env.cluster().nodes().get(0));
 
             Map<TopicPartition, DeleteRecordsResponse.PartitionResponse> m = new HashMap<>();
-            m.put(new TopicPartition("my_topic", 0),
+            m.put(myTopicPartition,
                     new DeleteRecordsResponse.PartitionResponse(3, Errors.NONE));
-            m.put(new TopicPartition("other_topic", 0),
+            m.put(otherTopicPartition,
                     new DeleteRecordsResponse.PartitionResponse(-1, Errors.OFFSET_OUT_OF_RANGE));
 
             List<MetadataResponse.TopicMetadata> t = new ArrayList<>();
@@ -457,16 +460,16 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(new DeleteRecordsResponse(0, m));
 
             Map<TopicPartition, RecordsToDelete> partitionsAndOffsets = new HashMap<>();
-            partitionsAndOffsets.put(new TopicPartition("my_topic", 0), RecordsToDelete.beforeOffset(3L));
-            partitionsAndOffsets.put(new TopicPartition("other_topic", 0), RecordsToDelete.beforeOffset(10L));
+            partitionsAndOffsets.put(myTopicPartition, RecordsToDelete.beforeOffset(3L));
+            partitionsAndOffsets.put(otherTopicPartition, RecordsToDelete.beforeOffset(10L));
             
             DeleteRecordsResult results = env.adminClient().deleteRecords(partitionsAndOffsets);
 
             Map<TopicPartition, KafkaFuture<Long>> values = results.values();
-            KafkaFuture<Long> myTopicResult = values.get(new TopicPartition("my_topic", 0));
+            KafkaFuture<Long> myTopicResult = values.get(myTopicPartition);
             long lowWatermark = myTopicResult.get();
             assertEquals(lowWatermark,3);
-            KafkaFuture<Long> otherTopicResult = values.get(new TopicPartition("other_topic", 0));
+            KafkaFuture<Long> otherTopicResult = values.get(otherTopicPartition);
             try {
                 otherTopicResult.get();
                 fail("get() should throw ExecutionException");
