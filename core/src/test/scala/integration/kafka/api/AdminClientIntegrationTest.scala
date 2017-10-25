@@ -81,7 +81,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   val producerCount = 1
 
   override def generateConfigs = {
-    val cfgs = TestUtils.createBrokerConfigs(brokerCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
+    val cfgs = TestUtils.createBrokerConfigs(serverCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = 2)
     cfgs.foreach { config =>
       config.setProperty(KafkaConfig.ListenersProp, s"${listenerName.value}://localhost:${TestUtils.RandomPort}")
@@ -981,27 +981,6 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     client.close()
   }
 
-<<<<<<< HEAD
-  override def generateConfigs = {
-    val cfgs = TestUtils.createBrokerConfigs(serverCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = 2)
-    cfgs.foreach { config =>
-      config.setProperty(KafkaConfig.ListenersProp, s"${listenerName.value}://localhost:${TestUtils.RandomPort}")
-      config.remove(KafkaConfig.InterBrokerSecurityProtocolProp)
-      config.setProperty(KafkaConfig.InterBrokerListenerNameProp, listenerName.value)
-      config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"${listenerName.value}:${securityProtocol.name}")
-      config.setProperty(KafkaConfig.DeleteTopicEnableProp, "true")
-      // We set this in order to test that we don't expose sensitive data via describe configs. This will already be
-      // set for subclasses with security enabled and we don't want to overwrite it.
-      if (!config.containsKey(KafkaConfig.SslTruststorePasswordProp))
-        config.setProperty(KafkaConfig.SslTruststorePasswordProp, "some.invalid.pass")
-    }
-    cfgs.foreach(_ ++= serverConfig)
-    cfgs.map(KafkaConfig.fromProps)
-  }
-
-=======
->>>>>>> trunk
   /**
     * Test injecting timeouts for calls that are in flight.
     */
