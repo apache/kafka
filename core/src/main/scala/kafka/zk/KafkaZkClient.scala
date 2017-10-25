@@ -14,16 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
 */
-package kafka.controller
+package kafka.zk
 
 import java.util.Properties
 
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.common.TopicAndPartition
+import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.log.LogConfig
 import kafka.server.ConfigType
-import kafka.utils.{Logging, ZkUtils}
+import kafka.utils._
 import kafka.zookeeper._
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.Stat
@@ -32,8 +33,18 @@ import org.apache.zookeeper.{CreateMode, KeeperException}
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
-class KafkaControllerZkUtils(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends Logging {
-  import KafkaControllerZkUtils._
+/**
+ * Provides higher level Kafka-specific operations on top of the pipelined [[kafka.zookeeper.ZooKeeperClient]].
+ *
+ * This performs better than [[kafka.utils.ZkUtils]] and should replace it completely, eventually.
+ *
+ * Implementation note: this class includes methods for various components (Controller, Configs, Old Consumer, etc.)
+ * and returns instances of classes from the calling packages in some cases. This is not ideal, but it makes it
+ * easier to quickly migrate away from `ZkUtils`. We should revisit this once the migration is completed and tests are
+ * in place. We should also consider whether a monolithic [[kafka.zk.ZkData]] is the way to go.
+ */
+class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends Logging {
+  import KafkaZkClient._
 
   /**
    * Gets topic partition states for the given partitions.
@@ -595,8 +606,7 @@ class KafkaControllerZkUtils(zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   private def createTopicPartition(partitions: Seq[TopicAndPartition]) = {
     val createRequests = partitions.map { partition =>
       val path = TopicPartitionZNode.path(partition)
-      val data = TopicPartitionZNode.encode
-      CreateRequest(path, data, acls(path), CreateMode.PERSISTENT, Some(partition))
+      CreateRequest(path, null, acls(path), CreateMode.PERSISTENT, Some(partition))
     }
     retryRequestsUntilConnected(createRequests)
   }
@@ -604,8 +614,7 @@ class KafkaControllerZkUtils(zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   private def createTopicPartitions(topics: Seq[String]) = {
     val createRequests = topics.map { topic =>
       val path = TopicPartitionsZNode.path(topic)
-      val data = TopicPartitionsZNode.encode
-      CreateRequest(path, data, acls(path), CreateMode.PERSISTENT, Some(topic))
+      CreateRequest(path, null, acls(path), CreateMode.PERSISTENT, Some(topic))
     }
     retryRequestsUntilConnected(createRequests)
   }
@@ -702,7 +711,7 @@ class KafkaControllerZkUtils(zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   }
 }
 
-object KafkaControllerZkUtils {
+object KafkaZkClient {
 
   /**
    * @param successfulPartitions The successfully updated partition states with adjusted znode versions.
