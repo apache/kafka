@@ -1406,7 +1406,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     if (!controller.isActive || !config.deleteTopicEnable) {
-      val error = if (!controller.isActive) Errors.NOT_CONTROLLER else Errors.INCOMPATIBLE_WITH_CONFIG
+      val error = if (!controller.isActive) Errors.NOT_CONTROLLER else Errors.INVALID_REQUEST
       val results = deleteTopicRequest.topics.asScala.map { topic =>
         (topic, error)
       }.toMap

@@ -30,7 +30,6 @@ import org.apache.kafka.common.errors.DuplicateSequenceException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
-import org.apache.kafka.common.errors.IncompatibleWithConfigException;
 import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
 import org.apache.kafka.common.errors.InvalidCommitOffsetSizeException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
@@ -546,14 +545,7 @@ public enum Errors {
             public ApiException build(String message) {
                 return new ReassignmentInProgressException(message);
             }
-    }),
-    INCOMPATIBLE_WITH_CONFIG(61, "The operation requested is incompatible with the configuration.",
-            new ApiExceptionBuilder() {
-                @Override
-                public ApiException build(String message) {
-                    return new IncompatibleWithConfigException(message);
-                }
-            });
+    });
 
     private interface ApiExceptionBuilder {
         ApiException build(String message);
