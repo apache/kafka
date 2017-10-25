@@ -24,6 +24,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.slf4j.Logger;
@@ -92,7 +93,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
     private void initialize() {
         if (!restoreConsumer.subscription().isEmpty()) {
-            throw new IllegalStateException("Restore consumer should not be subscribed to any topics (" + restoreConsumer.subscription() + ")");
+            throw new StreamsException("Restore consumer should not be subscribed to any topics (" + restoreConsumer.subscription() + ")");
         }
 
         // first refresh the changelog partition information from brokers, since initialize is only called when
