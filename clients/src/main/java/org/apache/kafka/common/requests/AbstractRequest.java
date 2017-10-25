@@ -19,9 +19,11 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
+import java.util.Map;
 
 public abstract class AbstractRequest extends AbstractRequestResponse {
 
@@ -120,6 +122,18 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
     public abstract AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e);
 
     /**
+     * Get the error counts corresponding to an error response. This is overridden for requests
+     * where response may be null (e.g produce with acks=0).
+     */
+    public Map<Errors, Integer> errorCounts(Throwable e) {
+        AbstractResponse response = getErrorResponse(0, e);
+        if (response == null)
+            throw new IllegalStateException("Error counts could not be obtained for request " + this);
+        else
+            return response.errorCounts();
+    }
+
+    /**
      * Factory method for getting a request object based on ApiKey ID and a version
      */
     public static AbstractRequest parseRequest(ApiKeys apiKey, short apiVersion, Struct struct) {
@@ -192,8 +206,8 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 return new DescribeConfigsRequest(struct, apiVersion);
             case ALTER_CONFIGS:
                 return new AlterConfigsRequest(struct, apiVersion);
-            case ALTER_REPLICA_DIR:
-                return new AlterReplicaDirRequest(struct, apiVersion);
+            case ALTER_REPLICA_LOG_DIRS:
+                return new AlterReplicaLogDirsRequest(struct, apiVersion);
             case DESCRIBE_LOG_DIRS:
                 return new DescribeLogDirsRequest(struct, apiVersion);
             case SASL_AUTHENTICATE:

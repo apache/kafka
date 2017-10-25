@@ -14,18 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package org.apache.kafka.clients.admin;
-
-import org.apache.kafka.common.annotation.InterfaceStability;
-import java.util.Collection;
+package org.apache.kafka.common.metrics;
 
 /**
- * Options for {@link AdminClient#describeReplicaLogDir(Collection<org.apache.kafka.common.TopicPartitionReplica>)}.
- *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * Super-interface for {@link Measurable} or {@link Gauge} that provides
+ * metric values.
+ * <p>
+ * In the future for Java8 and above, {@link Gauge#value(MetricConfig, long)} will be
+ * moved to this interface with a default implementation in {@link Measurable} that returns
+ * {@link Measurable#measure(MetricConfig, long)}.
+ * </p>
  */
-@InterfaceStability.Evolving
-public class DescribeReplicaLogDirOptions extends AbstractOptions<DescribeReplicaLogDirOptions> {
-
-}
+public interface MetricValueProvider<T> { }

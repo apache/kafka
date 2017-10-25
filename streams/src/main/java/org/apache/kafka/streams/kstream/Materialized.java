@@ -34,9 +34,23 @@ import java.util.Objects;
 
 /**
  * Used to describe how a {@link StateStore} should be materialized.
- * You can either provide a custom {@link StateStore} backend
- * through one of the provided methods accepting a supplier or use the default RocksDB backends
- * by providing just a store name.
+ * You can either provide a custom {@link StateStore} backend through one of the provided methods accepting a supplier
+ * or use the default RocksDB backends by providing just a store name.
+ * <p>
+ * For example, you can read a topic as {@link KTable} and force a state store materialization to access the content
+ * via Interactive Queries API:
+ * <pre>{@code
+ * StreamsBuilder builder = new StreamsBuilder();
+ * KTable<Integer, Integer> table = builder.table(
+ *   "topicName",
+ *   Materialized.as("queryable-store-name"));
+ * }</pre>
+ *
+ * @param <K> type of record key
+ * @param <V> type of record value
+ * @param <S> type of state store (note: state stores always have key/value types {@code <Bytes,byte[]>}
+ *
+ * @see org.apache.kafka.streams.state.Stores
  */
 public class Materialized<K, V, S extends StateStore> {
     protected StoreSupplier<S> storeSupplier;
@@ -122,6 +136,24 @@ public class Materialized<K, V, S extends StateStore> {
     public static <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> as(final KeyValueBytesStoreSupplier supplier) {
         Objects.requireNonNull(supplier, "supplier can't be null");
         return new Materialized<>(supplier);
+    }
+
+    /**
+     * Materialize a {@link StateStore} with the provided key and value {@link Serde}s.
+     * An internal name will be used for the store.
+     *
+     * @param keySerde      the key {@link Serde} to use. If the {@link Serde} is null, then the default key
+     *                      serde from configs will be used
+     * @param valueSerde    the value {@link Serde} to use. If the {@link Serde} is null, then the default value
+     *                      serde from configs will be used
+     * @param <K>           key type
+     * @param <V>           value type
+     * @param <S>           store type
+     * @return a new {@link Materialized} instance with the given key and value serdes
+     */
+    public static <K, V, S extends StateStore> Materialized<K, V, S> with(final Serde<K> keySerde,
+                                                                          final Serde<V> valueSerde) {
+        return new Materialized<K, V, S>((String) null).withKeySerde(keySerde).withValueSerde(valueSerde);
     }
 
     /**

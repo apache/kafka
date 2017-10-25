@@ -27,17 +27,32 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
+import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.ForeachAction;
+import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Reducer;
+import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
-import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -65,22 +80,20 @@ public class RestoreIntegrationTest {
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER =
             new EmbeddedKafkaCluster(NUM_BROKERS);
-    private final String inputStream = "input-stream";
+    private static final String INPUT_STREAM = "input-stream";
+    private static final String INPUT_STREAM_2 = "input-stream-2";
     private final int numberOfKeys = 10000;
     private KafkaStreams kafkaStreams;
     private String applicationId = "restore-test";
 
 
-    private void createTopics() throws InterruptedException {
-        CLUSTER.createTopic(inputStream, 2, 1);
+    @BeforeClass
+    public static void createTopics() throws InterruptedException {
+        CLUSTER.createTopic(INPUT_STREAM, 2, 1);
+        CLUSTER.createTopic(INPUT_STREAM_2, 2, 1);
     }
 
-    @Before
-    public void before() throws IOException, InterruptedException {
-        createTopics();
-    }
-
-    private Properties props() {
+    private Properties props(final String applicationId) {
         Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -107,7 +120,7 @@ public class RestoreIntegrationTest {
 
         createStateForRestoration();
 
-        builder.table(inputStream, Consumed.with(Serdes.Integer(), Serdes.Integer()))
+        builder.table(INPUT_STREAM, Consumed.with(Serdes.Integer(), Serdes.Integer()))
                 .toStream()
                 .foreach(new ForeachAction<Integer, Integer>() {
                     @Override
@@ -118,7 +131,7 @@ public class RestoreIntegrationTest {
 
 
         final CountDownLatch startupLatch = new CountDownLatch(1);
-        kafkaStreams = new KafkaStreams(builder.build(), props());
+        kafkaStreams = new KafkaStreams(builder.build(), props(applicationId));
         kafkaStreams.setStateListener(new KafkaStreams.StateListener() {
             @Override
             public void onChange(final KafkaStreams.State newState, final KafkaStreams.State oldState) {
@@ -153,6 +166,126 @@ public class RestoreIntegrationTest {
     }
 
 
+    @Test
+    public void shouldSuccessfullyStartWhenLoggingDisabled() throws InterruptedException {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<Integer, Integer> stream = builder.stream(INPUT_STREAM);
+        stream.groupByKey()
+                .reduce(new Reducer<Integer>() {
+                    @Override
+                    public Integer apply(final Integer value1, final Integer value2) {
+                        return value1 + value2;
+                    }
+                }, Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("reduce-store").withLoggingDisabled());
+
+        final CountDownLatch startupLatch = new CountDownLatch(1);
+        kafkaStreams = new KafkaStreams(builder.build(), props(applicationId));
+        kafkaStreams.setStateListener(new KafkaStreams.StateListener() {
+            @Override
+            public void onChange(final KafkaStreams.State newState, final KafkaStreams.State oldState) {
+                if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
+                    startupLatch.countDown();
+                }
+            }
+        });
+
+        kafkaStreams.start();
+
+        assertTrue(startupLatch.await(30, TimeUnit.SECONDS));
+    }
+
+    @Test
+    public void shouldProcessDataFromStoresWithLoggingDisabled() throws InterruptedException, ExecutionException {
+
+        IntegrationTestUtils.produceKeyValuesSynchronously(INPUT_STREAM_2,
+                                                           Arrays.asList(KeyValue.pair(1, 1),
+                                                                         KeyValue.pair(2, 2),
+                                                                         KeyValue.pair(3, 3)),
+                                                           TestUtils.producerConfig(CLUSTER.bootstrapServers(),
+                                                                                    IntegerSerializer.class,
+                                                                                    IntegerSerializer.class),
+                                                           CLUSTER.time);
+
+        final KeyValueBytesStoreSupplier lruMapSupplier = Stores.lruMap(INPUT_STREAM_2, 10);
+
+        final StoreBuilder<KeyValueStore<Integer, Integer>> storeBuilder = new KeyValueStoreBuilder<>(lruMapSupplier,
+                                                                                                      Serdes.Integer(),
+                                                                                                      Serdes.Integer(),
+                                                                                                      CLUSTER.time)
+                .withLoggingDisabled();
+
+        final StreamsBuilder streamsBuilder = new StreamsBuilder();
+
+        streamsBuilder.addStateStore(storeBuilder);
+
+        final KStream<Integer, Integer> stream = streamsBuilder.stream(INPUT_STREAM_2);
+        final CountDownLatch processorLatch = new CountDownLatch(3);
+        stream.process(new ProcessorSupplier<Integer, Integer>() {
+            @Override
+            public Processor<Integer, Integer> get() {
+                return new KeyValueStoreProcessor(INPUT_STREAM_2, processorLatch);
+            }
+        }, INPUT_STREAM_2);
+
+        final Topology topology = streamsBuilder.build();
+
+        kafkaStreams = new KafkaStreams(topology, props(applicationId + "-logging-disabled"));
+
+        final CountDownLatch latch = new CountDownLatch(1);
+        kafkaStreams.setStateListener(new KafkaStreams.StateListener() {
+            @Override
+            public void onChange(final KafkaStreams.State newState, final KafkaStreams.State oldState) {
+                if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
+                    latch.countDown();
+                }
+            }
+        });
+        kafkaStreams.start();
+
+        latch.await(30, TimeUnit.SECONDS);
+
+        assertTrue(processorLatch.await(30, TimeUnit.SECONDS));
+
+    }
+
+
+    public static class KeyValueStoreProcessor implements Processor<Integer, Integer> {
+
+        private String topic;
+        private final CountDownLatch processorLatch;
+
+        private KeyValueStore<Integer, Integer> store;
+
+        public KeyValueStoreProcessor(final String topic, final CountDownLatch processorLatch) {
+            this.topic = topic;
+            this.processorLatch = processorLatch;
+        }
+
+        @Override
+        public void init(final ProcessorContext context) {
+            this.store = (KeyValueStore<Integer, Integer>) context.getStateStore(topic);
+        }
+
+        @Override
+        public void process(final Integer key, final Integer value) {
+            if (key != null) {
+                store.put(key, value);
+                processorLatch.countDown();
+            }
+        }
+
+        @Override
+        public void punctuate(final long timestamp) {
+
+        }
+
+        @Override
+        public void close() {
+
+        }
+    }
+    
     private void createStateForRestoration()
             throws ExecutionException, InterruptedException {
         final Properties producerConfig = new Properties();
@@ -162,7 +295,7 @@ public class RestoreIntegrationTest {
                      new KafkaProducer<>(producerConfig, new IntegerSerializer(), new IntegerSerializer())) {
 
             for (int i = 0; i < numberOfKeys; i++) {
-                producer.send(new ProducerRecord<>(inputStream, i, i));
+                producer.send(new ProducerRecord<>(INPUT_STREAM, i, i));
             }
         }
 
@@ -173,8 +306,8 @@ public class RestoreIntegrationTest {
         consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class);
 
         final Consumer consumer = new KafkaConsumer(consumerConfig);
-        final List<TopicPartition> partitions = Arrays.asList(new TopicPartition(inputStream, 0),
-                                                              new TopicPartition(inputStream, 1));
+        final List<TopicPartition> partitions = Arrays.asList(new TopicPartition(INPUT_STREAM, 0),
+                                                              new TopicPartition(INPUT_STREAM, 1));
 
         consumer.assign(partitions);
         consumer.seekToEnd(partitions);

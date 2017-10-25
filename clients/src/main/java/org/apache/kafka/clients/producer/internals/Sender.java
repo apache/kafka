@@ -181,6 +181,7 @@ public class Sender implements Runnable {
         if (forceClose) {
             // We need to fail all the incomplete batches and wake up the threads waiting on
             // the futures.
+            log.debug("Aborting incomplete batches due to forced shutdown");
             this.accumulator.abortIncompleteBatches();
         }
         try {
@@ -527,8 +528,8 @@ public class Sender implements Runnable {
                 } else if (transactionManager.hasProducerIdAndEpoch(batch.producerId(), batch.producerEpoch())) {
                     // If idempotence is enabled only retry the request if the current producer id is the same as
                     // the producer id of the batch.
-                    log.debug("Retrying batch to topic-partition {}. Sequence number : {}", batch.topicPartition,
-                            batch.baseSequence());
+                    log.debug("Retrying batch to topic-partition {}. ProducerId: {}; Sequence number : {}",
+                            batch.topicPartition, batch.producerId(), batch.baseSequence());
                     reenqueueBatch(batch, now);
                 } else {
                     failBatch(batch, response, new OutOfOrderSequenceException("Attempted to retry sending a " +
@@ -587,8 +588,8 @@ public class Sender implements Runnable {
             transactionManager.removeInFlightBatch(batch);
         }
 
-        batch.done(response.baseOffset, response.logAppendTime, null);
-        this.accumulator.deallocate(batch);
+        if (batch.done(response.baseOffset, response.logAppendTime, null))
+            this.accumulator.deallocate(batch);
     }
 
     private void failBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response, RuntimeException exception, boolean adjustSequenceNumbers) {
@@ -623,8 +624,8 @@ public class Sender implements Runnable {
 
         this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
 
-        batch.done(baseOffset, logAppendTime, exception);
-        this.accumulator.deallocate(batch);
+        if (batch.done(baseOffset, logAppendTime, exception))
+            this.accumulator.deallocate(batch);
     }
 
     /**
@@ -675,7 +676,7 @@ public class Sender implements Runnable {
             // not all support the same message format version. For example, if a partition migrates from a broker
             // which is supporting the new magic version to one which doesn't, then we will need to convert.
             if (!records.hasMatchingMagic(minUsedMagic))
-                records = batch.records().downConvert(minUsedMagic, 0);
+                records = batch.records().downConvert(minUsedMagic, 0, time).records();
             produceRecordsByPartition.put(tp, records);
             recordsByPartition.put(tp, batch);
         }

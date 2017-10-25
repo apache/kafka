@@ -159,6 +159,11 @@ public class ApiVersionsResponse extends AbstractResponse {
         return error;
     }
 
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        return errorCounts(error);
+    }
+
     public static ApiVersionsResponse parse(ByteBuffer buffer, short version) {
         return new ApiVersionsResponse(ApiKeys.API_VERSIONS.parseResponse(version, buffer));
     }

@@ -48,9 +48,9 @@ public abstract class KafkaFuture<T> implements Future<T> {
 
     private static class AllOfAdapter<R> extends BiConsumer<R, Throwable> {
         private int remainingResponses;
-        private KafkaFuture future;
+        private KafkaFuture<?> future;
 
-        public AllOfAdapter(int remainingResponses, KafkaFuture future) {
+        public AllOfAdapter(int remainingResponses, KafkaFuture<?> future) {
             this.remainingResponses = remainingResponses;
             this.future = future;
             maybeComplete();
@@ -91,7 +91,7 @@ public abstract class KafkaFuture<T> implements Future<T> {
      */
     public static KafkaFuture<Void> allOf(KafkaFuture<?>... futures) {
         KafkaFuture<Void> allOfFuture = new KafkaFutureImpl<>();
-        AllOfAdapter allOfWaiter = new AllOfAdapter(futures.length, allOfFuture);
+        AllOfAdapter<Object> allOfWaiter = new AllOfAdapter<>(futures.length, allOfFuture);
         for (KafkaFuture<?> future : futures) {
             future.addWaiter(allOfWaiter);
         }

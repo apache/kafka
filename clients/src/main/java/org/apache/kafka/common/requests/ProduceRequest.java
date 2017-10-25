@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.CommonFields;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
@@ -33,20 +34,20 @@ import org.apache.kafka.common.utils.Utils;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.common.protocol.CommonFields.NULLABLE_TRANSACTIONAL_ID;
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 import static org.apache.kafka.common.protocol.types.Type.INT16;
 import static org.apache.kafka.common.protocol.types.Type.INT32;
-import static org.apache.kafka.common.protocol.types.Type.NULLABLE_STRING;
 import static org.apache.kafka.common.protocol.types.Type.RECORDS;
 
 public class ProduceRequest extends AbstractRequest {
-    private static final String TRANSACTIONAL_ID_KEY_NAME = "transactional_id";
     private static final String ACKS_KEY_NAME = "acks";
     private static final String TIMEOUT_KEY_NAME = "timeout";
     private static final String TOPIC_DATA_KEY_NAME = "topic_data";
@@ -86,8 +87,7 @@ public class ProduceRequest extends AbstractRequest {
     // Produce request V3 adds the transactional id which is used for authorization when attempting to write
     // transactional data. This version also adds support for message format V2.
     private static final Schema PRODUCE_REQUEST_V3 = new Schema(
-            new Field(TRANSACTIONAL_ID_KEY_NAME, NULLABLE_STRING, "The transactional ID of the producer. This is used to " +
-                    "authorize transaction produce requests. This can be null for non-transactional producers."),
+            CommonFields.NULLABLE_TRANSACTIONAL_ID,
             new Field(ACKS_KEY_NAME, INT16, "The number of acknowledgments the producer requires the leader to have " +
                     "received before considering a request complete. Allowed values: 0 for no acknowledgments, 1 " +
                     "for only the leader and -1 for the full ISR."),
@@ -228,7 +228,7 @@ public class ProduceRequest extends AbstractRequest {
         partitionSizes = createPartitionSizes(partitionRecords);
         acks = struct.getShort(ACKS_KEY_NAME);
         timeout = struct.getInt(TIMEOUT_KEY_NAME);
-        transactionalId = struct.hasField(TRANSACTIONAL_ID_KEY_NAME) ? struct.getString(TRANSACTIONAL_ID_KEY_NAME) : null;
+        transactionalId = struct.getOrElse(NULLABLE_TRANSACTIONAL_ID, null);
     }
 
     private void validateRecords(short version, MemoryRecords records) {
@@ -267,9 +267,7 @@ public class ProduceRequest extends AbstractRequest {
         Map<String, Map<Integer, MemoryRecords>> recordsByTopic = CollectionUtils.groupDataByTopic(partitionRecords);
         struct.set(ACKS_KEY_NAME, acks);
         struct.set(TIMEOUT_KEY_NAME, timeout);
-
-        if (struct.hasField(TRANSACTIONAL_ID_KEY_NAME))
-            struct.set(TRANSACTIONAL_ID_KEY_NAME, transactionalId);
+        struct.setIfExists(NULLABLE_TRANSACTIONAL_ID, transactionalId);
 
         List<Struct> topicDatas = new ArrayList<>(recordsByTopic.size());
         for (Map.Entry<String, Map<Integer, MemoryRecords>> topicEntry : recordsByTopic.entrySet()) {
@@ -332,6 +330,12 @@ public class ProduceRequest extends AbstractRequest {
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ApiKeys.PRODUCE.latestVersion()));
         }
+    }
+
+    @Override
+    public Map<Errors, Integer> errorCounts(Throwable e) {
+        Errors error = Errors.forException(e);
+        return Collections.singletonMap(error, partitions().size());
     }
 
     private Collection<TopicPartition> partitions() {

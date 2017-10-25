@@ -24,10 +24,30 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 
 /**
  * The {@code Consumed} class is used to define the optional parameters when using {@link StreamsBuilder} to
- * build instancs of {@link KStream}, {@link KTable}, and {@link GlobalKTable}.
+ * build instances of {@link KStream}, {@link KTable}, and {@link GlobalKTable}.
+ * <p>
+ * For example, you can read a topic as {@link KStream} with a custom timestamp extractor and specify the corresponding
+ * key and value serdes like:
+ * <pre>{@code
+ * StreamsBuilder builder = new StreamsBuilder();
+ * KStream<String, Long> stream = builder.stream(
+ *   "topicName",
+ *   Consumed.with(Serdes.String(), Serdes.Long())
+ *           .withTimestampExtractor(new LogAndSkipOnInvalidTimestamp()));
+ * }</pre>
+ * Similarly, you can read a topic as {@link KTable} with a custom {@code auto.offset.reset} configuration and force a
+ * state store {@link org.apache.kafka.streams.kstream.Materialized materialization} to access the content via
+ * interactive queries:
+ * <pre>{@code
+ * StreamsBuilder builder = new StreamsBuilder();
+ * KTable<Integer, Integer> table = builder.table(
+ *   "topicName",
+ *   Consumed.with(AutoOffsetReset.LATEST),
+ *   Materialized.as("queryable-store-name"));
+ * }</pre>
  *
- * @param <K>
- * @param <V>
+ * @param <K> type of record key
+ * @param <V> type of record value
  */
 public class Consumed<K, V> {
 
@@ -40,7 +60,6 @@ public class Consumed<K, V> {
                      final Serde<V> valueSerde,
                      final TimestampExtractor timestampExtractor,
                      final Topology.AutoOffsetReset resetPolicy) {
-
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.timestampExtractor = timestampExtractor;

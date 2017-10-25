@@ -18,17 +18,18 @@
 package kafka.admin
 
 import java.util.Properties
+
 import joptsimple._
 import kafka.common.Config
 import kafka.common.InvalidConfigException
 import kafka.log.LogConfig
-import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig, QuotaId}
+import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig}
 import kafka.utils.{CommandLineUtils, ZkUtils}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.scram._
-import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.metrics.Sanitizer
+import org.apache.kafka.common.utils.{Sanitizer, Utils}
+
 import scala.collection._
 import scala.collection.JavaConverters._
 

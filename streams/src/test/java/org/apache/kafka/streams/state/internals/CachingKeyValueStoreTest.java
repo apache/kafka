@@ -50,8 +50,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
-import static org.junit.Assert.fail;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
@@ -69,7 +69,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         underlyingStore = new InMemoryKeyValueStore<>(storeName, Serdes.Bytes(), Serdes.ByteArray());
         cacheFlushListener = new CacheFlushListenerStub<>();
         store = new CachingKeyValueStore<>(underlyingStore, Serdes.String(), Serdes.String());
-        store.setFlushListener(cacheFlushListener);
+        store.setFlushListener(cacheFlushListener, false);
         cache = new ThreadCache(new LogContext("testCache "), maxCacheSizeBytes, new MockStreamsMetrics(new Metrics()));
         context = new MockProcessorContext(null, null, null, (RecordCollector) null, cache);
         topic = "topic";
@@ -103,7 +103,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         final CacheFlushListenerStub<K, V> cacheFlushListener = new CacheFlushListenerStub<>();
 
         final CachedStateStore inner = (CachedStateStore) ((WrappedStateStore) store).wrappedStore();
-        inner.setFlushListener(cacheFlushListener);
+        inner.setFlushListener(cacheFlushListener, false);
         store.init(context, store);
         return store;
     }
@@ -152,12 +152,23 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     @Test
     public void shouldForwardOldValuesWhenEnabled() {
+        store.setFlushListener(cacheFlushListener, true);
         store.put(bytesKey("1"), bytesValue("a"));
         store.flush();
         store.put(bytesKey("1"), bytesValue("b"));
         store.flush();
         assertEquals("b", cacheFlushListener.forwarded.get("1").newValue);
         assertEquals("a", cacheFlushListener.forwarded.get("1").oldValue);
+    }
+
+    @Test
+    public void shouldNotForwardOldValuesWhenDisabled() {
+        store.put(bytesKey("1"), bytesValue("a"));
+        store.flush();
+        store.put(bytesKey("1"), bytesValue("b"));
+        store.flush();
+        assertEquals("b", cacheFlushListener.forwarded.get("1").newValue);
+        assertNull(cacheFlushListener.forwarded.get("1").oldValue);
     }
 
     @Test

@@ -26,19 +26,20 @@ import org.apache.kafka.common.protocol.types.Struct;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
+import static org.apache.kafka.common.protocol.CommonFields.GROUP_ID;
 import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 import static org.apache.kafka.common.protocol.types.Type.STRING;
 
 public class ListGroupsResponse extends AbstractResponse {
 
     private static final String GROUPS_KEY_NAME = "groups";
-    private static final String GROUP_ID_KEY_NAME = "group_id";
     private static final String PROTOCOL_TYPE_KEY_NAME = "protocol_type";
 
     private static final Schema LIST_GROUPS_RESPONSE_GROUP_V0 = new Schema(
-            new Field(GROUP_ID_KEY_NAME, STRING),
+            GROUP_ID,
             new Field(PROTOCOL_TYPE_KEY_NAME, STRING));
     private static final Schema LIST_GROUPS_RESPONSE_V0 = new Schema(
             ERROR_CODE,
@@ -79,7 +80,7 @@ public class ListGroupsResponse extends AbstractResponse {
         this.groups = new ArrayList<>();
         for (Object groupObj : struct.getArray(GROUPS_KEY_NAME)) {
             Struct groupStruct = (Struct) groupObj;
-            String groupId = groupStruct.getString(GROUP_ID_KEY_NAME);
+            String groupId = groupStruct.get(GROUP_ID);
             String protocolType = groupStruct.getString(PROTOCOL_TYPE_KEY_NAME);
             this.groups.add(new Group(groupId, protocolType));
         }
@@ -95,6 +96,11 @@ public class ListGroupsResponse extends AbstractResponse {
 
     public Errors error() {
         return error;
+    }
+
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        return errorCounts(error);
     }
 
     public static class Group {
@@ -124,7 +130,7 @@ public class ListGroupsResponse extends AbstractResponse {
         List<Struct> groupList = new ArrayList<>();
         for (Group group : groups) {
             Struct groupStruct = struct.instance(GROUPS_KEY_NAME);
-            groupStruct.set(GROUP_ID_KEY_NAME, group.groupId);
+            groupStruct.set(GROUP_ID, group.groupId);
             groupStruct.set(PROTOCOL_TYPE_KEY_NAME, group.protocolType);
             groupList.add(groupStruct);
         }

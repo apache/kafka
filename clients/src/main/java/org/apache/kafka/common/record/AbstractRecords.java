@@ -18,6 +18,7 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.AbstractIterator;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -58,11 +59,18 @@ public abstract class AbstractRecords implements Records {
      * If a client requests records in v1 format starting from the middle of an uncompressed batch in v2 format, we
      * need to drop records from the batch during the conversion. Some versions of librdkafka rely on this for
      * correctness.
+     *
+     * The temporaryMemoryBytes computation assumes that the batches are not loaded into the heap
+     * (via classes like FileChannelRecordBatch) before this method is called. This is the case in the broker (we
+     * only load records into the heap when down converting), but it's not for the producer. However, down converting
+     * in the producer is very uncommon and the extra complexity to handle that case is not worth it.
      */
-    protected MemoryRecords downConvert(Iterable<? extends RecordBatch> batches, byte toMagic, long firstOffset) {
+    protected ConvertedRecords<MemoryRecords> downConvert(Iterable<? extends RecordBatch> batches, byte toMagic,
+            long firstOffset, Time time) {
         // maintain the batch along with the decompressed records to avoid the need to decompress again
         List<RecordBatchAndRecords> recordBatchAndRecordsList = new ArrayList<>();
         int totalSizeEstimate = 0;
+        long startNanos = time.nanoseconds();
 
         for (RecordBatch batch : batches) {
             if (toMagic < RecordBatch.MAGIC_VALUE_V2 && batch.isControlBatch())
@@ -91,22 +99,31 @@ public abstract class AbstractRecords implements Records {
         }
 
         ByteBuffer buffer = ByteBuffer.allocate(totalSizeEstimate);
+        long temporaryMemoryBytes = 0;
+        int numRecordsConverted = 0;
         for (RecordBatchAndRecords recordBatchAndRecords : recordBatchAndRecordsList) {
-            if (recordBatchAndRecords.batch.magic() <= toMagic)
+            temporaryMemoryBytes += recordBatchAndRecords.batch.sizeInBytes();
+            if (recordBatchAndRecords.batch.magic() <= toMagic) {
                 recordBatchAndRecords.batch.writeTo(buffer);
-            else
-                buffer = convertRecordBatch(toMagic, buffer, recordBatchAndRecords);
+            } else {
+                MemoryRecordsBuilder builder = convertRecordBatch(toMagic, buffer, recordBatchAndRecords);
+                buffer = builder.buffer();
+                temporaryMemoryBytes += builder.uncompressedBytesWritten();
+                numRecordsConverted += builder.numRecords();
+            }
         }
 
         buffer.flip();
-        return MemoryRecords.readableRecords(buffer);
+        RecordsProcessingStats stats = new RecordsProcessingStats(temporaryMemoryBytes, numRecordsConverted,
+                time.nanoseconds() - startNanos);
+        return new ConvertedRecords<>(MemoryRecords.readableRecords(buffer), stats);
     }
 
     /**
      * Return a buffer containing the converted record batches. The returned buffer may not be the same as the received
      * one (e.g. it may require expansion).
      */
-    private ByteBuffer convertRecordBatch(byte magic, ByteBuffer buffer, RecordBatchAndRecords recordBatchAndRecords) {
+    private MemoryRecordsBuilder convertRecordBatch(byte magic, ByteBuffer buffer, RecordBatchAndRecords recordBatchAndRecords) {
         RecordBatch batch = recordBatchAndRecords.batch;
         final TimestampType timestampType = batch.timestampType();
         long logAppendTime = timestampType == TimestampType.LOG_APPEND_TIME ? batch.maxTimestamp() : RecordBatch.NO_TIMESTAMP;
@@ -117,7 +134,7 @@ public abstract class AbstractRecords implements Records {
             builder.append(record);
 
         builder.close();
-        return builder.buffer();
+        return builder;
     }
 
     /**
@@ -192,13 +209,31 @@ public abstract class AbstractRecords implements Records {
      * Get an upper bound estimate on the batch size needed to hold a record with the given fields. This is only
      * an estimate because it does not take into account overhead from the compression algorithm.
      */
-    public static int estimateSizeInBytesUpperBound(byte magic, CompressionType compressionType, ByteBuffer key, ByteBuffer value, Header[] headers) {
+    public static int estimateSizeInBytesUpperBound(byte magic, CompressionType compressionType, ByteBuffer key,
+                                                    ByteBuffer value, Header[] headers) {
         if (magic >= RecordBatch.MAGIC_VALUE_V2)
             return DefaultRecordBatch.estimateBatchSizeUpperBound(key, value, headers);
         else if (compressionType != CompressionType.NONE)
             return Records.LOG_OVERHEAD + LegacyRecord.recordOverhead(magic) + LegacyRecord.recordSize(magic, key, value);
         else
             return Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, key, value);
+    }
+
+    /**
+     * Return the size of the record batch header.
+     *
+     * For V0 and V1 with no compression, it's unclear if Records.LOG_OVERHEAD or 0 should be chosen. There is no header
+     * per batch, but a sequence of batches is preceded by the offset and size. This method returns `0` as it's what
+     * `MemoryRecordsBuilder` requires.
+     */
+    public static int recordBatchHeaderSizeInBytes(byte magic, CompressionType compressionType) {
+        if (magic > RecordBatch.MAGIC_VALUE_V1) {
+            return DefaultRecordBatch.RECORD_BATCH_OVERHEAD;
+        } else if (compressionType != CompressionType.NONE) {
+            return Records.LOG_OVERHEAD + LegacyRecord.recordOverhead(magic);
+        } else {
+            return 0;
+        }
     }
 
     private static class RecordBatchAndRecords {

@@ -14,32 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.auth;
+package org.apache.kafka.streams.processor.internals;
 
-import java.util.Map;
+import org.apache.kafka.common.TopicPartition;
 
-import org.apache.kafka.common.network.Mode;
-
-import javax.security.auth.Subject;
-import javax.security.auth.callback.CallbackHandler;
-
-/*
- * Callback handler for SASL-based authentication
- */
-public interface AuthCallbackHandler extends CallbackHandler {
-
-    /**
-     * Configures this callback handler.
-     *
-     * @param configs Configuration
-     * @param mode The mode that indicates if this is a client or server connection
-     * @param subject Subject from login context
-     * @param saslMechanism Negotiated SASL mechanism
-     */
-    void configure(Map<String, ?> configs, Mode mode, Subject subject, String saslMechanism);
-
-    /**
-     * Closes this instance.
-     */
-    void close();
+public interface RestoringTasks {
+    Task restoringTaskFor(final TopicPartition partition);
 }

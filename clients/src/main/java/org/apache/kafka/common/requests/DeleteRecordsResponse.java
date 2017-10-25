@@ -161,6 +161,14 @@ public class DeleteRecordsResponse extends AbstractResponse {
         return this.responses;
     }
 
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        Map<Errors, Integer> errorCounts = new HashMap<>();
+        for (PartitionResponse response : responses.values())
+            updateErrorCounts(errorCounts, response.error);
+        return errorCounts;
+    }
+
     public static DeleteRecordsResponse parse(ByteBuffer buffer, short version) {
         return new DeleteRecordsResponse(ApiKeys.DELETE_RECORDS.responseSchema(version).read(buffer));
     }

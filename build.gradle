@@ -28,19 +28,21 @@ buildscript {
     classpath 'com.github.ben-manes:gradle-versions-plugin:0.15.0'
     classpath 'org.scoverage:gradle-scoverage:2.1.0'
     classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.1'
+    classpath 'org.owasp:dependency-check-gradle:3.0.1'
   }
 }
 
 apply from: "$rootDir/gradle/dependencies.gradle"
 
 allprojects {
-  apply plugin: 'idea'
-  apply plugin: "jacoco"
 
   repositories {
     mavenCentral()
   }
-
+  
+  apply plugin: 'idea'
+  apply plugin: "jacoco"
+  apply plugin: 'org.owasp.dependencycheck'
   apply plugin: 'com.github.ben-manes.versions'
 
   dependencyUpdates {
@@ -77,7 +79,7 @@ allprojects {
 }
 
 ext {
-  gradleVersion = "4.2"
+  gradleVersion = "4.2.1"
   buildVersionFileName = "kafka-version.properties"
 
   maxPermSizeArgs = []
@@ -681,7 +683,8 @@ project(':core') {
                                'genAdminClientConfigDocs', 'genProducerConfigDocs', 'genConsumerConfigDocs',
                                'genKafkaConfigDocs', 'genTopicConfigDocs',
                                ':connect:runtime:genConnectConfigDocs', ':connect:runtime:genConnectTransformationDocs',
-                               ':streams:genStreamsConfigDocs', 'genConsumerMetricsDocs', 'genProducerMetricsDocs'], type: Tar) {
+                               ':streams:genStreamsConfigDocs', 'genConsumerMetricsDocs', 'genProducerMetricsDocs',
+                               ':connect:runtime:genConnectMetricsDocs'], type: Tar) {
     classifier = 'site-docs'
     compression = Compression.GZIP
     from project.file("$rootDir/docs")
@@ -834,6 +837,7 @@ project(':clients') {
     include "**/org/apache/kafka/common/resource/*"
     include "**/org/apache/kafka/common/serialization/*"
     include "**/org/apache/kafka/common/config/*"
+    include "**/org/apache/kafka/common/security/auth/*"
     include "**/org/apache/kafka/server/policy/*"
   }
 }
@@ -893,6 +897,7 @@ project(':streams') {
     testCompile project(':core').sourceSets.test.output
     testCompile libs.junit
     testCompile libs.easymock
+    testCompile libs.bcpkix
 
     testRuntime libs.slf4jlog4j
   }
@@ -1187,6 +1192,14 @@ project(':connect:runtime') {
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "connect_transforms.html").newOutputStream()
   }
+
+  task genConnectMetricsDocs(type: JavaExec) {
+    classpath = sourceSets.test.runtimeClasspath
+    main = 'org.apache.kafka.connect.runtime.ConnectMetrics'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "connect_metrics.html").newOutputStream()
+  }
+
 }
 
 project(':connect:file') {

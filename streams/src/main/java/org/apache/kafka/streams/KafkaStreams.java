@@ -37,6 +37,7 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
@@ -112,10 +113,10 @@ import static org.apache.kafka.streams.StreamsConfig.PROCESSING_GUARANTEE_CONFIG
  * props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
  * StreamsConfig config = new StreamsConfig(props);
  *
- * KStreamBuilder builder = new KStreamBuilder();
- * builder.stream("my-input-topic").mapValues(value -> value.length().toString()).to("my-output-topic");
+ * StreamsBuilder builder = new StreamsBuilder();
+ * builder.<String, String>stream("my-input-topic").mapValues(value -> value.length().toString()).to("my-output-topic");
  *
- * KafkaStreams streams = new KafkaStreams(builder, config);
+ * KafkaStreams streams = new KafkaStreams(builder.build(), config);
  * streams.start();
  * }</pre>
  *
@@ -335,7 +336,8 @@ public class KafkaStreams {
         if (state == State.CREATED) {
             stateListener = listener;
         } else {
-            throw new IllegalStateException("Can only set StateListener in CREATED state.");
+            throw new IllegalStateException("Can only set StateListener in CREATED state. " +
+                    "Current state is: " + state);
         }
     }
 
@@ -356,7 +358,8 @@ public class KafkaStreams {
                 globalStreamThread.setUncaughtExceptionHandler(eh);
             }
         } else {
-            throw new IllegalStateException("Can only set UncaughtExceptionHandler in CREATED state.");
+            throw new IllegalStateException("Can only set UncaughtExceptionHandler in CREATED state. " +
+                    "Current state is: " + state);
         }
     }
 
@@ -371,7 +374,8 @@ public class KafkaStreams {
         if (state == State.CREATED) {
             this.globalStateRestoreListener = globalStateRestoreListener;
         } else {
-            throw new IllegalStateException("Can only set the GlobalRestoreListener in the CREATED state");
+            throw new IllegalStateException("Can only set GlobalStateRestoreListener in CREATED state. " +
+                    "Current state is: " + state);
         }
     }
 
@@ -562,21 +566,45 @@ public class KafkaStreams {
             @Override
             public void onRestoreStart(final TopicPartition topicPartition, final String storeName, final long startingOffset, final long endingOffset) {
                 if (globalStateRestoreListener != null) {
-                    globalStateRestoreListener.onRestoreStart(topicPartition, storeName, startingOffset, endingOffset);
+                    try {
+                        globalStateRestoreListener.onRestoreStart(topicPartition, storeName, startingOffset, endingOffset);
+                    } catch (final Exception fatalUserException) {
+                        throw new StreamsException(
+                            String.format("Fatal user code error in store restore listener for store %s, partition %s.",
+                                storeName,
+                                topicPartition),
+                            fatalUserException);
+                    }
                 }
             }
 
             @Override
             public void onBatchRestored(final TopicPartition topicPartition, final String storeName, final long batchEndOffset, final long numRestored) {
                 if (globalStateRestoreListener != null) {
-                    globalStateRestoreListener.onBatchRestored(topicPartition, storeName, batchEndOffset, numRestored);
+                    try {
+                        globalStateRestoreListener.onBatchRestored(topicPartition, storeName, batchEndOffset, numRestored);
+                    } catch (final Exception fatalUserException) {
+                        throw new StreamsException(
+                            String.format("Fatal user code error in store restore listener for store %s, partition %s.",
+                                storeName,
+                                topicPartition),
+                            fatalUserException);
+                    }
                 }
             }
 
             @Override
             public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {
                 if (globalStateRestoreListener != null) {
-                    globalStateRestoreListener.onRestoreEnd(topicPartition, storeName, totalRestored);
+                    try {
+                        globalStateRestoreListener.onRestoreEnd(topicPartition, storeName, totalRestored);
+                    } catch (final Exception fatalUserException) {
+                        throw new StreamsException(
+                            String.format("Fatal user code error in store restore listener for store %s, partition %s.",
+                                storeName,
+                                topicPartition),
+                            fatalUserException);
+                    }
                 }
             }
         };
@@ -694,6 +722,12 @@ public class KafkaStreams {
     /**
      * Start the {@code KafkaStreams} instance by starting all its threads.
      * This function is expected to be called only once during the life cycle of the client.
+     * <p>
+     * Because threads are started in the background, this method does not block.
+     * As a consequence, any fatal exception that happens during processing is by default only logged.
+     * If you want to be notified about dying threads, you can
+     * {@link #setUncaughtExceptionHandler(Thread.UncaughtExceptionHandler) register an uncaught exception handler}
+     * before starting the {@code KafkaStreams} instance.
      * <p>
      * Note, for brokers with version {@code 0.9.x} or lower, the broker version cannot be checked.
      * There will be no error and the client will hang and retry to verify the broker version until it
@@ -924,10 +958,10 @@ public class KafkaStreams {
      * <p>
      * This will use the default Kafka Streams partitioner to locate the partition.
      * If a {@link StreamPartitioner custom partitioner} has been
-     * {@link ProducerConfig#PARTITIONER_CLASS_CONFIG configured} via {@link StreamsConfig},
-     * {@link KStream#through(StreamPartitioner, String)}, or {@link KTable#through(StreamPartitioner, String, String)},
-     * or if the original {@link KTable}'s input {@link StreamsBuilder#table(String, String) topic} is partitioned
-     * differently, please use {@link #metadataForKey(String, Object, StreamPartitioner)}.
+     * {@link ProducerConfig#PARTITIONER_CLASS_CONFIG configured} via {@link StreamsConfig} or
+     * {@link KStream#through(String, Produced)}, or if the original {@link KTable}'s input
+     * {@link StreamsBuilder#table(String) topic} is partitioned differently, please use
+     * {@link #metadataForKey(String, Object, StreamPartitioner)}.
      * <p>
      * Note:
      * <ul>

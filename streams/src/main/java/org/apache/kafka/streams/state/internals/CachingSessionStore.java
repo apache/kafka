@@ -47,6 +47,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
     private StateSerdes<K, AGG> serdes;
     private InternalProcessorContext context;
     private CacheFlushListener<Windowed<K>, AGG> flushListener;
+    private boolean sendOldValues;
     private String topic;
 
     CachingSessionStore(final SessionStore<Bytes, byte[]> bytesStore,
@@ -170,7 +171,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
             final Bytes rawKey = Bytes.wrap(serdes.rawKey(key.key()));
             if (flushListener != null) {
                 final AGG newValue = serdes.valueFrom(entry.newValue());
-                final AGG oldValue = fetchPrevious(rawKey, key.window());
+                final AGG oldValue = newValue == null || sendOldValues ? fetchPrevious(rawKey, key.window()) : null;
                 if (!(newValue == null && oldValue == null)) {
                     flushListener.apply(key, newValue, oldValue);
                 }
@@ -202,8 +203,10 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
         bytesStore.close();
     }
 
-    public void setFlushListener(CacheFlushListener<Windowed<K>, AGG> flushListener) {
+    public void setFlushListener(final CacheFlushListener<Windowed<K>, AGG> flushListener,
+                                 final boolean sendOldValues) {
         this.flushListener = flushListener;
+        this.sendOldValues = sendOldValues;
     }
 
 }

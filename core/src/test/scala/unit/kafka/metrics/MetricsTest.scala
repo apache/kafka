@@ -129,7 +129,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     // versus failures caused by the metrics
     val topicPartition = new TopicPartition(topic, 0)
     servers.foreach { server =>
-      val log = server.logManager.logsByTopicPartition.get(new TopicPartition(topic, 0))
+      val log = server.logManager.getLog(new TopicPartition(topic, 0))
       val brokerId = server.config.brokerId
       val logSize = log.map(_.size)
       assertTrue(s"Expected broker $brokerId to have a Log for $topicPartition with positive size, actual: $logSize",
@@ -159,7 +159,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   @Test
   def testControllerMetrics(): Unit = {
     val metrics = Metrics.defaultRegistry.allMetrics
-    
+
     assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=ActiveControllerCount"), 1)
     assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=OfflinePartitionsCount"), 1)
     assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=PreferredReplicaImbalanceCount"), 1)

@@ -14,22 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.metrics;
+package org.apache.kafka.streams.kstream.internals;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+public interface InternalNameProvider {
+    String newProcessorName(String prefix);
 
-import java.io.UnsupportedEncodingException;
-
-import org.junit.Test;
-
-public class SanitizerTest {
-
-    @Test
-    public void testSanitize() throws UnsupportedEncodingException {
-        String principal = "CN=Some characters !@#$%&*()_-+=';:,/~";
-        String sanitizedPrincipal = Sanitizer.sanitize(principal);
-        assertTrue(sanitizedPrincipal.replace('%', '_').matches("[a-zA-Z0-9\\._\\-]+"));
-        assertEquals(principal, Sanitizer.desanitize(sanitizedPrincipal));
-    }
+    String newStoreName(String prefix);
 }

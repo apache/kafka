@@ -314,8 +314,8 @@ public class WorkerTaskTest {
         long totalTime = 27000L;
         double pauseTimeRatio = (double) (3000L + 5000L) / totalTime;
         double runningTimeRatio = (double) (2000L + 4000L + 6000L) / totalTime;
-        assertEquals(pauseTimeRatio, group.currentMetricValue("pause-ratio"), 0.000001d);
-        assertEquals(runningTimeRatio, group.currentMetricValue("running-ratio"), 0.000001d);
+        assertEquals(pauseTimeRatio, metrics.currentMetricValueAsDouble(group.metricGroup(), "pause-ratio"), 0.000001d);
+        assertEquals(runningTimeRatio, metrics.currentMetricValueAsDouble(group.metricGroup(), "running-ratio"), 0.000001d);
     }
 
     private static abstract class TestSinkTask extends SinkTask {

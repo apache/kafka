@@ -32,6 +32,7 @@ import javax.security.sasl.SaslServer;
 import javax.security.sasl.SaslServerFactory;
 
 import org.apache.kafka.common.errors.IllegalSaslStateException;
+import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.scram.ScramMessages.ClientFinalMessage;
 import org.apache.kafka.common.security.scram.ScramMessages.ClientFirstMessage;
 import org.apache.kafka.common.security.scram.ScramMessages.ServerFinalMessage;
@@ -73,8 +74,17 @@ public class ScramSaslServer implements SaslServer {
         setState(State.RECEIVE_CLIENT_FIRST_MESSAGE);
     }
 
+    /**
+     * @throws SaslAuthenticationException if the requested authorization id is not the same as username.
+     * <p>
+     * <b>Note:</b> This method may throw {@link SaslAuthenticationException} to provide custom error messages
+     * to clients. But care should be taken to avoid including any information in the exception message that
+     * should not be leaked to unauthenticated clients. It may be safer to throw {@link SaslException} in
+     * most cases so that a standard error message is returned to clients.
+     * </p>
+     */
     @Override
-    public byte[] evaluateResponse(byte[] response) throws SaslException {
+    public byte[] evaluateResponse(byte[] response) throws SaslException, SaslAuthenticationException {
         try {
             switch (state) {
                 case RECEIVE_CLIENT_FIRST_MESSAGE:
@@ -91,7 +101,7 @@ public class ScramSaslServer implements SaslServer {
                             throw new SaslException("Authentication failed: Invalid user credentials");
                         String authorizationIdFromClient = clientFirstMessage.authorizationId();
                         if (!authorizationIdFromClient.isEmpty() && !authorizationIdFromClient.equals(username))
-                            throw new SaslException("Authentication failed: Client requested an authorization id that is different from username");
+                            throw new SaslAuthenticationException("Authentication failed: Client requested an authorization id that is different from username");
 
                         if (scramCredential.iterations() < mechanism.minIterations())
                             throw new SaslException("Iterations " + scramCredential.iterations() +  " is less than the minimum " + mechanism.minIterations() + " for " + mechanism);

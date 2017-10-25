@@ -24,6 +24,10 @@ import javax.management.JMException;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.Gauge;
+import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.metrics.Metrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,24 +55,46 @@ public class AppInfoParser {
         return COMMIT_ID;
     }
 
-    public static synchronized void registerAppInfo(String prefix, String id) {
+    public static synchronized void registerAppInfo(String prefix, String id, Metrics metrics) {
         try {
-            ObjectName name = new ObjectName(prefix + ":type=app-info,id=" + id);
+            ObjectName name = new ObjectName(prefix + ":type=app-info,id=" + Sanitizer.jmxSanitize(id));
             AppInfo mBean = new AppInfo();
             ManagementFactory.getPlatformMBeanServer().registerMBean(mBean, name);
+
+            registerMetrics(metrics); // prefix will be added later by JmxReporter
         } catch (JMException e) {
             log.warn("Error registering AppInfo mbean", e);
         }
     }
 
-    public static synchronized void unregisterAppInfo(String prefix, String id) {
+    public static synchronized void unregisterAppInfo(String prefix, String id, Metrics metrics) {
         MBeanServer server = ManagementFactory.getPlatformMBeanServer();
         try {
-            ObjectName name = new ObjectName(prefix + ":type=app-info,id=" + id);
+            ObjectName name = new ObjectName(prefix + ":type=app-info,id=" + Sanitizer.jmxSanitize(id));
             if (server.isRegistered(name))
                 server.unregisterMBean(name);
+
+            unregisterMetrics(metrics);
         } catch (JMException e) {
             log.warn("Error unregistering AppInfo mbean", e);
+        }
+    }
+
+    private static MetricName metricName(Metrics metrics, String name) {
+        return metrics.metricName(name, "app-info", "Metric indicating " + name);
+    }
+
+    private static void registerMetrics(Metrics metrics) {
+        if (metrics != null) {
+            metrics.addMetric(metricName(metrics, "version"), new ImmutableValue<>(VERSION));
+            metrics.addMetric(metricName(metrics, "commit-id"), new ImmutableValue<>(COMMIT_ID));
+        }
+    }
+
+    private static void unregisterMetrics(Metrics metrics) {
+        if (metrics != null) {
+            metrics.removeMetric(metricName(metrics, "version"));
+            metrics.removeMetric(metricName(metrics, "commit-id"));
         }
     }
 
@@ -94,5 +120,18 @@ public class AppInfoParser {
             return AppInfoParser.getCommitId();
         }
 
+    }
+
+    static class ImmutableValue<T> implements Gauge<T> {
+        private final T value;
+
+        public ImmutableValue(T value) {
+            this.value = value;
+        }
+
+        @Override
+        public T value(MetricConfig config, long now) {
+            return value;
+        }
     }
 }

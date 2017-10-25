@@ -130,8 +130,21 @@ public class SessionWindowedKStreamImplTest {
     @Test
     public void shouldMaterializeCount() {
         stream.count(Materialized.<String, Long, SessionStore<Bytes, byte[]>>as("count-store")
-                             .withKeySerde(Serdes.String())
-                             .withValueSerde(Serdes.Long()));
+                             .withKeySerde(Serdes.String()));
+
+        processData();
+        final SessionStore<String, Long> store = (SessionStore<String, Long>) driver.allStateStores().get("count-store");
+        final List<KeyValue<Windowed<String>, Long>> data = StreamsTestUtils.toList(store.fetch("1", "2"));
+        assertThat(data, equalTo(Arrays.asList(
+                KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), 2L),
+                KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), 1L),
+                KeyValue.pair(new Windowed<>("2", new SessionWindow(600, 600)), 1L))));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldMaterializeWithoutSpecifyingSerdes() {
+        stream.count(Materialized.<String, Long, SessionStore<Bytes, byte[]>>as("count-store"));
 
         processData();
         final SessionStore<String, Long> store = (SessionStore<String, Long>) driver.allStateStores().get("count-store");
@@ -250,7 +263,7 @@ public class SessionWindowedKStreamImplTest {
     }
 
     private void processData() {
-        driver.setUp(builder, TestUtils.tempDirectory(), Serdes.String(), Serdes.String(), 0);
+        driver.setUp(builder, TestUtils.tempDirectory(), 0);
         driver.setTime(10);
         driver.process(TOPIC, "1", "1");
         driver.setTime(15);

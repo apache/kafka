@@ -14,16 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package org.apache.kafka.clients.admin;
-
-import org.apache.kafka.common.annotation.InterfaceStability;
-import java.util.Map;
+package org.apache.kafka.common.metrics;
 
 /**
- * Options for {@link AdminClient#alterReplicaDir(Map, AlterReplicaDirOptions)}.
+ * A gauge metric is an instantaneous reading of a particular value.
  */
-@InterfaceStability.Evolving
-public class AlterReplicaDirOptions extends AbstractOptions<AlterReplicaDirOptions> {
+public interface Gauge<T> extends MetricValueProvider<T> {
+
+    /**
+     * Returns the current value associated with this gauge.
+     * @param config The configuration for this metric
+     * @param now The POSIX time in milliseconds the measurement is being taken
+     */
+    T value(MetricConfig config, long now);
 
 }
