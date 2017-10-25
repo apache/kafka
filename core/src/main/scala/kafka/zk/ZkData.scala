@@ -250,5 +250,5 @@ object ConsumerOffset {
 }
 
 object ZkVersion {
-  def noVersion = -1
+  val NoVersion = -1
 }
