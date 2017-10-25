@@ -359,6 +359,11 @@ public class ProducerConfig extends AbstractConfig {
                                         null,
                                         Importance.LOW,
                                         SECURITY_PROVIDERS_DOC)
+                                .define(CommonClientConfigs.ENABLE_STICKY_METADATA_FETCH_CONFIG,
+                                        Type.BOOLEAN,
+                                        false,
+                                        Importance.MEDIUM,
+                                        CommonClientConfigs.ENABLE_STICKY_METADATA_FETCH_DOC)
                                 .withClientSslSupport()
                                 .withClientSaslSupport()
                                 .define(ENABLE_IDEMPOTENCE_CONFIG,

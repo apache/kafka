@@ -143,6 +143,9 @@ public class CommonClientConfigs {
                                                            + "consumer's session stays active and to facilitate rebalancing when new consumers join or leave the group. "
                                                            + "The value must be set lower than <code>session.timeout.ms</code>, but typically should be set no higher "
                                                            + "than 1/3 of that value. It can be adjusted even lower to control the expected time for normal rebalances.";
+    public static final String ENABLE_STICKY_METADATA_FETCH_CONFIG = "enable.sticky.metadata.fetch";
+    public static final String ENABLE_STICKY_METADATA_FETCH_DOC = "Fetch metadata from the least loaded broker if false. Otherwise fetch metadata "
+                                                         + "from the same broker until it is disconnected.";
 
     /**
      * Postprocess the configuration so that exponential backoff is disabled when reconnect backoff
