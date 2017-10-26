@@ -1885,7 +1885,7 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         // preparing topics list for asking metadata about them
-        final List<String> topics = new ArrayList<>();
+        final Set<String> topics = new HashSet<>();
         for (TopicPartition topicPartition: partitionsAndOffsets.keySet()) {
             topics.add(topicPartition.topic());
         }
@@ -1898,7 +1898,7 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new MetadataRequest.Builder(topics, false);
+                return new MetadataRequest.Builder(new ArrayList<>(topics), false);
             }
 
             @Override
