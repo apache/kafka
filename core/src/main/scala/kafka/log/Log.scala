@@ -274,7 +274,8 @@ class Log(@volatile var dir: File,
       val filename = file.getName
       if (filename.endsWith(DeletedFileSuffix) || filename.endsWith(CleanedFileSuffix)) {
         // if the file ends in .deleted or .cleaned, delete it
-        file.delete()
+        if (!file.delete())
+          info(s"File ${file.getAbsolutePath} was not deleted")
       } else if(filename.endsWith(SwapFileSuffix)) {
         // we crashed in the middle of a swap operation, to recover:
         // if a log, delete the .index file, complete the swap operation later
@@ -282,16 +283,16 @@ class Log(@volatile var dir: File,
         val baseFile = new File(CoreUtils.replaceSuffix(file.getPath, SwapFileSuffix, ""))
         if (isIndexFile(baseFile)) {
           if (!file.delete())
-            info(s"Index file ${file.getAbsolutePath} not deleted")
+            info(s"Index file ${file.getAbsolutePath} was not deleted")
         } else if (isLogFile(baseFile)) {
           // delete the index files
           val offset = offsetFromFile(baseFile)
           if (!Log.offsetIndexFile(dir, offset).delete)
-            info(s"Index file ${Log.offsetIndexFile(dir, offset).getAbsolutePath} not deleted")
+            info(s"Index file ${Log.offsetIndexFile(dir, offset).getAbsolutePath} was not deleted")
           if (!Log.timeIndexFile(dir, offset).delete)
-            info(s"Index file ${Log.timeIndexFile(dir, offset).getAbsolutePath} not deleted")
+            info(s"Index file ${Log.timeIndexFile(dir, offset).getAbsolutePath} was not deleted")
           if (!Log.transactionIndexFile(dir, offset).delete)
-            info(s"Index file ${Log.transactionIndexFile(dir, offset).getAbsolutePath} not deleted")
+            info(s"Index file ${Log.transactionIndexFile(dir, offset).getAbsolutePath} was not deleted")
           swapFiles += file
         }
       }
@@ -311,7 +312,7 @@ class Log(@volatile var dir: File,
         if (!logFile.exists) {
           warn("Found an orphaned index file, %s, with no corresponding log file.".format(file.getAbsolutePath))
           if (!file.delete())
-            info(s"Index file ${file.getAbsolutePath} not deleted")
+            info(s"Index file ${file.getAbsolutePath} was not deleted")
         }
       } else if (isLogFile(file)) {
         // if it's a log file, load the corresponding log segment
@@ -343,11 +344,11 @@ class Log(@volatile var dir: File,
               warn(s"Found a corrupted index file due to ${e.getMessage}}. deleting ${timeIndexFile.getAbsolutePath}, " +
                 s"${indexFile.getAbsolutePath}, and ${txnIndexFile.getAbsolutePath} and rebuilding index...")
               if (!timeIndexFile.delete())
-                info(s"Index file ${timeIndexFile.getAbsolutePath} not deleted")
+                info(s"Index file ${timeIndexFile.getAbsolutePath} was not deleted")
               if (!indexFile.delete())
-                info(s"Index file ${indexFile.getAbsolutePath} not deleted")
+                info(s"Index file ${indexFile.getAbsolutePath} was not deleted")
               if (!segment.txnIndex.delete())
-                info(s"Segment index file not deleted")
+                info(s"Segment index file was not deleted")
               recoverSegment(segment)
           }
         } else {
