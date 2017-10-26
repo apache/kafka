@@ -437,26 +437,27 @@ class TransactionCoordinator(brokerId: Int,
     txnManager.timedOutTransactions().foreach { txnIdAndPidEpoch =>
       val coordinatorEpochAndMetadata = txnManager.getTransactionState(txnIdAndPidEpoch.transactionalId).right.flatMap {
         case None =>
-          fatal(s"Could not find transaction metadata when trying to timeout transaction with transactionalId " +
+          error(s"Could not find transaction metadata when trying to timeout transaction with transactionalId " +
             s"${txnIdAndPidEpoch.transactionalId}. ProducerId: ${txnIdAndPidEpoch.producerId}. ProducerEpoch: " +
             s"${txnIdAndPidEpoch.producerEpoch}")
           Left(Errors.INVALID_TXN_STATE)
 
         case Some(epochAndTxnMetadata) =>
           if (epochAndTxnMetadata.transactionMetadata.producerId != txnIdAndPidEpoch.producerId) {
-            fatal(s"Found incorrect producerId when expiring transactionalId: ${txnIdAndPidEpoch.transactionalId}. " +
+            error(s"Found incorrect producerId when expiring transactionalId: ${txnIdAndPidEpoch.transactionalId}. " +
               s"Expected producerId: ${txnIdAndPidEpoch.producerId}. Found producerId: " +
               s"${epochAndTxnMetadata.transactionMetadata.producerId}")
             Left(Errors.INVALID_PRODUCER_ID_MAPPING)
           } else {
             Right(epochAndTxnMetadata)
           }
-     }
+      }
 
       coordinatorEpochAndMetadata match {
         case Left(error) =>
-          logger.error(s"Could not retrieve transaction metadata for transactionalId ${txnIdAndPidEpoch.transactionalId} due " +
-            s"to error: $error")
+          // This means that we could not retrieve the right metadata cache entry. And that in turn means we can't
+          // bump the epoch. So we shouldn't continue with aborting the transaction.
+
         case Right(epochAndMetadata) =>
           val txnMetadata = epochAndMetadata.transactionMetadata
           txnMetadata.inLock(txnMetadata.fenceProducerEpoch())
