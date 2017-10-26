@@ -1054,10 +1054,12 @@ class KafkaApis(val requestChannel: RequestChannel,
             }
           }
         }
-        trace(s"Sending offset fetch response $offsetFetchResponse for correlation id ${header.correlationId} to client ${header.clientId}.")
-        offsetFetchResponse
-      }
-      sendResponseMaybeThrottle(request, createResponse)
+
+      trace(s"Sending offset fetch response $offsetFetchResponse for correlation id ${header.correlationId} to client ${header.clientId}.")
+      offsetFetchResponse
+    }
+
+    sendResponseMaybeThrottle(request, createResponse)
   }
 
   def handleFindCoordinatorRequest(request: RequestChannel.Request) {
