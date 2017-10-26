@@ -31,6 +31,7 @@ import kafka.network.RequestChannel
 import kafka.security.auth.Authorizer
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.{MockTime, TestUtils, ZkUtils}
+import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.memory.MemoryPool
@@ -49,7 +50,6 @@ import org.junit.Test
 
 import scala.collection.JavaConverters._
 import scala.collection.Map
-import kafka.controller.KafkaControllerZkUtils
 
 class KafkaApisTest {
 
@@ -60,8 +60,8 @@ class KafkaApisTest {
   private val adminManager = EasyMock.createNiceMock(classOf[AdminManager])
   private val txnCoordinator = EasyMock.createNiceMock(classOf[TransactionCoordinator])
   private val controller = EasyMock.createNiceMock(classOf[KafkaController])
-  private val oldZkUtils = EasyMock.createNiceMock(classOf[ZkUtils])
-  private val zkUtils = EasyMock.createNiceMock(classOf[KafkaControllerZkUtils])
+  private val zkUtils = EasyMock.createNiceMock(classOf[ZkUtils])
+  private val zkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
   private val metadataCache = EasyMock.createNiceMock(classOf[MetadataCache])
   private val metrics = new Metrics()
   private val brokerId = 1
@@ -84,8 +84,8 @@ class KafkaApisTest {
       groupCoordinator,
       txnCoordinator,
       controller,
-      oldZkUtils,
       zkUtils,
+      zkClient,
       brokerId,
       new KafkaConfig(properties),
       metadataCache,

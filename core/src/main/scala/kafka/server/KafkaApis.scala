@@ -29,7 +29,7 @@ import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0}
 import kafka.cluster.Partition
 import kafka.common.{OffsetAndMetadata, OffsetMetadata, TopicAndPartition}
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
-import kafka.controller.{KafkaController, KafkaControllerZkUtils}
+import kafka.controller.{KafkaController}
 import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.log.{Log, LogManager, TimestampOffset}
@@ -38,6 +38,7 @@ import kafka.network.RequestChannel.{CloseConnectionAction, NoOpAction, SendActi
 import kafka.security.SecurityUtils
 import kafka.security.auth.{Resource, _}
 import kafka.utils.{CoreUtils, Logging, ZKGroupTopicDirs, ZkUtils}
+import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
@@ -70,8 +71,8 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val groupCoordinator: GroupCoordinator,
                 val txnCoordinator: TransactionCoordinator,
                 val controller: KafkaController,
-                val oldZkUtils: ZkUtils,
-                val zkUtils: KafkaControllerZkUtils,
+                val zkUtils: ZkUtils,
+                val zkClient: KafkaZkClient,
                 val brokerId: Int,
                 val config: KafkaConfig,
                 val metadataCache: MetadataCache,
@@ -305,7 +306,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               if (partitionData.metadata != null && partitionData.metadata.length > config.offsetMetadataMaxSize)
                 (topicPartition, Errors.OFFSET_METADATA_TOO_LARGE)
               else {
-                zkUtils.setOrCreateConsumerOffset(offsetCommitRequest.groupId, topicPartition, partitionData.offset)
+                zkClient.setOrCreateConsumerOffset(offsetCommitRequest.groupId, topicPartition, partitionData.offset)
                 (topicPartition, Errors.NONE)
               }
             } catch {
@@ -831,7 +832,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                           replicationFactor: Int,
                           properties: Properties = new Properties()): MetadataResponse.TopicMetadata = {
     try {
-      AdminUtils.createTopic(oldZkUtils, topic, numPartitions, replicationFactor, properties, RackAwareMode.Safe)
+      AdminUtils.createTopic(zkUtils, topic, numPartitions, replicationFactor, properties, RackAwareMode.Safe)
       info("Auto creation of topic %s with %d partitions and replication factor %d is successful"
         .format(topic, numPartitions, replicationFactor))
       new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, topic, isInternal(topic),
@@ -1010,7 +1011,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 if (!metadataCache.contains(topicPartition.topic))
                   (topicPartition, OffsetFetchResponse.UNKNOWN_PARTITION)
                 else {
-                  val payloadOpt = zkUtils.getConsumerOffset(offsetFetchRequest.groupId, topicPartition)
+                  val payloadOpt = zkClient.getConsumerOffset(offsetFetchRequest.groupId, topicPartition)
                   payloadOpt match {
                     case Some(payload) =>
                       (topicPartition, new OffsetFetchResponse.PartitionData(

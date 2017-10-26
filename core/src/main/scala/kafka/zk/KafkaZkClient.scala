@@ -644,7 +644,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     createResponse
   }
 
-  private def deleteRecursive(path: String): Unit = {
+  private[zk] def deleteRecursive(path: String): Unit = {
     val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(path))
     if (getChildrenResponse.resultCode == Code.OK) {
       getChildrenResponse.children.foreach(child => deleteRecursive(s"$path/$child"))
@@ -657,7 +657,13 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     }
   }
 
-  private def createRecursive(path: String): Unit = {
+  private[zk] def pathExists(path: String): Boolean = {
+    val getDataRequest = GetDataRequest(path)
+    val getDataResponse = retryRequestUntilConnected(getDataRequest)
+    getDataResponse.resultCode == Code.OK
+  }
+
+  private[zk] def createRecursive(path: String): Unit = {
     val createRequest = CreateRequest(path, null, acls(path), CreateMode.PERSISTENT)
     var createResponse = retryRequestUntilConnected(createRequest)
     if (createResponse.resultCode == Code.NONODE) {
@@ -669,7 +675,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
       if (createResponse.resultCode != Code.OK && createResponse.resultCode != Code.NODEEXISTS) {
         throw createResponse.resultException.get
       }
-    } else if (createResponse.resultCode != Code.OK) {
+    } else if (createResponse.resultCode != Code.OK && createResponse.resultCode != Code.NODEEXISTS) {
       throw createResponse.resultException.get
     }
   }
