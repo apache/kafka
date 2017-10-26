@@ -435,7 +435,7 @@ class TransactionCoordinator(brokerId: Int,
 
   private def abortTimedOutTransactions(): Unit = {
     txnManager.timedOutTransactions().foreach { txnIdAndPidEpoch =>
-      val coordinatorEpochAndMetadata = txnManager.getTransactionState(txnIdAndPidEpoch.transactionalId).right.flatMap {
+      txnManager.getTransactionState(txnIdAndPidEpoch.transactionalId).right.flatMap {
         case None =>
           error(s"Could not find transaction metadata when trying to timeout transaction with transactionalId " +
             s"${txnIdAndPidEpoch.transactionalId}. ProducerId: ${txnIdAndPidEpoch.producerId}. ProducerEpoch: " +
@@ -449,35 +449,26 @@ class TransactionCoordinator(brokerId: Int,
               s"${epochAndTxnMetadata.transactionMetadata.producerId}")
             Left(Errors.INVALID_PRODUCER_ID_MAPPING)
           } else {
+            val txnMetadata = epochAndTxnMetadata.transactionMetadata
+            txnMetadata.inLock(txnMetadata.fenceProducerEpoch())
+            handleEndTransaction(txnMetadata.transactionalId,
+              txnMetadata.producerId,
+              txnMetadata.producerEpoch,
+              TransactionResult.ABORT,
+              {
+                case Errors.NONE =>
+                  info(s"Completed rollback ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} due to timeout")
+                case e @ (Errors.INVALID_PRODUCER_ID_MAPPING |
+                          Errors.INVALID_PRODUCER_EPOCH |
+                          Errors.CONCURRENT_TRANSACTIONS) =>
+                  debug(s"Rolling back ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} has aborted due to ${e.exceptionName}")
+                case e =>
+                  warn(s"Rolling back ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} failed due to ${e.exceptionName}")
+              })
             Right(epochAndTxnMetadata)
           }
       }
-
-      coordinatorEpochAndMetadata match {
-        case Left(error) =>
-          // This means that we could not retrieve the right metadata cache entry. And that in turn means we can't
-          // bump the epoch. So we shouldn't continue with aborting the transaction.
-
-        case Right(epochAndMetadata) =>
-          val txnMetadata = epochAndMetadata.transactionMetadata
-          txnMetadata.inLock(txnMetadata.fenceProducerEpoch())
-          handleEndTransaction(txnMetadata.transactionalId,
-            txnMetadata.producerId,
-            txnMetadata.producerEpoch,
-            TransactionResult.ABORT,
-            (error: Errors) => error match {
-              case Errors.NONE =>
-                info(s"Completed rollback ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} due to timeout")
-              case Errors.INVALID_PRODUCER_ID_MAPPING |
-                   Errors.INVALID_PRODUCER_EPOCH |
-                   Errors.CONCURRENT_TRANSACTIONS =>
-                debug(s"Rolling back ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} has aborted due to ${error.exceptionName()}")
-              case e =>
-                warn(s"Rolling back ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} failed due to ${error.exceptionName()}")
-            })
-
-      }
-   }
+    }
   }
 
   /**
