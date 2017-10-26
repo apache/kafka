@@ -104,7 +104,7 @@ class TransactionMetadataTest {
       txnLastUpdateTimestamp = time.milliseconds())
     assertTrue(txnMetadata.isProducerEpochExhausted)
 
-    txnMetadata.prepareFenceProducerEpoch()
+    txnMetadata.fenceProducerEpoch()
     assertEquals(Short.MaxValue, txnMetadata.producerEpoch)
 
     val transitMetadata = txnMetadata.prepareAbortOrCommit(PrepareAbort, time.milliseconds())
@@ -127,7 +127,7 @@ class TransactionMetadataTest {
       topicPartitions = mutable.Set.empty,
       txnLastUpdateTimestamp = time.milliseconds())
     assertTrue(txnMetadata.isProducerEpochExhausted)
-    txnMetadata.prepareFenceProducerEpoch()
+    txnMetadata.fenceProducerEpoch()
   }
 
   @Test

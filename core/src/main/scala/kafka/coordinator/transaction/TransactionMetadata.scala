@@ -180,7 +180,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
     TxnTransitMetadata(producerId, producerEpoch, txnTimeoutMs, state, topicPartitions.toSet, txnStartTimestamp, txnLastUpdateTimestamp)
   }
 
-  def prepareFenceProducerEpoch(): TxnTransitMetadata = {
+  def fenceProducerEpoch(): TxnTransitMetadata = {
     if (producerEpoch == Short.MaxValue)
       throw new IllegalStateException(s"Cannot fence producer with epoch equal to Short.MaxValue since this would overflow")
 
