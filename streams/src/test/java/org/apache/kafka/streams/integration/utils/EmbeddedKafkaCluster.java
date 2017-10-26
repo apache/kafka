@@ -20,7 +20,7 @@ import kafka.server.KafkaConfig$;
 import kafka.server.KafkaServer;
 import kafka.utils.MockTime;
 import kafka.utils.ZkUtils;
-import kafka.zk.EmbeddedZooKeeper;
+import kafka.zk.EmbeddedZookeeper;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.security.JaasUtils;
@@ -47,7 +47,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     private static final int DEFAULT_BROKER_PORT = 0; // 0 results in a random port being selected
     private static final int TOPIC_CREATION_TIMEOUT = 30000;
     private static final int TOPIC_DELETION_TIMEOUT = 30000;
-    private EmbeddedZooKeeper zookeeper = null;
+    private EmbeddedZookeeper zookeeper = null;
     private final KafkaEmbedded[] brokers;
     private ZkUtils zkUtils = null;
 
@@ -84,7 +84,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     public void start() throws IOException, InterruptedException {
         log.debug("Initiating embedded Kafka cluster startup");
         log.debug("Starting a ZooKeeper instance");
-        zookeeper = new EmbeddedZooKeeper();
+        zookeeper = new EmbeddedZookeeper();
         log.debug("ZooKeeper instance is running at {}", zKConnectString());
 
         zkUtils = ZkUtils.apply(
