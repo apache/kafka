@@ -25,19 +25,19 @@ import java.net.InetSocketAddress
 import kafka.utils.CoreUtils
 import org.apache.kafka.common.utils.Utils
 
-class EmbeddedZookeeper() {
+class EmbeddedZooKeeper() {
   val snapshotDir = TestUtils.tempDir()
   val logDir = TestUtils.tempDir()
   val tickTime = 500
-  val zookeeper = new ZooKeeperServer(snapshotDir, logDir, tickTime)
+  val zooKeeperServer = new ZooKeeperServer(snapshotDir, logDir, tickTime)
   val factory = new NIOServerCnxnFactory()
   private val addr = new InetSocketAddress("127.0.0.1", TestUtils.RandomPort)
   factory.configure(addr, 0)
-  factory.startup(zookeeper)
-  val port = zookeeper.getClientPort()
+  factory.startup(zooKeeperServer)
+  val port = zooKeeperServer.getClientPort()
 
   def shutdown() {
-    CoreUtils.swallow(zookeeper.shutdown())
+    CoreUtils.swallow(zooKeeperServer.shutdown())
     CoreUtils.swallow(factory.shutdown())
 
     def isDown(): Boolean = {

@@ -221,7 +221,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     } catch {
       case _: UnknownTopicOrPartitionException => // expected exception
     }
-    // verify delete topic path for test2 is removed from zookeeper
+    // verify delete topic path for test2 is removed from ZooKeeper
     TestUtils.verifyTopicDeletion(zkUtils, "test2", 1, servers)
     // verify that topic test is untouched
     TestUtils.waitUntilTrue(() => servers.forall(_.getLogManager().getLog(topicPartition).isDefined),

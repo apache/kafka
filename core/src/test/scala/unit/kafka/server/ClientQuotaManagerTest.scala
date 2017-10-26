@@ -84,7 +84,7 @@ class ClientQuotaManagerTest {
 
   /**
    * Tests parsing for <client-id> quotas.
-   * Quota overrides persisted in Zookeeper in /config/clients/<client-id>, default persisted in /config/clients/<default>
+   * Quota overrides persisted in ZooKeeper in /config/clients/<client-id>, default persisted in /config/clients/<default>
    */
   @Test
   def testClientIdQuotaParsing() {
@@ -97,7 +97,7 @@ class ClientQuotaManagerTest {
 
   /**
    * Tests parsing for <user> quotas.
-   * Quota overrides persisted in Zookeeper in /config/users/<user>, default persisted in /config/users/<default>
+   * Quota overrides persisted in ZooKeeper in /config/users/<user>, default persisted in /config/users/<default>
    */
   @Test
   def testUserQuotaParsing() {
@@ -111,7 +111,7 @@ class ClientQuotaManagerTest {
 
   /**
    * Tests parsing for <user, client-id> quotas.
-   * Quotas persisted in Zookeeper in /config/users/<user>/clients/<client-id>, default in /config/users/<default>/clients/<default>
+   * Quotas persisted in ZooKeeper in /config/users/<user>/clients/<client-id>, default in /config/users/<default>/clients/<default>
    */
   @Test
   def testUserClientIdQuotaParsing() {

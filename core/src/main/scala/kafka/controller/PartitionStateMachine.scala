@@ -18,9 +18,10 @@ package kafka.controller
 
 import kafka.api.LeaderAndIsr
 import kafka.common.{StateChangeFailedException, TopicAndPartition}
-import kafka.controller.KafkaControllerZkUtils.UpdateLeaderAndIsrResult
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
+import kafka.zk.{KafkaZkClient, TopicPartitionStateZNode}
+import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
 
@@ -43,7 +44,7 @@ class PartitionStateMachine(config: KafkaConfig,
                             stateChangeLogger: StateChangeLogger,
                             controllerContext: ControllerContext,
                             topicDeletionManager: TopicDeletionManager,
-                            zkUtils: KafkaControllerZkUtils,
+                            zkClient: KafkaZkClient,
                             partitionState: mutable.Map[TopicAndPartition, PartitionState],
                             controllerBrokerRequestBatch: ControllerBrokerRequestBatch) extends Logging {
   private val controllerId = config.brokerId
@@ -217,7 +218,7 @@ class PartitionStateMachine(config: KafkaConfig,
       partition -> leaderIsrAndControllerEpoch
     }.toMap
     val createResponses = try {
-      zkUtils.createTopicPartitionStatesRaw(leaderIsrAndControllerEpochs)
+      zkClient.createTopicPartitionStatesRaw(leaderIsrAndControllerEpochs)
     } catch {
       case e: Exception =>
         partitionsWithLiveReplicas.foreach { case (partition,_) => logFailedStateChange(partition, partitionState(partition), NewPartition, e) }
@@ -278,7 +279,7 @@ class PartitionStateMachine(config: KafkaConfig,
   private def doElectLeaderForPartitions(partitions: Seq[TopicAndPartition], partitionLeaderElectionStrategy: PartitionLeaderElectionStrategy):
   (Seq[TopicAndPartition], Seq[TopicAndPartition], Map[TopicAndPartition, Exception]) = {
     val getDataResponses = try {
-      zkUtils.getTopicPartitionStatesRaw(partitions)
+      zkClient.getTopicPartitionStatesRaw(partitions)
     } catch {
       case e: Exception =>
         return (Seq.empty, Seq.empty, partitions.map(_ -> e).toMap)
@@ -331,7 +332,7 @@ class PartitionStateMachine(config: KafkaConfig,
     }
     val recipientsPerPartition = partitionsWithLeaders.map { case (partition, leaderAndIsrOpt, recipients) => partition -> recipients }.toMap
     val adjustedLeaderAndIsrs = partitionsWithLeaders.map { case (partition, leaderAndIsrOpt, recipients) => partition -> leaderAndIsrOpt.get }.toMap
-    val UpdateLeaderAndIsrResult(successfulUpdates, updatesToRetry, failedUpdates) = zkUtils.updateLeaderAndIsr(
+    val UpdateLeaderAndIsrResult(successfulUpdates, updatesToRetry, failedUpdates) = zkClient.updateLeaderAndIsr(
       adjustedLeaderAndIsrs, controllerContext.epoch)
     successfulUpdates.foreach { case (partition, leaderAndIsr) =>
       val replicas = controllerContext.partitionReplicaAssignment(partition)
@@ -349,7 +350,7 @@ class PartitionStateMachine(config: KafkaConfig,
       val liveInSyncReplicas = leaderIsrAndControllerEpoch.leaderAndIsr.isr.filter(replica => controllerContext.isReplicaOnline(replica, partition))
       liveInSyncReplicas.isEmpty
     }
-    val (logConfigs, failed) = zkUtils.getLogConfigs(partitionsWithNoLiveInSyncReplicas.map { case (partition, _) => partition.topic }, config.originals())
+    val (logConfigs, failed) = zkClient.getLogConfigs(partitionsWithNoLiveInSyncReplicas.map { case (partition, _) => partition.topic }, config.originals())
     val partitionsWithUncleanLeaderElectionState = partitionsWithNoLiveInSyncReplicas.map { case (partition, leaderIsrAndControllerEpoch) =>
       if (failed.contains(partition.topic)) {
         logFailedStateChange(partition, partitionState(partition), OnlinePartition, failed(partition.topic))
