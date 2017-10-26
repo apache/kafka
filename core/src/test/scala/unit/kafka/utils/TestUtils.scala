@@ -1382,6 +1382,16 @@ object TestUtils extends Logging {
     records
   }
 
+  def consumeRemainingRecords[K, V](consumer: KafkaConsumer[K, V], timeout: Long): Seq[ConsumerRecord[K, V]] = {
+    val startTime = System.currentTimeMillis()
+    val records = new ArrayBuffer[ConsumerRecord[K, V]]()
+    waitUntilTrue(() => {
+      records ++= consumer.poll(50).asScala
+      System.currentTimeMillis() - startTime > timeout
+    }, s"The timeout $timeout was greater than the maximum wait time.")
+    records
+  }
+
   def createTransactionalProducer(transactionalId: String, servers: Seq[KafkaServer], batchSize: Int = 16384,
                                   transactionTimeoutMs: Long = 60000) = {
     val props = new Properties()

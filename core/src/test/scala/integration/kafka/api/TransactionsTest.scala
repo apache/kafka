@@ -466,7 +466,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     val firstMessageResult = producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, "1", "1", willBeCommitted = false)).get()
     assertTrue(firstMessageResult.hasOffset)
 
-    // Wait for expiration cycle to kick in.
+    // Wait for the expiration cycle to kick in.
     Thread.sleep(600)
 
     try {
@@ -478,6 +478,19 @@ class TransactionsTest extends KafkaServerTestHarness {
       case e: ExecutionException =>
       assertTrue(e.getCause.isInstanceOf[ProducerFencedException])
     }
+
+    // Verify that the first message was aborted and the second one was never written at all.
+    val nonTransactionalConsumer = nonTransactionalConsumers(0)
+    nonTransactionalConsumer.subscribe(List(topic1).asJava)
+    val records = TestUtils.consumeRemainingRecords(nonTransactionalConsumer, 1000)
+    assertEquals(1, records.size)
+    assertEquals("1", TestUtils.recordValueAsString(records.head))
+
+    val transactionalConsumer = transactionalConsumers.head
+    transactionalConsumer.subscribe(List(topic1).asJava)
+
+    val transactionalRecords = TestUtils.consumeRemainingRecords(transactionalConsumer, 1000)
+    assertTrue(transactionalRecords.isEmpty)
   }
 
   @Test
