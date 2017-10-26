@@ -16,9 +16,12 @@
  */
 package kafka.utils
 
+import java.nio.charset.StandardCharsets
+
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import kafka.utils.json.JsonValue
+
 import scala.collection._
 
 /**
@@ -32,6 +35,13 @@ object Json {
    * Parse a JSON string into a JsonValue if possible. `None` is returned if `input` is not valid JSON.
    */
   def parseFull(input: String): Option[JsonValue] =
+    try Option(mapper.readTree(input)).map(JsonValue(_))
+    catch { case _: JsonProcessingException => None }
+
+  /**
+   * Parse a JSON byte array into a JsonValue if possible. `None` is returned if `input` is not valid JSON.
+   */
+  def parseBytes(input: Array[Byte]): Option[JsonValue] =
     try Option(mapper.readTree(input)).map(JsonValue(_))
     catch { case _: JsonProcessingException => None }
 
@@ -58,5 +68,14 @@ object Json {
       case other: AnyRef => throw new IllegalArgumentException(s"Unknown argument of type ${other.getClass}: $other")
     }
   }
+
+  /**
+   * Encode an object into a JSON value in bytes. This method accepts any type T where
+   *   T => null | Boolean | String | Number | Map[String, T] | Array[T] | Iterable[T]
+   * Any other type will result in an exception.
+   *
+   * This method does not properly handle non-ascii characters.
+   */
+  def encodeAsBytes(obj: Any): Array[Byte] = encode(obj).getBytes(StandardCharsets.UTF_8)
 
 }

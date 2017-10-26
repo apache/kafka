@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.controller
+package kafka.zookeeper
 
 import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
 import java.util.concurrent.{ArrayBlockingQueue, ConcurrentHashMap, CountDownLatch, TimeUnit}
@@ -32,16 +32,16 @@ import org.apache.zookeeper.{CreateMode, KeeperException, WatchedEvent, Watcher,
 import scala.collection.JavaConverters._
 
 /**
- * ZookeeperClient is a zookeeper client that encourages pipelined requests to zookeeper.
+ * A ZooKeeper client that encourages pipelined requests.
  *
  * @param connectString comma separated host:port pairs, each corresponding to a zk server
  * @param sessionTimeoutMs session timeout in milliseconds
  * @param connectionTimeoutMs connection timeout in milliseconds
  * @param stateChangeHandler state change handler callbacks called by the underlying zookeeper client's EventThread.
  */
-class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTimeoutMs: Int,
+class ZooKeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTimeoutMs: Int,
                       stateChangeHandler: StateChangeHandler) extends Logging {
-  this.logIdent = "[ZookeeperClient] "
+  this.logIdent = "[ZooKeeperClient] "
   private val initializationLock = new ReentrantReadWriteLock()
   private val isConnectedOrExpiredLock = new ReentrantLock()
   private val isConnectedOrExpiredCondition = isConnectedOrExpiredLock.newCondition()
@@ -49,7 +49,7 @@ class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTi
   private val zNodeChildChangeHandlers = new ConcurrentHashMap[String, ZNodeChildChangeHandler]().asScala
 
   info(s"Initializing a new session to $connectString.")
-  @volatile private var zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZookeeperClientWatcher)
+  @volatile private var zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher)
   waitUntilConnected(connectionTimeoutMs, TimeUnit.MILLISECONDS)
 
   /**
@@ -143,8 +143,8 @@ class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTi
 
   /**
    * Wait indefinitely until the underlying zookeeper client to reaches the CONNECTED state.
-   * @throws ZookeeperClientAuthFailedException if the authentication failed either before or while waiting for connection.
-   * @throws ZookeeperClientExpiredException if the session expired either before or while waiting for connection.
+   * @throws ZooKeeperClientAuthFailedException if the authentication failed either before or while waiting for connection.
+   * @throws ZooKeeperClientExpiredException if the session expired either before or while waiting for connection.
    */
   def waitUntilConnected(): Unit = inLock(isConnectedOrExpiredLock) {
     waitUntilConnected(Long.MaxValue, TimeUnit.MILLISECONDS)
@@ -157,15 +157,15 @@ class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTi
       var state = zooKeeper.getState
       while (!state.isConnected && state.isAlive) {
         if (nanos <= 0) {
-          throw new ZookeeperClientTimeoutException(s"Timed out waiting for connection while in state: $state")
+          throw new ZooKeeperClientTimeoutException(s"Timed out waiting for connection while in state: $state")
         }
         nanos = isConnectedOrExpiredCondition.awaitNanos(nanos)
         state = zooKeeper.getState
       }
       if (state == States.AUTH_FAILED) {
-        throw new ZookeeperClientAuthFailedException("Auth failed either before or while waiting for connection")
+        throw new ZooKeeperClientAuthFailedException("Auth failed either before or while waiting for connection")
       } else if (state == States.CLOSED) {
-        throw new ZookeeperClientExpiredException("Session expired either before or while waiting for connection")
+        throw new ZooKeeperClientExpiredException("Session expired either before or while waiting for connection")
       }
     }
     info("Connected.")
@@ -180,7 +180,7 @@ class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTi
   }
 
   /**
-   * Register the handler to ZookeeperClient. This is just a local operation. This does not actually register a watcher.
+   * Register the handler to ZooKeeperClient. This is just a local operation. This does not actually register a watcher.
    *
    * The watcher is only registered once the user calls handle(AsyncRequest) or handle(Seq[AsyncRequest])
    * with either a GetDataRequest or ExistsRequest.
@@ -194,7 +194,7 @@ class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTi
   }
 
   /**
-   * Unregister the handler from ZookeeperClient. This is just a local operation.
+   * Unregister the handler from ZooKeeperClient. This is just a local operation.
    * @param path the path of the handler to unregister
    */
   def unregisterZNodeChangeHandler(path: String): Unit = {
@@ -202,7 +202,7 @@ class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTi
   }
 
   /**
-   * Register the handler to ZookeeperClient. This is just a local operation. This does not actually register a watcher.
+   * Register the handler to ZooKeeperClient. This is just a local operation. This does not actually register a watcher.
    *
    * The watcher is only registered once the user calls handle(AsyncRequest) or handle(Seq[AsyncRequest]) with a GetChildrenRequest.
    *
@@ -213,7 +213,7 @@ class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTi
   }
 
   /**
-   * Unregister the handler from ZookeeperClient. This is just a local operation.
+   * Unregister the handler from ZooKeeperClient. This is just a local operation.
    * @param path the path of the handler to unregister
    */
   def unregisterZNodeChildChangeHandler(path: String): Unit = {
@@ -240,7 +240,7 @@ class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTi
       while (now < threshold) {
         try {
           zooKeeper.close()
-          zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZookeeperClientWatcher)
+          zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher)
           waitUntilConnected(threshold - now, TimeUnit.MILLISECONDS)
           return
         } catch {
@@ -257,7 +257,7 @@ class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTi
     }
   }
 
-  private object ZookeeperClientWatcher extends Watcher {
+  private object ZooKeeperClientWatcher extends Watcher {
     override def process(event: WatchedEvent): Unit = {
       debug("Received event: " + event)
       Option(event.getPath) match {
@@ -310,7 +310,7 @@ trait ZNodeChildChangeHandler {
 sealed trait AsyncRequest {
   /**
    * This type member allows us to define methods that take requests and return responses with the correct types.
-   * See ``ZookeeperClient.handleRequests`` for example.
+   * See ``ZooKeeperClient.handleRequests`` for example.
    */
   type Response <: AsyncResponse
   def path: String
@@ -368,7 +368,7 @@ case class GetAclResponse(resultCode: Code, path: String, ctx: Option[Any], acl:
 case class SetAclResponse(resultCode: Code, path: String, ctx: Option[Any], stat: Stat) extends AsyncResponse
 case class GetChildrenResponse(resultCode: Code, path: String, ctx: Option[Any], children: Seq[String], stat: Stat) extends AsyncResponse
 
-class ZookeeperClientException(message: String) extends RuntimeException(message)
-class ZookeeperClientExpiredException(message: String) extends ZookeeperClientException(message)
-class ZookeeperClientAuthFailedException(message: String) extends ZookeeperClientException(message)
-class ZookeeperClientTimeoutException(message: String) extends ZookeeperClientException(message)
+class ZooKeeperClientException(message: String) extends RuntimeException(message)
+class ZooKeeperClientExpiredException(message: String) extends ZooKeeperClientException(message)
+class ZooKeeperClientAuthFailedException(message: String) extends ZooKeeperClientException(message)
+class ZooKeeperClientTimeoutException(message: String) extends ZooKeeperClientException(message)

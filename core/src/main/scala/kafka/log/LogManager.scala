@@ -23,14 +23,14 @@ import java.util.concurrent._
 
 import com.yammer.metrics.core.Gauge
 import kafka.common.KafkaException
-import kafka.controller.KafkaControllerZkUtils
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.{BrokerState, RecoveringFromUncleanShutdown, _}
 import kafka.utils._
+import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.errors.{LogDirNotFoundException, KafkaStorageException}
+import org.apache.kafka.common.errors.{KafkaStorageException, LogDirNotFoundException}
 
 import scala.collection.JavaConverters._
 import scala.collection._
@@ -101,7 +101,6 @@ class LogManager(logDirs: Seq[File],
   }
 
   loadLogs()
-
 
   // public, so we can access this from kafka.admin.DeleteTopicTest
   val cleaner: LogCleaner =
@@ -888,7 +887,7 @@ object LogManager {
 
   def apply(config: KafkaConfig,
             initialOfflineDirs: Seq[String],
-            zkUtils: KafkaControllerZkUtils,
+            zkClient: KafkaZkClient,
             brokerState: BrokerState,
             kafkaScheduler: KafkaScheduler,
             time: Time,
@@ -897,7 +896,7 @@ object LogManager {
     val defaultProps = KafkaServer.copyKafkaConfigToLog(config)
     val defaultLogConfig = LogConfig(defaultProps)
 
-    val (topicConfigs, failed) = zkUtils.getLogConfigs(zkUtils.getAllTopicsInCluster, defaultProps)
+    val (topicConfigs, failed) = zkClient.getLogConfigs(zkClient.getAllTopicsInCluster, defaultProps)
     if (!failed.isEmpty) throw failed.head._2
 
     // read the log configurations from zookeeper

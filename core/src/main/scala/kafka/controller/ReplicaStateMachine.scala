@@ -19,9 +19,10 @@ package kafka.controller
 import kafka.api.LeaderAndIsr
 import kafka.common.{StateChangeFailedException, TopicAndPartition}
 import kafka.controller.Callbacks.CallbackBuilder
-import kafka.controller.KafkaControllerZkUtils.UpdateLeaderAndIsrResult
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
+import kafka.zk.{KafkaZkClient, TopicPartitionStateZNode}
+import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import org.apache.zookeeper.KeeperException.Code
 
 import scala.collection.mutable
@@ -48,7 +49,7 @@ class ReplicaStateMachine(config: KafkaConfig,
                           stateChangeLogger: StateChangeLogger,
                           controllerContext: ControllerContext,
                           topicDeletionManager: TopicDeletionManager,
-                          zkUtils: KafkaControllerZkUtils,
+                          zkClient: KafkaZkClient,
                           replicaState: mutable.Map[PartitionAndReplica, ReplicaState],
                           controllerBrokerRequestBatch: ControllerBrokerRequestBatch) extends Logging {
   private val controllerId = config.brokerId
@@ -292,7 +293,7 @@ class ReplicaStateMachine(config: KafkaConfig,
       val adjustedIsr = if (leaderAndIsr.isr.size == 1) leaderAndIsr.isr else leaderAndIsr.isr.filter(_ != replicaId)
       leaderAndIsr.newLeaderAndIsr(newLeader, adjustedIsr)
     }
-    val UpdateLeaderAndIsrResult(successfulUpdates, updatesToRetry, failedUpdates) = zkUtils.updateLeaderAndIsr(
+    val UpdateLeaderAndIsrResult(successfulUpdates, updatesToRetry, failedUpdates) = zkClient.updateLeaderAndIsr(
       adjustedLeaderAndIsrs, controllerContext.epoch)
     val exceptionsForPartitionsWithNoLeaderAndIsrInZk = partitionsWithNoLeaderAndIsrInZk.flatMap { partition =>
       if (!topicDeletionManager.isPartitionToBeDeleted(partition)) {
@@ -325,7 +326,7 @@ class ReplicaStateMachine(config: KafkaConfig,
     val partitionsWithNoLeaderAndIsrInZk = mutable.Buffer.empty[TopicAndPartition]
     val failed = mutable.Map.empty[TopicAndPartition, Exception]
     val getDataResponses = try {
-      zkUtils.getTopicPartitionStatesRaw(partitions)
+      zkClient.getTopicPartitionStatesRaw(partitions)
     } catch {
       case e: Exception =>
         partitions.foreach(partition => failed.put(partition, e))

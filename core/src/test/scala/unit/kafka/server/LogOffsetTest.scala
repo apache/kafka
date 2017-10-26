@@ -80,7 +80,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     val topic = topicPartition.split("-").head
     val part = Integer.valueOf(topicPartition.split("-").last).intValue
 
-    // setup brokers in zookeeper as owners of partitions for this test
+    // setup brokers in ZooKeeper as owners of partitions for this test
     AdminUtils.createTopic(zkUtils, topic, 1, 1)
 
     val logManager = server.getLogManager
@@ -115,7 +115,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     val topic = topicPartition.split("-").head
     val part = Integer.valueOf(topicPartition.split("-").last).intValue
 
-    // setup brokers in zookeeper as owners of partitions for this test
+    // setup brokers in ZooKeeper as owners of partitions for this test
     AdminUtils.createTopic(zkUtils, topic, 1, 1)
 
     val logManager = server.getLogManager
@@ -154,7 +154,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
 
     val topic = topicPartition.split("-").head
 
-    // setup brokers in zookeeper as owners of partitions for this test
+    // setup brokers in ZooKeeper as owners of partitions for this test
     createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 1, servers = Seq(server))
 
     var offsetChanged = false
@@ -178,7 +178,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     val topic = topicPartition.split("-").head
     val part = Integer.valueOf(topicPartition.split("-").last).intValue
 
-    // setup brokers in zookeeper as owners of partitions for this test
+    // setup brokers in ZooKeeper as owners of partitions for this test
     AdminUtils.createTopic(zkUtils, topic, 3, 1)
 
     val logManager = server.getLogManager
@@ -207,7 +207,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     val topic = topicPartition.split("-").head
     val part = Integer.valueOf(topicPartition.split("-").last).intValue
 
-    // setup brokers in zookeeper as owners of partitions for this test
+    // setup brokers in ZooKeeper as owners of partitions for this test
     AdminUtils.createTopic(zkUtils, topic, 3, 1)
 
     val logManager = server.getLogManager

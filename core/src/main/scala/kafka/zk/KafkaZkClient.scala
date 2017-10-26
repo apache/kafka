@@ -14,16 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
 */
-package kafka.controller
+package kafka.zk
 
 import java.util.Properties
 
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.common.TopicAndPartition
+import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.log.LogConfig
 import kafka.server.ConfigType
-import kafka.utils.{Logging, ZkUtils}
+import kafka.utils._
+import kafka.zookeeper._
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.Stat
 import org.apache.zookeeper.{CreateMode, KeeperException}
@@ -31,8 +33,18 @@ import org.apache.zookeeper.{CreateMode, KeeperException}
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
-class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean) extends Logging {
-  import KafkaControllerZkUtils._
+/**
+ * Provides higher level Kafka-specific operations on top of the pipelined [[kafka.zookeeper.ZooKeeperClient]].
+ *
+ * This performs better than [[kafka.utils.ZkUtils]] and should replace it completely, eventually.
+ *
+ * Implementation note: this class includes methods for various components (Controller, Configs, Old Consumer, etc.)
+ * and returns instances of classes from the calling packages in some cases. This is not ideal, but it makes it
+ * easier to quickly migrate away from `ZkUtils`. We should revisit this once the migration is completed and tests are
+ * in place. We should also consider whether a monolithic [[kafka.zk.ZkData]] is the way to go.
+ */
+class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends Logging {
+  import KafkaZkClient._
 
   /**
    * Gets topic partition states for the given partitions.
@@ -533,7 +545,7 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
    * @param zNodeChangeHandler
    */
   def registerZNodeChangeHandlerAndCheckExistence(zNodeChangeHandler: ZNodeChangeHandler): Unit = {
-    zookeeperClient.registerZNodeChangeHandler(zNodeChangeHandler)
+    zooKeeperClient.registerZNodeChangeHandler(zNodeChangeHandler)
     val existsResponse = retryRequestUntilConnected(ExistsRequest(zNodeChangeHandler.path))
     if (existsResponse.resultCode != Code.OK && existsResponse.resultCode != Code.NONODE) {
       throw existsResponse.resultException.get
@@ -541,42 +553,42 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
   }
 
   /**
-   * See ZookeeperClient.registerZNodeChangeHandler
+   * See ZooKeeperClient.registerZNodeChangeHandler
    * @param zNodeChangeHandler
    */
   def registerZNodeChangeHandler(zNodeChangeHandler: ZNodeChangeHandler): Unit = {
-    zookeeperClient.registerZNodeChangeHandler(zNodeChangeHandler)
+    zooKeeperClient.registerZNodeChangeHandler(zNodeChangeHandler)
   }
 
   /**
-   * See ZookeeperClient.unregisterZNodeChangeHandler
+   * See ZooKeeperClient.unregisterZNodeChangeHandler
    * @param path
    */
   def unregisterZNodeChangeHandler(path: String): Unit = {
-    zookeeperClient.unregisterZNodeChangeHandler(path)
+    zooKeeperClient.unregisterZNodeChangeHandler(path)
   }
 
   /**
-   * See ZookeeperClient.registerZNodeChildChangeHandler
+   * See ZooKeeperClient.registerZNodeChildChangeHandler
    * @param zNodeChildChangeHandler
    */
   def registerZNodeChildChangeHandler(zNodeChildChangeHandler: ZNodeChildChangeHandler): Unit = {
-    zookeeperClient.registerZNodeChildChangeHandler(zNodeChildChangeHandler)
+    zooKeeperClient.registerZNodeChildChangeHandler(zNodeChildChangeHandler)
   }
 
   /**
-   * See ZookeeperClient.unregisterZNodeChildChangeHandler
+   * See ZooKeeperClient.unregisterZNodeChildChangeHandler
    * @param path
    */
   def unregisterZNodeChildChangeHandler(path: String): Unit = {
-    zookeeperClient.unregisterZNodeChildChangeHandler(path)
+    zooKeeperClient.unregisterZNodeChildChangeHandler(path)
   }
 
   /**
-   * Close the underlying ZookeeperClient.
+   * Close the underlying ZooKeeperClient.
    */
   def close(): Unit = {
-    zookeeperClient.close()
+    zooKeeperClient.close()
   }
 
   private def deleteRecursive(path: String): Unit = {
@@ -594,8 +606,7 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
   private def createTopicPartition(partitions: Seq[TopicAndPartition]) = {
     val createRequests = partitions.map { partition =>
       val path = TopicPartitionZNode.path(partition)
-      val data = TopicPartitionZNode.encode
-      CreateRequest(path, data, acls(path), CreateMode.PERSISTENT, Some(partition))
+      CreateRequest(path, null, acls(path), CreateMode.PERSISTENT, Some(partition))
     }
     retryRequestsUntilConnected(createRequests)
   }
@@ -603,8 +614,7 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
   private def createTopicPartitions(topics: Seq[String]) = {
     val createRequests = topics.map { topic =>
       val path = TopicPartitionsZNode.path(topic)
-      val data = TopicPartitionsZNode.encode
-      CreateRequest(path, data, acls(path), CreateMode.PERSISTENT, Some(topic))
+      CreateRequest(path, null, acls(path), CreateMode.PERSISTENT, Some(topic))
     }
     retryRequestsUntilConnected(createRequests)
   }
@@ -629,7 +639,7 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
     val remainingRequests = ArrayBuffer(requests: _*)
     val responses = new ArrayBuffer[Req#Response]
     while (remainingRequests.nonEmpty) {
-      val batchResponses = zookeeperClient.handleRequests(remainingRequests)
+      val batchResponses = zooKeeperClient.handleRequests(remainingRequests)
 
       // Only execute slow path if we find a response with CONNECTIONLOSS
       if (batchResponses.exists(_.resultCode == Code.CONNECTIONLOSS)) {
@@ -644,7 +654,7 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
         }
 
         if (remainingRequests.nonEmpty)
-          zookeeperClient.waitUntilConnected()
+          zooKeeperClient.waitUntilConnected()
       } else {
         remainingRequests.clear()
         responses ++= batchResponses
@@ -684,7 +694,7 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
       val getDataResponse = retryRequestUntilConnected(getDataRequest)
       val code = getDataResponse.resultCode
       if (code == Code.OK) {
-        if (getDataResponse.stat.getEphemeralOwner != zookeeperClient.sessionId) {
+        if (getDataResponse.stat.getEphemeralOwner != zooKeeperClient.sessionId) {
           error(s"Error while creating ephemeral at $path with return code: $code")
           Code.NODEEXISTS
         } else {
@@ -701,7 +711,7 @@ class KafkaControllerZkUtils(zookeeperClient: ZookeeperClient, isSecure: Boolean
   }
 }
 
-object KafkaControllerZkUtils {
+object KafkaZkClient {
 
   /**
    * @param successfulPartitions The successfully updated partition states with adjusted znode versions.

@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package unit.kafka.server
+package kafka.server
 
 import java.lang.{Long => JLong}
 import java.net.InetAddress
@@ -30,7 +30,6 @@ import kafka.log.{Log, TimestampOffset}
 import kafka.network.RequestChannel
 import kafka.security.auth.Authorizer
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server._
 import kafka.utils.{MockTime, TestUtils, ZkUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.UnsupportedVersionException

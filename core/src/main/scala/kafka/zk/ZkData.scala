@@ -14,41 +14,43 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
 */
-package kafka.controller
+package kafka.zk
 
+import java.nio.charset.StandardCharsets.UTF_8
 import java.util.Properties
 
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.common.TopicAndPartition
+import kafka.controller.{IsrChangeNotificationListener, LeaderIsrAndControllerEpoch}
 import kafka.utils.Json
 import org.apache.zookeeper.data.Stat
 
 import scala.collection.Seq
 
+// This file contains objects for encoding/decoding data stored in ZooKeeper nodes (znodes).
+
 object ControllerZNode {
   def path = "/controller"
   def encode(brokerId: Int, timestamp: Long): Array[Byte] =
-    Json.encode(Map("version" -> 1, "brokerid" -> brokerId, "timestamp" -> timestamp.toString)).getBytes("UTF-8")
-  def decode(bytes: Array[Byte]): Option[Int] = Json.parseFull(new String(bytes, "UTF-8")).map { js =>
+    Json.encodeAsBytes(Map("version" -> 1, "brokerid" -> brokerId, "timestamp" -> timestamp.toString))
+  def decode(bytes: Array[Byte]): Option[Int] = Json.parseBytes(bytes).map { js =>
     js.asJsonObject("brokerid").to[Int]
   }
 }
 
 object ControllerEpochZNode {
   def path = "/controller_epoch"
-  def encode(epoch: Int): Array[Byte] = epoch.toString.getBytes("UTF-8")
-  def decode(bytes: Array[Byte]) : Int = new String(bytes, "UTF-8").toInt
+  def encode(epoch: Int): Array[Byte] = epoch.toString.getBytes(UTF_8)
+  def decode(bytes: Array[Byte]): Int = new String(bytes, UTF_8).toInt
 }
 
 object ConfigZNode {
   def path = "/config"
-  def encode: Array[Byte] = null
 }
 
 object BrokersZNode {
   def path = "/brokers"
-  def encode: Array[Byte] = null
 }
 
 object BrokerIdsZNode {
@@ -66,27 +68,26 @@ object BrokerIdZNode {
              rack: Option[String],
              apiVersion: ApiVersion): Array[Byte] = {
     val version = if (apiVersion >= KAFKA_0_10_0_IV1) 4 else 2
-    Broker.toJson(version, id, host, port, advertisedEndpoints, jmxPort, rack).getBytes("UTF-8")
+    Broker.toJson(version, id, host, port, advertisedEndpoints, jmxPort, rack).getBytes(UTF_8)
   }
 
   def decode(id: Int, bytes: Array[Byte]): Broker = {
-    Broker.createBroker(id, new String(bytes, "UTF-8"))
+    Broker.createBroker(id, new String(bytes, UTF_8))
   }
 }
 
 object TopicsZNode {
   def path = s"${BrokersZNode.path}/topics"
-  def encode: Array[Byte] = null
 }
 
 object TopicZNode {
   def path(topic: String) = s"${TopicsZNode.path}/$topic"
   def encode(assignment: Map[TopicAndPartition, Seq[Int]]): Array[Byte] = {
     val assignmentJson = assignment.map { case (partition, replicas) => partition.partition.toString -> replicas }
-    Json.encode(Map("version" -> 1, "partitions" -> assignmentJson)).getBytes("UTF-8")
+    Json.encodeAsBytes(Map("version" -> 1, "partitions" -> assignmentJson))
   }
   def decode(topic: String, bytes: Array[Byte]): Map[TopicAndPartition, Seq[Int]] = {
-    Json.parseFull(new String(bytes, "UTF-8")).flatMap { js =>
+    Json.parseBytes(bytes).flatMap { js =>
       val assignmentJson = js.asJsonObject
       val partitionsJsonOpt = assignmentJson.get("partitions").map(_.asJsonObject)
       partitionsJsonOpt.map { partitionsJson =>
@@ -100,12 +101,10 @@ object TopicZNode {
 
 object TopicPartitionsZNode {
   def path(topic: String) = s"${TopicZNode.path(topic)}/partitions"
-  def encode: Array[Byte] = null
 }
 
 object TopicPartitionZNode {
   def path(partition: TopicAndPartition) = s"${TopicPartitionsZNode.path(partition.topic)}/${partition.partition}"
-  def encode: Array[Byte] = null
 }
 
 object TopicPartitionStateZNode {
@@ -113,11 +112,11 @@ object TopicPartitionStateZNode {
   def encode(leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch): Array[Byte] = {
     val leaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
     val controllerEpoch = leaderIsrAndControllerEpoch.controllerEpoch
-    Json.encode(Map("version" -> 1, "leader" -> leaderAndIsr.leader, "leader_epoch" -> leaderAndIsr.leaderEpoch,
-      "controller_epoch" -> controllerEpoch, "isr" -> leaderAndIsr.isr)).getBytes("UTF-8")
+    Json.encodeAsBytes(Map("version" -> 1, "leader" -> leaderAndIsr.leader, "leader_epoch" -> leaderAndIsr.leaderEpoch,
+      "controller_epoch" -> controllerEpoch, "isr" -> leaderAndIsr.isr))
   }
   def decode(bytes: Array[Byte], stat: Stat): Option[LeaderIsrAndControllerEpoch] = {
-    Json.parseFull(new String(bytes, "UTF-8")).map { js =>
+    Json.parseBytes(bytes).map { js =>
       val leaderIsrAndEpochInfo = js.asJsonObject
       val leader = leaderIsrAndEpochInfo("leader").to[Int]
       val epoch = leaderIsrAndEpochInfo("leader_epoch").to[Int]
@@ -131,17 +130,16 @@ object TopicPartitionStateZNode {
 
 object ConfigEntityTypeZNode {
   def path(entityType: String) = s"${ConfigZNode.path}/$entityType"
-  def encode: Array[Byte] = null
 }
 
 object ConfigEntityZNode {
   def path(entityType: String, entityName: String) = s"${ConfigEntityTypeZNode.path(entityType)}/$entityName"
   def encode(config: Properties): Array[Byte] = {
     import scala.collection.JavaConverters._
-    Json.encode(Map("version" -> 1, "config" -> config.asScala)).getBytes("UTF-8")
+    Json.encodeAsBytes(Map("version" -> 1, "config" -> config.asScala))
   }
   def decode(bytes: Array[Byte]): Option[Properties] = {
-    Json.parseFull(new String(bytes, "UTF-8")).map { js =>
+    Json.parseBytes(bytes).map { js =>
       val configOpt = js.asJsonObjectOption.flatMap(_.get("config").flatMap(_.asJsonObjectOption))
       val props = new Properties()
       configOpt.foreach(config => config.iterator.foreach { case (k, v) => props.setProperty(k, v.to[String]) })
@@ -152,7 +150,6 @@ object ConfigEntityZNode {
 
 object IsrChangeNotificationZNode {
   def path = "/isr_change_notification"
-  def encode: Array[Byte] = null
 }
 
 object IsrChangeNotificationSequenceZNode {
@@ -160,11 +157,11 @@ object IsrChangeNotificationSequenceZNode {
   def path(sequenceNumber: String) = s"${IsrChangeNotificationZNode.path}/$SequenceNumberPrefix$sequenceNumber"
   def encode(partitions: Set[TopicAndPartition]): Array[Byte] = {
     val partitionsJson = partitions.map(partition => Map("topic" -> partition.topic, "partition" -> partition.partition))
-    Json.encode(Map("version" -> IsrChangeNotificationListener.version, "partitions" -> partitionsJson)).getBytes("UTF-8")
+    Json.encodeAsBytes(Map("version" -> IsrChangeNotificationListener.version, "partitions" -> partitionsJson))
   }
 
   def decode(bytes: Array[Byte]): Set[TopicAndPartition] = {
-    Json.parseFull(new String(bytes, "UTF-8")).map { js =>
+    Json.parseBytes(bytes).map { js =>
       val partitionsJson = js.asJsonObject("partitions").asJsonArray
       partitionsJson.iterator.map { partitionsJson =>
         val partitionJson = partitionsJson.asJsonObject
@@ -179,7 +176,6 @@ object IsrChangeNotificationSequenceZNode {
 
 object LogDirEventNotificationZNode {
   def path = "/log_dir_event_notification"
-  def encode: Array[Byte] = null
 }
 
 object LogDirEventNotificationSequenceZNode {
@@ -187,8 +183,8 @@ object LogDirEventNotificationSequenceZNode {
   val LogDirFailureEvent = 1
   def path(sequenceNumber: String) = s"${LogDirEventNotificationZNode.path}/$SequenceNumberPrefix$sequenceNumber"
   def encode(brokerId: Int) =
-    Json.encode(Map("version" -> 1, "broker" -> brokerId, "event" -> LogDirFailureEvent)).getBytes("UTF-8")
-  def decode(bytes: Array[Byte]): Option[Int] = Json.parseFull(new String(bytes, "UTF-8")).map { js =>
+    Json.encodeAsBytes(Map("version" -> 1, "broker" -> brokerId, "event" -> LogDirFailureEvent))
+  def decode(bytes: Array[Byte]): Option[Int] = Json.parseBytes(bytes).map { js =>
     js.asJsonObject("broker").to[Int]
   }
   def sequenceNumber(path: String) = path.substring(path.lastIndexOf(SequenceNumberPrefix) + SequenceNumberPrefix.length)
@@ -196,17 +192,14 @@ object LogDirEventNotificationSequenceZNode {
 
 object AdminZNode {
   def path = "/admin"
-  def encode: Array[Byte] = null
 }
 
 object DeleteTopicsZNode {
   def path = s"${AdminZNode.path}/delete_topics"
-  def encode: Array[Byte] = null
 }
 
 object DeleteTopicsTopicZNode {
   def path(topic: String) = s"${DeleteTopicsZNode.path}/$topic"
-  def encode: Array[Byte] = null
 }
 
 object ReassignPartitionsZNode {
@@ -215,9 +208,9 @@ object ReassignPartitionsZNode {
     val reassignmentJson = reassignment.map { case (TopicAndPartition(topic, partition), replicas) =>
       Map("topic" -> topic, "partition" -> partition, "replicas" -> replicas)
     }
-    Json.encode(Map("version" -> 1, "partitions" -> reassignmentJson)).getBytes("UTF-8")
+    Json.encodeAsBytes(Map("version" -> 1, "partitions" -> reassignmentJson))
   }
-  def decode(bytes: Array[Byte]): Map[TopicAndPartition, Seq[Int]] = Json.parseFull(new String(bytes, "UTF-8")).flatMap { js =>
+  def decode(bytes: Array[Byte]): Map[TopicAndPartition, Seq[Int]] = Json.parseBytes(bytes).flatMap { js =>
     val reassignmentJson = js.asJsonObject
     val partitionsJsonOpt = reassignmentJson.get("partitions")
     partitionsJsonOpt.map { partitionsJson =>
@@ -234,9 +227,12 @@ object ReassignPartitionsZNode {
 
 object PreferredReplicaElectionZNode {
   def path = s"${AdminZNode.path}/preferred_replica_election"
-  def encode(partitions: Set[TopicAndPartition]): Array[Byte] =
-    Json.encode(Map("version" -> 1, "partitions" -> partitions.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition)))).getBytes("UTF-8")
-  def decode(bytes: Array[Byte]): Set[TopicAndPartition] = Json.parseFull(new String(bytes, "UTF-8")).map { js =>
+  def encode(partitions: Set[TopicAndPartition]): Array[Byte] = {
+    val jsonMap = Map("version" -> 1,
+      "partitions" -> partitions.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition)))
+    Json.encodeAsBytes(jsonMap)
+  }
+  def decode(bytes: Array[Byte]): Set[TopicAndPartition] = Json.parseBytes(bytes).map { js =>
     val partitionsJson = js.asJsonObject("partitions").asJsonArray
     partitionsJson.iterator.map { partitionsJson =>
       val partitionJson = partitionsJson.asJsonObject

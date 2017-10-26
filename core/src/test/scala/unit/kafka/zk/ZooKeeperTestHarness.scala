@@ -41,14 +41,14 @@ abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
   protected val zkAclsEnabled: Option[Boolean] = None
 
   var zkUtils: ZkUtils = null
-  var zookeeper: EmbeddedZookeeper = null
+  var zookeeper: EmbeddedZooKeeper = null
 
   def zkPort: Int = zookeeper.port
   def zkConnect: String = s"127.0.0.1:$zkPort"
   
   @Before
   def setUp() {
-    zookeeper = new EmbeddedZookeeper()
+    zookeeper = new EmbeddedZooKeeper()
     zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled()))
   }
 
