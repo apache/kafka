@@ -120,8 +120,6 @@ public abstract class AbstractCoordinator implements Closeable {
 
     private RequestFuture<Void> findCoordinatorFuture = null;
     
-    //For testing purposes
-    private long lastHeartbeat = 0;
     /**
      * Initialize the coordination manager.
      */
@@ -297,7 +295,6 @@ public abstract class AbstractCoordinator implements Closeable {
                 notify();
             }
             heartbeat.poll(now);
-            lastHeartbeat = now;
         }
     }
 
