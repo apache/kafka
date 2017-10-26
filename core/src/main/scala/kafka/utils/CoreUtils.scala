@@ -303,4 +303,8 @@ object CoreUtils extends Logging {
     props.foreach { case (k, v) => properties.put(k, v) }
     properties
   }
+
+  def getOrElseUpdateAtomically[K, V](map: concurrent.Map[K, V], key: K, createValue: => V): V = {
+    map.putIfAbsent(key, createValue).getOrElse(map(key))
+  }
 }
