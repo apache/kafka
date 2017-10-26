@@ -305,6 +305,11 @@ object CoreUtils extends Logging {
   }
 
   def getOrElseUpdateAtomically[K, V](map: concurrent.Map[K, V], key: K, createValue: => V): V = {
-    map.putIfAbsent(key, createValue).getOrElse(map(key))
+    map.get(key) match {
+      case Some(value) => value
+      case None =>
+        val value = createValue
+        map.putIfAbsent(key, value).getOrElse(value)
+    }
   }
 }
