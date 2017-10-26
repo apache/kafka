@@ -454,16 +454,19 @@ class TransactionCoordinator(brokerId: Int,
      }
 
       coordinatorEpochAndMetadata match {
+        case Left(error) =>
+          logger.error(s"Could not retrieve transaction metadata for transactionalId ${txnIdAndPidEpoch.transactionalId} due " +
+            s"to error: $error")
         case Right(epochAndMetadata) =>
           val txnMetadata = epochAndMetadata.transactionMetadata
-          txnMetadata.fenceProducerEpoch()
+          txnMetadata.inLock(txnMetadata.fenceProducerEpoch())
           handleEndTransaction(txnMetadata.transactionalId,
             txnMetadata.producerId,
             txnMetadata.producerEpoch,
             TransactionResult.ABORT,
             (error: Errors) => error match {
               case Errors.NONE =>
-                logger.error(s"Completed rollback ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} due to timeout")
+                info(s"Completed rollback ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} due to timeout")
               case Errors.INVALID_PRODUCER_ID_MAPPING |
                    Errors.INVALID_PRODUCER_EPOCH |
                    Errors.CONCURRENT_TRANSACTIONS =>
