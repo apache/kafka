@@ -74,7 +74,7 @@ object TestUtils extends Logging {
 
   /** Port to use for unit tests that mock/don't require a real ZK server. */
   val MockZkPort = 1
-  /** Zookeeper connection string to use for unit tests that mock/don't require a real ZK server. */
+  /** ZooKeeper connection string to use for unit tests that mock/don't require a real ZK server. */
   val MockZkConnect = "127.0.0.1:" + MockZkPort
 
   private val transactionStatusKey = "transactionStatus"
@@ -273,7 +273,7 @@ object TestUtils extends Logging {
   }
 
   /**
-   * Create a topic in zookeeper.
+   * Create a topic in ZooKeeper.
    * Wait until the leader is elected and the metadata is propagated to all brokers.
    * Return the leader for each partition.
    */
@@ -293,7 +293,7 @@ object TestUtils extends Logging {
   }
 
   /**
-   * Create a topic in zookeeper using a customized replica assignment.
+   * Create a topic in ZooKeeper using a customized replica assignment.
    * Wait until the leader is elected and the metadata is propagated to all brokers.
    * Return the leader for each partition.
    */
@@ -1172,7 +1172,7 @@ object TestUtils extends Logging {
     TestUtils.waitUntilTrue(() =>
       servers.forall(server => topicPartitions.forall(tp => server.replicaManager.getPartition(tp).isEmpty)),
       "Replica manager's should have deleted all of this topic's partitions")
-    // ensure that logs from all replicas are deleted if delete topic is marked successful in zookeeper
+    // ensure that logs from all replicas are deleted if delete topic is marked successful in ZooKeeper
     assertTrue("Replica logs not deleted after delete topic is complete",
       servers.forall(server => topicPartitions.forall(tp => server.getLogManager.getLog(tp).isEmpty)))
     // ensure that topic is removed from all cleaner offsets

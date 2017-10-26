@@ -47,7 +47,7 @@ class SaslPlainPlaintextConsumerTest extends BaseConsumerTest with SaslSetup {
 
   /**
    * Checks that everyone can access ZkUtils.SecureZkRootPaths and ZkUtils.SensitiveZkRootPaths
-   * when zookeeper.set.acl=false, even if Zookeeper is SASL-enabled.
+   * when zookeeper.set.acl=false, even if ZooKeeper is SASL-enabled.
    */
   @Test
   def testZkAclsDisabled() {

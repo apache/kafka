@@ -153,11 +153,11 @@ class ZkNodeChangeNotificationListener(private val zkUtils: ZkUtils,
     }
 
     override def handleSessionEstablishmentError(error: Throwable) {
-      fatal("Could not establish session with zookeeper", error)
+      fatal("Could not establish session with ZooKeeper", error)
     }
 
     override def handleStateChanged(state: KeeperState) {
-      debug(s"New zookeeper state: ${state}")
+      debug(s"New ZooKeeper state: ${state}")
     }
   }
 
