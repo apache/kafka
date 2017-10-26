@@ -222,7 +222,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
 
         val zooKeeperClient = new ZooKeeperClient(config.zkConnect, config.zkSessionTimeoutMs,
-          config.zkConnectionTimeoutMs, new StateChangeHandler {
+          config.zkConnectionTimeoutMs, config.zkMaxInFlightRequests, new StateChangeHandler {
             override def onReconnectionTimeout(): Unit = {
               error("Reconnection timeout.")
             }
