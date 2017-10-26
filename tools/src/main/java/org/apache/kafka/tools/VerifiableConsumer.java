@@ -219,7 +219,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             printJson(new StartupComplete());
             consumer.subscribe(Collections.singletonList(topic), this);
 
-            while (true) {
+            while (!isFinished()) {
                 ConsumerRecords<String, String> records = consumer.poll(Long.MAX_VALUE);
                 Map<TopicPartition, OffsetAndMetadata> offsets = onRecordsReceived(records);
 
