@@ -193,7 +193,7 @@ class UtilsTest extends JUnitSuite {
       for (i <- 1 to count) {
         executor.submit(new Runnable() {
           def run() {
-            CoreUtils.getOrElseUpdateAtomically(map, 0, {
+            CoreUtils.atomicGetOrUpdate(map, 0, {
               createdCount.incrementAndGet
               new AtomicInteger
             }).incrementAndGet()

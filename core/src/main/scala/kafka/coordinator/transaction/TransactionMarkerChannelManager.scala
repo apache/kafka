@@ -102,7 +102,7 @@ class TxnMarkerQueue(@volatile var destination: Node) {
   }
 
   def addMarkers(txnTopicPartition: Int, txnIdAndMarker: TxnIdAndMarkerEntry): Unit = {
-    val queue = CoreUtils.getOrElseUpdateAtomically(markersPerTxnTopicPartition, txnTopicPartition,
+    val queue = CoreUtils.atomicGetOrUpdate(markersPerTxnTopicPartition, txnTopicPartition,
         new LinkedBlockingQueue[TxnIdAndMarkerEntry]())
     queue.add(txnIdAndMarker)
   }
@@ -170,7 +170,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
 
     // we do not synchronize on the update of the broker node with the enqueuing,
     // since even if there is a race condition we will just retry
-    val brokerRequestQueue = CoreUtils.getOrElseUpdateAtomically(markersQueuePerBroker, brokerId,
+    val brokerRequestQueue = CoreUtils.atomicGetOrUpdate(markersQueuePerBroker, brokerId,
         new TxnMarkerQueue(broker))
     brokerRequestQueue.destination = broker
     brokerRequestQueue.addMarkers(txnTopicPartition, txnIdAndMarker)
