@@ -54,7 +54,7 @@ public class DeleteRecordsRequest extends AbstractRequest {
 
     private static final Schema DELETE_RECORDS_REQUEST_PARTITION_V0 = new Schema(
             PARTITION_ID,
-            new Field(OFFSET_KEY_NAME, INT64, "The offset before which the messages will be deleted."));
+            new Field(OFFSET_KEY_NAME, INT64, "The offset before which the messages will be deleted. -1 means high-watermark for the partition."));
 
     private static final Schema DELETE_RECORDS_REQUEST_TOPIC_V0 = new Schema(
             TOPIC_NAME,
