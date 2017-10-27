@@ -104,8 +104,12 @@ class TransactionMetadataTest {
       txnLastUpdateTimestamp = time.milliseconds())
     assertTrue(txnMetadata.isProducerEpochExhausted)
 
-    txnMetadata.fenceProducerEpoch()
-    assertEquals(Short.MaxValue, txnMetadata.producerEpoch)
+    val fencingTransitMetadata = txnMetadata.prepareFenceProducerEpoch()
+    assertEquals(Short.MaxValue, fencingTransitMetadata.producerEpoch)
+    assertEquals(Some(PrepareEpochFence), txnMetadata.pendingState)
+
+    // We should reset the pending state to make way for the abort transition.
+    txnMetadata.pendingState = None
 
     val transitMetadata = txnMetadata.prepareAbortOrCommit(PrepareAbort, time.milliseconds())
     txnMetadata.completeTransitionTo(transitMetadata)
@@ -127,7 +131,7 @@ class TransactionMetadataTest {
       topicPartitions = mutable.Set.empty,
       txnLastUpdateTimestamp = time.milliseconds())
     assertTrue(txnMetadata.isProducerEpochExhausted)
-    txnMetadata.fenceProducerEpoch()
+    txnMetadata.prepareFenceProducerEpoch()
   }
 
   @Test

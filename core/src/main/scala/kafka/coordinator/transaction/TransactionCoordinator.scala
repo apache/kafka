@@ -148,7 +148,7 @@ class TransactionCoordinator(brokerId: Int,
           responseCallback(initTransactionError(error))
 
         case Right((coordinatorEpoch, newMetadata)) =>
-          if (newMetadata.txnState == Ongoing) {
+          if (newMetadata.txnState == PrepareEpochFence) {
             // abort the ongoing transaction and then return CONCURRENT_TRANSACTIONS to let client wait and retry
             def sendRetriableErrorCallback(error: Errors): Unit = {
               if (error != Errors.NONE) {
@@ -212,8 +212,9 @@ class TransactionCoordinator(brokerId: Int,
           // This forces the client to retry, which will ensure that the epoch is bumped a second time. In
           // particular, if fencing the current producer exhausts the available epochs for the current producerId,
           // then when the client retries, we will generate a new producerId.
-          Right(coordinatorEpoch, txnMetadata.fenceProducerEpoch())
-        case Dead =>
+          Right(coordinatorEpoch, txnMetadata.prepareFenceProducerEpoch())
+
+        case Dead | PrepareEpochFence =>
           val errorMsg = s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +
             s"This is illegal as we should never have transitioned to this state."
           fatal(errorMsg)
@@ -308,9 +309,9 @@ class TransactionCoordinator(brokerId: Int,
           txnMetadata.inLock {
             if (txnMetadata.producerId != producerId)
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
-            else if (txnMetadata.producerEpoch != producerEpoch)
+            else if (producerEpoch < txnMetadata.producerEpoch)
               Left(Errors.INVALID_PRODUCER_EPOCH)
-            else if (txnMetadata.pendingTransitionInProgress)
+            else if (txnMetadata.pendingTransitionInProgress && txnMetadata.pendingState.isDefined && txnMetadata.pendingState.get != PrepareEpochFence)
               Left(Errors.CONCURRENT_TRANSACTIONS)
             else txnMetadata.state match {
               case Ongoing =>
@@ -318,6 +319,14 @@ class TransactionCoordinator(brokerId: Int,
                   PrepareCommit
                 else
                   PrepareAbort
+
+                if (nextState == PrepareAbort && txnMetadata.pendingState.isDefined && txnMetadata.pendingState.get == PrepareEpochFence) {
+                  // We should clear the pending state to make way for the transition to PrepareAbort and also bump
+                  // the epoch in the transaction metadata we are about to append.
+                  txnMetadata.pendingState = None
+                  txnMetadata.producerEpoch = producerEpoch
+                }
+
                 Right(coordinatorEpoch, txnMetadata.prepareAbortOrCommit(nextState, time.milliseconds()))
               case CompleteCommit =>
                 if (txnMarkerResult == TransactionResult.COMMIT)
@@ -341,7 +350,7 @@ class TransactionCoordinator(brokerId: Int,
                   logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
               case Empty =>
                 logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
-              case Dead =>
+              case Dead | PrepareEpochFence =>
                 val errorMsg = s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +
                   s"This is illegal as we should never have transitioned to this state."
                 fatal(errorMsg)
@@ -389,7 +398,7 @@ class TransactionCoordinator(brokerId: Int,
                             logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
                           else
                             Right(txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
-                        case Dead =>
+                        case Dead | PrepareEpochFence =>
                           val errorMsg = s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +
                             s"This is illegal as we should never have transitioned to this state."
                           fatal(errorMsg)
@@ -450,23 +459,27 @@ class TransactionCoordinator(brokerId: Int,
             Left(Errors.INVALID_PRODUCER_ID_MAPPING)
           } else {
             val txnMetadata = epochAndTxnMetadata.transactionMetadata
-            txnMetadata.inLock(txnMetadata.fenceProducerEpoch())
-            handleEndTransaction(txnMetadata.transactionalId,
-              txnMetadata.producerId,
-              txnMetadata.producerEpoch,
-              TransactionResult.ABORT,
-              {
-                case Errors.NONE =>
-                  info(s"Completed rollback ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} due to timeout")
-                case e @ (Errors.INVALID_PRODUCER_ID_MAPPING |
-                          Errors.INVALID_PRODUCER_EPOCH |
-                          Errors.CONCURRENT_TRANSACTIONS) =>
-                  debug(s"Rolling back ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} has aborted due to ${e.exceptionName}")
-                case e =>
-                  warn(s"Rolling back ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} failed due to ${e.exceptionName}")
-              })
-            Right(epochAndTxnMetadata)
-          }
+            if (txnMetadata.pendingTransitionInProgress) {
+              Left(Errors.CONCURRENT_TRANSACTIONS)
+            } else {
+              val txnTransitMetadata = txnMetadata.inLock(txnMetadata.prepareFenceProducerEpoch())
+              handleEndTransaction(txnMetadata.transactionalId,
+                txnTransitMetadata.producerId,
+                txnTransitMetadata.producerEpoch,
+                TransactionResult.ABORT,
+                {
+                  case Errors.NONE =>
+                    info(s"Completed rollback ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} due to timeout")
+                  case e @ (Errors.INVALID_PRODUCER_ID_MAPPING |
+                            Errors.INVALID_PRODUCER_EPOCH |
+                            Errors.CONCURRENT_TRANSACTIONS) =>
+                    debug(s"Rolling back ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} has aborted due to ${e.exceptionName}")
+                  case e =>
+                    warn(s"Rolling back ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} failed due to ${e.exceptionName}")
+                })
+              Right(epochAndTxnMetadata)
+            }
+         }
       }
     }
   }
