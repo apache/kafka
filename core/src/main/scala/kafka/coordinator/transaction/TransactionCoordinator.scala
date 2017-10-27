@@ -463,7 +463,7 @@ class TransactionCoordinator(brokerId: Int,
               s"${epochAndTxnMetadata.transactionMetadata.producerId}")
             Left(Errors.INVALID_PRODUCER_ID_MAPPING)
           } else {
-            if (txnMetadata.pendingTransitionInProgress) {
+            if (txnMetadata.inLock(txnMetadata.pendingTransitionInProgress)) {
               Left(Errors.CONCURRENT_TRANSACTIONS)
             } else {
               val txnTransitMetadata = txnMetadata.inLock(txnMetadata.prepareFenceProducerEpoch())
