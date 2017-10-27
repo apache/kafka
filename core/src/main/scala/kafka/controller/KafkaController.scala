@@ -1314,8 +1314,11 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
 
     override def process(): Unit = {
       if (!isActive) return
-      val dataOpt = zkUtils.readDataMaybeNull(ZkUtils.ReassignPartitionsPath)._1
-      dataOpt.map(ZkUtils.parsePartitionReassignmentData).foreach { partitionReassignment =>
+      // We read the reassignment data fresh so that we don't need to maintain it in memory. While
+      // a reassignment is in progress, there can be potentially many reassignment events in the queue
+      // since the completion of every individual reassignment causes the reassignment path to be updated.
+      val reassignmentDataOpt = zkUtils.readDataMaybeNull(ZkUtils.ReassignPartitionsPath)._1
+      reassignmentDataOpt.map(ZkUtils.parsePartitionReassignmentData).foreach { partitionReassignment =>
         val partitionsToBeReassigned = partitionReassignment.filterNot(p => controllerContext.partitionsBeingReassigned.contains(p._1))
         partitionsToBeReassigned.foreach { partitionToBeReassigned =>
           if(topicDeletionManager.isTopicQueuedUpForDeletion(partitionToBeReassigned._1.topic)) {
