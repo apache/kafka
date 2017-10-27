@@ -303,4 +303,19 @@ object CoreUtils extends Logging {
     props.foreach { case (k, v) => properties.put(k, v) }
     properties
   }
+
+  /**
+   * Atomic `getOrElseUpdate` for concurrent maps. This is optimized for the case where
+   * keys often exist in the map, avoiding the need to create a new value. `createValue`
+   * may be invoked more than once if multiple threads attempt to insert a key at the same
+   * time, but the same inserted value will be returned to all threads.
+   */
+  def atomicGetOrUpdate[K, V](map: concurrent.Map[K, V], key: K, createValue: => V): V = {
+    map.get(key) match {
+      case Some(value) => value
+      case None =>
+        val value = createValue
+        map.putIfAbsent(key, value).getOrElse(value)
+    }
+  }
 }
