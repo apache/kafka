@@ -52,6 +52,8 @@ class ZooKeeperClient(connectString: String,
   private val zNodeChangeHandlers = new ConcurrentHashMap[String, ZNodeChangeHandler]().asScala
   private val zNodeChildChangeHandlers = new ConcurrentHashMap[String, ZNodeChildChangeHandler]().asScala
   private val inFlightRequests = new Semaphore(maxInFlightRequests)
+  private val stateChangeHandlers = new ConcurrentHashMap[String, StateChangeHandler]().asScala
+  registerStateChangeHandler(stateChangeHandler)
 
   info(s"Initializing a new session to $connectString.")
   @volatile private var zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher)
@@ -233,6 +235,15 @@ class ZooKeeperClient(connectString: String,
     zNodeChildChangeHandlers.remove(path)
   }
 
+  def registerStateChangeHandler(statusChangeHandler: StateChangeHandler): Unit = {
+    if (statusChangeHandler != null)
+      stateChangeHandlers.put(statusChangeHandler.name, statusChangeHandler)
+  }
+
+  def unregisterStateChangeHandler(path: String): Unit = {
+    stateChangeHandlers.remove(path)
+  }
+
   def close(): Unit = inWriteLock(initializationLock) {
     info("Closing.")
     zNodeChangeHandlers.clear()
@@ -266,7 +277,7 @@ class ZooKeeperClient(connectString: String,
         }
       }
       info(s"Timed out waiting for connection during session initialization while in state: ${zooKeeper.getState}")
-      stateChangeHandler.onReconnectionTimeout()
+      stateChangeHandlers.foreach(_._2.onReconnectionTimeout())
     }
   }
 
@@ -280,13 +291,13 @@ class ZooKeeperClient(connectString: String,
           }
           if (event.getState == KeeperState.AuthFailed) {
             info("Auth failed.")
-            stateChangeHandler.onAuthFailure()
+            stateChangeHandlers.foreach(_._2.onAuthFailure())
           } else if (event.getState == KeeperState.Expired) {
             inWriteLock(initializationLock) {
               info("Session expired.")
-              stateChangeHandler.beforeInitializingSession()
+              stateChangeHandlers.foreach(_._2.beforeInitializingSession())
               initialize()
-              stateChangeHandler.afterInitializingSession()
+              stateChangeHandlers.foreach(_._2.afterInitializingSession())
             }
           }
         case Some(path) =>
@@ -302,6 +313,7 @@ class ZooKeeperClient(connectString: String,
 }
 
 trait StateChangeHandler {
+  val name: String
   def beforeInitializingSession(): Unit = {}
   def afterInitializingSession(): Unit = {}
   def onAuthFailure(): Unit = {}

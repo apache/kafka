@@ -328,6 +328,8 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
     System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, "no-such-file-exists.conf")
     val stateChangeHandlerCountDownLatch = new CountDownLatch(1)
     val stateChangeHandler = new StateChangeHandler {
+      override val name: String =  this.getClass.getName
+
       override def onAuthFailure(): Unit = {
         stateChangeHandlerCountDownLatch.countDown()
       }

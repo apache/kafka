@@ -18,30 +18,15 @@ package kafka.zk
 
 import kafka.server.Defaults
 import kafka.zookeeper.ZooKeeperClient
+import kafka.common.TopicAndPartition
 import org.apache.kafka.common.TopicPartition
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
-import org.junit.{After, Before, Test}
+import org.junit.Test
 
 class KafkaZkClientTest extends ZooKeeperTestHarness {
 
-  private var zooKeeperClient: ZooKeeperClient = null
-  private var zkClient: KafkaZkClient = null
-
   private val group = "my-group"
   private val topicPartition = new TopicPartition("topic", 0)
-
-  @Before
-  override def setUp() {
-    super.setUp()
-    zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Defaults.ZkMaxInFlightRequests, null)
-    zkClient = new KafkaZkClient(zooKeeperClient, false)
-  }
-
-  @After
-  override def tearDown() {
-    zkClient.close()
-    super.tearDown()
-  }
 
   @Test
   def testSetAndGetConsumerOffset() {

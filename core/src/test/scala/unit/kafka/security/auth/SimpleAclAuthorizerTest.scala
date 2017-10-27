@@ -23,7 +23,7 @@ import kafka.network.RequestChannel.Session
 import kafka.security.auth.Acl.WildCardHost
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import kafka.zk.ZooKeeperTestHarness
+import kafka.zk.{AclChangeNotificationZNode, ZooKeeperTestHarness}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -43,6 +43,8 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   @Before
   override def setUp() {
     super.setUp()
+
+    zkClient.createAclPaths
 
     // Increase maxUpdateRetries to avoid transient failures
     simpleAclAuthorizer.maxUpdateRetries = Int.MaxValue
@@ -258,7 +260,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     val acls1 = Set[Acl](acl2)
     simpleAclAuthorizer.addAcls(acls1, resource1)
 
-    zkUtils.deletePathRecursive(SimpleAclAuthorizer.AclChangedZkPath)
+    zkUtils.deletePathRecursive(AclChangeNotificationZNode.path)
     val authorizer = new SimpleAclAuthorizer
     try {
       authorizer.configure(config.originals)
