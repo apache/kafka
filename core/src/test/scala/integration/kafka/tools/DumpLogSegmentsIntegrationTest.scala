@@ -29,13 +29,16 @@ import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/**
+  * Testing of [[DumpLogSegments]] tool
+  */
 class DumpLogSegmentsIntegrationTest extends KafkaServerTestHarness {
 
   override def generateConfigs: Seq[KafkaConfig] = TestUtils.createBrokerConfigs(1, zkConnect)
     .map(KafkaConfig.fromProps(_, new Properties()))
 
   @Test
-  def testSaneOutputForPopulatedLog(): Unit = {
+  def testOutputForJustSentMessagesLogDump(): Unit = {
     val topic = "new-topic"
     val msg = "a test message"
     val producerProps = new Properties
