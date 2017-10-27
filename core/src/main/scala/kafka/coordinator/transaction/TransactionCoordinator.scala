@@ -463,25 +463,31 @@ class TransactionCoordinator(brokerId: Int,
               s"${epochAndTxnMetadata.transactionMetadata.producerId}")
             Left(Errors.INVALID_PRODUCER_ID_MAPPING)
           } else {
-            if (txnMetadata.inLock(txnMetadata.pendingTransitionInProgress)) {
-              Left(Errors.CONCURRENT_TRANSACTIONS)
-            } else {
-              val txnTransitMetadata = txnMetadata.inLock(txnMetadata.prepareFenceProducerEpoch())
-              handleEndTransaction(txnMetadata.transactionalId,
-                txnTransitMetadata.producerId,
-                txnTransitMetadata.producerEpoch,
-                TransactionResult.ABORT,
-                {
-                  case Errors.NONE =>
-                    info(s"Completed rollback ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} due to timeout")
-                  case e @ (Errors.INVALID_PRODUCER_ID_MAPPING |
-                            Errors.INVALID_PRODUCER_EPOCH |
-                            Errors.CONCURRENT_TRANSACTIONS) =>
-                    debug(s"Rolling back ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} has aborted due to ${e.exceptionName}")
-                  case e =>
-                    warn(s"Rolling back ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} failed due to ${e.exceptionName}")
-                })
-              Right(epochAndTxnMetadata)
+            val transitMetadata: Either[Errors, TxnTransitMetadata] = txnMetadata.inLock {
+              if (txnMetadata.pendingTransitionInProgress)
+                Left(Errors.CONCURRENT_TRANSACTIONS)
+              else
+                Right(txnMetadata.prepareFenceProducerEpoch())
+            }
+            transitMetadata match {
+              case Right(txnTransitMetadata) =>
+                handleEndTransaction(txnMetadata.transactionalId,
+                  txnTransitMetadata.producerId,
+                  txnTransitMetadata.producerEpoch,
+                  TransactionResult.ABORT,
+                  {
+                    case Errors.NONE =>
+                      info(s"Completed rollback ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} due to timeout")
+                    case e @ (Errors.INVALID_PRODUCER_ID_MAPPING |
+                              Errors.INVALID_PRODUCER_EPOCH |
+                              Errors.CONCURRENT_TRANSACTIONS) =>
+                      debug(s"Rolling back ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} has aborted due to ${e.exceptionName}")
+                    case e =>
+                      warn(s"Rolling back ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} failed due to ${e.exceptionName}")
+                  })
+                Right(epochAndTxnMetadata)
+              case (error) =>
+                Left(error)
             }
          }
       }
