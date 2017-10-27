@@ -21,7 +21,7 @@ import java.util.{Collections, Properties}
 import java.util.Arrays.asList
 import java.util.concurrent.{ExecutionException, TimeUnit}
 import java.io.File
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 
 import org.apache.kafka.clients.admin.KafkaAdminClientTest
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -45,6 +45,8 @@ import org.junit.Assert._
 
 import scala.util.Random
 import scala.collection.JavaConverters._
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Future}
 
 /**
  * An integration test of the KafkaAdminClient.
@@ -278,13 +280,11 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
       val tp = new TopicPartition(topicPartitionReplica.topic(), topicPartitionReplica.partition())
       assertEquals(server.logManager.getLog(tp).get.dir.getParent, replicaDirInfo.getCurrentReplicaLogDir)
     }
-
-    client.close()
   }
 
   @Test
   def testAlterReplicaLogDirs(): Unit = {
-    val adminClient = AdminClient.create(createConfig())
+    client = AdminClient.create(createConfig())
     val topic = "topic"
     val tp = new TopicPartition(topic, 0)
     val randomNums = servers.map(server => server -> Random.nextInt(2)).toMap
@@ -300,23 +300,21 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     }.toMap
 
     // Verify that replica can be created in the specified log directory
-    adminClient.alterReplicaLogDirs(firstReplicaAssignment.asJava, new AlterReplicaLogDirsOptions()).values().asScala.values.foreach { future =>
-      try {
-        future.get()
-        fail("Future should fail with ReplicaNotAvailableException")
-      } catch {
-        case e: ExecutionException => assertTrue(e.getCause.isInstanceOf[ReplicaNotAvailableException])
-      }
+    val futures = client.alterReplicaLogDirs(firstReplicaAssignment.asJava,
+      new AlterReplicaLogDirsOptions).values.asScala.values
+    futures.foreach { future =>
+      val exception = intercept[ExecutionException](future.get)
+      assertTrue(exception.getCause.isInstanceOf[ReplicaNotAvailableException])
     }
 
-    TestUtils.createTopic(zkUtils, topic, 1, brokerCount, servers, new Properties())
+    TestUtils.createTopic(zkUtils, topic, 1, brokerCount, servers, new Properties)
     servers.foreach { server =>
       val logDir = server.logManager.getLog(tp).get.dir.getParent
       assertEquals(firstReplicaAssignment(new TopicPartitionReplica(topic, 0, server.config.brokerId)), logDir)
     }
 
     // Verify that replica can be moved to the specified log directory after the topic has been created
-    adminClient.alterReplicaLogDirs(secondReplicaAssignment.asJava, new AlterReplicaLogDirsOptions()).all().get()
+    client.alterReplicaLogDirs(secondReplicaAssignment.asJava, new AlterReplicaLogDirsOptions).all.get
     servers.foreach { server =>
       TestUtils.waitUntilTrue(() => {
         val logDir = server.logManager.getLog(tp).get.dir.getParent
@@ -326,48 +324,45 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
 
     // Verify that replica can be moved to the specified log directory while the producer is sending messages
     val running = new AtomicBoolean(true)
-    @volatile var numMessages = 0
-    val thread = new Thread() {
-      override def run(): Unit = {
-        val producer = TestUtils.createNewProducer(
-          TestUtils.getBrokerListStrFromServers(servers, protocol = securityProtocol),
-          securityProtocol = securityProtocol,
-          trustStoreFile = trustStoreFile,
-          retries = 0, // Producer should not have to retry when broker is moving replica between log directories.
-          requestTimeoutMs = 2000,
-          acks = -1
-        )
-
-        while (running.get()) {
+    val numMessages = new AtomicInteger
+    import scala.concurrent.ExecutionContext.Implicits._
+    val producerFuture = Future {
+      val producer = TestUtils.createNewProducer(
+        TestUtils.getBrokerListStrFromServers(servers, protocol = securityProtocol),
+        securityProtocol = securityProtocol,
+        trustStoreFile = trustStoreFile,
+        retries = 0, // Producer should not have to retry when broker is moving replica between log directories.
+        requestTimeoutMs = 10000,
+        acks = -1
+      )
+      try {
+        while (running.get) {
           val future = producer.send(new ProducerRecord(topic, s"xxxxxxxxxxxxxxxxxxxx-$numMessages".getBytes))
-          numMessages += 1
-          future.get()
+          numMessages.incrementAndGet()
+          future.get(10, TimeUnit.SECONDS)
         }
-        producer.close()
-      }
+        numMessages.get
+      } finally producer.close()
     }
 
     try {
-      thread.start()
-      TestUtils.waitUntilTrue(() => numMessages > 100, "timed out waiting for message produce", 6000L)
-      adminClient.alterReplicaLogDirs(firstReplicaAssignment.asJava, new AlterReplicaLogDirsOptions()).all().get()
+      TestUtils.waitUntilTrue(() => numMessages.get > 100, "timed out waiting for message produce", 6000L)
+      client.alterReplicaLogDirs(firstReplicaAssignment.asJava, new AlterReplicaLogDirsOptions).all.get
       servers.foreach { server =>
         TestUtils.waitUntilTrue(() => {
           val logDir = server.logManager.getLog(tp).get.dir.getParent
           firstReplicaAssignment(new TopicPartitionReplica(topic, 0, server.config.brokerId)) == logDir
         }, "timed out waiting for replica movement", 6000L)
       }
-    } finally {
-      running.set(false)
-      thread.join()
-    }
+    } finally running.set(false)
+
+    val finalNumMessages = Await.result(producerFuture, Duration(20, TimeUnit.SECONDS))
 
     // Verify that all messages that are produced can be consumed
-    val consumerRecords = TestUtils.consumeTopicRecords(servers, topic, numMessages, securityProtocol, trustStoreFile)
+    val consumerRecords = TestUtils.consumeTopicRecords(servers, topic, finalNumMessages, securityProtocol, trustStoreFile)
     consumerRecords.zipWithIndex.foreach { case (consumerRecord, index) =>
-      assertEquals(s"xxxxxxxxxxxxxxxxxxxx-$index", new String(consumerRecord.value()))
+      assertEquals(s"xxxxxxxxxxxxxxxxxxxx-$index", new String(consumerRecord.value))
     }
-    adminClient.close()
   }
 
   @Test
