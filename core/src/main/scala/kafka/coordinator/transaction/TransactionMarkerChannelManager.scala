@@ -20,7 +20,7 @@ package kafka.coordinator.transaction
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{DelayedOperationPurgatory, KafkaConfig, MetadataCache}
-import kafka.utils.Logging
+import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.clients._
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.metrics.Metrics
@@ -102,7 +102,8 @@ class TxnMarkerQueue(@volatile var destination: Node) {
   }
 
   def addMarkers(txnTopicPartition: Int, txnIdAndMarker: TxnIdAndMarkerEntry): Unit = {
-    val queue = markersPerTxnTopicPartition.getOrElseUpdate(txnTopicPartition, new LinkedBlockingQueue[TxnIdAndMarkerEntry]())
+    val queue = CoreUtils.atomicGetOrUpdate(markersPerTxnTopicPartition, txnTopicPartition,
+        new LinkedBlockingQueue[TxnIdAndMarkerEntry]())
     queue.add(txnIdAndMarker)
   }
 
@@ -169,7 +170,8 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
 
     // we do not synchronize on the update of the broker node with the enqueuing,
     // since even if there is a race condition we will just retry
-    val brokerRequestQueue = markersQueuePerBroker.getOrElseUpdate(brokerId, new TxnMarkerQueue(broker))
+    val brokerRequestQueue = CoreUtils.atomicGetOrUpdate(markersQueuePerBroker, brokerId,
+        new TxnMarkerQueue(broker))
     brokerRequestQueue.destination = broker
     brokerRequestQueue.addMarkers(txnTopicPartition, txnIdAndMarker)
 
@@ -184,7 +186,6 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
       tryAppendToLog(txnLogAppend)
     }
   }
-
 
   private[transaction] def drainQueuedTransactionMarkers(): Iterable[RequestAndCompletionHandler] = {
     retryLogAppends()
