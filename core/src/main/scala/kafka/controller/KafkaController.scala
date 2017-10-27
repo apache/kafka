@@ -816,6 +816,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     if (reassignment.isEmpty) {
       info("No more partitions need to be reassigned. Deleting zk path %s".format(ReassignPartitionsZNode.path))
       zkClient.deletePartitionReassignment()
+      zkClient.registerZNodeChangeHandlerAndCheckExistence(partitionReassignmentHandler)
     } else {
       val setDataResponse = zkClient.setPartitionReassignmentRaw(reassignment)
       if (setDataResponse.resultCode == Code.NONODE) {
@@ -1451,8 +1452,6 @@ class PartitionReassignmentHandler(controller: KafkaController, eventManager: Co
   override val path: String = ReassignPartitionsZNode.path
 
   override def handleCreation(): Unit = eventManager.put(controller.PartitionReassignment)
-  override def handleDeletion(): Unit = eventManager.put(controller.PartitionReassignment)
-  override def handleDataChange(): Unit = eventManager.put(controller.PartitionReassignment)
 }
 
 class PartitionReassignmentIsrChangeHandler(controller: KafkaController, eventManager: ControllerEventManager, partition: TopicAndPartition) extends ZNodeChangeHandler {

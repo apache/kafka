@@ -470,6 +470,67 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     assertEquals(Seq(3), zkUtils.getReplicasForPartition("customers", 3))
   }
 
+  /**
+   * This test verifies that the Controller restores the watch for the reassignment znode after the first rebalance
+   * completes.
+   */
+  @Test
+  def shouldPerformTwoReassignmentOperationsOverVariousTopics() {
+    servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(conf => TestUtils.createServer(KafkaConfig.fromProps(conf)))
+
+    createTopic(zkUtils, "orders", Map(0 -> List(0, 1, 2), 1 -> List(0, 1, 2)), servers)
+    createTopic(zkUtils, "payments", Map(0 -> List(0, 1), 1 -> List(0, 1)), servers)
+    createTopic(zkUtils, "deliveries", Map(0 -> List(0)), servers)
+    createTopic(zkUtils, "customers", Map(0 -> List(0), 1 -> List(1), 2 -> List(2), 3 -> List(3)), servers)
+
+    val firstMove = Map(
+      TopicAndPartition("orders", 0) -> Seq(0, 2, 3), //moves
+      TopicAndPartition("orders", 1) -> Seq(0, 1, 2), //stays
+      TopicAndPartition("payments", 1) -> Seq(1, 2), //only define one partition as moving
+      TopicAndPartition("deliveries", 0) -> Seq(1, 2) //increase replication factor
+    )
+
+    new ReassignPartitionsCommand(zkUtils, None, firstMove).reassignPartitions()
+    waitForReassignmentToComplete()
+
+    // Check moved replicas did move
+    assertEquals(Seq(0, 2, 3), zkUtils.getReplicasForPartition("orders", 0))
+    assertEquals(Seq(0, 1, 2), zkUtils.getReplicasForPartition("orders", 1))
+    assertEquals(Seq(1, 2), zkUtils.getReplicasForPartition("payments", 1))
+    assertEquals(Seq(1, 2), zkUtils.getReplicasForPartition("deliveries", 0))
+
+    // Check untouched replicas are still there
+    assertEquals(Seq(0, 1), zkUtils.getReplicasForPartition("payments", 0))
+    assertEquals(Seq(0), zkUtils.getReplicasForPartition("customers", 0))
+    assertEquals(Seq(1), zkUtils.getReplicasForPartition("customers", 1))
+    assertEquals(Seq(2), zkUtils.getReplicasForPartition("customers", 2))
+    assertEquals(Seq(3), zkUtils.getReplicasForPartition("customers", 3))
+
+    // Define a move for some of them
+    val secondMove = Map(
+      TopicAndPartition("orders", 0) -> Seq(0, 2, 3), // stays
+      TopicAndPartition("orders", 1) -> Seq(3, 1, 2), // moves
+      TopicAndPartition("payments", 1) -> Seq(2, 1), // changed assigned leader
+      TopicAndPartition("deliveries", 0) -> Seq(1, 2, 3) //increase replication factor
+    )
+
+    new ReassignPartitionsCommand(zkUtils, None, secondMove).reassignPartitions()
+    waitForReassignmentToComplete()
+
+    // Check moved replicas did move
+    assertEquals(Seq(0, 2, 3), zkUtils.getReplicasForPartition("orders", 0))
+    assertEquals(Seq(3, 1, 2), zkUtils.getReplicasForPartition("orders", 1))
+    assertEquals(Seq(2, 1), zkUtils.getReplicasForPartition("payments", 1))
+    assertEquals(Seq(1, 2, 3), zkUtils.getReplicasForPartition("deliveries", 0))
+
+    //Check untouched replicas are still there
+    assertEquals(Seq(0, 1), zkUtils.getReplicasForPartition("payments", 0))
+    assertEquals(Seq(0), zkUtils.getReplicasForPartition("customers", 0))
+    assertEquals(Seq(1), zkUtils.getReplicasForPartition("customers", 1))
+    assertEquals(Seq(2), zkUtils.getReplicasForPartition("customers", 2))
+    assertEquals(Seq(3), zkUtils.getReplicasForPartition("customers", 3))
+  }
+
   def waitForReassignmentToComplete() {
     waitUntilTrue(() => !zkUtils.pathExists(ReassignPartitionsPath), s"Znode ${ZkUtils.ReassignPartitionsPath} wasn't deleted")
   }
