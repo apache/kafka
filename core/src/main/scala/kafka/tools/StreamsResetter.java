@@ -74,12 +74,21 @@ public class StreamsResetter {
     private static OptionSpec<String> applicationIdOption;
     private static OptionSpec<String> inputTopicsOption;
     private static OptionSpec<String> intermediateTopicsOption;
+    private static OptionSpec<Long> toOffsetOption;
+    private static OptionSpec<String> toDatetimeOption;
+    private static OptionSpec<String> byDurationOption;
+    private static OptionSpecBuilder toEarliestOption;
+    private static OptionSpecBuilder toLatestOption;
+    private static OptionSpecBuilder toCurrentOption;
+    private static OptionSpec<Long> shiftByOption;
     private static OptionSpecBuilder dryRunOption;
     private static OptionSpec<String> commandConfigOption;
 
     private OptionSet options = null;
     private final List<String> allTopics = new LinkedList<>();
     private boolean dryRun = false;
+    private String scenario = "to-earliest";
+
 
     public int run(final String[] args) {
         return run(args, new Properties());
@@ -169,6 +178,22 @@ public class StreamsResetter {
             .ofType(String.class)
             .withValuesSeparatedBy(',')
             .describedAs("list");
+        toOffsetOption = optionParser.accepts("to-offset", "Reset offsets to a specific offset.")
+            .withRequiredArg()
+            .ofType(Long.class);
+        toDatetimeOption = optionParser.accepts("to-datetime", "Reset offsets to offset from datetime. Format: 'YYYY-MM-DDTHH:mm:SS.sss'")
+            .withRequiredArg()
+            .ofType(String.class);
+        byDurationOption = optionParser.accepts("by-duration", "Reset offsets to offset by duration from current timestamp. Format: 'PnDTnHnMnS'")
+            .withRequiredArg()
+            .ofType(String.class);
+        toEarliestOption = optionParser.accepts("to-earliest", "Reset offsets to earliest offset.");
+        toLatestOption = optionParser.accepts("to-latest", "Reset offsets to latest offset.");
+        toCurrentOption = optionParser.accepts("to-current", "Reset offsets to current offset.");
+        shiftByOption = optionParser.accepts("shift-by", "Reset offsets shifting current offset by 'n', where 'n' can be positive or negative")
+            .withRequiredArg()
+            .describedAs("number-of-offsets")
+            .ofType(Long.class);
         commandConfigOption = optionParser.accepts("config-file", "Property file containing configs to be passed to admin clients and embedded consumer.")
             .withRequiredArg()
             .ofType(String.class)
@@ -184,6 +209,23 @@ public class StreamsResetter {
             printHelp(optionParser);
             throw e;
         }
+
+        /*HashSet<OptionSpec<?>> allScenarioOptions = new HashSet<>();
+        allScenarioOptions.add(toOffsetOption);
+        allScenarioOptions.add(toDatetimeOption);
+        allScenarioOptions.add(byDurationOption);
+        allScenarioOptions.add(toEarliestOption);
+        allScenarioOptions.add(toLatestOption);
+        allScenarioOptions.add(toCurrentOption);
+        allScenarioOptions.add(shiftByOption);
+
+        CommandLineUtils.checkInvalidArgs(optionParser, options, toOffsetOption, allScenarioOptions.$minus$eq(toOffsetOption));
+        CommandLineUtils.checkInvalidArgs(optionParser, options, toDatetimeOption, allScenarioOptions.$minus$eq(toDatetimeOption));
+        CommandLineUtils.checkInvalidArgs(optionParser, options, byDurationOption, allScenarioOptions.$minus$eq(byDurationOption));
+        CommandLineUtils.checkInvalidArgs(optionParser, options, toEarliestOption, allScenarioOptions.$minus$eq(toEarliestOption));
+        CommandLineUtils.checkInvalidArgs(optionParser, options, toLatestOption, allScenarioOptions.$minus$eq(toLatestOption));
+        CommandLineUtils.checkInvalidArgs(optionParser, options, toCurrentOption, allScenarioOptions.$minus$eq(toCurrentOption));
+        CommandLineUtils.checkInvalidArgs(optionParser, options, shiftByOption, allScenarioOptions.$minus$eq(shiftByOption));*/
     }
 
     private void maybeResetInputAndSeekToEndIntermediateTopicOffsets(final Map consumerConfig) {
@@ -249,8 +291,7 @@ public class StreamsResetter {
                 }
             }
 
-            //
-            maybeSeekToBeginning(client, inputTopicPartitions);
+            maybeReset(client, inputTopicPartitions);
 
             maybeSeekToEnd(client, intermediateTopicPartitions);
 
@@ -301,14 +342,15 @@ public class StreamsResetter {
         }
     }
 
-    private void maybeSeekToBeginning(final KafkaConsumer<byte[], byte[]> client,
-                                      final Set<TopicPartition> inputTopicPartitions) {
+    private void maybeReset(final KafkaConsumer<byte[], byte[]> client,
+                            final Set<TopicPartition> inputTopicPartitions) {
 
         final List<String> inputTopics = options.valuesOf(inputTopicsOption);
         final String groupId = options.valueOf(applicationIdOption);
 
         if (inputTopicPartitions.size() > 0) {
             System.out.println("Following input topics offsets will be reset to beginning (for consumer group " + groupId + ")");
+            //TODO implement reset offset logic by scenario
             for (final String topic : inputTopics) {
                 if (allTopics.contains(topic)) {
                     System.out.println("Topic: " + topic);
