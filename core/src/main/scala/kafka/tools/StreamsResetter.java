@@ -249,6 +249,7 @@ public class StreamsResetter {
                 }
             }
 
+            //
             maybeSeekToBeginning(client, inputTopicPartitions);
 
             maybeSeekToEnd(client, intermediateTopicPartitions);

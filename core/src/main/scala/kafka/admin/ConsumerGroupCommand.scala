@@ -529,8 +529,8 @@ object ConsumerGroupCommand extends Logging {
         case "Empty" | "Dead" =>
           val partitionsToReset = getPartitionsToReset(groupId)
           val preparedOffsets = prepareOffsetsToReset(groupId, partitionsToReset)
-          val execute = opts.options.has(opts.executeOpt)
-          if (execute)
+          val dryRun = opts.options.has(opts.dryRunOpt)
+          if (!dryRun)
             getConsumer().commitSync(preparedOffsets.asJava)
           preparedOffsets
         case currentState =>
@@ -727,7 +727,7 @@ object ConsumerGroupCommand extends Logging {
       "Has 3 execution options: (default) to plan which offsets to reset, --execute to execute the reset-offsets process, and --export to export the results to a CSV format." + nl +
       "Has the following scenarios to choose: --to-datetime, --by-period, --to-earliest, --to-latest, --shift-by, --from-file, --to-current. One scenario must be choose" + nl +
       "To define the scope use: --all-topics or --topic. . One scope must be choose, unless you use '--from-file' scenario"
-    val ExecuteDoc = "Execute operation. Supported operations: reset-offsets."
+    val DryRunDoc = "Only show results without executing changes on Consumer Groups. Supported operations: reset-offsets."
     val ExportDoc = "Export operation execution to a CSV file. Supported operations: reset-offsets."
     val ResetToOffsetDoc = "Reset offsets to a specific offset."
     val ResetFromFileDoc = "Reset offsets to values defined in CSV file."
@@ -770,7 +770,7 @@ object ConsumerGroupCommand extends Logging {
                                   .describedAs("command config property file")
                                   .ofType(classOf[String])
     val resetOffsetsOpt = parser.accepts("reset-offsets", ResetOffsetsDoc)
-    val executeOpt = parser.accepts("execute", ExecuteDoc)
+    val dryRunOpt = parser.accepts("dry-run", DryRunDoc)
     val exportOpt = parser.accepts("export", ExportDoc)
     val resetToOffsetOpt = parser.accepts("to-offset", ResetToOffsetDoc)
                            .withRequiredArg()
