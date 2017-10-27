@@ -464,7 +464,7 @@ class TransactionsTest extends KafkaServerTestHarness {
 
     // The first message and hence the first AddPartitions request should be successfully sent.
     val firstMessageResult = producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, "1", "1", willBeCommitted = false)).get()
-    assertTrue(firstMessageResult.hasOffset)
+    assertTrue(firstMessageResult.offset() != -1)
 
     // Wait for the expiration cycle to kick in.
     Thread.sleep(600)
