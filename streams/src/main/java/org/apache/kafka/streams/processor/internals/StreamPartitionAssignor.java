@@ -674,13 +674,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
         if (!topicsToMakeReady.isEmpty()) {
             internalTopicManager.makeReady(topicsToMakeReady);
 
-            // wait until each one of the topic metadata has been propagated to at least one broker
-            while (!allTopicsCreated(topicNamesToMakeReady, topicsToMakeReady)) {
-                try {
-                    Thread.sleep(50L);
-                } catch (InterruptedException e) {
-                    // ignore
-                }
+            if (!allTopicsCreated(topicNamesToMakeReady, topicsToMakeReady)) {
+                throw new org.apache.kafka.streams.errors.TopologyBuilderException("Internal topic(s) not found");
             }
         }
 
