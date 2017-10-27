@@ -452,13 +452,16 @@ class TransactionCoordinator(brokerId: Int,
           Left(Errors.INVALID_TXN_STATE)
 
         case Some(epochAndTxnMetadata) =>
-          if (epochAndTxnMetadata.transactionMetadata.producerId != txnIdAndPidEpoch.producerId) {
+          val txnMetadata = epochAndTxnMetadata.transactionMetadata
+          val producerIdHasChanged = txnMetadata.inLock {
+            txnMetadata.producerId != txnIdAndPidEpoch.producerId
+          }
+          if (producerIdHasChanged) {
             error(s"Found incorrect producerId when expiring transactionalId: ${txnIdAndPidEpoch.transactionalId}. " +
               s"Expected producerId: ${txnIdAndPidEpoch.producerId}. Found producerId: " +
               s"${epochAndTxnMetadata.transactionMetadata.producerId}")
             Left(Errors.INVALID_PRODUCER_ID_MAPPING)
           } else {
-            val txnMetadata = epochAndTxnMetadata.transactionMetadata
             if (txnMetadata.pendingTransitionInProgress) {
               Left(Errors.CONCURRENT_TRANSACTIONS)
             } else {
