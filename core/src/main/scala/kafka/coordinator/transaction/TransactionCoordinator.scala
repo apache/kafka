@@ -311,7 +311,7 @@ class TransactionCoordinator(brokerId: Int,
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
             else if (producerEpoch < txnMetadata.producerEpoch)
               Left(Errors.INVALID_PRODUCER_EPOCH)
-            else if (txnMetadata.pendingTransitionInProgress && txnMetadata.pendingState.isDefined && txnMetadata.pendingState.get != PrepareEpochFence)
+            else if (txnMetadata.pendingTransitionInProgress && txnMetadata.pendingState.get != PrepareEpochFence)
               Left(Errors.CONCURRENT_TRANSACTIONS)
             else txnMetadata.state match {
               case Ongoing =>
@@ -320,7 +320,8 @@ class TransactionCoordinator(brokerId: Int,
                 else
                   PrepareAbort
 
-                if (nextState == PrepareAbort && txnMetadata.pendingState.isDefined && txnMetadata.pendingState.get == PrepareEpochFence) {
+                if (nextState == PrepareAbort && txnMetadata.pendingState.isDefined
+                  && txnMetadata.pendingState.get == PrepareEpochFence) {
                   // We should clear the pending state to make way for the transition to PrepareAbort and also bump
                   // the epoch in the transaction metadata we are about to append.
                   txnMetadata.pendingState = None
