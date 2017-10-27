@@ -545,7 +545,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
   }
 
   def initiateReassignReplicasForTopicPartition(topicAndPartition: TopicAndPartition,
-                                        reassignedPartitionContext: ReassignedPartitionsContext) {
+                                                reassignedPartitionContext: ReassignedPartitionsContext) {
     val newReplicas = reassignedPartitionContext.newReplicas
     val topic = topicAndPartition.topic
     val partition = topicAndPartition.partition
@@ -1245,25 +1245,26 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
     }
   }
 
-  case class PartitionReassignment(partitionReassignment: Map[TopicAndPartition, Seq[Int]]) extends ControllerEvent {
+  case object PartitionReassignment extends ControllerEvent {
 
     def state = ControllerState.PartitionReassignment
 
     override def process(): Unit = {
       if (!isActive) return
+      // We read the reassignment data fresh so that we don't need to maintain it in memory. While
+      // a reassignment is in progress, there can be potentially many reassignment events in the queue
+      // since the completion of every individual reassignment causes the reassignment path to be updated.
+      val partitionReassignment = zkUtils.getPartitionsBeingReassigned()
       val partitionsToBeReassigned = partitionReassignment.filterNot(p => controllerContext.partitionsBeingReassigned.contains(p._1))
-      partitionsToBeReassigned.foreach { partitionToBeReassigned =>
-        if(topicDeletionManager.isTopicQueuedUpForDeletion(partitionToBeReassigned._1.topic)) {
-          error("Skipping reassignment of partition %s for topic %s since it is currently being deleted"
-            .format(partitionToBeReassigned._1, partitionToBeReassigned._1.topic))
-          removePartitionFromReassignedPartitions(partitionToBeReassigned._1)
+      partitionsToBeReassigned.foreach { case (partition, context) =>
+        if(topicDeletionManager.isTopicQueuedUpForDeletion(partition.topic)) {
+          error(s"Skipping reassignment of partition $partition since it is currently being deleted")
+          removePartitionFromReassignedPartitions(partition)
         } else {
-          val context = ReassignedPartitionsContext(partitionToBeReassigned._2)
-          initiateReassignReplicasForTopicPartition(partitionToBeReassigned._1, context)
+          initiateReassignReplicasForTopicPartition(partition, context)
         }
       }
     }
-
   }
 
   case class PartitionReassignmentIsrChange(topicAndPartition: TopicAndPartition, reassignedReplicas: Set[Int]) extends ControllerEvent {
@@ -1639,8 +1640,7 @@ class TopicDeletionListener(controller: KafkaController, eventManager: Controlle
  */
 class PartitionReassignmentListener(controller: KafkaController, eventManager: ControllerEventManager) extends IZkDataListener with Logging {
   override def handleDataChange(dataPath: String, data: Any): Unit = {
-    val partitionReassignment = ZkUtils.parsePartitionReassignmentData(data.toString)
-    eventManager.put(controller.PartitionReassignment(partitionReassignment))
+    eventManager.put(controller.PartitionReassignment)
   }
 
   override def handleDataDeleted(dataPath: String): Unit = {}

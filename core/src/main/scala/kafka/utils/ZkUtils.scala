@@ -787,7 +787,7 @@ class ZkUtils(val zkClient: ZkClient,
     jsonPartitionMapOpt match {
       case Some(jsonPartitionMap) =>
         val reassignedPartitions = parsePartitionReassignmentData(jsonPartitionMap)
-        reassignedPartitions.map(p => p._1 -> new ReassignedPartitionsContext(p._2))
+        reassignedPartitions.map(p => p._1 -> ReassignedPartitionsContext(p._2))
       case None => Map.empty[TopicAndPartition, ReassignedPartitionsContext]
     }
   }
