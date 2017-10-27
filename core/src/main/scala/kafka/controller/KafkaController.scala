@@ -596,7 +596,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
   }
 
   def initiateReassignReplicasForTopicPartition(topicAndPartition: TopicAndPartition,
-                                        reassignedPartitionContext: ReassignedPartitionsContext) {
+                                                reassignedPartitionContext: ReassignedPartitionsContext) {
     val newReplicas = reassignedPartitionContext.newReplicas
     val topic = topicAndPartition.topic
     val partition = topicAndPartition.partition
@@ -1317,18 +1317,14 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
       // We read the reassignment data fresh so that we don't need to maintain it in memory. While
       // a reassignment is in progress, there can be potentially many reassignment events in the queue
       // since the completion of every individual reassignment causes the reassignment path to be updated.
-      val reassignmentDataOpt = zkUtils.readDataMaybeNull(ZkUtils.ReassignPartitionsPath)._1
-      reassignmentDataOpt.map(ZkUtils.parsePartitionReassignmentData).foreach { partitionReassignment =>
-        val partitionsToBeReassigned = partitionReassignment.filterNot(p => controllerContext.partitionsBeingReassigned.contains(p._1))
-        partitionsToBeReassigned.foreach { partitionToBeReassigned =>
-          if(topicDeletionManager.isTopicQueuedUpForDeletion(partitionToBeReassigned._1.topic)) {
-            error("Skipping reassignment of partition %s for topic %s since it is currently being deleted"
-              .format(partitionToBeReassigned._1, partitionToBeReassigned._1.topic))
-            removePartitionFromReassignedPartitions(partitionToBeReassigned._1)
-          } else {
-            val context = ReassignedPartitionsContext(partitionToBeReassigned._2)
-            initiateReassignReplicasForTopicPartition(partitionToBeReassigned._1, context)
-          }
+      val partitionReassignment = zkUtils.getPartitionsBeingReassigned()
+      val partitionsToBeReassigned = partitionReassignment.filterNot(p => controllerContext.partitionsBeingReassigned.contains(p._1))
+      partitionsToBeReassigned.foreach { case (partition, context) =>
+        if(topicDeletionManager.isTopicQueuedUpForDeletion(partition.topic)) {
+          error(s"Skipping reassignment of partition $partition since it is currently being deleted")
+          removePartitionFromReassignedPartitions(partition)
+        } else {
+          initiateReassignReplicasForTopicPartition(partition, context)
         }
       }
     }
