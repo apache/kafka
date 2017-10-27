@@ -485,7 +485,7 @@ class TransactionCoordinator(brokerId: Int,
                     case e =>
                       warn(s"Rolling back ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} failed due to ${e.exceptionName}")
                   })
-                Right(epochAndTxnMetadata)
+                Right(txnTransitMetadata)
               case (error) =>
                 Left(error)
             }
