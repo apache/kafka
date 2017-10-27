@@ -192,7 +192,7 @@ class CoreUtilsTest extends JUnitSuite {
     val map = new ConcurrentHashMap[Int, AtomicInteger]().asScala
     implicit val executionContext = ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(nThreads))
     try {
-      Await.ready(Future.traverse(1 to count) { i =>
+      Await.result(Future.traverse(1 to count) { i =>
         Future {
           CoreUtils.atomicGetOrUpdate(map, 0, {
             createdCount.incrementAndGet
