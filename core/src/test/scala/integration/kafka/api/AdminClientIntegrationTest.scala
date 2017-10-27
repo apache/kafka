@@ -280,13 +280,11 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
       val tp = new TopicPartition(topicPartitionReplica.topic(), topicPartitionReplica.partition())
       assertEquals(server.logManager.getLog(tp).get.dir.getParent, replicaDirInfo.getCurrentReplicaLogDir)
     }
-
-    client.close()
   }
 
   @Test
   def testAlterReplicaLogDirs(): Unit = {
-    val adminClient = AdminClient.create(createConfig())
+    client = AdminClient.create(createConfig())
     val topic = "topic"
     val tp = new TopicPartition(topic, 0)
     val randomNums = servers.map(server => server -> Random.nextInt(2)).toMap
@@ -302,7 +300,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     }.toMap
 
     // Verify that replica can be created in the specified log directory
-    val futures = adminClient.alterReplicaLogDirs(firstReplicaAssignment.asJava,
+    val futures = client.alterReplicaLogDirs(firstReplicaAssignment.asJava,
       new AlterReplicaLogDirsOptions).values.asScala.values
     futures.foreach { future =>
       val exception = intercept[ExecutionException](future.get)
@@ -316,7 +314,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     }
 
     // Verify that replica can be moved to the specified log directory after the topic has been created
-    adminClient.alterReplicaLogDirs(secondReplicaAssignment.asJava, new AlterReplicaLogDirsOptions).all.get
+    client.alterReplicaLogDirs(secondReplicaAssignment.asJava, new AlterReplicaLogDirsOptions).all.get
     servers.foreach { server =>
       TestUtils.waitUntilTrue(() => {
         val logDir = server.logManager.getLog(tp).get.dir.getParent
@@ -349,7 +347,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
 
     try {
       TestUtils.waitUntilTrue(() => numMessages.get > 100, "timed out waiting for message produce", 6000L)
-      adminClient.alterReplicaLogDirs(firstReplicaAssignment.asJava, new AlterReplicaLogDirsOptions).all.get
+      client.alterReplicaLogDirs(firstReplicaAssignment.asJava, new AlterReplicaLogDirsOptions).all.get
       servers.foreach { server =>
         TestUtils.waitUntilTrue(() => {
           val logDir = server.logManager.getLog(tp).get.dir.getParent
