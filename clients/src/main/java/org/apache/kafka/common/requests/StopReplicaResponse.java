@@ -26,6 +26,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -86,7 +87,9 @@ public class StopReplicaResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return errorCounts(error);
+        if (error != Errors.NONE)
+            return Collections.singletonMap(error, responses.size());
+        return errorCounts(responses);
     }
 
     public static StopReplicaResponse parse(ByteBuffer buffer, short version) {
