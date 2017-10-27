@@ -77,6 +77,12 @@ private[transaction] case object CompleteAbort extends TransactionState { val by
   */
 private[transaction] case object Dead extends TransactionState { val byte: Byte = 6 }
 
+/**
+  * We are in the middle of bumping the epoch and fencing out older producers.
+  */
+
+private[transaction] case object PrepareEpochFence extends TransactionState { val byte: Byte = 7}
+
 private[transaction] object TransactionMetadata {
   def apply(transactionalId: String, producerId: Long, producerEpoch: Short, txnTimeoutMs: Int, timestamp: Long) =
     new TransactionMetadata(transactionalId, producerId, producerEpoch, txnTimeoutMs, Empty,
@@ -96,6 +102,7 @@ private[transaction] object TransactionMetadata {
       case 4 => CompleteCommit
       case 5 => CompleteAbort
       case 6 => Dead
+      case 7 => PrepareEpochFence
       case unknown => throw new IllegalStateException("Unknown transaction state byte " + unknown + " from the transaction status message")
     }
   }
@@ -107,10 +114,12 @@ private[transaction] object TransactionMetadata {
     Map(Empty -> Set(Empty, CompleteCommit, CompleteAbort),
       Ongoing -> Set(Ongoing, Empty, CompleteCommit, CompleteAbort),
       PrepareCommit -> Set(Ongoing),
-      PrepareAbort -> Set(Ongoing),
+      PrepareAbort -> Set(Ongoing, PrepareEpochFence),
       CompleteCommit -> Set(PrepareCommit),
       CompleteAbort -> Set(PrepareAbort),
-      Dead -> Set(Empty, CompleteAbort, CompleteCommit))
+      Dead -> Set(Empty, CompleteAbort, CompleteCommit),
+      PrepareEpochFence -> Set(Ongoing)
+    )
 }
 
 // this is a immutable object representing the target transition of the transaction metadata
@@ -184,11 +193,8 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
     if (producerEpoch == Short.MaxValue)
       throw new IllegalStateException(s"Cannot fence producer with epoch equal to Short.MaxValue since this would overflow")
 
-    // bump up the epoch to let the txn markers be able to override the current producer epoch
-    producerEpoch = (producerEpoch + 1).toShort
-
-    // do not call transitTo as it will set the pending state, a follow-up call to abort the transaction will set its pending state
-    TxnTransitMetadata(producerId, producerEpoch, txnTimeoutMs, state, topicPartitions.toSet, txnStartTimestamp, txnLastUpdateTimestamp)
+    prepareTransitionTo(PrepareEpochFence, producerId, (producerEpoch + 1).toShort, txnTimeoutMs, topicPartitions.toSet,
+      txnStartTimestamp, txnLastUpdateTimestamp)
   }
 
   def prepareIncrementProducerEpoch(newTxnTimeoutMs: Int, updateTimestamp: Long): TxnTransitMetadata = {
@@ -342,6 +348,14 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
             txnStartTimestamp = transitMetadata.txnStartTimestamp
             topicPartitions.clear()
           }
+
+        case PrepareEpochFence =>
+          // We should never get here, since once we prepare to fence the epoch, we immediately set the pending state
+          // to PrepareAbort, and then consequently to CompleteAbort after the markers are written.. So we should never
+          // ever try to complete a transition to PrepareEpochFence, as it is not a valid previous state for any other state, and hence
+          // can never be transitioned out of.
+          throwStateTransitionFailure(transitMetadata)
+
 
         case Dead =>
           // The transactionalId was being expired. The completion of the operation should result in removal of the
