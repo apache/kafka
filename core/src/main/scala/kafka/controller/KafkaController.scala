@@ -1432,6 +1432,10 @@ class LogDirEventNotificationHandler(controller: KafkaController, eventManager: 
   override def handleChildChange(): Unit = eventManager.put(controller.LogDirEventNotification)
 }
 
+object LogDirEventNotificationHandler {
+  val Version: Long = 1L
+}
+
 class PartitionModificationsHandler(controller: KafkaController, eventManager: ControllerEventManager, topic: String) extends ZNodeChangeHandler {
   override val path: String = TopicZNode.path(topic)
 
@@ -1465,6 +1469,10 @@ class IsrChangeNotificationHandler(controller: KafkaController, eventManager: Co
   override def handleChildChange(): Unit = eventManager.put(controller.IsrChangeNotification)
 }
 
+object IsrChangeNotificationHandler {
+  val Version: Long = 1L
+}
+
 class PreferredReplicaElectionHandler(controller: KafkaController, eventManager: ControllerEventManager) extends ZNodeChangeHandler {
   override val path: String = PreferredReplicaElectionZNode.path
 
@@ -1479,14 +1487,6 @@ class ControllerChangeHandler(controller: KafkaController, eventManager: Control
   override def handleCreation(): Unit = eventManager.put(controller.ControllerChange)
   override def handleDeletion(): Unit = eventManager.put(controller.Reelect)
   override def handleDataChange(): Unit = eventManager.put(controller.ControllerChange)
-}
-
-object LogDirEventNotificationListener {
-  val version: Long = 1L
-}
-
-object IsrChangeNotificationListener {
-  val version: Long = 1L
 }
 
 case class ReassignedPartitionsContext(var newReplicas: Seq[Int] = Seq.empty,
