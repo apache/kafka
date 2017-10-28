@@ -26,6 +26,7 @@ import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
@@ -33,8 +34,13 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 
+import javax.xml.datatype.DatatypeFactory;
+import javax.xml.datatype.Duration;
 import java.io.IOException;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -79,7 +85,7 @@ public class StreamsResetter {
     private static OptionSpec<String> byDurationOption;
     private static OptionSpecBuilder toEarliestOption;
     private static OptionSpecBuilder toLatestOption;
-    private static OptionSpecBuilder toCurrentOption;
+    private static OptionSpec<String> fromFileOption;
     private static OptionSpec<Long> shiftByOption;
     private static OptionSpecBuilder dryRunOption;
     private static OptionSpec<String> commandConfigOption;
@@ -87,7 +93,6 @@ public class StreamsResetter {
     private OptionSet options = null;
     private final List<String> allTopics = new LinkedList<>();
     private boolean dryRun = false;
-    private String scenario = "to-earliest";
 
 
     public int run(final String[] args) {
@@ -189,7 +194,9 @@ public class StreamsResetter {
             .ofType(String.class);
         toEarliestOption = optionParser.accepts("to-earliest", "Reset offsets to earliest offset.");
         toLatestOption = optionParser.accepts("to-latest", "Reset offsets to latest offset.");
-        toCurrentOption = optionParser.accepts("to-current", "Reset offsets to current offset.");
+        fromFileOption = optionParser.accepts("from-file", "Reset offsets to values defined in CSV file.")
+            .withRequiredArg()
+            .ofType(String.class);
         shiftByOption = optionParser.accepts("shift-by", "Reset offsets shifting current offset by 'n', where 'n' can be positive or negative")
             .withRequiredArg()
             .describedAs("number-of-offsets")
@@ -228,7 +235,7 @@ public class StreamsResetter {
         CommandLineUtils.checkInvalidArgs(optionParser, options, shiftByOption, allScenarioOptions.$minus$eq(shiftByOption));*/
     }
 
-    private void maybeResetInputAndSeekToEndIntermediateTopicOffsets(final Map consumerConfig) {
+    private void maybeResetInputAndSeekToEndIntermediateTopicOffsets(final Map consumerConfig) throws Exception {
         final List<String> inputTopics = options.valuesOf(inputTopicsOption);
         final List<String> intermediateTopics = options.valuesOf(intermediateTopicsOption);
 
@@ -244,7 +251,7 @@ public class StreamsResetter {
         }
 
         if (inputTopics.size() != 0) {
-            System.out.println("Seek-to-beginning for input topics " + inputTopics);
+            System.out.println("Reset-offsets for input topics " + inputTopics);
         }
         if (intermediateTopics.size() != 0) {
             System.out.println("Seek-to-end for intermediate topics " + intermediateTopics);
@@ -316,7 +323,7 @@ public class StreamsResetter {
                 }
             }
 
-        } catch (final RuntimeException e) {
+        } catch (final Exception e) {
             System.err.println("ERROR: Resetting offsets failed.");
             throw e;
         }
@@ -343,23 +350,158 @@ public class StreamsResetter {
     }
 
     private void maybeReset(final KafkaConsumer<byte[], byte[]> client,
-                            final Set<TopicPartition> inputTopicPartitions) {
+                            final Set<TopicPartition> inputTopicPartitions)
+        throws Exception {
 
-        final List<String> inputTopics = options.valuesOf(inputTopicsOption);
         final String groupId = options.valueOf(applicationIdOption);
 
         if (inputTopicPartitions.size() > 0) {
-            System.out.println("Following input topics offsets will be reset to beginning (for consumer group " + groupId + ")");
-            //TODO implement reset offset logic by scenario
-            for (final String topic : inputTopics) {
-                if (allTopics.contains(topic)) {
-                    System.out.println("Topic: " + topic);
+            System.out.println("Following input topics offsets will be reset to (for consumer group " + groupId + ")");
+            if (options.has(toOffsetOption)) {
+                final Long offset = options.valueOf(toOffsetOption);
+                final Map<TopicPartition, Long> endOffsets = client.endOffsets(inputTopicPartitions);
+                final Map<TopicPartition, Long> beginningOffsets = client.beginningOffsets(inputTopicPartitions);
+
+                final Map<TopicPartition, Long> topicPartitionsAndOffset = new HashMap<>(inputTopicPartitions.size());
+                for (final TopicPartition topicPartition : inputTopicPartitions) {
+                    topicPartitionsAndOffset.put(topicPartition, offset);
                 }
-            }
-            if (!dryRun) {
+
+                final Map<TopicPartition, Long> validatedTopicPartitionsAndOffset =
+                    checkOffsetRange(topicPartitionsAndOffset, beginningOffsets, endOffsets);
+
+                for (final TopicPartition topicPartition : inputTopicPartitions) {
+                    client.seek(topicPartition, validatedTopicPartitionsAndOffset.get(topicPartition));
+                }
+            } else if (options.has(toEarliestOption)) {
+                client.seekToBeginning(inputTopicPartitions);
+            } else if (options.has(toLatestOption)) {
+                client.seekToEnd(inputTopicPartitions);
+            } else if (options.has(shiftByOption)) {
+                final Long shiftBy = options.valueOf(shiftByOption);
+                final Map<TopicPartition, Long> endOffsets = client.endOffsets(inputTopicPartitions);
+                final Map<TopicPartition, Long> beginningOffsets = client.beginningOffsets(inputTopicPartitions);
+
+                final Map<TopicPartition, Long> topicPartitionsAndOffset = new HashMap<>(inputTopicPartitions.size());
+                for (final TopicPartition topicPartition : inputTopicPartitions) {
+                    final Long position = client.position(topicPartition);
+                    final Long offset = position + shiftBy;
+                    topicPartitionsAndOffset.put(topicPartition, offset);
+                }
+
+                final Map<TopicPartition, Long> validatedTopicPartitionsAndOffset =
+                    checkOffsetRange(topicPartitionsAndOffset, beginningOffsets, endOffsets);
+
+                for (final TopicPartition topicPartition : inputTopicPartitions) {
+                    client.seek(topicPartition, validatedTopicPartitionsAndOffset.get(topicPartition));
+                }
+            } else if (options.has(toDatetimeOption)) {
+                String ts = options.valueOf(toDatetimeOption);
+                if (!(ts.split("T")[1].contains("+") || ts.split("T")[1].contains("-") || ts.split("T")[1].contains("Z"))) {
+                    ts = ts + "Z";
+                }
+
+                Date date;
+                try {
+                    date = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX").parse(ts);
+                } catch (ParseException e) {
+                    date = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX").parse(ts);
+                }
+
+                final Long timestamp = date.getTime();
+
+                final Map<TopicPartition, Long> topicPartitionsAndTimes = new HashMap<>(inputTopicPartitions.size());
+                for (final TopicPartition topicPartition : inputTopicPartitions) {
+                    topicPartitionsAndTimes.put(topicPartition, timestamp);
+                }
+
+                final Map<TopicPartition, OffsetAndTimestamp> topicPartitionsAndOffset = client.offsetsForTimes(topicPartitionsAndTimes);
+
+                for (final TopicPartition topicPartition : inputTopicPartitions) {
+                    final Long offset = topicPartitionsAndOffset.get(topicPartition).offset();
+                    client.seek(topicPartition, offset);
+                }
+            } else if (options.has(byDurationOption)) {
+                final String duration = options.valueOf(byDurationOption);
+                final Date now = new Date();
+                final Duration durationParsed = DatatypeFactory.newInstance().newDuration(duration);
+                durationParsed.negate().addTo(now);
+                final Long timestamp = now.getTime();
+
+                final Map<TopicPartition, Long> topicPartitionsAndTimes = new HashMap<>(inputTopicPartitions.size());
+                for (final TopicPartition topicPartition : inputTopicPartitions) {
+                    topicPartitionsAndTimes.put(topicPartition, timestamp);
+                }
+
+                final Map<TopicPartition, OffsetAndTimestamp> topicPartitionsAndOffset = client.offsetsForTimes(topicPartitionsAndTimes);
+
+                for (final TopicPartition topicPartition : inputTopicPartitions) {
+                    final Long offset = topicPartitionsAndOffset.get(topicPartition).offset();
+                    client.seek(topicPartition, offset);
+                }
+            } else if (options.has(fromFileOption)) {
+                final Map<TopicPartition, Long> endOffsets = client.endOffsets(inputTopicPartitions);
+                final Map<TopicPartition, Long> beginningOffsets = client.beginningOffsets(inputTopicPartitions);
+
+                final String resetPlanPath = options.valueOf(fromFileOption);
+                final String resetPlanCsv = Utils.readFileAsString(resetPlanPath);
+                final Map<TopicPartition, Long> topicPartitionsAndOffset = parseResetPlan(resetPlanCsv);
+
+                final Map<TopicPartition, Long> validatedTopicPartitionsAndOffset =
+                    checkOffsetRange(topicPartitionsAndOffset, beginningOffsets, endOffsets);
+
+                for (final TopicPartition topicPartition : inputTopicPartitions) {
+                    final Long offset = validatedTopicPartitionsAndOffset.get(topicPartition);
+                    client.seek(topicPartition, offset);
+                }
+            } else {
                 client.seekToBeginning(inputTopicPartitions);
             }
+
+            for (final TopicPartition p : inputTopicPartitions) {
+                final Long position = client.position(p);
+                System.out.println("Topic: " + p.topic() + " Partition: " + p.partition() + " Offset: " + position);
+            }
         }
+    }
+
+    private Map<TopicPartition, Long> parseResetPlan(String resetPlanCsv) {
+        final Map<TopicPartition, Long> topicPartitionAndOffset = new HashMap<>();
+        for (final String line : resetPlanCsv.split("\n")) {
+            final String[] parts = line.split(",");
+            final String topic = parts[0];
+            final int partition = Integer.parseInt(parts[1]);
+            final long offset = Long.parseLong(parts[2]);
+            final TopicPartition topicPartition = new TopicPartition(topic, partition);
+            topicPartitionAndOffset.put(topicPartition, offset);
+        }
+        return topicPartitionAndOffset;
+    }
+
+    private Map<TopicPartition, Long> checkOffsetRange(Map<TopicPartition, Long> inputTopicPartitionsAndOffset,
+                                                       Map<TopicPartition, Long> beginningOffsets,
+                                                       Map<TopicPartition, Long> endOffsets) {
+        Map<TopicPartition, Long> validatedTopicPartitionsOffsets = new HashMap<>();
+        for (final TopicPartition topicPartition : inputTopicPartitionsAndOffset.keySet()) {
+            final Long endOffset = endOffsets.get(topicPartition);
+            final Long offset = inputTopicPartitionsAndOffset.get(topicPartition);
+            if (offset < endOffset) {
+                final Long beginningOffset = beginningOffsets.get(topicPartition);
+                if (offset > beginningOffset) {
+                    System.out.println("New offset (" + offset + ") is lower than earliest offset. Value will be set to " + beginningOffset);
+                    //client.seek(topicPartition, beginningOffset);
+                    validatedTopicPartitionsOffsets.put(topicPartition, beginningOffset);
+                } else {
+                    //client.seek(topicPartition, offset);
+                    validatedTopicPartitionsOffsets.put(topicPartition, offset);
+                }
+            } else {
+                System.out.println("New offset (" + offset + ") is higher than latest offset. Value will be set to " + endOffset);
+                //client.seek(topicPartition, endOffset);
+                validatedTopicPartitionsOffsets.put(topicPartition, endOffset);
+            }
+        }
+        return validatedTopicPartitionsOffsets;
     }
 
     private boolean isInputTopic(final String topic) {
