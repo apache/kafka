@@ -77,7 +77,8 @@ class EmbeddedZookeeper() {
     *
     * To disable such logs this method is used.
     *
-    * If the API of ZooKeeperServer will be changed
+    * If the API of ZooKeeperServer will be changed the method will not cause tests to fail because
+    * the method is wrapped with [[Try]]
     *
     * @param zooKeeperServer instance of [[ZooKeeperServer]] used for testing
     * @return attempt to disable
