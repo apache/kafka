@@ -296,13 +296,13 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     partitionStateMachine.triggerOnlinePartitionStateChange()
     // check if reassignment of some partitions need to be restarted
     val partitionsWithReplicasOnNewBrokers = controllerContext.partitionsBeingReassigned.filter {
-      case (_, reassignmentContext) => reassignmentContext.newReplicas.exists(newBrokersSet.contains(_))
+      case (_, reassignmentContext) => reassignmentContext.newReplicas.exists(newBrokersSet.contains)
     }
-    partitionsWithReplicasOnNewBrokers.foreach(p => onPartitionReassignment(p._1, p._2))
+    partitionsWithReplicasOnNewBrokers.foreach { case (tp, context) => onPartitionReassignment(tp, context) }
     // check if topic deletion needs to be resumed. If at least one replica that belongs to the topic being deleted exists
     // on the newly restarted brokers, there is a chance that topic deletion can resume
     val replicasForTopicsToBeDeleted = allReplicasOnNewBrokers.filter(p => topicDeletionManager.isTopicQueuedUpForDeletion(p.topic))
-    if(replicasForTopicsToBeDeleted.nonEmpty) {
+    if (replicasForTopicsToBeDeleted.nonEmpty) {
       info(("Some replicas %s for topics scheduled for deletion %s are on the newly restarted brokers %s. " +
         "Signaling restart of topic deletion for these topics").format(replicasForTopicsToBeDeleted.mkString(","),
         topicDeletionManager.topicsToBeDeleted.mkString(","), newBrokers.mkString(",")))
@@ -423,8 +423,8 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
   def onPartitionReassignment(topicPartition: TopicPartition, reassignedPartitionContext: ReassignedPartitionsContext) {
     val reassignedReplicas = reassignedPartitionContext.newReplicas
     if (!areReplicasInIsr(topicPartition, reassignedReplicas)) {
-      info("New replicas %s for partition %s being ".format(reassignedReplicas.mkString(","), topicPartition) +
-        "reassigned not yet caught up with the leader")
+      info(s"New replicas ${reassignedReplicas.mkString(",")} for partition $topicPartition being reassigned not yet " +
+        "caught up with the leader")
       val newReplicasNotInOldReplicaList = reassignedReplicas.toSet -- controllerContext.partitionReplicaAssignment(topicPartition).toSet
       val newAndOldReplicas = (reassignedPartitionContext.newReplicas ++ controllerContext.partitionReplicaAssignment(topicPartition)).toSet
       //1. Update AR in ZK with OAR + RAR.
@@ -434,7 +434,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
         newAndOldReplicas.toSeq)
       //3. replicas in RAR - OAR -> NewReplica
       startNewReplicasForReassignedPartition(topicPartition, reassignedPartitionContext, newReplicasNotInOldReplicaList)
-      info("Waiting for new replicas %s for partition %s being ".format(reassignedReplicas.mkString(","), topicPartition) +
+      info(s"Waiting for new replicas ${reassignedReplicas.mkString(",")} for partition ${topicPartition} being " +
         "reassigned to catch up with the leader")
     } else {
       //4. Wait until all replicas in RAR are in sync with the leader.
@@ -454,7 +454,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       updateAssignedReplicasForPartition(topicPartition, reassignedReplicas)
       //11. Update the /admin/reassign_partitions path in ZK to remove this partition.
       removePartitionFromReassignedPartitions(topicPartition)
-      info("Removed partition %s from the list of reassigned partitions in zookeeper".format(topicPartition))
+      info(s"Removed partition $topicPartition from the list of reassigned partitions in zookeeper")
       controllerContext.partitionsBeingReassigned.remove(topicPartition)
       //12. After electing leader, the replicas and isr information changes, so resend the update metadata request to every broker
       sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq, Set(topicPartition))
@@ -480,10 +480,10 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       assignedReplicasOpt match {
         case Some(assignedReplicas) =>
           if (assignedReplicas == newReplicas) {
-            throw new KafkaException("Partition %s to be reassigned is already assigned to replicas".format(topicPartition) +
-              " %s. Ignoring request for partition reassignment".format(newReplicas.mkString(",")))
+            throw new KafkaException(s"Partition $topicPartition to be reassigned is already assigned to replicas " +
+              s"${newReplicas.mkString(",")}. Ignoring request for partition reassignment")
           } else {
-            info("Handling reassignment of partition %s to new replicas %s".format(topicPartition, newReplicas.mkString(",")))
+            info(s"Handling reassignment of partition $topicPartition to new replicas ${newReplicas.mkString(",")}")
             // first register ISR change listener
             watchIsrChangesForReassignedPartition(topicPartition, reassignedPartitionContext)
             controllerContext.partitionsBeingReassigned.put(topicPartition, reassignedPartitionContext)
@@ -491,13 +491,13 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
             topicDeletionManager.markTopicIneligibleForDeletion(Set(topic))
             onPartitionReassignment(topicPartition, reassignedPartitionContext)
           }
-        case None => throw new KafkaException("Attempt to reassign partition %s that doesn't exist"
-          .format(topicPartition))
+        case None => throw new KafkaException(s"Attempt to reassign partition $topicPartition that doesn't exist")
       }
     } catch {
-      case e: Throwable => error("Error completing reassignment of partition %s".format(topicPartition), e)
-      // remove the partition from the admin path to unblock the admin client
-      removePartitionFromReassignedPartitions(topicPartition)
+      case e: Throwable =>
+        error(s"Error completing reassignment of partition $topicPartition", e)
+        // remove the partition from the admin path to unblock the admin client
+        removePartitionFromReassignedPartitions(topicPartition)
     }
   }
 
@@ -806,7 +806,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
     // write the new list to zookeeper
     if (updatedPartitionsBeingReassigned.isEmpty) {
-      info("No more partitions need to be reassigned. Deleting zk path %s".format(ReassignPartitionsZNode.path))
+      info(s"No more partitions need to be reassigned. Deleting zk path ${ReassignPartitionsZNode.path}")
       zkClient.deletePartitionReassignment()
       // Ensure we detect future reassignments
       eventManager.put(PartitionReassignment)
@@ -1309,17 +1309,16 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
           case Some(leaderIsrAndControllerEpoch) => // check if new replicas have joined ISR
             val leaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
             val caughtUpReplicas = reassignedReplicas & leaderAndIsr.isr.toSet
-            if(caughtUpReplicas == reassignedReplicas) {
+            if (caughtUpReplicas == reassignedReplicas) {
               // resume the partition reassignment process
-              info("%d/%d replicas have caught up with the leader for partition %s being reassigned."
-                .format(caughtUpReplicas.size, reassignedReplicas.size, partition) +
-                "Resuming partition reassignment")
+              info(s"${caughtUpReplicas.size}/${reassignedReplicas.size} replicas have caught up with the leader for " +
+                s"partition $partition being reassigned. Resuming partition reassignment")
               onPartitionReassignment(partition, reassignedPartitionContext)
             }
             else {
-              info("%d/%d replicas have caught up with the leader for partition %s being reassigned."
-                .format(caughtUpReplicas.size, reassignedReplicas.size, partition) +
-                "Replica(s) %s still need to catch up".format((reassignedReplicas -- leaderAndIsr.isr.toSet).mkString(",")))
+              info(s"${caughtUpReplicas.size}/${reassignedReplicas.size} replicas have caught up with the leader for " +
+                s"partition $partition being reassigned. Replica(s) " +
+                s"${(reassignedReplicas -- leaderAndIsr.isr.toSet).mkString(",")} still need to catch up")
             }
           case None => error("Error handling reassignment of partition %s to replicas %s as it was never created"
             .format(partition, reassignedReplicas.mkString(",")))
