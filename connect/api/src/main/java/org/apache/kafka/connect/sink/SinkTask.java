@@ -61,6 +61,14 @@ public abstract class SinkTask implements Task {
      */
     public static final String TOPICS_CONFIG = "topics";
 
+    /**
+     * <p>
+     * The configuration key that provides a regex specifying which topics to include as inputs
+     * for this SinkTask.
+     * </p>
+     */
+    public static final String TOPICS_REGEX_CONFIG = "topics.regex";
+
     protected SinkTaskContext context;
 
     /**

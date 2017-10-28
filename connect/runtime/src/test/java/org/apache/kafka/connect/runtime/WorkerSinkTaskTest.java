@@ -67,6 +67,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Pattern;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
@@ -127,6 +128,7 @@ public class WorkerSinkTaskTest {
     @Mock
     private KafkaConsumer<byte[], byte[]> consumer;
     private Capture<ConsumerRebalanceListener> rebalanceListener = EasyMock.newCapture();
+    private Capture<Pattern> topicsRegex = EasyMock.newCapture();
 
     private long recordsReturnedTp1;
     private long recordsReturnedTp3;
@@ -1139,6 +1141,41 @@ public class WorkerSinkTaskTest {
 
         assertEquals(timestamp, record.timestamp());
         assertEquals(timestampType, record.timestampType());
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testTopicsRegex() throws Exception {
+        Map<String, String> props = new HashMap<>(TASK_PROPS);
+        props.remove("topics");
+        props.put("topics.regex", "te.*");
+        TaskConfig taskConfig = new TaskConfig(props);
+
+        createTask(TargetState.PAUSED);
+
+        PowerMock.expectPrivate(workerTask, "createConsumer").andReturn(consumer);
+        consumer.subscribe(EasyMock.capture(topicsRegex), EasyMock.capture(rebalanceListener));
+        PowerMock.expectLastCall();
+
+        sinkTask.initialize(EasyMock.capture(sinkTaskContext));
+        PowerMock.expectLastCall();
+        sinkTask.start(props);
+        PowerMock.expectLastCall();
+
+        expectPollInitialAssignment();
+
+        Set<TopicPartition> partitions = new HashSet<>(asList(TOPIC_PARTITION, TOPIC_PARTITION2));
+        EasyMock.expect(consumer.assignment()).andReturn(partitions);
+        consumer.pause(partitions);
+        PowerMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(taskConfig);
+        workerTask.initializeAndStart();
+        workerTask.iteration();
+        time.sleep(10000L);
 
         PowerMock.verifyAll();
     }
