@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -57,7 +58,7 @@ public class SegmentIteratorTest {
                 Serdes.String(),
                 Serdes.String(),
                 new NoOpRecordCollector(),
-                new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
+                new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())));
         segmentOne.openDB(context);
         segmentTwo.openDB(context);
         segmentOne.put(Bytes.wrap("a".getBytes()), "1".getBytes());
@@ -79,7 +80,7 @@ public class SegmentIteratorTest {
     }
 
     @Test
-    public void shouldIterateOverAllSegments() throws Exception {
+    public void shouldIterateOverAllSegments() {
         iterator = new SegmentIterator(Arrays.asList(segmentOne, segmentTwo).iterator(),
                 hasNextCondition,
                 Bytes.wrap("a".getBytes()),
@@ -105,7 +106,7 @@ public class SegmentIteratorTest {
     }
 
     @Test
-    public void shouldOnlyIterateOverSegmentsInRange() throws Exception {
+    public void shouldOnlyIterateOverSegmentsInRange() {
         iterator = new SegmentIterator(Arrays.asList(segmentOne, segmentTwo).iterator(),
                 hasNextCondition,
                 Bytes.wrap("a".getBytes()),
@@ -123,7 +124,7 @@ public class SegmentIteratorTest {
     }
 
     @Test(expected = NoSuchElementException.class)
-    public void shouldThrowNoSuchElementOnPeekNextKeyIfNoNext() throws Exception {
+    public void shouldThrowNoSuchElementOnPeekNextKeyIfNoNext() {
         iterator = new SegmentIterator(Arrays.asList(segmentOne, segmentTwo).iterator(),
                 hasNextCondition,
                 Bytes.wrap("f".getBytes()),
@@ -133,7 +134,7 @@ public class SegmentIteratorTest {
     }
 
     @Test(expected = NoSuchElementException.class)
-    public void shouldThrowNoSuchElementOnNextIfNoNext() throws Exception {
+    public void shouldThrowNoSuchElementOnNextIfNoNext() {
         iterator = new SegmentIterator(Arrays.asList(segmentOne, segmentTwo).iterator(),
                 hasNextCondition,
                 Bytes.wrap("f".getBytes()),

@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor;
 
 /**
  * Represents a user defined endpoint in a {@link org.apache.kafka.streams.KafkaStreams} application.
@@ -29,7 +30,7 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
  *  {@link KafkaStreams#metadataForKey(String, Object, Serializer)}
  *
  *  The HostInfo is constructed during Partition Assignment
- *  see {@link org.apache.kafka.streams.processor.internals.StreamPartitionAssignor}
+ *  see {@link StreamPartitionAssignor}
  *  It is extracted from the config {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_SERVER_CONFIG}
  *
  *  If developers wish to expose an endpoint in their KafkaStreams applications they should provide the above

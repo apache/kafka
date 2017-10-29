@@ -26,7 +26,6 @@ import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
 import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException}
-import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import scala.collection.JavaConverters._
 import org.apache.log4j.Logger
@@ -247,8 +246,13 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   private def logAuditMessage(principal: KafkaPrincipal, authorized: Boolean, operation: Operation, resource: Resource, host: String) {
-    val permissionType = if (authorized) "Allowed" else "Denied"
-    authorizerLogger.debug(s"Principal = $principal is $permissionType Operation = $operation from host = $host on resource = $resource")
+    def logMessage: String = {
+      val authResult = if (authorized) "Allowed" else "Denied"
+      s"Principal = $principal is $authResult Operation = $operation from host = $host on resource = $resource"
+    }
+
+    if (authorized) authorizerLogger.debug(logMessage)
+    else authorizerLogger.info(logMessage)
   }
 
   /**

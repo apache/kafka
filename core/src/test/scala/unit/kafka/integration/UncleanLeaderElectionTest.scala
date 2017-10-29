@@ -102,7 +102,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testUncleanLeaderElectionEnabled {
+  def testUncleanLeaderElectionEnabled(): Unit = {
     // enable unclean leader election
     configProps1.put("unclean.leader.election.enable", "true")
     configProps2.put("unclean.leader.election.enable", "true")
@@ -116,7 +116,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
 
   @Test
   @Ignore // Should be re-enabled after KAFKA-3096 is fixed
-  def testUncleanLeaderElectionDisabled {
+  def testUncleanLeaderElectionDisabled(): Unit = {
     // unclean leader election is disabled by default
     startBrokers(Seq(configProps1, configProps2))
 
@@ -127,7 +127,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testUncleanLeaderElectionEnabledByTopicOverride {
+  def testUncleanLeaderElectionEnabledByTopicOverride(): Unit = {
     // disable unclean leader election globally, but enable for our specific test topic
     configProps1.put("unclean.leader.election.enable", "false")
     configProps2.put("unclean.leader.election.enable", "false")
@@ -144,7 +144,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
 
   @Test
   @Ignore // Should be re-enabled after KAFKA-3096 is fixed
-  def testCleanLeaderElectionDisabledByTopicOverride {
+  def testCleanLeaderElectionDisabledByTopicOverride(): Unit = {
     // enable unclean leader election globally, but disable for our specific test topic
     configProps1.put("unclean.leader.election.enable", "true")
     configProps2.put("unclean.leader.election.enable", "true")
@@ -160,7 +160,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testUncleanLeaderElectionInvalidTopicOverride {
+  def testUncleanLeaderElectionInvalidTopicOverride(): Unit = {
     startBrokers(Seq(configProps1))
 
     // create topic with an invalid value for unclean leader election
@@ -172,7 +172,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     }
   }
 
-  def verifyUncleanLeaderElectionEnabled {
+  def verifyUncleanLeaderElectionEnabled(): Unit = {
     // wait until leader is elected
     val leaderId = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId)
     debug("Leader for " + topic  + " is elected to be: %s".format(leaderId))
@@ -205,7 +205,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     assertEquals(List("first", "third"), consumeAllMessages(topic))
   }
 
-  def verifyUncleanLeaderElectionDisabled {
+  def verifyUncleanLeaderElectionDisabled(): Unit = {
     // wait until leader is elected
     val leaderId = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId)
     debug("Leader for " + topic  + " is elected to be: %s".format(leaderId))

@@ -17,10 +17,7 @@
 
 package kafka.api
 
-import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.utils._
-
-import scala.collection.Set
 
 object LeaderAndIsr {
   val initialLeaderEpoch: Int = 0
@@ -41,22 +38,11 @@ case class LeaderAndIsr(leader: Int,
 
   def newLeader(leader: Int) = newLeaderAndIsr(leader, isr)
 
-  def newLeaderAndIsr(leader: Int, isr: List[Int]) = LeaderAndIsr(leader, leaderEpoch + 1, isr, zkVersion + 1)
+  def newLeaderAndIsr(leader: Int, isr: List[Int]) = LeaderAndIsr(leader, leaderEpoch + 1, isr, zkVersion)
 
   def newEpochAndZkVersion = newLeaderAndIsr(leader, isr)
 
   override def toString: String = {
     Json.encode(Map("leader" -> leader, "leader_epoch" -> leaderEpoch, "isr" -> isr))
-  }
-}
-
-case class PartitionStateInfo(leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch, allReplicas: Seq[Int]) {
-
-  override def toString: String = {
-    val partitionStateInfo = new StringBuilder
-    partitionStateInfo.append("(LeaderAndIsrInfo:" + leaderIsrAndControllerEpoch.toString)
-    partitionStateInfo.append(",ReplicationFactor:" + allReplicas.size + ")")
-    partitionStateInfo.append(",AllReplicas:" + allReplicas.mkString(",") + ")")
-    partitionStateInfo.toString()
   }
 }

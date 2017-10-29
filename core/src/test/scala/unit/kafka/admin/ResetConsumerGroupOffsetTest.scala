@@ -10,22 +10,18 @@
   * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
   * specific language governing permissions and limitations under the License.
   */
-package unit.kafka.admin
+package kafka.admin
 
 import java.io.{BufferedWriter, File, FileWriter}
-import java.text.SimpleDateFormat
-import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
-import java.util.{Calendar, Collections, Date, Properties}
+import java.text.{ParseException, SimpleDateFormat}
+import java.util.{Calendar, Date, Properties}
 
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, KafkaConsumerGroupService}
-import kafka.admin.{AdminUtils, ConsumerGroupCommand}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.consumer.KafkaConsumer
-import org.apache.kafka.common.errors.WakeupException
-import org.apache.kafka.common.serialization.StringDeserializer
-import org.junit.{Before, After, Test}
+import org.junit.{After, Before, Test}
+
 import scala.collection.mutable.ArrayBuffer
 
 /**
@@ -156,7 +152,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     AdminUtils.createTopic(zkUtils, topic1, 1, 1)
     TestUtils.produceMessages(servers, topic1, 50, acks = 1, 100 * 1000)
 
-    val format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX")
+    val format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX")
     val checkpoint = new Date()
 
     TestUtils.produceMessages(servers, topic1, 50, acks = 1, 100 * 1000)
@@ -193,6 +189,39 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     printConsumerGroup()
 
     AdminUtils.deleteTopic(zkUtils, topic1)
+  }
+
+  @Test
+  def testDateTimeFormats() {
+    //check valid formats
+    invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS"))
+    invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ"))
+    invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX"))
+    invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXX"))
+    invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX"))
+
+    //check some invalid formats
+    try {
+      invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss"))
+      fail("Call to getDateTime should fail")
+    } catch {
+      case _: ParseException =>
+    }
+
+    try {
+      invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.X"))
+      fail("Call to getDateTime should fail")
+    } catch {
+      case _: ParseException =>
+    }
+  }
+
+  private def invokeGetDateTimeMethod(format: SimpleDateFormat) {
+    val checkpoint = new Date()
+    val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--to-datetime", format.format(checkpoint), "--execute")
+    val opts  = new ConsumerGroupCommandOptions(cgcArgs)
+    val consumerGroupCommand = createConsumerGroupService(opts)
+    consumerGroupCommand.getDateTime
   }
 
   @Test
@@ -296,7 +325,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     AdminUtils.deleteTopic(zkUtils, topic1)
   }
 
-  private def produceConsumeAndShutdown(consumerGroupCommand: KafkaConsumerGroupService, numConsumers: Int = 1, topic: String, totalMessages: Int) {
+  private def produceConsumeAndShutdown(consumerGroupCommand: KafkaConsumerGroupService, numConsumers: Int, topic: String, totalMessages: Int) {
     TestUtils.produceMessages(servers, topic, totalMessages, acks = 1, 100 * 1000)
     val executor = createConsumerGroupExecutor(brokerList, numConsumers, group, topic)
 
@@ -515,7 +544,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
   @Test
   def testResetOffsetsExportImportPlan() {
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--to-earliest", "--export")
+    val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--to-offset","2", "--export")
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
     val consumerGroupCommand = createConsumerGroupService(opts)
 
@@ -530,18 +559,18 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
       val bw = new BufferedWriter(new FileWriter(file))
       bw.write(consumerGroupCommand.exportOffsetsToReset(assignmentsToReset))
       bw.close()
-      assignmentsToReset.exists { assignment => assignment._2.offset() == 0 } && file.exists()
+      assignmentsToReset.exists { assignment => assignment._2.offset() == 2 } && file.exists()
     }, "Expected the consume all messages and save reset offsets plan to file")
 
 
-    val cgcArgsExec = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--to-earliest", "--from-file", file.getCanonicalPath)
+    val cgcArgsExec = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--from-file", file.getCanonicalPath)
     val optsExec = new ConsumerGroupCommandOptions(cgcArgsExec)
     val consumerGroupCommandExec = createConsumerGroupService(optsExec)
 
     TestUtils.waitUntilTrue(() => {
         val assignmentsToReset = consumerGroupCommandExec.resetOffsets()
-        assignmentsToReset.exists { assignment => assignment._2.offset() == 0 }
-    }, "Expected the consumer group to reset to offset 0 (earliest) by file.")
+        assignmentsToReset.exists { assignment => assignment._2.offset() == 2 }
+    }, "Expected the consumer group to reset to offset 2 according to the plan in the file.")
 
     file.deleteOnExit()
 
@@ -569,59 +598,5 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     val service = new KafkaConsumerGroupService(opts)
     consumerGroupServices += service
     service
-  }
-}
-
-
-class ConsumerThread(broker: String, id: Int, groupId: String, topic: String) extends Runnable {
-  val props = new Properties
-  props.put("bootstrap.servers", broker)
-  props.put("group.id", groupId)
-  props.put("key.deserializer", classOf[StringDeserializer].getName)
-  props.put("value.deserializer", classOf[StringDeserializer].getName)
-  val consumer = new KafkaConsumer(props)
-
-  def run() {
-    try {
-      consumer.subscribe(Collections.singleton(topic))
-      while (true)
-        consumer.poll(Long.MaxValue)
-    } catch {
-      case _: WakeupException => // OK
-    } finally {
-      consumer.close()
-    }
-  }
-
-  def shutdown() {
-    consumer.wakeup()
-  }
-}
-
-class ConsumerGroupExecutor(broker: String, numConsumers: Int, groupId: String, topic: String) {
-  val executor: ExecutorService = Executors.newFixedThreadPool(numConsumers)
-  var consumers: List[ConsumerThread] = List[ConsumerThread]()
-
-  for (i <- 1 to numConsumers) {
-    val consumer = new ConsumerThread(broker, i, groupId, topic)
-    consumers ++= List(consumer)
-    executor.submit(consumer)
-  }
-
-  Runtime.getRuntime.addShutdownHook(new Thread() {
-    override def run() {
-      shutdown()
-    }
-  })
-
-  def shutdown() {
-    consumers.foreach(_.shutdown())
-    executor.shutdown()
-    try {
-      executor.awaitTermination(5000, TimeUnit.MILLISECONDS)
-    } catch {
-      case e: InterruptedException =>
-        e.printStackTrace()
-    }
   }
 }

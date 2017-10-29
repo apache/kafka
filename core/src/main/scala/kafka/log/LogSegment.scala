@@ -20,8 +20,6 @@ import java.io.{File, IOException}
 import java.nio.file.Files
 import java.nio.file.attribute.FileTime
 import java.util.concurrent.TimeUnit
-
-import kafka.common._
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server.epoch.LeaderEpochCache
 import kafka.server.{FetchDataInfo, LogOffsetMetadata}
@@ -147,7 +145,7 @@ class LogSegment(val log: FileRecords,
   private def updateProducerState(producerStateManager: ProducerStateManager, batch: RecordBatch): Unit = {
     if (batch.hasProducerId) {
       val producerId = batch.producerId
-      val appendInfo = producerStateManager.prepareUpdate(producerId, loadingFromLog = true)
+      val appendInfo = producerStateManager.prepareUpdate(producerId, isFromClient = false)
       val maybeCompletedTxn = appendInfo.append(batch)
       producerStateManager.update(appendInfo)
       maybeCompletedTxn.foreach { completedTxn =>
@@ -382,29 +380,25 @@ class LogSegment(val log: FileRecords,
   }
 
   /**
+   * Update the directory reference for the log and indices in this segment. This would typically be called after a
+   * directory is renamed.
+   */
+  def updateDir(dir: File): Unit = {
+    log.setFile(new File(dir, log.file.getName))
+    index.file = new File(dir, index.file.getName)
+    timeIndex.file = new File(dir, timeIndex.file.getName)
+    txnIndex.file = new File(dir, txnIndex.file.getName)
+  }
+
+  /**
    * Change the suffix for the index and log file for this log segment
+   * IOException from this method should be handled by the caller
    */
   def changeFileSuffixes(oldSuffix: String, newSuffix: String) {
-
-    def kafkaStorageException(fileType: String, e: IOException) =
-      new KafkaStorageException(s"Failed to change the $fileType file suffix from $oldSuffix to $newSuffix for log segment $baseOffset", e)
-
-    try log.renameTo(new File(CoreUtils.replaceSuffix(log.file.getPath, oldSuffix, newSuffix)))
-    catch {
-      case e: IOException => throw kafkaStorageException("log", e)
-    }
-    try index.renameTo(new File(CoreUtils.replaceSuffix(index.file.getPath, oldSuffix, newSuffix)))
-    catch {
-      case e: IOException => throw kafkaStorageException("index", e)
-    }
-    try timeIndex.renameTo(new File(CoreUtils.replaceSuffix(timeIndex.file.getPath, oldSuffix, newSuffix)))
-    catch {
-      case e: IOException => throw kafkaStorageException("timeindex", e)
-    }
-    try txnIndex.renameTo(new File(CoreUtils.replaceSuffix(txnIndex.file.getPath, oldSuffix, newSuffix)))
-    catch {
-      case e: IOException => throw kafkaStorageException("txnindex", e)
-    }
+    log.renameTo(new File(CoreUtils.replaceSuffix(log.file.getPath, oldSuffix, newSuffix)))
+    index.renameTo(new File(CoreUtils.replaceSuffix(index.file.getPath, oldSuffix, newSuffix)))
+    timeIndex.renameTo(new File(CoreUtils.replaceSuffix(timeIndex.file.getPath, oldSuffix, newSuffix)))
+    txnIndex.renameTo(new File(CoreUtils.replaceSuffix(txnIndex.file.getPath, oldSuffix, newSuffix)))
   }
 
   /**
@@ -481,9 +475,17 @@ class LogSegment(val log: FileRecords,
   }
 
   /**
+    * Close file handlers used by the log segment but don't write to disk. This is used when the disk may have failed
+    */
+  def closeHandlers() {
+    CoreUtils.swallow(index.closeHandler())
+    CoreUtils.swallow(timeIndex.closeHandler())
+    CoreUtils.swallow(log.closeHandlers())
+    CoreUtils.swallow(txnIndex.close())
+  }
+
+  /**
    * Delete this log segment from the filesystem.
-   *
-   * @throws KafkaStorageException if the delete fails.
    */
   def delete() {
     val deletedLog = log.delete()
@@ -491,13 +493,13 @@ class LogSegment(val log: FileRecords,
     val deletedTimeIndex = timeIndex.delete()
     val deletedTxnIndex = txnIndex.delete()
     if (!deletedLog && log.file.exists)
-      throw new KafkaStorageException("Delete of log " + log.file.getName + " failed.")
+      throw new IOException("Delete of log " + log.file.getName + " failed.")
     if (!deletedIndex && index.file.exists)
-      throw new KafkaStorageException("Delete of index " + index.file.getName + " failed.")
+      throw new IOException("Delete of index " + index.file.getName + " failed.")
     if (!deletedTimeIndex && timeIndex.file.exists)
-      throw new KafkaStorageException("Delete of time index " + timeIndex.file.getName + " failed.")
+      throw new IOException("Delete of time index " + timeIndex.file.getName + " failed.")
     if (!deletedTxnIndex && txnIndex.file.exists)
-      throw new KafkaStorageException("Delete of transaction index " + txnIndex.file.getName + " failed.")
+      throw new IOException("Delete of transaction index " + txnIndex.file.getName + " failed.")
   }
 
   /**

@@ -73,8 +73,8 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
     LOG_FILE = os.path.join(LOG_DIR, "console_consumer.log")
     LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
     CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "console_consumer.properties")
-    JMX_TOOL_LOG = "/mnt/jmx_tool.log"
-    JMX_TOOL_ERROR_LOG = "/mnt/jmx_tool.err.log"
+    JMX_TOOL_LOG = os.path.join(PERSISTENT_ROOT, "jmx_tool.log")
+    JMX_TOOL_ERROR_LOG = os.path.join(PERSISTENT_ROOT, "jmx_tool.err.log")
 
     logs = {
         "consumer_stdout": {
@@ -120,7 +120,8 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             print_timestamp             if True, print each message's timestamp as well
             isolation_level             How to handle transactional messages.
         """
-        JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes or [])
+        JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes or [],
+                          root=ConsoleConsumer.PERSISTENT_ROOT)
         BackgroundThreadService.__init__(self, context, num_nodes)
         self.kafka = kafka
         self.new_consumer = new_consumer
@@ -170,7 +171,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
     def start_cmd(self, node):
         """Return the start command appropriate for the given node."""
         args = self.args.copy()
-        args['zk_connect'] = self.kafka.zk.connect_setting()
+        args['zk_connect'] = self.kafka.zk_connect_setting()
         args['stdout'] = ConsoleConsumer.STDOUT_CAPTURE
         args['stderr'] = ConsoleConsumer.STDERR_CAPTURE
         args['log_dir'] = ConsoleConsumer.LOG_DIR
@@ -255,26 +256,26 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         self.logger.debug("Console consumer %d command: %s", idx, cmd)
 
         consumer_output = node.account.ssh_capture(cmd, allow_fail=False)
-        first_line = next(consumer_output, None)
 
-        if first_line is not None:
+        with self.lock:
+            self._init_jmx_attributes()
             self.logger.debug("collecting following jmx objects: %s", self.jmx_object_names)
-            self.init_jmx_attributes()
             self.start_jmx_tool(idx, node)
 
-            for line in itertools.chain([first_line], consumer_output):
-                msg = line.strip()
-                if msg == "shutdown_complete":
-                    # Note that we can only rely on shutdown_complete message if running 0.10.0 or greater
-                    if node in self.clean_shutdown_nodes:
-                        raise Exception("Unexpected shutdown event from consumer, already shutdown. Consumer index: %d" % idx)
-                    self.clean_shutdown_nodes.add(node)
-                else:
-                    if self.message_validator is not None:
-                        msg = self.message_validator(msg)
-                    if msg is not None:
-                        self.messages_consumed[idx].append(msg)
+        for line in consumer_output:
+            msg = line.strip()
+            if msg == "shutdown_complete":
+                # Note that we can only rely on shutdown_complete message if running 0.10.0 or greater
+                if node in self.clean_shutdown_nodes:
+                    raise Exception("Unexpected shutdown event from consumer, already shutdown. Consumer index: %d" % idx)
+                self.clean_shutdown_nodes.add(node)
+            else:
+                if self.message_validator is not None:
+                    msg = self.message_validator(msg)
+                if msg is not None:
+                    self.messages_consumed[idx].append(msg)
 
+        with self.lock:
             self.read_jmx_output(idx, node)
 
     def start_node(self, node):
@@ -297,22 +298,26 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         self.security_config.clean_node(node)
 
     def has_partitions_assigned(self, node):
-       if self.new_consumer is False:
-          return False
-       idx = self.idx(node)
-       self.init_jmx_attributes()
-       self.start_jmx_tool(idx, node)
-       self.read_jmx_output(idx, node)
-       if not self.assigned_partitions_jmx_attr in self.maximum_jmx_value:
-           return False
-       self.logger.debug("Number of partitions assigned %f" % self.maximum_jmx_value[self.assigned_partitions_jmx_attr])
-       return self.maximum_jmx_value[self.assigned_partitions_jmx_attr] > 0.0
+        if self.new_consumer is False:
+            return False
+        idx = self.idx(node)
+        with self.lock:
+            self._init_jmx_attributes()
+            self.start_jmx_tool(idx, node)
+            self.read_jmx_output(idx, node)
+        if not self.assigned_partitions_jmx_attr in self.maximum_jmx_value:
+            return False
+        self.logger.debug("Number of partitions assigned %f" % self.maximum_jmx_value[self.assigned_partitions_jmx_attr])
+        return self.maximum_jmx_value[self.assigned_partitions_jmx_attr] > 0.0
 
-    def init_jmx_attributes(self):
-        if self.new_consumer is True:
-            if self.jmx_object_names is None:
-                self.jmx_object_names = []
-                self.jmx_object_names += ["kafka.consumer:type=consumer-coordinator-metrics,client-id=%s" % self.client_id]
-                self.jmx_attributes += ["assigned-partitions"]
+    def _init_jmx_attributes(self):
+        # Must hold lock
+        if self.new_consumer:
+            # We use a flag to track whether we're using this automatically generated ID because the service could be
+            # restarted multiple times and the client ID may be changed.
+            if getattr(self, '_automatic_metrics', False) or not self.jmx_object_names:
+                self._automatic_metrics = True
+                self.jmx_object_names = ["kafka.consumer:type=consumer-coordinator-metrics,client-id=%s" % self.client_id]
+                self.jmx_attributes = ["assigned-partitions"]
                 self.assigned_partitions_jmx_attr = "kafka.consumer:type=consumer-coordinator-metrics,client-id=%s:assigned-partitions" % self.client_id
 

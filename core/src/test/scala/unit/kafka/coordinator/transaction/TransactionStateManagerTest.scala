@@ -17,6 +17,7 @@
 package kafka.coordinator.transaction
 
 import java.nio.ByteBuffer
+import java.util.concurrent.locks.ReentrantLock
 
 import kafka.log.Log
 import kafka.server.{FetchDataInfo, LogOffsetMetadata, ReplicaManager}
@@ -309,7 +310,7 @@ class TransactionStateManagerTest {
     transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
     transactionManager.putTransactionStateIfNotExists(transactionalId1, txnMetadata1)
 
-    expectedError = Errors.UNKNOWN
+    expectedError = Errors.UNKNOWN_SERVER_ERROR
     var failedMetadata = txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
 
     prepareForTxnMessageAppend(Errors.MESSAGE_TOO_LARGE)
@@ -498,12 +499,13 @@ class TransactionStateManagerTest {
           EasyMock.eq(false),
           EasyMock.eq(recordsByPartition),
           EasyMock.capture(capturedArgument),
-          EasyMock.eq(None)
+          EasyMock.anyObject().asInstanceOf[Option[ReentrantLock]],
+          EasyMock.anyObject()
         )).andAnswer(new IAnswer[Unit] {
           override def answer(): Unit = {
             capturedArgument.getValue.apply(
               Map(partition ->
-                new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP)
+                new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)
               )
             )
           }
@@ -598,11 +600,12 @@ class TransactionStateManagerTest {
       isFromClient = EasyMock.eq(false),
       EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
       EasyMock.capture(capturedArgument),
+      EasyMock.anyObject().asInstanceOf[Option[ReentrantLock]],
       EasyMock.anyObject())
     ).andAnswer(new IAnswer[Unit] {
         override def answer(): Unit = capturedArgument.getValue.apply(
           Map(new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, partitionId) ->
-            new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP)
+            new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)
           )
         )
       }

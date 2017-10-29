@@ -37,7 +37,7 @@ import org.junit.Assert._
 class SyncProducerTest extends KafkaServerTestHarness {
   private val messageBytes =  new Array[Byte](2)
   // turning off controlled shutdown since testProducerCanTimeout() explicitly shuts down request handler pool.
-  def generateConfigs() = List(KafkaConfig.fromProps(TestUtils.createBrokerConfigs(1, zkConnect, false).head))
+  def generateConfigs = List(KafkaConfig.fromProps(TestUtils.createBrokerConfigs(1, zkConnect, false).head))
 
   private def produceRequest(topic: String,
     partition: Int,

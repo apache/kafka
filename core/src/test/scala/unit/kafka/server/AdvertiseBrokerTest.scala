@@ -20,7 +20,7 @@ package kafka.server
 import org.junit.Assert._
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
-import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.{After, Test}
 
 import scala.collection.mutable.ArrayBuffer
@@ -37,7 +37,7 @@ class AdvertiseBrokerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testBrokerAdvertiseHostNameAndPortToZK: Unit = {
+  def testBrokerAdvertiseHostNameAndPortToZK(): Unit = {
     val advertisedHostName = "routable-host1"
     val advertisedPort = 1234
     val props = TestUtils.createBrokerConfig(brokerId, zkConnect)
@@ -54,7 +54,7 @@ class AdvertiseBrokerTest extends ZooKeeperTestHarness {
     assertEquals(SecurityProtocol.PLAINTEXT.name, endpoint.listenerName.value)
   }
 
-  def testBrokerAdvertiseListenersToZK: Unit = {
+  def testBrokerAdvertiseListenersToZK(): Unit = {
     val props = TestUtils.createBrokerConfig(brokerId, zkConnect)
     props.put("advertised.listeners", "PLAINTEXT://routable-listener:3334")
     servers += TestUtils.createServer(KafkaConfig.fromProps(props))
@@ -68,7 +68,7 @@ class AdvertiseBrokerTest extends ZooKeeperTestHarness {
     assertEquals(SecurityProtocol.PLAINTEXT.name, endpoint.listenerName)
   }
 
-  def testBrokerAdvertiseListenersWithCustomNamesToZK: Unit = {
+  def testBrokerAdvertiseListenersWithCustomNamesToZK(): Unit = {
     val props = TestUtils.createBrokerConfig(brokerId, zkConnect)
     props.put("listeners", "INTERNAL://:0,EXTERNAL://:0")
     props.put("advertised.listeners", "EXTERNAL://external-listener:9999,INTERNAL://internal-listener:10999")

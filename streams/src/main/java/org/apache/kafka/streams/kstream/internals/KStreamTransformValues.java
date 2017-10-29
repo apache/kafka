@@ -91,8 +91,10 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
                     }
 
                     @Override
-                    public void register(final StateStore store, final boolean loggingEnabled, final StateRestoreCallback stateRestoreCallback) {
-                        context.register(store, loggingEnabled, stateRestoreCallback);
+                    public void register(final StateStore store,
+                                         final boolean deprecatedAndIgnoredLoggingEnabled,
+                                         final StateRestoreCallback stateRestoreCallback) {
+                        context.register(store, deprecatedAndIgnoredLoggingEnabled, stateRestoreCallback);
                     }
 
                     @Override
@@ -105,6 +107,7 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
                         return context.schedule(interval, type, callback);
                     }
 
+                    @SuppressWarnings("deprecation")
                     @Override
                     public void schedule(final long interval) {
                         context.schedule(interval);
@@ -168,6 +171,7 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
             context.forward(key, valueTransformer.transform(value));
         }
 
+        @SuppressWarnings("deprecation")
         @Override
         public void punctuate(long timestamp) {
             if (valueTransformer.punctuate(timestamp) != null) {

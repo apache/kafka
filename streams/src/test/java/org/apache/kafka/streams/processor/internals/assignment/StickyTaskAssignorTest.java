@@ -51,7 +51,7 @@ public class StickyTaskAssignorTest {
     private final Integer p4 = 4;
 
     @Test
-    public void shouldAssignOneActiveTaskToEachProcessWhenTaskCountSameAsProcessCount() throws Exception {
+    public void shouldAssignOneActiveTaskToEachProcessWhenTaskCountSameAsProcessCount() {
         createClient(p1, 1);
         createClient(p2, 1);
         createClient(p3, 1);
@@ -65,7 +65,7 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldNotMigrateActiveTaskToOtherProcess() throws Exception {
+    public void shouldNotMigrateActiveTaskToOtherProcess() {
         createClientWithPreviousActiveTasks(p1, 1, task00);
         createClientWithPreviousActiveTasks(p2, 1, task01);
 
@@ -91,7 +91,7 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldMigrateActiveTasksToNewProcessWithoutChangingAllAssignments() throws Exception {
+    public void shouldMigrateActiveTasksToNewProcessWithoutChangingAllAssignments() {
         createClientWithPreviousActiveTasks(p1, 1, task00, task02);
         createClientWithPreviousActiveTasks(p2, 1, task01);
         createClient(p3, 1);
@@ -107,7 +107,7 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldAssignBasedOnCapacity() throws Exception {
+    public void shouldAssignBasedOnCapacity() {
         createClient(p1, 1);
         createClient(p2, 2);
         final StickyTaskAssignor taskAssignor = createTaskAssignor(task00, task01, task02);
@@ -152,7 +152,7 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldAssignTasksToClientWithPreviousStandbyTasks() throws Exception {
+    public void shouldAssignTasksToClientWithPreviousStandbyTasks() {
         final ClientState client1 = createClient(p1, 1);
         client1.addPreviousStandbyTasks(Utils.mkSet(task02));
         final ClientState client2 = createClient(p2, 1);
@@ -170,7 +170,7 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldAssignBasedOnCapacityWhenMultipleClientHaveStandbyTasks() throws Exception {
+    public void shouldAssignBasedOnCapacityWhenMultipleClientHaveStandbyTasks() {
         final ClientState c1 = createClientWithPreviousActiveTasks(p1, 1, task00);
         c1.addPreviousStandbyTasks(Utils.mkSet(task01));
         final ClientState c2 = createClientWithPreviousActiveTasks(p2, 2, task02);
@@ -185,7 +185,7 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldAssignStandbyTasksToDifferentClientThanCorrespondingActiveTaskIsAssingedTo() throws Exception {
+    public void shouldAssignStandbyTasksToDifferentClientThanCorrespondingActiveTaskIsAssingedTo() {
         createClientWithPreviousActiveTasks(p1, 1, task00);
         createClientWithPreviousActiveTasks(p2, 1, task01);
         createClientWithPreviousActiveTasks(p3, 1, task02);
@@ -215,7 +215,7 @@ public class StickyTaskAssignorTest {
 
 
     @Test
-    public void shouldAssignMultipleReplicasOfStandbyTask() throws Exception {
+    public void shouldAssignMultipleReplicasOfStandbyTask() {
         createClientWithPreviousActiveTasks(p1, 1, task00);
         createClientWithPreviousActiveTasks(p2, 1, task01);
         createClientWithPreviousActiveTasks(p3, 1, task02);
@@ -229,7 +229,7 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldNotAssignStandbyTaskReplicasWhenNoClientAvailableWithoutHavingTheTaskAssigned() throws Exception {
+    public void shouldNotAssignStandbyTaskReplicasWhenNoClientAvailableWithoutHavingTheTaskAssigned() {
         createClient(p1, 1);
         final StickyTaskAssignor taskAssignor = createTaskAssignor(task00);
         taskAssignor.assign(1);
@@ -237,7 +237,7 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldAssignActiveAndStandbyTasks() throws Exception {
+    public void shouldAssignActiveAndStandbyTasks() {
         createClient(p1, 1);
         createClient(p2, 1);
         createClient(p3, 1);
@@ -251,7 +251,7 @@ public class StickyTaskAssignorTest {
 
 
     @Test
-    public void shouldAssignAtLeastOneTaskToEachClientIfPossible() throws Exception {
+    public void shouldAssignAtLeastOneTaskToEachClientIfPossible() {
         createClient(p1, 3);
         createClient(p2, 1);
         createClient(p3, 1);
@@ -264,7 +264,7 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldAssignEachActiveTaskToOneClientWhenMoreClientsThanTasks() throws Exception {
+    public void shouldAssignEachActiveTaskToOneClientWhenMoreClientsThanTasks() {
         createClient(p1, 1);
         createClient(p2, 1);
         createClient(p3, 1);
@@ -279,7 +279,7 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldBalanceActiveAndStandbyTasksAcrossAvailableClients() throws Exception {
+    public void shouldBalanceActiveAndStandbyTasksAcrossAvailableClients() {
         createClient(p1, 1);
         createClient(p2, 1);
         createClient(p3, 1);
@@ -296,7 +296,7 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldAssignMoreTasksToClientWithMoreCapacity() throws Exception {
+    public void shouldAssignMoreTasksToClientWithMoreCapacity() {
         createClient(p2, 2);
         createClient(p1, 1);
 
@@ -320,7 +320,7 @@ public class StickyTaskAssignorTest {
 
 
     @Test
-    public void shouldNotHaveSameAssignmentOnAnyTwoHosts() throws Exception {
+    public void shouldNotHaveSameAssignmentOnAnyTwoHosts() {
         createClient(p1, 1);
         createClient(p2, 1);
         createClient(p3, 1);
@@ -342,7 +342,7 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldNotHaveSameAssignmentOnAnyTwoHostsWhenThereArePreviousActiveTasks() throws Exception {
+    public void shouldNotHaveSameAssignmentOnAnyTwoHostsWhenThereArePreviousActiveTasks() {
         createClientWithPreviousActiveTasks(p1, 1, task01, task02);
         createClientWithPreviousActiveTasks(p2, 1, task03);
         createClientWithPreviousActiveTasks(p3, 1, task00);
@@ -364,7 +364,7 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldNotHaveSameAssignmentOnAnyTwoHostsWhenThereArePreviousStandbyTasks() throws Exception {
+    public void shouldNotHaveSameAssignmentOnAnyTwoHostsWhenThereArePreviousStandbyTasks() {
         final ClientState c1 = createClientWithPreviousActiveTasks(p1, 1, task01, task02);
         c1.addPreviousStandbyTasks(Utils.mkSet(task03, task00));
         final ClientState c2 = createClientWithPreviousActiveTasks(p2, 1, task03, task00);
@@ -389,7 +389,7 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldReBalanceTasksAcrossAllClientsWhenCapacityAndTaskCountTheSame() throws Exception {
+    public void shouldReBalanceTasksAcrossAllClientsWhenCapacityAndTaskCountTheSame() {
         createClientWithPreviousActiveTasks(p3, 1, task00, task01, task02, task03);
         createClient(p1, 1);
         createClient(p2, 1);
@@ -405,7 +405,7 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldReBalanceTasksAcrossClientsWhenCapacityLessThanTaskCount() throws Exception {
+    public void shouldReBalanceTasksAcrossClientsWhenCapacityLessThanTaskCount() {
         createClientWithPreviousActiveTasks(p3, 1, task00, task01, task02, task03);
         createClient(p1, 1);
         createClient(p2, 1);
@@ -419,7 +419,7 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldRebalanceTasksToClientsBasedOnCapacity() throws Exception {
+    public void shouldRebalanceTasksToClientsBasedOnCapacity() {
         createClientWithPreviousActiveTasks(p2, 1, task00, task03, task02);
         createClient(p3, 2);
         final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task02, task03);
@@ -429,7 +429,7 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldMoveMinimalNumberOfTasksWhenPreviouslyAboveCapacityAndNewClientAdded() throws Exception {
+    public void shouldMoveMinimalNumberOfTasksWhenPreviouslyAboveCapacityAndNewClientAdded() {
         final Set<TaskId> p1PrevTasks = Utils.mkSet(task00, task02);
         final Set<TaskId> p2PrevTasks = Utils.mkSet(task01, task03);
 
@@ -450,7 +450,7 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldNotMoveAnyTasksWhenNewTasksAdded() throws Exception {
+    public void shouldNotMoveAnyTasksWhenNewTasksAdded() {
         createClientWithPreviousActiveTasks(p1, 1, task00, task01);
         createClientWithPreviousActiveTasks(p2, 1, task02, task03);
 
@@ -462,7 +462,7 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldAssignNewTasksToNewClientWhenPreviousTasksAssignedToOldClients() throws Exception {
+    public void shouldAssignNewTasksToNewClientWhenPreviousTasksAssignedToOldClients() {
 
         createClientWithPreviousActiveTasks(p1, 1, task02, task01);
         createClientWithPreviousActiveTasks(p2, 1, task00, task03);
@@ -477,7 +477,7 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldAssignTasksNotPreviouslyActiveToNewClient() throws Exception {
+    public void shouldAssignTasksNotPreviouslyActiveToNewClient() {
         final TaskId task10 = new TaskId(0, 10);
         final TaskId task11 = new TaskId(0, 11);
         final TaskId task12 = new TaskId(1, 2);
@@ -507,7 +507,7 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldAssignTasksNotPreviouslyActiveToMultipleNewClients() throws Exception {
+    public void shouldAssignTasksNotPreviouslyActiveToMultipleNewClients() {
         final TaskId task10 = new TaskId(0, 10);
         final TaskId task11 = new TaskId(0, 11);
         final TaskId task12 = new TaskId(1, 2);
@@ -538,7 +538,7 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldAssignTasksToNewClient() throws Exception {
+    public void shouldAssignTasksToNewClient() {
         createClientWithPreviousActiveTasks(p1, 1, task01, task02);
         createClient(p2, 1);
         createTaskAssignor(task01, task02).assign(0);
@@ -546,7 +546,7 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldAssignTasksToNewClientWithoutFlippingAssignmentBetweenExistingClients() throws Exception {
+    public void shouldAssignTasksToNewClientWithoutFlippingAssignmentBetweenExistingClients() {
         final ClientState c1 = createClientWithPreviousActiveTasks(p1, 1, task00, task01, task02);
         final ClientState c2 = createClientWithPreviousActiveTasks(p2, 1, task03, task04, task05);
         final ClientState newClient = createClient(p3, 1);
@@ -565,7 +565,7 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldAssignTasksToNewClientWithoutFlippingAssignmentBetweenExistingAndBouncedClients() throws Exception {
+    public void shouldAssignTasksToNewClientWithoutFlippingAssignmentBetweenExistingAndBouncedClients() {
         final TaskId task06 = new TaskId(0, 6);
         final ClientState c1 = createClientWithPreviousActiveTasks(p1, 1, task00, task01, task02, task06);
         final ClientState c2 = createClient(p2, 1);

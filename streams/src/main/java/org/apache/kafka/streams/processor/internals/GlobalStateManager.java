@@ -16,8 +16,14 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.streams.errors.StreamsException;
+
 import java.util.Set;
 
 public interface GlobalStateManager extends StateManager {
+    /**
+     * @throws IllegalStateException If store gets registered after initialized is already finished
+     * @throws StreamsException if the store's change log does not contain the partition
+     */
     Set<String> initialize(InternalProcessorContext processorContext);
 }

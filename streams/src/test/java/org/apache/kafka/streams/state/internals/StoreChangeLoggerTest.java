@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -38,8 +39,7 @@ public class StoreChangeLoggerTest {
     private final Map<Integer, String> logged = new HashMap<>();
 
     private final MockProcessorContext context = new MockProcessorContext(StateSerdes.withBuiltinTypes(topic, Integer.class, String.class),
-            new RecordCollectorImpl(null, "StoreChangeLoggerTest") {
-                @SuppressWarnings("unchecked")
+            new RecordCollectorImpl(null, "StoreChangeLoggerTest", new LogContext("StoreChangeLoggerTest ")) {
                 @Override
                 public <K1, V1> void send(final String topic,
                                           final K1 key,
@@ -71,9 +71,8 @@ public class StoreChangeLoggerTest {
         context.close();
     }
 
-    @SuppressWarnings("unchecked")
     @Test
-    public void testAddRemove() throws Exception {
+    public void testAddRemove() {
         context.setTime(1);
         changeLogger.logChange(0, "zero");
         changeLogger.logChange(1, "one");

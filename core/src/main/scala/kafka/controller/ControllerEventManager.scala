@@ -18,11 +18,13 @@
 package kafka.controller
 
 import java.util.concurrent.LinkedBlockingQueue
-
-import scala.collection._
+import java.util.concurrent.locks.ReentrantLock
 
 import kafka.metrics.KafkaTimer
+import kafka.utils.CoreUtils.inLock
 import kafka.utils.ShutdownableThread
+
+import scala.collection._
 
 object ControllerEventManager {
   val ControllerEventThreadName = "controller-event-thread"
@@ -31,7 +33,7 @@ class ControllerEventManager(rateAndTimeMetrics: Map[ControllerState, KafkaTimer
                              eventProcessedListener: ControllerEvent => Unit) {
 
   @volatile private var _state: ControllerState = ControllerState.Idle
-
+  private val putLock = new ReentrantLock()
   private val queue = new LinkedBlockingQueue[ControllerEvent]
   private val thread = new ControllerEventThread(ControllerEventManager.ControllerEventThreadName)
 
@@ -41,7 +43,14 @@ class ControllerEventManager(rateAndTimeMetrics: Map[ControllerState, KafkaTimer
 
   def close(): Unit = thread.shutdown()
 
-  def put(event: ControllerEvent): Unit = queue.put(event)
+  def put(event: ControllerEvent): Unit = inLock(putLock) {
+    queue.put(event)
+  }
+
+  def clearAndPut(event: ControllerEvent): Unit = inLock(putLock) {
+    queue.clear()
+    queue.put(event)
+  }
 
   class ControllerEventThread(name: String) extends ShutdownableThread(name = name) {
     override def doWork(): Unit = {

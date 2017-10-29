@@ -14,15 +14,14 @@ package kafka.api
 
 import java.io.File
 
-import kafka.security.auth.{All, Allow, Alter, AlterConfigs, Authorizer, ClusterAction, Create, Delete, Deny, Describe, Operation, PermissionType, SimpleAclAuthorizer, Topic, Acl => AuthAcl, Resource => AuthResource}
-import org.apache.kafka.common.protocol.SecurityProtocol
+import kafka.security.auth.{All, Allow, Alter, AlterConfigs, Authorizer, ClusterAction, Create, Delete, Deny, Describe, Group, Operation, PermissionType, SimpleAclAuthorizer, Topic, Acl => AuthAcl, Resource => AuthResource}
 import kafka.server.KafkaConfig
 import kafka.utils.{CoreUtils, JaasTestUtils, TestUtils}
-import org.apache.kafka.clients.admin.{AdminClient, CreateAclsOptions, DeleteAclsOptions, KafkaAdminClient}
+import org.apache.kafka.clients.admin.{AdminClient, CreateAclsOptions, DeleteAclsOptions}
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, InvalidRequestException}
 import org.apache.kafka.common.resource.{Resource, ResourceFilter, ResourceType}
-import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.junit.Assert.assertEquals
 import org.junit.{After, Assert, Before, Test}
 
@@ -41,13 +40,16 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
     try {
       authorizer.configure(this.configs.head.originals())
       authorizer.addAcls(Set(new AuthAcl(AuthAcl.WildCardPrincipal, Allow,
-                              AuthAcl.WildCardHost, All)), new AuthResource(Topic, "*"))
+                             AuthAcl.WildCardHost, All)), new AuthResource(Topic, "*"))
+      authorizer.addAcls(Set(new AuthAcl(AuthAcl.WildCardPrincipal, Allow,
+                             AuthAcl.WildCardHost, All)), new AuthResource(Group, "*"))
+
       authorizer.addAcls(Set(clusterAcl(Allow, Create),
                              clusterAcl(Allow, Delete),
                              clusterAcl(Allow, ClusterAction),
                              clusterAcl(Allow, AlterConfigs),
                              clusterAcl(Allow, Alter)),
-                         AuthResource.ClusterResource)
+                             AuthResource.ClusterResource)
     } finally {
       authorizer.close()
     }
@@ -94,11 +96,13 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
     new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.READ, AclPermissionType.ALLOW))
   val transactionalIdAcl = new AclBinding(new Resource(ResourceType.TRANSACTIONAL_ID, "transactional_id"),
     new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.WRITE, AclPermissionType.ALLOW))
+  val groupAcl = new AclBinding(new Resource(ResourceType.GROUP, "*"),
+    new AccessControlEntry("User:*", "*", AclOperation.ALL, AclPermissionType.ALLOW))
 
   @Test
   override def testAclOperations(): Unit = {
     client = AdminClient.create(createConfig())
-    assertEquals(6, client.describeAcls(AclBindingFilter.ANY).values.get().size)
+    assertEquals(7, client.describeAcls(AclBindingFilter.ANY).values.get().size)
     val results = client.createAcls(List(acl2, acl3).asJava)
     assertEquals(Set(acl2, acl3), results.values.keySet().asScala)
     results.values.values().asScala.foreach(value => value.get)
@@ -134,12 +138,12 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
     val filterB = new AclBindingFilter(new ResourceFilter(ResourceType.TOPIC, "mytopic2"), AccessControlEntryFilter.ANY)
     val filterC = new AclBindingFilter(new ResourceFilter(ResourceType.TRANSACTIONAL_ID, null), AccessControlEntryFilter.ANY)
 
-    waitForDescribeAcls(client, filterA, Set())
+    waitForDescribeAcls(client, filterA, Set(groupAcl))
     waitForDescribeAcls(client, filterC, Set(transactionalIdAcl))
 
     val results2 = client.deleteAcls(List(filterA, filterB, filterC).asJava, new DeleteAclsOptions())
     assertEquals(Set(filterA, filterB, filterC), results2.values.keySet.asScala)
-    assertEquals(Set(), results2.values.get(filterA).get.values.asScala.map(_.binding).toSet)
+    assertEquals(Set(groupAcl), results2.values.get(filterA).get.values.asScala.map(_.binding).toSet)
     assertEquals(Set(transactionalIdAcl), results2.values.get(filterC).get.values.asScala.map(_.binding).toSet)
     assertEquals(Set(acl2), results2.values.get(filterB).get.values.asScala.map(_.binding).toSet)
 

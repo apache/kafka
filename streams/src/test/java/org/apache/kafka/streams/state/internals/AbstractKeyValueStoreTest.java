@@ -162,6 +162,7 @@ public abstract class AbstractKeyValueStoreTest {
         // receive the restore entries ...
         store = createKeyValueStore(driver.context(), Integer.class, String.class, false);
         context.restore(store.name(), driver.restoredEntries());
+
         // Verify that the store's contents were properly restored ...
         assertEquals(0, driver.checkForRestoredEntries(store));
 
@@ -219,52 +220,52 @@ public abstract class AbstractKeyValueStoreTest {
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerExceptionOnPutNullKey() throws Exception {
+    public void shouldThrowNullPointerExceptionOnPutNullKey() {
         store.put(null, "anyValue");
     }
 
     @Test
-    public void shouldNotThrowNullPointerExceptionOnPutNullValue() throws Exception {
+    public void shouldNotThrowNullPointerExceptionOnPutNullValue() {
         store.put(1, null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerExceptionOnPutIfAbsentNullKey() throws Exception {
+    public void shouldThrowNullPointerExceptionOnPutIfAbsentNullKey() {
         store.putIfAbsent(null, "anyValue");
     }
 
     @Test
-    public void shouldNotThrowNullPointerExceptionOnPutIfAbsentNullValue() throws Exception {
+    public void shouldNotThrowNullPointerExceptionOnPutIfAbsentNullValue() {
         store.putIfAbsent(1, null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerExceptionOnPutAllNullKey() throws Exception {
+    public void shouldThrowNullPointerExceptionOnPutAllNullKey() {
         store.putAll(Collections.singletonList(new KeyValue<Integer, String>(null, "anyValue")));
     }
 
     @Test
-    public void shouldNotThrowNullPointerExceptionOnPutAllNullKey() throws Exception {
+    public void shouldNotThrowNullPointerExceptionOnPutAllNullKey() {
         store.putAll(Collections.singletonList(new KeyValue<Integer, String>(1, null)));
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerExceptionOnDeleteNullKey() throws Exception {
+    public void shouldThrowNullPointerExceptionOnDeleteNullKey() {
         store.delete(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerExceptionOnGetNullKey() throws Exception {
+    public void shouldThrowNullPointerExceptionOnGetNullKey() {
         store.get(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerExceptionOnRangeNullFromKey() throws Exception {
+    public void shouldThrowNullPointerExceptionOnRangeNullFromKey() {
         store.range(null, 2);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerExceptionOnRangeNullToKey() throws Exception {
+    public void shouldThrowNullPointerExceptionOnRangeNullToKey() {
         store.range(2, null);
     }
 

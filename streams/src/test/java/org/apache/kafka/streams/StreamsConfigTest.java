@@ -17,6 +17,7 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -25,6 +26,8 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
+import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.hamcrest.CoreMatchers;
 import org.junit.Before;
 import org.junit.Test;
@@ -41,11 +44,13 @@ import static org.apache.kafka.common.requests.IsolationLevel.READ_UNCOMMITTED;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
+import static org.apache.kafka.test.StreamsTestUtils.minimalStreamsConfig;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class StreamsConfigTest {
 
@@ -77,7 +82,7 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void testGetProducerConfigs() throws Exception {
+    public void testGetProducerConfigs() {
         final String clientId = "client";
         final Map<String, Object> returnedProps = streamsConfig.getProducerConfigs(clientId);
         assertEquals(returnedProps.get(ProducerConfig.CLIENT_ID_CONFIG), clientId + "-producer");
@@ -86,7 +91,7 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void testGetConsumerConfigs() throws Exception {
+    public void testGetConsumerConfigs() {
         final String groupId = "example-application";
         final String clientId = "client";
         final Map<String, Object> returnedProps = streamsConfig.getConsumerConfigs(null, groupId, clientId);
@@ -97,7 +102,7 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void testGetRestoreConsumerConfigs() throws Exception {
+    public void testGetRestoreConsumerConfigs() {
         final String clientId = "client";
         final Map<String, Object> returnedProps = streamsConfig.getRestoreConsumerConfigs(clientId);
         assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), clientId + "-restore-consumer");
@@ -138,7 +143,7 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldSupportPrefixedConsumerConfigs() throws Exception {
+    public void shouldSupportPrefixedConsumerConfigs() {
         props.put(consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
         props.put(consumerPrefix(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG), 1);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
@@ -148,7 +153,7 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldSupportPrefixedRestoreConsumerConfigs() throws Exception {
+    public void shouldSupportPrefixedRestoreConsumerConfigs() {
         props.put(consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
         props.put(consumerPrefix(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG), 1);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
@@ -158,7 +163,7 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldSupportPrefixedPropertiesThatAreNotPartOfConsumerConfig() throws Exception {
+    public void shouldSupportPrefixedPropertiesThatAreNotPartOfConsumerConfig() {
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         props.put(consumerPrefix("interceptor.statsd.host"), "host");
         final Map<String, Object> consumerConfigs = streamsConfig.getConsumerConfigs(null, "groupId", "clientId");
@@ -166,7 +171,7 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldSupportPrefixedPropertiesThatAreNotPartOfRestoreConsumerConfig() throws Exception {
+    public void shouldSupportPrefixedPropertiesThatAreNotPartOfRestoreConsumerConfig() {
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         props.put(consumerPrefix("interceptor.statsd.host"), "host");
         final Map<String, Object> consumerConfigs = streamsConfig.getRestoreConsumerConfigs("clientId");
@@ -174,7 +179,7 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldSupportPrefixedPropertiesThatAreNotPartOfProducerConfig() throws Exception {
+    public void shouldSupportPrefixedPropertiesThatAreNotPartOfProducerConfig() {
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         props.put(producerPrefix("interceptor.statsd.host"), "host");
         final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs("clientId");
@@ -183,7 +188,7 @@ public class StreamsConfigTest {
 
 
     @Test
-    public void shouldSupportPrefixedProducerConfigs() throws Exception {
+    public void shouldSupportPrefixedProducerConfigs() {
         props.put(producerPrefix(ProducerConfig.BUFFER_MEMORY_CONFIG), 10);
         props.put(producerPrefix(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG), 1);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
@@ -193,7 +198,7 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldBeSupportNonPrefixedConsumerConfigs() throws Exception {
+    public void shouldBeSupportNonPrefixedConsumerConfigs() {
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG, 1);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
@@ -203,7 +208,7 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldBeSupportNonPrefixedRestoreConsumerConfigs() throws Exception {
+    public void shouldBeSupportNonPrefixedRestoreConsumerConfigs() {
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG, 1);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
@@ -213,7 +218,7 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldSupportNonPrefixedProducerConfigs() throws Exception {
+    public void shouldSupportNonPrefixedProducerConfigs() {
         props.put(ProducerConfig.BUFFER_MEMORY_CONFIG, 10);
         props.put(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG, 1);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
@@ -225,21 +230,21 @@ public class StreamsConfigTest {
 
 
     @Test(expected = StreamsException.class)
-    public void shouldThrowStreamsExceptionIfKeySerdeConfigFails() throws Exception {
+    public void shouldThrowStreamsExceptionIfKeySerdeConfigFails() {
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         streamsConfig.defaultKeySerde();
     }
 
     @Test(expected = StreamsException.class)
-    public void shouldThrowStreamsExceptionIfValueSerdeConfigFails() throws Exception {
+    public void shouldThrowStreamsExceptionIfValueSerdeConfigFails() {
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         streamsConfig.defaultValueSerde();
     }
 
     @Test
-    public void shouldOverrideStreamsDefaultConsumerConfigs() throws Exception {
+    public void shouldOverrideStreamsDefaultConsumerConfigs() {
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "latest");
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "10");
         final StreamsConfig streamsConfig = new StreamsConfig(props);
@@ -249,7 +254,7 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldOverrideStreamsDefaultProducerConfigs() throws Exception {
+    public void shouldOverrideStreamsDefaultProducerConfigs() {
         props.put(StreamsConfig.producerPrefix(ProducerConfig.LINGER_MS_CONFIG), "10000");
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs("clientId");
@@ -257,7 +262,7 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldOverrideStreamsDefaultConsumerConifgsOnRestoreConsumer() throws Exception {
+    public void shouldOverrideStreamsDefaultConsumerConifgsOnRestoreConsumer() {
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "latest");
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "10");
         final StreamsConfig streamsConfig = new StreamsConfig(props);
@@ -266,22 +271,24 @@ public class StreamsConfigTest {
         assertEquals("10", consumerConfigs.get(ConsumerConfig.MAX_POLL_RECORDS_CONFIG));
     }
 
-    @Test(expected = ConfigException.class)
-    public void shouldThrowExceptionIfConsumerAutoCommitIsOverridden() throws Exception {
+    @Test
+    public void shouldResetToDefaultIfConsumerAutoCommitIsOverridden() {
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG), "true");
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        streamsConfig.getConsumerConfigs(null, "a", "b");
-    }
-
-    @Test(expected = ConfigException.class)
-    public void shouldThrowExceptionIfRestoreConsumerAutoCommitIsOverridden() throws Exception {
-        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG), "true");
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        streamsConfig.getRestoreConsumerConfigs("client");
+        final Map<String, Object> consumerConfigs = streamsConfig.getConsumerConfigs(null, "a", "b");
+        assertEquals("false", consumerConfigs.get(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG));
     }
 
     @Test
-    public void shouldSetInternalLeaveGroupOnCloseConfigToFalseInConsumer() throws Exception {
+    public void shouldResetToDefaultIfRestoreConsumerAutoCommitIsOverridden() {
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG), "true");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.getRestoreConsumerConfigs("client");
+        assertEquals("false", consumerConfigs.get(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG));
+    }
+
+    @Test
+    public void shouldSetInternalLeaveGroupOnCloseConfigToFalseInConsumer() {
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> consumerConfigs = streamsConfig.getConsumerConfigs(null, "groupId", "clientId");
         assertThat(consumerConfigs.get("internal.leave.group.on.close"), CoreMatchers.<Object>equalTo(false));
@@ -307,50 +314,56 @@ public class StreamsConfigTest {
         new StreamsConfig(props);
     }
 
-    @Test(expected = ConfigException.class)
-    public void shouldThrowExceptionIfConsumerIsolationLevelIsOverriddenIfEosEnabled() {
+    @Test
+    public void shouldResetToDefaultIfConsumerIsolationLevelIsOverriddenIfEosEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
         props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "anyValue");
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        streamsConfig.getConsumerConfigs(null, "groupId", "clientId");
+        final Map<String, Object> consumerConfigs = streamsConfig.getConsumerConfigs(null, "groupId", "clientId");
+        assertThat((String) consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG), equalTo(READ_COMMITTED.name().toLowerCase(Locale.ROOT)));
     }
 
     @Test
     public void shouldAllowSettingConsumerIsolationLevelIfEosDisabled() {
         props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT));
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        streamsConfig.getConsumerConfigs(null, "groupId", "clientId");
+        final Map<String, Object> consumerConfigs = streamsConfig.getConsumerConfigs(null, "groupId", "clientrId");
+        assertThat((String) consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG), equalTo(READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT)));
     }
 
 
-    @Test(expected = ConfigException.class)
-    public void shouldThrowExceptionIfProducerEnableIdempotenceIsOverriddenIfEosEnabled() {
+    @Test
+    public void shouldResetToDefaultIfProducerEnableIdempotenceIsOverriddenIfEosEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "anyValue");
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        streamsConfig.getProducerConfigs("clientId");
+        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs("clientId");
+        assertTrue((Boolean) producerConfigs.get(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG));
     }
 
     @Test
     public void shouldAllowSettingProducerEnableIdempotenceIfEosDisabled() {
-        props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
+        props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        streamsConfig.getProducerConfigs("clientId");
+        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs("clientId");
+        assertThat((Boolean) producerConfigs.get(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG), equalTo(false));
     }
 
-    @Test(expected = ConfigException.class)
-    public void shouldThrowExceptionIfProducerMaxInFlightRequestPerConnectionsIsOverriddenIfEosEnabled() {
+    @Test
+    public void shouldResetToDefaultIfProducerMaxInFlightRequestPerConnectionsIsOverriddenIfEosEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
         props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "anyValue");
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        streamsConfig.getProducerConfigs("clientId");
+        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs("clientId");
+        assertThat((Integer) producerConfigs.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION), equalTo(1));
     }
 
     @Test
     public void shouldAllowSettingProducerMaxInFlightRequestPerConnectionsWhenEosDisabled() {
-        props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "anyValue");
+        props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 2);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        streamsConfig.getProducerConfigs("clientId");
+        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs("clientId");
+        assertThat((Integer) producerConfigs.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION), equalTo(2));
     }
 
     @Test
@@ -390,6 +403,94 @@ public class StreamsConfigTest {
         assertThat(streamsConfig.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG), equalTo(commitIntervalMs));
     }
 
+    @Test
+    public void shouldBeBackwardsCompatibleWithDeprecatedConfigs() {
+        final Properties props = minimalStreamsConfig();
+        props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.Double().getClass());
+        props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.Double().getClass());
+        props.put(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
+
+        final StreamsConfig config = new StreamsConfig(props);
+        assertTrue(config.defaultKeySerde() instanceof Serdes.DoubleSerde);
+        assertTrue(config.defaultValueSerde() instanceof Serdes.DoubleSerde);
+        assertTrue(config.defaultTimestampExtractor() instanceof MockTimestampExtractor);
+    }
+
+    @Test
+    public void shouldUseNewConfigsWhenPresent() {
+        final Properties props = minimalStreamsConfig();
+        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
+        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
+        props.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
+
+        final StreamsConfig config = new StreamsConfig(props);
+        assertTrue(config.defaultKeySerde() instanceof Serdes.LongSerde);
+        assertTrue(config.defaultValueSerde() instanceof Serdes.LongSerde);
+        assertTrue(config.defaultTimestampExtractor() instanceof MockTimestampExtractor);
+    }
+
+    @Test
+    public void shouldUseCorrectDefaultsWhenNoneSpecified() {
+        final StreamsConfig config = new StreamsConfig(minimalStreamsConfig());
+        assertTrue(config.defaultKeySerde() instanceof Serdes.ByteArraySerde);
+        assertTrue(config.defaultValueSerde() instanceof Serdes.ByteArraySerde);
+        assertTrue(config.defaultTimestampExtractor() instanceof FailOnInvalidTimestamp);
+    }
+
+    @Test
+    public void shouldSpecifyCorrectKeySerdeClassOnErrorUsingDeprecatedConfigs() {
+        final Properties props = minimalStreamsConfig();
+        props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
+        final StreamsConfig config = new StreamsConfig(props);
+        try {
+            config.keySerde();
+            fail("Test should throw a StreamsException");
+        } catch (StreamsException e) {
+            assertEquals("Failed to configure key serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde", e.getMessage());
+        }
+    }
+
+    @Test
+    public void shouldSpecifyCorrectKeySerdeClassOnError() {
+        final Properties props = minimalStreamsConfig();
+        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
+        final StreamsConfig config = new StreamsConfig(props);
+        try {
+            config.keySerde();
+            fail("Test should throw a StreamsException");
+        } catch (StreamsException e) {
+            assertEquals("Failed to configure key serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde", e.getMessage());
+        }
+    }
+
+    @Test
+    public void shouldSpecifyCorrectValueSerdeClassOnErrorUsingDeprecatedConfigs() {
+        final Properties props = minimalStreamsConfig();
+        props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
+        final StreamsConfig config = new StreamsConfig(props);
+        try {
+            config.valueSerde();
+            fail("Test should throw a StreamsException");
+        } catch (StreamsException e) {
+            assertEquals("Failed to configure value serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde", e.getMessage());
+        }
+    }
+
+    @Test
+    public void shouldSpecifyCorrectValueSerdeClassOnError() {
+        final Properties props = minimalStreamsConfig();
+        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
+        final StreamsConfig config = new StreamsConfig(props);
+        try {
+            config.valueSerde();
+            fail("Test should throw a StreamsException");
+        } catch (StreamsException e) {
+            assertEquals("Failed to configure value serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde", e.getMessage());
+        }
+    }
+
+
+
     static class MisconfiguredSerde implements Serde {
         @Override
         public void configure(final Map configs, final boolean isKey) {
@@ -409,6 +510,14 @@ public class StreamsConfigTest {
         @Override
         public Deserializer deserializer() {
             return null;
+        }
+    }
+
+    public static class MockTimestampExtractor implements TimestampExtractor {
+
+        @Override
+        public long extract(final ConsumerRecord<Object, Object> record, final long previousTimestamp) {
+            return 0;
         }
     }
 }

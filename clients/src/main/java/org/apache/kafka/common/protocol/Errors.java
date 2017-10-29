@@ -17,6 +17,7 @@
 package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.ConcurrentTransactionsException;
@@ -24,7 +25,8 @@ import org.apache.kafka.common.errors.ControllerMovedException;
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.CorruptRecordException;
-import org.apache.kafka.common.errors.DuplicateSequenceNumberException;
+import org.apache.kafka.common.errors.LogDirNotFoundException;
+import org.apache.kafka.common.errors.DuplicateSequenceException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
@@ -44,6 +46,7 @@ import org.apache.kafka.common.errors.InvalidTimestampException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
 import org.apache.kafka.common.errors.InvalidTxnTimeoutException;
+import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.NotControllerException;
@@ -57,6 +60,7 @@ import org.apache.kafka.common.errors.OperationNotAttemptedException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.ReassignmentInProgressException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
@@ -69,6 +73,7 @@ import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.TransactionCoordinatorFencedException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
@@ -84,10 +89,15 @@ import java.util.Map;
  * This class contains all the client-server errors--those errors that must be sent from the server to the client. These
  * are thus part of the protocol. The names can be changed but the error code cannot.
  *
+ * Note that client library will convert an unknown error code to the non-retriable UnknownServerException if the client library
+ * version is old and does not recognize the newly-added error code. Therefore when a new server-side error is added,
+ * we may need extra logic to convert the new error code to another existing error code before sending the response back to
+ * the client if the request version suggests that the client may not recognize the new error code.
+ *
  * Do not add exceptions that occur only on the client or only on the server here.
  */
 public enum Errors {
-    UNKNOWN(-1, "The server experienced an unexpected error when processing the request",
+    UNKNOWN_SERVER_ERROR(-1, "The server experienced an unexpected error when processing the request",
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {
@@ -256,7 +266,8 @@ public enum Errors {
             }
         }),
     INCONSISTENT_GROUP_PROTOCOL(23,
-            "The group member's supported protocols are incompatible with those of existing members.",
+            "The group member's supported protocols are incompatible with those of existing members" +
+                " or first group member tried to join with empty protocol type or empty protocol list.",
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {
@@ -425,7 +436,7 @@ public enum Errors {
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {
-                return new DuplicateSequenceNumberException(message);
+                return new DuplicateSequenceException(message);
             }
         }),
     INVALID_PRODUCER_EPOCH(47, "Producer attempted an operation with an old epoch. Either there is a newer producer " +
@@ -495,7 +506,46 @@ public enum Errors {
             public ApiException build(String message) {
                 return new OperationNotAttemptedException(message);
             }
-        });
+    }),
+    KAFKA_STORAGE_ERROR(56, "Disk error when trying to access log file on the disk.",
+        new ApiExceptionBuilder() {
+            @Override
+            public ApiException build(String message) {
+                return new KafkaStorageException(message);
+            }
+    }),
+    LOG_DIR_NOT_FOUND(57, "The user-specified log directory is not found in the broker config.",
+        new ApiExceptionBuilder() {
+            @Override
+            public ApiException build(String message) {
+                return new LogDirNotFoundException(message);
+            }
+    }),
+    SASL_AUTHENTICATION_FAILED(58, "SASL Authentication failed.",
+        new ApiExceptionBuilder() {
+            @Override
+            public ApiException build(String message) {
+                return new SaslAuthenticationException(message);
+            }
+    }),
+    UNKNOWN_PRODUCER_ID(59, "This exception is raised by the broker if it could not locate the producer metadata " +
+            "associated with the producerId in question. This could happen if, for instance, the producer's records " +
+            "were deleted because their retention time had elapsed. Once the last records of the producerId are " +
+            "removed, the producer's metadata is removed from the broker, and future appends by the producer will " +
+            "return this exception.",
+        new ApiExceptionBuilder() {
+            @Override
+            public ApiException build(String message) {
+                return new UnknownProducerIdException(message);
+            }
+    }),
+    REASSIGNMENT_IN_PROGRESS(60, "A partition reassignment is in progress",
+        new ApiExceptionBuilder() {
+            @Override
+            public ApiException build(String message) {
+                return new ReassignmentInProgressException(message);
+            }
+    });
 
     private interface ApiExceptionBuilder {
         ApiException build(String message);
@@ -588,7 +638,7 @@ public enum Errors {
             return error;
         } else {
             log.warn("Unexpected error code: {}.", code);
-            return UNKNOWN;
+            return UNKNOWN_SERVER_ERROR;
         }
     }
 
@@ -604,7 +654,7 @@ public enum Errors {
                 return error;
             clazz = clazz.getSuperclass();
         }
-        return UNKNOWN;
+        return UNKNOWN_SERVER_ERROR;
     }
 
     private static String toHtml() {

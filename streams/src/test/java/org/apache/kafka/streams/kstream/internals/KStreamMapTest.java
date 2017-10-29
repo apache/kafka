@@ -18,13 +18,14 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.junit.After;
+import org.junit.Rule;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -35,20 +36,12 @@ public class KStreamMapTest {
 
     final private Serde<Integer> intSerde = Serdes.Integer();
     final private Serde<String> stringSerde = Serdes.String();
-
-    private KStreamTestDriver driver = null;
-
-    @After
-    public void cleanup() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
-    }
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @Test
     public void testMap() {
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
 
         KeyValueMapper<Integer, String, KeyValue<String, Integer>> mapper =
             new KeyValueMapper<Integer, String, KeyValue<String, Integer>>() {
@@ -60,13 +53,13 @@ public class KStreamMapTest {
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
-        KStream<Integer, String> stream = builder.stream(intSerde, stringSerde, topicName);
+        KStream<Integer, String> stream = builder.stream(topicName, Consumed.with(intSerde, stringSerde));
         MockProcessorSupplier<String, Integer> processor;
 
         processor = new MockProcessorSupplier<>();
         stream.map(mapper).process(processor);
 
-        driver = new KStreamTestDriver(builder);
+        driver.setUp(builder);
         for (int expectedKey : expectedKeys) {
             driver.process(topicName, expectedKey, "V" + expectedKey);
         }
@@ -81,7 +74,7 @@ public class KStreamMapTest {
     }
 
     @Test
-    public void testTypeVariance() throws Exception {
+    public void testTypeVariance() {
         KeyValueMapper<Number, Object, KeyValue<Number, String>> stringify = new KeyValueMapper<Number, Object, KeyValue<Number, String>>() {
             @Override
             public KeyValue<Number, String> apply(Number key, Object value) {
@@ -89,7 +82,7 @@ public class KStreamMapTest {
             }
         };
 
-        new KStreamBuilder()
+        new StreamsBuilder()
             .<Integer, String>stream("numbers")
             .map(stringify)
             .to("strings");

@@ -18,13 +18,14 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.junit.After;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.util.HashMap;
@@ -38,20 +39,12 @@ public class KStreamSelectKeyTest {
 
     final private Serde<Integer> integerSerde = Serdes.Integer();
     final private Serde<String> stringSerde = Serdes.String();
-
-    private KStreamTestDriver driver;
-
-    @After
-    public void cleanup() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
-    }
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @Test
     public void testSelectKey() {
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
 
         final Map<Number, String> keyMap = new HashMap<>();
         keyMap.put(1, "ONE");
@@ -69,13 +62,13 @@ public class KStreamSelectKeyTest {
         final String[] expected = new String[]{"ONE:1", "TWO:2", "THREE:3"};
         final int[] expectedValues = new int[]{1, 2, 3};
 
-        KStream<String, Integer>  stream = builder.stream(stringSerde, integerSerde, topicName);
+        KStream<String, Integer>  stream = builder.stream(topicName, Consumed.with(stringSerde, integerSerde));
 
         MockProcessorSupplier<String, Integer> processor = new MockProcessorSupplier<>();
 
         stream.selectKey(selector).process(processor);
 
-        driver = new KStreamTestDriver(builder);
+        driver.setUp(builder);
 
         for (int expectedValue : expectedValues) {
             driver.process(topicName, null, expectedValue);
@@ -90,13 +83,13 @@ public class KStreamSelectKeyTest {
     }
 
     @Test
-    public void testTypeVariance() throws Exception {
+    public void testTypeVariance() {
         ForeachAction<Number, Object> consume = new ForeachAction<Number, Object>() {
             @Override
             public void apply(Number key, Object value) {}
         };
 
-        new KStreamBuilder()
+        new StreamsBuilder()
             .<Integer, String>stream("empty")
             .foreach(consume);
     }

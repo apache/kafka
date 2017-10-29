@@ -37,6 +37,7 @@ import javax.management.ReflectionException;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.utils.Sanitizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -133,7 +134,7 @@ public class JmxReporter implements MetricsReporter {
             mBeanName.append(",");
             mBeanName.append(entry.getKey());
             mBeanName.append("=");
-            mBeanName.append(entry.getValue());
+            mBeanName.append(Sanitizer.jmxSanitize(entry.getValue()));
         }
         return mBeanName.toString();
     }
@@ -169,7 +170,7 @@ public class JmxReporter implements MetricsReporter {
         private final Map<String, KafkaMetric> metrics;
 
         public KafkaMbean(String mbeanName) throws MalformedObjectNameException {
-            this.metrics = new HashMap<String, KafkaMetric>();
+            this.metrics = new HashMap<>();
             this.objectName = new ObjectName(mbeanName);
         }
 
@@ -184,22 +185,22 @@ public class JmxReporter implements MetricsReporter {
         @Override
         public Object getAttribute(String name) throws AttributeNotFoundException, MBeanException, ReflectionException {
             if (this.metrics.containsKey(name))
-                return this.metrics.get(name).value();
+                return this.metrics.get(name).metricValue();
             else
                 throw new AttributeNotFoundException("Could not find attribute " + name);
         }
 
         @Override
         public AttributeList getAttributes(String[] names) {
-            try {
-                AttributeList list = new AttributeList();
-                for (String name : names)
+            AttributeList list = new AttributeList();
+            for (String name : names) {
+                try {
                     list.add(new Attribute(name, getAttribute(name)));
-                return list;
-            } catch (Exception e) {
-                log.error("Error getting JMX attribute: ", e);
-                return new AttributeList();
+                } catch (Exception e) {
+                    log.warn("Error getting JMX attribute '{}'", name, e);
+                }
             }
+            return list;
         }
 
         public KafkaMetric removeAttribute(String name) {

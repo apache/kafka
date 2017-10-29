@@ -76,7 +76,6 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         brokers = new KafkaEmbedded[numBrokers];
         this.brokerConfig = brokerConfig;
         time = new MockTime(mockTimeMillisStart, mockTimeNanoStart);
-
     }
 
     /**
@@ -122,7 +121,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     /**
      * Stop the Kafka cluster.
      */
-    public void stop() {
+    private void stop() {
         for (final KafkaEmbedded broker : brokers) {
             broker.stop();
         }
@@ -215,7 +214,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      *
      * @param topic the name of the topic
      */
-    public void deleteTopic(final String topic) throws Exception {
+    public void deleteTopic(final String topic) throws InterruptedException {
         deleteTopicsAndWait(-1L, topic);
     }
 
@@ -224,7 +223,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      *
      * @param topic the name of the topic
      */
-    public void deleteTopicAndWait(final String topic) throws Exception {
+    public void deleteTopicAndWait(final String topic) throws InterruptedException {
         deleteTopicsAndWait(TOPIC_DELETION_TIMEOUT, topic);
     }
 
@@ -234,7 +233,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      * @param timeoutMs the max time to wait for the topic to be deleted (does not block if {@code <= 0})
      * @param topic the name of the topic
      */
-    public void deleteTopicAndWait(final long timeoutMs, final String topic) throws Exception {
+    public void deleteTopicAndWait(final long timeoutMs, final String topic) throws InterruptedException {
         deleteTopicsAndWait(timeoutMs, topic);
     }
 
@@ -243,7 +242,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      *
      * @param topics the name of the topics
      */
-    public void deleteTopics(final String... topics) throws Exception {
+    public void deleteTopics(final String... topics) throws InterruptedException {
         deleteTopicsAndWait(-1, topics);
     }
 
@@ -252,7 +251,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      *
      * @param topics the name of the topics
      */
-    public void deleteTopicsAndWait(final String... topics) throws Exception {
+    public void deleteTopicsAndWait(final String... topics) throws InterruptedException {
         deleteTopicsAndWait(TOPIC_DELETION_TIMEOUT, topics);
     }
 
@@ -262,7 +261,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      * @param timeoutMs the max time to wait for the topics to be deleted (does not block if {@code <= 0})
      * @param topics the name of the topics
      */
-    public void deleteTopicsAndWait(final long timeoutMs, final String... topics) throws Exception {
+    public void deleteTopicsAndWait(final long timeoutMs, final String... topics) throws InterruptedException {
         for (final String topic : topics) {
             try {
                 brokers[0].deleteTopic(topic);
@@ -274,32 +273,51 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         }
     }
 
-    public void deleteAndRecreateTopics(final String... topics) throws Exception {
+    public void deleteAndRecreateTopics(final String... topics) throws InterruptedException {
         deleteTopicsAndWait(TOPIC_DELETION_TIMEOUT, topics);
         createTopics(topics);
     }
 
-    public void deleteAndRecreateTopics(final long timeoutMs, final String... topics) throws Exception {
+    public void deleteAndRecreateTopics(final long timeoutMs, final String... topics) throws InterruptedException {
         deleteTopicsAndWait(timeoutMs, topics);
         createTopics(topics);
     }
 
+    public void waitForRemainingTopics(final long timeoutMs, final String... topics) throws InterruptedException {
+        TestUtils.waitForCondition(new TopicsRemainingCondition(topics), timeoutMs, "Topics are not expected after " + timeoutMs + " milli seconds.");
+    }
+
     private final class TopicsDeletedCondition implements TestCondition {
-        final Set<String> deletedTopic = new HashSet<>();
+        final Set<String> deletedTopics = new HashSet<>();
 
         private TopicsDeletedCondition(final String... topics) {
-            Collections.addAll(deletedTopic, topics);
+            Collections.addAll(deletedTopics, topics);
         }
 
         @Override
         public boolean conditionMet() {
             final Set<String> allTopics = new HashSet<>();
             allTopics.addAll(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics()));
-            return !allTopics.removeAll(deletedTopic);
+            return !allTopics.removeAll(deletedTopics);
         }
     }
 
-    public List<KafkaServer> brokers() {
+    private final class TopicsRemainingCondition implements TestCondition {
+        final Set<String> remainingTopics = new HashSet<>();
+
+        private TopicsRemainingCondition(final String... topics) {
+            Collections.addAll(remainingTopics, topics);
+        }
+
+        @Override
+        public boolean conditionMet() {
+            final Set<String> allTopics = new HashSet<>();
+            allTopics.addAll(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics()));
+            return allTopics.equals(remainingTopics);
+        }
+    }
+
+    private List<KafkaServer> brokers() {
         final List<KafkaServer> servers = new ArrayList<>();
         for (final KafkaEmbedded broker : brokers) {
             servers.add(broker.kafkaServer());

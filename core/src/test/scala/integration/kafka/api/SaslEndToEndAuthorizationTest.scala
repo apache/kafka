@@ -19,9 +19,10 @@ package kafka.api
 import java.util.Properties
 
 import kafka.utils.TestUtils
-import org.apache.kafka.common.protocol.SecurityProtocol
+import kafka.utils.Implicits._
 import org.apache.kafka.common.config.SaslConfigs
-import org.apache.kafka.common.errors.GroupAuthorizationException
+import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.errors.TopicAuthorizationException
 import org.junit.{Before, Test}
 
 import scala.collection.immutable.List
@@ -53,12 +54,12 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
     * the second one connects ok, but fails to consume messages due to the ACL.
     */
   @Test(timeout = 15000)
-  def testTwoConsumersWithDifferentSaslCredentials {
+  def testTwoConsumersWithDifferentSaslCredentials(): Unit = {
     setAclsAndProduce()
     val consumer1 = consumers.head
 
     val consumer2Config = new Properties
-    consumer2Config.putAll(consumerConfig)
+    consumer2Config ++= consumerConfig
     // consumer2 retrieves its credentials from the static JAAS configuration, so we test also this path
     consumer2Config.remove(SaslConfigs.SASL_JAAS_CONFIG)
 
@@ -76,9 +77,9 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
 
     try {
       consumeRecords(consumer2)
-      fail("Expected exception as consumer2 has no access to group")
+      fail("Expected exception as consumer2 has no access to topic")
     } catch {
-      case _: GroupAuthorizationException => //expected
+      case _: TopicAuthorizationException => //expected
     }
   }
 }
