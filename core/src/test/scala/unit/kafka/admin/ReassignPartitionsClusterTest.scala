@@ -471,11 +471,13 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   }
 
   /**
-   * This test verifies that the Controller restores the watch for the reassignment znode after the first rebalance
-   * completes.
+   * Verifies that the Controller sets a watcher for the reassignment znode after reassignment completion.
+   * This includes the case where the znode is set immediately after it's deleted (i.e. before the watch is set).
+   * This case relies on the scheduling of the operations, so it won't necessarily fail every time, but it fails
+   * often enough to detect a regression.
    */
   @Test
-  def shouldPerformTwoReassignmentOperationsOverVariousTopics() {
+  def shouldPerformMultipleReassignmentOperationsOverVariousTopics() {
     servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(conf => TestUtils.createServer(KafkaConfig.fromProps(conf)))
 
     createTopic(zkUtils, "orders", Map(0 -> List(0, 1, 2), 1 -> List(0, 1, 2)), servers)
@@ -524,6 +526,37 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     assertEquals(Seq(1, 2, 3), zkUtils.getReplicasForPartition("deliveries", 0))
 
     //Check untouched replicas are still there
+    assertEquals(Seq(0, 1), zkUtils.getReplicasForPartition("payments", 0))
+    assertEquals(Seq(0), zkUtils.getReplicasForPartition("customers", 0))
+    assertEquals(Seq(1), zkUtils.getReplicasForPartition("customers", 1))
+    assertEquals(Seq(2), zkUtils.getReplicasForPartition("customers", 2))
+    assertEquals(Seq(3), zkUtils.getReplicasForPartition("customers", 3))
+
+    // We set the znode and then continuously attempt to set it again to exercise the case where the znode is set
+    // immediately after deletion (i.e. before we set the watcher again)
+
+    val thirdMove = Map(TopicAndPartition("orders", 0) -> Seq(1, 2, 3))
+
+    new ReassignPartitionsCommand(zkUtils, None, thirdMove).reassignPartitions()
+
+    val fourthMove = Map(TopicAndPartition("payments", 1) -> Seq(2, 3))
+
+    Iterator.continually {
+      try new ReassignPartitionsCommand(zkUtils, None, fourthMove).reassignPartitions()
+      catch {
+        case _: AdminCommandFailedException => false
+      }
+    }.exists(identity)
+
+    waitForReassignmentToComplete()
+
+    // Check moved replicas for secondMove and fourthMove
+    assertEquals(Seq(1, 2, 3), zkUtils.getReplicasForPartition("orders", 0))
+    assertEquals(Seq(2, 3), zkUtils.getReplicasForPartition("payments", 1))
+
+    //Check untouched replicas are still there
+    assertEquals(Seq(3, 1, 2), zkUtils.getReplicasForPartition("orders", 1))
+    assertEquals(Seq(1, 2, 3), zkUtils.getReplicasForPartition("deliveries", 0))
     assertEquals(Seq(0, 1), zkUtils.getReplicasForPartition("payments", 0))
     assertEquals(Seq(0), zkUtils.getReplicasForPartition("customers", 0))
     assertEquals(Seq(1), zkUtils.getReplicasForPartition("customers", 1))

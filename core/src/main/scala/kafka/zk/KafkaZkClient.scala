@@ -620,16 +620,20 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
   }
 
   /**
-   * This registers a ZNodeChangeHandler and attempts to register a watcher with an ExistsRequest, which allows data watcher
-   * registrations on paths which might not even exist.
+   * This registers a ZNodeChangeHandler and attempts to register a watcher with an ExistsRequest, which allows data
+   * watcher registrations on paths which might not even exist.
    *
    * @param zNodeChangeHandler
+   * @return `true` if the path exists or `false` if it does not
+   * @throws ZooKeeperException if an error is returned by ZooKeeper
    */
-  def registerZNodeChangeHandlerAndCheckExistence(zNodeChangeHandler: ZNodeChangeHandler): Unit = {
+  def registerZNodeChangeHandlerAndCheckExistence(zNodeChangeHandler: ZNodeChangeHandler): Boolean = {
     zooKeeperClient.registerZNodeChangeHandler(zNodeChangeHandler)
     val existsResponse = retryRequestUntilConnected(ExistsRequest(zNodeChangeHandler.path))
-    if (existsResponse.resultCode != Code.OK && existsResponse.resultCode != Code.NONODE) {
-      throw existsResponse.resultException.get
+    existsResponse.resultCode match {
+      case Code.OK => true
+      case Code.NONODE => false
+      case _ => throw existsResponse.resultException.get
     }
   }
 

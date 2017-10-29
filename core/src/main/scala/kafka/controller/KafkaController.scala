@@ -816,7 +816,10 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     if (reassignment.isEmpty) {
       info("No more partitions need to be reassigned. Deleting zk path %s".format(ReassignPartitionsZNode.path))
       zkClient.deletePartitionReassignment()
-      zkClient.registerZNodeChangeHandlerAndCheckExistence(partitionReassignmentHandler)
+      // If the reassignment znode was set before we registered the watcher, we need to queue the PartitionReassignment
+      // event manually
+      if (zkClient.registerZNodeChangeHandlerAndCheckExistence(partitionReassignmentHandler))
+        eventManager.put(PartitionReassignment)
     } else {
       val setDataResponse = zkClient.setPartitionReassignmentRaw(reassignment)
       if (setDataResponse.resultCode == Code.NONODE) {
