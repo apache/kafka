@@ -358,7 +358,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             Struct connectConfig = new Struct(TASK_CONFIGURATION_V0);
             connectConfig.put("properties", taskConfig);
             byte[] serializedConfig = converter.fromConnectData(topic, TASK_CONFIGURATION_V0, connectConfig);
-            log.debug("Writing configuration for task " + index + " configuration: " + taskConfig);
+            log.debug("Writing configuration for task {} configuration: {}", index, taskConfig);
             ConnectorTaskId connectorTaskId = new ConnectorTaskId(connector, index);
             configLog.send(TASK_KEY(connectorTaskId), serializedConfig);
             index++;
@@ -375,7 +375,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             Struct connectConfig = new Struct(CONNECTOR_TASKS_COMMIT_V0);
             connectConfig.put("tasks", taskCount);
             byte[] serializedConfig = converter.fromConnectData(topic, CONNECTOR_TASKS_COMMIT_V0, connectConfig);
-            log.debug("Writing commit for connector " + connector + " with " + taskCount + " tasks.");
+            log.debug("Writing commit for connector {} with {} tasks.", connector, taskCount);
             configLog.send(COMMIT_TASKS_KEY(connector), serializedConfig);
 
             // Read to end to ensure all the commit messages have been written
@@ -525,7 +525,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                                     newConnectorConfig == null ? null : newConnectorConfig.getClass());
                             return;
                         }
-                        log.debug("Updating configuration for connector " + connectorName + " configuration: " + newConnectorConfig);
+                        log.debug("Updating configuration for connector {} configuration: {}", connectorName, newConnectorConfig);
                         connectorConfigs.put(connectorName, (Map<String, String>) newConnectorConfig);
 
                         // Set the initial state of the connector to STARTED, which ensures that any connectors
@@ -563,7 +563,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                         deferred = new HashMap<>();
                         deferredTaskUpdates.put(taskId.connector(), deferred);
                     }
-                    log.debug("Storing new config for task " + taskId + " this will wait for a commit message before the new config will take effect. New config: " + newTaskConfig);
+                    log.debug("Storing new config for task {} this will wait for a commit message before the new config will take effect. New config: {}", taskId, newTaskConfig);
                     deferred.put(taskId, (Map<String, String>) newTaskConfig);
                 }
             } else if (record.key().startsWith(COMMIT_TASKS_PREFIX)) {
@@ -607,7 +607,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                         // historical data, in which case we would not have applied any updates yet and there will be no
                         // task config data already committed for the connector, so we shouldn't have to clear any data
                         // out. All we need to do is add the flag marking it inconsistent.
-                        log.debug("We have an incomplete set of task configs for connector " + connectorName + " probably due to compaction. So we are not doing anything with the new configuration.");
+                        log.debug("We have an incomplete set of task configs for connector {} probably due to compaction. So we are not doing anything with the new configuration.", connectorName);
                         inconsistent.add(connectorName);
                     } else {
                         if (deferred != null) {

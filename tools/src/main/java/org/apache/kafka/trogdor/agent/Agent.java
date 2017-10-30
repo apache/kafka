@@ -154,7 +154,7 @@ public final class Agent {
                     }
                     for (Fault fault: toStart) {
                         try {
-                            log.debug("Activating fault " + fault);
+                            log.debug("Activating fault {}", fault);
                             fault.activate(now, platform);
                             started.add(fault);
                         } catch (Throwable e) {
@@ -164,7 +164,7 @@ public final class Agent {
                     }
                     for (Fault fault: toEnd) {
                         try {
-                            log.debug("Deactivating fault " + fault);
+                            log.debug("Deactivating fault {}", fault);
                             fault.deactivate(now, platform);
                         } catch (Throwable e) {
                             log.error("Error deactivating fault " + fault.id(), e);

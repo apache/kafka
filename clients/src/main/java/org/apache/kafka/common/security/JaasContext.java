@@ -33,7 +33,7 @@ import java.util.Map;
 
 public class JaasContext {
 
-    private static final Logger LOG = LoggerFactory.getLogger(JaasUtils.class);
+    private static final Logger LOG = LoggerFactory.getLogger(JaasContext.class);
 
     private static final String GLOBAL_CONTEXT_NAME_SERVER = "KafkaServer";
     private static final String GLOBAL_CONTEXT_NAME_CLIENT = "KafkaClient";
