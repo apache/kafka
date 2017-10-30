@@ -218,7 +218,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldUnassignChangelogPartitionsOnSuspend() {
-        restoreConsumer.assign(Collections.<TopicPartition>emptyList());
+        restoreConsumer.unsubscribe();
         EasyMock.expectLastCall();
         replay();
 
@@ -231,7 +231,7 @@ public class TaskManagerTest {
         EasyMock.expect(active.suspend()).andReturn(new RuntimeException(""));
         EasyMock.expect(standby.suspend()).andReturn(new RuntimeException(""));
         EasyMock.expectLastCall();
-        restoreConsumer.assign(Collections.<TopicPartition>emptyList());
+        restoreConsumer.unsubscribe();
 
         replay();
         try {
@@ -265,7 +265,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldUnassignChangelogPartitionsOnShutdown() {
-        restoreConsumer.assign(Collections.<TopicPartition>emptyList());
+        restoreConsumer.unsubscribe();
         EasyMock.expectLastCall();
         replay();
 
@@ -482,8 +482,6 @@ public class TaskManagerTest {
         EasyMock.expectLastCall();
         EasyMock.replay(task);
     }
-
-
 
     private void mockStandbyTaskExpectations() {
         mockThreadMetadataProvider(taskId0Assignment, Collections.<TaskId, Set<TopicPartition>>emptyMap());

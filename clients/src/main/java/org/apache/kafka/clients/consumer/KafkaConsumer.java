@@ -1388,6 +1388,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     /**
      * Get the offset of the <i>next record</i> that will be fetched (if a record with that offset exists).
+     * This method may issue a remote call to the server if there is no current position for the given partition.
+     * <p>
+     * This call will block until either the position could be determined or an unrecoverable error is
+     * encountered (in which case it is thrown to the caller).
      *
      * @param partition The partition to get the position for
      * @return The offset
@@ -1583,6 +1587,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *         than or equal to the target timestamp. {@code null} will be returned for the partition if there is no
      *         such message.
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
+     * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
      * @throws IllegalArgumentException if the target timestamp is negative.
      * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
      *         expiration of the configured request timeout
@@ -1617,6 +1622,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param partitions the partitions to get the earliest offsets.
      * @return The earliest available offsets for the given partitions
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
+     * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
      * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
      *         expiration of the configured request timeout
      */
@@ -1646,6 +1652,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param partitions the partitions to get the end offsets.
      * @return The end offsets for the given partitions.
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
+     * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
      * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
      *         expiration of the configured request timeout
      */
@@ -1666,9 +1673,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * timeout. See {@link #close(long, TimeUnit)} for details. Note that {@link #wakeup()}
      * cannot be used to interrupt close.
      *
-     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted
      *             before or while this function is called
+     * @throws org.apache.kafka.common.KafkaException for any other error during close
      */
     @Override
     public void close() {
@@ -1686,9 +1693,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param timeout The maximum time to wait for consumer to close gracefully. The value must be
      *                non-negative. Specifying a timeout of zero means do not wait for pending requests to complete.
      * @param timeUnit The time unit for the {@code timeout}
-     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
-     * @throws InterruptException If the thread is interrupted before or while this function is called
      * @throws IllegalArgumentException If the {@code timeout} is negative.
+     * @throws InterruptException If the thread is interrupted before or while this function is called
+     * @throws org.apache.kafka.common.KafkaException for any other error during close
      */
     public void close(long timeout, TimeUnit timeUnit) {
         if (timeout < 0)

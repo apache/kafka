@@ -34,6 +34,7 @@ import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.ProduceResponse;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -214,8 +215,9 @@ public class StreamsKafkaClientTest {
     private StreamsKafkaClient createStreamsKafkaClient() {
         final StreamsConfig streamsConfig = new StreamsConfig(config);
         return new StreamsKafkaClient(StreamsKafkaClient.Config.fromStreamsConfig(streamsConfig),
-                                                                             kafkaClient,
-                                                                             reporters);
+                                      kafkaClient,
+                                      reporters,
+                                      new LogContext());
     }
 
 
