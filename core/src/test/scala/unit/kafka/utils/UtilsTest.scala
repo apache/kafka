@@ -18,6 +18,8 @@
 package kafka.utils
 
 import java.util.{Arrays, UUID}
+import java.util.concurrent.{ ConcurrentHashMap, Executors }
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
 import java.nio.ByteBuffer
 import java.util.regex.Pattern
@@ -29,6 +31,8 @@ import kafka.common.KafkaException
 import kafka.utils.CoreUtils.inLock
 import org.junit.Test
 import org.apache.kafka.common.utils.{Base64, Utils}
+
+import scala.collection.JavaConverters._
 
 class UtilsTest extends JUnitSuite {
 
@@ -176,5 +180,34 @@ class UtilsTest extends JUnitSuite {
     val clusterId = CoreUtils.generateUuidAsBase64()
     assertEquals(clusterId.length, 22)
     assertTrue(clusterIdPattern.matcher(clusterId).matches())
+  }
+
+  @Test
+  def testGetOrElseUpdateAtomically(): Unit = {
+    val count = 1000
+    val nThreads = 5
+    val createdCount = new AtomicInteger
+    val map = new ConcurrentHashMap[Int, AtomicInteger]().asScala
+    val executor = Executors.newFixedThreadPool(nThreads)
+    try {
+      for (i <- 1 to count) {
+        executor.submit(new Runnable() {
+          def run() {
+            CoreUtils.atomicGetOrUpdate(map, 0, {
+              createdCount.incrementAndGet
+              new AtomicInteger
+            }).incrementAndGet()
+          }
+        })
+      }
+      executor.shutdown()
+      executor.awaitTermination(1000, java.util.concurrent.TimeUnit.MILLISECONDS)
+
+      assertEquals(count, map(0).get)
+      val created = createdCount.get
+      assertTrue(s"Too many creations $created", created > 0 && created <= nThreads)
+    } finally {
+      executor.shutdownNow()
+    }
   }
 }

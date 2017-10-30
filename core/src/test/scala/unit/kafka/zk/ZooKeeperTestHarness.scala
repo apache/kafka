@@ -81,7 +81,7 @@ object ZooKeeperTestHarness {
    */
   @BeforeClass
   def setUpClass() {
-    verifyNoUnexpectedThreads()
+    verifyNoUnexpectedThreads("@BeforeClass")
   }
 
   /**
@@ -89,18 +89,18 @@ object ZooKeeperTestHarness {
    */
   @AfterClass
   def tearDownClass() {
-    verifyNoUnexpectedThreads()
+    verifyNoUnexpectedThreads("@AfterClass")
   }
 
   /**
    * Verifies that threads which are known to cause transient failures in subsequent tests
    * have been shutdown.
    */
-  def verifyNoUnexpectedThreads() {
+  def verifyNoUnexpectedThreads(context: String) {
     def allThreads = Thread.getAllStackTraces.keySet.asScala.map(thread => thread.getName)
     val (threads, noUnexpected) = TestUtils.computeUntilTrue(allThreads) { threads =>
       threads.forall(t => unexpectedThreadNames.forall(s => !t.contains(s)))
     }
-    assertTrue(s"Found unexpected threads, allThreads=$threads", noUnexpected)
+    assertTrue(s"Found unexpected threads during $context, allThreads=$threads", noUnexpected)
   }
 }

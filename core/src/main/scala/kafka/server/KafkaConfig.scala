@@ -465,10 +465,14 @@ object KafkaConfig {
   " If this is not set, the value for `listeners` will be used." +
   " Unlike `listeners` it is not valid to advertise the 0.0.0.0 meta-address."
   val ListenerSecurityProtocolMapDoc = "Map between listener names and security protocols. This must be defined for " +
-    "the same security protocol to be usable in more than one port or IP. For example, we can separate internal and " +
-    "external traffic even if SSL is required for both. Concretely, we could define listeners with names INTERNAL " +
-    "and EXTERNAL and this property as: `INTERNAL:SSL,EXTERNAL:SSL`. As shown, key and value are separated by a colon " +
-    "and map entries are separated by commas. Each listener name should only appear once in the map."
+    "the same security protocol to be usable in more than one port or IP. For example, internal and " +
+    "external traffic can be separated even if SSL is required for both. Concretely, the user could define listeners " +
+    "with names INTERNAL and EXTERNAL and this property as: `INTERNAL:SSL,EXTERNAL:SSL`. As shown, key and value are " +
+    "separated by a colon and map entries are separated by commas. Each listener name should only appear once in the map. " +
+    "Different security (SSL and SASL) settings can be configured for each listener by adding a normalised " +
+    "prefix (the listener name is lowercased) to the config name. For example, to set a different keystore for the " +
+    "INTERNAL listener, a config with name `listener.name.internal.ssl.keystore.location` would be set. " +
+    "If the config for the listener name is not set, the config will fallback to the generic config (i.e. `ssl.keystore.location`). "
 
   val SocketSendBufferBytesDoc = "The SO_SNDBUF buffer of the socket sever sockets. If the value is -1, the OS default will be used."
   val SocketReceiveBufferBytesDoc = "The SO_RCVBUF buffer of the socket sever sockets. If the value is -1, the OS default will be used."
