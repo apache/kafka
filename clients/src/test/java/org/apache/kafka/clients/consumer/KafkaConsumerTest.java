@@ -1622,7 +1622,7 @@ public class KafkaConsumerTest {
         SubscriptionState subscriptions = new SubscriptionState(autoResetStrategy);
         LogContext loggerFactory = new LogContext();
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(loggerFactory, client, metadata, time,
-                retryBackoffMs, requestTimeoutMs);
+                retryBackoffMs, requestTimeoutMs, heartbeatIntervalMs);
         ConsumerCoordinator consumerCoordinator = new ConsumerCoordinator(
                 loggerFactory,
                 consumerClient,
