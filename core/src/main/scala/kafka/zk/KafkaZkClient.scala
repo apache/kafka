@@ -638,7 +638,9 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     val createRequest = CreateRequest(path, ConsumerOffset.encode(offset), acls(path), CreateMode.PERSISTENT)
     var createResponse = retryRequestUntilConnected(createRequest)
     if (createResponse.resultCode == Code.NONODE) {
-      createRecursive(path.substring(0, path.lastIndexOf("/")))
+      val indexOfLastSlash = path.lastIndexOf("/")
+      if (indexOfLastSlash == -1) throw new IllegalArgumentException(s"Invalid path ${path}")
+      createRecursive(path.substring(0, indexOfLastSlash))
       createResponse = retryRequestUntilConnected(createRequest)
     }
     createResponse

@@ -40,7 +40,6 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   @After
   override def tearDown() {
     zkClient.close()
-    zooKeeperClient.close()
     super.tearDown()
   }
 
@@ -55,6 +54,12 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     // Update an existing offset and retrieve it
     zkClient.setOrCreateConsumerOffset(group, topicPartition, offset + 2L)
     assertEquals(offset + 2L, zkClient.getConsumerOffset(group, topicPartition).get)
+  }
+
+  @Test
+  def testGetConsumerOffsetNoData() {
+    zkClient.createRecursive(ConsumerOffset.path(group, topicPartition.topic, topicPartition.partition))
+    assertTrue(zkClient.getConsumerOffset(group, topicPartition).isEmpty)
   }
 
   @Test
