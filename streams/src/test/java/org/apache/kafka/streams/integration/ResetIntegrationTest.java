@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.integration;
 
 import kafka.server.KafkaConfig$;
+import kafka.tools.StreamsResetter;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.AfterClass;
@@ -25,7 +26,12 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Properties;
+
+import static org.junit.Assert.fail;
 
 /**
  * Tests local state store and global application cleanup.
@@ -63,5 +69,71 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
     @Test
     public void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic() throws Exception {
         super.testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic();
+    }
+
+    @Test
+    public void testReprocessingFromLatestEarliestAfterResetWithoutIntermediateUserTopic() throws Exception {
+        super.testReprocessingFromLatestAfterResetWithoutIntermediateUserTopic();
+    }
+
+    @Test
+    public void testReprocessingFromOffsetAfterResetWithoutIntermediateUserTopic() throws Exception {
+        super.testReprocessingFromOffsetAfterResetWithoutIntermediateUserTopic();
+    }
+
+    @Test
+    public void testReprocessingByShiftPositiveAfterResetWithoutIntermediateUserTopic() throws Exception {
+        super.testReprocessingByShiftPositiveAfterResetWithoutIntermediateUserTopic();
+    }
+
+    @Test
+    public void testReprocessingByShiftNegativeAfterResetWithoutIntermediateUserTopic() throws Exception {
+        super.testReprocessingByShiftNegativeAfterResetWithoutIntermediateUserTopic();
+    }
+
+    @Test
+    public void testReprocessingFromFileAfterResetWithoutIntermediateUserTopic() throws Exception {
+        super.testReprocessingFromFileAfterResetWithoutIntermediateUserTopic();
+    }
+
+    @Test
+    public void testReprocessingFromDateTimeAfterResetWithoutIntermediateUserTopic() throws Exception {
+        super.testReprocessingFromDateTimeAfterResetWithoutIntermediateUserTopic();
+    }
+
+    @Test
+    public void testReprocessingByDurationAfterResetWithoutIntermediateUserTopic() throws Exception {
+        super.testReprocessingByDurationAfterResetWithoutIntermediateUserTopic();
+    }
+
+    @Test
+    public void testDateTimeFormats() throws ParseException {
+        //check valid formats
+        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS"));
+        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ"));
+        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX"));
+        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXX"));
+        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX"));
+
+        //check some invalid formats
+        try {
+            invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss"));
+            fail("Call to getDateTime should fail");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        try {
+            invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.X"));
+            fail("Call to getDateTime should fail");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void invokeGetDateTimeMethod(SimpleDateFormat format) throws ParseException {
+        final Date checkpoint = new Date();
+        StreamsResetter streamsResetter = new StreamsResetter();
+        streamsResetter.getDateTime(format.format(checkpoint));
     }
 }
