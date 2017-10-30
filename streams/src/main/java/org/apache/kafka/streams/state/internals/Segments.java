@@ -61,6 +61,14 @@ class Segments {
         this.formatter = new SimpleDateFormat("yyyyMMddHHmm");
         this.formatter.setTimeZone(new SimpleTimeZone(0, "UTC"));
     }
+    
+    Segment minSegment() {
+        return getSegment(minSegmentId);
+    }
+    
+    Segment maxSegment() {
+        return getSegment(maxSegmentId);
+    }
 
     long segmentId(final long timestamp) {
         return timestamp / segmentInterval;
@@ -87,9 +95,9 @@ class Segments {
             Segment previousSegment = segments.putIfAbsent(key, newSegment);
             if (previousSegment == null) {
                 newSegment.openDB(context);
-                maxSegmentId = segmentId > maxSegmentId ? segmentId : maxSegmentId;
-                minSegmentId = segmentId < minSegmentId ? segmentId : minSegmentId;
             }
+            maxSegmentId = segmentId > maxSegmentId ? segmentId : maxSegmentId;
+            minSegmentId = segmentId < minSegmentId ? segmentId : minSegmentId;
             return previousSegment == null ? newSegment : previousSegment;
         } else {
             return null;
@@ -142,6 +150,20 @@ class Segments {
         return segments;
     }
 
+    List<Segment> allSegments() {
+        final List<Segment> segments = new ArrayList<>();
+        for (Segment segment : this.segments.values()) {
+            if (segment.isOpen()) {
+                try {
+                    segments.add(segment);
+                } catch (InvalidStateStoreException ise) {
+                    // segment may have been closed by streams thread;
+                }
+            }
+        }
+        return segments;
+    }
+    
     void flush() {
         for (Segment segment : segments.values()) {
             segment.flush();

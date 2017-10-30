@@ -129,7 +129,44 @@ public class CachingWindowStoreTest {
         assertFalse(iterator.hasNext());
         assertEquals(2, cache.size());
     }
+    
+    @Test
+    public void shouldGetAllFromCache() {
+        cachingStore.put(bytesKey("a"), bytesValue("a"));
+        cachingStore.put(bytesKey("b"), bytesValue("b"));
+        cachingStore.put(bytesKey("c"), bytesValue("c"));
+        cachingStore.put(bytesKey("d"), bytesValue("d"));
+        cachingStore.put(bytesKey("e"), bytesValue("e"));
+        cachingStore.put(bytesKey("f"), bytesValue("f"));
+        cachingStore.put(bytesKey("g"), bytesValue("g"));
+        cachingStore.put(bytesKey("h"), bytesValue("h"));
 
+        final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.all();
+        String[] array = {"a", "b", "c", "d", "e", "f", "g", "h"};
+        for (String s : array) {
+            verifyWindowedKeyValue(iterator.next(), new Windowed<>(bytesKey(s), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)), s);
+        }
+        assertFalse(iterator.hasNext());
+    }
+    
+    @Test
+    public void shouldFetchAllWithinTimestampRange() {
+        cachingStore.put(bytesKey("a"), bytesValue("a"));
+        cachingStore.put(bytesKey("b"), bytesValue("b"));
+        cachingStore.put(bytesKey("c"), bytesValue("c"));
+        cachingStore.put(bytesKey("d"), bytesValue("d"));
+        cachingStore.put(bytesKey("e"), bytesValue("e"));
+        cachingStore.put(bytesKey("f"), bytesValue("f"));
+        cachingStore.put(bytesKey("g"), bytesValue("g"));
+        cachingStore.put(bytesKey("h"), bytesValue("h"));
+
+        final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.fetchAll(9, 10);
+        String[] array = {"a", "b", "c", "d", "e", "f", "g", "h"};
+        for (String s : array) {
+            verifyWindowedKeyValue(iterator.next(), new Windowed<>(bytesKey(s), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)), s);
+        }
+        assertFalse(iterator.hasNext());
+    }
 
     @Test
     public void shouldFlushEvictedItemsIntoUnderlyingStore() throws IOException {

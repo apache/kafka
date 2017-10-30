@@ -80,4 +80,32 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
                                                                provider.stores(storeName, windowStoreType).iterator(),
                                                                nextIteratorFunction));
     }
+    
+    @Override
+    public KeyValueIterator<Windowed<K>, V> all() {
+        final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction = new NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>>() {
+            @Override
+            public KeyValueIterator<Windowed<K>, V> apply(final ReadOnlyWindowStore<K, V> store) {
+                return store.all();
+            }
+        };
+        return new DelegatingPeekingKeyValueIterator<>(storeName,
+                new CompositeKeyValueIterator<>(
+                        provider.stores(storeName, windowStoreType).iterator(),
+                        nextIteratorFunction));
+    }
+    
+    @Override
+    public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom, final long timeTo) {
+        final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction = new NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>>() {
+            @Override
+            public KeyValueIterator<Windowed<K>, V> apply(final ReadOnlyWindowStore<K, V> store) {
+                return store.fetchAll(timeFrom, timeTo);
+            }
+        };
+        return new DelegatingPeekingKeyValueIterator<>(storeName,
+                new CompositeKeyValueIterator<>(
+                        provider.stores(storeName, windowStoreType).iterator(),
+                        nextIteratorFunction));
+    }
 }

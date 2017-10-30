@@ -96,5 +96,4 @@ class SessionKeySchema implements SegmentedBytesStore.KeySchema {
     public List<Segment> segmentsToSearch(final Segments segments, final long from, final long to) {
         return segments.segments(from, Long.MAX_VALUE);
     }
-
 }

@@ -92,4 +92,5 @@ class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
     public List<Segment> segmentsToSearch(final Segments segments, final long from, final long to) {
         return segments.segments(from, to);
     }
+
 }

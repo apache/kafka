@@ -184,7 +184,6 @@ public class RocksDBSegmentedBytesStoreTest {
                                                   KeyValue.pair(new Windowed<>(key, new SessionWindow(30000L, 60000L)), 100L))));
     }
 
-
     private Set<String> segmentDirs() {
         File windowDir = new File(stateDir, storeName);
 
