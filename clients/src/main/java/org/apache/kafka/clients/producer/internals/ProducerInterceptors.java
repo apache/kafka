@@ -63,9 +63,9 @@ public class ProducerInterceptors<K, V> implements Closeable {
                 // do not propagate interceptor exception, log and continue calling other interceptors
                 // be careful not to throw exception from here
                 if (record != null)
-                    log.warn("Error executing interceptor onSend callback for topic: {}, partition: {}", record.topic(), record.partition(), e);
+                    log.warn("Unable to execute interceptor onSend callback for topic: {}, partition: {}", record.topic(), record.partition(), e);
                 else
-                    log.warn("Error executing interceptor onSend callback", e);
+                    log.warn("Unable to execute interceptor onSend callback", e);
             }
         }
         return interceptRecord;
@@ -88,7 +88,7 @@ public class ProducerInterceptors<K, V> implements Closeable {
                 interceptor.onAcknowledgement(metadata, exception);
             } catch (Exception e) {
                 // do not propagate interceptor exceptions, just log
-                log.warn("Error executing interceptor onAcknowledgement callback", e);
+                log.warn("Unable to execute interceptor onAcknowledgement callback", e);
             }
         }
     }
@@ -118,7 +118,7 @@ public class ProducerInterceptors<K, V> implements Closeable {
                 }
             } catch (Exception e) {
                 // do not propagate interceptor exceptions, just log
-                log.warn("Error executing interceptor onAcknowledgement callback", e);
+                log.warn("Unable to execute interceptor onAcknowledgement callback", e);
             }
         }
     }

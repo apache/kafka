@@ -41,7 +41,7 @@ public class AppInfoParser {
         try (InputStream resourceStream = AppInfoParser.class.getResourceAsStream("/kafka/kafka-version.properties")) {
             props.load(resourceStream);
         } catch (Exception e) {
-            log.warn("Error while loading kafka-version.properties :" + e.getMessage());
+            log.warn("Unable to load kafka-version.properties :" + e.getMessage());
         }
         VERSION = props.getProperty("version", "unknown").trim();
         COMMIT_ID = props.getProperty("commitId", "unknown").trim();
@@ -63,7 +63,7 @@ public class AppInfoParser {
 
             registerMetrics(metrics); // prefix will be added later by JmxReporter
         } catch (JMException e) {
-            log.warn("Error registering AppInfo mbean", e);
+            log.warn("Unable to register AppInfo mbean", e);
         }
     }
 
@@ -76,7 +76,7 @@ public class AppInfoParser {
 
             unregisterMetrics(metrics);
         } catch (JMException e) {
-            log.warn("Error unregistering AppInfo mbean", e);
+            log.warn("Unable to unregister AppInfo mbean", e);
         }
     }
 

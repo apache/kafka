@@ -496,7 +496,7 @@ public class Selector implements Selectable, AutoCloseable {
                 else if (e instanceof AuthenticationException) // will be logged later as error by clients
                     log.debug("Connection with {} disconnected due to authentication exception", desc, e);
                 else
-                    log.warn("Unexpected error from {}; closing connection", desc, e);
+                    log.warn("Unexpected failure from {}; closing connection", desc, e);
                 close(channel, true);
             } finally {
                 maybeRecordTimePerConnection(channel, channelStartTimeNanos);

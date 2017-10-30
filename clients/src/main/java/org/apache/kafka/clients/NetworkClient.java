@@ -704,7 +704,7 @@ public class NetworkClient implements KafkaClient {
         final String node = req.destination;
         if (apiVersionsResponse.error() != Errors.NONE) {
             if (req.request.version() == 0 || apiVersionsResponse.error() != Errors.UNSUPPORTED_VERSION) {
-                log.warn("Received error {} from node {} when making an ApiVersionsRequest with correlation id {}. Disconnecting.",
+                log.warn("Received response {} from node {} when making an ApiVersionsRequest with correlation id {}. Disconnecting.",
                         apiVersionsResponse.error(), node, req.header.correlationId());
                 this.selector.close(node);
                 processDisconnection(responses, node, now, ChannelState.LOCAL_CLOSE);
@@ -799,7 +799,7 @@ public class NetworkClient implements KafkaClient {
             connectionStates.disconnected(nodeConnectionId, now);
             /* maybe the problem is our metadata, update it */
             metadataUpdater.requestUpdate();
-            log.debug("Error connecting to node {}", node, e);
+            log.debug("Unable to connect to node {}", node, e);
         }
     }
 
@@ -879,7 +879,7 @@ public class NetworkClient implements KafkaClient {
             // check if any topics metadata failed to get updated
             Map<String, Errors> errors = response.errors();
             if (!errors.isEmpty())
-                log.warn("Error while fetching metadata with correlation id {} : {}", requestHeader.correlationId(), errors);
+                log.warn("Unable to fetch metadata with correlation id {} : {}", requestHeader.correlationId(), errors);
 
             // don't update the cluster if there are no valid nodes...the topic we want may still be in the process of being
             // created which means we will get errors and no nodes until it exists

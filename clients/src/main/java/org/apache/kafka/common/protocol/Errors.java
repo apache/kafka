@@ -637,7 +637,7 @@ public enum Errors {
         if (error != null) {
             return error;
         } else {
-            log.warn("Unexpected error code: {}.", code);
+            log.warn("Unknown code: {}.", code);
             return UNKNOWN_SERVER_ERROR;
         }
     }

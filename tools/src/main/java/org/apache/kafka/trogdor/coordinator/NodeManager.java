@@ -180,7 +180,7 @@ class NodeManager {
         try {
             client.putFault(new CreateAgentFaultRequest(fault.id(), fault.spec()));
         } catch (Exception e) {
-            log.warn("{}: error sending fault to {}.", node.name(), client.target(), e);
+            log.warn("{}: unable to send fault to {}.", node.name(), client.target(), e);
             return false;
         }
         lock.lock();
@@ -201,7 +201,7 @@ class NodeManager {
         try {
             status = client.getStatus();
         } catch (Exception e) {
-            log.warn("{}: error sending heartbeat to {}.", node.name(), client.target(), e);
+            log.warn("{}: unable to send heartbeat to {}.", node.name(), client.target(), e);
             return;
         }
         lock.lock();

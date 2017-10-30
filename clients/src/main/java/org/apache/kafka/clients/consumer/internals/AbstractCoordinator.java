@@ -736,7 +736,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 log.debug("LeaveGroup request returned successfully");
                 future.complete(null);
             } else {
-                log.debug("LeaveGroup request failed with error: {}", error.message());
+                log.debug("LeaveGroup request failed: {}", error.message());
                 future.raise(error);
             }
         }
