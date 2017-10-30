@@ -703,6 +703,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
             IsolationLevel isolationLevel = IsolationLevel.valueOf(
                     config.getString(ConsumerConfig.ISOLATION_LEVEL_CONFIG).toUpperCase(Locale.ROOT));
+            
+            int heartbeatIntervalMs = config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
+            
             Sensor throttleTimeSensor = Fetcher.throttleTimeSensor(metrics, metricsRegistry.fetcherMetrics);
 
             NetworkClient netClient = new NetworkClient(
@@ -726,7 +729,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     metadata,
                     time,
                     retryBackoffMs,
-                    config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG));
+                    config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
+                    Math.min(5000, heartbeatIntervalMs));
             OffsetResetStrategy offsetResetStrategy = OffsetResetStrategy.valueOf(config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase(Locale.ROOT));
             this.subscriptions = new SubscriptionState(offsetResetStrategy);
             this.assignors = config.getConfiguredInstances(
@@ -737,7 +741,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     groupId,
                     config.getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG),
                     config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG),
-                    config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG),
+                    heartbeatIntervalMs,
                     assignors,
                     this.metadata,
                     this.subscriptions,
