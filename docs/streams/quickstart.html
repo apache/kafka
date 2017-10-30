@@ -5,9 +5,7 @@
  The ASF licenses this file to You under the Apache License, Version 2.0
  (the "License"); you may not use this file except in compliance with
  the License.  You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
  Unless required by applicable law or agreed to in writing, software
  distributed under the License is distributed on an "AS IS" BASIS,
  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,8 +15,9 @@
 <script><!--#include virtual="../js/templateData.js" --></script>
 
 <script id="content-template" type="text/x-handlebars-template">
-  <h1>Run Streams Demo Application</h1> 
-  <div class="sub-nav-sticky">
+
+  <h1>Run Streams Demo Application</h1>
+ <div class="sub-nav-sticky">
       <div class="sticky-top">
         <div style="height:35px">
           <a href="/{{version}}/documentation/streams/">Introduction</a>
@@ -29,11 +28,10 @@
         </div>
       </div>
   </div> 
-
- <p>
+<p>
   This tutorial assumes you are starting fresh and have no existing Kafka or ZooKeeper data. However, if you have already started Kafka and
   ZooKeeper, feel free to skip the first two steps.
- </p>
+</p>
 
   <p>
  Kafka Streams is a client library for building mission-critical real-time applications and microservices,
@@ -54,7 +52,8 @@ final Serde&lt;Long&gt; longSerde = Serdes.Long();
 // Construct a `KStream` from the input topic "streams-plaintext-input", where message values
 // represent lines of text (for the sake of this example, we ignore whatever may be stored
 // in the message keys).
-KStream&lt;String, String&gt; textLines = builder.stream(stringSerde, stringSerde, "streams-plaintext-input");
+KStream&lt;String, String&gt; textLines = builder.stream("streams-plaintext-input",
+    Consumed.with(stringSerde, stringSerde);
 
 KTable&lt;String, Long&gt; wordCounts = textLines
     // Split each text line, by whitespace, into words.
@@ -64,10 +63,10 @@ KTable&lt;String, Long&gt; wordCounts = textLines
     .groupBy((key, value) -> value)
 
     // Count the occurrences of each word (message key).
-    .count("Counts")
+    .count()
 
 // Store the running counts as a changelog stream to the output topic.
-wordCounts.to(stringSerde, longSerde, "streams-wordcount-output");
+wordCounts.toStream().to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long()));
 </pre>
 
 <p>
@@ -118,7 +117,6 @@ Kafka uses <a href="https://zookeeper.apache.org/">ZooKeeper</a> so you need to 
 <h4><a id="quickstart_streams_prepare" href="#quickstart_streams_prepare">Step 3: Prepare input topic and start Kafka producer</a></h4>
 
 <!--
-
 <pre class="brush: bash;">
 &gt; echo -e "all streams lead to kafka\nhello kafka streams\njoin kafka summit" > file-input.txt
 </pre>
@@ -128,7 +126,6 @@ Or on Windows:
 &gt; echo hello kafka streams>> file-input.txt
 &gt; echo|set /p=join kafka summit>> file-input.txt
 </pre>
-
 -->
 
 Next, we create the input topic named <b>streams-plaintext-input</b> and the output topic named <b>streams-wordcount-output</b>:
@@ -140,12 +137,18 @@ Next, we create the input topic named <b>streams-plaintext-input</b> and the out
     --partitions 1 \
     --topic streams-plaintext-input
 Created topic "streams-plaintext-input".
+</pre>
 
+Note: we create the output topic with compaction enabled because the output stream is a changelog stream
+(cf. <a href="#anchor-changelog-output">explanation of application output</a> below).
+
+<pre class="brush: bash;">
 &gt; bin/kafka-topics.sh --create \
     --zookeeper localhost:2181 \
     --replication-factor 1 \
     --partitions 1 \
-    --topic streams-wordcount-output
+    --topic streams-wordcount-output \
+    --config cleanup.policy=compact
 Created topic "streams-wordcount-output".
 </pre>
 
@@ -154,10 +157,10 @@ The created topic can be described with the same <b>kafka-topics</b> tool:
 <pre class="brush: bash;">
 &gt; bin/kafka-topics.sh --zookeeper localhost:2181 --describe
 
-Topic:streams-plaintext-input	PartitionCount:1	ReplicationFactor:1	Configs:
-    Topic: streams-plaintext-input	Partition: 0	Leader: 0	Replicas: 0	Isr: 0
-Topic:streams-wordcount-output	PartitionCount:1	ReplicationFactor:1	Configs:
-	Topic: streams-wordcount-output	Partition: 0	Leader: 0	Replicas: 0	Isr: 0
+Topic:streams-plaintext-input PartitionCount:1  ReplicationFactor:1 Configs:
+    Topic: streams-plaintext-input  Partition: 0  Leader: 0 Replicas: 0 Isr: 0
+Topic:streams-wordcount-output  PartitionCount:1  ReplicationFactor:1 Configs:
+  Topic: streams-wordcount-output Partition: 0  Leader: 0 Replicas: 0 Isr: 0
 </pre>
 
 <h4><a id="quickstart_streams_start" href="#quickstart_streams_start">Step 4: Start the Wordcount Application</a></h4>
@@ -219,11 +222,11 @@ This message will be processed by the Wordcount application and the following ou
     --property key.deserializer=org.apache.kafka.common.serialization.StringDeserializer \
     --property value.deserializer=org.apache.kafka.common.serialization.LongDeserializer
 
-all	    1
-streams	1
-lead	1
-to	    1
-kafka	1
+all     1
+streams 1
+lead  1
+to      1
+kafka 1
 </pre>
 
 <p>
@@ -252,14 +255,14 @@ In your other terminal in which the console consumer is running, you will observ
     --property key.deserializer=org.apache.kafka.common.serialization.StringDeserializer \
     --property value.deserializer=org.apache.kafka.common.serialization.LongDeserializer
 
-all	    1
-streams	1
-lead	1
-to	    1
-kafka	1
-hello	1
-kafka	2
-streams	2
+all     1
+streams 1
+lead  1
+to      1
+kafka 1
+hello 1
+kafka 2
+streams 2
 </pre>
 
 Here the last printed lines <b>kafka 2</b> and <b>streams 2</b> indicate updates to the keys <b>kafka</b> and <b>streams</b> whose counts have been incremented from <b>1</b> to <b>2</b>.
@@ -274,6 +277,7 @@ hello kafka streams
 join kafka summit
 </pre>
 
+<a name="anchor-changelog-output"></a>
 The <b>streams-wordcount-output</b> topic will subsequently show the corresponding updated word counts (see last three lines):
 
 <pre class="brush: bash;">
@@ -286,17 +290,17 @@ The <b>streams-wordcount-output</b> topic will subsequently show the correspondi
     --property key.deserializer=org.apache.kafka.common.serialization.StringDeserializer \
     --property value.deserializer=org.apache.kafka.common.serialization.LongDeserializer
 
-all	    1
-streams	1
-lead	1
-to	    1
-kafka	1
-hello	1
-kafka	2
-streams	2
-join	1
-kafka	3
-summit	1
+all     1
+streams 1
+lead  1
+to      1
+kafka 1
+hello 1
+kafka 2
+streams 2
+join  1
+kafka 3
+summit  1
 </pre>
 
 As one can see, outputs of the Wordcount application is actually a continuous stream of updates, where each output record (i.e. each line in the original output above) is
