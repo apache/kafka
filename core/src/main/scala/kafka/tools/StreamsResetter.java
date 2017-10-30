@@ -396,19 +396,8 @@ public class StreamsResetter {
                     client.seek(topicPartition, validatedTopicPartitionsAndOffset.get(topicPartition));
                 }
             } else if (options.has(toDatetimeOption)) {
-                String ts = options.valueOf(toDatetimeOption);
-                if (!(ts.split("T")[1].contains("+") || ts.split("T")[1].contains("-") || ts.split("T")[1].contains("Z"))) {
-                    ts = ts + "Z";
-                }
-
-                Date date;
-                try {
-                    date = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX").parse(ts);
-                } catch (ParseException e) {
-                    date = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX").parse(ts);
-                }
-
-                final Long timestamp = date.getTime();
+                final String ts = options.valueOf(toDatetimeOption);
+                final Long timestamp = getDateTime(ts);
 
                 final Map<TopicPartition, Long> topicPartitionsAndTimes = new HashMap<>(inputTopicPartitions.size());
                 for (final TopicPartition topicPartition : inputTopicPartitions) {
@@ -465,6 +454,21 @@ public class StreamsResetter {
         }
     }
 
+    public Long getDateTime(String ts) throws ParseException {
+        if (!(ts.split("T")[1].contains("+") || ts.split("T")[1].contains("-") || ts.split("T")[1].contains("Z"))) {
+            ts = ts + "Z";
+        }
+
+        Date date;
+        try {
+            date = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX").parse(ts);
+        } catch (ParseException e) {
+            date = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX").parse(ts);
+        }
+
+        return date.getTime();
+    }
+
     private Map<TopicPartition, Long> parseResetPlan(String resetPlanCsv) {
         final Map<TopicPartition, Long> topicPartitionAndOffset = new HashMap<>();
         for (final String line : resetPlanCsv.split("\n")) {
@@ -488,16 +492,13 @@ public class StreamsResetter {
             if (offset < endOffset) {
                 final Long beginningOffset = beginningOffsets.get(topicPartition);
                 if (offset > beginningOffset) {
-                    System.out.println("New offset (" + offset + ") is lower than earliest offset. Value will be set to " + beginningOffset);
-                    //client.seek(topicPartition, beginningOffset);
-                    validatedTopicPartitionsOffsets.put(topicPartition, beginningOffset);
-                } else {
-                    //client.seek(topicPartition, offset);
                     validatedTopicPartitionsOffsets.put(topicPartition, offset);
+                } else {
+                    System.out.println("New offset (" + offset + ") is lower than earliest offset. Value will be set to " + beginningOffset);
+                    validatedTopicPartitionsOffsets.put(topicPartition, beginningOffset);
                 }
             } else {
                 System.out.println("New offset (" + offset + ") is higher than latest offset. Value will be set to " + endOffset);
-                //client.seek(topicPartition, endOffset);
                 validatedTopicPartitionsOffsets.put(topicPartition, endOffset);
             }
         }
