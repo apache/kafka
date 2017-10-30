@@ -21,16 +21,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.connect.data.Date;
-import org.apache.kafka.connect.data.Decimal;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.kafka.common.cache.Cache;
+import org.apache.kafka.connect.data.Date;
+import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
+import org.apache.kafka.connect.data.UUID;
 import org.apache.kafka.connect.errors.DataException;
 import org.junit.Before;
 import org.junit.Test;
@@ -376,6 +377,46 @@ public class JsonConverterTest {
         assertEquals(schema, schemaAndValue.schema());
         assertEquals(new java.util.Date(42), schemaAndValue.value());
     }
+    @Test
+    public void UUIDToConnect() {
+        Schema schema = UUID.SCHEMA;
+        java.util.UUID reference = new java.util.UUID(0l, 0l);
+        // Payload is string representation of java.util.UUID
+        String msg = "{ \"schema\": { \"type\": \"string\", \"name\": \"org.apache.kafka.connect.data.UUID\", \"version\": 1 }, \"payload\": \"00000000-0000-0000-0000-000000000000\" }";
+        SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
+        java.util.UUID converted = (java.util.UUID) schemaAndValue.value();
+        assertEquals(schema, schemaAndValue.schema());
+        assertEquals(reference.compareTo(converted), 0);
+    }
+
+    @Test
+    public void UUIDToConnectOptional() {
+        Schema schema = UUID.builder().optional().schema();
+        String msg = "{ \"schema\": { \"type\": \"string\", \"name\": \"org.apache.kafka.connect.data.UUID\", \"version\": 1, \"optional\": true }, \"payload\": null }";
+        SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
+        assertEquals(schema, schemaAndValue.schema());
+        assertNull(schemaAndValue.value());
+    }
+
+    @Test
+    public void UUIDToConnectWithDefaultValue() {
+        java.util.UUID reference = new java.util.UUID(0l, 0l);
+        Schema schema = UUID.builder().defaultValue(reference).build();
+        String msg = "{ \"schema\": { \"type\": \"string\", \"name\": \"org.apache.kafka.connect.data.UUID\", \"version\": 1, \"default\": \"00000000-0000-0000-0000-000000000000\"}, \"payload\": null }";
+        SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
+        assertEquals(schema, schemaAndValue.schema());
+        assertEquals(reference, schemaAndValue.value());
+    }
+
+    @Test
+    public void UUIDToConnectOptionalWithDefaultValue() {
+        java.util.UUID reference = new java.util.UUID(0l, 0l);
+        Schema schema = UUID.builder().optional().defaultValue(reference).build();
+        String msg = "{ \"schema\": { \"type\": \"string\", \"name\": \"org.apache.kafka.connect.data.UUID\", \"version\": 1, \"optional\": true, \"default\": \"00000000-0000-0000-0000-000000000000\" } , \"payload\": null }";
+        SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
+        assertEquals(schema, schemaAndValue.schema());
+        assertEquals(reference, schemaAndValue.value());
+    }
 
     // Schema metadata
 
@@ -622,6 +663,16 @@ public class JsonConverterTest {
         assertEquals(4000000000L, payload.longValue());
     }
 
+    @Test
+    public void UUIDToJson() throws IOException {
+        JsonNode converted = parse(converter.fromConnectData(TOPIC, UUID.SCHEMA, new java.util.UUID(0l, 0l)));
+        validateEnvelope(converted);
+        assertEquals(parse("{ \"type\": \"string\", \"optional\": false, \"name\": \"org.apache.kafka.connect.data.UUID\", \"version\": 1 }"),
+                converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        JsonNode payload = converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME);
+        assertTrue(payload.isTextual());
+        assertEquals("00000000-0000-0000-0000-000000000000", payload.asText());
+    }
 
     @Test
     public void nullSchemaAndPrimitiveToJson() {

@@ -68,6 +68,7 @@ public class ConnectSchema implements Schema {
         LOGICAL_TYPE_CLASSES.put(Date.LOGICAL_NAME, Arrays.asList((Class) java.util.Date.class));
         LOGICAL_TYPE_CLASSES.put(Time.LOGICAL_NAME, Arrays.asList((Class) java.util.Date.class));
         LOGICAL_TYPE_CLASSES.put(Timestamp.LOGICAL_NAME, Arrays.asList((Class) java.util.Date.class));
+        LOGICAL_TYPE_CLASSES.put(UUID.LOGICAL_NAME, Arrays.asList((Class) java.util.UUID.class));
         // We don't need to put these into JAVA_CLASS_SCHEMA_TYPES since that's only used to determine schemas for
         // schemaless data and logical types will have ambiguous schemas (e.g. many of them use the same Java class) so
         // they should not be used without schemas.

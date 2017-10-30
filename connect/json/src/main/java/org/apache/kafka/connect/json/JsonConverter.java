@@ -24,16 +24,17 @@ import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.errors.SerializationException;
-import org.apache.kafka.connect.data.SchemaBuilder;
-import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.data.Struct;
-import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.ConnectSchema;
-import org.apache.kafka.connect.data.SchemaAndValue;
-import org.apache.kafka.connect.data.Timestamp;
-import org.apache.kafka.connect.data.Time;
-import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Date;
+import org.apache.kafka.connect.data.Decimal;
+import org.apache.kafka.connect.data.Field;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.data.SchemaBuilder;
+import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.data.Time;
+import org.apache.kafka.connect.data.Timestamp;
+import org.apache.kafka.connect.data.UUID;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.storage.Converter;
 
@@ -219,6 +220,15 @@ public class JsonConverter implements Converter {
                 return Timestamp.toLogical(schema, (long) value);
             }
         });
+
+        TO_CONNECT_LOGICAL_CONVERTERS.put(UUID.LOGICAL_NAME, new LogicalTypeConverter() {
+            @Override
+            public Object convert(Schema schema, Object value) {
+                if (!(value instanceof String))
+                    throw new DataException("Invalid type for UUID, underlying representation should be String but was " + value.getClass());
+                return UUID.toLogical(schema, (String) value);
+            }
+        });
     }
 
     private static final HashMap<String, LogicalTypeConverter> TO_JSON_LOGICAL_CONVERTERS = new HashMap<>();
@@ -256,6 +266,15 @@ public class JsonConverter implements Converter {
                 if (!(value instanceof java.util.Date))
                     throw new DataException("Invalid type for Timestamp, expected Date but was " + value.getClass());
                 return Timestamp.fromLogical(schema, (java.util.Date) value);
+            }
+        });
+
+        TO_JSON_LOGICAL_CONVERTERS.put(UUID.LOGICAL_NAME, new LogicalTypeConverter() {
+            @Override
+            public Object convert(Schema schema, Object value) {
+                if (!(value instanceof java.util.UUID))
+                    throw new DataException("Invalid type for UUID, expected UUID but was " + value.getClass());
+                return UUID.fromLogical(schema, (java.util.UUID) value);
             }
         });
     }
