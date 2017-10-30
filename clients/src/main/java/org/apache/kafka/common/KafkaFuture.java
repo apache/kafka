@@ -113,6 +113,8 @@ public abstract class KafkaFuture<T> implements Future<T> {
      */
     public abstract <R> KafkaFuture<R> thenApply(Function<T, R> function);
 
+    public abstract <R> KafkaFuture<R> thenCompose(Function<T, KafkaFuture<R>> function);
+
     protected abstract void addWaiter(BiConsumer<? super T, ? super Throwable> action);
 
     /**

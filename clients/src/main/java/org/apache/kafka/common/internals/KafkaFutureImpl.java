@@ -70,6 +70,41 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
         }
     }
 
+    private static class Composer<A, B> extends BiConsumer<A, Throwable> {
+        private final Function<A, KafkaFuture<B>> function;
+        private final KafkaFutureImpl<B> future;
+
+        Composer(Function<A, KafkaFuture<B>> function, KafkaFutureImpl<B> future) {
+            this.function = function;
+            this.future = future;
+        }
+
+        // Called when "this" completes
+        @Override
+        public void accept(A a, Throwable exception) {
+            if (exception != null) {
+                future.completeExceptionally(exception);
+            } else {
+                try {
+                    // TODO typecast eek!
+                    KafkaFutureImpl<B> mapped = (KafkaFutureImpl) function.apply(a);
+                    mapped.addWaiter(new BiConsumer<B, Throwable>() {
+                        @Override
+                        public void accept(B b, Throwable throwable) {
+                            if (throwable != null) {
+                                future.completeExceptionally(throwable);
+                            } else {
+                                future.complete(b);
+                            }
+                        }
+                    });
+                } catch (Throwable t) {
+                    future.completeExceptionally(t);
+                }
+            }
+        }
+    }
+
     private static class SingleWaiter<R> extends BiConsumer<R, Throwable> {
         private R value = null;
         private Throwable exception = null;
@@ -143,6 +178,13 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
     public <R> KafkaFuture<R> thenApply(Function<T, R> function) {
         KafkaFutureImpl<R> future = new KafkaFutureImpl<R>();
         addWaiter(new Applicant<>(function, future));
+        return future;
+    }
+
+    @Override
+    public <R> KafkaFuture<R> thenCompose(Function<T, KafkaFuture<R>> function) {
+        KafkaFutureImpl<R> future = new KafkaFutureImpl<R>();
+        addWaiter(new Composer<>(function, future));
         return future;
     }
 

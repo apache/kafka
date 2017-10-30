@@ -25,7 +25,6 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
 
 /**
  * The result of {@link AdminClient#electPreferredLeaders(Collection, ElectPreferredLeadersOptions)}
@@ -46,21 +45,22 @@ public class ElectPreferredLeadersResult {
      * If there was not an election triggered for the given {@code partition}, the
      * returned future will complete with an error.
      */
-    public KafkaFuture<Void> partitionResult(TopicPartition partition) {
-        final Map<TopicPartition, ? extends KafkaFuture<Void>> map;
-        try {
-            map = futures.get();
-        } catch (InterruptedException | ExecutionException e) {
-            return KafkaFuture.exceptionalFuture(e);
+    public KafkaFuture<Void> partitionResult(final TopicPartition partition) {
+        class Function<T extends Map<TopicPartition, ? extends KafkaFuture<Void>>>
+                extends KafkaFuture.Function<T, KafkaFuture<Void>> {
+            @Override
+            public KafkaFuture<Void> apply(T map) {
+                KafkaFuture<Void> result = map.get(partition);
+                if (result == null) {
+                    KafkaFutureImpl future = new KafkaFutureImpl<>();
+                    future.completeExceptionally(new IllegalArgumentException(
+                            "Preferred leader election for partition \"" + partition + "\" was not attempted"));
+                    result = future;
+                }
+                return result;
+            }
         }
-        KafkaFuture<Void> result = map.get(partition);
-        if (result == null) {
-            KafkaFutureImpl future = new KafkaFutureImpl<>();
-            future.completeExceptionally(new IllegalArgumentException(
-                    "Preferred leader election for partition \"" + partition + "\" was not attempted"));
-            result = future;
-        }
-        return result;
+        return futures.<Void>thenCompose(new Function());
     }
 
     /**
@@ -73,29 +73,26 @@ public class ElectPreferredLeadersResult {
      * with a null {@code partitions} argument.</p>
      */
     public KafkaFuture<Set<TopicPartition>> partitions() {
-        final Map<TopicPartition, ? extends KafkaFuture<Void>> map;
-        try {
-            map = futures.get();
-        } catch (InterruptedException e) {
-            return KafkaFuture.exceptionalFuture(e);
-        } catch (ExecutionException e) {
-            return KafkaFuture.exceptionalFuture(e.getCause());
+        class Function<T extends Map<TopicPartition, ? extends KafkaFuture<Void>>> extends KafkaFuture.Function<T, Set<TopicPartition>> {
+            @Override
+            public Set<TopicPartition> apply(T map) {
+                return map.keySet();
+            }
         }
-        KafkaFutureImpl<Set<TopicPartition>> result = new KafkaFutureImpl<>();
-        result.complete(map.keySet());
-        return result;
+        return futures.thenApply(new Function());
     }
 
     /**
      * Return a future which succeeds if all the topic elections succeed.
      */
     public KafkaFuture<Void> all() {
-        final Map<TopicPartition, ? extends KafkaFuture<Void>> map;
-        try {
-            map = futures.get();
-        } catch (InterruptedException | ExecutionException e) {
-            return KafkaFuture.exceptionalFuture(e);
+        class Function<T extends Map<TopicPartition, ? extends KafkaFuture<Void>>> extends KafkaFuture.Function<T, KafkaFuture<Void>> {
+
+            @Override
+            public KafkaFuture<Void> apply(T map) {
+                return KafkaFuture.allOf(map.values().toArray(new KafkaFuture[0]));
+            }
         }
-        return KafkaFuture.allOf(map.values().toArray(new KafkaFuture[0]));
+        return futures.thenCompose(new Function());
     }
 }

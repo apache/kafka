@@ -1914,6 +1914,10 @@ public class KafkaAdminClient extends AdminClient {
                     KafkaFutureImpl<Void> future;
                     if (knownPartitions) {
                         future = mapOfFutures.get(partition);
+                        if (future == null) {
+                            future = new KafkaFutureImpl();
+                            future.completeExceptionally(new IllegalStateException("Unexpected partition in response"));
+                        }
                     } else {
                         future = new KafkaFutureImpl<Void>();
                         mapOfFutures.put(partition, future);
