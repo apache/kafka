@@ -21,6 +21,7 @@ import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
 import joptsimple.OptionSpecBuilder;
+import kafka.utils.CommandLineUtils;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.KafkaAdminClient;
@@ -217,22 +218,22 @@ public class StreamsResetter {
             throw e;
         }
 
-        /*HashSet<OptionSpec<?>> allScenarioOptions = new HashSet<>();
-        allScenarioOptions.add(toOffsetOption);
-        allScenarioOptions.add(toDatetimeOption);
-        allScenarioOptions.add(byDurationOption);
-        allScenarioOptions.add(toEarliestOption);
-        allScenarioOptions.add(toLatestOption);
-        allScenarioOptions.add(toCurrentOption);
-        allScenarioOptions.add(shiftByOption);
+        scala.collection.immutable.HashSet<OptionSpec<?>> allScenarioOptions = new scala.collection.immutable.HashSet<>();
+        allScenarioOptions.$plus(toOffsetOption);
+        allScenarioOptions.$plus(toDatetimeOption);
+        allScenarioOptions.$plus(byDurationOption);
+        allScenarioOptions.$plus(toEarliestOption);
+        allScenarioOptions.$plus(toLatestOption);
+        allScenarioOptions.$plus(fromFileOption);
+        allScenarioOptions.$plus(shiftByOption);
 
-        CommandLineUtils.checkInvalidArgs(optionParser, options, toOffsetOption, allScenarioOptions.$minus$eq(toOffsetOption));
-        CommandLineUtils.checkInvalidArgs(optionParser, options, toDatetimeOption, allScenarioOptions.$minus$eq(toDatetimeOption));
-        CommandLineUtils.checkInvalidArgs(optionParser, options, byDurationOption, allScenarioOptions.$minus$eq(byDurationOption));
-        CommandLineUtils.checkInvalidArgs(optionParser, options, toEarliestOption, allScenarioOptions.$minus$eq(toEarliestOption));
-        CommandLineUtils.checkInvalidArgs(optionParser, options, toLatestOption, allScenarioOptions.$minus$eq(toLatestOption));
-        CommandLineUtils.checkInvalidArgs(optionParser, options, toCurrentOption, allScenarioOptions.$minus$eq(toCurrentOption));
-        CommandLineUtils.checkInvalidArgs(optionParser, options, shiftByOption, allScenarioOptions.$minus$eq(shiftByOption));*/
+        CommandLineUtils.checkInvalidArgs(optionParser, options, toOffsetOption, allScenarioOptions.$minus(toOffsetOption));
+        CommandLineUtils.checkInvalidArgs(optionParser, options, toDatetimeOption, allScenarioOptions.$minus(toDatetimeOption));
+        CommandLineUtils.checkInvalidArgs(optionParser, options, byDurationOption, allScenarioOptions.$minus(byDurationOption));
+        CommandLineUtils.checkInvalidArgs(optionParser, options, toEarliestOption, allScenarioOptions.$minus(toEarliestOption));
+        CommandLineUtils.checkInvalidArgs(optionParser, options, toLatestOption, allScenarioOptions.$minus(toLatestOption));
+        CommandLineUtils.checkInvalidArgs(optionParser, options, fromFileOption, allScenarioOptions.$minus(fromFileOption));
+        CommandLineUtils.checkInvalidArgs(optionParser, options, shiftByOption, allScenarioOptions.$minus(shiftByOption));
     }
 
     private void maybeResetInputAndSeekToEndIntermediateTopicOffsets(final Map consumerConfig) throws Exception {
