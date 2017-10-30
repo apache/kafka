@@ -19,7 +19,7 @@ package kafka.tools
 
 import java.io.PrintStream
 import java.nio.charset.StandardCharsets
-import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.{Locale, Properties, Random}
 
 import joptsimple._
@@ -46,7 +46,7 @@ object ConsoleConsumer extends Logging {
 
   var messageCount = 0
 
-  private val shutdownLatch = new CountDownLatch(1)
+  private val doneShutdown = new AtomicBoolean(false)
 
   def main(args: Array[String]) {
     val conf = new ConsumerConfig(args)
@@ -83,16 +83,19 @@ object ConsoleConsumer extends Logging {
     try {
       process(conf.maxMessages, conf.formatter, consumer, System.out, conf.skipMessageOnError)
     } finally {
-      consumer.cleanup()
-      conf.formatter.close()
-      reportRecordCount()
-
-      // if we generated a random group id (as none specified explicitly) then avoid polluting zookeeper with persistent group data, this is a hack
-      if (!conf.groupIdPassed)
-        ZkUtils.maybeDeletePath(conf.options.valueOf(conf.zkConnectOpt), "/consumers/" + conf.consumerProps.get("group.id"))
-
-      shutdownLatch.countDown()
+      shutdown(conf, consumer)
     }
+  }
+
+  private def shutdown(conf: ConsumerConfig, consumer: BaseConsumer) = {
+    if (!doneShutdown.getAndSet(true))
+    consumer.cleanup()
+    conf.formatter.close()
+    reportRecordCount()
+
+    // if we generated a random group id (as none specified explicitly) then avoid polluting zookeeper with persistent group data, this is a hack
+    if (!conf.groupIdPassed)
+      ZkUtils.maybeDeletePath(conf.options.valueOf(conf.zkConnectOpt), "/consumers/" + conf.consumerProps.get("group.id"))
   }
 
   def checkZk(config: ConsumerConfig) {
@@ -110,11 +113,10 @@ object ConsoleConsumer extends Logging {
   }
 
   def addShutdownHook(consumer: BaseConsumer, conf: ConsumerConfig) {
-    Runtime.getRuntime.addShutdownHook(new Thread() {
+    Runtime.getRuntime.addShutdownHook(new Thread("ConsoleConsumer shutdown hook") {
       override def run() {
         consumer.stop()
-
-        shutdownLatch.await()
+        shutdown(conf, consumer)
 
         if (conf.enableSystestEventsLogging) {
           System.out.println("shutdown_complete")
