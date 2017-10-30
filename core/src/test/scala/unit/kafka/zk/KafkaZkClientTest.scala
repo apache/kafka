@@ -74,12 +74,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertFalse(zkClient.pathExists("/delete/some"))
     assertFalse(zkClient.pathExists("/delete"))
 
-    try {
-      zkClient.deleteRecursive("delete-invalid-path")
-      fail("Should have thrown IllegalArgumentException")
-    } catch {
-      case _: IllegalArgumentException => //expected
-    }
+    intercept[IllegalArgumentException](zkClient.deleteRecursive("delete-invalid-path"))
   }
 
   @Test
@@ -91,12 +86,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertTrue(zkClient.pathExists("/create/some/random/long/path"))
     zkClient.createRecursive("/create/some/random/long/path") // no errors if path already exists
 
-    try {
-      zkClient.createRecursive("create-invalid-path")
-      fail("Should have thrown IllegalArgumentException")
-    } catch {
-      case _: IllegalArgumentException => //expected
-    }
+    intercept[IllegalArgumentException](zkClient.createRecursive("create-invalid-path"))
   }
 
 }
