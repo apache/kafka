@@ -541,8 +541,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         if (requestHandlerPool != null)
           CoreUtils.swallow(requestHandlerPool.shutdown())
 
-        CoreUtils.swallow(kafkaScheduler.shutdown())
-
         if (apis != null)
           CoreUtils.swallow(apis.close())
         CoreUtils.swallow(authorizer.foreach(_.close()))
@@ -558,6 +556,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           CoreUtils.swallow(replicaManager.shutdown())
         if (logManager != null)
           CoreUtils.swallow(logManager.shutdown())
+
+        CoreUtils.swallow(kafkaScheduler.shutdown())
 
         if (kafkaController != null)
           CoreUtils.swallow(kafkaController.shutdown())
