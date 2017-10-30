@@ -246,13 +246,7 @@ object PreferredReplicaElectionZNode {
 object ConsumerOffset {
   def path(group: String, topic: String, partition: Integer) = s"/consumers/${group}/offset/${topic}/${partition}"
   def encode(offset: Long): Array[Byte] = offset.toString.getBytes("UTF-8")
-  def decode(bytes: Array[Byte]): Option[Long] = {
-    if (bytes != null) {
-      Option(new String(bytes, "UTF-8").toLong)
-    } else {
-      None
-    }
-  }
+  def decode(bytes: Array[Byte]): Option[Long] = Option(bytes).map(new String(_, "UTF-8").toLong)
 }
 
 object ZkVersion {
