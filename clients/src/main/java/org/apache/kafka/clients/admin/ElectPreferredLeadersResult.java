@@ -41,13 +41,6 @@ public class ElectPreferredLeadersResult {
         this.futures = futures;
     }
 
-    /** Return a new future that has completed exceptionally */
-    private static <T> KafkaFuture<T> exceptionalFuture(Throwable e) {
-        KafkaFutureImpl<T> future = new KafkaFutureImpl<>();
-        future.completeExceptionally(e);
-        return future;
-    }
-
     /**
      * Get the result of the election for the given {@code partition}.
      * If there was not an election triggered for the given {@code partition}, the
@@ -58,7 +51,7 @@ public class ElectPreferredLeadersResult {
         try {
             map = futures.get();
         } catch (InterruptedException | ExecutionException e) {
-            return exceptionalFuture(e);
+            return KafkaFuture.exceptionalFuture(e);
         }
         KafkaFuture<Void> result = map.get(partition);
         if (result == null) {
@@ -84,9 +77,9 @@ public class ElectPreferredLeadersResult {
         try {
             map = futures.get();
         } catch (InterruptedException e) {
-            return exceptionalFuture(e);
+            return KafkaFuture.exceptionalFuture(e);
         } catch (ExecutionException e) {
-            return exceptionalFuture(e.getCause());
+            return KafkaFuture.exceptionalFuture(e.getCause());
         }
         KafkaFutureImpl<Set<TopicPartition>> result = new KafkaFutureImpl<>();
         result.complete(map.keySet());
@@ -101,7 +94,7 @@ public class ElectPreferredLeadersResult {
         try {
             map = futures.get();
         } catch (InterruptedException | ExecutionException e) {
-            return exceptionalFuture(e);
+            return KafkaFuture.exceptionalFuture(e);
         }
         return KafkaFuture.allOf(map.values().toArray(new KafkaFuture[0]));
     }

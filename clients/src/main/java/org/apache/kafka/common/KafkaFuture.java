@@ -84,6 +84,15 @@ public abstract class KafkaFuture<T> implements Future<T> {
         return future;
     }
 
+    /**
+     * Return a new future that has completed exceptionally with the given exception.
+     */
+    public static <T> KafkaFuture<T> exceptionalFuture(Throwable exception) {
+        KafkaFutureImpl<T> future = new KafkaFutureImpl<>();
+        future.completeExceptionally(exception);
+        return future;
+    }
+
     /** 
      * Returns a new KafkaFuture that is completed when all the given futures have completed.  If
      * any future throws an exception, the returned future returns it.  If multiple futures throw
