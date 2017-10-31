@@ -120,9 +120,11 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertTrue(dataAndVersion._1.isEmpty)
     assertEquals(-1, dataAndVersion._2)
 
-    // test with non-existing path
+    // create a test path
     zkClient.createRecursive(path)
     zkClient.conditionalUpdatePath(path, "version1", 0)
+
+    // test with existing path
     dataAndVersion = zkClient.getDataAndVersion(path)
     assertEquals("version1", dataAndVersion._1.get)
     assertEquals(1, dataAndVersion._2)
@@ -134,7 +136,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testConditionalUpdatePersistentPath() {
+  def testConditionalUpdatePath() {
     val path = "/testconditionalpath"
 
     // test with non-existing path
@@ -150,7 +152,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertTrue(statusAndVersion._1)
     assertEquals(1, statusAndVersion._2)
 
-    // test with wrong expected version
+    // test with invalid expected version
     statusAndVersion = zkClient.conditionalUpdatePath(path, "version2", 2)
     assertFalse(statusAndVersion._1)
     assertEquals(-1, statusAndVersion._2)

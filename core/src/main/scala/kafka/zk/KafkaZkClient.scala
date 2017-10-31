@@ -329,7 +329,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    * @param path zk node path
    * @return A tuple of 2 elements, where first element is zk node data as string
    *         and second element is zk node version.
-   *         returns (None, -1) if node doesn't exists, data is null or for any error.
+   *         returns (None, -1) if node doesn't exists and throws exception for any error
    */
   def getDataAndVersion(path: String): (Option[String], Int) = {
     val getDataRequest = GetDataRequest(path)
@@ -342,8 +342,10 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
         val data = new String(getDataResponse.data, UTF_8)
         (Some(data), getDataResponse.stat.getVersion)
       }
-    } else
+    } else if (getDataResponse.resultCode == Code.NONODE)
       (None, -1)
+    else
+      throw getDataResponse.resultException.get
   }
 
   /**
@@ -376,10 +378,15 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
             (false, -1)
         }
 
-      case _ =>
+      case Code.NONODE =>
         debug("Conditional update of path %s with data %s and expected version %d failed due to %s".format(path, data,
           expectVersion, setDataResponse.resultException.get.getMessage))
         (false, -1)
+
+      case _ =>
+        debug("Conditional update of path %s with data %s and expected version %d failed due to %s".format(path, data,
+          expectVersion, setDataResponse.resultException.get.getMessage))
+        throw setDataResponse.resultException.get
     }
   }
 
