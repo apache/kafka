@@ -36,7 +36,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   @Before
   override def setUp() {
     super.setUp()
-    zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, null)
+    zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue, null)
     zkClient = new KafkaZkClient(zooKeeperClient, false)
   }
 
