@@ -87,8 +87,11 @@ class ZooKeeperClient(connectString: String,
 
       requests.foreach { request =>
         inFlightRequests.acquire()
-        send(request) { response =>
-          responseQueue.add(response)
+        try {
+          send(request) { response =>
+            responseQueue.add(response)
+          }
+        } finally {
           inFlightRequests.release()
           countDownLatch.countDown()
         }
