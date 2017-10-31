@@ -38,7 +38,7 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-public class AssignedStreamTasksTest {
+public class AssignedStreamsTasksTest {
 
     private final StreamTask t1 = EasyMock.createMock(StreamTask.class);
     private final StreamTask t2 = EasyMock.createMock(StreamTask.class);
