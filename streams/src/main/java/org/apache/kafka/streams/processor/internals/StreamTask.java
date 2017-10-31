@@ -30,6 +30,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
+import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.Cancellable;
@@ -117,7 +118,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         this.producer = producer;
         this.metrics = new TaskMetrics(metrics);
 
-        recordCollector = createRecordCollector(logContext);
+        final ProductionExceptionHandler productionExceptionHandler = config.defaultProductionExceptionHandler();
+
+        recordCollector = createRecordCollector(logContext, productionExceptionHandler);
         streamTimePunctuationQueue = new PunctuationQueue();
         systemTimePunctuationQueue = new PunctuationQueue();
         maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
@@ -649,7 +652,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     // visible for testing only
-    RecordCollector createRecordCollector(final LogContext logContext) {
-        return new RecordCollectorImpl(producer, id.toString(), logContext);
+    RecordCollector createRecordCollector(final LogContext logContext, final ProductionExceptionHandler productionExceptionHandler) {
+        return new RecordCollectorImpl(producer, id.toString(), logContext, productionExceptionHandler);
     }
 }
