@@ -5,9 +5,7 @@
  The ASF licenses this file to You under the Apache License, Version 2.0
  (the "License"); you may not use this file except in compliance with
  the License.  You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
  Unless required by applicable law or agreed to in writing, software
  distributed under the License is distributed on an "AS IS" BASIS,
  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -19,7 +17,17 @@
 
 <script id="content-template" type="text/x-handlebars-template">
     <h1>Core Concepts</h1>
-
+    <div class="sub-nav-sticky">
+      <div class="sticky-top">
+        <div style="height:35px">
+          <a href="/{{version}}/documentation/streams/">Introduction</a>
+          <a href="/{{version}}/documentation/streams/developer-guide">Developer Guide</a>
+          <a class="active-menu-item" href="/{{version}}/documentation/streams/core-concepts">Concepts</a>
+          <a href="/{{version}}/documentation/streams/quickstart">Run Demo App</a>
+          <a href="/{{version}}/documentation/streams/tutorial">Tutorial: Write App</a>
+        </div>
+      </div>
+    </div> 
     <p>
         Kafka Streams is a client library for processing and analyzing data stored in Kafka.
         It builds upon important stream processing concepts such as properly distinguishing between event time and processing time, windowing support, and simple yet efficient management and real-time querying of application state.
@@ -96,7 +104,7 @@
     </p>
     <p>
         Kafka Streams assigns a <b>timestamp</b> to every data record via the <code>TimestampExtractor</code> interface.
-        These per-record timestamps describe the progress of a stream with regards to time and are leveraged by	time-dependent operations such as window operations.
+        These per-record timestamps describe the progress of a stream with regards to time and are leveraged by time-dependent operations such as window operations.
         As a result, this time will only advance when a new record arrives at the processor.
         We call this data-driven time the <b>stream time</b> of the application to differentiate with the <b>wall-clock time</b> when this application is actually executing.
         Concrete implementations of the <code>TimestampExtractor</code> interface will then provide different semantics to the stream time definition.
@@ -180,7 +188,20 @@
 $(function() {
   // Show selected style on nav item
   $('.b-nav__streams').addClass('selected');
-
+     //sticky secondary nav
+          var $navbar = $(".sub-nav-sticky"),
+               y_pos = $navbar.offset().top,
+               height = $navbar.height();
+       
+           $(window).scroll(function() {
+               var scrollTop = $(window).scrollTop();
+           
+               if (scrollTop > y_pos - height) {
+                   $navbar.addClass("navbar-fixed")
+               } else if (scrollTop <= y_pos) {
+                   $navbar.removeClass("navbar-fixed")
+               }
+    });
   // Display docs subnav items
   $('.b-nav__docs').parent().toggleClass('nav__item__with__subs--expanded');
 });
