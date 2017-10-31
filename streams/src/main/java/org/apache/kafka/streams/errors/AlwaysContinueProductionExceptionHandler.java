@@ -18,7 +18,6 @@ package org.apache.kafka.streams.errors;
 
 import java.util.Map;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.Configurable;
 
 /**
  * Production exception handler that always instructs streams to continue when an exception
