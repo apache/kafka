@@ -512,7 +512,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     val secondMove = Map(
       TopicAndPartition("orders", 0) -> Seq(0, 2, 3), // stays
       TopicAndPartition("orders", 1) -> Seq(3, 1, 2), // moves
-      TopicAndPartition("payments", 1) -> Seq(2, 1), // changed assigned leader
+      TopicAndPartition("payments", 1) -> Seq(2, 1), // changed preferred leader
       TopicAndPartition("deliveries", 0) -> Seq(1, 2, 3) //increase replication factor
     )
 
@@ -541,6 +541,8 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     val fourthMove = Map(TopicAndPartition("payments", 1) -> Seq(2, 3))
 
+    // Continuously attempt to set the reassignment znode with `fourthMove` until it succeeds. It will only succeed
+    // after `thirdMove` completes.
     Iterator.continually {
       try new ReassignPartitionsCommand(zkUtils, None, fourthMove).reassignPartitions()
       catch {
@@ -550,7 +552,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     waitForReassignmentToComplete()
 
-    // Check moved replicas for secondMove and fourthMove
+    // Check moved replicas for thirdMove and fourthMove
     assertEquals(Seq(1, 2, 3), zkUtils.getReplicasForPartition("orders", 0))
     assertEquals(Seq(2, 3), zkUtils.getReplicasForPartition("payments", 1))
 

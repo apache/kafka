@@ -816,10 +816,8 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     if (reassignment.isEmpty) {
       info("No more partitions need to be reassigned. Deleting zk path %s".format(ReassignPartitionsZNode.path))
       zkClient.deletePartitionReassignment()
-      // If the reassignment znode was set before we registered the watcher, we need to queue the PartitionReassignment
-      // event manually
-      if (zkClient.registerZNodeChangeHandlerAndCheckExistence(partitionReassignmentHandler))
-        eventManager.put(PartitionReassignment)
+      // Ensure we detect future reassignments
+      eventManager.put(PartitionReassignment)
     } else {
       val setDataResponse = zkClient.setPartitionReassignmentRaw(reassignment)
       if (setDataResponse.resultCode == Code.NONODE) {
@@ -1288,17 +1286,21 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
     override def process(): Unit = {
       if (!isActive) return
-      zkClient.registerZNodeChangeHandlerAndCheckExistence(partitionReassignmentHandler)
-      val partitionReassignment = zkClient.getPartitionReassignment
-      val partitionsToBeReassigned = partitionReassignment.filterNot(p => controllerContext.partitionsBeingReassigned.contains(p._1))
-      partitionsToBeReassigned.foreach { partitionToBeReassigned =>
-        if(topicDeletionManager.isTopicQueuedUpForDeletion(partitionToBeReassigned._1.topic)) {
-          error("Skipping reassignment of partition %s for topic %s since it is currently being deleted"
-            .format(partitionToBeReassigned._1, partitionToBeReassigned._1.topic))
-          removePartitionFromReassignedPartitions(partitionToBeReassigned._1)
-        } else {
-          val context = ReassignedPartitionsContext(partitionToBeReassigned._2)
-          initiateReassignReplicasForTopicPartition(partitionToBeReassigned._1, context)
+
+      // We need to register the watcher if the path doesn't exist in order to detect future reassignments and we get
+      // the `path exists` check for free
+      if (zkClient.registerZNodeChangeHandlerAndCheckExistence(partitionReassignmentHandler)) {
+        val partitionReassignment = zkClient.getPartitionReassignment
+        val partitionsToBeReassigned = partitionReassignment.filterNot(p => controllerContext.partitionsBeingReassigned.contains(p._1))
+        partitionsToBeReassigned.foreach { partitionToBeReassigned =>
+          if (topicDeletionManager.isTopicQueuedUpForDeletion(partitionToBeReassigned._1.topic)) {
+            error("Skipping reassignment of partition %s for topic %s since it is currently being deleted"
+              .format(partitionToBeReassigned._1, partitionToBeReassigned._1.topic))
+            removePartitionFromReassignedPartitions(partitionToBeReassigned._1)
+          } else {
+            val context = ReassignedPartitionsContext(partitionToBeReassigned._2)
+            initiateReassignReplicasForTopicPartition(partitionToBeReassigned._1, context)
+          }
         }
       }
     }
