@@ -1456,6 +1456,9 @@ class TopicDeletionHandler(controller: KafkaController, eventManager: Controller
 class PartitionReassignmentHandler(controller: KafkaController, eventManager: ControllerEventManager) extends ZNodeChangeHandler {
   override val path: String = ReassignPartitionsZNode.path
 
+  // Note that the event is also enqueued when the znode is deleted, but we do it explicitly instead of relying on
+  // handleDeletion(). This approach is more robust as it doesn't depend on the watcher being re-registered after
+  // it's consumed during data changes (we ensure re-registration when the znode is deleted).
   override def handleCreation(): Unit = eventManager.put(controller.PartitionReassignment)
 }
 
