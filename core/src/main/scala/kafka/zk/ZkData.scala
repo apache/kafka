@@ -153,6 +153,19 @@ object ConfigEntityZNode {
   }
 }
 
+object ConfigEntityChangeNotificationZNode {
+  def path = s"${ConfigZNode.path}/changes"
+}
+
+object ConfigEntityChangeNotificationSequenceZNode {
+  val SequenceNumberPrefix = "config_change_"
+  def createPath = s"${ConfigEntityChangeNotificationZNode.path}/$SequenceNumberPrefix"
+  def path(sequenceNumber: String) = s"${ConfigEntityChangeNotificationZNode.path}/$SequenceNumberPrefix$sequenceNumber"
+  def encode(resourceName : String): Array[Byte] = resourceName.getBytes(UTF_8)
+  def decode(bytes: Array[Byte]): String = new String(bytes, UTF_8)
+  def sequenceNumber(path: String) = path.substring(path.lastIndexOf(SequenceNumberPrefix) + SequenceNumberPrefix.length)
+}
+
 object IsrChangeNotificationZNode {
   def path = "/isr_change_notification"
 }
@@ -289,7 +302,9 @@ object AclChangeNotificationZNode {
 
 object AclChangeNotificationSequenceZNode {
   val SequenceNumberPrefix = "acl_changes_"
-  def path = s"${AclChangeNotificationZNode.path}/$SequenceNumberPrefix"
+  def createPath = s"${AclChangeNotificationZNode.path}/$SequenceNumberPrefix"
+  def path(sequenceNumber: String) = s"${AclChangeNotificationZNode.path}/$SequenceNumberPrefix$sequenceNumber"
   def encode(resourceName : String): Array[Byte] = resourceName.getBytes(UTF_8)
   def decode(bytes: Array[Byte]): String = new String(bytes, UTF_8)
+  def sequenceNumber(path: String) = path.substring(path.lastIndexOf(SequenceNumberPrefix) + SequenceNumberPrefix.length)
 }

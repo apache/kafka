@@ -25,12 +25,13 @@ import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
-import kafka.zk.{AclChangeNotificationSequenceZNode, AclChangeNotificationZNode, AclZNode, KafkaZkClient}
+import kafka.zk.{AclChangeNotificationZNode, AclZNode, KafkaZkClient}
 import kafka.zookeeper.{StateChangeHandler, ZooKeeperClient}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.SecurityUtils
 import org.apache.log4j.Logger
 import org.apache.zookeeper.KeeperException.Code
+import org.apache.zookeeper.data.Stat
 
 import scala.collection.JavaConverters._
 import scala.util.Random
@@ -102,7 +103,13 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
     loadCache()
 
-    aclChangeListener = new ZkNodeChangeNotificationListener(zkClient, AclChangeNotificationZNode.path, AclChangeNotificationSequenceZNode.SequenceNumberPrefix, AclChangedNotificationHandler)
+    aclChangeListener = new ZkNodeChangeNotificationListener(zkClient, AclChangeNotificationZNode.path, AclChangedNotificationHandler) {
+      override def getAllChangeNotifications(): Seq[String] = zkClient.getAclChangeNotifications
+      override def deleteChangeNotification(sequenceNumber: String): Boolean = zkClient.deleteAclChangeNotification(sequenceNumber)
+      override def getDataFromChangeNotification(sequenceNumber: String): (Option[String], Stat) =
+        zkClient.getDataFromAclChangeNotification(sequenceNumber)
+    }
+
     aclChangeListener.init()
   }
 
@@ -228,10 +235,6 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     }
   }
 
-  def toResourcePath(resource: Resource): String = {
-    AclZNode.path + "/" + resource.resourceType + "/" + resource.name
-  }
-
   private def logAuditMessage(principal: KafkaPrincipal, authorized: Boolean, operation: Operation, resource: Resource, host: String) {
     def logMessage: String = {
       val authResult = if (authorized) "Allowed" else "Denied"
@@ -305,12 +308,12 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
    * @return true if the update was successful and the new version
    */
   private def conditionalUpdate(resource: Resource, acls: Set[Acl], expectedVersion: Int): (Boolean, Int) = {
-    val setDataResponse = zkClient.setAclForResource(resource, acls, expectedVersion)
+    val setDataResponse = zkClient.setAclForResourceRaw(resource, acls, expectedVersion)
     setDataResponse.resultCode match {
       case Code.OK =>
         (true, setDataResponse.stat.getVersion)
       case Code.NONODE => {
-        val createResponse = zkClient.createAclForResource(resource, acls)
+        val createResponse = zkClient.createAclForResourceRaw(resource, acls)
         createResponse.resultCode match {
           case Code.OK =>
             (true, 0)
@@ -347,7 +350,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   private def updateAclChangedFlag(resource: Resource) {
-    zkClient.createAclChangeNotification(resource.toString)
+    zkClient.createAclChangeNotificationRaw(resource.toString)
   }
 
   private def backoffTime = {
@@ -363,5 +366,4 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       }
     }
   }
-
 }

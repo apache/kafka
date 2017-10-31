@@ -23,6 +23,7 @@ import kafka.utils.{Logging, ShutdownableThread}
 import kafka.zk.KafkaZkClient
 import kafka.zookeeper.{StateChangeHandler, ZNodeChildChangeHandler}
 import org.apache.kafka.common.utils.Time
+import org.apache.zookeeper.data.Stat
 
 /**
  * Handle the notificationMessage.
@@ -40,24 +41,22 @@ trait NotificationHandler {
  *
  * @param zkClient
  * @param seqNodeRoot
- * @param seqNodePrefix
  * @param notificationHandler
  * @param changeExpirationMs
  * @param time
  */
-class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
+abstract class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
                                        private val seqNodeRoot: String,
-                                       private val seqNodePrefix: String,
                                        private val notificationHandler: NotificationHandler,
                                        private val changeExpirationMs: Long = 15 * 60 * 1000,
                                        private val time: Time = Time.SYSTEM) extends Logging {
   private var lastExecutedChange = -1L
   private val queue = new LinkedBlockingQueue[ChangeNotification]
-  private val thread = new ChangeEventProcessThread("change-event-process-thread")
+  private val thread = new ChangeEventProcessThread(s"$seqNodeRoot-event-process-thread")
   private val isClosed = new AtomicBoolean(false)
 
   def init() {
-    zkClient.registerStatusChangeHandler(ZkStateChangeListener)
+    zkClient.registerStateChangeHandler(ZkStateChangeListener)
     zkClient.registerZNodeChildChangeHandler(ChangeNotificationHandler)
     addChangeNotification()
     thread.start()
@@ -76,21 +75,19 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
    */
   private def processNotifications() {
     try {
-      val notifications = zkClient.getChildren(seqNodeRoot).sorted
+      val notifications = getAllChangeNotifications.sorted
       if (notifications.nonEmpty) {
         info(s"Processing notification(s) to $seqNodeRoot")
         val now = time.milliseconds
         for (notification <- notifications) {
-          val changeId = changeNumber(notification)
-          if (changeId > lastExecutedChange) {
-            val changeZnode = seqNodeRoot + "/" + notification
-            val data = zkClient.getDataAndStat(changeZnode)._1.orNull
+          if (notification.toLong > lastExecutedChange) {
+            val data = getDataFromChangeNotification(notification)._1.orNull
             if (data != null) {
               notificationHandler.processNotification(data)
             } else {
-              logger.warn(s"read null data from $changeZnode when processing notification $notification")
+              logger.warn(s"read null data from $notification sequence node when processing notification for path = $seqNodeRoot")
             }
-            lastExecutedChange = changeId
+            lastExecutedChange = notification.toLong
           }
         }
         purgeObsoleteNotifications(now, notifications)
@@ -101,8 +98,14 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
     }
   }
 
+  def getAllChangeNotifications() : Seq[String]
+
+  def deleteChangeNotification(sequenceNumber: String) : Boolean
+
+  def getDataFromChangeNotification(sequenceNumber: String) : (Option[String], Stat)
+
   private def addChangeNotification(): Unit = {
-    if (queue.peek() == null)
+    if (!isClosed.get && queue.peek() == null)
       queue.put(new ChangeNotification)
   }
 
@@ -118,19 +121,15 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
    */
   private def purgeObsoleteNotifications(now: Long, notifications: Seq[String]) {
     for (notification <- notifications.sorted) {
-      val notificationNode = seqNodeRoot + "/" + notification
-      val (data, stat) = zkClient.getDataAndStat(notificationNode)
+      val (data, stat) = getDataFromChangeNotification(notification)
       if (data.isDefined) {
         if (now - stat.getCtime > changeExpirationMs) {
-          debug(s"Purging change notification $notificationNode")
-          zkClient.deletePath(notificationNode)
+          debug(s"Purging change notification $notification for path = $seqNodeRoot")
+          deleteChangeNotification(notification)
         }
       }
     }
   }
-
-  /* get the change number from a change notification znode */
-  private def changeNumber(name: String): Long = name.substring(seqNodePrefix.length).toLong
 
   class ChangeEventProcessThread(name: String) extends ShutdownableThread(name = name) {
     override def doWork(): Unit = queue.take().process

@@ -53,6 +53,7 @@ class ZooKeeperClient(connectString: String,
   private val zNodeChildChangeHandlers = new ConcurrentHashMap[String, ZNodeChildChangeHandler]().asScala
   private val inFlightRequests = new Semaphore(maxInFlightRequests)
   private val stateChangeHandlers = new ConcurrentHashMap[String, StateChangeHandler]().asScala
+
   registerStateChangeHandler(stateChangeHandler)
 
   info(s"Initializing a new session to $connectString.")
@@ -235,11 +236,18 @@ class ZooKeeperClient(connectString: String,
     zNodeChildChangeHandlers.remove(path)
   }
 
-  def registerStateChangeHandler(statusChangeHandler: StateChangeHandler): Unit = {
-    if (statusChangeHandler != null)
-      stateChangeHandlers.put(statusChangeHandler.name, statusChangeHandler)
+  /**
+   * @param stateChangeHandler
+   */
+  def registerStateChangeHandler(stateChangeHandler: StateChangeHandler): Unit = {
+    if (stateChangeHandler != null)
+      stateChangeHandlers.put(stateChangeHandler.name, stateChangeHandler)
   }
 
+  /**
+   *
+   * @param path
+   */
   def unregisterStateChangeHandler(path: String): Unit = {
     stateChangeHandlers.remove(path)
   }
@@ -248,6 +256,7 @@ class ZooKeeperClient(connectString: String,
     info("Closing.")
     zNodeChangeHandlers.clear()
     zNodeChildChangeHandlers.clear()
+    stateChangeHandlers.clear()
     zooKeeper.close()
     info("Closed.")
   }
@@ -277,7 +286,7 @@ class ZooKeeperClient(connectString: String,
         }
       }
       info(s"Timed out waiting for connection during session initialization while in state: ${zooKeeper.getState}")
-      stateChangeHandlers.foreach(_._2.onReconnectionTimeout())
+      stateChangeHandlers.foreach {case (name, handler) => handler.onReconnectionTimeout()}
     }
   }
 
@@ -291,13 +300,13 @@ class ZooKeeperClient(connectString: String,
           }
           if (event.getState == KeeperState.AuthFailed) {
             info("Auth failed.")
-            stateChangeHandlers.foreach(_._2.onAuthFailure())
+            stateChangeHandlers.foreach {case (name, handler) => handler.onAuthFailure()}
           } else if (event.getState == KeeperState.Expired) {
             inWriteLock(initializationLock) {
               info("Session expired.")
-              stateChangeHandlers.foreach(_._2.beforeInitializingSession())
+              stateChangeHandlers.foreach {case (name, handler) => handler.beforeInitializingSession()}
               initialize()
-              stateChangeHandlers.foreach(_._2.afterInitializingSession())
+              stateChangeHandlers.foreach {case (name, handler) => handler.afterInitializingSession()}
             }
           }
         case Some(path) =>

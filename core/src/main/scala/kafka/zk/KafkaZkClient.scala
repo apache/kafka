@@ -19,13 +19,13 @@ package kafka.zk
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.Properties
 
+import java.nio.charset.StandardCharsets.UTF_8
+
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.log.LogConfig
-import kafka.security.auth.Acl
-import kafka.security.auth.Resource
-import kafka.security.auth.ResourceType
+import kafka.security.auth.{Acl, Resource, ResourceType}
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
 import kafka.server.ConfigType
 import kafka.utils._
@@ -352,6 +352,47 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
   }
 
   /**
+   * Gets the data and Stat at the given zk path
+   * @param path zk node path
+   * @return A tuple of 2 elements, where first element is zk node data as string
+   *         and second element is zk node stats.
+   *         returns (None, new Stat()) if node doesn't exists and throws exception for any error
+   */
+  private[zk] def getDataAndStat(path: String): (Option[String], Stat) = {
+    val getDataRequest = GetDataRequest(path)
+    val getDataResponse = retryRequestUntilConnected(getDataRequest)
+
+    if (getDataResponse.resultCode == Code.OK) {
+      if (getDataResponse.data == null)
+        (None, getDataResponse.stat)
+      else {
+        val data = new String(getDataResponse.data, UTF_8)
+        (Some(data), getDataResponse.stat)
+      }
+    } else if (getDataResponse.resultCode  == Code.NONODE) {
+      (None, new Stat())
+    } else {
+      throw getDataResponse.resultException.get
+    }
+  }
+
+  /**
+   * Gets all the child nodes at a given zk node path
+   * @param path
+   * @return list of child node names
+   */
+  private[zk] def getChildren(path : String): Seq[String] = {
+    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(path))
+    if (getChildrenResponse.resultCode == Code.OK) {
+      getChildrenResponse.children
+    } else if (getChildrenResponse.resultCode == Code.NONODE) {
+      Seq.empty
+    } else {
+      throw getChildrenResponse.resultException.get
+    }
+  }
+
+  /**
    * Conditional update the persistent path data, return (true, newVersion) if it succeeds, otherwise (the path doesn't
    * exist, the current version is not the expected version, etc.) return (false, -1)
    *
@@ -652,8 +693,10 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     val getDataResponse = retryRequestUntilConnected(getDataRequest)
     if (getDataResponse.resultCode == Code.OK) {
       ResourceZNode.decode(getDataResponse.data, getDataResponse.stat)
-    } else {
+    } else if (getDataResponse.resultCode == Code.NONODE) {
       VersionedAcls(Set(), -1)
+    } else {
+      throw getDataResponse.resultException.get
     }
   }
 
@@ -664,7 +707,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    * @param expectedVersion expected zk version
    * @return SetDataResponse
    */
-  def setAclForResource(resource: Resource, acls: Set[Acl], expectedVersion: Int): SetDataResponse = {
+  def setAclForResourceRaw(resource: Resource, acls: Set[Acl], expectedVersion: Int): SetDataResponse = {
     val setDataRequest = SetDataRequest(ResourceZNode.path(resource), ResourceZNode.encode(acls), expectedVersion)
     retryRequestUntilConnected(setDataRequest)
   }
@@ -675,7 +718,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    * @param aclsSet the acls to sets on the resource znode
    * @return CreateResponse
    */
-  def createAclForResource(resource: Resource, aclsSet: Set[Acl]): CreateResponse = {
+  def createAclForResourceRaw(resource: Resource, aclsSet: Set[Acl]): CreateResponse = {
     val path = ResourceZNode.path(resource)
     val createRequest = CreateRequest(path, ResourceZNode.encode(aclsSet), acls(path), CreateMode.PERSISTENT)
     retryRequestUntilConnected(createRequest)
@@ -683,27 +726,85 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
 
   /**
    * Creates Acl change notification message
-   * @param resource resource name
-   * @return CreateResponse
+   * @param resourceName resource name
    */
-  def createAclChangeNotification(resource: String): CreateResponse = {
-    val path = AclChangeNotificationSequenceZNode.path
-    val createRequest = CreateRequest(path, AclChangeNotificationSequenceZNode.encode(resource), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
-    retryRequestUntilConnected(createRequest)
+  def createAclChangeNotificationRaw(resourceName: String): Unit = {
+    val path = AclChangeNotificationSequenceZNode.createPath
+    val createRequest = CreateRequest(path, AclChangeNotificationSequenceZNode.encode(resourceName), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
+    val createResponse = retryRequestUntilConnected(createRequest)
+    if (createResponse.resultCode != Code.OK) {
+      throw createResponse.resultException.get
+    }
   }
 
   /**
-   * Gets the resource types
+   * Gets all Acl change notifications
+   * @return list of change node sequence numbers
    */
-  def getResourceTypes(): Seq[String] = {
-    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(AclZNode.path))
+  def getAclChangeNotifications(): Seq[String] = {
+    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(AclChangeNotificationZNode.path))
     if (getChildrenResponse.resultCode == Code.OK) {
-      getChildrenResponse.children
+      getChildrenResponse.children.map(AclChangeNotificationSequenceZNode.sequenceNumber)
     } else if (getChildrenResponse.resultCode == Code.NONODE) {
       Seq.empty
     } else {
       throw getChildrenResponse.resultException.get
     }
+  }
+
+  /**
+   * Get Acl change data and zk node Stat associated with the given sequence number
+   * @param sequenceNumber
+   * @return
+   */
+  def getDataFromAclChangeNotification(sequenceNumber: String): (Option[String], Stat) = {
+    getDataAndStat(AclChangeNotificationSequenceZNode.path(sequenceNumber))
+  }
+
+  /**
+   * Deletes all Acl change notifications.
+   */
+  def deleteAclChangeNotifications(): Unit = {
+    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(AclChangeNotificationZNode.path))
+    if (getChildrenResponse.resultCode == Code.OK) {
+      deleteAclChangeNotifications(getChildrenResponse.children)
+    } else if (getChildrenResponse.resultCode != Code.NONODE) {
+      throw getChildrenResponse.resultException.get
+    }
+  }
+
+  /**
+   * Deletes the Acl change notifications associated with the given sequence numbers.
+   * @param sequenceNumbers the sequence numbers associated with the Acl change notifications to be deleted.
+   */
+  def deleteAclChangeNotifications(sequenceNumbers: Seq[String]): Unit = {
+    val deleteRequests = sequenceNumbers.map { sequenceNumber =>
+      DeleteRequest(AclChangeNotificationSequenceZNode.path(sequenceNumber), ZkVersion.NoVersion)
+    }
+    retryRequestsUntilConnected(deleteRequests)
+  }
+
+  /**
+   * Deletes Acl change notification associated with the given sequence number
+   * @param sequenceNumber
+   * @return delete status
+   */
+  def deleteAclChangeNotification(sequenceNumber: String): Boolean = {
+    val deleteRequest = DeleteRequest(AclChangeNotificationSequenceZNode.path(sequenceNumber), ZkVersion.NoVersion)
+    val deleteResponse = retryRequestUntilConnected(deleteRequest)
+    if (deleteResponse.resultCode == Code.OK || deleteResponse.resultCode == Code.NONODE) {
+      true
+    }else {
+      throw deleteResponse.resultException.get
+    }
+  }
+
+  /**
+   * Gets the resource types
+   * @return list of resource type names
+   */
+  def getResourceTypes(): Seq[String] = {
+    getChildren(AclZNode.path)
   }
 
   /**
@@ -712,22 +813,26 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    * @return list of resource names
    */
   def getResourceNames(resourceType: String): Seq[String] = {
-    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(ResourceTypeZNode.path(resourceType)))
-    if (getChildrenResponse.resultCode == Code.OK) {
-      getChildrenResponse.children
-    } else if (getChildrenResponse.resultCode == Code.NONODE) {
-      Seq.empty
-    } else {
-      throw getChildrenResponse.resultException.get
-    }
+    getChildren(ResourceTypeZNode.path(resourceType))
   }
 
   /**
    * Deletes the given Resource node
+   * @param resource
+   * @return delete status
    */
   def deleteResource(resource: Resource): Boolean = {
     deleteRecursive(ResourceZNode.path(resource))
-    true
+    !resourceExists(resource)
+  }
+
+  /**
+   * checks the resource existence
+   * @param resource
+   * @return existence status
+   */
+  def resourceExists(resource: Resource): Boolean = {
+    pathExists(ResourceZNode.path(resource))
   }
 
   /**
@@ -749,14 +854,12 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
   }
 
   /**
-   * Gets all the child nodes at a given zk node path
-   * @param path
-   * @return list of child node names
+   * Gets all config change notifications
    */
-  def getChildren(path : String): Seq[String] = {
-    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(path))
+  def getConfigChangeNotifications(): Seq[String] = {
+    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(ConfigEntityChangeNotificationZNode.path))
     if (getChildrenResponse.resultCode == Code.OK) {
-      getChildrenResponse.children
+      getChildrenResponse.children.map(ConfigEntityChangeNotificationSequenceZNode.sequenceNumber)
     } else if (getChildrenResponse.resultCode == Code.NONODE) {
       Seq.empty
     } else {
@@ -765,34 +868,19 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
   }
 
   /**
-   * Gets the data and Stat at the given zk path
-   * @param path zk node path
-   * @return A tuple of 2 elements, where first element is zk node data as string
-   *         and second element is zk node stats.
-   *         returns (None, -1) if node doesn't exists, data is null or for any error.
+   * Get config change data and zk node Stat associated with the given sequence number
+   * @param sequenceNumber
+   * @return returns the data and Stat
    */
-  def getDataAndStat(path: String): (Option[String], Stat) = {
-    val getDataRequest = GetDataRequest(path)
-    val getDataResponse = retryRequestUntilConnected(getDataRequest)
-
-    if (getDataResponse.resultCode == Code.OK) {
-      if (getDataResponse.data == null)
-        (None, getDataResponse.stat)
-      else {
-        val data = new String(getDataResponse.data, "UTF-8")
-        (Some(data), getDataResponse.stat)
-      }
-    } else
-      (None, new Stat())
+  def getDataFromConfigChangeNotification(sequenceNumber: String): (Option[String], Stat) = {
+    getDataAndStat(ConfigEntityChangeNotificationSequenceZNode.path(sequenceNumber))
   }
 
   /**
-   * Deletes th zk node
-   * @param path
-   * @return  return true if it succeeds, false otherwise
+   * Deletes Config change notification associated with the given sequence number
    */
-  def deletePath(path: String): Boolean = {
-    val deleteRequest = DeleteRequest(path, -1)
+  def deleteConfigChangeNotification(sequenceNumber: String): Boolean = {
+    val deleteRequest = DeleteRequest(ConfigEntityChangeNotificationSequenceZNode.path(sequenceNumber), ZkVersion.NoVersion)
     val deleteResponse = retryRequestUntilConnected(deleteRequest)
     if (deleteResponse.resultCode == Code.OK || deleteResponse.resultCode == Code.NONODE) {
       true
@@ -800,6 +888,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
       throw deleteResponse.resultException.get
     }
   }
+
 
   /**
    * This registers a ZNodeChangeHandler and attempts to register a watcher with an ExistsRequest, which allows data
@@ -855,16 +944,16 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    *
    * @param stateChangeHandler
    */
-  def registerStatusChangeHandler(stateChangeHandler: StateChangeHandler): Unit = {
+  def registerStateChangeHandler(stateChangeHandler: StateChangeHandler): Unit = {
     zooKeeperClient.registerStateChangeHandler(stateChangeHandler)
   }
 
   /**
    *
-   * @param path
+   * @param name
    */
-  def unregisterStateChangeHandler(path: String): Unit = {
-    zooKeeperClient.unregisterStateChangeHandler(path)
+  def unregisterStateChangeHandler(name: String): Unit = {
+    zooKeeperClient.unregisterStateChangeHandler(name)
   }
 
 

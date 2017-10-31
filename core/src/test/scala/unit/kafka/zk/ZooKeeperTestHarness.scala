@@ -42,6 +42,7 @@ abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
   protected val zkAclsEnabled: Option[Boolean] = None
 
   var zkUtils: ZkUtils = null
+  var zooKeeperClient: ZooKeeperClient = null
   var zkClient: KafkaZkClient = null
   var zookeeper: EmbeddedZookeeper = null
 
@@ -53,11 +54,7 @@ abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
     zookeeper = new EmbeddedZookeeper()
     zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled()))
 
-    val zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout,
-      zkConnectionTimeout, new StateChangeHandler {
-        override val name: String = this.getClass.getName
-      })
-
+    zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, null)
     zkClient = new KafkaZkClient(zooKeeperClient, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled()))
   }
 
