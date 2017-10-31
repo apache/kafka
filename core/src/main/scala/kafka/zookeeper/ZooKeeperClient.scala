@@ -90,10 +90,13 @@ class ZooKeeperClient(connectString: String,
         try {
           send(request) { response =>
             responseQueue.add(response)
+            inFlightRequests.release()
+            countDownLatch.countDown()
           }
-        } finally {
-          inFlightRequests.release()
-          countDownLatch.countDown()
+        } catch {
+          case e: Throwable =>
+            inFlightRequests.release()
+            throw e
         }
       }
       countDownLatch.await()
