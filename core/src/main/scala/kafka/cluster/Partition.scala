@@ -55,7 +55,7 @@ class Partition(val topic: String,
   // Do not use replicaManager if this partition is ReplicaManager.OfflinePartition
   private val localBrokerId = if (!isOffline) replicaManager.config.brokerId else -1
   private val logManager = if (!isOffline) replicaManager.logManager else null
-  private val zkUtils = if (!isOffline) replicaManager.zkUtils else null
+  private val zkUtils = if (!isOffline) replicaManager.zkClient else null
   // allReplicasMap includes both assigned replicas and the future replica if there is ongoing replica movement
   private val allReplicasMap = new Pool[Int, Replica]
   // The read lock is only required when multiple reads are executed and needs to be in a consistent manner

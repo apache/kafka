@@ -34,14 +34,14 @@ object ReplicationUtils extends Logging {
     zkVersion: Int): (Boolean,Int) = {
     debug(s"Updated ISR for $topic-$partitionId to ${newLeaderAndIsr.isr.mkString(",")}")
     val path = getTopicPartitionLeaderAndIsrPath(topic, partitionId)
-    val newLeaderData = zkUtils.leaderAndIsrZkData(newLeaderAndIsr, controllerEpoch)
+    val newLeaderData = zkClient.leaderAndIsrZkData(newLeaderAndIsr, controllerEpoch)
     // use the epoch of the controller that made the leadership decision, instead of the current controller epoch
-    val updatePersistentPath: (Boolean, Int) = zkUtils.conditionalUpdatePath(path, newLeaderData, zkVersion, Some(checkLeaderAndIsrZkData))
+    val updatePersistentPath: (Boolean, Int) = zkClient.conditionalUpdatePath(path, newLeaderData, zkVersion, Some(checkLeaderAndIsrZkData))
     updatePersistentPath
   }
 
   def propagateIsrChanges(zkClient: KafkaZkClient, isrChangeSet: Set[TopicPartition]): Unit = {
-    val isrChangeNotificationPath: String = zkUtils.createSequentialPersistentPath(
+    val isrChangeNotificationPath: String = zkClient.createSequentialPersistentPath(
       ZkUtils.IsrChangeNotificationPath + "/" + IsrChangeNotificationPrefix,
       generateIsrChangeJson(isrChangeSet))
     debug(s"Added $isrChangeNotificationPath for $isrChangeSet")
@@ -49,7 +49,7 @@ object ReplicationUtils extends Logging {
 
   private def checkLeaderAndIsrZkData(zkClient: KafkaZkClient, path: String, expectedLeaderAndIsrInfo: String): (Boolean, Int) = {
     try {
-      val writtenLeaderAndIsrInfo = zkUtils.readDataMaybeNull(path)
+      val writtenLeaderAndIsrInfo = zkClient.readDataMaybeNull(path)
       val writtenLeaderOpt = writtenLeaderAndIsrInfo._1
       val writtenStat = writtenLeaderAndIsrInfo._2
       val expectedLeader = parseLeaderAndIsr(expectedLeaderAndIsrInfo, path, writtenStat)

@@ -27,7 +27,7 @@ object LogDirUtils extends Logging {
   val LogDirFailureEvent = 1
 
   def propagateLogDirEvent(zkClient: KafkaZkClient, brokerId: Int) {
-    val logDirEventNotificationPath: String = zkUtils.createSequentialPersistentPath(
+    val logDirEventNotificationPath: String = zkClient.createSequentialPersistentPath(
       ZkUtils.LogDirEventNotificationPath + "/" + LogDirEventNotificationPrefix, logDirFailureEventZkData(brokerId))
     debug(s"Added $logDirEventNotificationPath for broker $brokerId")
   }

@@ -158,7 +158,7 @@ class ReplicaManager(val config: KafkaConfig,
            metadataCache: MetadataCache,
            logDirFailureChannel: LogDirFailureChannel,
            threadNamePrefix: Option[String] = None) {
-    this(config, metrics, time, zkUtils, scheduler, logManager, isShuttingDown,
+    this(config, metrics, time, zkClient, scheduler, logManager, isShuttingDown,
       quotaManagers, brokerTopicStats, metadataCache, logDirFailureChannel,
       DelayedOperationPurgatory[DelayedProduce](
         purgatoryName = "Produce", brokerId = config.brokerId,
@@ -266,7 +266,7 @@ class ReplicaManager(val config: KafkaConfig,
       if (isrChangeSet.nonEmpty &&
         (lastIsrChangeMs.get() + ReplicaManager.IsrChangePropagationBlackOut < now ||
           lastIsrPropagationMs.get() + ReplicaManager.IsrChangePropagationInterval < now)) {
-        ReplicationUtils.propagateIsrChanges(zkUtils, isrChangeSet)
+        ReplicationUtils.propagateIsrChanges(zkClient, isrChangeSet)
         isrChangeSet.clear()
         lastIsrPropagationMs.set(now)
       }
@@ -1445,7 +1445,7 @@ class ReplicaManager(val config: KafkaConfig,
            s"for partitions ${partitionsWithOfflineFutureReplica.mkString(",")} because they are in the failed log directory $dir.")
     }
     logManager.handleLogDirFailure(dir)
-    LogDirUtils.propagateLogDirEvent(zkUtils, localBrokerId)
+    LogDirUtils.propagateLogDirEvent(zkClient, localBrokerId)
     info(s"Stopped serving replicas in dir $dir")
   }
 
