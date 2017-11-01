@@ -1431,7 +1431,7 @@ object TestUtils extends Logging {
 
   private def asBytes(string: String) = string.getBytes(StandardCharsets.UTF_8)
 
-  // Verifies that the record was intended to be committed by checking the the headers for an expected transaction status
+  // Verifies that the record was intended to be committed by checking the headers for an expected transaction status
   // If true, this will return the value as a string. It is expected that the record in question should have been created
   // by the `producerRecordWithExpectedTransactionStatus` method.
   def assertCommittedAndGetValue(record: ConsumerRecord[Array[Byte], Array[Byte]]) : String = {

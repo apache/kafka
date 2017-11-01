@@ -601,7 +601,7 @@ class TransactionStateManager(brokerId: Int,
 
           val append: Boolean = metadata.inLock {
             if (epochAndMetadata.coordinatorEpoch != coordinatorEpoch) {
-              // the coordinator epoch has changed, reply to client immediately with with NOT_COORDINATOR
+              // the coordinator epoch has changed, reply to client immediately with NOT_COORDINATOR
               responseCallback(Errors.NOT_COORDINATOR)
               false
             } else {

@@ -1213,7 +1213,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         public void onRevoked(String leader, Collection<String> connectors, Collection<ConnectorTaskId> tasks) {
             log.info("Rebalance started");
 
-            // Note that since we don't reset the assignment, we we don't revoke leadership here. During a rebalance,
+            // Note that since we don't reset the assignment, we don't revoke leadership here. During a rebalance,
             // it is still important to have a leader that can write configs, offsets, etc.
 
             if (rebalanceResolved) {

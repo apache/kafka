@@ -328,7 +328,7 @@ class SocketServerTest extends JUnitSuite {
       TestUtils.waitUntilTrue(() => openChannel.isEmpty, "Idle channel not closed")
       TestUtils.waitUntilTrue(() => openOrClosingChannel.isDefined, "Channel removed without processing staged receives")
 
-      // Create new connection with same id when when `channel1` is in Selector.closingChannels
+      // Create new connection with same id when `channel1` is in Selector.closingChannels
       // Check that new connection is closed and openOrClosingChannel still contains `channel1`
       connectAndWaitForConnectionRegister()
       TestUtils.waitUntilTrue(() => connectionCount == 1, "Failed to close channel")

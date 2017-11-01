@@ -67,7 +67,7 @@ object JmxTool extends Logging {
       .describedAs("format")
       .ofType(classOf[String])
     val jmxServiceUrlOpt =
-      parser.accepts("jmx-url", "The url to connect to to poll JMX data. See Oracle javadoc for JMXServiceURL for details.")
+      parser.accepts("jmx-url", "The url to connect to poll JMX data. See Oracle javadoc for JMXServiceURL for details.")
         .withRequiredArg
         .describedAs("service-url")
         .ofType(classOf[String])

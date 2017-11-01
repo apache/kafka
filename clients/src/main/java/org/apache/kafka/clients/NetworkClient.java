@@ -369,7 +369,7 @@ public class NetworkClient implements KafkaClient {
         if (!isInternalRequest) {
             // If this request came from outside the NetworkClient, validate
             // that we can send data.  If the request is internal, we trust
-            // that that internal code has done this validation.  Validation
+            // that internal code has done this validation.  Validation
             // will be slightly different for some internal requests (for
             // example, ApiVersionsRequests can be sent prior to being in
             // READY state.)
