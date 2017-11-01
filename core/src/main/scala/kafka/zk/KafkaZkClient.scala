@@ -16,6 +16,7 @@
 */
 package kafka.zk
 
+import java.nio.charset.StandardCharsets.UTF_8
 import java.util.Properties
 
 import kafka.api.LeaderAndIsr
@@ -26,13 +27,13 @@ import kafka.log.LogConfig
 import kafka.server.ConfigType
 import kafka.utils._
 import kafka.zookeeper._
+import org.apache.kafka.common.TopicPartition
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.Stat
 import org.apache.zookeeper.{CreateMode, KeeperException}
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
-import org.apache.kafka.common.TopicPartition
 
 /**
  * Provides higher level Kafka-specific operations on top of the pipelined [[kafka.zookeeper.ZooKeeperClient]].
@@ -308,6 +309,85 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
         throw getDataResponse.resultException.get
       }
     }.toMap
+  }
+
+  /**
+   * Gets the partition count for a given topic
+   * @param topic The topic to get partition count for.
+   * @return  optional integer that is Some if the topic exists and None otherwise.
+   */
+  def getTopicPartitionCount(topic: String): Option[Int] = {
+    val topicData = getReplicaAssignmentForTopics(Set(topic))
+    if (topicData.nonEmpty)
+      Some(topicData.size)
+    else
+      None
+  }
+
+  /**
+   * Gets the data and version at the given zk path
+   * @param path zk node path
+   * @return A tuple of 2 elements, where first element is zk node data as string
+   *         and second element is zk node version.
+   *         returns (None, -1) if node doesn't exists and throws exception for any error
+   */
+  def getDataAndVersion(path: String): (Option[String], Int) = {
+    val getDataRequest = GetDataRequest(path)
+    val getDataResponse = retryRequestUntilConnected(getDataRequest)
+
+    if (getDataResponse.resultCode == Code.OK) {
+      if (getDataResponse.data == null)
+        (None, getDataResponse.stat.getVersion)
+      else {
+        val data = new String(getDataResponse.data, UTF_8)
+        (Some(data), getDataResponse.stat.getVersion)
+      }
+    } else if (getDataResponse.resultCode == Code.NONODE)
+      (None, -1)
+    else
+      throw getDataResponse.resultException.get
+  }
+
+  /**
+   * Conditional update the persistent path data, return (true, newVersion) if it succeeds, otherwise (the path doesn't
+   * exist, the current version is not the expected version, etc.) return (false, -1)
+   *
+   * When there is a ConnectionLossException during the conditional update, ZookeeperClient will retry the update and may fail
+   * since the previous update may have succeeded (but the stored zkVersion no longer matches the expected one).
+   * In this case, we will run the optionalChecker to further check if the previous write did indeed succeeded.
+   */
+  def conditionalUpdatePath(path: String, data: String, expectVersion: Int,
+                            optionalChecker:Option[(KafkaZkClient, String, String) => (Boolean,Int)] = None): (Boolean, Int) = {
+
+    val setDataRequest = SetDataRequest(path, data.getBytes(UTF_8), expectVersion)
+    val setDataResponse = retryRequestUntilConnected(setDataRequest)
+
+    setDataResponse.resultCode match {
+      case Code.OK =>
+        debug("Conditional update of path %s with value %s and expected version %d succeeded, returning the new version: %d"
+          .format(path, data, expectVersion, setDataResponse.stat.getVersion))
+        (true, setDataResponse.stat.getVersion)
+
+      case Code.BADVERSION =>
+        optionalChecker match {
+          case Some(checker) => checker(this, path, data)
+          case _ =>
+            debug("Checker method is not passed skipping zkData match")
+            debug("Conditional update of path %s with data %s and expected version %d failed due to %s"
+              .format(path, data, expectVersion, setDataResponse.resultException.get.getMessage))
+            (false, -1)
+        }
+
+      case Code.NONODE =>
+        debug("Conditional update of path %s with data %s and expected version %d failed due to %s".format(path, data,
+          expectVersion, setDataResponse.resultException.get.getMessage))
+        (false, -1)
+
+      case _ =>
+        debug("Conditional update of path %s with data %s and expected version %d failed due to %s".format(path, data,
+          expectVersion, setDataResponse.resultException.get.getMessage))
+        throw setDataResponse.resultException.get
+    }
   }
 
   /**

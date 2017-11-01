@@ -16,11 +16,14 @@
 */
 package kafka.zk
 
+import kafka.common.TopicAndPartition
+import kafka.utils.ZkUtils
 import kafka.zookeeper.ZooKeeperClient
-
-import org.junit.{After, Before, Test}
-import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.apache.kafka.common.TopicPartition
+import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
+import org.junit.{After, Before, Test}
+
+import scala.collection.mutable
 
 class KafkaZkClientTest extends ZooKeeperTestHarness {
 
@@ -89,4 +92,69 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     intercept[IllegalArgumentException](zkClient.createRecursive("create-invalid-path"))
   }
 
+  @Test
+  def testGetTopicPartitionCount() {
+    val topic = "mytest"
+
+    // test with non-existing topic
+    assertTrue(zkClient.getTopicPartitionCount(topic).isEmpty)
+
+    // create a topic path
+    zkClient.createRecursive(ZkUtils.getTopicPath(topic))
+
+    val assignment = new mutable.HashMap[TopicAndPartition, Seq[Int]]()
+    assignment.put(new TopicAndPartition(topic, 0), Seq(0,1))
+    assignment.put(new TopicAndPartition(topic, 1), Seq(0,1))
+    zkClient.setTopicAssignmentRaw(topic, assignment.toMap)
+
+    assertEquals(2, zkClient.getTopicPartitionCount(topic).get)
+  }
+
+
+  @Test
+  def testGetDataAndVersion() {
+    val path = "/testpath"
+
+    // test with non-existing path
+    var dataAndVersion = zkClient.getDataAndVersion(path)
+    assertTrue(dataAndVersion._1.isEmpty)
+    assertEquals(-1, dataAndVersion._2)
+
+    // create a test path
+    zkClient.createRecursive(path)
+    zkClient.conditionalUpdatePath(path, "version1", 0)
+
+    // test with existing path
+    dataAndVersion = zkClient.getDataAndVersion(path)
+    assertEquals("version1", dataAndVersion._1.get)
+    assertEquals(1, dataAndVersion._2)
+
+    zkClient.conditionalUpdatePath(path, "version2", 1)
+    dataAndVersion = zkClient.getDataAndVersion(path)
+    assertEquals("version2", dataAndVersion._1.get)
+    assertEquals(2, dataAndVersion._2)
+  }
+
+  @Test
+  def testConditionalUpdatePath() {
+    val path = "/testconditionalpath"
+
+    // test with non-existing path
+    var statusAndVersion = zkClient.conditionalUpdatePath(path, "version0", 0)
+    assertFalse(statusAndVersion._1)
+    assertEquals(-1, statusAndVersion._2)
+
+    // create path
+    zkClient.createRecursive(path)
+
+    // test with valid expected version
+    statusAndVersion = zkClient.conditionalUpdatePath(path, "version1", 0)
+    assertTrue(statusAndVersion._1)
+    assertEquals(1, statusAndVersion._2)
+
+    // test with invalid expected version
+    statusAndVersion = zkClient.conditionalUpdatePath(path, "version2", 2)
+    assertFalse(statusAndVersion._1)
+    assertEquals(-1, statusAndVersion._2)
+  }
 }
