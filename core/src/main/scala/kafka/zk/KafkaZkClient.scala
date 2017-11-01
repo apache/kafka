@@ -48,6 +48,29 @@ import scala.collection.mutable.ArrayBuffer
 class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends Logging {
   import KafkaZkClient._
 
+  def createSequentialPersistentPath(path: String, data: String = ""): String = {
+    val createRequest = CreateRequest(path, data.getBytes("UTF-8"), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
+    val createResponse = retryRequestUntilConnected(createRequest)
+    createResponse.path
+  }
+
+  def leaderAndIsrZkData(leaderAndIsr: LeaderAndIsr, controllerEpoch: Int): String = {
+    Json.encode(Map("version" -> 1, "leader" -> leaderAndIsr.leader, "leader_epoch" -> leaderAndIsr.leaderEpoch,
+                    "controller_epoch" -> controllerEpoch, "isr" -> leaderAndIsr.isr))
+  }
+
+  def readDataMaybeNull(path: String): (Option[String], Stat) = {
+    val getDataRequest = GetDataRequest(path)
+    val getDataResponse = retryRequestUntilConnected(getDataRequest)
+
+    if (getDataResponse.resultCode == Code.NONODE) {
+      (None, getDataResponse.stat)
+    } else {
+      val data = new String(getDataResponse.data, UTF_8)
+      (Some(data), getDataResponse.stat)
+    }
+  }
+
   /**
    * Gets topic partition states for the given partitions.
    * @param partitions the partitions for which we want ot get states.

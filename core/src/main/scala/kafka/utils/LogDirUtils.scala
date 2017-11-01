@@ -18,6 +18,7 @@
 package kafka.utils
 
 import kafka.controller.LogDirEventNotificationListener
+import kafka.zk.KafkaZkClient
 import scala.collection.Map
 
 object LogDirUtils extends Logging {
@@ -25,7 +26,7 @@ object LogDirUtils extends Logging {
   private val LogDirEventNotificationPrefix = "log_dir_event_"
   val LogDirFailureEvent = 1
 
-  def propagateLogDirEvent(zkUtils: ZkUtils, brokerId: Int) {
+  def propagateLogDirEvent(zkUtils: KafkaZkClient, brokerId: Int) {
     val logDirEventNotificationPath: String = zkUtils.createSequentialPersistentPath(
       ZkUtils.LogDirEventNotificationPath + "/" + LogDirEventNotificationPrefix, logDirFailureEventZkData(brokerId))
     debug(s"Added $logDirEventNotificationPath for broker $brokerId")

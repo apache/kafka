@@ -23,6 +23,8 @@ import scala.collection._
 import scala.collection.JavaConverters._
 import kafka.server.{ConfigType, DynamicConfig}
 import kafka.utils._
+import kafka.zk.KafkaZkClient
+import kafka.zookeeper.{StateChangeHandler, ZooKeeperClient}
 import kafka.common.{AdminCommandFailedException, TopicAndPartition}
 import kafka.log.LogConfig
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
@@ -46,10 +48,20 @@ object ReassignPartitionsCommand extends Logging {
 
     val opts = validateAndParseArgs(args)
     val zkConnect = opts.options.valueOf(opts.zkConnectOpt)
-    val zkUtils = ZkUtils(zkConnect,
-                          30000,
-                          30000,
-                          JaasUtils.isZkSecurityEnabled())
+    val zooKeeperClient = new ZooKeeperClient(zkConnect, 30000, 30000, new StateChangeHandler {
+        override def onReconnectionTimeout(): Unit = {
+          error("Reconnection timeout.")
+        }
+
+        override def afterInitializingSession(): Unit = kafkaController.newSession()
+
+        override def onAuthFailure(): Unit = {
+          error("Auth failure.")
+        }
+
+        override def beforeInitializingSession(): Unit = kafkaController.expire()
+      })
+    val zkUtils = new KafkaZkClient(zooKeeperClient, JaasUtils.isZkSecurityEnabled())
     val adminClientOpt = createAdminClient(opts)
 
     try {
@@ -77,13 +89,13 @@ object ReassignPartitionsCommand extends Logging {
     }
   }
 
-  def verifyAssignment(zkUtils: ZkUtils, adminClientOpt: Option[JAdminClient], opts: ReassignPartitionsCommandOptions) {
+  def verifyAssignment(zkUtils: KafkaZkClient, adminClientOpt: Option[JAdminClient], opts: ReassignPartitionsCommandOptions) {
     val jsonFile = opts.options.valueOf(opts.reassignmentJsonFileOpt)
     val jsonString = Utils.readFileAsString(jsonFile)
     verifyAssignment(zkUtils, adminClientOpt, jsonString)
   }
 
-  def verifyAssignment(zkUtils: ZkUtils, adminClientOpt: Option[JAdminClient], jsonString: String): Unit = {
+  def verifyAssignment(zkUtils: KafkaZkClient, adminClientOpt: Option[JAdminClient], jsonString: String): Unit = {
     println("Status of partition reassignment: ")
     val (partitionsToBeReassigned, replicaAssignment) = parsePartitionReassignmentData(jsonString)
     val reassignedPartitionsStatus = checkIfPartitionReassignmentSucceeded(zkUtils, partitionsToBeReassigned.toMap)
@@ -114,7 +126,7 @@ object ReassignPartitionsCommand extends Logging {
     removeThrottle(zkUtils, reassignedPartitionsStatus, replicasReassignmentStatus)
   }
 
-  private[admin] def removeThrottle(zkUtils: ZkUtils,
+  private[admin] def removeThrottle(zkUtils: KafkaZkClient,
                                     reassignedPartitionsStatus: Map[TopicAndPartition, ReassignmentStatus],
                                     replicasReassignmentStatus: Map[TopicPartitionReplica, ReassignmentStatus],
                                     admin: AdminUtilities = AdminUtils): Unit = {
@@ -152,7 +164,7 @@ object ReassignPartitionsCommand extends Logging {
     }
   }
 
-  def generateAssignment(zkUtils: ZkUtils, opts: ReassignPartitionsCommandOptions) {
+  def generateAssignment(zkUtils: KafkaZkClient, opts: ReassignPartitionsCommandOptions) {
     val topicsToMoveJsonFile = opts.options.valueOf(opts.topicsToMoveJsonFileOpt)
     val brokerListToReassign = opts.options.valueOf(opts.brokerListOpt).split(',').map(_.toInt)
     val duplicateReassignments = CoreUtils.duplicates(brokerListToReassign)
@@ -165,7 +177,7 @@ object ReassignPartitionsCommand extends Logging {
     println("Proposed partition reassignment configuration\n%s".format(formatAsReassignmentJson(proposedAssignments, Map.empty)))
   }
 
-  def generateAssignment(zkUtils: ZkUtils, brokerListToReassign: Seq[Int], topicsToMoveJsonString: String, disableRackAware: Boolean): (Map[TopicAndPartition, Seq[Int]], Map[TopicAndPartition, Seq[Int]]) = {
+  def generateAssignment(zkUtils: KafkaZkClient, brokerListToReassign: Seq[Int], topicsToMoveJsonString: String, disableRackAware: Boolean): (Map[TopicAndPartition, Seq[Int]], Map[TopicAndPartition, Seq[Int]]) = {
     val topicsToReassign = ZkUtils.parseTopicsData(topicsToMoveJsonString)
     val duplicateTopicsToReassign = CoreUtils.duplicates(topicsToReassign)
     if (duplicateTopicsToReassign.nonEmpty)
