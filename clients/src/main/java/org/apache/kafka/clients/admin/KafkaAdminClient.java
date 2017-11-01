@@ -924,6 +924,20 @@ public class KafkaAdminClient extends AdminClient {
                         call.callName, correlationId, response.destination())));
                 } else {
                     try {
+                        boolean retriableException = false;
+                        for(Errors errors : response.responseBody().errorCounts().keySet()) {
+                            final ApiException exception = errors.exception();
+                            if (exception instanceof RetriableException) {
+                                call.fail(now, exception);
+                                retriableException = true;
+                                break;
+                            }
+                        }
+
+                        if (retriableException) {
+                            continue;
+                        }
+
                         call.handleResponse(response.responseBody());
                         if (log.isTraceEnabled())
                             log.trace("{} got response {}", call,
