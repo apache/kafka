@@ -482,14 +482,14 @@ class TransactionsTest extends KafkaServerTestHarness {
     // Verify that the first message was aborted and the second one was never written at all.
     val nonTransactionalConsumer = nonTransactionalConsumers(0)
     nonTransactionalConsumer.subscribe(List(topic1).asJava)
-    val records = TestUtils.consumeRemainingRecords(nonTransactionalConsumer, 1000)
+    val records = TestUtils.consumeRecordsFor(nonTransactionalConsumer, 1000)
     assertEquals(1, records.size)
     assertEquals("1", TestUtils.recordValueAsString(records.head))
 
     val transactionalConsumer = transactionalConsumers.head
     transactionalConsumer.subscribe(List(topic1).asJava)
 
-    val transactionalRecords = TestUtils.consumeRemainingRecords(transactionalConsumer, 1000)
+    val transactionalRecords = TestUtils.consumeRecordsFor(transactionalConsumer, 1000)
     assertTrue(transactionalRecords.isEmpty)
   }
 

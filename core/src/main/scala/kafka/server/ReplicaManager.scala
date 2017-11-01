@@ -122,13 +122,6 @@ object LogReadResult {
                                            lastStableOffset = None)
 }
 
-case class BecomeLeaderOrFollowerResult(responseMap: collection.Map[TopicPartition, Errors], error: Errors) {
-
-  override def toString = {
-    "update results: [%s], global error: [%d]".format(responseMap, error.code)
-  }
-}
-
 object ReplicaManager {
   val HighWatermarkFilename = "replication-offset-checkpoint"
   val IsrChangePropagationBlackOut = 5000L
@@ -1038,29 +1031,29 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   def becomeLeaderOrFollower(correlationId: Int,
-                             leaderAndISRRequest: LeaderAndIsrRequest,
-                             onLeadershipChange: (Iterable[Partition], Iterable[Partition]) => Unit): BecomeLeaderOrFollowerResult = {
-    leaderAndISRRequest.partitionStates.asScala.foreach { case (topicPartition, stateInfo) =>
+                             leaderAndIsrRequest: LeaderAndIsrRequest,
+                             onLeadershipChange: (Iterable[Partition], Iterable[Partition]) => Unit): LeaderAndIsrResponse = {
+    leaderAndIsrRequest.partitionStates.asScala.foreach { case (topicPartition, stateInfo) =>
       stateChangeLogger.trace(s"Received LeaderAndIsr request $stateInfo " +
-        s"correlation id $correlationId from controller ${leaderAndISRRequest.controllerId} " +
-        s"epoch ${leaderAndISRRequest.controllerEpoch} for partition $topicPartition")
+        s"correlation id $correlationId from controller ${leaderAndIsrRequest.controllerId} " +
+        s"epoch ${leaderAndIsrRequest.controllerEpoch} for partition $topicPartition")
     }
     replicaStateChangeLock synchronized {
-      val responseMap = new mutable.HashMap[TopicPartition, Errors]
-      if (leaderAndISRRequest.controllerEpoch < controllerEpoch) {
-        stateChangeLogger.warn(s"Ignoring LeaderAndIsr request from controller ${leaderAndISRRequest.controllerId} with " +
-          s"correlation id $correlationId since its controller epoch ${leaderAndISRRequest.controllerEpoch} is old. " +
+      if (leaderAndIsrRequest.controllerEpoch < controllerEpoch) {
+        stateChangeLogger.warn(s"Ignoring LeaderAndIsr request from controller ${leaderAndIsrRequest.controllerId} with " +
+          s"correlation id $correlationId since its controller epoch ${leaderAndIsrRequest.controllerEpoch} is old. " +
           s"Latest known controller epoch is $controllerEpoch")
-        BecomeLeaderOrFollowerResult(responseMap, Errors.STALE_CONTROLLER_EPOCH)
+        leaderAndIsrRequest.getErrorResponse(0, Errors.STALE_CONTROLLER_EPOCH.exception)
       } else {
-        val controllerId = leaderAndISRRequest.controllerId
-        controllerEpoch = leaderAndISRRequest.controllerEpoch
+        val responseMap = new mutable.HashMap[TopicPartition, Errors]
+        val controllerId = leaderAndIsrRequest.controllerId
+        controllerEpoch = leaderAndIsrRequest.controllerEpoch
 
         // First check partition's leader epoch
         val partitionState = new mutable.HashMap[Partition, LeaderAndIsrRequest.PartitionState]()
-        val newPartitions = leaderAndISRRequest.partitionStates.asScala.keys.filter(topicPartition => getPartition(topicPartition).isEmpty)
+        val newPartitions = leaderAndIsrRequest.partitionStates.asScala.keys.filter(topicPartition => getPartition(topicPartition).isEmpty)
 
-        leaderAndISRRequest.partitionStates.asScala.foreach { case (topicPartition, stateInfo) =>
+        leaderAndIsrRequest.partitionStates.asScala.foreach { case (topicPartition, stateInfo) =>
           val partition = getOrCreatePartition(topicPartition)
           val partitionLeaderEpoch = partition.getLeaderEpoch
           if (partition eq ReplicaManager.OfflinePartition) {
@@ -1105,7 +1098,7 @@ class ReplicaManager(val config: KafkaConfig,
         else
           Set.empty[Partition]
 
-        leaderAndISRRequest.partitionStates.asScala.keys.foreach( topicPartition =>
+        leaderAndIsrRequest.partitionStates.asScala.keys.foreach(topicPartition =>
           /*
            * If there is offline log directory, a Partition object may have been created by getOrCreatePartition()
            * before getOrCreateReplica() failed to create local replica due to KafkaStorageException.
@@ -1139,7 +1132,7 @@ class ReplicaManager(val config: KafkaConfig,
         replicaFetcherManager.shutdownIdleFetcherThreads()
         replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
         onLeadershipChange(partitionsBecomeLeader, partitionsBecomeFollower)
-        BecomeLeaderOrFollowerResult(responseMap, Errors.NONE)
+        new LeaderAndIsrResponse(Errors.NONE, responseMap.asJava)
       }
     }
   }

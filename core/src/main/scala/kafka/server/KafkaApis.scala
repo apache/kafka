@@ -29,7 +29,7 @@ import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0}
 import kafka.cluster.Partition
 import kafka.common.{OffsetAndMetadata, OffsetMetadata, TopicAndPartition}
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
-import kafka.controller.KafkaController
+import kafka.controller.{KafkaController}
 import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.log.{Log, LogManager, TimestampOffset}
@@ -38,6 +38,7 @@ import kafka.network.RequestChannel.{CloseConnectionAction, NoOpAction, SendActi
 import kafka.security.SecurityUtils
 import kafka.security.auth.{Resource, _}
 import kafka.utils.{CoreUtils, Logging, ZKGroupTopicDirs, ZkUtils}
+import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
@@ -71,6 +72,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val txnCoordinator: TransactionCoordinator,
                 val controller: KafkaController,
                 val zkUtils: ZkUtils,
+                val zkClient: KafkaZkClient,
                 val brokerId: Int,
                 val config: KafkaConfig,
                 val metadataCache: MetadataCache,
@@ -170,13 +172,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
-      val result = replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest, onLeadershipChange)
-      val leaderAndIsrResponse = new LeaderAndIsrResponse(result.error, result.responseMap.asJava)
-      sendResponseExemptThrottle(request, leaderAndIsrResponse)
+      val response = replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest, onLeadershipChange)
+      sendResponseExemptThrottle(request, response)
     } else {
-      val result = leaderAndIsrRequest.partitionStates.asScala.keys.map((_, Errors.CLUSTER_AUTHORIZATION_FAILED)).toMap
-      sendResponseMaybeThrottle(request, _ =>
-        new LeaderAndIsrResponse(Errors.CLUSTER_AUTHORIZATION_FAILED, result.asJava))
+      sendResponseMaybeThrottle(request, throttleTimeMs => leaderAndIsrRequest.getErrorResponse(throttleTimeMs,
+        Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
     }
   }
 
@@ -300,12 +300,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         // for version 0 always store offsets to ZK
         val responseInfo = authorizedTopicRequestInfo.map {
           case (topicPartition, partitionData) =>
-            val topicDirs = new ZKGroupTopicDirs(offsetCommitRequest.groupId, topicPartition.topic)
             try {
               if (partitionData.metadata != null && partitionData.metadata.length > config.offsetMetadataMaxSize)
                 (topicPartition, Errors.OFFSET_METADATA_TOO_LARGE)
               else {
-                zkUtils.updatePersistentPath(s"${topicDirs.consumerOffsetDir}/${topicPartition.partition}", partitionData.offset.toString)
+                zkClient.setOrCreateConsumerOffset(offsetCommitRequest.groupId, topicPartition, partitionData.offset)
                 (topicPartition, Errors.NONE)
               }
             } catch {
@@ -1006,12 +1005,11 @@ class KafkaApis(val requestChannel: RequestChannel,
 
             // version 0 reads offsets from ZK
             val authorizedPartitionData = authorizedPartitions.map { topicPartition =>
-              val topicDirs = new ZKGroupTopicDirs(offsetFetchRequest.groupId, topicPartition.topic)
               try {
                 if (!metadataCache.contains(topicPartition.topic))
                   (topicPartition, OffsetFetchResponse.UNKNOWN_PARTITION)
                 else {
-                  val payloadOpt = zkUtils.readDataMaybeNull(s"${topicDirs.consumerOffsetDir}/${topicPartition.partition}")._1
+                  val payloadOpt = zkClient.getConsumerOffset(offsetFetchRequest.groupId, topicPartition)
                   payloadOpt match {
                     case Some(payload) =>
                       (topicPartition, new OffsetFetchResponse.PartitionData(

@@ -61,7 +61,6 @@ import org.apache.kafka.streams.state.internals.StateStoreProvider;
 import org.apache.kafka.streams.state.internals.StreamThreadStateStoreProvider;
 import org.slf4j.Logger;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -711,12 +710,7 @@ public class KafkaStreams {
 
         client.checkBrokerCompatibility(EXACTLY_ONCE.equals(config.getString(PROCESSING_GUARANTEE_CONFIG)));
 
-        try {
-            client.close();
-        } catch (final IOException e) {
-            log.warn("Could not close StreamKafkaClient.", e);
-        }
-
+        client.close();
     }
 
     /**

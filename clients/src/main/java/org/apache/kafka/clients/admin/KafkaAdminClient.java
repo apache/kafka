@@ -17,7 +17,6 @@
 
 package org.apache.kafka.clients.admin;
 
-import java.util.Set;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
@@ -65,13 +64,13 @@ import org.apache.kafka.common.requests.AlterConfigsRequest;
 import org.apache.kafka.common.requests.AlterConfigsResponse;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsRequest;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsResponse;
-import org.apache.kafka.common.requests.CreatePartitionsRequest;
-import org.apache.kafka.common.requests.CreatePartitionsResponse;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.CreateAclsRequest;
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation;
 import org.apache.kafka.common.requests.CreateAclsResponse;
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse;
+import org.apache.kafka.common.requests.CreatePartitionsRequest;
+import org.apache.kafka.common.requests.CreatePartitionsResponse;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.DeleteAclsRequest;
@@ -108,6 +107,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -953,22 +953,22 @@ public class KafkaAdminClient extends AdminClient {
 
         @Override
         public void run() {
-            /**
+            /*
              * Maps nodes to calls that we want to send.
              */
             Map<Node, List<Call>> callsToSend = new HashMap<>();
 
-            /**
+            /*
              * Maps node ID strings to calls that have been sent.
              */
             Map<String, List<Call>> callsInFlight = new HashMap<>();
 
-            /**
+            /*
              * Maps correlation IDs to calls that have been sent.
              */
             Map<Integer, Call> correlationIdToCalls = new HashMap<>();
 
-            /**
+            /*
              * The previous metadata version which wasn't usable, or null if there is none.
              */
             Integer prevMetadataVersion = null;

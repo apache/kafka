@@ -136,12 +136,10 @@ public class FileRecords extends AbstractRecords implements Closeable {
         if (size < 0)
             throw new IllegalArgumentException("Invalid size: " + size);
 
-        final int end;
-        // handle integer overflow
-        if (this.start + position + size < 0)
-            end = sizeInBytes();
-        else
-            end = Math.min(this.start + position + size, sizeInBytes());
+        int end = this.start + position + size;
+        // handle integer overflow or if end is beyond the end of the file
+        if (end < 0 || end >= start + sizeInBytes())
+            end = start + sizeInBytes();
         return new FileRecords(file, channel, this.start + position, end, true);
     }
 

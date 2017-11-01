@@ -119,7 +119,7 @@ public abstract class AbstractCoordinator implements Closeable {
     private Generation generation = Generation.NO_GENERATION;
 
     private RequestFuture<Void> findCoordinatorFuture = null;
-
+    
     /**
      * Initialize the coordination manager.
      */
