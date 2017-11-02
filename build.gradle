@@ -35,6 +35,9 @@ buildscript {
 apply from: "$rootDir/gradle/dependencies.gradle"
 
 allprojects {
+  apply plugin: 'java'
+  sourceCompatibility = 1.7
+  targetCompatibility = 1.7
 
   repositories {
     mavenCentral()
