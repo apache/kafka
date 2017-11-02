@@ -18,10 +18,10 @@
 package kafka.controller
 
 import kafka.utils.Logging
-import org.apache.log4j
+import org.slf4j.LoggerFactory
 
 object StateChangeLogger {
-  private val Logger = log4j.Logger.getLogger("state.change.logger")
+  private val Logger = LoggerFactory.getLogger("state.change.logger")
 }
 
 /**
