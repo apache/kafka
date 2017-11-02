@@ -472,7 +472,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
   }
 
   def initiateReassignReplicasForTopicPartition(topicPartition: TopicPartition,
-                                        reassignedPartitionContext: ReassignedPartitionsContext) {
+                                                reassignedPartitionContext: ReassignedPartitionsContext) {
     val newReplicas = reassignedPartitionContext.newReplicas
     val topic = topicPartition.topic
     try {
@@ -621,19 +621,17 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
   private def initializePartitionReassignment() {
     // read the partitions being reassigned from zookeeper path /admin/reassign_partitions
-    val partitionsBeingReassigned = zkClient.getPartitionReassignment.mapValues(replicas => ReassignedPartitionsContext(replicas))
+    val partitionsBeingReassigned = zkClient.getPartitionReassignment
     // check if they are already completed or topic was deleted
-    val reassignedPartitions = partitionsBeingReassigned.filter { partition =>
-      val replicasOpt = controllerContext.partitionReplicaAssignment.get(partition._1)
-      val topicDeleted = replicasOpt.isEmpty
-      val successful = if (!topicDeleted) replicasOpt.get == partition._2.newReplicas else false
-      topicDeleted || successful
+    val reassignedPartitions = partitionsBeingReassigned.filter { case (tp, reassignmentReplicas) =>
+      controllerContext.partitionReplicaAssignment.get(tp) match {
+        case None => true // topic deleted
+        case Some(currentReplicas) => currentReplicas == reassignmentReplicas // reassignment completed
+      }
     }.keys
-    reassignedPartitions.foreach(p => removePartitionFromReassignedPartitions(p))
-    val partitionsToReassign = mutable.Map[TopicPartition, ReassignedPartitionsContext]()
-    partitionsToReassign ++= partitionsBeingReassigned
-    partitionsToReassign --= reassignedPartitions
-    controllerContext.partitionsBeingReassigned ++= partitionsToReassign
+    reassignedPartitions.foreach(removePartitionFromReassignedPartitions)
+    val partitionsToReassign = partitionsBeingReassigned -- reassignedPartitions
+    controllerContext.partitionsBeingReassigned ++= partitionsToReassign.mapValues(new ReassignedPartitionsContext(_))
     info(s"Partitions being reassigned: $partitionsBeingReassigned")
     info(s"Partitions already reassigned: $reassignedPartitions")
     info(s"Resuming reassignment of partitions: $partitionsToReassign")
@@ -652,8 +650,8 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
   }
 
   private def maybeTriggerPartitionReassignment() {
-    controllerContext.partitionsBeingReassigned.foreach { topicPartitionToReassign =>
-      initiateReassignReplicasForTopicPartition(topicPartitionToReassign._1, topicPartitionToReassign._2)
+    controllerContext.partitionsBeingReassigned.foreach { case (tp, reassignContext) =>
+      initiateReassignReplicasForTopicPartition(tp, reassignContext)
     }
   }
 
