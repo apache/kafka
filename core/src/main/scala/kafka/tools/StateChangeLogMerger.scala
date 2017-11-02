@@ -63,11 +63,11 @@ object StateChangeLogMerger extends Logging {
     val parser = new OptionParser(false)
     val filesOpt = parser.accepts("logs", "Comma separated list of state change logs or a regex for the log file names.")
                               .withRequiredArg
-                              .describedAs("list or regex of state change logs(e.g: file1,file2,...)")
+                              .describedAs("list/regex of state change logs(e.g: file1,file2,...)")
                               .ofType(classOf[String])
     val regexOpt = parser.accepts("logs-regex", "Regex to match the state change log files to be merged.")
                               .withRequiredArg
-                              .describedAs("regex to match state change logs to be merged(e.g: /tmp/state-change.log*)")
+                              .describedAs("regex to match state change logs(e.g: /tmp/state-change.log*)")
                               .ofType(classOf[String])
     val topicOpt = parser.accepts("topic", "The topic whose state change logs should be merged.")
                               .withRequiredArg

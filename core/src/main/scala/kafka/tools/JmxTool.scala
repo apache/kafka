@@ -64,7 +64,7 @@ object JmxTool extends Logging {
     val dateFormatOpt = parser.accepts("date-format", "The date format to use for formatting the time field. " +
       "See java.text.SimpleDateFormat for options.")
       .withRequiredArg
-      .describedAs("date format to use for formatting time field")
+      .describedAs("date format for formatting time field")
       .ofType(classOf[String])
     val jmxServiceUrlOpt =
       parser.accepts("jmx-url", "The url to connect to poll JMX data. See Oracle javadoc for JMXServiceURL for details.")

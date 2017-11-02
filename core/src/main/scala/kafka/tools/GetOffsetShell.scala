@@ -42,7 +42,7 @@ object GetOffsetShell {
                            .required
     val partitionOpt = parser.accepts("partitions", "Comma separated list of partition ids. If not specified, it will find offsets for all partitions.")
                            .withRequiredArg
-                           .describedAs("partition ids")
+                           .describedAs("partition id(s)")
                            .ofType(classOf[String])
                            .defaultsTo("")
     val timeOpt = parser.accepts("time", "Timestamp in milliseconds. The offsets before this timestamp will be fetched.")

@@ -272,7 +272,7 @@ object ConsoleConsumer extends Logging {
       .ofType(classOf[java.lang.Integer])
     val offsetOpt = parser.accepts("offset", "The offset id to consume from (a non-negative number), or 'earliest' which means from beginning, or 'latest' which means from end")
       .withRequiredArg
-      .describedAs("consumer offset")
+      .describedAs("consume offset")
       .ofType(classOf[String])
       .defaultsTo("latest")
     val zkConnectOpt = parser.accepts("zookeeper", "The connection string for the zookeeper connection in the form host:port. " +
@@ -291,7 +291,7 @@ object ConsoleConsumer extends Logging {
       .ofType(classOf[String])
     val messageFormatterOpt = parser.accepts("formatter", "The name of a class to use for formatting Kafka messages for display.")
       .withRequiredArg
-      .describedAs("name of class used to format Kafka messages for display")
+      .describedAs("class name to format Kafka messages")
       .ofType(classOf[String])
       .defaultsTo(classOf[DefaultMessageFormatter].getName)
     val messageFormatterArgOpt = parser.accepts("property", "The properties to initialize the message formatter.")
@@ -307,7 +307,7 @@ object ConsoleConsumer extends Logging {
       .ofType(classOf[java.lang.Integer])
     val timeoutMsOpt = parser.accepts("timeout-ms", "If specified, exit if no message is available for consumption for the specified interval.")
       .withRequiredArg
-      .describedAs("interval to wait(in ms) for before exiting if no message is available")
+      .describedAs("wait time for messages to be available before exiting")
       .ofType(classOf[java.lang.Integer])
     val skipMessageOnErrorOpt = parser.accepts("skip-message-on-error", "If there is an error when processing a message, " +
       "skip it instead of halt.")
@@ -323,7 +323,7 @@ object ConsoleConsumer extends Logging {
         "(The new consumer implementation is used by default or can be explicitely set using the --new-consumer option.)")
       .requiredUnless("zookeeper")
       .withRequiredArg
-      .describedAs("server to connect to")
+      .describedAs("server to use for bootstrapping")
       .ofType(classOf[String])
     val keyDeserializerOpt = parser.accepts("key-deserializer")
       .withRequiredArg

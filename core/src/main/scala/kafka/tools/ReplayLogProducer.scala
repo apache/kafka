@@ -71,7 +71,7 @@ object ReplayLogProducer extends Logging {
       .defaultsTo("localhost:2181")
     val brokerListOpt = parser.accepts("broker-list", "The broker list must be specified.")
       .withRequiredArg
-      .describedAs("server(s) to connect to(e.g: hostname:port)")
+      .describedAs("server(s) to use for bootstrapping(e.g: hostname:port)")
       .ofType(classOf[String])
       .required
     val inputTopicOpt = parser.accepts("inputtopic", "The topic to consume from.")
@@ -91,7 +91,7 @@ object ReplayLogProducer extends Logging {
       .defaultsTo(-1)
     val numThreadsOpt = parser.accepts("threads", "Number of sending threads.")
       .withRequiredArg
-      .describedAs("number of threads")
+      .describedAs("number of sending threads")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(1)
     val reportingIntervalOpt = parser.accepts("reporting-interval", "Interval at which to print progress info.")

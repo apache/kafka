@@ -275,7 +275,7 @@ object AclCommand extends Logging {
     val authorizerPropertiesOpt = parser.accepts("authorizer-properties", "Properties required to configure an instance of Authorizer. " +
       "These are key=val pairs. For the default authorizer, the example values are: zookeeper.connect=localhost:2181.")
       .withRequiredArg
-      .describedAs("properties(key=value pairs) for configuring instance of Authorizer")
+      .describedAs("properties to configure Authorizer instance")
       .ofType(classOf[String])
       .required
 

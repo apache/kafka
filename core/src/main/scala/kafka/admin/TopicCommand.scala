@@ -45,7 +45,7 @@ object TopicCommand extends Logging {
  
     // should have exactly one action
     val actions = Seq(opts.createOpt, opts.listOpt, opts.alterOpt, opts.describeOpt, opts.deleteOpt).count(opts.options.has _)
-    if(actions != 1)
+    if (actions != 1)
       CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --list, --describe, --create, --alter or --delete")
 
     opts.checkArgs()
@@ -136,7 +136,7 @@ object TopicCommand extends Logging {
         println("Updated config for topic \"%s\".".format(topic))
       }
 
-      if(opts.options.has(opts.partitionsOpt)) {
+      if (opts.options.has(opts.partitionsOpt)) {
         if (topic == Topic.GROUP_METADATA_TOPIC_NAME) {
           throw new IllegalArgumentException("The number of partitions for the offsets topic cannot be changed.")
         }
@@ -317,18 +317,18 @@ object TopicCommand extends Logging {
                                      "partitions for the given topic. Else, it will output the partition assignments of all topics. The details include a summary of all partitions for " +
                                      "a given topic followed by details about each partition which includes information regarding leader, replicas and In-sync replicas(Isr)")
     val helpOpt = parser.accepts("help", "Print usage information.").forHelp
-    val topicOpt = parser.accepts("topic", "The topic to create, alter or describe. Can also accept a regular " +
+    val topicOpt = parser.accepts("topic", "The topic to create, delete, alter or describe. Can also accept a regular " +
                                            "expression except for --create option.")
                          .requiredIf("create", "delete", "alter")
                          .withRequiredArg
-                         .describedAs("topic to create/alter/describe")
+                         .describedAs("topic to create/delete/alter/describe")
                          .ofType(classOf[String])
     val nl = System.getProperty("line.separator")
     val configOpt = parser.accepts("config", "A topic configuration override for the topic being created or altered."  +
                                              "The following is a list of valid configurations: " + nl + LogConfig.configNames.map("\t" + _).mkString(nl) + nl +
                                              "See the Kafka documentation for full details on the topic configs.")
                            .withRequiredArg
-                           .describedAs("config(name=value) override for given topic")
+                           .describedAs("config override for given topic")
                            .ofType(classOf[String])
     val deleteConfigOpt = parser.accepts("delete-config", "A topic configuration override to be removed for an existing topic (see the list of configurations under the --config option).")
                            .withRequiredArg
@@ -365,12 +365,12 @@ object TopicCommand extends Logging {
 
     val commandDef: String = "Create, delete, describe, or change a topic."
     
-    if(args.length == 0)
+    if (args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, commandDef)
 
     val options: OptionSet = CommandLineUtils.tryParse(parser, args)
     
-    if(options.has("help"))
+    if (options.has("help"))
       CommandLineUtils.printUsageAndDie(parser, commandDef)
 
     val allTopicLevelOpts: Set[OptionSpec[_]] = Set(alterOpt, createOpt, describeOpt, listOpt, deleteOpt)

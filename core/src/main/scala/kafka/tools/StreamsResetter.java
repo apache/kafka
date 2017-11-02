@@ -173,7 +173,7 @@ public class StreamsResetter {
             .withRequiredArg()
             .ofType(String.class)
             .defaultsTo("localhost:9092")
-            .describedAs("server(s) to connect to");
+            .describedAs("server(s) to use for bootstrapping");
         inputTopicsOption = optionParser.accepts("input-topics", "Comma-separated list of user input topics. For these topics, the tool will reset the offset to the earliest available offset.")
             .withRequiredArg()
             .ofType(String.class)
@@ -205,7 +205,7 @@ public class StreamsResetter {
         commandConfigOption = optionParser.accepts("config-file", "Property file containing configs to be passed to admin clients and embedded consumer.")
             .withRequiredArg()
             .ofType(String.class)
-            .describedAs("fconfig ile name to be passed to admin clients and embedded consumers");
+            .describedAs("file name");
         dryRunOption = optionParser.accepts("dry-run", "Display the actions that would be performed without executing the reset commands.");
         optionParser.accepts("help", "Print usage information.").forHelp();
 

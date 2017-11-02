@@ -64,7 +64,6 @@ object ConsoleProducer {
     } catch {
       case e: joptsimple.OptionException =>
         System.err.println(e.getMessage)
-        e.printStackTrace()
         Exit.exit(1)
       case e: Exception =>
         e.printStackTrace
@@ -138,12 +137,12 @@ object ConsoleProducer {
     val parser = new OptionParser(false)
     val topicOpt = parser.accepts("topic", "The topic id to produce messages to.")
       .withRequiredArg
-      .describedAs("topic id")
+      .describedAs("topic")
       .ofType(classOf[String])
       .required
     val brokerListOpt = parser.accepts("broker-list", "The broker list string in the form host1:port1,host2:port2.")
       .withRequiredArg
-      .describedAs("server(s) to connect to")
+      .describedAs("server(s) to use for bootstrapping")
       .ofType(classOf[String])
       .required
     val syncOpt = parser.accepts("sync", "If set, message requests are send to the brokers synchronously, one at a time as they arrive.")
@@ -154,29 +153,29 @@ object ConsoleProducer {
                                     .ofType(classOf[String])
     val batchSizeOpt = parser.accepts("batch-size", "Number of messages to send in a single batch if they are not being sent synchronously.")
       .withRequiredArg
-      .describedAs("Number of messages in a single batch")
+      .describedAs("number of messages in a single batch")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(200)
     val messageSendMaxRetriesOpt = parser.accepts("message-send-max-retries", "Brokers can fail receiving the message for multiple reasons, and being unavailable transiently is just one of them. This property specifies the number of retries before the producer gives up and drops this message.")
       .withRequiredArg
-      .describedAs("number of retries before producer drops the messages")
+      .describedAs("number of retries before dropping this message")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(3)
     val retryBackoffMsOpt = parser.accepts("retry-backoff-ms", "Before each retry, the producer refreshes the metadata of relevant topics. Since leader election takes a bit of time, this property specifies the amount of time that the producer waits before refreshing the metadata.")
       .withRequiredArg
-      .describedAs("time (in ms) that the producer waits before refreshing the metadata")
+      .describedAs("wait time before refreshing the metadata")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(100)
     val sendTimeoutOpt = parser.accepts("timeout", "If set and the producer is running in asynchronous mode, this gives the maximum amount of time" +
       " a message will queue awaiting sufficient batch size. The value is given in milliseconds.")
       .withRequiredArg
-      .describedAs("max time(in ms) message will queue awaiting sufficient batch size")
+      .describedAs("timeout_ms")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(1000)
     val queueSizeOpt = parser.accepts("queue-size", "If set and the producer is running in asynchronous mode, this gives the maximum amount of " +
       " messages that will queue awaiting sufficient batch size.")
       .withRequiredArg
-      .describedAs("max number of messages in a queue to form sufficient batch size")
+      .describedAs("queue-size")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(10000)
     val queueEnqueueTimeoutMsOpt = parser.accepts("queue-enqueuetimeout-ms", "Timeout for event enqueue in milliseconds.")
@@ -186,7 +185,7 @@ object ConsoleProducer {
       .defaultsTo(Int.MaxValue)
     val requestRequiredAcksOpt = parser.accepts("request-required-acks", "The required acks of the producer requests.")
       .withRequiredArg
-      .describedAs("request required acks")
+      .describedAs("required acks of requests")
       .ofType(classOf[java.lang.String])
       .defaultsTo("1")
     val requestTimeoutMsOpt = parser.accepts("request-timeout-ms", "The ack timeout of the producer requests. Value must be non-negative and non-zero.")
@@ -243,7 +242,7 @@ object ConsoleProducer {
     val propertyOpt = parser.accepts("property", "A mechanism to pass user-defined properties in the form key=value to the message reader. " +
       "This allows custom configuration for a user-defined message reader.")
       .withRequiredArg
-      .describedAs("user-defined properties for the messages reader")
+      .describedAs("user-defined properties for the message reader")
       .ofType(classOf[String])
     val producerPropertyOpt = parser.accepts("producer-property", "A mechanism to pass user-defined properties in the form key=value to the producer. ")
             .withRequiredArg

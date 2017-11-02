@@ -71,13 +71,13 @@ object BrokerApiVersionsCommand {
                                  .ofType(classOf[String])
     val bootstrapServerOpt = parser.accepts("bootstrap-server", BootstrapServerDoc)
                                    .withRequiredArg
-                                   .describedAs("server(s) to connect to")
+                                   .describedAs("server(s) to use for bootstrapping")
                                    .ofType(classOf[String])
                                    .required
     parser.accepts("help", "Print usage information.").forHelp()
 
     var commandDef = "Retrieve broker version information."
-    if(args.length == 0)
+    if (args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, commandDef) 
     val options = CommandLineUtils.tryParse(parser, args)
     

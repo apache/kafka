@@ -109,20 +109,20 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       val numStreamsOpt = parser.accepts("num.streams",
         "Number of consumption streams.")
         .withRequiredArg()
-        .describedAs("Number of threads")
+        .describedAs("number of threads")
         .ofType(classOf[java.lang.Integer])
         .defaultsTo(1)
 
       val whitelistOpt = parser.accepts("whitelist",
         "Whitelist of topics to mirror.")
         .withRequiredArg()
-        .describedAs("Java regex (String)")
+        .describedAs("java regex (String)")
         .ofType(classOf[String])
 
       val blacklistOpt = parser.accepts("blacklist",
         "Blacklist of topics to mirror. Only old consumer supports blacklist.")
         .withRequiredArg()
-        .describedAs("Java regex (String)")
+        .describedAs("java regex (String)")
         .ofType(classOf[String])
 
       val offsetCommitIntervalMsOpt = parser.accepts("offset.commit.interval.ms",

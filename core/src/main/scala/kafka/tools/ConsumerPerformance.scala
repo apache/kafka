@@ -266,7 +266,7 @@ object ConsumerPerformance extends LazyLogging {
         "the new consumer implementation is set. User can also explicitely set the new consumer implementation using the --new-consumer option.")
       .requiredUnless("zookeeper")
       .withRequiredArg()
-      .describedAs("server(s) to connect to")
+      .describedAs("server(s) to use for bootstrapping")
       .ofType(classOf[String])
     val topicOpt = parser.accepts("topic", "The topic to consume from.")
       .withRequiredArg
@@ -297,7 +297,7 @@ object ConsumerPerformance extends LazyLogging {
       .defaultsTo(10)
     val numFetchersOpt = parser.accepts("num-fetch-threads", "Number of fetcher threads.")
       .withRequiredArg
-      .describedAs("Number of fetcher threads")
+      .describedAs("number of fetcher threads")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(1)
     val newConsumerOpt = parser.accepts("new-consumer", "Use the new consumer implementation. This is the default, so " +

@@ -61,7 +61,7 @@ object ExportZkOffsets extends Logging {
                             .ofType(classOf[String])
     val outFileOpt = parser.accepts("output-file", "Output file name to print the offset information of broker partitions.")
                             .withRequiredArg()
-                            .describedAs("file name for exporting offset information")
+                            .describedAs("file name to export offset information")
                             .ofType(classOf[String])
                             .required
     parser.accepts("help", "Print usage information.").forHelp

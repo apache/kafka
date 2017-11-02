@@ -73,7 +73,7 @@ object ProducerPerformance extends Logging {
   class ProducerPerfConfig(args: Array[String]) extends PerfConfig(args) {
     val brokerListOpt = parser.accepts("broker-list", "The list of broker host and port for bootstrap.")
       .withRequiredArg
-      .describedAs("server(s) to connect to (e.g: hostname:port,..,hostname:port)")
+      .describedAs("server(s) to use for bootstrapping (e.g: hostname:port,..,hostname:port)")
       .ofType(classOf[String])
       .required
     val producerConfigOpt = parser.accepts("producer.config", "Producer config properties file.")

@@ -52,7 +52,7 @@ object ImportZkOffsets extends Logging {
                             .ofType(classOf[String])
     val inFileOpt = parser.accepts("input-file", "Input file to import offsets for broker partitions.")
                             .withRequiredArg()
-                            .describedAs("file name for importing offset information")
+                            .describedAs("file name to import offset information")
                             .ofType(classOf[String])
                             .required
     parser.accepts("help", "Print usage information.").forHelp

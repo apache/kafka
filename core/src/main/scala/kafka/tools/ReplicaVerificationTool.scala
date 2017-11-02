@@ -68,7 +68,7 @@ object ReplicaVerificationTool extends Logging {
     val parser = new OptionParser(false)
     val brokerListOpt = parser.accepts("broker-list", "The list of hostname and port of the server to connect to.")
                          .withRequiredArg
-                         .describedAs("server(s) to connect to(e.g. hostname:port,...,hostname:port)")
+                         .describedAs("server(s) to use for bootstrapping(e.g. hostname:port,...,hostname:port)")
                          .ofType(classOf[String])
                          .required
     val fetchSizeOpt = parser.accepts("fetch-size", "The fetch size of each request.")
@@ -132,7 +132,6 @@ object ReplicaVerificationTool extends Logging {
     val brokerMap = topicsMetadataResponse.brokers.map(b => (b.id, b)).toMap
     val filteredTopicMetadata = topicsMetadataResponse.topicsMetadata.filter(
         topicMetadata => topicWhiteListFiler.isTopicAllowed(topicMetadata.topic, excludeInternalTopics = false)
-  
     )
 
     if (filteredTopicMetadata.isEmpty) {

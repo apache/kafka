@@ -381,22 +381,22 @@ object ReassignPartitionsCommand extends Logging {
 
     // Should have exactly one action
     val actions = Seq(opts.generateOpt, opts.executeOpt, opts.verifyOpt).count(opts.options.has _)
-    if(actions != 1)
+    if (actions != 1)
       CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --generate, --execute or --verify")
 
     //Validate arguments for each action
-    if(opts.options.has(opts.verifyOpt)) {
-      if(!opts.options.has(opts.reassignmentJsonFileOpt))
+    if (opts.options.has(opts.verifyOpt)) {
+      if (!opts.options.has(opts.reassignmentJsonFileOpt))
         CommandLineUtils.printUsageAndDie(opts.parser, "If --verify option is used, command must include --reassignment-json-file that was used during the --execute option")
       CommandLineUtils.checkInvalidArgs(opts.parser, opts.options, opts.verifyOpt, Set(opts.interBrokerThrottleOpt, opts.replicaAlterLogDirsThrottleOpt, opts.topicsToMoveJsonFileOpt, opts.disableRackAware, opts.brokerListOpt))
     }
     else if(opts.options.has(opts.generateOpt)) {
-      if(!(opts.options.has(opts.topicsToMoveJsonFileOpt) && opts.options.has(opts.brokerListOpt)))
+      if (!(opts.options.has(opts.topicsToMoveJsonFileOpt) && opts.options.has(opts.brokerListOpt)))
         CommandLineUtils.printUsageAndDie(opts.parser, "If --generate option is used, command must include both --topics-to-move-json-file and --broker-list options")
       CommandLineUtils.checkInvalidArgs(opts.parser, opts.options, opts.generateOpt, Set(opts.interBrokerThrottleOpt, opts.replicaAlterLogDirsThrottleOpt, opts.reassignmentJsonFileOpt))
     }
     else if (opts.options.has(opts.executeOpt)){
-      if(!opts.options.has(opts.reassignmentJsonFileOpt))
+      if (!opts.options.has(opts.reassignmentJsonFileOpt))
         CommandLineUtils.printUsageAndDie(opts.parser, "If --execute option is used, command must include --reassignment-json-file that was output " + "during the --generate option")
       CommandLineUtils.checkInvalidArgs(opts.parser, opts.options, opts.executeOpt, Set(opts.topicsToMoveJsonFileOpt, opts.disableRackAware, opts.brokerListOpt))
     }
@@ -408,7 +408,7 @@ object ReassignPartitionsCommand extends Logging {
     val bootstrapServerOpt = parser.accepts("bootstrap-server", "The server(s) to use for bootstrapping. This is required if " +
                       "an absolution path of the log directory is specified for any replica in the reassignment json file.")
                       .withRequiredArg
-                      .describedAs("server(s) to connect to")
+                      .describedAs("server(s) to use for bootstrapping")
                       .ofType(classOf[String])
     val zkConnectOpt = parser.accepts("zookeeper", "The connection string for the zookeeper connection in the " +
                       "form host:port. Multiple URLS can be given to allow fail-over.")
@@ -443,23 +443,23 @@ object ReassignPartitionsCommand extends Logging {
     val disableRackAware = parser.accepts("disable-rack-aware", "Disable rack aware replica assignment.")
     val interBrokerThrottleOpt = parser.accepts("throttle", "The movement of partitions between brokers will be throttled to this value (bytes/sec). Rerunning with this option, whilst a rebalance is in progress, will alter the throttle value. The throttle rate should be at least 1 KB/s.")
                       .withRequiredArg()
-                      .describedAs("throttle value(bytes/sec) related to the movement of partitions between brokers")
+                      .describedAs("throttle size(bytes/sec)")
                       .ofType(classOf[Long])
                       .defaultsTo(-1)
     val replicaAlterLogDirsThrottleOpt = parser.accepts("replica-alter-log-dirs-throttle", "The movement of replicas between log directories on the same broker will be throttled to this value (bytes/sec). Rerunning with this option, whilst a rebalance is in progress, will alter the throttle value. The throttle rate should be at least 1 KB/s.")
                       .withRequiredArg()
-                      .describedAs("throttle value(byes/sec) related to the movement of replicas between log directories on the same broker")
+                      .describedAs("throttle size(bytes/sec)")
                       .ofType(classOf[Long])
                       .defaultsTo(-1)
     val timeoutOpt = parser.accepts("timeout", "The maximum time in milliseconds allowed to wait for partition reassignment execution to be successfully initiated.")
                       .withRequiredArg()
-                      .describedAs("maximum time(in ms) to wait to initiate partition reassignment")
+                      .describedAs("timeout")
                       .ofType(classOf[Long])
                       .defaultsTo(10000)
     val helpOpt = parser.accepts("help", "Print usage information.").forHelp
 
     var commandDef: String = "This command moves topic partitions between replicas."
-    if(args.length == 0)
+    if (args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, commandDef)
 
     val options = CommandLineUtils.tryParse(parser, args)

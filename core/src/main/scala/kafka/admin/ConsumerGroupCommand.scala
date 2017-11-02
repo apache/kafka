@@ -861,12 +861,11 @@ object ConsumerGroupCommand extends Logging {
     val StateDoc = "Describe the group state. This option may be used with '--describe' and '--bootstrap-server' options only." + nl +
       "Example: --bootstrap-server localhost:9092 --describe --group group1 --state"
 
-
     val parser = new OptionParser(false)
     val newConsumerOpt = parser.accepts("new-consumer", NewConsumerDoc)
     val bootstrapServerOpt = parser.accepts("bootstrap-server", BootstrapServerDoc)
                                    .withRequiredArg
-                                   .describedAs("server to connect to")
+                                   .describedAs("server to use for bootstrapping")
                                    .ofType(classOf[String])
     val zkConnectOpt = parser.accepts("zookeeper", ZkConnectDoc)
                              .requiredUnless("bootstrap-server")

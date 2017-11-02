@@ -43,7 +43,7 @@ object SimpleConsumerShell extends Logging {
     val parser = new OptionParser(false)
     val brokerListOpt = parser.accepts("broker-list", "The list of hostname and port of the server to connect to.")
                            .withRequiredArg
-                           .describedAs("server(s) to connect to (e.g. hostname:port,...,hostname:port)")
+                           .describedAs("server(s) to use for bootstrapping (e.g. hostname:port,...,hostname:port)")
                            .ofType(classOf[String])
                            .required
     val topicOpt = parser.accepts("topic", "The topic to consume from.")
@@ -78,7 +78,7 @@ object SimpleConsumerShell extends Logging {
                            .defaultsTo(1024 * 1024)
     val messageFormatterOpt = parser.accepts("formatter", "The name of a class to use for formatting Kafka messages for display.")
                            .withRequiredArg
-                           .describedAs("class name to use for formatting messages to display")
+                           .describedAs("class name to use for formatting messages for display")
                            .ofType(classOf[String])
                            .defaultsTo(classOf[DefaultMessageFormatter].getName)
     val messageFormatterArgOpt = parser.accepts("property", "The properties to initialize the message formatter.")

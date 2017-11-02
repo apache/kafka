@@ -22,7 +22,7 @@ import java.util.Properties
 
 import kafka.admin.AdminClient.DeleteRecordsResult
 import kafka.common.AdminCommandFailedException
-import kafka.utils.{CoreUtils, Exit, Json, CommandLineUtils}
+import kafka.utils.{CoreUtils, Json, CommandLineUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.clients.CommonClientConfigs
@@ -51,8 +51,7 @@ object DeleteRecordsCommand {
   }
 
   def execute(args: Array[String], out: PrintStream): Unit = {
-    var opts: DeleteRecordsCommandOptions = null
-    opts = new DeleteRecordsCommandOptions(args)
+    val opts = new DeleteRecordsCommandOptions(args)
     val adminClient = createAdminClient(opts)
     val offsetJsonFile =  opts.options.valueOf(opts.offsetJsonFileOpt)
     val offsetJsonString = Utils.readFileAsString(offsetJsonFile)
@@ -92,12 +91,12 @@ object DeleteRecordsCommand {
     val parser = new OptionParser(false)
     val bootstrapServerOpt = parser.accepts("bootstrap-server", BootstrapServerDoc)
                                    .withRequiredArg
-                                   .describedAs("server(s) to connect to")
+                                   .describedAs("server(s) to use for bootstrapping")
                                    .ofType(classOf[String])
                                    .required
     val offsetJsonFileOpt = parser.accepts("offset-json-file", offsetJsonFileDoc)
                                    .withRequiredArg
-                                   .describedAs("Offset json file path")
+                                   .describedAs("offset json file path")
                                    .ofType(classOf[String])
                                    .required
     val commandConfigOpt = parser.accepts("command-config", CommandConfigDoc)
