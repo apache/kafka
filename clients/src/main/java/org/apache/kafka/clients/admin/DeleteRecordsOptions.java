@@ -19,6 +19,13 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 
+import java.util.Map;
+
+/**
+ * Options for {@link AdminClient#deleteRecords(Map, DeleteRecordsOptions)}.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
+ */
 @InterfaceStability.Evolving
 public class DeleteRecordsOptions extends AbstractOptions<DeleteRecordsOptions> {
 

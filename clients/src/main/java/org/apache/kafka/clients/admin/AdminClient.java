@@ -510,7 +510,7 @@ public abstract class AdminClient implements AutoCloseable {
                                                             CreatePartitionsOptions options);
 
     /**
-     * Delete records from topic partitions starting at the provided offsets.
+     * Delete records whose offset is smaller than the given offset of the corresponding partition.
      *
      * This is a convenience method for {@link #deleteRecords(Map, DeleteRecordsOptions)} with default options.
      * See the overload for more details.
@@ -525,7 +525,7 @@ public abstract class AdminClient implements AutoCloseable {
     }
 
     /**
-     * Delete records from topic partitions starting at the provided offsets.
+     * Delete records whose offset is smaller than the given offset of the corresponding partition.
      *
      * This operation is supported by brokers with version 0.11.0.0 or higher.
      *

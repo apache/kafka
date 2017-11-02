@@ -47,12 +47,12 @@ public class RecordsToDelete {
     /**
      * The offset before which all records will be deleted
      */
-    public long offset() {
+    public long beforeOffset() {
         return offset;
     }
 
     @Override
     public String toString() {
-        return "(offset = " + offset + ")";
+        return "(beforeOffset = " + offset + ")";
     }
 }

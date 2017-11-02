@@ -465,7 +465,7 @@ public class KafkaAdminClientTest {
             
             DeleteRecordsResult results = env.adminClient().deleteRecords(partitionsAndOffsets);
 
-            Map<TopicPartition, KafkaFuture<Long>> values = results.values();
+            Map<TopicPartition, KafkaFuture<Long>> values = results.lowWatermarks();
             KafkaFuture<Long> myTopicResult = values.get(myTopicPartition);
             long lowWatermark = myTopicResult.get();
             assertEquals(lowWatermark, 3);

@@ -725,7 +725,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertEquals(0L, consumer.position(topicPartition))
 
     val result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(5L)).asJava)
-    val lowWatermark = result.values().get(topicPartition).get()
+    val lowWatermark = result.lowWatermarks().get(topicPartition).get()
     assertEquals(5L, lowWatermark)
     consumer.seekToBeginning(Collections.singletonList(topicPartition))
     assertEquals(5L, consumer.position(topicPartition))
@@ -750,7 +750,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     }, "Expected 10 messages", 3000L)
 
     var result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(3L)).asJava)
-    var lowWatermark = result.values().get(topicPartition).get()
+    var lowWatermark = result.lowWatermarks().get(topicPartition).get()
     assertEquals(3L, lowWatermark)
     consumer.seek(topicPartition, 1L)
     messageCount = 0
@@ -760,7 +760,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     }, "Expected 7 messages", 3000L)
 
     result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(8L)).asJava)
-    lowWatermark = result.values().get(topicPartition).get()
+    lowWatermark = result.lowWatermarks().get(topicPartition).get()
     assertEquals(8L, lowWatermark)
     consumer.seek(topicPartition, 1L)
     messageCount = 0
@@ -782,7 +782,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     sendRecords(producers.head, 10, topicPartition)
     var result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(5L)).asJava)
-    var lowWatermark = result.values().get(topicPartition).get()
+    var lowWatermark = result.lowWatermarks().get(topicPartition).get()
     assertEquals(5L, lowWatermark)
 
     for (i <- 0 until serverCount) {
@@ -796,7 +796,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     TestUtils.waitUntilTrue(() => {
       result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(0L)).asJava)
-      lowWatermark = result.values().get(topicPartition).get(1000L, TimeUnit.MILLISECONDS)
+      lowWatermark = result.lowWatermarks().get(topicPartition).get(1000L, TimeUnit.MILLISECONDS)
       lowWatermark == 5L
     }, "Expected low watermark of the partition to be 5L")
 
@@ -813,7 +813,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     sendRecords(producers.head, 10, topicPartition)
     val result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(3L)).asJava)
-    val lowWatermark = result.values().get(topicPartition).get()
+    val lowWatermark = result.lowWatermarks().get(topicPartition).get()
     assertEquals(3L, lowWatermark)
 
     for (i <- 0 until serverCount)
@@ -856,13 +856,13 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     sendRecords(producers.head, 10, topicPartition)
     // Should get success result
     var result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(5L)).asJava)
-    var lowWatermark = result.values().get(topicPartition).get()
+    var lowWatermark = result.lowWatermarks().get(topicPartition).get()
     assertEquals(5L, lowWatermark)
 
     // OffsetOutOfRangeException if offset > high_watermark
     result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(20L)).asJava)
     try {
-      result.values().get(topicPartition).get()
+      result.lowWatermarks().get(topicPartition).get()
       fail("Expected failure with an OffsetOutOfRangeException")
     } catch {
       case e: ExecutionException =>
@@ -873,7 +873,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val nonExistPartition = new TopicPartition(topic, 3)
     result = client.deleteRecords(Map(nonExistPartition -> RecordsToDelete.beforeOffset(20L)).asJava)
     try {
-      result.values().get(nonExistPartition).get()
+      result.lowWatermarks().get(nonExistPartition).get()
       fail("Expected failure with an LeaderNotAvailableException")
     } catch {
       case e: ExecutionException =>

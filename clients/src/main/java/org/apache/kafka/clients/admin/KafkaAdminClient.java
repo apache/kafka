@@ -1918,7 +1918,7 @@ public class KafkaAdminClient extends AdminClient {
                     if (node != null) {
                         if (!leaders.containsKey(node))
                             leaders.put(node, new HashMap<TopicPartition, Long>());
-                        leaders.get(node).put(entry.getKey(), entry.getValue().offset());
+                        leaders.get(node).put(entry.getKey(), entry.getValue().beforeOffset());
                     } else {
                         KafkaFutureImpl<Long> future = futures.get(entry.getKey());
                         future.completeExceptionally(Errors.LEADER_NOT_AVAILABLE.exception());

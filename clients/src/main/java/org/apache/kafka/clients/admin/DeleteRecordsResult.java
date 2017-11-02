@@ -23,6 +23,11 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Map;
 
+/**
+ * The result of the {@link AdminClient#deleteRecords(Map)} call.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
+ */
 @InterfaceStability.Evolving
 public class DeleteRecordsResult {
 
@@ -34,9 +39,9 @@ public class DeleteRecordsResult {
 
     /**
      * Return a map from topic partition to futures which can be used to check the status of
-     * individual deletions.
+     * individual deletions. Each future provides the "low watermark" for the corresponding topic partition.
      */
-    public Map<TopicPartition, KafkaFuture<Long>> values() {
+    public Map<TopicPartition, KafkaFuture<Long>> lowWatermarks() {
         return futures;
     }
 
