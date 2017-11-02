@@ -25,10 +25,12 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.test.MockRestoreCallback;
 import org.apache.kafka.test.MockStateRestoreListener;
+import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
 import org.easymock.MockType;
@@ -94,11 +96,19 @@ public class StoreChangelogReaderTest {
 
     @Test
     public void shouldThrowExceptionIfConsumerHasCurrentSubscription() {
+        final StateRestorer mockRestorer = EasyMock.mock(StateRestorer.class);
+        mockRestorer.setUserRestoreListener(stateRestoreListener);
+        expect(mockRestorer.partition()).andReturn(new TopicPartition("sometopic", 0)).andReturn(new TopicPartition("sometopic", 0));
+        EasyMock.replay(mockRestorer);
+        changelogReader.register(mockRestorer);
+
+
         consumer.subscribe(Collections.singleton("sometopic"));
+
         try {
             changelogReader.restore(active);
             fail("Should have thrown IllegalStateException");
-        } catch (final IllegalStateException e) {
+        } catch (final StreamsException expected) {
             // ok
         }
     }

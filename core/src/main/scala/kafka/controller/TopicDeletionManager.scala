@@ -19,6 +19,7 @@ package kafka.controller
 
 import kafka.common.TopicAndPartition
 import kafka.utils.Logging
+import kafka.zk.KafkaZkClient
 
 import scala.collection.{Set, mutable}
 
@@ -57,7 +58,7 @@ import scala.collection.{Set, mutable}
  */
 class TopicDeletionManager(controller: KafkaController,
                            eventManager: ControllerEventManager,
-                           kafkaControllerZkUtils: KafkaControllerZkUtils) extends Logging {
+                           zkClient: KafkaZkClient) extends Logging {
   this.logIdent = "[Topic Deletion Manager " + controller.config.brokerId + "], "
   val controllerContext = controller.controllerContext
   val isDeleteTopicEnabled = controller.config.deleteTopicEnable
@@ -73,7 +74,7 @@ class TopicDeletionManager(controller: KafkaController,
     } else {
       // if delete topic is disabled clean the topic entries under /admin/delete_topics
       info("Removing " + initialTopicsToBeDeleted + " since delete topic is disabled")
-      kafkaControllerZkUtils.deleteTopicDeletions(initialTopicsToBeDeleted.toSeq)
+      zkClient.deleteTopicDeletions(initialTopicsToBeDeleted.toSeq)
     }
   }
 
@@ -239,9 +240,9 @@ class TopicDeletionManager(controller: KafkaController,
     controller.partitionStateMachine.handleStateChanges(partitionsForDeletedTopic.toSeq, NonExistentPartition)
     topicsToBeDeleted -= topic
     partitionsToBeDeleted.retain(_.topic != topic)
-    kafkaControllerZkUtils.deleteTopicZNode(topic)
-    kafkaControllerZkUtils.deleteTopicConfigs(Seq(topic))
-    kafkaControllerZkUtils.deleteTopicDeletions(Seq(topic))
+    zkClient.deleteTopicZNode(topic)
+    zkClient.deleteTopicConfigs(Seq(topic))
+    zkClient.deleteTopicDeletions(Seq(topic))
     controllerContext.removeTopic(topic)
   }
 
