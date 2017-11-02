@@ -25,12 +25,15 @@ import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.trogdor.common.JsonUtil;
-import org.apache.kafka.trogdor.rest.CoordinatorFaultsResponse;
 import org.apache.kafka.trogdor.rest.CoordinatorStatusResponse;
-import org.apache.kafka.trogdor.rest.CreateCoordinatorFaultRequest;
+import org.apache.kafka.trogdor.rest.CreateTaskRequest;
+import org.apache.kafka.trogdor.rest.CreateTaskResponse;
 import org.apache.kafka.trogdor.rest.Empty;
 import org.apache.kafka.trogdor.rest.JsonRestServer;
 import org.apache.kafka.trogdor.rest.JsonRestServer.HttpResponse;
+import org.apache.kafka.trogdor.rest.StopTaskRequest;
+import org.apache.kafka.trogdor.rest.StopTaskResponse;
+import org.apache.kafka.trogdor.rest.TasksResponse;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
@@ -40,47 +43,64 @@ import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
  */
 public class CoordinatorClient {
     /**
+     * The maximum number of tries to make.
+     */
+    private final int maxTries;
+
+    /**
      * The URL target.
      */
     private final String target;
 
-    public CoordinatorClient(String host, int port) {
-        this(String.format("%s:%d", host, port));
+    public CoordinatorClient(int maxTries, String host, int port) {
+        this(maxTries, String.format("%s:%d", host, port));
     }
 
-    public CoordinatorClient(String target) {
+    public CoordinatorClient(int maxTries, String target) {
+        this.maxTries = maxTries;
         this.target = target;
+    }
+
+    public int maxTries() {
+        return maxTries;
     }
 
     private String url(String suffix) {
         return String.format("http://%s%s", target, suffix);
     }
 
-    public CoordinatorStatusResponse getStatus() throws Exception {
+    public CoordinatorStatusResponse status() throws Exception {
         HttpResponse<CoordinatorStatusResponse> resp =
             JsonRestServer.<CoordinatorStatusResponse>httpRequest(url("/coordinator/status"), "GET",
-                null, new TypeReference<CoordinatorStatusResponse>() { });
+                null, new TypeReference<CoordinatorStatusResponse>() { }, maxTries);
         return resp.body();
     }
 
-    public CoordinatorFaultsResponse getFaults() throws Exception {
-        HttpResponse<CoordinatorFaultsResponse> resp =
-            JsonRestServer.<CoordinatorFaultsResponse>httpRequest(url("/coordinator/faults"), "GET",
-                null, new TypeReference<CoordinatorFaultsResponse>() { });
+    public CreateTaskResponse createTask(CreateTaskRequest request) throws Exception {
+        HttpResponse<CreateTaskResponse> resp =
+            JsonRestServer.<CreateTaskResponse>httpRequest(url("/coordinator/task/create"), "POST",
+                request, new TypeReference<CreateTaskResponse>() { }, maxTries);
         return resp.body();
     }
 
-    public void putFault(CreateCoordinatorFaultRequest request) throws Exception {
-        HttpResponse<CreateCoordinatorFaultRequest> resp =
-            JsonRestServer.<CreateCoordinatorFaultRequest>httpRequest(url("/coordinator/fault"), "PUT",
-                request, new TypeReference<CreateCoordinatorFaultRequest>() { });
-        resp.body();
+    public StopTaskResponse stopTask(StopTaskRequest request) throws Exception {
+        HttpResponse<StopTaskResponse> resp =
+            JsonRestServer.<StopTaskResponse>httpRequest(url("/coordinator/task/stop"), "PUT",
+                request, new TypeReference<StopTaskResponse>() { }, maxTries);
+        return resp.body();
+    }
+
+    public TasksResponse tasks() throws Exception {
+        HttpResponse<TasksResponse> resp =
+            JsonRestServer.<TasksResponse>httpRequest(url("/coordinator/tasks"), "GET",
+                null, new TypeReference<TasksResponse>() { }, maxTries);
+        return resp.body();
     }
 
     public void shutdown() throws Exception {
         HttpResponse<Empty> resp =
             JsonRestServer.<Empty>httpRequest(url("/coordinator/shutdown"), "PUT",
-                null, new TypeReference<Empty>() { });
+                null, new TypeReference<Empty>() { }, maxTries);
         resp.body();
     }
 
@@ -102,17 +122,23 @@ public class CoordinatorClient {
             .type(Boolean.class)
             .dest("status")
             .help("Get coordinator status.");
-        actions.addArgument("--get-faults")
+        actions.addArgument("--show-tasks")
             .action(storeTrue())
             .type(Boolean.class)
-            .dest("get_faults")
-            .help("Get coordinator faults.");
-        actions.addArgument("--create-fault")
+            .dest("show_tasks")
+            .help("Show coordinator tasks.");
+        actions.addArgument("--create-task")
             .action(store())
             .type(String.class)
-            .dest("create_fault")
-            .metavar("FAULT_JSON")
-            .help("Create a new fault.");
+            .dest("create_task")
+            .metavar("TASK_SPEC_JSON")
+            .help("Create a new task from a task spec.");
+        actions.addArgument("--stop-task")
+            .action(store())
+            .type(String.class)
+            .dest("stop_task")
+            .metavar("TASK_ID")
+            .help("Stop a task.");
         actions.addArgument("--shutdown")
             .action(storeTrue())
             .type(Boolean.class)
@@ -132,17 +158,20 @@ public class CoordinatorClient {
             }
         }
         String target = res.getString("target");
-        CoordinatorClient client = new CoordinatorClient(target);
+        CoordinatorClient client = new CoordinatorClient(3, target);
         if (res.getBoolean("status")) {
             System.out.println("Got coordinator status: " +
-                JsonUtil.toPrettyJsonString(client.getStatus()));
-        } else if (res.getBoolean("get_faults")) {
-            System.out.println("Got coordinator faults: " +
-                JsonUtil.toPrettyJsonString(client.getFaults()));
-        } else if (res.getString("create_fault") != null) {
-            client.putFault(JsonUtil.JSON_SERDE.readValue(res.getString("create_fault"),
-                CreateCoordinatorFaultRequest.class));
-            System.out.println("Created fault.");
+                JsonUtil.toPrettyJsonString(client.status()));
+        } else if (res.getBoolean("show_tasks")) {
+            System.out.println("Got coordinator tasks: " +
+                JsonUtil.toPrettyJsonString(client.tasks()));
+        } else if (res.getString("create_task") != null) {
+            client.createTask(JsonUtil.JSON_SERDE.readValue(res.getString("create_task"),
+                CreateTaskRequest.class));
+            System.out.println("Created task.");
+        } else if (res.getString("stop_task") != null) {
+            client.stopTask(new StopTaskRequest(res.getString("stop_task")));
+            System.out.println("Created task.");
         } else if (res.getBoolean("shutdown")) {
             client.shutdown();
             System.out.println("Sent shutdown request.");
