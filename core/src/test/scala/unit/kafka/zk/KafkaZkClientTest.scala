@@ -22,8 +22,6 @@ import org.apache.kafka.common.TopicPartition
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.{After, Before, Test}
 
-import scala.collection.mutable
-
 class KafkaZkClientTest extends ZooKeeperTestHarness {
 
   private var zooKeeperClient: ZooKeeperClient = null
@@ -101,9 +99,10 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     // create a topic path
     zkClient.createRecursive(TopicZNode.path(topic))
 
-    val assignment = new mutable.HashMap[TopicPartition, Seq[Int]]()
-    assignment.put(new TopicPartition(topic, 0), Seq(0,1))
-    assignment.put(new TopicPartition(topic, 1), Seq(0,1))
+    val assignment = Map(
+      new TopicPartition(topic, 0) -> Seq(0, 1),
+      new TopicPartition(topic, 1) -> Seq(0, 1)
+    )
     zkClient.setTopicAssignmentRaw(topic, assignment)
 
     assertEquals(2, zkClient.getTopicPartitionCount(topic).get)
