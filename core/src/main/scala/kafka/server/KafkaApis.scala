@@ -19,6 +19,7 @@ package kafka.server
 
 import java.nio.ByteBuffer
 import java.lang.{Long => JLong}
+import java.nio.channels.GatheringByteChannel
 import java.util.{Collections, Properties}
 import java.util
 import java.util.concurrent.ConcurrentHashMap
@@ -44,7 +45,7 @@ import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANS
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, MemoryRecords, RecordBatch, RecordsProcessingStats}
+import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse
 import org.apache.kafka.common.requests.DeleteAclsResponse.{AclDeletionResult, AclFilterResponse}
 import org.apache.kafka.common.requests.{Resource => RResource, ResourceType => RResourceType, _}
@@ -55,6 +56,7 @@ import org.apache.kafka.common.requests.{SaslAuthenticateResponse, SaslHandshake
 import org.apache.kafka.common.resource.{Resource => AdminResource}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding}
 import DescribeLogDirsResponse.LogDirInfo
+import org.apache.kafka.common.header.Header
 
 import scala.collection.{mutable, _}
 import scala.collection.JavaConverters._
@@ -365,6 +367,7 @@ class KafkaApis(val requestChannel: RequestChannel,
    * Handle a produce request
    */
   def handleProduceRequest(request: RequestChannel.Request) {
+    // tvarkonyi TODO: authorize request
     val produceRequest = request.body[ProduceRequest]
     val numBytesAppended = request.header.toStruct.sizeOf + request.sizeOfBodyInBytes
 
@@ -475,6 +478,7 @@ class KafkaApis(val requestChannel: RequestChannel,
    * Handle a fetch request
    */
   def handleFetchRequest(request: RequestChannel.Request) {
+    // tvarkonyi TODO: handle authorization
     val fetchRequest = request.body[FetchRequest]
     val versionId = request.header.apiVersion
     val clientId = request.header.clientId
@@ -482,6 +486,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     val unauthorizedTopicResponseData = mutable.ArrayBuffer[(TopicPartition, FetchResponse.PartitionData)]()
     val nonExistingTopicResponseData = mutable.ArrayBuffer[(TopicPartition, FetchResponse.PartitionData)]()
     val authorizedRequestInfo = mutable.ArrayBuffer[(TopicPartition, FetchRequest.PartitionData)]()
+
+    //logger.info("TVARKONYI fetch request" + fetchRequest + "/" + clientId)
 
     for ((topicPartition, partitionData) <- fetchRequest.fetchData.asScala) {
       if (!authorize(request.session, Read, new Resource(Topic, topicPartition.topic)))
@@ -526,14 +532,44 @@ class KafkaApis(val requestChannel: RequestChannel,
       }.getOrElse(data)
     }
 
+    def getAuthorization(topicPartition: TopicPartition, fetchPartitionData:FetchPartitionData): Boolean = {
+      logger.info(s"Getting authorization for topic ${topicPartition.topic()}/${topicPartition.partition()} for ${fetchPartitionData.records}")
+      true
+    }
+
     // the callback for process a fetch response, invoked before throttling
     def processResponseCallback(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]) {
       val partitionData = {
-        responsePartitionData.map { case (tp, data) =>
+        responsePartitionData
+          //.filter{ case (tp, data) => getAuthorization(tp, data)}
+          .map { case (tp, data) =>
+//          data.records.records().forEach(logger.info(_))
+          // TVARKONYI TODO: this is the place
+          val newRecords = new RecordAccessManager(data.records, new RecordAuthorizer {
+            override def authorize(record: Record): Boolean = {
+              val securityHeaders = record.headers.find((p: Header) => {
+                return p.key.startsWith("cellsec")
+              })
+              if (securityHeaders.isEmpty) {
+                return true
+              }
+              for (securityHeader <- securityHeaders) {
+
+                if (securityHeader.key == "cellsec-user") {
+                  val user = "USER" // TODO: get user
+                  if (securityHeader.value == user) {
+                    return true
+                  }
+                }
+              }
+              false
+            }
+          })
+
           val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
           val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
           tp -> new FetchResponse.PartitionData(data.error, data.highWatermark, lastStableOffset,
-            data.logStartOffset, abortedTransactions, data.records)
+            data.logStartOffset, abortedTransactions, newRecords)
         }
       }
 
@@ -593,6 +629,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       processResponseCallback(Seq.empty)
     else {
       // call the replica manager to fetch messages from the local replica
+      //logger.info("TVARKONYI: fetching ")
       replicaManager.fetchMessages(
         fetchRequest.maxWait.toLong,
         fetchRequest.replicaId,
@@ -604,6 +641,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         processResponseCallback,
         fetchRequest.isolationLevel)
     }
+    //logger.info("TVARKONYI: End of request")
   }
 
   private def sizeOfThrottledPartitions(versionId: Short,
