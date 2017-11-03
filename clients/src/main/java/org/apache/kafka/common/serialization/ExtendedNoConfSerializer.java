@@ -16,15 +16,15 @@
  */
 package org.apache.kafka.common.serialization;
 
-import org.apache.kafka.common.utils.Bytes;
-
-public class BytesSerializer extends NoConfSerializer<Bytes> {
-
-    public byte[] serialize(String topic, Bytes data) {
-        if (data == null)
-            return null;
-
-        return data.get();
-    }
-}
-
+/**
+ * An extended Serializer with empty {@code configure()} and {@code close()} methods.
+ *
+ * Prefer {@link ExtendedSerializer} if both {@code configure()} and {@code close()}
+ * methods are needed to be non-empty.
+ *
+ * Once Kafka drops support for Java 7, the {@code configure()} and
+ * {@code close()} methods will be implemented as default empty methods in
+ * {@link Serializer} so that backwards compatibility is maintained. This class
+ * may be deprecated once that happens.
+ */
+public abstract class ExtendedNoConfSerializer<T> extends NoConfSerializer<T> implements ExtendedSerializer<T> { }

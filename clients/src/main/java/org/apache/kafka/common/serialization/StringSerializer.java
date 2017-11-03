@@ -25,7 +25,7 @@ import java.util.Map;
  *  String encoding defaults to UTF8 and can be customized by setting the property key.serializer.encoding,
  *  value.serializer.encoding or serializer.encoding. The first two take precedence over the last.
  */
-public class StringSerializer implements Serializer<String> {
+public class StringSerializer extends NoConfSerializer<String> {
     private String encoding = "UTF8";
 
     @Override
@@ -48,10 +48,5 @@ public class StringSerializer implements Serializer<String> {
         } catch (UnsupportedEncodingException e) {
             throw new SerializationException("Error when serializing string to byte[] due to unsupported encoding " + encoding);
         }
-    }
-
-    @Override
-    public void close() {
-        // nothing to do
     }
 }

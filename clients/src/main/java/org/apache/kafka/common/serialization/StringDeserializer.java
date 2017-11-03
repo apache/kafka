@@ -25,7 +25,7 @@ import java.util.Map;
  *  String encoding defaults to UTF8 and can be customized by setting the property key.deserializer.encoding,
  *  value.deserializer.encoding or deserializer.encoding. The first two take precedence over the last.
  */
-public class StringDeserializer implements Deserializer<String> {
+public class StringDeserializer extends NoConfDeserializer<String> {
     private String encoding = "UTF8";
 
     @Override
@@ -48,10 +48,5 @@ public class StringDeserializer implements Deserializer<String> {
         } catch (UnsupportedEncodingException e) {
             throw new SerializationException("Error when deserializing byte[] to string due to unsupported encoding " + encoding);
         }
-    }
-
-    @Override
-    public void close() {
-        // nothing to do
     }
 }

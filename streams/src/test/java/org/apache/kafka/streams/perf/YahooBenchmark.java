@@ -24,6 +24,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.NoConfDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
@@ -233,7 +234,7 @@ public class YahooBenchmark {
     }
 
     // Note: these are also in the streams example package, eventuall use 1 file
-    private class JsonPOJODeserializer<T> implements Deserializer<T> {
+    private class JsonPOJODeserializer<T> extends NoConfDeserializer<T> {
         private ObjectMapper objectMapper = new ObjectMapper();
 
         private Class<T> tClass;
@@ -263,11 +264,6 @@ public class YahooBenchmark {
             }
 
             return data;
-        }
-
-        @Override
-        public void close() {
-
         }
     }
 

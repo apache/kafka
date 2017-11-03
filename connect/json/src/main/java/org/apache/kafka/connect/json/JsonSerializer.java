@@ -19,15 +19,13 @@ package org.apache.kafka.connect.json;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.errors.SerializationException;
-import org.apache.kafka.common.serialization.Serializer;
-
-import java.util.Map;
+import org.apache.kafka.common.serialization.NoConfSerializer;
 
 /**
  * Serialize Jackson JsonNode tree model objects to UTF-8 JSON. Using the tree model allows handling arbitrarily
  * structured data without corresponding Java classes. This serializer also supports Connect schemas.
  */
-public class JsonSerializer implements Serializer<JsonNode> {
+public class JsonSerializer extends NoConfSerializer<JsonNode> {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
@@ -35,10 +33,6 @@ public class JsonSerializer implements Serializer<JsonNode> {
      */
     public JsonSerializer() {
 
-    }
-
-    @Override
-    public void configure(Map<String, ?> config, boolean isKey) {
     }
 
     @Override
@@ -51,10 +45,6 @@ public class JsonSerializer implements Serializer<JsonNode> {
         } catch (Exception e) {
             throw new SerializationException("Error serializing JSON message", e);
         }
-    }
-
-    @Override
-    public void close() {
     }
 
 }

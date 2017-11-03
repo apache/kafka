@@ -18,14 +18,7 @@ package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.common.errors.SerializationException;
 
-import java.util.Map;
-
-public class FloatDeserializer implements Deserializer<Float> {
-
-    @Override
-    public void configure(final Map<String, ?> configs, final boolean isKey) {
-        // nothing to do
-    }
+public class FloatDeserializer extends NoConfDeserializer<Float> {
 
     @Override
     public Float deserialize(final String topic, final byte[] data) {
@@ -42,10 +35,4 @@ public class FloatDeserializer implements Deserializer<Float> {
         }
         return Float.intBitsToFloat(value);
     }
-
-    @Override
-    public void close() {
-        // nothing to do
-    }
-
 }

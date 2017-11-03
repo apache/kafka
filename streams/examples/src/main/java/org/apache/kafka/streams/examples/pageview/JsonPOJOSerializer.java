@@ -19,11 +19,9 @@ package org.apache.kafka.streams.examples.pageview;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.errors.SerializationException;
-import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.NoConfSerializer;
 
-import java.util.Map;
-
-public class JsonPOJOSerializer<T> implements Serializer<T> {
+public class JsonPOJOSerializer<T> extends NoConfSerializer<T> {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
@@ -32,10 +30,6 @@ public class JsonPOJOSerializer<T> implements Serializer<T> {
     public JsonPOJOSerializer() {
     }
     
-    @Override
-    public void configure(Map<String, ?> props, boolean isKey) {
-    }
-
     @Override
     public byte[] serialize(String topic, T data) {
         if (data == null)
@@ -46,10 +40,6 @@ public class JsonPOJOSerializer<T> implements Serializer<T> {
         } catch (Exception e) {
             throw new SerializationException("Error serializing JSON message", e);
         }
-    }
-
-    @Override
-    public void close() {
     }
 
 }
