@@ -799,17 +799,12 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
   }
 
   def removePartitionFromReassignedPartitions(topicAndPartition: TopicAndPartition) {
-    val partitionsBeingReassigned = controllerContext.partitionsBeingReassigned.get(topicAndPartition) match {
-      case Some(reassignContext) =>
-        // stop watching the ISR changes for this partition
-        zkClient.unregisterZNodeChangeHandler(reassignContext.reassignIsrChangeHandler.path)
-        controllerContext.partitionsBeingReassigned
-      case None =>
-        // read reassigned partitions from zookeeper if this partition is not cached
-        zkClient.getPartitionReassignment.mapValues(replicas => ReassignedPartitionsContext(replicas))
+    controllerContext.partitionsBeingReassigned.get(topicAndPartition).foreach { reassignContext =>
+      // stop watching the ISR changes for this partition
+      zkClient.unregisterZNodeChangeHandler(reassignContext.reassignIsrChangeHandler.path)
     }
 
-    val updatedPartitionsBeingReassigned = partitionsBeingReassigned - topicAndPartition
+    val updatedPartitionsBeingReassigned = controllerContext.partitionsBeingReassigned - topicAndPartition
 
     // write the new list to zookeeper
     if (updatedPartitionsBeingReassigned.isEmpty) {
@@ -825,7 +820,6 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       }
     }
 
-    // update the cache. NO-OP if the partition's reassignment was never started
     controllerContext.partitionsBeingReassigned.remove(topicAndPartition)
   }
 

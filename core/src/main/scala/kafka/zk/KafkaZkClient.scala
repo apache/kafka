@@ -634,7 +634,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    *
    * @param zNodeChangeHandler
    * @return `true` if the path exists or `false` if it does not
-   * @throws ZooKeeperException if an error is returned by ZooKeeper
+   * @throws KeeperException if an error is returned by ZooKeeper
    */
   def registerZNodeChangeHandlerAndCheckExistence(zNodeChangeHandler: ZNodeChangeHandler): Boolean = {
     zooKeeperClient.registerZNodeChangeHandler(zNodeChangeHandler)
