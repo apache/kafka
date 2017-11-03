@@ -17,12 +17,30 @@
 
 package org.apache.kafka.trogdor.common;
 
+import java.util.HashSet;
+import java.util.Map;
 import java.util.NavigableMap;
+import java.util.Set;
 
 /**
  * Defines a cluster topology
  */
 public interface Topology {
+    class Util {
+        /**
+         * Get the names of agent nodes in the topology.
+         */
+        public static Set<String> agentNodeNames(Topology topology) {
+            Set<String> set = new HashSet<>();
+            for (Map.Entry<String, Node> entry : topology.nodes().entrySet()) {
+                if (Node.Util.getTrogdorAgentPort(entry.getValue()) > 0) {
+                    set.add(entry.getKey());
+                }
+            }
+            return set;
+        }
+    }
+
     /**
      * Get the node with the given name.
      */
