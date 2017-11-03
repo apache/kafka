@@ -105,7 +105,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
       case Some(partitionedData) =>
         val failedProduceRequests = new ArrayBuffer[KeyedMessage[K, Message]]
         for ((brokerid, messagesPerBrokerMap) <- partitionedData) {
-          if (logger.isTraceEnabled) {
+          if (isTraceEnabled) {
             messagesPerBrokerMap.foreach(partitionAndEvent =>
               trace("Handling event for Topic: %s, Broker: %d, Partitions: %s".format(partitionAndEvent._1, brokerid, partitionAndEvent._2)))
           }
@@ -277,7 +277,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
         if(response != null) {
           if (response.status.size != producerRequest.data.size)
             throw new KafkaException("Incomplete response (%s) for producer request (%s)".format(response, producerRequest))
-          if (logger.isTraceEnabled) {
+          if (isTraceEnabled) {
             val successfullySentData = response.status.filter(_._2.error == Errors.NONE)
             successfullySentData.foreach(m => messagesPerTopic(m._1).foreach(message =>
               trace("Successfully sent message: %s".format(if(message.message.isNull) null else message.message.toString()))))

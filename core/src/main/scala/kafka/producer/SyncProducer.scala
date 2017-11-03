@@ -56,7 +56,7 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
      * Also, when verification is turned on, care should be taken to see that the logs don't fill up with unnecessary
      * data. So, leaving the rest of the logging at TRACE, while errors should be logged at ERROR level
      */
-    if (logger.isDebugEnabled) {
+    if (isDebugEnabled) {
       val buffer = new RequestOrResponseSend("", request).buffer
       trace("verifying sendbuffer of size " + buffer.limit())
       val requestTypeId = buffer.getShort()
