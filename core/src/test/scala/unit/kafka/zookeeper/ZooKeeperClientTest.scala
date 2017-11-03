@@ -19,7 +19,8 @@ package kafka.zookeeper
 import java.net.UnknownHostException
 import java.nio.charset.StandardCharsets
 import java.util.UUID
-import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.{ArrayBlockingQueue, CountDownLatch, TimeUnit}
 import javax.security.auth.login.Configuration
 
 import kafka.zk.ZooKeeperTestHarness
@@ -333,6 +334,39 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
     }
     new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue, stateChangeHandler)
     assertTrue("Failed to receive auth failed notification", stateChangeHandlerCountDownLatch.await(5, TimeUnit.SECONDS))
+  }
+
+  @Test
+  def testConnectionLossRequestTermination(): Unit = {
+    val batchSize = 10
+    val zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue, null)
+    zookeeper.shutdown()
+    val requests = (1 to batchSize).map(i => GetDataRequest(s"/$i"))
+    val countDownLatch = new CountDownLatch(1)
+    val running = new AtomicBoolean(true)
+    val unexpectedResponses = new ArrayBlockingQueue[GetDataResponse](batchSize)
+    val requestThread = new Thread {
+      override def run(): Unit = {
+        while (running.get()) {
+          val responses = zooKeeperClient.handleRequests(requests)
+          val suffix = responses.dropWhile(response => response.resultCode != Code.CONNECTIONLOSS)
+          if (!suffix.forall(response => response.resultCode == Code.CONNECTIONLOSS))
+            responses.foreach(unexpectedResponses.add)
+          if (!unexpectedResponses.isEmpty || suffix.nonEmpty)
+            running.set(false)
+        }
+        countDownLatch.countDown()
+      }
+    }
+    requestThread.start()
+    val requestThreadTerminated = countDownLatch.await(30, TimeUnit.SECONDS)
+    if (!requestThreadTerminated) {
+      running.set(false)
+      requestThread.join(5000)
+      fail("Failed to receive a CONNECTIONLOSS response code after zookeeper has shutdown.")
+    } else if (!unexpectedResponses.isEmpty) {
+      fail(s"Received an unexpected non-CONNECTIONLOSS response code after a CONNECTIONLOSS response code from a single batch: $unexpectedResponses")
+    }
   }
 
   private def bytes = UUID.randomUUID().toString.getBytes(StandardCharsets.UTF_8)
