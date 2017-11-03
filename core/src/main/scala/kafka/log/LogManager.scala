@@ -122,7 +122,7 @@ class LogManager(logDirs: Seq[File],
       new Gauge[Int] {
         def value = if (_liveLogDirs.contains(dir)) 0 else 1
       },
-      Map("logDirectory" -> dir.getAbsolutePath)
+      Map("logDirectory" -> dir.getAbsolutePath.replace(":", "").replace("\\", "/")) // convert to Unix path since colon is not allowed in yammer metrics
     )
   }
 
