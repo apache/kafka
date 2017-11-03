@@ -925,7 +925,7 @@ public class KafkaAdminClient extends AdminClient {
                 } else {
                     try {
                         boolean retriableException = false;
-                        for(Errors errors : response.responseBody().errorCounts().keySet()) {
+                        for (Errors errors : response.responseBody().errorCounts().keySet()) {
                             final ApiException exception = errors.exception();
                             if (exception instanceof RetriableException) {
                                 call.fail(now, exception);
