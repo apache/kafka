@@ -52,6 +52,11 @@ trait Logging extends LazyLogging {
 
   def trace(msg: => String): Unit = logger.trace(msgWithLogIdent(msg))
 
+  // The return type here should be Unit as in any other logging function in this class.
+  // However making it so will cause the compiler to believe that the signature of this
+  // and the trace above will be the same as the parameters are generic Function objects
+  // subject to type erasure. After the erasure the signature of the two function would
+  // be the same.
   def trace(e: => Throwable): Any = logger.trace(logIdent,e)
 
   def trace(msg: => String, e: => Throwable): Unit = logger.trace(msgWithLogIdent(msg),e)
