@@ -153,19 +153,6 @@ object ConfigEntityZNode {
   }
 }
 
-object ConfigEntityChangeNotificationZNode {
-  def path = s"${ConfigZNode.path}/changes"
-}
-
-object ConfigEntityChangeNotificationSequenceZNode {
-  val SequenceNumberPrefix = "config_change_"
-  def createPath = s"${ConfigEntityChangeNotificationZNode.path}/$SequenceNumberPrefix"
-  def path(sequenceNumber: String) = s"${ConfigEntityChangeNotificationZNode.path}/$SequenceNumberPrefix$sequenceNumber"
-  def encode(resourceName : String): Array[Byte] = resourceName.getBytes(UTF_8)
-  def decode(bytes: Array[Byte]): String = new String(bytes, UTF_8)
-  def sequenceNumber(path: String) = path.substring(path.lastIndexOf(SequenceNumberPrefix) + SequenceNumberPrefix.length)
-}
-
 object IsrChangeNotificationZNode {
   def path = "/isr_change_notification"
 }

@@ -25,13 +25,11 @@ import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
-import kafka.zk.{AclChangeNotificationZNode, AclZNode, KafkaZkClient}
-import kafka.zookeeper.{StateChangeHandler, ZooKeeperClient}
+import kafka.zk.{AclChangeNotificationSequenceZNode, AclChangeNotificationZNode, KafkaZkClient}
+import kafka.zookeeper.ZooKeeperClient
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.SecurityUtils
 import org.apache.log4j.Logger
-import org.apache.zookeeper.KeeperException.Code
-import org.apache.zookeeper.data.Stat
 
 import scala.collection.JavaConverters._
 import scala.util.Random
@@ -90,26 +88,14 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     val zkConnectionTimeoutMs = configs.get(SimpleAclAuthorizer.ZkConnectionTimeOutProp).map(_.toString.toInt).getOrElse(kafkaConfig.zkConnectionTimeoutMs)
     val zkSessionTimeOutMs = configs.get(SimpleAclAuthorizer.ZkSessionTimeOutProp).map(_.toString.toInt).getOrElse(kafkaConfig.zkSessionTimeoutMs)
 
-    val zooKeeperClient = new ZooKeeperClient(zkUrl, zkSessionTimeOutMs,
-      zkConnectionTimeoutMs, new StateChangeHandler {
-        override val name: String = SimpleAclAuthorizer.getClass.getName
-        override def onReconnectionTimeout(): Unit = error("Reconnection timeout.")
-        override def afterInitializingSession(): Unit = debug("Initialised Session.")
-        override def onAuthFailure(): Unit = error("Auth failure.")
-      })
+    val zooKeeperClient = new ZooKeeperClient(zkUrl, zkSessionTimeOutMs, zkConnectionTimeoutMs)
 
     zkClient = new KafkaZkClient(zooKeeperClient, kafkaConfig.zkEnableSecureAcls)
     zkClient.createAclPaths()
 
     loadCache()
 
-    aclChangeListener = new ZkNodeChangeNotificationListener(zkClient, AclChangeNotificationZNode.path, AclChangedNotificationHandler) {
-      override def getAllChangeNotifications(): Seq[String] = zkClient.getAclChangeNotifications
-      override def deleteChangeNotification(sequenceNumber: String): Boolean = zkClient.deleteAclChangeNotification(sequenceNumber)
-      override def getDataFromChangeNotification(sequenceNumber: String): (Option[String], Stat) =
-        zkClient.getDataFromAclChangeNotification(sequenceNumber)
-    }
-
+    aclChangeListener = new ZkNodeChangeNotificationListener(zkClient, AclChangeNotificationZNode.path, AclChangeNotificationSequenceZNode.SequenceNumberPrefix, AclChangedNotificationHandler)
     aclChangeListener.init()
   }
 
@@ -268,7 +254,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       val newAcls = getNewAcls(currentVersionedAcls.acls)
       val (updateSucceeded, updateVersion) =
         if (newAcls.nonEmpty) {
-         conditionalUpdate(resource, newAcls, currentVersionedAcls.zkVersion)
+         zkClient.conditionalSetOrCreateAclsForResource(resource, newAcls, currentVersionedAcls.zkVersion)
         } else {
           trace(s"Deleting path for $resource because it had no ACLs remaining")
           (zkClient.conditionalDelete(resource, currentVersionedAcls.zkVersion), 0)
@@ -300,39 +286,6 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     }
   }
 
-  /**
-   * Updates a resource zk path with an expected version. If the resource does not exist, it will create it.
-   * @param resource
-   * @param acls
-   * @param expectedVersion
-   * @return true if the update was successful and the new version
-   */
-  private def conditionalUpdate(resource: Resource, acls: Set[Acl], expectedVersion: Int): (Boolean, Int) = {
-    val setDataResponse = zkClient.setAclForResourceRaw(resource, acls, expectedVersion)
-    setDataResponse.resultCode match {
-      case Code.OK =>
-        (true, setDataResponse.stat.getVersion)
-      case Code.NONODE => {
-        val createResponse = zkClient.createAclForResourceRaw(resource, acls)
-        createResponse.resultCode match {
-          case Code.OK =>
-            (true, 0)
-          case Code.NODEEXISTS =>
-            (false, 0)
-          case _ =>
-            error(s"Error while creating acls at $resource")
-            throw createResponse.resultException.get
-        }
-      }
-      case Code.BADVERSION =>
-        debug(s"Failed to update node for $resource due to bad version.")
-        (false, 0)
-      case _ =>
-        debug(s"Error while updating node at $resource")
-        throw setDataResponse.resultException.get
-    }
-  }
-
   private def getAclsFromCache(resource: Resource): VersionedAcls = {
     aclCache.getOrElse(resource, throw new IllegalArgumentException(s"ACLs do not exist in the cache for resource $resource"))
   }
@@ -350,7 +303,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   private def updateAclChangedFlag(resource: Resource) {
-    zkClient.createAclChangeNotificationRaw(resource.toString)
+    zkClient.createAclChangeNotification(resource.toString)
   }
 
   private def backoffTime = {
@@ -366,4 +319,5 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       }
     }
   }
+
 }

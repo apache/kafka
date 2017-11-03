@@ -208,7 +208,6 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
     assertEquals(3, children.size)
     assertEquals(Set("child1","child2","child3"), children.toSet)
-
   }
 
   @Test
@@ -240,8 +239,8 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     val acl3 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), Deny, "host1", Read)
 
     //create acls for resources
-    zkClient.createAclForResourceRaw(resource1, Set(acl1, acl2))
-    zkClient.createAclForResourceRaw(resource2, Set(acl1, acl3))
+    zkClient.conditionalSetOrCreateAclsForResource(resource1, Set(acl1, acl2), 0)
+    zkClient.conditionalSetOrCreateAclsForResource(resource2, Set(acl1, acl3), 0)
 
     versionedAcls = zkClient.getVersionedAclsForResource(resource1)
     assertEquals(Set(acl1, acl2), versionedAcls.acls)
@@ -249,26 +248,11 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertTrue(zkClient.resourceExists(resource1))
 
     //update acls for resource
-    zkClient.setAclForResourceRaw(resource1, Set(acl1, acl3), 0)
+    zkClient.conditionalSetOrCreateAclsForResource(resource1, Set(acl1, acl3), 0)
 
     versionedAcls = zkClient.getVersionedAclsForResource(resource1)
     assertEquals(Set(acl1, acl3), versionedAcls.acls)
     assertEquals(1, versionedAcls.zkVersion)
-
-    //create Acl change notification message
-    zkClient.createAclChangeNotificationRaw(resource1.name)
-
-    val aclChangeNotifications = zkClient.getAclChangeNotifications
-    assertEquals(1, aclChangeNotifications.size)
-
-    //get data for change notification
-    val dataForNotification = zkClient.getDataFromAclChangeNotification(aclChangeNotifications.head)
-    assertEquals(resource1.name, dataForNotification._1.get)
-
-    assertTrue(zkClient.pathExists(AclChangeNotificationSequenceZNode.path(aclChangeNotifications.head)))
-    //delete change notification node
-    zkClient.deleteAclChangeNotification(aclChangeNotifications.head)
-    assertFalse(zkClient.pathExists(AclChangeNotificationSequenceZNode.path(aclChangeNotifications.head)))
 
     //get resource Types
     assertTrue(ResourceType.values.map( rt => rt.name).toSet == zkClient.getResourceTypes().toSet)
@@ -280,6 +264,11 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
     //delete resource
     assertTrue(zkClient.deleteResource(resource1))
-    assertFalse(zkClient.pathExists(ResourceZNode.path(resource1)))
+    assertFalse(zkClient.resourceExists(resource1))
+
+    //delete with invalid expected zk version
+    assertFalse(zkClient.conditionalDelete(resource2, 10))
+    //delete with valid expected zk version
+    assertTrue(zkClient.conditionalDelete(resource2, 0))
   }
 }

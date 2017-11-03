@@ -38,14 +38,13 @@ import scala.collection.JavaConverters._
  * @param sessionTimeoutMs session timeout in milliseconds
  * @param connectionTimeoutMs connection timeout in milliseconds
  * @param maxInFlightRequests maximum number of unacknowledged requests the client will send before blocking.
- * @param stateChangeHandler state change handler callbacks called by the underlying zookeeper client's EventThread.
  */
 class ZooKeeperClient(connectString: String,
                       sessionTimeoutMs: Int,
                       connectionTimeoutMs: Int,
-                      maxInFlightRequests: Int,
-                      stateChangeHandler: StateChangeHandler) extends Logging {
+                      maxInFlightRequests: Int) extends Logging {
   this.logIdent = "[ZooKeeperClient] "
+
   private val initializationLock = new ReentrantReadWriteLock()
   private val isConnectedOrExpiredLock = new ReentrantLock()
   private val isConnectedOrExpiredCondition = isConnectedOrExpiredLock.newCondition()
@@ -53,8 +52,6 @@ class ZooKeeperClient(connectString: String,
   private val zNodeChildChangeHandlers = new ConcurrentHashMap[String, ZNodeChildChangeHandler]().asScala
   private val inFlightRequests = new Semaphore(maxInFlightRequests)
   private val stateChangeHandlers = new ConcurrentHashMap[String, StateChangeHandler]().asScala
-
-  registerStateChangeHandler(stateChangeHandler)
 
   info(s"Initializing a new session to $connectString.")
   @volatile private var zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher)
@@ -239,17 +236,17 @@ class ZooKeeperClient(connectString: String,
   /**
    * @param stateChangeHandler
    */
-  def registerStateChangeHandler(stateChangeHandler: StateChangeHandler): Unit = {
+  def registerStateChangeHandler(stateChangeHandler: StateChangeHandler): Unit = inReadLock(initializationLock) {
     if (stateChangeHandler != null)
       stateChangeHandlers.put(stateChangeHandler.name, stateChangeHandler)
   }
 
   /**
    *
-   * @param path
+   * @param name
    */
-  def unregisterStateChangeHandler(path: String): Unit = {
-    stateChangeHandlers.remove(path)
+  def unregisterStateChangeHandler(name: String): Unit = {
+    stateChangeHandlers.remove(name)
   }
 
   def close(): Unit = inWriteLock(initializationLock) {
@@ -288,6 +285,14 @@ class ZooKeeperClient(connectString: String,
       info(s"Timed out waiting for connection during session initialization while in state: ${zooKeeper.getState}")
       stateChangeHandlers.foreach {case (name, handler) => handler.onReconnectionTimeout()}
     }
+  }
+
+  /**
+   * reinitialize method to use in unit tests
+   */
+  private[zookeeper] def reinitialize(): Unit = {
+    zooKeeper.close()
+    initialize()
   }
 
   private object ZooKeeperClientWatcher extends Watcher {

@@ -221,6 +221,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
 
+<<<<<<< 36496a23e3048a5dbe7862f24d9600fc40f4c839
         val zooKeeperClient = new ZooKeeperClient(config.zkConnect, config.zkSessionTimeoutMs,
           config.zkConnectionTimeoutMs, config.zkMaxInFlightRequests, new StateChangeHandler {
             override val name: String = KafkaServer.getClass.getName
@@ -237,6 +238,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
             override def beforeInitializingSession(): Unit = kafkaController.expire()
           })
+=======
+        val zooKeeperClient = new ZooKeeperClient(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs)
+>>>>>>> Address review commnets
         zkClient = new KafkaZkClient(zooKeeperClient, zkUtils.isSecure)
 
         /* start log manager */

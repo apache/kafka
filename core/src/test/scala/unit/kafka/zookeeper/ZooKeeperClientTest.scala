@@ -28,7 +28,7 @@ import org.apache.kafka.common.security.JaasUtils
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.{CreateMode, ZooDefs}
 import org.junit.Assert.{assertArrayEquals, assertEquals, assertTrue}
-import org.junit.{After, Test}
+import org.junit.{After, Ignore, Test}
 
 class ZooKeeperClientTest extends ZooKeeperTestHarness {
   private val mockPath = "/foo"
@@ -42,18 +42,18 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
 
   @Test(expected = classOf[UnknownHostException])
   def testUnresolvableConnectString(): Unit = {
-    new ZooKeeperClient("some.invalid.hostname.foo.bar.local", -1, -1, Int.MaxValue, null)
+    new ZooKeeperClient("some.invalid.hostname.foo.bar.local", -1, -1, Int.MaxValue)
   }
 
   @Test(expected = classOf[ZooKeeperClientTimeoutException])
   def testConnectionTimeout(): Unit = {
     zookeeper.shutdown()
-    new ZooKeeperClient(zkConnect, zkSessionTimeout, connectionTimeoutMs = 100, Int.MaxValue, null)
+    new ZooKeeperClient(zkConnect, zkSessionTimeout, connectionTimeoutMs = 100, Int.MaxValue)
   }
 
   @Test
   def testConnection(): Unit = {
-    new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue, null)
+    new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue)
   }
 
   @Test
@@ -314,7 +314,11 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
         stateChangeHandlerCountDownLatch.countDown()
       }
     }
-    new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue, stateChangeHandler)
+
+    val zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue,)
+    zooKeeperClient.registerStateChangeHandler(stateChangeHandler)
+    zooKeeperClient.reinitialize()
+
     assertTrue("Failed to receive auth failed notification", stateChangeHandlerCountDownLatch.await(5, TimeUnit.SECONDS))
   }
 

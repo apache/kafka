@@ -30,7 +30,6 @@ import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.security.scram.ScramMechanism
 import org.apache.kafka.common.utils.Time
-import org.apache.zookeeper.data.Stat
 
 /**
  * Represents all the entities that can be configured via ZK
@@ -152,12 +151,8 @@ class DynamicConfigManager(private val oldZkUtils: ZkUtils,
     }
   }
 
-  private val configChangeListener = new ZkNodeChangeNotificationListener(zkClient, ZkUtils.ConfigChangesPath, ConfigChangedNotificationHandler) {
-    override def getAllChangeNotifications(): Seq[String] = zkClient.getConfigChangeNotifications()
-    override def deleteChangeNotification(sequenceNumber: String): Boolean = zkClient.deleteConfigChangeNotification(sequenceNumber)
-    override def getDataFromChangeNotification(sequenceNumber: String): (Option[String], Stat) =
-      zkClient.getDataFromConfigChangeNotification(sequenceNumber)
-  }
+  private val configChangeListener = new ZkNodeChangeNotificationListener(zkClient, ZkUtils.ConfigChangesPath,
+    AdminUtils.EntityConfigChangeZnodePrefix, ConfigChangedNotificationHandler)
 
   /**
    * Begin watching for config changes
