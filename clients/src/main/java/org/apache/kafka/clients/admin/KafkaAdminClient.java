@@ -17,7 +17,6 @@
 
 package org.apache.kafka.clients.admin;
 
-import java.util.Set;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
@@ -28,6 +27,8 @@ import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResult;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo;
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
@@ -66,13 +67,13 @@ import org.apache.kafka.common.requests.AlterConfigsRequest;
 import org.apache.kafka.common.requests.AlterConfigsResponse;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsRequest;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsResponse;
-import org.apache.kafka.common.requests.CreatePartitionsRequest;
-import org.apache.kafka.common.requests.CreatePartitionsResponse;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.CreateAclsRequest;
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation;
 import org.apache.kafka.common.requests.CreateAclsResponse;
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse;
+import org.apache.kafka.common.requests.CreatePartitionsRequest;
+import org.apache.kafka.common.requests.CreatePartitionsResponse;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.DeleteAclsRequest;
@@ -85,6 +86,8 @@ import org.apache.kafka.common.requests.DescribeAclsRequest;
 import org.apache.kafka.common.requests.DescribeAclsResponse;
 import org.apache.kafka.common.requests.DescribeConfigsRequest;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
+import org.apache.kafka.common.requests.DescribeGroupsRequest;
+import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.requests.DescribeLogDirsRequest;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
@@ -95,9 +98,11 @@ import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -109,6 +114,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -1873,6 +1879,72 @@ public class KafkaAdminClient extends AdminClient {
             }
         }, now);
         return new CreatePartitionsResult(new HashMap<String, KafkaFuture<Void>>(futures));
+    }
+
+    @Override
+    public DescribeConsumerGroupResult describeConsumerGroup(List<String> groupIds, DescribeConsumerGroupOptions options) {
+        final Map<String, KafkaFutureImpl<ConsumerGroupDescription>> consumerGroupFutures = new HashMap<>(groupIds.size());
+        final ArrayList<String> groupIdList = new ArrayList<>();
+        for (String groupId : groupIds) {
+            if (!consumerGroupFutures.containsKey(groupId)) {
+                consumerGroupFutures.put(groupId, new KafkaFutureImpl<ConsumerGroupDescription>());
+                groupIdList.add(groupId);
+            }
+        }
+        final long now = time.milliseconds();
+        runnable.call(new Call("describeConsumerGroups", calcDeadlineMs(now, options.timeoutMs()),
+            new ControllerNodeProvider()) {
+
+            @Override
+            AbstractRequest.Builder createRequest(int timeoutMs) {
+                return new DescribeGroupsRequest.Builder(groupIdList);
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                DescribeGroupsResponse response = (DescribeGroupsResponse) abstractResponse;
+                // Handle server responses for particular groupId.
+                for (Map.Entry<String, KafkaFutureImpl<ConsumerGroupDescription>> entry : consumerGroupFutures.entrySet()) {
+                    String groupId = entry.getKey();
+                    KafkaFutureImpl<ConsumerGroupDescription> future = entry.getValue();
+                    final DescribeGroupsResponse.GroupMetadata groupMetadata = response.groups().get(groupId);
+                    final Errors topicError = groupMetadata.error();
+                    if (topicError != null) {
+                        future.completeExceptionally(topicError.exception());
+                        continue;
+                    }
+
+                    final List<DescribeGroupsResponse.GroupMember> members = groupMetadata.members();
+                    final List<ConsumerDescription> consumers = new ArrayList<>(members.size());
+                    for (DescribeGroupsResponse.GroupMember groupMember : members) {
+                        PartitionAssignor.Assignment assignment =
+                            ConsumerProtocol.deserializeAssignment(
+                                ByteBuffer.wrap(Utils.readBytes(groupMember.memberAssignment())));
+                        ConsumerDescription consumerDescription =
+                            new ConsumerDescription(
+                                groupMember.clientId(),
+                                groupMember.memberId(),
+                                groupMember.clientHost(),
+                                assignment.partitions());
+                        consumers.add(consumerDescription);
+                    }
+                    final ConsumerGroupDescription consumerGroupDescription =
+                        new ConsumerGroupDescription(groupId, consumers);
+                    future.complete(consumerGroupDescription);
+                }
+            }
+
+            @Override
+            boolean handleUnsupportedVersionException(UnsupportedVersionException exception) {
+                return false;
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                completeAllExceptionally(consumerGroupFutures.values(), throwable);
+            }
+        }, now);
+        return new DescribeConsumerGroupResult(new HashMap<String, KafkaFuture<ConsumerGroupDescription>>(consumerGroupFutures));
     }
 
 }

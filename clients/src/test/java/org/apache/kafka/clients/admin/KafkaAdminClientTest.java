@@ -18,10 +18,13 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBinding;
@@ -43,10 +46,12 @@ import org.apache.kafka.common.requests.DeleteAclsResponse.AclDeletionResult;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
 import org.apache.kafka.common.requests.DescribeAclsResponse;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
+import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.resource.ResourceFilter;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Ignore;
@@ -56,6 +61,8 @@ import org.junit.rules.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -411,6 +418,57 @@ public class KafkaAdminClientTest {
                 InvalidTopicException e = (InvalidTopicException) e0.getCause();
                 assertEquals("some detailed reason", e.getMessage());
             }
+        }
+    }
+
+    @Test
+    public void testDescribeConsumerGroup() throws Exception {
+        try (MockKafkaAdminClientEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
+            env.kafkaClient().setNode(env.cluster().controller());
+
+            Map<String, DescribeGroupsResponse.GroupMetadata> m = new HashMap<>();
+            List<DescribeGroupsResponse.GroupMember> members = new ArrayList<>();
+            List<TopicPartition> topicPartitions = new ArrayList<>();
+            final TopicPartition topic1 = new TopicPartition("topic1", 0);
+            topicPartitions.add(topic1);
+            List<String> topics = new ArrayList<>();
+            topics.add("topic1");
+            ByteBuffer assignmentBytes =
+                ConsumerProtocol.serializeAssignment(new PartitionAssignor.Assignment(topicPartitions));
+            ByteBuffer subscriptionBytes =
+                ConsumerProtocol.serializeSubscription(new PartitionAssignor.Subscription(topics));
+
+            final DescribeGroupsResponse.GroupMember groupMember =
+                new DescribeGroupsResponse.GroupMember(
+                    "member1",
+                    "clientId1",
+                    "host1",
+                    subscriptionBytes,
+                    assignmentBytes);
+            members.add(groupMember);
+            final DescribeGroupsResponse.GroupMetadata groupMetadata =
+                new DescribeGroupsResponse.GroupMetadata(
+                    null,
+                    "",
+                    "",
+                    "",
+                    members);
+            m.put("group1", groupMetadata);
+
+            // Test a call where one filter has an error.
+            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(0, m));
+
+            List<String> groupIds = new ArrayList<>();
+            groupIds.add("group1");
+            DescribeConsumerGroupResult results =
+                env.adminClient().describeConsumerGroup(groupIds, new DescribeConsumerGroupOptions());
+            Map<String, KafkaFuture<ConsumerGroupDescription>> values = results.values();
+            KafkaFuture<ConsumerGroupDescription> group1Result = values.get("group1");
+            ConsumerGroupDescription description = group1Result.get();
+            assertEquals(description.name(), "group1");
+            assertEquals(description.consumers().size(), 1);
         }
     }
 
