@@ -93,6 +93,7 @@ public class ConnectSchema implements Schema {
     // Optional human readable documentation describing this schema.
     private final String doc;
     private final Map<String, String> parameters;
+    private final int hc;  // precomputed hash code
 
     /**
      * Construct a Schema. Most users should not construct schemas manually, preferring {@link SchemaBuilder} instead.
@@ -118,6 +119,7 @@ public class ConnectSchema implements Schema {
 
         this.keySchema = keySchema;
         this.valueSchema = valueSchema;
+        this.hc = Objects.hash(type, optional, defaultValue, fields, keySchema, valueSchema, name, version, doc, parameters);
     }
 
     /**
@@ -283,20 +285,20 @@ public class ConnectSchema implements Schema {
         if (o == null || getClass() != o.getClass()) return false;
         ConnectSchema schema = (ConnectSchema) o;
         return Objects.equals(optional, schema.optional) &&
+                Objects.equals(version, schema.version) &&
+                Objects.equals(name, schema.name) &&
+                Objects.equals(doc, schema.doc) &&
                 Objects.equals(type, schema.type) &&
                 Objects.equals(defaultValue, schema.defaultValue) &&
                 Objects.equals(fields, schema.fields) &&
                 Objects.equals(keySchema, schema.keySchema) &&
                 Objects.equals(valueSchema, schema.valueSchema) &&
-                Objects.equals(name, schema.name) &&
-                Objects.equals(version, schema.version) &&
-                Objects.equals(doc, schema.doc) &&
                 Objects.equals(parameters, schema.parameters);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(type, optional, defaultValue, fields, keySchema, valueSchema, name, version, doc, parameters);
+        return this.hc;
     }
 
     @Override
