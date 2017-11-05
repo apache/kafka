@@ -20,12 +20,16 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
+
 /**
+ * The result of the {@link KafkaAdminClient#describeConsumerGroups(Collection, DescribeConsumerGroupOptions)}} call.
  *
+ * The API of this class is evolving, see {@link AdminClient} for details.
  */
 @InterfaceStability.Evolving
 public class DescribeConsumerGroupResult {

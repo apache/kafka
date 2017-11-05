@@ -1882,7 +1882,7 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public DescribeConsumerGroupResult describeConsumerGroup(List<String> groupIds, DescribeConsumerGroupOptions options) {
+    public DescribeConsumerGroupResult describeConsumerGroups(Collection<String> groupIds, DescribeConsumerGroupOptions options) {
         final Map<String, KafkaFutureImpl<ConsumerGroupDescription>> consumerGroupFutures = new HashMap<>(groupIds.size());
         final ArrayList<String> groupIdList = new ArrayList<>();
         for (String groupId : groupIds) {

@@ -31,10 +31,10 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * The administrative client for Kafka, which supports managing and inspecting topics, brokers, configurations and ACLs.
- *
+ * <p>
  * The minimum broker version required is 0.10.0.0. Methods with stricter requirements will specify the minimum broker
  * version required.
- *
+ * <p>
  * This client was introduced in 0.11.0.0 and the API is still evolving. We will try to evolve the API in a compatible
  * manner, but we reserve the right to make breaking changes in minor releases, if necessary. We will update the
  * {@code InterfaceStability} annotation and this notice once the API is considered stable.
@@ -509,6 +509,27 @@ public abstract class AdminClient implements AutoCloseable {
     public abstract CreatePartitionsResult createPartitions(Map<String, NewPartitions> newPartitions,
                                                             CreatePartitionsOptions options);
 
-    public abstract DescribeConsumerGroupResult describeConsumerGroup(List<String> groupIds,
-                                                                      DescribeConsumerGroupOptions options);
+    /**
+     * Describe some group IDs in the cluster.
+     *
+     * @param groupIds The IDs of the groups to describe.
+     * @param options  The options to use when describing the groups.
+     * @return The DescribeConsumerGroupResult.
+     */
+    public abstract DescribeConsumerGroupResult describeConsumerGroups(Collection<String> groupIds,
+                                                                       DescribeConsumerGroupOptions options);
+
+    /**
+     * Describe some group IDs in the cluster, with the default options.
+     * <p>
+     * This is a convenience method for
+     * #{@link AdminClient#describeConsumerGroups(Collection, DescribeConsumerGroupOptions)} with
+     * default options. See the overload for more details.
+     *
+     * @param groupIds The IDs of the groups to describe.
+     * @return The DescribeConsumerGroupResult.
+     */
+    public DescribeConsumerGroupResult describeConsumerGroups(Collection<String> groupIds) {
+        return describeConsumerGroups(groupIds, new DescribeConsumerGroupOptions());
+    }
 }

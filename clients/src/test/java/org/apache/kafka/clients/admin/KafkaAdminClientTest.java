@@ -51,7 +51,6 @@ import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.resource.ResourceFilter;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Ignore;
@@ -463,7 +462,7 @@ public class KafkaAdminClientTest {
             List<String> groupIds = new ArrayList<>();
             groupIds.add("group1");
             DescribeConsumerGroupResult results =
-                env.adminClient().describeConsumerGroup(groupIds, new DescribeConsumerGroupOptions());
+                env.adminClient().describeConsumerGroups(groupIds, new DescribeConsumerGroupOptions());
             Map<String, KafkaFuture<ConsumerGroupDescription>> values = results.values();
             KafkaFuture<ConsumerGroupDescription> group1Result = values.get("group1");
             ConsumerGroupDescription description = group1Result.get();
