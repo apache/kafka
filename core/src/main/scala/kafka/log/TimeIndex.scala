@@ -53,9 +53,9 @@ import org.apache.kafka.common.record.RecordBatch
 class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true)
     extends AbstractIndex[Long, Long](_file, baseOffset, maxIndexSize, writable) with Logging {
 
-  override def entrySize = 12
+  @volatile private var _lastEntry = lastEntryFromIndexFile
 
-  @volatile var _lastEntry = lastEntryFromIndexFile
+  override def entrySize = 12
 
   // We override the full check to reserve the last time index entry slot for the on roll call.
   override def isFull: Boolean = entries >= maxEntries - 1
