@@ -158,6 +158,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertEquals(-1, statusAndVersion._2)
   }
 
+  @Test
   def testSetGetAndDeletePartitionReassignment() {
     zkClient.createRecursive(AdminZNode.path)
 
