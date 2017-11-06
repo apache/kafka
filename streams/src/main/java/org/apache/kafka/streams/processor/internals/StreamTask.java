@@ -42,7 +42,6 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import static java.lang.String.format;
@@ -493,11 +492,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
     }
 
-    @Override
-    public Map<TopicPartition, Long> checkpointedOffsets() {
-        throw new UnsupportedOperationException("checkpointedOffsets is not supported by StreamTasks");
-    }
-
     /**
      * <pre>
      * - {@link #suspend(boolean) suspend(clean)}
@@ -617,11 +611,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         final long timestamp = time.milliseconds();
 
         return systemTimePunctuationQueue.mayPunctuate(timestamp, PunctuationType.WALL_CLOCK_TIME, this);
-    }
-
-    @Override
-    public List<ConsumerRecord<byte[], byte[]>> update(final TopicPartition partition, final List<ConsumerRecord<byte[], byte[]>> remaining) {
-        throw new UnsupportedOperationException("update is not implemented");
     }
 
     /**

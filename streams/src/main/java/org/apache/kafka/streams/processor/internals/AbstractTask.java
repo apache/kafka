@@ -102,22 +102,22 @@ public abstract class AbstractTask implements Task {
     }
 
     @Override
-    public final String applicationId() {
+    public String applicationId() {
         return applicationId;
     }
 
     @Override
-    public final Set<TopicPartition> partitions() {
+    public Set<TopicPartition> partitions() {
         return partitions;
     }
 
     @Override
-    public final ProcessorTopology topology() {
+    public ProcessorTopology topology() {
         return topology;
     }
 
     @Override
-    public final ProcessorContext context() {
+    public ProcessorContext context() {
         return processorContext;
     }
 

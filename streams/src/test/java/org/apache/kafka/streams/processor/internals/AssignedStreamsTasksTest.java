@@ -38,21 +38,21 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-public class AssignedTasksTest {
+public class AssignedStreamsTasksTest {
 
-    private final Task t1 = EasyMock.createMock(Task.class);
-    private final Task t2 = EasyMock.createMock(Task.class);
+    private final StreamTask t1 = EasyMock.createMock(StreamTask.class);
+    private final StreamTask t2 = EasyMock.createMock(StreamTask.class);
     private final TopicPartition tp1 = new TopicPartition("t1", 0);
     private final TopicPartition tp2 = new TopicPartition("t2", 0);
     private final TopicPartition changeLog1 = new TopicPartition("cl1", 0);
     private final TopicPartition changeLog2 = new TopicPartition("cl2", 0);
     private final TaskId taskId1 = new TaskId(0, 0);
     private final TaskId taskId2 = new TaskId(1, 0);
-    private AssignedTasks assignedTasks;
+    private AssignedStreamsTasks assignedTasks;
 
     @Before
     public void before() {
-        assignedTasks = new AssignedTasks(new LogContext("log "), "task");
+        assignedTasks = new AssignedStreamsTasks(new LogContext("log "));
         EasyMock.expect(t1.id()).andReturn(taskId1).anyTimes();
         EasyMock.expect(t2.id()).andReturn(taskId2).anyTimes();
     }
@@ -117,7 +117,7 @@ public class AssignedTasksTest {
 
         final Set<TopicPartition> readyPartitions = assignedTasks.initializeNewTasks();
 
-        Collection<Task> restoring = assignedTasks.restoringTasks();
+        Collection<StreamTask> restoring = assignedTasks.restoringTasks();
         assertThat(restoring.size(), equalTo(1));
         assertSame(restoring.iterator().next(), t1);
         assertThat(readyPartitions, equalTo(t2partitions));

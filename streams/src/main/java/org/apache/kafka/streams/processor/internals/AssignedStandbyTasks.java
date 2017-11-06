@@ -16,8 +16,12 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.LogContext;
 
-public interface RestoringTasks {
-    StreamTask restoringTaskFor(final TopicPartition partition);
+class AssignedStandbyTasks extends AssignedTasks<StandbyTask> {
+
+    AssignedStandbyTasks(final LogContext logContext) {
+        super(logContext, "standby task");
+    }
+
 }
