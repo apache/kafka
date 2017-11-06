@@ -86,7 +86,6 @@ class KafkaApis(val requestChannel: RequestChannel,
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
 
   def close() {
-    quotas.shutdown()
     info("Shutdown complete.")
   }
 

@@ -52,11 +52,12 @@ object QuotaFactory extends Logging {
     }
   }
 
-  def instantiate(cfg: KafkaConfig, metrics: Metrics, time: Time): QuotaManagers = {
+  def instantiate(cfg: KafkaConfig, metrics: Metrics, time: Time,
+      threadNamePrefix: Option[String] = None): QuotaManagers = {
     QuotaManagers(
-      new ClientQuotaManager(clientFetchConfig(cfg), metrics, Fetch, time),
-      new ClientQuotaManager(clientProduceConfig(cfg), metrics, Produce, time),
-      new ClientRequestQuotaManager(clientRequestConfig(cfg), metrics, time),
+      new ClientQuotaManager(clientFetchConfig(cfg), metrics, Fetch, time, threadNamePrefix),
+      new ClientQuotaManager(clientProduceConfig(cfg), metrics, Produce, time, threadNamePrefix),
+      new ClientRequestQuotaManager(clientRequestConfig(cfg), metrics, time, threadNamePrefix),
       new ReplicationQuotaManager(replicationConfig(cfg), metrics, LeaderReplication, time),
       new ReplicationQuotaManager(replicationConfig(cfg), metrics, FollowerReplication, time),
       new ReplicationQuotaManager(alterLogDirsReplicationConfig(cfg), metrics, AlterLogDirsReplication, time)

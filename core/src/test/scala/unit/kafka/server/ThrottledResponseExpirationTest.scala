@@ -46,7 +46,7 @@ class ThrottledResponseExpirationTest {
     val clientMetrics = new ClientQuotaManager(ClientQuotaManagerConfig(), metrics, QuotaType.Produce, time)
 
     val delayQueue = new DelayQueue[ThrottledResponse]()
-    val reaper = new clientMetrics.ThrottledRequestReaper(delayQueue)
+    val reaper = new clientMetrics.ThrottledRequestReaper(delayQueue, "")
     try {
       // Add 4 elements to the queue out of order. Add 2 elements with the same expire timestamp
       delayQueue.add(new ThrottledResponse(time, 10, callback))
