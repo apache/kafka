@@ -33,7 +33,6 @@ import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StoreChangelogReader;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
-import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
@@ -68,7 +67,7 @@ public class StreamThreadStateStoreProviderTest {
     private File stateDir;
     private final String topicName = "topic";
     private StreamThread threadMock;
-    private Map<TaskId, Task> tasks;
+    private Map<TaskId, StreamTask> tasks;
 
     @SuppressWarnings("deprecation")
     @Before
