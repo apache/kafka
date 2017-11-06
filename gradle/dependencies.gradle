@@ -29,7 +29,7 @@ ext {
 }
 
 // Add Scala version
-def defaultScala211Version = '2.11.11'
+def defaultScala211Version = '2.11.12'
 def defaultScala212Version = '2.12.4'
 if (hasProperty('scalaVersion')) {
   if (scalaVersion == '2.11') {
