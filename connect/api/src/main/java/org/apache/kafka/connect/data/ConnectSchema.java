@@ -93,7 +93,8 @@ public class ConnectSchema implements Schema {
     // Optional human readable documentation describing this schema.
     private final String doc;
     private final Map<String, String> parameters;
-    private final int hc;  // precomputed hash code
+    // precomputed hash code. There is no need to re-compute every time hashCode() is called.
+    private final int hash;
 
     /**
      * Construct a Schema. Most users should not construct schemas manually, preferring {@link SchemaBuilder} instead.
@@ -119,7 +120,7 @@ public class ConnectSchema implements Schema {
 
         this.keySchema = keySchema;
         this.valueSchema = valueSchema;
-        this.hc = Objects.hash(type, optional, defaultValue, fields, keySchema, valueSchema, name, version, doc, parameters);
+        this.hash = Objects.hash(type, optional, defaultValue, fields, keySchema, valueSchema, name, version, doc, parameters);
     }
 
     /**
@@ -298,7 +299,7 @@ public class ConnectSchema implements Schema {
 
     @Override
     public int hashCode() {
-        return this.hc;
+        return this.hash;
     }
 
     @Override
