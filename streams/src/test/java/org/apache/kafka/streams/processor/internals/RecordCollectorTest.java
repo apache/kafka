@@ -125,8 +125,8 @@ public class RecordCollectorTest {
     }
 
     @SuppressWarnings("unchecked")
-    @Test(expected = KafkaException.class)
-    public void shouldThrowStreamsExceptionOnAnyException() {
+    @Test(expected = StreamsException.class)
+    public void shouldThrowStreamsExceptionOnAnyExceptionButProducerFencedException() {
         final RecordCollector collector = new RecordCollectorImpl(
                 new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
                     @Override
