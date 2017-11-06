@@ -18,6 +18,6 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
 
-public interface RestoringTasks<T extends Task> {
-    T restoringTaskFor(final TopicPartition partition);
+public interface RestoringTasks {
+    StreamTask restoringTaskFor(final TopicPartition partition);
 }

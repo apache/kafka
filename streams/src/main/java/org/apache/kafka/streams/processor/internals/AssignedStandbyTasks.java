@@ -17,15 +17,11 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.utils.LogContext;
-import org.slf4j.Logger;
 
 class AssignedStandbyTasks extends AssignedTasks<StandbyTask> {
-    private final Logger log;
 
     AssignedStandbyTasks(final LogContext logContext) {
         super(logContext, "standby task");
-
-        this.log = logContext.logger(getClass());
     }
 
 }

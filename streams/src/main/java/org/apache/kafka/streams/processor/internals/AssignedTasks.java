@@ -36,7 +36,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
-abstract class AssignedTasks<T extends Task> implements RestoringTasks {
+abstract class AssignedTasks<T extends Task> {
     private final Logger log;
     private final String taskTypeName;
     private final TaskAction<T> commitAction;
@@ -48,9 +48,7 @@ abstract class AssignedTasks<T extends Task> implements RestoringTasks {
     // IQ may access this map.
     Map<TaskId, T> running = new ConcurrentHashMap<>();
     private Map<TopicPartition, T> runningByPartition = new HashMap<>();
-    private Map<TopicPartition, T> restoringByPartition = new HashMap<>();
-    protected int committed = 0;
-
+    Map<TopicPartition, T> restoringByPartition = new HashMap<>();
 
     AssignedTasks(final LogContext logContext,
                   final String taskTypeName) {
@@ -283,11 +281,6 @@ abstract class AssignedTasks<T extends Task> implements RestoringTasks {
         for (TopicPartition topicPartition : task.changelogPartitions()) {
             runningByPartition.put(topicPartition, task);
         }
-    }
-
-    @Override
-    public T restoringTaskFor(final TopicPartition partition) {
-        return restoringByPartition.get(partition);
     }
 
     T runningTaskFor(final TopicPartition partition) {

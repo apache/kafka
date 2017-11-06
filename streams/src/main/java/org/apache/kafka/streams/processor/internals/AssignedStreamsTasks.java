@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
@@ -25,10 +26,10 @@ import org.slf4j.Logger;
 import java.util.Iterator;
 import java.util.Map;
 
-class AssignedStreamsTasks extends AssignedTasks<StreamTask> {
+class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements RestoringTasks {
     private final Logger log;
-
     private final TaskAction<StreamTask> maybeCommitAction;
+    private int committed = 0;
 
     AssignedStreamsTasks(final LogContext logContext) {
         super(logContext, "stream task");
@@ -50,6 +51,11 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> {
                 }
             }
         };
+    }
+
+    @Override
+    public StreamTask restoringTaskFor(final TopicPartition partition) {
+        return restoringByPartition.get(partition);
     }
 
     /**
