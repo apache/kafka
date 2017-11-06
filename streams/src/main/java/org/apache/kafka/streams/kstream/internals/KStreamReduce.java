@@ -68,7 +68,7 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
             V oldAgg = store.get(key);
             V newAgg = oldAgg;
 
-            // try to add the new new value
+            // try to add the new value
             if (value != null) {
                 if (newAgg == null) {
                     newAgg = value;

@@ -60,7 +60,7 @@ final class InFlightRequests {
     }
 
     /**
-     * Get the oldest request (the one that that will be completed next) for the given node
+     * Get the oldest request (the one that will be completed next) for the given node
      */
     public NetworkClient.InFlightRequest completeNext(String node) {
         return requestQueue(node).pollLast();
@@ -167,5 +167,5 @@ final class InFlightRequests {
         }
         return nodeIds;
     }
-    
+
 }

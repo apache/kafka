@@ -469,7 +469,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                         transactionInFlight = false;
                     } catch (final ProducerFencedException ignore) {
                         /* TODO
-                         * this should actually never happen atm as we we guard the call to #abortTransaction
+                         * this should actually never happen atm as we guard the call to #abortTransaction
                          * -> the reason for the guard is a "bug" in the Producer -- it throws IllegalStateException
                          * instead of ProducerFencedException atm. We can remove the isZombie flag after KAFKA-5604 got
                          * fixed and fall-back to this catch-and-swallow code

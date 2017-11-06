@@ -186,7 +186,7 @@ public class SaslClientAuthenticator implements Authenticator {
                     if (authenticateVersion != null)
                         saslAuthenticateVersion((short) Math.min(authenticateVersion.maxVersion, ApiKeys.SASL_AUTHENTICATE.latestVersion()));
                     setSaslState(SaslState.SEND_HANDSHAKE_REQUEST);
-                    // Fall through to send send handshake request with the latest supported version
+                    // Fall through to send handshake request with the latest supported version
                 }
             case SEND_HANDSHAKE_REQUEST:
                 SaslHandshakeRequest handshakeRequest = createSaslHandshakeRequest(saslHandshakeVersion);

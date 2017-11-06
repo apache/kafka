@@ -316,7 +316,7 @@ public class KafkaBasedLog<K, V> {
 
                     synchronized (KafkaBasedLog.this) {
                         // Only invoke exactly the number of callbacks we found before triggering the read to log end
-                        // since it is possible for another write + readToEnd to sneak in in the meantime
+                        // since it is possible for another write + readToEnd to sneak in the meantime
                         for (int i = 0; i < numCallbacks; i++) {
                             Callback<Void> cb = readLogEndOffsetCallbacks.poll();
                             cb.onCompletion(null, null);
