@@ -789,9 +789,17 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     client = AdminClient.create(createConfig)
 
     TestUtils.waitUntilTrue(() => {
+      // Need to retry if leader is not available for the partition
       result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(0L)).asJava)
-      lowWatermark = result.lowWatermarks().get(topicPartition).get(1000L, TimeUnit.MILLISECONDS)
-      lowWatermark == 5L
+
+      val future = result.lowWatermarks().get(topicPartition)
+      try {
+        lowWatermark = future.get(1000L, TimeUnit.MILLISECONDS)
+        lowWatermark == 5L
+      } catch {
+        case e: LeaderNotAvailableException => false
+      }
+
     }, "Expected low watermark of the partition to be 5L")
 
     client.close()
