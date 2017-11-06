@@ -1907,8 +1907,13 @@ public class KafkaAdminClient extends AdminClient {
 
                 // completing futures for topics with errors
                 for (Map.Entry<String, Errors> topicError: response.errors().entrySet()) {
-                    KafkaFutureImpl<Long> future = futures.get(topicError.getKey());
-                    future.completeExceptionally(topicError.getValue().exception());
+
+                    for (TopicPartition topicPartition: futures.keySet()) {
+                        if (topicPartition.topic().equals(topicError.getKey())) {
+                            KafkaFutureImpl<Long> future = futures.get(topicPartition);
+                            future.completeExceptionally(topicError.getValue().exception());
+                        }
+                    }
                 }
 
                 // grouping topic partitions per leader

@@ -64,6 +64,10 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
   var client: AdminClient = null
 
+  val topic = "topic"
+  val partition = 0
+  val topicPartition = new TopicPartition(topic, partition)
+
   @Before
   override def setUp(): Unit = {
     super.setUp
@@ -701,10 +705,6 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     }
   }
 
-  val topic = "topic"
-  val partition = 0
-  val topicPartition = new TopicPartition(topic, partition)
-
   @Test
   def testSeekToBeginningAfterDeleteRecords(): Unit = {
     TestUtils.createTopic(zkUtils, topic, 2, serverCount, servers)
@@ -835,44 +835,6 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(DeleteRecordsRequest.HIGH_WATERMARK)).asJava)
     result.all().get()
     assertNull(consumer.offsetsForTimes(Map(topicPartition -> new JLong(0L)).asJava).get(topicPartition))
-
-    client.close()
-  }
-
-  @Test
-  def testDeleteRecordsWithException(): Unit = {
-    TestUtils.createTopic(zkUtils, topic, 2, serverCount, servers)
-
-    client = AdminClient.create(createConfig)
-
-    subscribeAndWaitForAssignment(topic, consumers.head)
-
-    sendRecords(producers.head, 10, topicPartition)
-    // Should get success result
-    var result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(5L)).asJava)
-    var lowWatermark = result.lowWatermarks().get(topicPartition).get()
-    assertEquals(5L, lowWatermark)
-
-    // OffsetOutOfRangeException if offset > high_watermark
-    result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(20L)).asJava)
-    try {
-      result.lowWatermarks().get(topicPartition).get()
-      fail("Expected failure with an OffsetOutOfRangeException")
-    } catch {
-      case e: ExecutionException =>
-        assertTrue(e.getCause.isInstanceOf[OffsetOutOfRangeException])
-    }
-
-    // LeaderNotAvailableException if user tries to delete records of a non-existent partition
-    val nonExistPartition = new TopicPartition(topic, 3)
-    result = client.deleteRecords(Map(nonExistPartition -> RecordsToDelete.beforeOffset(20L)).asJava)
-    try {
-      result.lowWatermarks().get(nonExistPartition).get()
-      fail("Expected failure with an LeaderNotAvailableException")
-    } catch {
-      case e: ExecutionException =>
-        assertTrue(e.getCause.isInstanceOf[LeaderNotAvailableException])
-    }
 
     client.close()
   }

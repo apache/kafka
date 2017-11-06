@@ -31,9 +31,12 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.LeaderNotAvailableException;
+import org.apache.kafka.common.errors.NotLeaderForPartitionException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.CreatePartitionsResponse;
 import org.apache.kafka.common.requests.ApiError;
@@ -426,13 +429,19 @@ public class KafkaAdminClientTest {
         nodes.put(0, new Node(0, "localhost", 8121));
         List<PartitionInfo> partitionInfos = new ArrayList<>();
         partitionInfos.add(new PartitionInfo("my_topic", 0, nodes.get(0), new Node[] {nodes.get(0)}, new Node[] {nodes.get(0)}));
-        partitionInfos.add(new PartitionInfo("other_topic", 0, nodes.get(0), new Node[] {nodes.get(0)}, new Node[] {nodes.get(0)}));
+        partitionInfos.add(new PartitionInfo("my_topic", 1, nodes.get(0), new Node[] {nodes.get(0)}, new Node[] {nodes.get(0)}));
+        partitionInfos.add(new PartitionInfo("my_topic", 2, null, new Node[] {nodes.get(0)}, new Node[] {nodes.get(0)}));
+        partitionInfos.add(new PartitionInfo("my_topic", 3, nodes.get(0), new Node[] {nodes.get(0)}, new Node[] {nodes.get(0)}));
+        partitionInfos.add(new PartitionInfo("my_topic", 4, nodes.get(0), new Node[] {nodes.get(0)}, new Node[] {nodes.get(0)}));
         Cluster cluster = new Cluster("mockClusterId", nodes.values(),
                 partitionInfos, Collections.<String>emptySet(),
                 Collections.<String>emptySet(), nodes.get(0));
 
-        TopicPartition myTopicPartition = new TopicPartition("my_topic", 0);
-        TopicPartition otherTopicPartition = new TopicPartition("other_topic", 0);
+        TopicPartition myTopicPartition0 = new TopicPartition("my_topic", 0);
+        TopicPartition myTopicPartition1 = new TopicPartition("my_topic", 1);
+        TopicPartition myTopicPartition2 = new TopicPartition("my_topic", 2);
+        TopicPartition myTopicPartition3 = new TopicPartition("my_topic", 3);
+        TopicPartition myTopicPartition4 = new TopicPartition("my_topic", 4);
 
         try (MockKafkaAdminClientEnv env = new MockKafkaAdminClientEnv(cluster)) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
@@ -440,41 +449,82 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNode(env.cluster().nodes().get(0));
 
             Map<TopicPartition, DeleteRecordsResponse.PartitionResponse> m = new HashMap<>();
-            m.put(myTopicPartition,
+            m.put(myTopicPartition0,
                     new DeleteRecordsResponse.PartitionResponse(3, Errors.NONE));
-            m.put(otherTopicPartition,
-                    new DeleteRecordsResponse.PartitionResponse(-1, Errors.OFFSET_OUT_OF_RANGE));
+            m.put(myTopicPartition1,
+                    new DeleteRecordsResponse.PartitionResponse(DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.OFFSET_OUT_OF_RANGE));
+            m.put(myTopicPartition3,
+                    new DeleteRecordsResponse.PartitionResponse(DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.NOT_LEADER_FOR_PARTITION));
+            m.put(myTopicPartition4,
+                    new DeleteRecordsResponse.PartitionResponse(DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.UNKNOWN_TOPIC_OR_PARTITION));
 
             List<MetadataResponse.TopicMetadata> t = new ArrayList<>();
-            t.add(new MetadataResponse.TopicMetadata(Errors.NONE, "my_topic", false,
-                    Collections.singletonList(
-                            new MetadataResponse.PartitionMetadata(Errors.NONE, 0, nodes.get(0),
-                                    Collections.singletonList(nodes.get(0)), Collections.singletonList(nodes.get(0)), Collections.<Node>emptyList()))));
-            t.add(new MetadataResponse.TopicMetadata(Errors.NONE, "other_topic", false,
-                    Collections.singletonList(
-                            new MetadataResponse.PartitionMetadata(Errors.NONE, 0, nodes.get(0),
-                                    Collections.singletonList(nodes.get(0)), Collections.singletonList(nodes.get(0)), Collections.<Node>emptyList()))));
+            List<MetadataResponse.PartitionMetadata> p = new ArrayList<>();
+            p.add(new MetadataResponse.PartitionMetadata(Errors.NONE, 0, nodes.get(0),
+                    Collections.singletonList(nodes.get(0)), Collections.singletonList(nodes.get(0)), Collections.<Node>emptyList()));
+            p.add(new MetadataResponse.PartitionMetadata(Errors.NONE, 1, nodes.get(0),
+                    Collections.singletonList(nodes.get(0)), Collections.singletonList(nodes.get(0)), Collections.<Node>emptyList()));
+            p.add(new MetadataResponse.PartitionMetadata(Errors.LEADER_NOT_AVAILABLE, 2, null,
+                    Collections.singletonList(nodes.get(0)), Collections.singletonList(nodes.get(0)), Collections.<Node>emptyList()));
+            p.add(new MetadataResponse.PartitionMetadata(Errors.NONE, 3, nodes.get(0),
+                    Collections.singletonList(nodes.get(0)), Collections.singletonList(nodes.get(0)), Collections.<Node>emptyList()));
+            p.add(new MetadataResponse.PartitionMetadata(Errors.NONE, 4, nodes.get(0),
+                    Collections.singletonList(nodes.get(0)), Collections.singletonList(nodes.get(0)), Collections.<Node>emptyList()));
 
+            t.add(new MetadataResponse.TopicMetadata(Errors.NONE, "my_topic", false, p));
 
             env.kafkaClient().prepareResponse(new MetadataResponse(cluster.nodes(), cluster.clusterResource().clusterId(), cluster.controller().id(), t));
             env.kafkaClient().prepareResponse(new DeleteRecordsResponse(0, m));
 
             Map<TopicPartition, RecordsToDelete> partitionsAndOffsets = new HashMap<>();
-            partitionsAndOffsets.put(myTopicPartition, RecordsToDelete.beforeOffset(3L));
-            partitionsAndOffsets.put(otherTopicPartition, RecordsToDelete.beforeOffset(10L));
-            
+            partitionsAndOffsets.put(myTopicPartition0, RecordsToDelete.beforeOffset(3L));
+            partitionsAndOffsets.put(myTopicPartition1, RecordsToDelete.beforeOffset(10L));
+            partitionsAndOffsets.put(myTopicPartition2, RecordsToDelete.beforeOffset(10L));
+            partitionsAndOffsets.put(myTopicPartition3, RecordsToDelete.beforeOffset(10L));
+            partitionsAndOffsets.put(myTopicPartition4, RecordsToDelete.beforeOffset(10L));
+
             DeleteRecordsResult results = env.adminClient().deleteRecords(partitionsAndOffsets);
 
+            // success on records deletion for partition 0
             Map<TopicPartition, KafkaFuture<Long>> values = results.lowWatermarks();
-            KafkaFuture<Long> myTopicResult = values.get(myTopicPartition);
-            long lowWatermark = myTopicResult.get();
+            KafkaFuture<Long> myTopicPartition0Result = values.get(myTopicPartition0);
+            long lowWatermark = myTopicPartition0Result.get();
             assertEquals(lowWatermark, 3);
-            KafkaFuture<Long> otherTopicResult = values.get(otherTopicPartition);
+
+            // "offset out of range" failure on records deletion for partition 1
+            KafkaFuture<Long> myTopicPartition1Result = values.get(myTopicPartition1);
             try {
-                otherTopicResult.get();
+                myTopicPartition1Result.get();
                 fail("get() should throw ExecutionException");
             } catch (ExecutionException e0) {
                 assertTrue(e0.getCause() instanceof OffsetOutOfRangeException);
+            }
+
+            // "leader not available" failure on metadata request for partition 2
+            KafkaFuture<Long> myTopicPartition2Result = values.get(myTopicPartition2);
+            try {
+                myTopicPartition2Result.get();
+                fail("get() should throw ExecutionException");
+            } catch (ExecutionException e1) {
+                assertTrue(e1.getCause() instanceof LeaderNotAvailableException);
+            }
+
+            // "not leader for partition" failure on records deletion for partition 3
+            KafkaFuture<Long> myTopicPartition3Result = values.get(myTopicPartition3);
+            try {
+                myTopicPartition3Result.get();
+                fail("get() should throw ExecutionException");
+            } catch (ExecutionException e1) {
+                assertTrue(e1.getCause() instanceof NotLeaderForPartitionException);
+            }
+
+            // "unknown topic or partition" failure on records deletion for partition 4
+            KafkaFuture<Long> myTopicPartition4Result = values.get(myTopicPartition4);
+            try {
+                myTopicPartition4Result.get();
+                fail("get() should throw ExecutionException");
+            } catch (ExecutionException e1) {
+                assertTrue(e1.getCause() instanceof UnknownTopicOrPartitionException);
             }
         }
     }
