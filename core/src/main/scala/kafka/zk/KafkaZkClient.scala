@@ -431,24 +431,33 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
   }
 
   /**
-   * Sets the partition reassignment znode with the given reassignment.
-   * @param reassignment the reassignment to set on the reassignment znode.
-   * @return SetDataResponse
+   * Sets or creates the partition reassignment znode with the given reassignment depending on whether it already
+   * exists or not.
+   *
+   * @param reassignment the reassignment to set on the reassignment znode
+   * @throws KeeperException if there is an error while setting or creating the znode
    */
-  def setPartitionReassignmentRaw(reassignment: Map[TopicAndPartition, Seq[Int]]): SetDataResponse = {
-    val setDataRequest = SetDataRequest(ReassignPartitionsZNode.path, ReassignPartitionsZNode.encode(reassignment), ZkVersion.NoVersion)
-    retryRequestUntilConnected(setDataRequest)
-  }
+  def setOrCreatePartitionReassignment(reassignment: collection.Map[TopicAndPartition, Seq[Int]]): Unit = {
 
-  /**
-   * Creates the partition reassignment znode with the given reassignment.
-   * @param reassignment the reassignment to set on the reassignment znode.
-   * @return CreateResponse
-   */
-  def createPartitionReassignment(reassignment: Map[TopicAndPartition, Seq[Int]]): CreateResponse = {
-    val createRequest = CreateRequest(ReassignPartitionsZNode.path, ReassignPartitionsZNode.encode(reassignment),
-      acls(ReassignPartitionsZNode.path), CreateMode.PERSISTENT)
-    retryRequestUntilConnected(createRequest)
+    def set(reassignmentData: Array[Byte]): SetDataResponse = {
+      val setDataRequest = SetDataRequest(ReassignPartitionsZNode.path, reassignmentData, ZkVersion.NoVersion)
+      retryRequestUntilConnected(setDataRequest)
+    }
+
+    def create(reassignmentData: Array[Byte]): CreateResponse = {
+      val createRequest = CreateRequest(ReassignPartitionsZNode.path, reassignmentData, acls(ReassignPartitionsZNode.path),
+        CreateMode.PERSISTENT)
+      retryRequestUntilConnected(createRequest)
+    }
+
+    val reassignmentData = ReassignPartitionsZNode.encode(reassignment)
+    val setDataResponse = set(reassignmentData)
+    setDataResponse.resultCode match {
+      case Code.NONODE =>
+        val createDataResponse = create(reassignmentData)
+        createDataResponse.resultException.foreach(e => throw e)
+      case _ => setDataResponse.resultException.foreach(e => throw e)
+    }
   }
 
   /**
@@ -620,16 +629,20 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
   }
 
   /**
-   * This registers a ZNodeChangeHandler and attempts to register a watcher with an ExistsRequest, which allows data watcher
-   * registrations on paths which might not even exist.
+   * This registers a ZNodeChangeHandler and attempts to register a watcher with an ExistsRequest, which allows data
+   * watcher registrations on paths which might not even exist.
    *
    * @param zNodeChangeHandler
+   * @return `true` if the path exists or `false` if it does not
+   * @throws KeeperException if an error is returned by ZooKeeper
    */
-  def registerZNodeChangeHandlerAndCheckExistence(zNodeChangeHandler: ZNodeChangeHandler): Unit = {
+  def registerZNodeChangeHandlerAndCheckExistence(zNodeChangeHandler: ZNodeChangeHandler): Boolean = {
     zooKeeperClient.registerZNodeChangeHandler(zNodeChangeHandler)
     val existsResponse = retryRequestUntilConnected(ExistsRequest(zNodeChangeHandler.path))
-    if (existsResponse.resultCode != Code.OK && existsResponse.resultCode != Code.NONODE) {
-      throw existsResponse.resultException.get
+    existsResponse.resultCode match {
+      case Code.OK => true
+      case Code.NONODE => false
+      case _ => throw existsResponse.resultException.get
     }
   }
 
