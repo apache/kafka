@@ -157,4 +157,28 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertFalse(statusAndVersion._1)
     assertEquals(-1, statusAndVersion._2)
   }
+
+  @Test
+  def testSetGetAndDeletePartitionReassignment() {
+    zkClient.createRecursive(AdminZNode.path)
+
+    assertEquals(Map.empty, zkClient.getPartitionReassignment)
+
+    val reassignment = Map(
+      TopicAndPartition("topic_a", 0) -> Seq(0, 1, 3),
+      TopicAndPartition("topic_a", 1) -> Seq(2, 1, 3),
+      TopicAndPartition("topic_b", 0) -> Seq(4, 5),
+      TopicAndPartition("topic_c", 0) -> Seq(5, 3)
+    )
+    zkClient.setOrCreatePartitionReassignment(reassignment)
+    assertEquals(reassignment, zkClient.getPartitionReassignment)
+
+    val updatedReassingment = reassignment - TopicAndPartition("topic_b", 0)
+    zkClient.setOrCreatePartitionReassignment(updatedReassingment)
+    assertEquals(updatedReassingment, zkClient.getPartitionReassignment)
+
+    zkClient.deletePartitionReassignment()
+    assertEquals(Map.empty, zkClient.getPartitionReassignment)
+  }
+
 }

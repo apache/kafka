@@ -204,7 +204,7 @@ object DeleteTopicsTopicZNode {
 
 object ReassignPartitionsZNode {
   def path = s"${AdminZNode.path}/reassign_partitions"
-  def encode(reassignment: Map[TopicAndPartition, Seq[Int]]): Array[Byte] = {
+  def encode(reassignment: collection.Map[TopicAndPartition, Seq[Int]]): Array[Byte] = {
     val reassignmentJson = reassignment.map { case (TopicAndPartition(topic, partition), replicas) =>
       Map("topic" -> topic, "partition" -> partition, "replicas" -> replicas)
     }
