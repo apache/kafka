@@ -1878,71 +1878,27 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public ElectPreferredLeadersResult electPreferredLeaders(final Collection<TopicPartition> partitions,
                                                              ElectPreferredLeadersOptions options) {
-
-        final KafkaFutureImpl<Map<TopicPartition, KafkaFutureImpl<Void>>> futures = new KafkaFutureImpl<>();
-        final Map<TopicPartition, KafkaFutureImpl<Void>> mapOfFutures;
-        final List<TopicPartition> requestList;
-        final boolean knownPartitions = partitions != null;
-        if (knownPartitions) {
-            mapOfFutures = new HashMap<>(partitions.size());
-            for (TopicPartition partition : partitions) {
-                KafkaFutureImpl future = new KafkaFutureImpl<Void>();
-                mapOfFutures.put(partition, future);
-            }
-            futures.complete(mapOfFutures);
-            requestList = new ArrayList<>(partitions);
-        } else {
-            mapOfFutures = new HashMap<>();
-            requestList = null;
-        }
-
+        final KafkaFutureImpl<Map<TopicPartition, ApiError>> electionFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
         runnable.call(new Call("electPreferredLeaders", calcDeadlineMs(now, options.timeoutMs()),
                 new ControllerNodeProvider()) {
 
             @Override
             public AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new ElectPreferredLeadersRequest.Builder(requestList, timeoutMs);
+                return new ElectPreferredLeadersRequest.Builder(partitions, timeoutMs);
             }
 
             @Override
             public void handleResponse(AbstractResponse abstractResponse) {
                 ElectPreferredLeadersResponse response = (ElectPreferredLeadersResponse) abstractResponse;
-                // Iterate over the response partitions->errors because the argument partitions can be null
-                for (Map.Entry<TopicPartition, ApiError> entry : response.errors().entrySet()) {
-                    TopicPartition partition = entry.getKey();
-                    KafkaFutureImpl<Void> future;
-                    if (knownPartitions) {
-                        future = mapOfFutures.get(partition);
-                        if (future == null) {
-                            future = new KafkaFutureImpl();
-                            future.completeExceptionally(new IllegalStateException("Unexpected partition in response"));
-                        }
-                    } else {
-                        future = new KafkaFutureImpl<Void>();
-                        mapOfFutures.put(partition, future);
-                    }
-                    if (entry.getValue().isSuccess()) {
-                        future.complete(null);
-                    } else {
-                        ApiException exception = entry.getValue().exception();
-                        future.completeExceptionally(exception);
-                    }
-                }
-                if (!knownPartitions) {
-                    futures.complete(mapOfFutures);
-                }
+                electionFuture.complete(response.errors());
             }
 
             @Override
             void handleFailure(Throwable throwable) {
-                if (knownPartitions) {
-                    completeAllExceptionally(mapOfFutures.values(), throwable);
-                } else {
-                    futures.completeExceptionally(throwable);
-                }
+                electionFuture.completeExceptionally(throwable);
             }
         }, now);
-        return new ElectPreferredLeadersResult(futures);
+        return new ElectPreferredLeadersResult(electionFuture);
     }
 }

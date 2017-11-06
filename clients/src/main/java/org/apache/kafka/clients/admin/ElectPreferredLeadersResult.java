@@ -20,7 +20,10 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.requests.ApiError;
 
 import java.util.Collection;
 import java.util.Map;
@@ -34,10 +37,10 @@ import java.util.Set;
 @InterfaceStability.Evolving
 public class ElectPreferredLeadersResult {
 
-    private final KafkaFuture<? extends Map<TopicPartition, ? extends KafkaFuture<Void>>> futures;
+    private final KafkaFutureImpl<Map<TopicPartition, ApiError>> electionFuture;
 
-    ElectPreferredLeadersResult(KafkaFuture<? extends Map<TopicPartition, ? extends KafkaFuture<Void>>> futures) {
-        this.futures = futures;
+    ElectPreferredLeadersResult(KafkaFutureImpl<Map<TopicPartition, ApiError>> electionFuture) {
+        this.electionFuture = electionFuture;
     }
 
     /**
@@ -46,21 +49,26 @@ public class ElectPreferredLeadersResult {
      * returned future will complete with an error.
      */
     public KafkaFuture<Void> partitionResult(final TopicPartition partition) {
-        class Function<T extends Map<TopicPartition, ? extends KafkaFuture<Void>>>
-                extends KafkaFuture.Function<T, KafkaFuture<Void>> {
+        final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
+        electionFuture.thenApply(new KafkaFuture.Function<Map<TopicPartition, ApiError>, Void>() {
             @Override
-            public KafkaFuture<Void> apply(T map) {
-                KafkaFuture<Void> result = map.get(partition);
-                if (result == null) {
-                    KafkaFutureImpl future = new KafkaFutureImpl<>();
-                    future.completeExceptionally(new IllegalArgumentException(
-                            "Preferred leader election for partition \"" + partition + "\" was not attempted"));
-                    result = future;
+            public Void apply(Map<TopicPartition, ApiError> topicPartitions) {
+                if (!topicPartitions.containsKey(partition)) {
+                    result.completeExceptionally(new UnknownTopicOrPartitionException(
+                        "Preferred leader election for partition \"" + partition +
+                            "\" was not attempted"));
+                } else {
+                    ApiException exception = topicPartitions.get(partition).exception();
+                    if (exception == null) {
+                        result.complete(null);
+                    } else {
+                        result.completeExceptionally(exception);
+                    }
                 }
-                return result;
+                return null;
             }
-        }
-        return futures.<Void>thenCompose(new Function());
+        });
+        return result;
     }
 
     /**
@@ -73,26 +81,41 @@ public class ElectPreferredLeadersResult {
      * with a null {@code partitions} argument.</p>
      */
     public KafkaFuture<Set<TopicPartition>> partitions() {
-        class Function<T extends Map<TopicPartition, ? extends KafkaFuture<Void>>> extends KafkaFuture.Function<T, Set<TopicPartition>> {
+        final KafkaFutureImpl<Set<TopicPartition>> result = new KafkaFutureImpl<>();
+        electionFuture.thenApply(new KafkaFuture.Function<Map<TopicPartition, ApiError>, Void>() {
             @Override
-            public Set<TopicPartition> apply(T map) {
-                return map.keySet();
+            public Void apply(Map<TopicPartition, ApiError> topicPartitions) {
+                for (ApiError apiError : topicPartitions.values()) {
+                    if (apiError.isFailure()) {
+                        result.completeExceptionally(apiError.exception());
+                        return null;
+                    }
+                }
+                result.complete(topicPartitions.keySet());
+                return null;
             }
-        }
-        return futures.thenApply(new Function());
+        });
+        return result;
     }
 
     /**
      * Return a future which succeeds if all the topic elections succeed.
      */
     public KafkaFuture<Void> all() {
-        class Function<T extends Map<TopicPartition, ? extends KafkaFuture<Void>>> extends KafkaFuture.Function<T, KafkaFuture<Void>> {
-
+        final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
+        electionFuture.thenApply(new KafkaFuture.Function<Map<TopicPartition, ApiError>, Void>() {
             @Override
-            public KafkaFuture<Void> apply(T map) {
-                return KafkaFuture.allOf(map.values().toArray(new KafkaFuture[0]));
+            public Void apply(Map<TopicPartition, ApiError> topicPartitions) {
+                for (ApiError apiError : topicPartitions.values()) {
+                    if (apiError.isFailure()) {
+                        result.completeExceptionally(apiError.exception());
+                        return null;
+                    }
+                }
+                result.complete(null);
+                return null;
             }
-        }
-        return futures.thenCompose(new Function());
+        });
+        return result;
     }
 }
