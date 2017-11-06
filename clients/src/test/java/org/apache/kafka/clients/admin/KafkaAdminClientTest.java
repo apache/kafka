@@ -47,6 +47,7 @@ import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
 import org.apache.kafka.common.requests.DescribeAclsResponse;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
 import org.apache.kafka.common.requests.DescribeGroupsResponse;
+import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.resource.ResourceFilter;
 import org.apache.kafka.common.resource.ResourceType;
@@ -421,7 +422,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testDescribeConsumerGroup() throws Exception {
+    public void testDescribeConsumerGroups() throws Exception {
         try (MockKafkaAdminClientEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
@@ -461,13 +462,39 @@ public class KafkaAdminClientTest {
 
             List<String> groupIds = new ArrayList<>();
             groupIds.add("group1");
-            DescribeConsumerGroupResult results =
-                env.adminClient().describeConsumerGroups(groupIds, new DescribeConsumerGroupOptions());
+            DescribeConsumerGroupsResult results =
+                env.adminClient().describeConsumerGroups(groupIds);
             Map<String, KafkaFuture<ConsumerGroupDescription>> values = results.values();
             KafkaFuture<ConsumerGroupDescription> group1Result = values.get("group1");
             ConsumerGroupDescription description = group1Result.get();
             assertEquals(description.name(), "group1");
             assertEquals(description.consumers().size(), 1);
+        }
+    }
+
+    @Test
+    public void testListConsumerGroups() throws Exception {
+        try (MockKafkaAdminClientEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
+            env.kafkaClient().setNode(env.cluster().controller());
+
+            List<ListGroupsResponse.Group> groups = new ArrayList<>();
+            ListGroupsResponse.Group group1 = new ListGroupsResponse.Group("group1", "1");
+            groups.add(group1);
+            ListGroupsResponse.Group group2 = new ListGroupsResponse.Group("group2", "1");
+            groups.add(group2);
+
+            // Test a call where one filter has an error.
+            env.kafkaClient().prepareResponse(new ListGroupsResponse(null, groups));
+
+            ListConsumerGroupsResult results =
+                env.adminClient().listConsumerGroups();
+            KafkaFuture<Map<String, ConsumerGroupListing>> values = results.namesToListings();
+            Map<String, ConsumerGroupListing> groupsResult = values.get();
+            assertEquals(groupsResult.keySet().size(), 2);
+            assertEquals(groupsResult.get("group1").name(), "group1");
+            assertEquals(groupsResult.get("group2").name(), "group2");
         }
     }
 

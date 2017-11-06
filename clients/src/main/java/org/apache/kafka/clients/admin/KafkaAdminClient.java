@@ -90,6 +90,8 @@ import org.apache.kafka.common.requests.DescribeGroupsRequest;
 import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.requests.DescribeLogDirsRequest;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
+import org.apache.kafka.common.requests.ListGroupsRequest;
+import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.Resource;
@@ -1882,7 +1884,7 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public DescribeConsumerGroupResult describeConsumerGroups(Collection<String> groupIds, DescribeConsumerGroupOptions options) {
+    public DescribeConsumerGroupsResult describeConsumerGroups(Collection<String> groupIds, DescribeConsumerGroupsOptions options) {
         final Map<String, KafkaFutureImpl<ConsumerGroupDescription>> consumerGroupFutures = new HashMap<>(groupIds.size());
         final ArrayList<String> groupIdList = new ArrayList<>();
         for (String groupId : groupIds) {
@@ -1944,7 +1946,38 @@ public class KafkaAdminClient extends AdminClient {
                 completeAllExceptionally(consumerGroupFutures.values(), throwable);
             }
         }, now);
-        return new DescribeConsumerGroupResult(new HashMap<String, KafkaFuture<ConsumerGroupDescription>>(consumerGroupFutures));
+        return new DescribeConsumerGroupsResult(new HashMap<String, KafkaFuture<ConsumerGroupDescription>>(consumerGroupFutures));
+    }
+
+    @Override
+    public ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options) {
+        final KafkaFutureImpl<Map<String, ConsumerGroupListing>> consumerGroupListingFuture = new KafkaFutureImpl<>();
+        final long now = time.milliseconds();
+        runnable.call(new Call("listConsumerGroups", calcDeadlineMs(now, options.timeoutMs()),
+            new LeastLoadedNodeProvider()) {
+
+            @Override
+            AbstractRequest.Builder createRequest(int timeoutMs) {
+                return new ListGroupsRequest.Builder();
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                final ListGroupsResponse response = (ListGroupsResponse) abstractResponse;
+                final Map<String, ConsumerGroupListing> consumerGroupListing = new HashMap<>();
+                for (ListGroupsResponse.Group group : response.groups()) {
+                    final String groupId = group.groupId();
+                    consumerGroupListing.put(groupId, new ConsumerGroupListing(groupId));
+                }
+                consumerGroupListingFuture.complete(consumerGroupListing);
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                consumerGroupListingFuture.completeExceptionally(throwable);
+            }
+        }, now);
+        return new ListConsumerGroupsResult(consumerGroupListingFuture);
     }
 
 }

@@ -24,7 +24,6 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigResource;
 
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
@@ -516,20 +515,40 @@ public abstract class AdminClient implements AutoCloseable {
      * @param options  The options to use when describing the groups.
      * @return The DescribeConsumerGroupResult.
      */
-    public abstract DescribeConsumerGroupResult describeConsumerGroups(Collection<String> groupIds,
-                                                                       DescribeConsumerGroupOptions options);
+    public abstract DescribeConsumerGroupsResult describeConsumerGroups(Collection<String> groupIds,
+                                                                        DescribeConsumerGroupsOptions options);
 
     /**
      * Describe some group IDs in the cluster, with the default options.
      * <p>
      * This is a convenience method for
-     * #{@link AdminClient#describeConsumerGroups(Collection, DescribeConsumerGroupOptions)} with
+     * #{@link AdminClient#describeConsumerGroups(Collection, DescribeConsumerGroupsOptions)} with
      * default options. See the overload for more details.
      *
      * @param groupIds The IDs of the groups to describe.
      * @return The DescribeConsumerGroupResult.
      */
-    public DescribeConsumerGroupResult describeConsumerGroups(Collection<String> groupIds) {
-        return describeConsumerGroups(groupIds, new DescribeConsumerGroupOptions());
+    public DescribeConsumerGroupsResult describeConsumerGroups(Collection<String> groupIds) {
+        return describeConsumerGroups(groupIds, new DescribeConsumerGroupsOptions());
+    }
+
+    /**
+     * List the consumer groups available in the cluster.
+     *
+     * @param options           The options to use when listing the consumer groups.
+     * @return                  The ListConsumerGroupsResult.
+     */
+    public abstract ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options);
+
+    /**
+     * List the consumer groups available in the cluster with the default options.
+     *
+     * This is a convenience method for #{@link AdminClient#listConsumerGroups(ListConsumerGroupsOptions)} with default options.
+     * See the overload for more details.
+     *
+     * @return                  The ListConsumerGroupsResult.
+     */
+    public ListConsumerGroupsResult listConsumerGroups() {
+        return listConsumerGroups(new ListConsumerGroupsOptions());
     }
 }

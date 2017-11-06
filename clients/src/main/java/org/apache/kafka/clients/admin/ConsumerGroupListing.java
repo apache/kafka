@@ -17,16 +17,30 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
-import java.util.Collection;
-
 /**
- * Options for {@link AdminClient#describeConsumerGroups(Collection, DescribeConsumerGroupOptions)}.
- * <p>
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * A listing of a consumer group in the cluster.
  */
-@InterfaceStability.Evolving
-public class DescribeConsumerGroupOptions extends AbstractOptions<DescribeConsumerGroupOptions> {
+public class ConsumerGroupListing {
+    private final String name;
 
+    /**
+     * Create an instance with the specified parameters.
+     *
+     * @param name The topic name
+     */
+    public ConsumerGroupListing(String name) {
+        this.name = name;
+    }
+
+    /**
+     * The name of the consumer group.
+     */
+    public String name() {
+        return name;
+    }
+
+    @Override
+    public String toString() {
+        return "(name=" + name + ")";
+    }
 }
