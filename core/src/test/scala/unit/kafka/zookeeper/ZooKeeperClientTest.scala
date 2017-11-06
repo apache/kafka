@@ -339,7 +339,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
   @Test
   def testConnectionLossRequestTermination(): Unit = {
     val batchSize = 10
-    val zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue, null)
+    val zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, 2, null)
     zookeeper.shutdown()
     val requests = (1 to batchSize).map(i => GetDataRequest(s"/$i"))
     val countDownLatch = new CountDownLatch(1)
