@@ -40,7 +40,7 @@ public class Sanitizer {
 
     /**
      * Even though only a small number of characters are disallowed in JMX, quote any
-     * string containing special characteres to be safe. All characters in strings sanitized
+     * string containing special characters to be safe. All characters in strings sanitized
      * using {@link #sanitize(String)} are safe for JMX and hence included here.
      */
     private static final Pattern MBEAN_PATTERN = Pattern.compile("[\\w-%\\. \t]*");

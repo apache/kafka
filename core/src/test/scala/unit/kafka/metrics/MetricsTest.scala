@@ -18,6 +18,7 @@
 package kafka.metrics
 
 import java.util.Properties
+import javax.management.ObjectName
 
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.{Meter, MetricPredicate}
@@ -97,6 +98,15 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     // Check if clusterId metric exists.
     val metrics = Metrics.defaultRegistry.allMetrics
     assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.server:type=KafkaServer,name=ClusterId"), 1)
+  }
+
+  @Test
+  def testWindowsStyleTagNames(): Unit = {
+    val path = "C:\\windows-path\\kafka-logs"
+    val tags = Map("dir" -> path)
+    val expectedMBeanName = Set(tags.keySet.head, ObjectName.quote(path)).mkString("=")
+    val metric = KafkaMetricsGroup.metricName("test-metric", tags)
+    assert(metric.getMBeanName.endsWith(expectedMBeanName))
   }
 
   @deprecated("This test has been deprecated and it will be removed in a future release", "0.10.0.0")
