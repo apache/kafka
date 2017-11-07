@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import java.util.Map;
 
+import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -27,6 +28,11 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.streams.KafkaClientSupplier;
 
 public class DefaultKafkaClientSupplier implements KafkaClientSupplier {
+    @Override
+    public AdminClient getAdminClient(final Map<String, Object> config) {
+        return AdminClient.create(config);
+    }
+
     @Override
     public Producer<byte[], byte[]> getProducer(Map<String, Object> config) {
         return new KafkaProducer<>(config, new ByteArraySerializer(), new ByteArraySerializer());

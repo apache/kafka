@@ -81,7 +81,7 @@ public class StreamThreadTest {
     private final String applicationId = "stream-thread-test";
     private final MockTime mockTime = new MockTime();
     private final Metrics metrics = new Metrics();
-    private MockClientSupplier clientSupplier = new MockClientSupplier();
+    private final MockClientSupplier clientSupplier = new MockClientSupplier();
     private UUID processId = UUID.randomUUID();
     private final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(new InternalTopologyBuilder());
     private InternalTopologyBuilder internalTopologyBuilder;
@@ -350,8 +350,9 @@ public class StreamThreadTest {
 
     private StreamThread createStreamThread(final String clientId, final StreamsConfig config, final boolean eosEnabled) {
         if (eosEnabled) {
-            clientSupplier = new MockClientSupplier(applicationId);
+            clientSupplier.setApplicationIdForProducer(applicationId);
         }
+
         return StreamThread.create(internalTopologyBuilder,
                                    config,
                                    clientSupplier,
@@ -818,7 +819,7 @@ public class StreamThreadTest {
 
         final StreamThread thread = createStreamThread(clientId, new StreamsConfig(configProps(true)), true);
 
-        final MockConsumer consumer = clientSupplier.consumer;
+        final MockConsumer<byte[], byte[]> consumer = clientSupplier.consumer;
         consumer.updatePartitions(TOPIC, Collections.singletonList(new PartitionInfo(TOPIC, 0, null, null, null)));
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
@@ -832,8 +833,6 @@ public class StreamThreadTest {
         thread.runOnce(-1);
         assertThat(thread.tasks().size(), equalTo(1));
         final MockProducer producer = clientSupplier.producers.get(0);
-
-
 
         // change consumer subscription from "pattern" to "manual" to be able to call .addRecords()
         consumer.updateBeginningOffsets(Collections.singletonMap(task0Assignment.iterator().next(), 0L));
