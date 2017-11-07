@@ -21,9 +21,9 @@ import java.util.Properties
 
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
-import kafka.common.TopicAndPartition
-import kafka.controller.{IsrChangeNotificationListener, LeaderIsrAndControllerEpoch}
+import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch}
 import kafka.utils.Json
+import org.apache.kafka.common.TopicPartition
 import org.apache.zookeeper.data.Stat
 
 import scala.collection.Seq
@@ -82,17 +82,17 @@ object TopicsZNode {
 
 object TopicZNode {
   def path(topic: String) = s"${TopicsZNode.path}/$topic"
-  def encode(assignment: Map[TopicAndPartition, Seq[Int]]): Array[Byte] = {
+  def encode(assignment: collection.Map[TopicPartition, Seq[Int]]): Array[Byte] = {
     val assignmentJson = assignment.map { case (partition, replicas) => partition.partition.toString -> replicas }
     Json.encodeAsBytes(Map("version" -> 1, "partitions" -> assignmentJson))
   }
-  def decode(topic: String, bytes: Array[Byte]): Map[TopicAndPartition, Seq[Int]] = {
+  def decode(topic: String, bytes: Array[Byte]): Map[TopicPartition, Seq[Int]] = {
     Json.parseBytes(bytes).flatMap { js =>
       val assignmentJson = js.asJsonObject
       val partitionsJsonOpt = assignmentJson.get("partitions").map(_.asJsonObject)
       partitionsJsonOpt.map { partitionsJson =>
         partitionsJson.iterator.map { case (partition, replicas) =>
-          TopicAndPartition(topic, partition.toInt) -> replicas.to[Seq[Int]]
+          new TopicPartition(topic, partition.toInt) -> replicas.to[Seq[Int]]
         }
       }
     }.map(_.toMap).getOrElse(Map.empty)
@@ -104,11 +104,11 @@ object TopicPartitionsZNode {
 }
 
 object TopicPartitionZNode {
-  def path(partition: TopicAndPartition) = s"${TopicPartitionsZNode.path(partition.topic)}/${partition.partition}"
+  def path(partition: TopicPartition) = s"${TopicPartitionsZNode.path(partition.topic)}/${partition.partition}"
 }
 
 object TopicPartitionStateZNode {
-  def path(partition: TopicAndPartition) = s"${TopicPartitionZNode.path(partition)}/state"
+  def path(partition: TopicPartition) = s"${TopicPartitionZNode.path(partition)}/state"
   def encode(leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch): Array[Byte] = {
     val leaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
     val controllerEpoch = leaderIsrAndControllerEpoch.controllerEpoch
@@ -155,19 +155,19 @@ object IsrChangeNotificationZNode {
 object IsrChangeNotificationSequenceZNode {
   val SequenceNumberPrefix = "isr_change_"
   def path(sequenceNumber: String) = s"${IsrChangeNotificationZNode.path}/$SequenceNumberPrefix$sequenceNumber"
-  def encode(partitions: Set[TopicAndPartition]): Array[Byte] = {
+  def encode(partitions: Set[TopicPartition]): Array[Byte] = {
     val partitionsJson = partitions.map(partition => Map("topic" -> partition.topic, "partition" -> partition.partition))
-    Json.encodeAsBytes(Map("version" -> IsrChangeNotificationListener.version, "partitions" -> partitionsJson))
+    Json.encodeAsBytes(Map("version" -> IsrChangeNotificationHandler.Version, "partitions" -> partitionsJson))
   }
 
-  def decode(bytes: Array[Byte]): Set[TopicAndPartition] = {
+  def decode(bytes: Array[Byte]): Set[TopicPartition] = {
     Json.parseBytes(bytes).map { js =>
       val partitionsJson = js.asJsonObject("partitions").asJsonArray
       partitionsJson.iterator.map { partitionsJson =>
         val partitionJson = partitionsJson.asJsonObject
         val topic = partitionJson("topic").to[String]
         val partition = partitionJson("partition").to[Int]
-        TopicAndPartition(topic, partition)
+        new TopicPartition(topic, partition)
       }
     }
   }.map(_.toSet).getOrElse(Set.empty)
@@ -204,13 +204,13 @@ object DeleteTopicsTopicZNode {
 
 object ReassignPartitionsZNode {
   def path = s"${AdminZNode.path}/reassign_partitions"
-  def encode(reassignment: collection.Map[TopicAndPartition, Seq[Int]]): Array[Byte] = {
-    val reassignmentJson = reassignment.map { case (TopicAndPartition(topic, partition), replicas) =>
-      Map("topic" -> topic, "partition" -> partition, "replicas" -> replicas)
+  def encode(reassignment: collection.Map[TopicPartition, Seq[Int]]): Array[Byte] = {
+    val reassignmentJson = reassignment.map { case (tp, replicas) =>
+      Map("topic" -> tp.topic, "partition" -> tp.partition, "replicas" -> replicas)
     }
     Json.encodeAsBytes(Map("version" -> 1, "partitions" -> reassignmentJson))
   }
-  def decode(bytes: Array[Byte]): Map[TopicAndPartition, Seq[Int]] = Json.parseBytes(bytes).flatMap { js =>
+  def decode(bytes: Array[Byte]): Map[TopicPartition, Seq[Int]] = Json.parseBytes(bytes).flatMap { js =>
     val reassignmentJson = js.asJsonObject
     val partitionsJsonOpt = reassignmentJson.get("partitions")
     partitionsJsonOpt.map { partitionsJson =>
@@ -219,7 +219,7 @@ object ReassignPartitionsZNode {
         val topic = partitionFields("topic").to[String]
         val partition = partitionFields("partition").to[Int]
         val replicas = partitionFields("replicas").to[Seq[Int]]
-        TopicAndPartition(topic, partition) -> replicas
+        new TopicPartition(topic, partition) -> replicas
       }
     }
   }.map(_.toMap).getOrElse(Map.empty)
@@ -227,18 +227,18 @@ object ReassignPartitionsZNode {
 
 object PreferredReplicaElectionZNode {
   def path = s"${AdminZNode.path}/preferred_replica_election"
-  def encode(partitions: Set[TopicAndPartition]): Array[Byte] = {
+  def encode(partitions: Set[TopicPartition]): Array[Byte] = {
     val jsonMap = Map("version" -> 1,
       "partitions" -> partitions.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition)))
     Json.encodeAsBytes(jsonMap)
   }
-  def decode(bytes: Array[Byte]): Set[TopicAndPartition] = Json.parseBytes(bytes).map { js =>
+  def decode(bytes: Array[Byte]): Set[TopicPartition] = Json.parseBytes(bytes).map { js =>
     val partitionsJson = js.asJsonObject("partitions").asJsonArray
     partitionsJson.iterator.map { partitionsJson =>
       val partitionJson = partitionsJson.asJsonObject
       val topic = partitionJson("topic").to[String]
       val partition = partitionJson("partition").to[Int]
-      TopicAndPartition(topic, partition)
+      new TopicPartition(topic, partition)
     }
   }.map(_.toSet).getOrElse(Set.empty)
 }

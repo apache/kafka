@@ -21,7 +21,6 @@ import java.util.Properties
 
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
-import kafka.common.TopicAndPartition
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.log.LogConfig
 import kafka.server.ConfigType
@@ -29,7 +28,7 @@ import kafka.utils._
 import kafka.zookeeper._
 import org.apache.kafka.common.TopicPartition
 import org.apache.zookeeper.KeeperException.Code
-import org.apache.zookeeper.data.Stat
+import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException}
 
 import scala.collection.mutable
@@ -53,7 +52,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    * @param partitions the partitions for which we want ot get states.
    * @return sequence of GetDataResponses whose contexts are the partitions they are associated with.
    */
-  def getTopicPartitionStatesRaw(partitions: Seq[TopicAndPartition]): Seq[GetDataResponse] = {
+  def getTopicPartitionStatesRaw(partitions: Seq[TopicPartition]): Seq[GetDataResponse] = {
     val getDataRequests = partitions.map { partition =>
       GetDataRequest(TopicPartitionStateZNode.path(partition), ctx = Some(partition))
     }
@@ -65,7 +64,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    * @param leaderIsrAndControllerEpochs the partition states of each partition whose state we wish to set.
    * @return sequence of SetDataResponse whose contexts are the partitions they are associated with.
    */
-  def setTopicPartitionStatesRaw(leaderIsrAndControllerEpochs: Map[TopicAndPartition, LeaderIsrAndControllerEpoch]): Seq[SetDataResponse] = {
+  def setTopicPartitionStatesRaw(leaderIsrAndControllerEpochs: Map[TopicPartition, LeaderIsrAndControllerEpoch]): Seq[SetDataResponse] = {
     val setDataRequests = leaderIsrAndControllerEpochs.map { case (partition, leaderIsrAndControllerEpoch) =>
       val path = TopicPartitionStateZNode.path(partition)
       val data = TopicPartitionStateZNode.encode(leaderIsrAndControllerEpoch)
@@ -79,7 +78,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    * @param leaderIsrAndControllerEpochs the partition states of each partition whose state we wish to set.
    * @return sequence of CreateResponse whose contexts are the partitions they are associated with.
    */
-  def createTopicPartitionStatesRaw(leaderIsrAndControllerEpochs: Map[TopicAndPartition, LeaderIsrAndControllerEpoch]): Seq[CreateResponse] = {
+  def createTopicPartitionStatesRaw(leaderIsrAndControllerEpochs: Map[TopicPartition, LeaderIsrAndControllerEpoch]): Seq[CreateResponse] = {
     createTopicPartitions(leaderIsrAndControllerEpochs.keys.map(_.topic).toSet.toSeq)
     createTopicPartition(leaderIsrAndControllerEpochs.keys.toSeq)
     val createRequests = leaderIsrAndControllerEpochs.map { case (partition, leaderIsrAndControllerEpoch) =>
@@ -118,10 +117,10 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    * @param controllerEpoch The current controller epoch.
    * @return UpdateLeaderAndIsrResult instance containing per partition results.
    */
-  def updateLeaderAndIsr(leaderAndIsrs: Map[TopicAndPartition, LeaderAndIsr], controllerEpoch: Int): UpdateLeaderAndIsrResult = {
-    val successfulUpdates = mutable.Map.empty[TopicAndPartition, LeaderAndIsr]
-    val updatesToRetry = mutable.Buffer.empty[TopicAndPartition]
-    val failed = mutable.Map.empty[TopicAndPartition, Exception]
+  def updateLeaderAndIsr(leaderAndIsrs: Map[TopicPartition, LeaderAndIsr], controllerEpoch: Int): UpdateLeaderAndIsrResult = {
+    val successfulUpdates = mutable.Map.empty[TopicPartition, LeaderAndIsr]
+    val updatesToRetry = mutable.Buffer.empty[TopicPartition]
+    val failed = mutable.Map.empty[TopicPartition, Exception]
     val leaderIsrAndControllerEpochs = leaderAndIsrs.map { case (partition, leaderAndIsr) => partition -> LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch) }
     val setDataResponses = try {
       setTopicPartitionStatesRaw(leaderIsrAndControllerEpochs)
@@ -131,7 +130,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
         return UpdateLeaderAndIsrResult(successfulUpdates.toMap, updatesToRetry, failed.toMap)
     }
     setDataResponses.foreach { setDataResponse =>
-      val partition = setDataResponse.ctx.get.asInstanceOf[TopicAndPartition]
+      val partition = setDataResponse.ctx.get.asInstanceOf[TopicPartition]
       if (setDataResponse.resultCode == Code.OK) {
         val updatedLeaderAndIsr = leaderAndIsrs(partition).withZkVersion(setDataResponse.stat.getVersion)
         successfulUpdates.put(partition, updatedLeaderAndIsr)
@@ -227,7 +226,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    * @param assignment the partition to replica mapping to set for the given topic
    * @return SetDataResponse
    */
-  def setTopicAssignmentRaw(topic: String, assignment: Map[TopicAndPartition, Seq[Int]]): SetDataResponse = {
+  def setTopicAssignmentRaw(topic: String, assignment: collection.Map[TopicPartition, Seq[Int]]): SetDataResponse = {
     val setDataRequest = SetDataRequest(TopicZNode.path(topic), TopicZNode.encode(assignment), ZkVersion.NoVersion)
     retryRequestUntilConnected(setDataRequest)
   }
@@ -296,7 +295,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    * @param topics the topics whose partitions we wish to get the assignments for.
    * @return the replica assignment for each partition from the given topics.
    */
-  def getReplicaAssignmentForTopics(topics: Set[String]): Map[TopicAndPartition, Seq[Int]] = {
+  def getReplicaAssignmentForTopics(topics: Set[String]): Map[TopicPartition, Seq[Int]] = {
     val getDataRequests = topics.map(topic => GetDataRequest(TopicZNode.path(topic), ctx = Some(topic)))
     val getDataResponses = retryRequestsUntilConnected(getDataRequests.toSeq)
     getDataResponses.flatMap { getDataResponse =>
@@ -304,7 +303,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
       if (getDataResponse.resultCode == Code.OK) {
         TopicZNode.decode(topic, getDataResponse.data)
       } else if (getDataResponse.resultCode == Code.NONODE) {
-        Map.empty[TopicAndPartition, Seq[Int]]
+        Map.empty[TopicPartition, Seq[Int]]
       } else {
         throw getDataResponse.resultException.get
       }
@@ -418,13 +417,13 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    * Returns all reassignments.
    * @return the reassignments for each partition.
    */
-  def getPartitionReassignment: Map[TopicAndPartition, Seq[Int]] = {
+  def getPartitionReassignment: Map[TopicPartition, Seq[Int]] = {
     val getDataRequest = GetDataRequest(ReassignPartitionsZNode.path)
     val getDataResponse = retryRequestUntilConnected(getDataRequest)
     if (getDataResponse.resultCode == Code.OK) {
       ReassignPartitionsZNode.decode(getDataResponse.data)
     } else if (getDataResponse.resultCode == Code.NONODE) {
-      Map.empty[TopicAndPartition, Seq[Int]]
+      Map.empty[TopicPartition, Seq[Int]]
     } else {
       throw getDataResponse.resultException.get
     }
@@ -437,7 +436,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    * @param reassignment the reassignment to set on the reassignment znode
    * @throws KeeperException if there is an error while setting or creating the znode
    */
-  def setOrCreatePartitionReassignment(reassignment: collection.Map[TopicAndPartition, Seq[Int]]): Unit = {
+  def setOrCreatePartitionReassignment(reassignment: collection.Map[TopicPartition, Seq[Int]]): Unit = {
 
     def set(reassignmentData: Array[Byte]): SetDataResponse = {
       val setDataRequest = SetDataRequest(ReassignPartitionsZNode.path, reassignmentData, ZkVersion.NoVersion)
@@ -473,10 +472,10 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    * @param partitions the partitions for which we want ot get states.
    * @return map containing LeaderIsrAndControllerEpoch of each partition for we were able to lookup the partition state.
    */
-  def getTopicPartitionStates(partitions: Seq[TopicAndPartition]): Map[TopicAndPartition, LeaderIsrAndControllerEpoch] = {
+  def getTopicPartitionStates(partitions: Seq[TopicPartition]): Map[TopicPartition, LeaderIsrAndControllerEpoch] = {
     val getDataResponses = getTopicPartitionStatesRaw(partitions)
     getDataResponses.flatMap { getDataResponse =>
-      val partition = getDataResponse.ctx.get.asInstanceOf[TopicAndPartition]
+      val partition = getDataResponse.ctx.get.asInstanceOf[TopicPartition]
       if (getDataResponse.resultCode == Code.OK) {
         TopicPartitionStateZNode.decode(getDataResponse.data, getDataResponse.stat).map(partition -> _)
       } else if (getDataResponse.resultCode == Code.NONODE) {
@@ -507,7 +506,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    * @param sequenceNumbers the sequence numbers associated with the isr change notifications.
    * @return partitions associated with the given isr change notifications.
    */
-  def getPartitionsFromIsrChangeNotifications(sequenceNumbers: Seq[String]): Seq[TopicAndPartition] = {
+  def getPartitionsFromIsrChangeNotifications(sequenceNumbers: Seq[String]): Seq[TopicPartition] = {
     val getDataRequests = sequenceNumbers.map { sequenceNumber =>
       GetDataRequest(IsrChangeNotificationSequenceZNode.path(sequenceNumber))
     }
@@ -550,13 +549,13 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    * Gets the partitions marked for preferred replica election.
    * @return sequence of partitions.
    */
-  def getPreferredReplicaElection: Set[TopicAndPartition] = {
+  def getPreferredReplicaElection: Set[TopicPartition] = {
     val getDataRequest = GetDataRequest(PreferredReplicaElectionZNode.path)
     val getDataResponse = retryRequestUntilConnected(getDataRequest)
     if (getDataResponse.resultCode == Code.OK) {
       PreferredReplicaElectionZNode.decode(getDataResponse.data)
     } else if (getDataResponse.resultCode == Code.NONODE) {
-      Set.empty[TopicAndPartition]
+      Set.empty[TopicPartition]
     } else {
       throw getDataResponse.resultException.get
     }
@@ -775,7 +774,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     }
   }
 
-  private def createTopicPartition(partitions: Seq[TopicAndPartition]) = {
+  private def createTopicPartition(partitions: Seq[TopicPartition]): Seq[CreateResponse] = {
     val createRequests = partitions.map { partition =>
       val path = TopicPartitionZNode.path(partition)
       CreateRequest(path, null, acls(path), CreateMode.PERSISTENT, Some(partition))
@@ -783,7 +782,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     retryRequestsUntilConnected(createRequests)
   }
 
-  private def createTopicPartitions(topics: Seq[String]) = {
+  private def createTopicPartitions(topics: Seq[String]): Seq[CreateResponse] = {
     val createRequests = topics.map { topic =>
       val path = TopicPartitionsZNode.path(topic)
       CreateRequest(path, null, acls(path), CreateMode.PERSISTENT, Some(topic))
@@ -791,14 +790,14 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     retryRequestsUntilConnected(createRequests)
   }
 
-  private def getTopicConfigs(topics: Seq[String]) = {
+  private def getTopicConfigs(topics: Seq[String]): Seq[GetDataResponse] = {
     val getDataRequests = topics.map { topic =>
       GetDataRequest(ConfigEntityZNode.path(ConfigType.Topic, topic), ctx = Some(topic))
     }
     retryRequestsUntilConnected(getDataRequests)
   }
 
-  private def acls(path: String) = {
+  private def acls(path: String): Seq[ACL] = {
     import scala.collection.JavaConverters._
     ZkUtils.defaultAcls(isSecure, path).asScala
   }
@@ -892,7 +891,7 @@ object KafkaZkClient {
    *                      update partition state.
    * @param failedPartitions Exceptions corresponding to failed partition state updates.
    */
-  case class UpdateLeaderAndIsrResult(successfulPartitions: Map[TopicAndPartition, LeaderAndIsr],
-                                      partitionsToRetry: Seq[TopicAndPartition],
-                                      failedPartitions: Map[TopicAndPartition, Exception])
+  case class UpdateLeaderAndIsrResult(successfulPartitions: Map[TopicPartition, LeaderAndIsr],
+                                      partitionsToRetry: Seq[TopicPartition],
+                                      failedPartitions: Map[TopicPartition, Exception])
 }
