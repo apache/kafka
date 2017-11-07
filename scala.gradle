@@ -6,6 +6,8 @@ if (scalaVersion.startsWith('2.10')) {
     ext.baseScalaVersion = '2.10'
 } else if (scalaVersion.startsWith('2.11')) {
     ext.baseScalaVersion = '2.11'
+} else if (scalaVersion.startsWith('2.12')) {
+    ext.baseScalaVersion = '2.12'
 } else {
     ext.baseScalaVersion = scalaVersion
 }
