@@ -571,7 +571,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
   def deleteIsrChangeNotifications(): Unit = {
     val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(IsrChangeNotificationZNode.path))
     if (getChildrenResponse.resultCode == Code.OK) {
-      deleteIsrChangeNotifications(getChildrenResponse.children)
+      deleteIsrChangeNotifications(getChildrenResponse.children.map(IsrChangeNotificationSequenceZNode.sequenceNumber))
     } else if (getChildrenResponse.resultCode != Code.NONODE) {
       throw getChildrenResponse.resultException.get
     }
@@ -732,15 +732,13 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
           case Code.NODEEXISTS =>
             (false, 0)
           case _ =>
-            error(s"Error while creating acls at $resource")
             throw createResponse.resultException.get
         }
       }
       case Code.BADVERSION =>
-        debug(s"Failed to update node for $resource due to bad version.")
         (false, 0)
       case _ =>
-        debug(s"Error while updating node at $resource")
+        error(s"Error while updating node at $resource")
         throw setDataResponse.resultException.get
     }
   }
@@ -760,6 +758,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
 
   /**
    * Deletes all Acl change notifications.
+   * @throws KeeperException if there is an error while deleting Acl change notifications
    */
   def deleteAclChangeNotifications(): Unit = {
     val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(AclChangeNotificationZNode.path))
@@ -771,12 +770,12 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
   }
 
   /**
-   * Deletes the Acl change notifications associated with the given sequence numbers.
-   * @param sequenceNumbers the sequence numbers associated with the Acl change notifications to be deleted.
+   * Deletes the Acl change notifications associated with the given sequence nodes
+   * @param sequenceNodes
    */
-  private def deleteAclChangeNotifications(sequenceNumbers: Seq[String]): Unit = {
-    val deleteRequests = sequenceNumbers.map { sequenceNumber =>
-      DeleteRequest(AclChangeNotificationSequenceZNode.path(sequenceNumber), ZkVersion.NoVersion)
+  private def deleteAclChangeNotifications(sequenceNodes: Seq[String]): Unit = {
+    val deleteRequests = sequenceNodes.map { sequenceNode =>
+      DeleteRequest(AclChangeNotificationSequenceZNode.deletePath(sequenceNode), ZkVersion.NoVersion)
     }
 
     val deleteResponses = retryRequestsUntilConnected(deleteRequests)
@@ -841,7 +840,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
   }
   
   /**
-   * Deletes th zk node recursively
+   * Deletes the zk node recursively
    * @param path
    * @return  return true if it succeeds, false otherwise
    */
@@ -915,7 +914,6 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     zooKeeperClient.unregisterStateChangeHandler(name)
   }
 
-
   /**
    * Close the underlying ZooKeeperClient.
    */
@@ -977,6 +975,12 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     createResponse
   }
 
+  /**
+   * Deletes the given zk path recursively
+   * @param path
+   * @return true if path gets deleted successfully, false if root path doesn't exists
+   * @throws KeeperException if there is an error while deleting the znodes
+   */
   private[zk] def deleteRecursive(path: String): Boolean = {
     val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(path))
     if (getChildrenResponse.resultCode == Code.OK) {
@@ -985,10 +989,11 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
       if (deleteResponse.resultCode != Code.OK && deleteResponse.resultCode != Code.NONODE) {
         throw deleteResponse.resultException.get
       }
-    } else if (getChildrenResponse.resultCode != Code.NONODE) {
+      true
+    } else if (getChildrenResponse.resultCode == Code.NONODE) {
+      false
+    } else
       throw getChildrenResponse.resultException.get
-    }
-    true
   }
 
   private[zk] def pathExists(path: String): Boolean = {

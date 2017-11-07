@@ -44,7 +44,6 @@ class ZooKeeperClient(connectString: String,
                       connectionTimeoutMs: Int,
                       maxInFlightRequests: Int) extends Logging {
   this.logIdent = "[ZooKeeperClient] "
-
   private val initializationLock = new ReentrantReadWriteLock()
   private val isConnectedOrExpiredLock = new ReentrantLock()
   private val isConnectedOrExpiredCondition = isConnectedOrExpiredLock.newCondition()
@@ -245,7 +244,7 @@ class ZooKeeperClient(connectString: String,
    *
    * @param name
    */
-  def unregisterStateChangeHandler(name: String): Unit = {
+  def unregisterStateChangeHandler(name: String): Unit = inReadLock(initializationLock) {
     stateChangeHandlers.remove(name)
   }
 
@@ -304,7 +303,7 @@ class ZooKeeperClient(connectString: String,
             isConnectedOrExpiredCondition.signalAll()
           }
           if (event.getState == KeeperState.AuthFailed) {
-            info("Auth failed.")
+            error("Auth failed.")
             stateChangeHandlers.foreach {case (name, handler) => handler.onAuthFailure()}
           } else if (event.getState == KeeperState.Expired) {
             inWriteLock(initializationLock) {

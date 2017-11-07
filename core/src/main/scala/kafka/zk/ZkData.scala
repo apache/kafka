@@ -22,10 +22,7 @@ import java.util.Properties
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch}
-import kafka.common.TopicAndPartition
-import kafka.controller.{IsrChangeNotificationListener, LeaderIsrAndControllerEpoch}
-import kafka.security.auth.Acl
-import kafka.security.auth.Resource
+import kafka.security.auth.{Acl, Resource}
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
 import kafka.utils.Json
 import org.apache.kafka.common.TopicPartition
@@ -258,6 +255,10 @@ object ZkVersion {
   val NoVersion = -1
 }
 
+object StateChangeHandlers {
+  def controllerHandler = "controller-state-change-handler"
+}
+
 /**
  * The root acl storage node. Under this node there will be one child node per resource type (Topic, Cluster, Group).
  * under each resourceType there will be a unique child for each resource instance and the data for that child will contain
@@ -290,8 +291,7 @@ object AclChangeNotificationZNode {
 object AclChangeNotificationSequenceZNode {
   val SequenceNumberPrefix = "acl_changes_"
   def createPath = s"${AclChangeNotificationZNode.path}/$SequenceNumberPrefix"
-  def path(sequenceNumber: String) = s"${AclChangeNotificationZNode.path}/$SequenceNumberPrefix$sequenceNumber"
+  def deletePath(sequenceNode: String) = s"${AclChangeNotificationZNode.path}/${sequenceNode}"
   def encode(resourceName : String): Array[Byte] = resourceName.getBytes(UTF_8)
   def decode(bytes: Array[Byte]): String = new String(bytes, UTF_8)
-  def sequenceNumber(path: String) = path.substring(path.lastIndexOf(SequenceNumberPrefix) + SequenceNumberPrefix.length)
 }

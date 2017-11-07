@@ -28,7 +28,7 @@ import org.apache.kafka.common.security.JaasUtils
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.{CreateMode, ZooDefs}
 import org.junit.Assert.{assertArrayEquals, assertEquals, assertTrue}
-import org.junit.{After, Ignore, Test}
+import org.junit.{After, Test}
 
 class ZooKeeperClientTest extends ZooKeeperTestHarness {
   private val mockPath = "/foo"
@@ -315,7 +315,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
       }
     }
 
-    val zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue,)
+    val zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue)
     zooKeeperClient.registerStateChangeHandler(stateChangeHandler)
     zooKeeperClient.reinitialize()
 
@@ -325,7 +325,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
   @Test
   def testConnectionLossRequestTermination(): Unit = {
     val batchSize = 10
-    val zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, 2, null)
+    val zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, 2)
     zookeeper.shutdown()
     val requests = (1 to batchSize).map(i => GetDataRequest(s"/$i"))
     val countDownLatch = new CountDownLatch(1)

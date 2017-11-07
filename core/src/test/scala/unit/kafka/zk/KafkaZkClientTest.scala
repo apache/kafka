@@ -16,11 +16,8 @@
 */
 package kafka.zk
 
-import kafka.server.Defaults
-import kafka.zookeeper.ZooKeeperClient
 import java.util.UUID
 
-import kafka.common.TopicAndPartition
 import kafka.security.auth._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.security.auth.KafkaPrincipal
@@ -270,5 +267,15 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertFalse(zkClient.conditionalDelete(resource2, 10))
     //delete with valid expected zk version
     assertTrue(zkClient.conditionalDelete(resource2, 0))
+
+
+    zkClient.createAclChangeNotification("resource1")
+    zkClient.createAclChangeNotification("resource2")
+
+    assertEquals(2, zkClient.getChildren(AclChangeNotificationZNode.path).size)
+
+    zkClient.deleteAclChangeNotifications()
+    assertTrue(zkClient.getChildren(AclChangeNotificationZNode.path).isEmpty)
+
   }
 }

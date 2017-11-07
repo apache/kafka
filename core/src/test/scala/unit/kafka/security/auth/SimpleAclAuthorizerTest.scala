@@ -23,7 +23,7 @@ import kafka.network.RequestChannel.Session
 import kafka.security.auth.Acl.WildCardHost
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import kafka.zk.{AclChangeNotificationZNode, ZooKeeperTestHarness}
+import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.Assert._
 import org.junit.{After, Before, Test}

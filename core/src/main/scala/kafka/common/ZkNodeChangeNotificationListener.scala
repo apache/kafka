@@ -145,7 +145,6 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
     override val name: String = seqNodeRoot
     override def afterInitializingSession(): Unit = addChangeNotification
     override def onReconnectionTimeout(): Unit = error("Reconnection timeout.")
-    override def onAuthFailure(): Unit = error("Auth failure.")
   }
 }
 

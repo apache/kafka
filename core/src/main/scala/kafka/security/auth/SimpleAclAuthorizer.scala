@@ -40,6 +40,7 @@ object SimpleAclAuthorizer {
   val ZkUrlProp = "authorizer.zookeeper.url"
   val ZkConnectionTimeOutProp = "authorizer.zookeeper.connection.timeout.ms"
   val ZkSessionTimeOutProp = "authorizer.zookeeper.session.timeout.ms"
+  val ZkMaxInFlightRequests = "authorizer.zookeeper.max.in.flight.requests"
 
   //List of users that will be treated as super users and will have access to all the resources for all actions from all hosts, defaults to no super users.
   val SuperUsersProp = "super.users"
@@ -87,8 +88,9 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     val zkUrl = configs.get(SimpleAclAuthorizer.ZkUrlProp).map(_.toString).getOrElse(kafkaConfig.zkConnect)
     val zkConnectionTimeoutMs = configs.get(SimpleAclAuthorizer.ZkConnectionTimeOutProp).map(_.toString.toInt).getOrElse(kafkaConfig.zkConnectionTimeoutMs)
     val zkSessionTimeOutMs = configs.get(SimpleAclAuthorizer.ZkSessionTimeOutProp).map(_.toString.toInt).getOrElse(kafkaConfig.zkSessionTimeoutMs)
+    val zkMaxInFlightRequests = configs.get(SimpleAclAuthorizer.ZkMaxInFlightRequests).map(_.toString.toInt).getOrElse(kafkaConfig.zkMaxInFlightRequests)
 
-    val zooKeeperClient = new ZooKeeperClient(zkUrl, zkSessionTimeOutMs, zkConnectionTimeoutMs)
+    val zooKeeperClient = new ZooKeeperClient(zkUrl, zkSessionTimeOutMs, zkConnectionTimeoutMs, zkMaxInFlightRequests)
 
     zkClient = new KafkaZkClient(zooKeeperClient, kafkaConfig.zkEnableSecureAcls)
     zkClient.createAclPaths()
@@ -204,7 +206,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   def close() {
     if (aclChangeListener != null) aclChangeListener.close()
-    if (zkClient != null ) zkClient.close()
+    if (zkClient != null) zkClient.close()
   }
 
   private def loadCache()  {
