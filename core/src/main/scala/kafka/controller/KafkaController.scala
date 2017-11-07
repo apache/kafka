@@ -831,8 +831,10 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
         warn("Partition %s failed to complete preferred replica leader election. Leader is %d".format(partition, currentLeader))
       }
     }
-    if (!isTriggeredByAutoRebalance)
+    if (!isTriggeredByAutoRebalance) {
       zkClient.deletePreferredReplicaElection()
+      eventManager.put(PreferredReplicaLeaderElection)
+    }
   }
 
   /**
@@ -1474,8 +1476,6 @@ class PreferredReplicaElectionHandler(controller: KafkaController, eventManager:
   override val path: String = PreferredReplicaElectionZNode.path
 
   override def handleCreation(): Unit = eventManager.put(controller.PreferredReplicaLeaderElection)
-  override def handleDeletion(): Unit = eventManager.put(controller.PreferredReplicaLeaderElection)
-  override def handleDataChange(): Unit = eventManager.put(controller.PreferredReplicaLeaderElection)
 }
 
 class ControllerChangeHandler(controller: KafkaController, eventManager: ControllerEventManager) extends ZNodeChangeHandler {
