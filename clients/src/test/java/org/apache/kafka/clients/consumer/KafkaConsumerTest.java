@@ -1615,7 +1615,7 @@ public class KafkaConsumerTest {
 
         OffsetResetStrategy autoResetStrategy = OffsetResetStrategy.EARLIEST;
         List<PartitionAssignor> assignors = Arrays.asList(assignor);
-        ConsumerInterceptors<String, String> interceptors = null;
+        ConsumerInterceptors<String, String> interceptors = new ConsumerInterceptors<>(Collections.<ConsumerInterceptor<String, String>>emptyList());
 
         Metrics metrics = new Metrics();
         ConsumerMetrics metricsRegistry = new ConsumerMetrics(metricGroupPrefix);

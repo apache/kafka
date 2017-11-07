@@ -36,6 +36,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.common.config.ConfigDef.NON_NULL;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
 /**
@@ -101,16 +102,15 @@ public class ConnectorConfig extends AbstractConfig {
                 .define(TASKS_MAX_CONFIG, Type.INT, TASKS_MAX_DEFAULT, atLeast(TASKS_MIN_CONFIG), Importance.HIGH, TASKS_MAX_DOC, COMMON_GROUP, 3, Width.SHORT, TASK_MAX_DISPLAY)
                 .define(KEY_CONVERTER_CLASS_CONFIG, Type.CLASS, null, Importance.LOW, KEY_CONVERTER_CLASS_DOC, COMMON_GROUP, 4, Width.SHORT, KEY_CONVERTER_CLASS_DISPLAY)
                 .define(VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS, null, Importance.LOW, VALUE_CONVERTER_CLASS_DOC, COMMON_GROUP, 5, Width.SHORT, VALUE_CONVERTER_CLASS_DISPLAY)
-                .define(TRANSFORMS_CONFIG, Type.LIST, null, new ConfigDef.Validator() {
+                .define(TRANSFORMS_CONFIG, Type.LIST, Collections.emptyList(), ConfigDef.Composite.of(NON_NULL, new ConfigDef.Validator() {
                     @Override
                     public void ensureValid(String name, Object value) {
-                        if (value == null) return;
                         final List<String> transformAliases = (List<String>) value;
                         if (transformAliases.size() > new HashSet<>(transformAliases).size()) {
                             throw new ConfigException(name, value, "Duplicate alias provided.");
                         }
                     }
-                }, Importance.LOW, TRANSFORMS_DOC, TRANSFORMS_GROUP, 6, Width.LONG, TRANSFORMS_DISPLAY);
+                }), Importance.LOW, TRANSFORMS_DOC, TRANSFORMS_GROUP, 6, Width.LONG, TRANSFORMS_DISPLAY);
     }
 
     public ConnectorConfig(Plugins plugins) {
@@ -139,9 +139,6 @@ public class ConnectorConfig extends AbstractConfig {
      */
     public <R extends ConnectRecord<R>> List<Transformation<R>> transformations() {
         final List<String> transformAliases = getList(TRANSFORMS_CONFIG);
-        if (transformAliases == null || transformAliases.isEmpty()) {
-            return Collections.emptyList();
-        }
 
         final List<Transformation<R>> transformations = new ArrayList<>(transformAliases.size());
         for (String alias : transformAliases) {

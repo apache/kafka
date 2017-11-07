@@ -26,6 +26,7 @@ import org.apache.kafka.common.security.TestSecurityConfig;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -48,6 +49,22 @@ public class AbstractConfigTest {
         testInvalidInputs("org.apache.kafka.clients.producer.unknown-metrics-reporter");
         testInvalidInputs("test1,test2");
         testInvalidInputs("org.apache.kafka.common.metrics.FakeMetricsReporter,");
+    }
+
+
+    @Test
+    public void testEmptyList() {
+        AbstractConfig conf;
+        ConfigDef configDef = new ConfigDef().define("a", Type.LIST, "", ConfigDef.NON_NULL, Importance.HIGH, "doc");
+
+        conf = new AbstractConfig(configDef, Collections.emptyMap());
+        assertEquals(Collections.emptyList(), conf.getList("a"));
+
+        conf = new AbstractConfig(configDef, Collections.singletonMap("a", ""));
+        assertEquals(Collections.emptyList(), conf.getList("a"));
+
+        conf = new AbstractConfig(configDef, Collections.singletonMap("a", "b,c,d"));
+        assertEquals(Arrays.asList("b", "c", "d"), conf.getList("a"));
     }
 
     @Test
