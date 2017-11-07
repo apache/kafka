@@ -17,7 +17,7 @@
 package kafka.zk
 
 import kafka.common.TopicAndPartition
-import kafka.utils.ZkUtils
+import kafka.server.Defaults
 import kafka.zookeeper.ZooKeeperClient
 import org.apache.kafka.common.TopicPartition
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
@@ -36,7 +36,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   @Before
   override def setUp() {
     super.setUp()
-    zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, null)
+    zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Defaults.ZkMaxInFlightRequests, null)
     zkClient = new KafkaZkClient(zooKeeperClient, false)
   }
 
@@ -100,7 +100,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertTrue(zkClient.getTopicPartitionCount(topic).isEmpty)
 
     // create a topic path
-    zkClient.createRecursive(ZkUtils.getTopicPath(topic))
+    zkClient.createRecursive(TopicZNode.path(topic))
 
     val assignment = new mutable.HashMap[TopicAndPartition, Seq[Int]]()
     assignment.put(new TopicAndPartition(topic, 0), Seq(0,1))

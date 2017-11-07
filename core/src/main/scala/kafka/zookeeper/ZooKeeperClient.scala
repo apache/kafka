@@ -18,7 +18,7 @@
 package kafka.zookeeper
 
 import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
-import java.util.concurrent.{ArrayBlockingQueue, ConcurrentHashMap, CountDownLatch, TimeUnit}
+import java.util.concurrent.{ArrayBlockingQueue, ConcurrentHashMap, CountDownLatch, Semaphore, TimeUnit}
 
 import kafka.utils.CoreUtils.{inLock, inReadLock, inWriteLock}
 import kafka.utils.Logging
@@ -37,9 +37,13 @@ import scala.collection.JavaConverters._
  * @param connectString comma separated host:port pairs, each corresponding to a zk server
  * @param sessionTimeoutMs session timeout in milliseconds
  * @param connectionTimeoutMs connection timeout in milliseconds
+ * @param maxInFlightRequests maximum number of unacknowledged requests the client will send before blocking.
  * @param stateChangeHandler state change handler callbacks called by the underlying zookeeper client's EventThread.
  */
-class ZooKeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTimeoutMs: Int,
+class ZooKeeperClient(connectString: String,
+                      sessionTimeoutMs: Int,
+                      connectionTimeoutMs: Int,
+                      maxInFlightRequests: Int,
                       stateChangeHandler: StateChangeHandler) extends Logging {
   this.logIdent = "[ZooKeeperClient] "
   private val initializationLock = new ReentrantReadWriteLock()
@@ -47,6 +51,7 @@ class ZooKeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTi
   private val isConnectedOrExpiredCondition = isConnectedOrExpiredLock.newCondition()
   private val zNodeChangeHandlers = new ConcurrentHashMap[String, ZNodeChangeHandler]().asScala
   private val zNodeChildChangeHandlers = new ConcurrentHashMap[String, ZNodeChildChangeHandler]().asScala
+  private val inFlightRequests = new Semaphore(maxInFlightRequests)
 
   info(s"Initializing a new session to $connectString.")
   @volatile private var zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher)
@@ -81,9 +86,17 @@ class ZooKeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTi
       val responseQueue = new ArrayBlockingQueue[Req#Response](requests.size)
 
       requests.foreach { request =>
-        send(request) { response =>
-          responseQueue.add(response)
-          countDownLatch.countDown()
+        inFlightRequests.acquire()
+        try {
+          send(request) { response =>
+            responseQueue.add(response)
+            inFlightRequests.release()
+            countDownLatch.countDown()
+          }
+        } catch {
+          case e: Throwable =>
+            inFlightRequests.release()
+            throw e
         }
       }
       countDownLatch.await()
