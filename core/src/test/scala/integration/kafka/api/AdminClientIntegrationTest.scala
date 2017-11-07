@@ -706,7 +706,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   }
 
   @Test
-  def testSeekToBeginningAfterDeleteRecords(): Unit = {
+  def testSeekAfterDeleteRecords(): Unit = {
     TestUtils.createTopic(zkUtils, topic, 2, serverCount, servers)
 
     client = AdminClient.create(createConfig)
@@ -721,47 +721,12 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(5L)).asJava)
     val lowWatermark = result.lowWatermarks().get(topicPartition).get()
     assertEquals(5L, lowWatermark)
+
     consumer.seekToBeginning(Collections.singletonList(topicPartition))
     assertEquals(5L, consumer.position(topicPartition))
 
-    client.close()
-  }
-
-  @Test
-  def testConsumeAfterDeleteRecords(): Unit = {
-    TestUtils.createTopic(zkUtils, topic, 2, serverCount, servers)
-
-    client = AdminClient.create(createConfig)
-
-    val consumer = consumers.head
-    subscribeAndWaitForAssignment(topic, consumer)
-
-    sendRecords(producers.head, 10, topicPartition)
-    var messageCount = 0
-    TestUtils.waitUntilTrue(() => {
-      messageCount += consumer.poll(0).count()
-      messageCount == 10
-    }, "Expected 10 messages", 3000L)
-
-    var result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(3L)).asJava)
-    var lowWatermark = result.lowWatermarks().get(topicPartition).get()
-    assertEquals(3L, lowWatermark)
-    consumer.seek(topicPartition, 1L)
-    messageCount = 0
-    TestUtils.waitUntilTrue(() => {
-      messageCount += consumer.poll(0).count()
-      messageCount == 7
-    }, "Expected 7 messages", 3000L)
-
-    result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(8L)).asJava)
-    lowWatermark = result.lowWatermarks().get(topicPartition).get()
-    assertEquals(8L, lowWatermark)
-    consumer.seek(topicPartition, 1L)
-    messageCount = 0
-    TestUtils.waitUntilTrue(() => {
-      messageCount += consumer.poll(0).count()
-      messageCount == 2
-    }, "Expected 2 messages", 3000L)
+    consumer.seek(topicPartition, 7L)
+    assertEquals(7L, consumer.position(topicPartition))
 
     client.close()
   }
