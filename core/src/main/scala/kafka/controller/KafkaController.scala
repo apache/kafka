@@ -833,6 +833,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     }
     if (!isTriggeredByAutoRebalance) {
       zkClient.deletePreferredReplicaElection()
+      // Ensure we detect future preferred replica leader elections
       eventManager.put(PreferredReplicaLeaderElection)
     }
   }
