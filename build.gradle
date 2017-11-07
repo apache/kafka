@@ -218,10 +218,14 @@ project(':core') {
     testCompile project(':clients')
     if (scalaVersion.startsWith('2.10')) {
       testCompile 'org.scalatest:scalatest_2.10:1.9.1'
-    } else if (scalaVersion.startsWith('2.11') || scalaVersion.startsWith('2.12')) {
+    } else if (scalaVersion.startsWith('2.11')) {
       compile 'org.scala-lang.modules:scala-xml_2.11:1.0.6'
       compile 'org.scala-lang.modules:scala-parser-combinators_2.11:1.0.6'
       testCompile "org.scalatest:scalatest_2.11:2.2.0"
+    } else if (scalaVersion.startsWith('2.12')) {
+      compile 'org.scala-lang.modules:scala-xml_2.12:1.0.6'
+      compile 'org.scala-lang.modules:scala-parser-combinators_2.12:1.0.6'
+      testCompile "org.scalatest:scalatest_2.12:3.0.4"
     } else {
       testCompile "org.scalatest:scalatest_$scalaVersion:1.8"
     }
