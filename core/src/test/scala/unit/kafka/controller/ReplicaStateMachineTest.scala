@@ -240,7 +240,7 @@ class ReplicaStateMachineTest extends JUnitSuite {
 
   @Test
   def testOfflineReplicaToReplicaDeletionStartedTransition(): Unit = {
-    val callbacks = (new Callbacks.CallbackBuilder).build
+    val callbacks = new Callbacks()
     replicaState.put(replica, OfflineReplica)
     EasyMock.expect(mockControllerBrokerRequestBatch.newBatch())
     EasyMock.expect(mockControllerBrokerRequestBatch.addStopReplicaRequestForBrokers(Seq(brokerId),

@@ -18,7 +18,6 @@ package kafka.controller
 
 import kafka.api.LeaderAndIsr
 import kafka.common.StateChangeFailedException
-import kafka.controller.Callbacks.CallbackBuilder
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import kafka.zk.{KafkaZkClient, TopicPartitionStateZNode}
@@ -96,7 +95,7 @@ class ReplicaStateMachine(config: KafkaConfig,
   }
 
   def handleStateChanges(replicas: Seq[PartitionAndReplica], targetState: ReplicaState,
-                         callbacks: Callbacks = (new CallbackBuilder).build): Unit = {
+                         callbacks: Callbacks = new Callbacks()): Unit = {
     if (replicas.nonEmpty) {
       try {
         controllerBrokerRequestBatch.newBatch()

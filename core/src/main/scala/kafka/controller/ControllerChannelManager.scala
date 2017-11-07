@@ -506,17 +506,4 @@ case class ControllerBrokerStateInfo(networkClient: NetworkClient,
 
 case class StopReplicaRequestInfo(replica: PartitionAndReplica, deletePartition: Boolean, callback: AbstractResponse => Unit)
 
-class Callbacks private (var stopReplicaResponseCallback: (AbstractResponse, Int) => Unit)
-
-object Callbacks {
-  class CallbackBuilder {
-    var stopReplicaResponseCbk: (AbstractResponse, Int) => Unit = null
-
-    def stopReplicaCallback(cbk: (AbstractResponse, Int) => Unit): CallbackBuilder = {
-      stopReplicaResponseCbk = cbk
-      this
-    }
-
-    def build: Callbacks = new Callbacks(stopReplicaResponseCbk)
-  }
-}
+class Callbacks(val stopReplicaResponseCallback: (AbstractResponse, Int) => Unit = (_, _ ) => ())
