@@ -116,7 +116,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   private val lock = new ReentrantReadWriteLock()
   private val delayQueue = new DelayQueue[ThrottledResponse]()
   private val sensorAccessor = new SensorAccess(lock, metrics)
-  val throttledRequestReaper = new ThrottledRequestReaper(delayQueue, threadNamePrefix.getOrElse(""))
+  private[server] val throttledRequestReaper = new ThrottledRequestReaper(delayQueue, threadNamePrefix.getOrElse(""))
 
   private val delayQueueSensor = metrics.sensor(quotaType + "-delayQueue")
   delayQueueSensor.add(metrics.metricName("queue-size",
