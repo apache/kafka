@@ -369,8 +369,8 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
     val controllerId = zkUtils.getController()
     val controller = servers.find(p => p.config.brokerId == controllerId).get.kafkaController
-    val resultQueue = new LinkedBlockingQueue[Try[Set[TopicAndPartition]]]()
-    val controlledShutdownCallback = (controlledShutdownResult: Try[Set[TopicAndPartition]]) => resultQueue.put(controlledShutdownResult)
+    val resultQueue = new LinkedBlockingQueue[Try[Set[TopicPartition]]]()
+    val controlledShutdownCallback = (controlledShutdownResult: Try[Set[TopicPartition]]) => resultQueue.put(controlledShutdownResult)
     controller.shutdownBroker(2, controlledShutdownCallback)
     var partitionsRemaining = resultQueue.take().get
     var activeServers = servers.filter(s => s.config.brokerId != 2)
