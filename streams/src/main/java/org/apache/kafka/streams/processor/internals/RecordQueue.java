@@ -185,5 +185,15 @@ public class RecordQueue {
     public void clear() {
         fifoQueue.clear();
         timeTracker.clear();
+        partitionTime = TimestampTracker.NOT_KNOWN;
+    }
+
+    /*
+     * Returns the timestamp tracker of the record queue
+     *
+     * This is only used for testing
+     */
+    TimestampTracker<ConsumerRecord<Object, Object>> timeTracker() {
+        return timeTracker;
     }
 }
