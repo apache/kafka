@@ -184,5 +184,6 @@ public class RecordQueue {
      */
     public void clear() {
         fifoQueue.clear();
+        timeTracker.clear();
     }
 }
