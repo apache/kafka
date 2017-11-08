@@ -527,6 +527,29 @@ public class SelectorTest {
         control.verify();
     }
 
+    /**
+     * Tests that channel references are not leaked when channels are closed regardless
+     * of whether channel has been muted. Channels hold a reference to the last send.
+     * Test checks that channels created with large sends can be created and closed
+     * without running out of memory.
+     */
+    @Test
+    public void testChannelReferencesCleared() throws Exception {
+        int sendSize = 50 * 1024 * 1024;
+        for (int i = 0; i < 100; i++) {
+            createSendAndClose("node1-" + i, sendSize, false);
+            createSendAndClose("node2-" + i, sendSize, true);
+        }
+    }
+
+    private void createSendAndClose(String node, int sendSize, boolean muteBeforeClose) throws IOException {
+        blockingConnect(node);
+        NetworkSend send = new NetworkSend(node, ByteBuffer.allocate(sendSize));
+        selector.send(send);
+        if (muteBeforeClose)
+            selector.mute(node);
+        selector.close(node);
+    }
 
     private String blockingRequest(String node, String s) throws IOException {
         selector.send(createSend(node, s));

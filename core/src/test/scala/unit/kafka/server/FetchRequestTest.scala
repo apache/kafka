@@ -16,6 +16,7 @@
   */
 package kafka.server
 
+import java.io.DataInputStream
 import java.util
 import java.util.Properties
 
@@ -28,7 +29,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{Record, RecordBatch}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
-import org.apache.kafka.common.serialization.StringSerializer
+import org.apache.kafka.common.serialization.{ByteArraySerializer, StringSerializer}
 import org.junit.Assert._
 import org.junit.Test
 
@@ -44,7 +45,8 @@ class FetchRequestTest extends BaseRequestTest {
   private var producer: KafkaProducer[String, String] = null
 
   override def tearDown() {
-    producer.close()
+    if (producer != null)
+      producer.close()
     super.tearDown()
   }
 
@@ -166,6 +168,58 @@ class FetchRequestTest extends BaseRequestTest {
     assertTrue(partitionData.highWatermark > 0)
     assertEquals(maxPartitionBytes, partitionData.records.sizeInBytes)
     assertEquals(0, records(partitionData).map(_.sizeInBytes).sum)
+  }
+
+  /**
+   * Tests that down-conversions dont leak memory. Large down conversions are triggered
+   * in the server where the client closes connection. If references to byte arrays are
+   * not released this will OOM.
+   */
+  @Test
+  def testDownConversionWithConnectionFailure(): Unit = {
+    val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1).head
+
+    val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
+      retries = 5, keySerializer = new StringSerializer, valueSerializer = new ByteArraySerializer)
+    try {
+      val bytes = new Array[Byte](100 * 1000)
+      for (i <- 0 to 3000) {
+        producer.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
+          "key", bytes))
+      }
+      producer.flush()
+    } finally {
+      producer.close()
+    }
+
+    def fetch(version: Short, waitForResponse: Boolean): Option[FetchResponse] = {
+      val maxPartitionBytes = 100 * 1024 * 1024
+      val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(maxPartitionBytes,
+        Seq(topicPartition))).build(version)
+
+      val socket = connect(brokerSocketServer(leaderId))
+      try {
+        val header = nextRequestHeader(ApiKeys.FETCH, fetchRequest.version)
+        val serializedBytes = fetchRequest.serialize(header).array
+        sendRequest(socket, serializedBytes)
+        if (waitForResponse) {
+          val response = receiveResponse(socket)
+          Some(FetchResponse.parse(skipResponseHeader(response), version))
+        } else {
+          // read some data to ensure broker has muted this channel
+          new DataInputStream(socket.getInputStream).readInt()
+          None
+        }
+      } finally {
+        socket.close()
+      }
+    }
+
+    (0 to 30).foreach(_ => fetch(1, false))
+
+    val fetchResponse = fetch(1, true).getOrElse(throw new IllegalStateException("No fetch response"))
+    val partitionData = fetchResponse.responseData.get(topicPartition)
+    assertEquals(Errors.NONE, partitionData.error)
   }
 
   /**

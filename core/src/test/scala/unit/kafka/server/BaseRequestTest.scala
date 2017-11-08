@@ -80,14 +80,14 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
     new Socket("localhost", s.boundPort(ListenerName.forSecurityProtocol(protocol)))
   }
 
-  private def sendRequest(socket: Socket, request: Array[Byte]) {
+  def sendRequest(socket: Socket, request: Array[Byte]) {
     val outgoing = new DataOutputStream(socket.getOutputStream)
     outgoing.writeInt(request.length)
     outgoing.write(request)
     outgoing.flush()
   }
 
-  private def receiveResponse(socket: Socket): Array[Byte] = {
+  def receiveResponse(socket: Socket): Array[Byte] = {
     val incoming = new DataInputStream(socket.getInputStream)
     val len = incoming.readInt()
     val response = new Array[Byte](len)
