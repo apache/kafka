@@ -175,4 +175,8 @@ class DynamicConfigManager(private val oldZkUtils: ZkUtils,
         }
     }
   }
+
+  def shutdown(): Unit = {
+    configChangeListener.close()
+  }
 }
