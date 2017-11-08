@@ -1201,6 +1201,42 @@ public class FetcherTest {
     }
 
     @Test
+    public void testFetcherLeadMetric() {
+        subscriptions.assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        MetricName minLeadMetric = metrics.metricInstance(metricsRegistry.recordsLeadMin);
+        MetricName partitionLeadMetric = metrics.metricName(tp0 + ".records-lead", metricGroup);
+
+        Map<MetricName, KafkaMetric> allMetrics = metrics.metrics();
+        KafkaMetric recordsFetchLeadMin = allMetrics.get(minLeadMetric);
+
+        // recordsFetchLeadMin should be initialized to MAX_VALUE
+        assertEquals(Double.MAX_VALUE, recordsFetchLeadMin.value(), EPSILON);
+
+        // recordsFetchLeadMin should be position - logStartOffset after receiving an empty FetchResponse
+        fetchRecords(tp0, MemoryRecords.EMPTY, Errors.NONE, 100L, -1L, 0L, 0);
+        assertEquals(0L, recordsFetchLeadMin.value(), EPSILON);
+
+        KafkaMetric partitionLead = allMetrics.get(partitionLeadMetric);
+        assertEquals(0L, partitionLead.value(), EPSILON);
+
+        // recordsFetchLeadMin should be position - logStartOffset after receiving a non-empty FetchResponse
+        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
+                TimestampType.CREATE_TIME, 0L);
+        for (int v = 0; v < 3; v++) {
+            builder.appendWithOffset(v, RecordBatch.NO_TIMESTAMP, "key".getBytes(), ("value-" + v).getBytes());
+        }
+        fetchRecords(tp0, builder.build(), Errors.NONE, 200L, -1L, 0L, 0);
+        assertEquals(0L, recordsFetchLeadMin.value(), EPSILON);
+        assertEquals(3L, partitionLead.value(), EPSILON);
+
+        // verify de-registration of partition lag
+        subscriptions.unsubscribe();
+        assertFalse(allMetrics.containsKey(partitionLeadMetric));
+    }
+
+    @Test
     public void testReadCommittedLagMetric() {
         Metrics metrics = new Metrics();
         fetcher = createFetcher(subscriptions, metrics, new ByteArrayDeserializer(),
@@ -1405,6 +1441,14 @@ public class FetcherTest {
             TopicPartition tp, MemoryRecords records, Errors error, long hw, long lastStableOffset, int throttleTime) {
         assertEquals(1, fetcher.sendFetches());
         client.prepareResponse(fetchResponse(tp, records, error, hw, lastStableOffset, throttleTime));
+        consumerClient.poll(0);
+        return fetcher.fetchedRecords();
+    }
+
+    private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchRecords(
+            TopicPartition tp, MemoryRecords records, Errors error, long hw, long lastStableOffset, long logStartOffset, int throttleTime) {
+        assertEquals(1, fetcher.sendFetches());
+        client.prepareResponse(fetchResponse(tp, records, error, hw, lastStableOffset, logStartOffset, throttleTime));
         consumerClient.poll(0);
         return fetcher.fetchedRecords();
     }
@@ -2029,6 +2073,13 @@ public class FetcherTest {
                                         long lastStableOffset, int throttleTime) {
         Map<TopicPartition, FetchResponse.PartitionData> partitions = Collections.singletonMap(tp,
                 new FetchResponse.PartitionData(error, hw, lastStableOffset, 0L, null, records));
+        return new FetchResponse(new LinkedHashMap<>(partitions), throttleTime);
+    }
+
+    private FetchResponse fetchResponse(TopicPartition tp, MemoryRecords records, Errors error, long hw,
+                                        long lastStableOffset, long logStartOffset, int throttleTime) {
+        Map<TopicPartition, FetchResponse.PartitionData> partitions = Collections.singletonMap(tp,
+                new FetchResponse.PartitionData(error, hw, lastStableOffset, logStartOffset, null, records));
         return new FetchResponse(new LinkedHashMap<>(partitions), throttleTime);
     }
 

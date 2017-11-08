@@ -44,6 +44,7 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Meter;
+import org.apache.kafka.common.metrics.stats.Min;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.BufferSupplier;
@@ -578,6 +579,11 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 if (partitionLag != null)
                     this.sensors.recordPartitionLag(partitionRecords.partition, partitionLag);
 
+                Long lead = subscriptions.partitionLead(partitionRecords.partition);
+                if (lead != null) {
+                    this.sensors.recordPartitionLead(partitionRecords.partition, lead);
+                }
+
                 return partRecords;
             } else {
                 // these records aren't next in line based on the last consumed position, ignore them
@@ -858,6 +864,11 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 if (partition.highWatermark >= 0) {
                     log.trace("Updating high watermark for partition {} to {}", tp, partition.highWatermark);
                     subscriptions.updateHighWatermark(tp, partition.highWatermark);
+                }
+
+                if (partition.logStartOffset >= 0) {
+                    log.trace("Updating log start offset for partition {} to {}", tp, partition.logStartOffset);
+                    subscriptions.updateLogStartOffset(tp, partition.logStartOffset);
                 }
 
                 if (partition.lastStableOffset >= 0) {
@@ -1250,6 +1261,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         private final Sensor recordsFetched;
         private final Sensor fetchLatency;
         private final Sensor recordsFetchLag;
+        private final Sensor recordsFetchLead;
 
         private Set<TopicPartition> assignedPartitions;
 
@@ -1276,6 +1288,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
             this.recordsFetchLag = metrics.sensor("records-lag");
             this.recordsFetchLag.add(metrics.metricInstance(metricsRegistry.recordsLagMax), new Max());
+
+            this.recordsFetchLead = metrics.sensor("records-lead");
+            this.recordsFetchLead.add(metrics.metricInstance(metricsRegistry.recordsLeadMin), new Min());
         }
 
         private void recordTopicFetchMetrics(String topic, int bytes, int records) {
@@ -1314,11 +1329,33 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         private void updatePartitionLagSensors(Set<TopicPartition> assignedPartitions) {
             if (this.assignedPartitions != null) {
                 for (TopicPartition tp : this.assignedPartitions) {
-                    if (!assignedPartitions.contains(tp))
+                    if (!assignedPartitions.contains(tp)) {
                         metrics.removeSensor(partitionLagMetricName(tp));
+                        metrics.removeSensor(partitionLeadMetricName(tp));
+                    }
                 }
             }
             this.assignedPartitions = assignedPartitions;
+        }
+
+        private void recordPartitionLead(TopicPartition tp, long lead) {
+            this.recordsFetchLead.record(lead);
+
+            String name = partitionLeadMetricName(tp);
+            Sensor recordsLead = this.metrics.getSensor(name);
+            if (recordsLead == null) {
+                recordsLead = this.metrics.sensor(name);
+                recordsLead.add(this.metrics.metricName(name,
+                        metricsRegistry.partitionRecordsLead.group(),
+                        metricsRegistry.partitionRecordsLead.description()), new Value());
+                recordsLead.add(this.metrics.metricName(name + "-min",
+                        metricsRegistry.partitionRecordsLeadMin.group(),
+                        metricsRegistry.partitionRecordsLeadMin.description()), new Min());
+                recordsLead.add(this.metrics.metricName(name + "-avg",
+                        metricsRegistry.partitionRecordsLeadAvg.group(),
+                        metricsRegistry.partitionRecordsLeadAvg.description()), new Avg());
+            }
+            recordsLead.record(lead);
         }
 
         private void recordPartitionLag(TopicPartition tp, long lag) {
@@ -1343,6 +1380,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
         private static String partitionLagMetricName(TopicPartition tp) {
             return tp + ".records-lag";
+        }
+
+        private static String partitionLeadMetricName(TopicPartition tp) {
+            return tp + ".records-lead";
         }
     }
 

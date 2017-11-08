@@ -1404,6 +1404,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       val expectedLag = numMessages - records.count
       assertEquals(s"The lag should be $expectedLag", expectedLag, fetchLag0.value, epsilon)
 
+      val fetchLead0 = consumer.metrics.get(new MetricName(tp + ".records-lead", "consumer-fetch-manager-metrics", "", tags))
+      assertNotNull(fetchLead0)
+      assertEquals(s"The lead should be $records.count", records.count, fetchLead0.value, epsilon)
+
       // Remove topic from subscription
       consumer.subscribe(List(topic2).asJava, listener0)
       TestUtils.waitUntilTrue(() => {
@@ -1413,6 +1417,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       // Verify the metric has gone
       assertNull(consumer.metrics.get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags)))
       assertNull(consumer.metrics.get(new MetricName(tp2 + ".records-lag", "consumer-fetch-manager-metrics", "", tags)))
+      assertNull(consumer.metrics.get(new MetricName(tp + ".records-lead", "consumer-fetch-manager-metrics", "", tags)))
+      assertNull(consumer.metrics.get(new MetricName(tp2 + ".records-lead", "consumer-fetch-manager-metrics", "", tags)))
     } finally {
       consumer.close()
     }
@@ -1438,13 +1444,17 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       // Verify the metric exist.
       val tags = Collections.singletonMap("client-id", "testPerPartitionLagMetricsCleanUpWithAssign")
       val fetchLag = consumer.metrics.get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags))
+      val fetchLead = consumer.metrics.get(new MetricName(tp + ".records-lead", "consumer-fetch-manager-metrics", "", tags))
       assertNotNull(fetchLag)
+      assertNotNull(fetchLead)
       val expectedLag = numMessages - records.count
       assertEquals(s"The lag should be $expectedLag", expectedLag, fetchLag.value, epsilon)
+      assertEquals(s"The lead should be $records.count", records.count, fetchLead.value, epsilon)
 
       consumer.assign(List(tp2).asJava)
       TestUtils.waitUntilTrue(() => !consumer.poll(100).isEmpty, "Consumer did not consume any message before timeout.")
       assertNull(consumer.metrics.get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags)))
+      assertNull(consumer.metrics.get(new MetricName(tp + ".records-lead", "consumer-fetch-manager-metrics", "", tags)))
     } finally {
       consumer.close()
     }
@@ -1468,7 +1478,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       }, "Consumer did not consume any message before timeout.")
       val tags = Collections.singletonMap("client-id", "testPerPartitionLagWithMaxPollRecords")
       val lag = consumer.metrics.get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags))
+      val lead = consumer.metrics.get(new MetricName(tp + ".records-lead", "consumer-fetch-manager-metrics", "", tags))
       assertEquals(s"The lag should be ${numMessages - records.count}", numMessages - records.count, lag.value, epsilon)
+      assertEquals(s"The lead should be ${records.count}", records.count, lead.value, epsilon)
     } finally {
       consumer.close()
     }
