@@ -180,7 +180,7 @@ public class RecordQueue {
     }
 
     /**
-     * Clear the fifo queue of its elements
+     * Clear the fifo queue of its elements, also clear the time tracker's kept stamped elements
      */
     public void clear() {
         fifoQueue.clear();
