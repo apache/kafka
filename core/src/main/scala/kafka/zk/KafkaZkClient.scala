@@ -772,9 +772,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     val path = AclChangeNotificationSequenceZNode.createPath
     val createRequest = CreateRequest(path, AclChangeNotificationSequenceZNode.encode(resourceName), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
     val createResponse = retryRequestUntilConnected(createRequest)
-    if (createResponse.resultCode != Code.OK) {
-      throw createResponse.resultException.get
-    }
+    createResponse.resultException.foreach(e => throw e)
   }
 
   /**
@@ -972,11 +970,9 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     val setDataResponse = setConsumerOffset(group, topicPartition, offset)
     if (setDataResponse.resultCode == Code.NONODE) {
       val createResponse = createConsumerOffset(group, topicPartition, offset)
-      if (createResponse.resultCode != Code.OK) {
-        throw createResponse.resultException.get
-      }
-    } else if (setDataResponse.resultCode != Code.OK) {
-      throw setDataResponse.resultException.get
+      createResponse.resultException.foreach(e => throw e)
+    } else {
+      setDataResponse.resultException.foreach(e => throw e)
     }
   }
 
