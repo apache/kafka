@@ -256,7 +256,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       val newAcls = getNewAcls(currentVersionedAcls.acls)
       val (updateSucceeded, updateVersion) =
         if (newAcls.nonEmpty) {
-         zkClient.conditionalSetOrCreateAclsForResource(resource, newAcls, currentVersionedAcls.zkVersion)
+          zkClient.conditionalSetOrCreateAclsForResource(resource, newAcls, currentVersionedAcls.zkVersion)
         } else {
           trace(s"Deleting path for $resource because it had no ACLs remaining")
           (zkClient.conditionalDelete(resource, currentVersionedAcls.zkVersion), 0)

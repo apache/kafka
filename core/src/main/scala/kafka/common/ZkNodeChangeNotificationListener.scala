@@ -20,7 +20,7 @@ import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.utils.{Logging, ShutdownableThread}
-import kafka.zk.KafkaZkClient
+import kafka.zk.{KafkaZkClient, StateChangeHandlers}
 import kafka.zookeeper.{StateChangeHandler, ZNodeChildChangeHandler}
 import org.apache.kafka.common.utils.Time
 
@@ -142,7 +142,7 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
   }
 
   object ZkStateChangeListener extends  StateChangeHandler {
-    override val name: String = seqNodeRoot
+    override val name: String = StateChangeHandlers.zkNodeChangeListenerHandler(seqNodeRoot)
     override def afterInitializingSession(): Unit = addChangeNotification
     override def onReconnectionTimeout(): Unit = error("Reconnection timeout.")
   }

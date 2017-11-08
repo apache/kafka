@@ -738,7 +738,6 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
       case Code.BADVERSION =>
         (false, 0)
       case _ =>
-        error(s"Error while updating node at $resource")
         throw setDataResponse.resultException.get
     }
   }
