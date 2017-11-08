@@ -519,7 +519,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
    */
   def startup() = {
     zkClient.registerStateChangeHandler(new StateChangeHandler {
-      override val name: String = StateChangeHandlers.controllerHandler
+      override val name: String = StateChangeHandlers.ControllerHandler
       override def onReconnectionTimeout(): Unit = error("Reconnection timeout.")
       override def afterInitializingSession(): Unit = newSession()
       override def beforeInitializingSession(): Unit = expire()

@@ -256,7 +256,7 @@ object ZkVersion {
 }
 
 object StateChangeHandlers {
-  val controllerHandler = "controller-state-change-handler"
+  val ControllerHandler = "controller-state-change-handler"
   def zkNodeChangeListenerHandler(seqNodeRoot: String) = s"change-notification-$seqNodeRoot"
 }
 

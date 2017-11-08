@@ -57,7 +57,7 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
   private val isClosed = new AtomicBoolean(false)
 
   def init() {
-    zkClient.registerStateChangeHandler(ZkStateChangeListener)
+    zkClient.registerStateChangeHandler(ZkStateChangeHandler)
     zkClient.registerZNodeChildChangeHandler(ChangeNotificationHandler)
     addChangeNotification()
     thread.start()
@@ -65,7 +65,7 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
 
   def close() = {
     isClosed.set(true)
-    zkClient.unregisterStateChangeHandler(ZkStateChangeListener.name)
+    zkClient.unregisterStateChangeHandler(ZkStateChangeHandler.name)
     zkClient.unregisterZNodeChildChangeHandler(ChangeNotificationHandler.path)
     queue.clear()
     thread.shutdown()
@@ -141,7 +141,7 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
     override def handleChildChange(): Unit = addChangeNotification
   }
 
-  object ZkStateChangeListener extends  StateChangeHandler {
+  object ZkStateChangeHandler extends  StateChangeHandler {
     override val name: String = StateChangeHandlers.zkNodeChangeListenerHandler(seqNodeRoot)
     override def afterInitializingSession(): Unit = addChangeNotification
     override def onReconnectionTimeout(): Unit = error("Reconnection timeout.")
