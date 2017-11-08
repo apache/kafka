@@ -16,32 +16,18 @@
 */
 package kafka.zk
 
-import kafka.server.Defaults
-import kafka.zookeeper.ZooKeeperClient
+import java.util.UUID
+
+import kafka.security.auth._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
-import org.junit.{After, Before, Test}
+import org.junit.Test
 
 class KafkaZkClientTest extends ZooKeeperTestHarness {
 
-  private var zooKeeperClient: ZooKeeperClient = null
-  private var zkClient: KafkaZkClient = null
-
   private val group = "my-group"
   private val topicPartition = new TopicPartition("topic", 0)
-
-  @Before
-  override def setUp() {
-    super.setUp()
-    zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Defaults.ZkMaxInFlightRequests, null)
-    zkClient = new KafkaZkClient(zooKeeperClient, false)
-  }
-
-  @After
-  override def tearDown() {
-    zkClient.close()
-    super.tearDown()
-  }
 
   @Test
   def testSetAndGetConsumerOffset() {
@@ -179,4 +165,117 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertEquals(Map.empty, zkClient.getPartitionReassignment)
   }
 
+  @Test
+  def testGetDataAndStat() {
+    val path = "/testpath"
+
+    // test with non-existing path
+    var dataAndVersion = zkClient.getDataAndStat(path)
+    assertTrue(dataAndVersion._1.isEmpty)
+    assertEquals(0, dataAndVersion._2.getVersion)
+
+    // create a test path
+    zkClient.createRecursive(path)
+    zkClient.conditionalUpdatePath(path, "version1", 0)
+
+    // test with existing path
+    dataAndVersion = zkClient.getDataAndStat(path)
+    assertEquals("version1", dataAndVersion._1.get)
+    assertEquals(1, dataAndVersion._2.getVersion)
+
+    zkClient.conditionalUpdatePath(path, "version2", 1)
+    dataAndVersion = zkClient.getDataAndStat(path)
+    assertEquals("version2", dataAndVersion._1.get)
+    assertEquals(2, dataAndVersion._2.getVersion)
+  }
+
+  @Test
+  def testGetChildren() {
+    val path = "/testpath"
+
+    // test with non-existing path
+    assertTrue(zkClient.getChildren(path).isEmpty)
+
+    // create child nodes
+    zkClient.createRecursive( "/testpath/child1")
+    zkClient.createRecursive( "/testpath/child2")
+    zkClient.createRecursive( "/testpath/child3")
+
+    val children = zkClient.getChildren(path)
+
+    assertEquals(3, children.size)
+    assertEquals(Set("child1","child2","child3"), children.toSet)
+  }
+
+  @Test
+  def testAclManagementMethods() {
+
+    assertFalse(zkClient.pathExists(AclZNode.path))
+    assertFalse(zkClient.pathExists(AclChangeNotificationZNode.path))
+    ResourceType.values.foreach(resource => assertFalse(zkClient.pathExists(ResourceTypeZNode.path(resource.name))))
+
+    // create acl paths
+    zkClient.createAclPaths
+
+    assertTrue(zkClient.pathExists(AclZNode.path))
+    assertTrue(zkClient.pathExists(AclChangeNotificationZNode.path))
+    ResourceType.values.foreach(resource => assertTrue(zkClient.pathExists(ResourceTypeZNode.path(resource.name))))
+
+    val resource1 = new Resource(Topic, UUID.randomUUID().toString)
+    val resource2 = new Resource(Topic, UUID.randomUUID().toString)
+
+    // try getting acls for non-existing resource
+    var versionedAcls = zkClient.getVersionedAclsForResource(resource1)
+    assertTrue(versionedAcls.acls.isEmpty)
+    assertEquals(-1, versionedAcls.zkVersion)
+    assertFalse(zkClient.resourceExists(resource1))
+
+
+    val acl1 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice"), Deny, "host1" , Read)
+    val acl2 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), Allow, "*", Read)
+    val acl3 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), Deny, "host1", Read)
+
+    //create acls for resources
+    zkClient.conditionalSetOrCreateAclsForResource(resource1, Set(acl1, acl2), 0)
+    zkClient.conditionalSetOrCreateAclsForResource(resource2, Set(acl1, acl3), 0)
+
+    versionedAcls = zkClient.getVersionedAclsForResource(resource1)
+    assertEquals(Set(acl1, acl2), versionedAcls.acls)
+    assertEquals(0, versionedAcls.zkVersion)
+    assertTrue(zkClient.resourceExists(resource1))
+
+    //update acls for resource
+    zkClient.conditionalSetOrCreateAclsForResource(resource1, Set(acl1, acl3), 0)
+
+    versionedAcls = zkClient.getVersionedAclsForResource(resource1)
+    assertEquals(Set(acl1, acl3), versionedAcls.acls)
+    assertEquals(1, versionedAcls.zkVersion)
+
+    //get resource Types
+    assertTrue(ResourceType.values.map( rt => rt.name).toSet == zkClient.getResourceTypes().toSet)
+
+    //get resource name
+    val resourceNames = zkClient.getResourceNames(Topic.name)
+    assertEquals(2, resourceNames.size)
+    assertTrue(Set(resource1.name,resource2.name) == resourceNames.toSet)
+
+    //delete resource
+    assertTrue(zkClient.deleteResource(resource1))
+    assertFalse(zkClient.resourceExists(resource1))
+
+    //delete with invalid expected zk version
+    assertFalse(zkClient.conditionalDelete(resource2, 10))
+    //delete with valid expected zk version
+    assertTrue(zkClient.conditionalDelete(resource2, 0))
+
+
+    zkClient.createAclChangeNotification("resource1")
+    zkClient.createAclChangeNotification("resource2")
+
+    assertEquals(2, zkClient.getChildren(AclChangeNotificationZNode.path).size)
+
+    zkClient.deleteAclChangeNotifications()
+    assertTrue(zkClient.getChildren(AclChangeNotificationZNode.path).isEmpty)
+
+  }
 }

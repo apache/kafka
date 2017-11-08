@@ -25,9 +25,9 @@ import kafka.common._
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server._
 import kafka.utils._
-import kafka.zk._
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
-import kafka.zookeeper.{ZNodeChangeHandler, ZNodeChildChangeHandler}
+import kafka.zk._
+import kafka.zookeeper.{StateChangeHandler, ZNodeChangeHandler, ZNodeChildChangeHandler}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException}
 import org.apache.kafka.common.metrics.Metrics
@@ -518,6 +518,12 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
    * elector
    */
   def startup() = {
+    zkClient.registerStateChangeHandler(new StateChangeHandler {
+      override val name: String = StateChangeHandlers.ControllerHandler
+      override def onReconnectionTimeout(): Unit = error("Reconnection timeout.")
+      override def afterInitializingSession(): Unit = newSession()
+      override def beforeInitializingSession(): Unit = expire()
+    })
     eventManager.put(Startup)
     eventManager.start()
   }
