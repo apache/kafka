@@ -189,10 +189,10 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 final ConsumerRecords<byte[], byte[]> records = globalConsumer.poll(100);
                 final List<KeyValue<byte[], byte[]>> restoreRecords = new ArrayList<>();
                 for (ConsumerRecord<byte[], byte[]> record : records) {
-                    offset = record.offset() + 1;
                     if (record.key() != null) {
                         restoreRecords.add(KeyValue.pair(record.key(), record.value()));
                     }
+                    offset = consumer.position(topicPartition);
                 }
                 stateRestoreAdapter.restoreAll(restoreRecords);
                 stateRestoreListener.onBatchRestored(topicPartition, storeName, offset, restoreRecords.size());
