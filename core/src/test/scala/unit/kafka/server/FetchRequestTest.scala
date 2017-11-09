@@ -173,22 +173,17 @@ class FetchRequestTest extends BaseRequestTest {
   /**
    * Tests that down-conversions dont leak memory. Large down conversions are triggered
    * in the server. The client closes its connection after reading partial data when the
-   * channel is muted in the server. Tests that the memory used has not increased
-   * significantly after a couple of clients are closed.
+   * channel is muted in the server. If buffers are not released this will result in OOM.
    */
   @Test
   def testDownConversionWithConnectionFailure(): Unit = {
-    def memoryInUse: Long = {
-      System.gc()
-      Runtime.getRuntime.totalMemory - Runtime.getRuntime.freeMemory
-    }
-    val startMem = memoryInUse
     val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1).head
 
     val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
       retries = 5, keySerializer = new StringSerializer, valueSerializer = new ByteArraySerializer)
+    val msgValueLen = 100 * 1000
     try {
-      val bytes = new Array[Byte](200 * 1000)
+      val bytes = new Array[Byte](msgValueLen)
       for (i <- 0 to 1000) {
         producer.send(new ProducerRecord(topicPartition.topic, topicPartition.partition, "key", bytes))
       }
@@ -206,7 +201,8 @@ class FetchRequestTest extends BaseRequestTest {
         send(fetchRequest, ApiKeys.FETCH, socket)
         if (closeAfterPartialResponse) {
           // read some data to ensure broker has muted this channel and then close socket
-          new DataInputStream(socket.getInputStream).readInt()
+          val size = new DataInputStream(socket.getInputStream).readInt()
+          assertTrue(s"Fetch size too small $size", size > maxPartitionBytes - msgValueLen)
           None
         } else {
           Some(FetchResponse.parse(receive(socket), version))
@@ -217,17 +213,14 @@ class FetchRequestTest extends BaseRequestTest {
     }
 
     val version = 1.toShort
-    (0 to 2).par.foreach(_ => fetch(version, maxPartitionBytes = 200 * 1024 * 1024, closeAfterPartialResponse = true))
+    (0 to 15).foreach(_ => fetch(version, maxPartitionBytes = msgValueLen * 1000, closeAfterPartialResponse = true))
 
-    val response = fetch(version, maxPartitionBytes = 1024 * 1024, closeAfterPartialResponse = false)
+    val response = fetch(version, maxPartitionBytes = msgValueLen * 3, closeAfterPartialResponse = false)
     val fetchResponse = response.getOrElse(throw new IllegalStateException("No fetch response"))
     val partitionData = fetchResponse.responseData.get(topicPartition)
     assertEquals(Errors.NONE, partitionData.error)
-
-    val memDiff = memoryInUse - startMem
-    // Since we cannot rely on exact values of used memory, tolerate large difference
-    // in memory and only check for leaks of large byte arrays
-    assertTrue(s"Too much memory in use: $memDiff", memDiff < 200 * 1024 * 1024)
+    val batches = partitionData.records.batches.asScala.toBuffer
+    assertEquals(2, batches.size)
   }
 
   /**
