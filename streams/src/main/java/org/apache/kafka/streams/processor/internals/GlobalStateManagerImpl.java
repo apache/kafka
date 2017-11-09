@@ -173,10 +173,10 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             while (offset < highWatermark) {
                 final ConsumerRecords<byte[], byte[]> records = consumer.poll(100);
                 for (ConsumerRecord<byte[], byte[]> record : records) {
-                    offset = record.offset() + 1;
                     if (record.key() != null) {
                         stateRestoreCallback.restore(record.key(), record.value());
                     }
+                    offset = consumer.position(topicPartition);
                 }
             }
             checkpointableOffsets.put(topicPartition, offset);
