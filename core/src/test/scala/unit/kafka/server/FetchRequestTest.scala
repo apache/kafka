@@ -186,15 +186,17 @@ class FetchRequestTest extends BaseRequestTest {
     val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
       retries = 5, lingerMs = Long.MaxValue,
       keySerializer = new StringSerializer, valueSerializer = new ByteArraySerializer, props = Some(propsOverride))
-    try {
-      val bytes = new Array[Byte](msgValueLen)
-      for (i <- 0 to 1000) {
+    val bytes = new Array[Byte](msgValueLen)
+    val futures = try {
+      (0 to 1000).map { _ =>
         producer.send(new ProducerRecord(topicPartition.topic, topicPartition.partition, "key", bytes))
       }
-      producer.flush()
     } finally {
       producer.close()
     }
+    // Check futures to ensure sends succeeded, but do this after close since the last
+    // batch is not complete, but sent when the producer is closed
+    futures.foreach(_.get)
 
     def fetch(version: Short, maxPartitionBytes: Int, closeAfterPartialResponse: Boolean): Option[FetchResponse] = {
       val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(maxPartitionBytes,
@@ -206,7 +208,11 @@ class FetchRequestTest extends BaseRequestTest {
         if (closeAfterPartialResponse) {
           // read some data to ensure broker has muted this channel and then close socket
           val size = new DataInputStream(socket.getInputStream).readInt()
-          assertTrue(s"Fetch size too small $size", size > maxPartitionBytes - batchSize)
+          // Check that we have received almost `maxPartitionBytes` (minus a tolerance) since in
+          // the case of OOM, the size will be significantly smaller. We can't check for exactly
+          // maxPartitionBytes since we use approx message sizes that includes only the message value.
+          assertTrue(s"Fetch size too small $size, broker may have run out of memory",
+              size > maxPartitionBytes - batchSize)
           None
         } else {
           Some(FetchResponse.parse(receive(socket), version))
@@ -224,7 +230,7 @@ class FetchRequestTest extends BaseRequestTest {
     val partitionData = fetchResponse.responseData.get(topicPartition)
     assertEquals(Errors.NONE, partitionData.error)
     val batches = partitionData.records.batches.asScala.toBuffer
-    assertEquals(3, batches.size)
+    assertEquals(3, batches.size) // size is 3 (not 4) since maxPartitionBytes=msgValueSize*4, excluding key and headers
   }
 
   /**
