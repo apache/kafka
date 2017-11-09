@@ -1077,4 +1077,15 @@ public class Selector implements Selectable, AutoCloseable {
     boolean isMadeReadProgressLastPoll() {
         return madeReadProgressLastPoll;
     }
+
+    //package-private for testing
+    boolean isEmpty() {
+        // Split the checks to keep checkstyle happy
+        boolean isEmpty = channels.isEmpty() && closingChannels.isEmpty() &&
+                explicitlyMutedChannels.isEmpty() && stagedReceives.isEmpty();
+        isEmpty &= immediatelyConnectedKeys.isEmpty() && keysWithBufferedRead.isEmpty() &&
+                connected.isEmpty() && disconnected.isEmpty() && failedSends.isEmpty();
+        isEmpty &= completedSends.isEmpty() && completedReceives.isEmpty();
+        return isEmpty;
+    }
 }
