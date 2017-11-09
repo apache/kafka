@@ -77,6 +77,7 @@ class KafkaApisTest {
   @After
   def tearDown() {
     quotas.shutdown()
+    metrics.close()
   }
 
   def createKafkaApis(interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion): KafkaApis = {

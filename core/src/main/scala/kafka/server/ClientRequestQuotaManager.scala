@@ -27,7 +27,7 @@ import org.apache.kafka.common.utils.Time
 class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
                                 private val metrics: Metrics,
                                 private val time: Time,
-                                threadNamePrefix: Option[String] = None)
+                                threadNamePrefix: String)
                                 extends ClientQuotaManager(config, metrics, QuotaType.Request, time, threadNamePrefix) {
   val maxThrottleTimeMs = TimeUnit.SECONDS.toMillis(this.config.quotaWindowSizeSeconds)
   def exemptSensor = getOrCreateSensor(exemptSensorName, exemptMetricName)

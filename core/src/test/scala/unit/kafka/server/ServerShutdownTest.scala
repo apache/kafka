@@ -26,9 +26,12 @@ import java.io.File
 
 import kafka.log.LogManager
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.serialization.{IntegerSerializer, StringSerializer}
+import org.I0Itec.zkclient.exception.ZkException
 import org.junit.{Before, Test}
 import org.junit.Assert._
+import scala.reflect.ClassTag
 
 class ServerShutdownTest extends ZooKeeperTestHarness {
   var config: KafkaConfig = null
@@ -127,7 +130,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     val newProps = TestUtils.createBrokerConfig(0, zkConnect)
     newProps.setProperty("zookeeper.connect", "fakehostthatwontresolve:65535")
     val newConfig = KafkaConfig.fromProps(newProps)
-    verifyCleanShutdownAfterFailedStartup(newConfig, classOf[org.I0Itec.zkclient.exception.ZkException])
+    verifyCleanShutdownAfterFailedStartup[ZkException](newConfig)
   }
 
   @Test
@@ -139,12 +142,12 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     server.awaitShutdown()
     config.logDirs.foreach { dirName =>
       val partitionDir = new File(dirName, s"$topic-0")
-      partitionDir.listFiles().foreach( f => TestUtils.appendNonsenseToFile(f, TestUtils.random.nextInt(1024) + 1))
+      partitionDir.listFiles.foreach(f => TestUtils.appendNonsenseToFile(f, TestUtils.random.nextInt(1024) + 1))
     }
-    verifyCleanShutdownAfterFailedStartup(config, classOf[org.apache.kafka.common.errors.KafkaStorageException])
+    verifyCleanShutdownAfterFailedStartup[KafkaStorageException](config)
   }
 
-  private def verifyCleanShutdownAfterFailedStartup(config: KafkaConfig, exceptionClass: Class[_ <: Exception]) {
+  private def verifyCleanShutdownAfterFailedStartup[E <: Exception](config: KafkaConfig)(implicit exceptionClassTag: ClassTag[E]) {
     val server = new KafkaServer(config, threadNamePrefix = Option(this.getClass.getName))
     try {
       server.startup()
@@ -155,7 +158,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
       // identify the correct exception, making sure the server was shutdown, and cleaning up if anything
       // goes wrong so that awaitShutdown doesn't hang
       case e: Exception =>
-        assertTrue(s"Unexpected exception $e", exceptionClass.isInstance(e))
+        assertTrue(s"Unexpected exception $e", exceptionClassTag.runtimeClass.isInstance(e))
         assertEquals(NotRunning.state, server.brokerState.currentState)
     }
     finally {
