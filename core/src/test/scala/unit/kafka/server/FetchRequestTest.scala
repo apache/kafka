@@ -24,7 +24,7 @@ import kafka.api.KAFKA_0_11_0_IV2
 import kafka.log.LogConfig
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils._
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{Record, RecordBatch}
@@ -179,9 +179,13 @@ class FetchRequestTest extends BaseRequestTest {
   def testDownConversionWithConnectionFailure(): Unit = {
     val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1).head
 
-    val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
-      retries = 5, keySerializer = new StringSerializer, valueSerializer = new ByteArraySerializer)
     val msgValueLen = 100 * 1000
+    val batchSize = 4 * msgValueLen
+    val propsOverride = new Properties
+    propsOverride.put(ProducerConfig.BATCH_SIZE_CONFIG, batchSize.toString)
+    val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
+      retries = 5, lingerMs = Long.MaxValue,
+      keySerializer = new StringSerializer, valueSerializer = new ByteArraySerializer, props = Some(propsOverride))
     try {
       val bytes = new Array[Byte](msgValueLen)
       for (i <- 0 to 1000) {
@@ -202,7 +206,7 @@ class FetchRequestTest extends BaseRequestTest {
         if (closeAfterPartialResponse) {
           // read some data to ensure broker has muted this channel and then close socket
           val size = new DataInputStream(socket.getInputStream).readInt()
-          assertTrue(s"Fetch size too small $size", size > maxPartitionBytes - msgValueLen)
+          assertTrue(s"Fetch size too small $size", size > maxPartitionBytes - batchSize)
           None
         } else {
           Some(FetchResponse.parse(receive(socket), version))
@@ -215,12 +219,12 @@ class FetchRequestTest extends BaseRequestTest {
     val version = 1.toShort
     (0 to 15).foreach(_ => fetch(version, maxPartitionBytes = msgValueLen * 1000, closeAfterPartialResponse = true))
 
-    val response = fetch(version, maxPartitionBytes = msgValueLen * 3, closeAfterPartialResponse = false)
+    val response = fetch(version, maxPartitionBytes = batchSize, closeAfterPartialResponse = false)
     val fetchResponse = response.getOrElse(throw new IllegalStateException("No fetch response"))
     val partitionData = fetchResponse.responseData.get(topicPartition)
     assertEquals(Errors.NONE, partitionData.error)
     val batches = partitionData.records.batches.asScala.toBuffer
-    assertEquals(2, batches.size)
+    assertEquals(3, batches.size)
   }
 
   /**
