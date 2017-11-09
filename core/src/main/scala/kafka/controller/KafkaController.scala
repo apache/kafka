@@ -124,13 +124,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
   def epoch: Int = controllerContext.epoch
 
-  def state: ControllerState = eventManager.state
-
-  def clientId: String = {
-    val controllerListener = config.listeners.find(_.listenerName == config.interBrokerListenerName).getOrElse(
-      throw new IllegalArgumentException(s"No listener with name ${config.interBrokerListenerName} is configured."))
-    "id_%d-host_%s-port_%d".format(config.brokerId, controllerListener.host, controllerListener.port)
-  }
+  private def state: ControllerState = eventManager.state
 
   /**
    * On clean shutdown, the controller first determines the partitions that the
@@ -158,7 +152,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
    * If it encounters any unexpected exception/error while becoming controller, it resigns as the current controller.
    * This ensures another controller election will be triggered and there will always be an actively serving controller
    */
-  def onControllerFailover() {
+  private def onControllerFailover() {
     info("Reading controller epoch from ZooKeeper")
     readControllerEpochFromZooKeeper()
     info("Incrementing controller epoch in ZooKeeper")
@@ -214,7 +208,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
    * This callback is invoked by the zookeeper leader elector when the current broker resigns as the controller. This is
    * required to clean up internal controller data structures
    */
-  def onControllerResignation() {
+  private def onControllerResignation() {
     debug("Resigning")
     // de-register listeners
     zkClient.unregisterZNodeChildChangeHandler(isrChangeNotificationHandler.path)
@@ -258,7 +252,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
    * have experienced new log directory failures. In response the controller should send LeaderAndIsrRequest
    * to all these brokers to query the state of their replicas
    */
-  def onBrokerLogDirFailure(brokerIds: Seq[Int]) {
+  private def onBrokerLogDirFailure(brokerIds: Seq[Int]) {
     // send LeaderAndIsrRequest for all replicas on those brokers to see if they are still online.
     val replicasOnBrokers = controllerContext.replicasOnBrokers(brokerIds.toSet)
     replicaStateMachine.handleStateChanges(replicasOnBrokers.toSeq, OnlineReplica)
@@ -278,7 +272,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
    * 2. Even if we do refresh the cache, there is no guarantee that by the time the leader and ISR request reaches
    *    every broker that it is still valid.  Brokers check the leader epoch to determine validity of the request.
    */
-  def onBrokerStartup(newBrokers: Seq[Int]) {
+  private def onBrokerStartup(newBrokers: Seq[Int]) {
     info("New broker startup callback for %s".format(newBrokers.mkString(",")))
     newBrokers.foreach(controllerContext.replicasOnOfflineDirs.remove)
     val newBrokersSet = newBrokers.toSet
@@ -314,7 +308,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
    * This callback is invoked by the replica state machine's broker change listener with the list of failed brokers
    * as input. It will call onReplicaBecomeOffline(...) with the list of replicas on those failed brokers as input.
    */
-  def onBrokerFailure(deadBrokers: Seq[Int]) {
+  private def onBrokerFailure(deadBrokers: Seq[Int]) {
     info("Broker failure callback for %s".format(deadBrokers.mkString(",")))
     deadBrokers.foreach(controllerContext.replicasOnOfflineDirs.remove)
     val deadBrokersThatWereShuttingDown =
@@ -335,7 +329,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     * the partition state machine will refresh our cache for us when performing leader election for all new/offline
     * partitions coming online.
     */
-  def onReplicasBecomeOffline(newOfflineReplicas: Set[PartitionAndReplica]): Unit = {
+  private def onReplicasBecomeOffline(newOfflineReplicas: Set[PartitionAndReplica]): Unit = {
     val (newOfflineReplicasForDeletion, newOfflineReplicasNotForDeletion) =
       newOfflineReplicas.partition(p => topicDeletionManager.isTopicQueuedUpForDeletion(p.topic))
 
@@ -371,7 +365,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
    * 1. Move the newly created partitions to the NewPartition state
    * 2. Move the newly created partitions from NewPartition->OnlinePartition state
    */
-  def onNewPartitionCreation(newPartitions: Set[TopicPartition]) {
+  private def onNewPartitionCreation(newPartitions: Set[TopicPartition]) {
     info("New partition creation callback for %s".format(newPartitions.mkString(",")))
     partitionStateMachine.handleStateChanges(newPartitions.toSeq, NewPartition)
     replicaStateMachine.handleStateChanges(controllerContext.replicasForPartition(newPartitions).toSeq, NewReplica)
@@ -420,7 +414,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
    * Note that we have to update AR in ZK with RAR last since it's the only place where we store OAR persistently.
    * This way, if the controller crashes before that step, we can still recover.
    */
-  def onPartitionReassignment(topicPartition: TopicPartition, reassignedPartitionContext: ReassignedPartitionsContext) {
+  private def onPartitionReassignment(topicPartition: TopicPartition, reassignedPartitionContext: ReassignedPartitionsContext) {
     val reassignedReplicas = reassignedPartitionContext.newReplicas
     if (!areReplicasInIsr(topicPartition, reassignedReplicas)) {
       info(s"New replicas ${reassignedReplicas.mkString(",")} for partition $topicPartition being reassigned not yet " +
@@ -471,7 +465,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     zkClient.registerZNodeChangeHandler(reassignIsrChangeHandler)
   }
 
-  def initiateReassignReplicasForTopicPartition(topicPartition: TopicPartition,
+  private def initiateReassignReplicasForTopicPartition(topicPartition: TopicPartition,
                                                 reassignedPartitionContext: ReassignedPartitionsContext) {
     val newReplicas = reassignedPartitionContext.newReplicas
     val topic = topicPartition.topic
@@ -501,7 +495,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     }
   }
 
-  def onPreferredReplicaElection(partitions: Set[TopicPartition], isTriggeredByAutoRebalance: Boolean = false) {
+  private def onPreferredReplicaElection(partitions: Set[TopicPartition], isTriggeredByAutoRebalance: Boolean = false) {
     info("Starting preferred replica leader election for partitions %s".format(partitions.mkString(",")))
     try {
       partitionStateMachine.handleStateChanges(partitions.toSeq, OnlinePartition, Option(PreferredReplicaPartitionLeaderElectionStrategy))
@@ -543,7 +537,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     controllerContext.controllerChannelManager.sendRequest(brokerId, apiKey, request, callback)
   }
 
-  def incrementControllerEpoch(): Unit = {
+  private def incrementControllerEpoch(): Unit = {
     val newControllerEpoch = controllerContext.epoch + 1
     val setDataResponse = zkClient.setControllerEpochRaw(newControllerEpoch, controllerContext.epochZkVersion)
     setDataResponse.resultCode match {
@@ -667,7 +661,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     controllerContext.controllerChannelManager.startup()
   }
 
-  def updateLeaderAndIsrCache(partitions: Seq[TopicPartition] = controllerContext.partitionReplicaAssignment.keys.toSeq) {
+  private def updateLeaderAndIsrCache(partitions: Seq[TopicPartition] = controllerContext.partitionReplicaAssignment.keys.toSeq) {
     val leaderIsrAndControllerEpochs = zkClient.getTopicPartitionStates(partitions)
     leaderIsrAndControllerEpochs.foreach { case (partition, leaderIsrAndControllerEpoch) =>
       controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
@@ -800,7 +794,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     }
   }
 
-  def removePartitionFromReassignedPartitions(topicPartition: TopicPartition) {
+  private def removePartitionFromReassignedPartitions(topicPartition: TopicPartition) {
     controllerContext.partitionsBeingReassigned.get(topicPartition).foreach { reassignContext =>
       // stop watching the ISR changes for this partition
       zkClient.unregisterZNodeChangeHandler(reassignContext.reassignIsrChangeHandler.path)
@@ -825,7 +819,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     controllerContext.partitionsBeingReassigned.remove(topicPartition)
   }
 
-  def removePartitionsFromPreferredReplicaElection(partitionsToBeRemoved: Set[TopicPartition],
+  private def removePartitionsFromPreferredReplicaElection(partitionsToBeRemoved: Set[TopicPartition],
                                                    isTriggeredByAutoRebalance : Boolean) {
     for (partition <- partitionsToBeRemoved) {
       // check the status
@@ -1128,7 +1122,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     eventManager.put(Reelect)
   }
 
-  def elect(): Unit = {
+  private def elect(): Unit = {
     val timestamp = time.milliseconds
     activeControllerId = zkClient.getControllerId.getOrElse(-1)
     /*
