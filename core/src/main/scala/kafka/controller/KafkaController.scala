@@ -837,8 +837,11 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
         warn("Partition %s failed to complete preferred replica leader election. Leader is %d".format(partition, currentLeader))
       }
     }
-    if (!isTriggeredByAutoRebalance)
+    if (!isTriggeredByAutoRebalance) {
       zkClient.deletePreferredReplicaElection()
+      // Ensure we detect future preferred replica leader elections
+      eventManager.put(PreferredReplicaLeaderElection)
+    }
   }
 
   /**
@@ -1361,14 +1364,18 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
     override def process(): Unit = {
       if (!isActive) return
-      zkClient.registerZNodeChangeHandlerAndCheckExistence(preferredReplicaElectionHandler)
-      val partitions = zkClient.getPreferredReplicaElection
-      val partitionsForTopicsToBeDeleted = partitions.filter(p => topicDeletionManager.isTopicQueuedUpForDeletion(p.topic))
-      if (partitionsForTopicsToBeDeleted.nonEmpty) {
-        error("Skipping preferred replica election for partitions %s since the respective topics are being deleted"
-          .format(partitionsForTopicsToBeDeleted))
+
+      // We need to register the watcher if the path doesn't exist in order to detect future preferred replica
+      // leader elections and we get the `path exists` check for free
+      if (zkClient.registerZNodeChangeHandlerAndCheckExistence(preferredReplicaElectionHandler)) {
+        val partitions = zkClient.getPreferredReplicaElection
+        val partitionsForTopicsToBeDeleted = partitions.filter(p => topicDeletionManager.isTopicQueuedUpForDeletion(p.topic))
+        if (partitionsForTopicsToBeDeleted.nonEmpty) {
+          error("Skipping preferred replica election for partitions %s since the respective topics are being deleted"
+            .format(partitionsForTopicsToBeDeleted))
+        }
+        onPreferredReplicaElection(partitions -- partitionsForTopicsToBeDeleted)
       }
-      onPreferredReplicaElection(partitions -- partitionsForTopicsToBeDeleted)
     }
   }
 
@@ -1480,8 +1487,6 @@ class PreferredReplicaElectionHandler(controller: KafkaController, eventManager:
   override val path: String = PreferredReplicaElectionZNode.path
 
   override def handleCreation(): Unit = eventManager.put(controller.PreferredReplicaLeaderElection)
-  override def handleDeletion(): Unit = eventManager.put(controller.PreferredReplicaLeaderElection)
-  override def handleDataChange(): Unit = eventManager.put(controller.PreferredReplicaLeaderElection)
 }
 
 class ControllerChangeHandler(controller: KafkaController, eventManager: ControllerEventManager) extends ZNodeChangeHandler {
