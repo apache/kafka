@@ -19,7 +19,7 @@ from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 
 class PerformanceService(KafkaPathResolverMixin, BackgroundThreadService):
 
-    def __init__(self, context, num_nodes, stop_timeout_sec=30):
+    def __init__(self, context=None, num_nodes=0, stop_timeout_sec=30):
         super(PerformanceService, self).__init__(context, num_nodes)
         self.results = [None] * self.num_nodes
         self.stats = [[] for x in range(self.num_nodes)]
