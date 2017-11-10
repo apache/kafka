@@ -46,7 +46,7 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import javax.ws.rs.BadRequestException;
-import javax.ws.rs.core.Response;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -67,7 +67,7 @@ public class ConnectorsResourceTest {
     // URL construction properly, avoiding //, which will mess up routing in the REST server
     private static final String LEADER_URL = "http://leader:8083/";
     private static final String CONNECTOR_NAME = "test";
-    private static final String CONNECTOR_NAME_SPECIAL_CHARS = "test?a=b&c=d\rx=1.1\n><";
+    private static final String CONNECTOR_NAME_SPECIAL_CHARS = "t?a=b&c=d\rx=1.1\n>< \t`'\" x%y+z!#$&'()*+,:;=?@[]";
     private static final String CONNECTOR2_NAME = "test2";
     private static final Boolean FORWARD = true;
     private static final Map<String, String> CONNECTOR_CONFIG_SPECIAL_CHARS = new HashMap<>();
@@ -328,8 +328,9 @@ public class ConnectorsResourceTest {
 
         PowerMock.replayAll();
 
-        Response rsp = connectorsResource.createConnector(FORWARD, body);
-        Assert.assertEquals("/connectors/test%3Fa%3Db%26c%3Dd%0Dx%3D1.1%0A%3E%3C", rsp.getLocation().toString());
+        String rspLocation = connectorsResource.createConnector(FORWARD, body).getLocation().toString();
+        String decoded = new URI(rspLocation).getPath();
+        Assert.assertEquals("/connectors/" + CONNECTOR_NAME_SPECIAL_CHARS, decoded);
 
         PowerMock.verifyAll();
     }
@@ -337,13 +338,16 @@ public class ConnectorsResourceTest {
     @Test
     public void testPutConnectorConfigWithSpecialCharsInName() throws Throwable {
         final Capture<Callback<Herder.Created<ConnectorInfo>>> cb = Capture.newInstance();
+
         herder.putConnectorConfig(EasyMock.eq(CONNECTOR_NAME_SPECIAL_CHARS), EasyMock.eq(CONNECTOR_CONFIG_SPECIAL_CHARS), EasyMock.eq(true), EasyMock.capture(cb));
         expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(CONNECTOR_NAME_SPECIAL_CHARS, CONNECTOR_CONFIG_SPECIAL_CHARS, CONNECTOR_TASK_NAMES,
                 ConnectorType.SINK)));
+
         PowerMock.replayAll();
 
-        Response rsp = connectorsResource.putConnectorConfig(CONNECTOR_NAME_SPECIAL_CHARS, FORWARD, CONNECTOR_CONFIG_SPECIAL_CHARS);
-        Assert.assertEquals("/connectors/test%3Fa%3Db%26c%3Dd%0Dx%3D1.1%0A%3E%3C", rsp.getLocation().toString());
+        String rspLocation = connectorsResource.putConnectorConfig(CONNECTOR_NAME_SPECIAL_CHARS, FORWARD, CONNECTOR_CONFIG_SPECIAL_CHARS).getLocation().toString();
+        String decoded = new URI(rspLocation).getPath();
+        Assert.assertEquals("/connectors/" + CONNECTOR_NAME_SPECIAL_CHARS, decoded);
 
         PowerMock.verifyAll();
     }

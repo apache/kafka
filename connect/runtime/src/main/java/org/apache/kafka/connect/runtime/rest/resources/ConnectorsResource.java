@@ -48,7 +48,6 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriBuilder;
 import java.net.URI;
-import java.net.URLEncoder;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -101,7 +100,9 @@ public class ConnectorsResource {
         herder.putConnectorConfig(name, configs, false, cb);
         Herder.Created<ConnectorInfo> info = completeOrForwardRequest(cb, "/connectors", "POST", createRequest,
                 new TypeReference<ConnectorInfo>() { }, new CreatedConnectorInfoTranslator(), forward);
-        return Response.created(URI.create("/connectors/" + URLEncoder.encode(name, "UTF-8"))).entity(info.result()).build();
+
+        URI location = UriBuilder.fromUri("/connectors").path(name).build();
+        return Response.created(location).entity(info.result()).build();
     }
 
     @GET
@@ -146,10 +147,12 @@ public class ConnectorsResource {
         Herder.Created<ConnectorInfo> createdInfo = completeOrForwardRequest(cb, "/connectors/" + connector + "/config",
                 "PUT", connectorConfig, new TypeReference<ConnectorInfo>() { }, new CreatedConnectorInfoTranslator(), forward);
         Response.ResponseBuilder response;
-        if (createdInfo.created())
-            response = Response.created(URI.create("/connectors/" + URLEncoder.encode(connector, "UTF-8")));
-        else
+        if (createdInfo.created()) {
+            URI location = UriBuilder.fromUri("/connectors").path(connector).build();
+            response = Response.created(location);
+        } else {
             response = Response.ok();
+        }
         return response.entity(createdInfo.result()).build();
     }
 
