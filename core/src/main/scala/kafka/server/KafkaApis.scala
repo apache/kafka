@@ -761,8 +761,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         val response = new FetchResponse(unconvertedFetchResponse.error, convertedData, throttleTimeMs,
           unconvertedFetchResponse.sessionId)
         // record the bytes out metrics only when the response is being sent
-        response.responseData.forEach { (tp, data) =>
-          brokerTopicStats.updateBytesOut(tp.topic, fetchRequest.isFromFollower, reassigningPartitions.contains(tp), data.records.sizeInBytes)
+        response.responseData.forEach { case (tp, data) =>
+          // do not recreate the metrics if this was a DelayedFetch executed after a topic was deleted
+          if (data.error != Errors.UNKNOWN_TOPIC_OR_PARTITION) {
+            brokerTopicStats.updateBytesOut(tp.topic, fetchRequest.isFromFollower, reassigningPartitions.contains(tp), data.records.sizeInBytes)
+          }
         }
         response
       }

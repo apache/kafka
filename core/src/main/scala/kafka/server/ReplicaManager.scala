@@ -1045,6 +1045,11 @@ class ReplicaManager(val config: KafkaConfig,
 
       val adjustedMaxBytes = math.min(fetchInfo.maxBytes, limitBytes)
       try {
+        brokerTopicStats.allTopicsStats.totalFetchRequestRate.mark()
+        if (allPartitions.contains(tp)) {
+           brokerTopicStats.topicStats(tp.topic).totalFetchRequestRate.mark()
+        }
+
         if (traceEnabled)
           trace(s"Fetching log segment for partition $tp, offset $offset, partition fetch size $partitionFetchSize, " +
             s"remaining response limit $limitBytes" +
