@@ -501,7 +501,7 @@ class LogSegment(val log: FileRecords,
       closeable(log.delete _, "log", log.file),
       closeable(index.delete _, "index", index.file),
       closeable(timeIndex.delete _, "time index", timeIndex.file),
-      closeable(txnIndex.delete _, "transaction index", txnIndex.file),
+      closeable(txnIndex.delete _, "transaction index", txnIndex.file)
     )
     Utils.closeAll(closeables: _*)
   }
