@@ -517,11 +517,11 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
-     * @param partitionsAndOffsets  The topic partitions and related offsets from which records deletion starts.
+     * @param recordsToDelete       The topic partitions and related offsets from which records deletion starts.
      * @return                      The DeleteRecordsResult.
      */
-    public DeleteRecordsResult deleteRecords(Map<TopicPartition, RecordsToDelete> partitionsAndOffsets) {
-        return deleteRecords(partitionsAndOffsets, new DeleteRecordsOptions());
+    public DeleteRecordsResult deleteRecords(Map<TopicPartition, RecordsToDelete> recordsToDelete) {
+        return deleteRecords(recordsToDelete, new DeleteRecordsOptions());
     }
 
     /**
@@ -529,10 +529,10 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
-     * @param partitionsAndOffsets  The topic partitions and related offsets from which records deletion starts.
+     * @param recordsToDelete       The topic partitions and related offsets from which records deletion starts.
      * @param options               The options to use when deleting records.
      * @return                      The DeleteRecordsResult.
      */
-    public abstract DeleteRecordsResult deleteRecords(Map<TopicPartition, RecordsToDelete> partitionsAndOffsets,
+    public abstract DeleteRecordsResult deleteRecords(Map<TopicPartition, RecordsToDelete> recordsToDelete,
                                                       DeleteRecordsOptions options);
 }

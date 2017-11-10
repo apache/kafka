@@ -476,14 +476,14 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(new MetadataResponse(cluster.nodes(), cluster.clusterResource().clusterId(), cluster.controller().id(), t));
             env.kafkaClient().prepareResponse(new DeleteRecordsResponse(0, m));
 
-            Map<TopicPartition, RecordsToDelete> partitionsAndOffsets = new HashMap<>();
-            partitionsAndOffsets.put(myTopicPartition0, RecordsToDelete.beforeOffset(3L));
-            partitionsAndOffsets.put(myTopicPartition1, RecordsToDelete.beforeOffset(10L));
-            partitionsAndOffsets.put(myTopicPartition2, RecordsToDelete.beforeOffset(10L));
-            partitionsAndOffsets.put(myTopicPartition3, RecordsToDelete.beforeOffset(10L));
-            partitionsAndOffsets.put(myTopicPartition4, RecordsToDelete.beforeOffset(10L));
+            Map<TopicPartition, RecordsToDelete> recordsToDelete = new HashMap<>();
+            recordsToDelete.put(myTopicPartition0, RecordsToDelete.beforeOffset(3L));
+            recordsToDelete.put(myTopicPartition1, RecordsToDelete.beforeOffset(10L));
+            recordsToDelete.put(myTopicPartition2, RecordsToDelete.beforeOffset(10L));
+            recordsToDelete.put(myTopicPartition3, RecordsToDelete.beforeOffset(10L));
+            recordsToDelete.put(myTopicPartition4, RecordsToDelete.beforeOffset(10L));
 
-            DeleteRecordsResult results = env.adminClient().deleteRecords(partitionsAndOffsets);
+            DeleteRecordsResult results = env.adminClient().deleteRecords(recordsToDelete);
 
             // success on records deletion for partition 0
             Map<TopicPartition, KafkaFuture<Long>> values = results.lowWatermarks();
