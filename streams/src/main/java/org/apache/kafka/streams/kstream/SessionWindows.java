@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+
+import java.util.Objects;
 
 /**
  * A session based window specification used for aggregating events into sessions.
@@ -59,15 +60,9 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
  * @see TimeWindows
  * @see UnlimitedWindows
  * @see JoinWindows
- * @see KGroupedStream#count(SessionWindows, String)
- * @see KGroupedStream#count(SessionWindows, org.apache.kafka.streams.processor.StateStoreSupplier)
- * @see KGroupedStream#reduce(Reducer, SessionWindows, String)
- * @see KGroupedStream#reduce(Reducer, SessionWindows, org.apache.kafka.streams.processor.StateStoreSupplier)
- * @see KGroupedStream#aggregate(Initializer, Aggregator, Merger, SessionWindows, org.apache.kafka.common.serialization.Serde, String)
- * @see KGroupedStream#aggregate(Initializer, Aggregator, Merger, SessionWindows, org.apache.kafka.common.serialization.Serde, org.apache.kafka.streams.processor.StateStoreSupplier)
+ * @see KGroupedStream#windowedBy(SessionWindows)
  * @see TimestampExtractor
  */
-@InterfaceStability.Unstable
 public final class SessionWindows {
 
     private final long gapMs;
@@ -127,5 +122,19 @@ public final class SessionWindows {
      */
     public long maintainMs() {
         return Math.max(maintainDurationMs, gapMs);
+    }
+
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        final SessionWindows that = (SessionWindows) o;
+        return gapMs == that.gapMs &&
+                maintainDurationMs == that.maintainDurationMs;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(gapMs, maintainDurationMs);
     }
 }

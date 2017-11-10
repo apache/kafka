@@ -18,15 +18,18 @@
 package kafka.admin
 
 import java.util.Properties
+
 import joptsimple._
 import kafka.common.Config
 import kafka.common.InvalidConfigException
 import kafka.log.LogConfig
-import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig, QuotaId}
+import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig}
 import kafka.utils.{CommandLineUtils, ZkUtils}
+import kafka.utils.Implicits._
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.scram._
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{Sanitizer, Utils}
+
 import scala.collection._
 import scala.collection.JavaConverters._
 
@@ -95,16 +98,11 @@ object ConfigCommand extends Config {
     if (invalidConfigs.nonEmpty)
       throw new InvalidConfigException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
 
-    configs.putAll(configsToBeAdded)
+    configs ++= configsToBeAdded
     configsToBeDeleted.foreach(configs.remove(_))
 
-    entityType match {
-      case ConfigType.Topic => utils.changeTopicConfig(zkUtils, entityName, configs)
-      case ConfigType.Client => utils.changeClientIdConfig(zkUtils, entityName, configs)
-      case ConfigType.User => utils.changeUserOrUserClientIdConfig(zkUtils, entityName, configs)
-      case ConfigType.Broker => utils.changeBrokerConfig(zkUtils, Seq(parseBroker(entityName)), configs)
-      case _ => throw new IllegalArgumentException(s"$entityType is not a known entityType. Should be one of ${ConfigType.Topic}, ${ConfigType.Client}, ${ConfigType.Broker}")
-    }
+    utils.changeConfigs(zkUtils, entityType, entityName, configs)
+
     println(s"Completed Updating config for entity: $entity.")
   }
 
@@ -126,14 +124,6 @@ object ConfigCommand extends Config {
         case value =>
           configsToBeAdded.setProperty(mechanism.mechanismName, scramCredential(mechanism, value))
       }
-    }
-  }
-
-  private def parseBroker(broker: String): Int = {
-    try broker.toInt
-    catch {
-      case _: NumberFormatException =>
-        throw new IllegalArgumentException(s"Error parsing broker $broker. The broker's Entity Name must be a single integer value")
     }
   }
 
@@ -196,7 +186,7 @@ object ConfigCommand extends Config {
       sanitizedName match {
         case Some(ConfigEntityName.Default) => "default " + typeName
         case Some(n) =>
-          val desanitized = if (entityType == ConfigType.User) QuotaId.desanitize(n) else n
+          val desanitized = if (entityType == ConfigType.User || entityType == ConfigType.Client) Sanitizer.desanitize(n) else n
           s"$typeName '$desanitized'"
         case None => entityType
       }
@@ -277,10 +267,7 @@ object ConfigCommand extends Config {
         ConfigEntityName.Default
       else {
         entityType match {
-          case ConfigType.User => QuotaId.sanitize(name)
-          case ConfigType.Client =>
-            validateChars("Client-id", name)
-            name
+          case ConfigType.User | ConfigType.Client => Sanitizer.sanitize(name)
           case _ => throw new IllegalArgumentException("Invalid entity type " + entityType)
         }
       }
@@ -291,7 +278,7 @@ object ConfigCommand extends Config {
   }
 
   class ConfigCommandOptions(args: Array[String]) {
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the form host:port. " +
             "Multiple URLS can be given to allow fail-over.")
             .withRequiredArg

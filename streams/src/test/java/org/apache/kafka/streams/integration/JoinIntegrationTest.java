@@ -16,10 +16,8 @@
  */
 package org.apache.kafka.streams.integration;
 
-import kafka.utils.ZkUtils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -27,19 +25,17 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.test.IntegrationTest;
-import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
-import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
@@ -48,11 +44,9 @@ import org.junit.experimental.categories.Category;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
-import java.util.Set;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
@@ -65,8 +59,6 @@ public class JoinIntegrationTest {
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
-    private static ZkUtils zkUtils = null;
-
     private static final String APP_ID = "join-integration-test";
     private static final String INPUT_TOPIC_1 = "inputTopicLeft";
     private static final String INPUT_TOPIC_2 = "inputTopicRight";
@@ -76,7 +68,7 @@ public class JoinIntegrationTest {
     private final static Properties RESULT_CONSUMER_CONFIG = new Properties();
     private final static Properties STREAMS_CONFIG = new Properties();
 
-    private KStreamBuilder builder;
+    private StreamsBuilder builder;
     private KStream<Long, String> leftStream;
     private KStream<Long, String> rightStream;
     private KTable<Long, String> leftTable;
@@ -107,10 +99,8 @@ public class JoinIntegrationTest {
         }
     };
 
-    private final TestCondition topicsGotDeleted = new TopicsGotDeletedCondition();
-
     @BeforeClass
-    public static void setupConfigsAndUtils() throws Exception {
+    public static void setupConfigsAndUtils() {
         PRODUCER_CONFIG.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         PRODUCER_CONFIG.put(ProducerConfig.ACKS_CONFIG, "all");
         PRODUCER_CONFIG.put(ProducerConfig.RETRIES_CONFIG, 0);
@@ -126,46 +116,30 @@ public class JoinIntegrationTest {
         STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         STREAMS_CONFIG.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         STREAMS_CONFIG.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
-        STREAMS_CONFIG.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
-        STREAMS_CONFIG.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        STREAMS_CONFIG.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
+        STREAMS_CONFIG.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         STREAMS_CONFIG.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-
-        zkUtils = ZkUtils.apply(CLUSTER.zKConnectString(),
-            30000,
-            30000,
-            JaasUtils.isZkSecurityEnabled());
-    }
-
-    @AfterClass
-    public static void release() {
-        if (zkUtils != null) {
-            zkUtils.close();
-        }
+        STREAMS_CONFIG.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
+        STREAMS_CONFIG.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
     }
 
     @Before
-    public void prepareTopology() throws Exception {
-        CLUSTER.createTopic(INPUT_TOPIC_1);
-        CLUSTER.createTopic(INPUT_TOPIC_2);
-        CLUSTER.createTopic(OUTPUT_TOPIC);
+    public void prepareTopology() throws InterruptedException {
+        CLUSTER.createTopics(INPUT_TOPIC_1, INPUT_TOPIC_2, OUTPUT_TOPIC);
 
-        builder = new KStreamBuilder();
-        leftTable = builder.table(INPUT_TOPIC_1, "leftTable");
-        rightTable = builder.table(INPUT_TOPIC_2, "rightTable");
+        builder = new StreamsBuilder();
+        leftTable = builder.table(INPUT_TOPIC_1);
+        rightTable = builder.table(INPUT_TOPIC_2);
         leftStream = leftTable.toStream();
         rightStream = rightTable.toStream();
     }
 
     @After
-    public void cleanup() throws Exception {
-        CLUSTER.deleteTopic(INPUT_TOPIC_1);
-        CLUSTER.deleteTopic(INPUT_TOPIC_2);
-        CLUSTER.deleteTopic(OUTPUT_TOPIC);
-
-        TestUtils.waitForCondition(topicsGotDeleted, 120000, "Topics not deleted after 120 seconds.");
+    public void cleanup() throws InterruptedException {
+        CLUSTER.deleteTopicsAndWait(120000, INPUT_TOPIC_1, INPUT_TOPIC_2, OUTPUT_TOPIC);
     }
 
-    private void checkResult(final String outputTopic, final List<String> expectedResult) throws Exception {
+    private void checkResult(final String outputTopic, final List<String> expectedResult) throws InterruptedException {
         if (expectedResult != null) {
             final List<String> result = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(RESULT_CONSUMER_CONFIG, outputTopic, expectedResult.size(), 30 * 1000L);
             assertThat(result, is(expectedResult));
@@ -180,7 +154,7 @@ public class JoinIntegrationTest {
         assert expectedResult.size() == input.size();
 
         IntegrationTestUtils.purgeLocalStreamsState(STREAMS_CONFIG);
-        final KafkaStreams streams = new KafkaStreams(builder, STREAMS_CONFIG);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), STREAMS_CONFIG);
         try {
             streams.start();
 
@@ -410,15 +384,6 @@ public class JoinIntegrationTest {
         leftTable.outerJoin(rightTable, valueJoiner).to(OUTPUT_TOPIC);
 
         runTest(expectedResult);
-    }
-
-    private final class TopicsGotDeletedCondition implements TestCondition {
-        @Override
-        public boolean conditionMet() {
-            final Set<String> allTopics = new HashSet<>();
-            allTopics.addAll(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics()));
-            return !allTopics.contains(INPUT_TOPIC_1) && !allTopics.contains(INPUT_TOPIC_2) && !allTopics.contains(OUTPUT_TOPIC);
-        }
     }
 
     private final class Input<V> {

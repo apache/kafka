@@ -20,10 +20,11 @@ import kafka.consumer.SimpleConsumer
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.{ShutdownableThread, TestUtils}
+import kafka.utils.Implicits._
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.{Ignore, Test}
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -51,34 +52,23 @@ class ProducerBounceTest extends KafkaServerTestHarness {
   //
   // Since such quick rotation of servers is incredibly unrealistic, we allow this one test to preallocate ports, leaving
   // a small risk of hitting errors due to port conflicts. Hopefully this is infrequent enough to not cause problems.
-  override def generateConfigs() = {
+  override def generateConfigs = {
     FixedPortTestUtils.createBrokerConfigs(numServers, zkConnect,enableControlledShutdown = true)
       .map(KafkaConfig.fromProps(_, overridingProps))
   }
 
   private val topic1 = "topic-1"
 
-  @Before
-  override def setUp() {
-    super.setUp()
-  }
-
-  @After
-  override def tearDown() {
-    super.tearDown()
-  }
-
   /**
-   * With replication, producer should able able to find new leader after it detects broker failure
+   * With replication, producer should able to find new leader after it detects broker failure
    */
+  @Ignore // To be re-enabled once we can make it less flaky (KAFKA-2837)
   @Test
   def testBrokerFailure() {
     val numPartitions = 3
-    val topicConfig = new Properties();
+    val topicConfig = new Properties()
     topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
-    val leaders = TestUtils.createTopic(zkUtils, topic1, numPartitions, numServers, servers, topicConfig)
-
-    assertTrue("Leader of all partitions of the topic should exist", leaders.values.forall(leader => leader.isDefined))
+    TestUtils.createTopic(zkUtils, topic1, numPartitions, numServers, servers, topicConfig)
 
     val scheduler = new ProducerScheduler()
     scheduler.start
@@ -112,7 +102,7 @@ class ProducerBounceTest extends KafkaServerTestHarness {
     val newLeaders = (0 until numPartitions).map(i => TestUtils.waitUntilMetadataIsPropagated(servers, topic1, i))
     val fetchResponses = newLeaders.zipWithIndex.map { case (leader, partition) =>
       // Consumers must be instantiated after all the restarts since they use random ports each time they start up
-      val consumer = new SimpleConsumer("localhost", boundPort(servers(leader)), 100, 1024 * 1024, "")
+      val consumer = new SimpleConsumer("localhost", boundPort(servers(leader)), 30000, 1024 * 1024, "")
       val response = consumer.fetch(new FetchRequestBuilder().addFetch(topic1, partition, 0, Int.MaxValue).build()).messageSet(topic1, partition)
       consumer.close
       response
@@ -132,9 +122,9 @@ class ProducerBounceTest extends KafkaServerTestHarness {
 
     val producerConfig = new Properties()
     producerConfig.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
-    producerConfig.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1")
+    producerConfig.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "5")
     val producerConfigWithCompression = new Properties()
-    producerConfigWithCompression.putAll(producerConfig)
+    producerConfigWithCompression ++= producerConfig
     producerConfigWithCompression.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, "lz4")
     val producers = List(
       TestUtils.createNewProducer(brokerList, bufferSize = producerBufferSize / 4, retries = 10, props = Some(producerConfig)),

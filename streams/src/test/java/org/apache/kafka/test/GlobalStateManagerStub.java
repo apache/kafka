@@ -51,14 +51,12 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     }
 
     @Override
-    public void register(final StateStore store, final boolean loggingEnabled, final StateRestoreCallback stateRestoreCallback) {
+    public void register(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
 
     }
 
     @Override
-    public void flush(final InternalProcessorContext context) {
-
-    }
+    public void flush() {}
 
     @Override
     public void close(final Map<TopicPartition, Long> offsets) throws IOException {

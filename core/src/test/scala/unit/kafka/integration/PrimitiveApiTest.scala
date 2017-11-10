@@ -24,12 +24,11 @@ import kafka.api.{FetchRequest, FetchRequestBuilder, PartitionFetchInfo}
 import kafka.server.{KafkaConfig, KafkaRequestHandler}
 import kafka.producer.{KeyedMessage, Producer}
 import org.apache.log4j.{Level, Logger}
-import kafka.zk.ZooKeeperTestHarness
 import org.junit.Test
 
 import scala.collection._
 import kafka.common.{ErrorMapping, OffsetOutOfRangeException, TopicAndPartition, UnknownTopicOrPartitionException}
-import kafka.utils.{CoreUtils, StaticPartitioner, TestUtils}
+import kafka.utils.{StaticPartitioner, TestUtils}
 import kafka.serializer.StringEncoder
 import java.util.Properties
 
@@ -42,7 +41,7 @@ import org.apache.kafka.common.TopicPartition
 class PrimitiveApiTest extends ProducerConsumerTestHarness {
   val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])
 
-  def generateConfigs() = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
+  def generateConfigs = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
 
   @Test
   def testFetchRequestCanProperlySerialize() {

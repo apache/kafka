@@ -38,7 +38,7 @@ public class FileStreamSourceConnector extends SourceConnector {
     public static final String FILE_CONFIG = "file";
 
     private static final ConfigDef CONFIG_DEF = new ConfigDef()
-        .define(FILE_CONFIG, Type.STRING, Importance.HIGH, "Source filename.")
+        .define(FILE_CONFIG, Type.STRING, null, Importance.HIGH, "Source filename. If not specified, the standard input will be used")
         .define(TOPIC_CONFIG, Type.STRING, Importance.HIGH, "The topic to publish data to");
 
     private String filename;

@@ -197,7 +197,7 @@ object TestOffsetManager {
   }
 
   def main(args: Array[String]) {
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     val zookeeperOpt = parser.accepts("zookeeper", "The ZooKeeper connection URL.")
       .withRequiredArg
       .describedAs("ZooKeeper URL")
@@ -263,8 +263,7 @@ object TestOffsetManager {
       }
 
       fetchThread = new FetchThread(threadCount, fetchIntervalMs, zkUtils)
-
-      val statsThread = new StatsThread(reportingIntervalMs, commitThreads, fetchThread)
+      statsThread = new StatsThread(reportingIntervalMs, commitThreads, fetchThread)
 
       Runtime.getRuntime.addShutdownHook(new Thread() {
         override def run() {

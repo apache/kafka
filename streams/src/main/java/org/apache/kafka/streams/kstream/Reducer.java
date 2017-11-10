@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.streams.KeyValue;
+
 /**
  * The {@code Reducer} interface for combining two values of the same type into a new value.
  * In contrast to {@link Aggregator} the result type must be the same as the input type.
@@ -28,15 +28,14 @@ import org.apache.kafka.streams.KeyValue;
  * {@code Reducer} can be used to implement aggregation functions like sum, min, or max.
  *
  * @param <V> value type
- * @see KGroupedStream#reduce(Reducer, String)
- * @see KGroupedStream#reduce(Reducer, org.apache.kafka.streams.processor.StateStoreSupplier)
- * @see KGroupedStream#reduce(Reducer, Windows, String)
- * @see KGroupedStream#reduce(Reducer, org.apache.kafka.streams.processor.StateStoreSupplier)
- * @see KGroupedStream#reduce(Reducer, SessionWindows, String)
- * @see KGroupedStream#reduce(Reducer, SessionWindows, org.apache.kafka.streams.processor.StateStoreSupplier)
+ * @see KGroupedStream#reduce(Reducer)
+ * @see KGroupedStream#reduce(Reducer, Materialized)
+ * @see TimeWindowedKStream#reduce(Reducer)
+ * @see TimeWindowedKStream#reduce(Reducer, Materialized)
+ * @see SessionWindowedKStream#reduce(Reducer)
+ * @see SessionWindowedKStream#reduce(Reducer, Materialized)
  * @see Aggregator
  */
-@InterfaceStability.Unstable
 public interface Reducer<V> {
 
     /**

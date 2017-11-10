@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -24,7 +23,7 @@ import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
 
 import java.util.List;
-import java.util.NoSuchElementException;
+import java.util.Objects;
 
 /**
  * Wrapper over the underlying {@link ReadOnlySessionStore}s found in a {@link
@@ -46,6 +45,7 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
 
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K key) {
+        Objects.requireNonNull(key, "key can't be null");
         final List<ReadOnlySessionStore<K, V>> stores = storeProvider.stores(storeName, queryableStoreType);
         for (final ReadOnlySessionStore<K, V> store : stores) {
             try {
@@ -61,29 +61,22 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
                                                              "please re-discover its location from the state metadata.");
             }
         }
-        return new KeyValueIterator<Windowed<K>, V>() {
-            @Override
-            public void close() {
-            }
+        return KeyValueIterators.emptyIterator();
+    }
 
+    @Override
+    public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to) {
+        Objects.requireNonNull(from, "from can't be null");
+        Objects.requireNonNull(to, "to can't be null");
+        final NextIteratorFunction<Windowed<K>, V, ReadOnlySessionStore<K, V>> nextIteratorFunction = new NextIteratorFunction<Windowed<K>, V, ReadOnlySessionStore<K, V>>() {
             @Override
-            public Windowed<K> peekNextKey() {
-                throw new NoSuchElementException();
-            }
-
-            @Override
-            public boolean hasNext() {
-                return false;
-            }
-
-            @Override
-            public KeyValue<Windowed<K>, V> next() {
-                throw new NoSuchElementException();
-            }
-
-            @Override
-            public void remove() {
+            public KeyValueIterator<Windowed<K>, V> apply(final ReadOnlySessionStore<K, V> store) {
+                return store.fetch(from, to);
             }
         };
+        return new DelegatingPeekingKeyValueIterator<>(storeName,
+                                                       new CompositeKeyValueIterator<>(
+                                                               storeProvider.stores(storeName, queryableStoreType).iterator(),
+                                                               nextIteratorFunction));
     }
 }

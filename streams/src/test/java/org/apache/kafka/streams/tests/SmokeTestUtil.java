@@ -32,61 +32,62 @@ import java.io.File;
 
 public class SmokeTestUtil {
 
-    public final static int WINDOW_SIZE = 100;
-    public final static long START_TIME = 60000L * 60 * 24 * 365 * 30;
-    public final static int END = Integer.MAX_VALUE;
+    final static int END = Integer.MAX_VALUE;
 
-    public static ProcessorSupplier<Object, Object> printProcessorSupplier(final String topic) {
+    static ProcessorSupplier<Object, Object> printProcessorSupplier(final String topic) {
         return printProcessorSupplier(topic, false);
     }
 
-    public static ProcessorSupplier<Object, Object> printProcessorSupplier(final String topic, final boolean printOffset) {
+    private static ProcessorSupplier<Object, Object> printProcessorSupplier(final String topic, final boolean printOffset) {
         return new ProcessorSupplier<Object, Object>() {
+            @Override
             public Processor<Object, Object> get() {
                 return new AbstractProcessor<Object, Object>() {
                     private int numRecordsProcessed = 0;
                     private ProcessorContext context;
 
                     @Override
-                    public void init(ProcessorContext context) {
+                    public void init(final ProcessorContext context) {
                         System.out.println("initializing processor: topic=" + topic + " taskId=" + context.taskId());
                         numRecordsProcessed = 0;
                         this.context = context;
                     }
 
                     @Override
-                    public void process(Object key, Object value) {
-                        if (printOffset) System.out.println(">>> " + context.offset());
+                    public void process(final Object key, final Object value) {
+                        if (printOffset) {
+                            System.out.println(">>> " + context.offset());
+                        }
                         numRecordsProcessed++;
                         if (numRecordsProcessed % 100 == 0) {
+                            System.out.println(System.currentTimeMillis());
                             System.out.println("processed " + numRecordsProcessed + " records from topic=" + topic);
                         }
                     }
 
                     @Override
-                    public void punctuate(long timestamp) {
-                    }
+                    public void punctuate(final long timestamp) { }
 
                     @Override
-                    public void close() {
-                    }
+                    public void close() { }
                 };
             }
         };
     }
 
     public static final class Unwindow<K, V> implements KeyValueMapper<Windowed<K>, V, KeyValue<K, V>> {
-        public KeyValue<K, V> apply(Windowed<K> winKey, V value) {
-            return new KeyValue<K, V>(winKey.key(), value);
+        @Override
+        public KeyValue<K, V> apply(final Windowed<K> winKey, final V value) {
+            return new KeyValue<>(winKey.key(), value);
         }
     }
 
     public static class Agg {
 
-        public KeyValueMapper<String, Long, KeyValue<String, Long>> selector() {
+        KeyValueMapper<String, Long, KeyValue<String, Long>> selector() {
             return new KeyValueMapper<String, Long, KeyValue<String, Long>>() {
                 @Override
-                public KeyValue<String, Long> apply(String key, Long value) {
+                public KeyValue<String, Long> apply(final String key, final Long value) {
                     return new KeyValue<>(value == null ? null : Long.toString(value), 1L);
                 }
             };
@@ -101,19 +102,19 @@ public class SmokeTestUtil {
             };
         }
 
-        public Aggregator<String, Long, Long> adder() {
+        Aggregator<String, Long, Long> adder() {
             return new Aggregator<String, Long, Long>() {
                 @Override
-                public Long apply(String aggKey, Long value, Long aggregate) {
+                public Long apply(final String aggKey, final Long value, final Long aggregate) {
                     return aggregate + value;
                 }
             };
         }
 
-        public Aggregator<String, Long, Long> remover() {
+        Aggregator<String, Long, Long> remover() {
             return new Aggregator<String, Long, Long>() {
                 @Override
-                public Long apply(String aggKey, Long value, Long aggregate) {
+                public Long apply(final String aggKey, final Long value, final Long aggregate) {
                     return aggregate - value;
                 }
             };
@@ -124,33 +125,22 @@ public class SmokeTestUtil {
 
     public static Serde<Integer> intSerde = Serdes.Integer();
 
-    public static Serde<Long> longSerde = Serdes.Long();
+    static Serde<Long> longSerde = Serdes.Long();
 
-    public static Serde<Double> doubleSerde = Serdes.Double();
+    static Serde<Double> doubleSerde = Serdes.Double();
 
-    public static File createDir(String path) throws Exception {
-        File dir = new File(path);
-
-        dir.mkdir();
-
-        return dir;
-    }
-
-    public static File createDir(File parent, String child) throws Exception {
-        File dir = new File(parent, child);
+    static File createDir(final File parent, final String child) {
+        final File dir = new File(parent, child);
 
         dir.mkdir();
 
         return dir;
     }
 
-    public static void sleep(long duration) {
+    public static void sleep(final long duration) {
         try {
             Thread.sleep(duration);
-        } catch (Exception ex) {
-            //
-        }
+        } catch (final Exception ignore) { }
     }
-
 
 }

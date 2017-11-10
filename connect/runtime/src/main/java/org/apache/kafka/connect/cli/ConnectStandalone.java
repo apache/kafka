@@ -21,9 +21,10 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.Connect;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
-import org.apache.kafka.connect.runtime.ConnectorFactory;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.Worker;
+import org.apache.kafka.connect.runtime.WorkerInfo;
+import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
@@ -60,23 +61,31 @@ public class ConnectStandalone {
             Exit.exit(1);
         }
 
+        Time time = Time.SYSTEM;
+        log.info("Kafka Connect standalone worker initializing ...");
+        long initStart = time.hiResClockMs();
+        WorkerInfo initInfo = new WorkerInfo();
+        initInfo.logAll();
+
         String workerPropsFile = args[0];
         Map<String, String> workerProps = !workerPropsFile.isEmpty() ?
                 Utils.propsToStringMap(Utils.loadProps(workerPropsFile)) : Collections.<String, String>emptyMap();
 
-        Time time = Time.SYSTEM;
-        ConnectorFactory connectorFactory = new ConnectorFactory();
+        log.info("Scanning for plugin classes. This might take a moment ...");
+        Plugins plugins = new Plugins(workerProps);
+        plugins.compareAndSwapWithDelegatingLoader();
         StandaloneConfig config = new StandaloneConfig(workerProps);
 
         RestServer rest = new RestServer(config);
         URI advertisedUrl = rest.advertisedUrl();
         String workerId = advertisedUrl.getHost() + ":" + advertisedUrl.getPort();
 
-        Worker worker = new Worker(workerId, time, connectorFactory, config, new FileOffsetBackingStore());
+        Worker worker = new Worker(workerId, time, plugins, config, new FileOffsetBackingStore());
 
         Herder herder = new StandaloneHerder(worker);
         final Connect connect = new Connect(herder, rest);
-        
+        log.info("Kafka Connect standalone worker initialization took {}ms", time.hiResClockMs() - initStart);
+
         try {
             connect.start();
             for (final String connectorPropsFile : Arrays.copyOfRange(args, 1, args.length)) {

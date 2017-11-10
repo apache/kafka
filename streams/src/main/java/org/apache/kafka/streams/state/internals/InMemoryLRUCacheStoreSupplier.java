@@ -29,6 +29,7 @@ import java.util.Map;
  * @param <V> The value type
  *
  */
+@Deprecated
 public class InMemoryLRUCacheStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, KeyValueStore> {
 
     private final int capacity;
@@ -37,7 +38,7 @@ public class InMemoryLRUCacheStoreSupplier<K, V> extends AbstractStoreSupplier<K
         this(name, capacity, keySerde, valueSerde, null, logged, logConfig);
     }
 
-    public InMemoryLRUCacheStoreSupplier(String name, int capacity, Serde<K> keySerde, Serde<V> valueSerde, Time time, boolean logged, Map<String, String> logConfig) {
+    private InMemoryLRUCacheStoreSupplier(String name, int capacity, Serde<K> keySerde, Serde<V> valueSerde, Time time, boolean logged, Map<String, String> logConfig) {
         super(name, keySerde, valueSerde, time, logged, logConfig);
         this.capacity = capacity;
     }

@@ -55,7 +55,6 @@ public class InMemoryKeyValueLoggedStore<K, V> extends WrappedStateStore.Abstrac
 
         this.changeLogger = new StoreChangeLogger<>(inner.name(), context, serdes);
 
-
         // if the inner store is an LRU cache, add the eviction listener to log removed record
         if (inner instanceof MemoryLRUCache) {
             ((MemoryLRUCache<K, V>) inner).whenEldestRemoved(new MemoryNavigableLRUCache.EldestEntryRemovalListener<K, V>() {

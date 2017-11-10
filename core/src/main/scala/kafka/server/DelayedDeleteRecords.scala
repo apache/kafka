@@ -20,9 +20,7 @@ package kafka.server
 
 import java.util.concurrent.TimeUnit
 
-import com.yammer.metrics.core.Meter
 import kafka.metrics.KafkaMetricsGroup
-import kafka.utils.Pool
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.DeleteRecordsResponse
@@ -64,7 +62,7 @@ class DelayedDeleteRecords(delayMs: Long,
   /**
    * The delayed delete records operation can be completed if every partition specified in the request satisfied one of the following:
    *
-   * 1) There was an error while checking if all replicas have caught up to to the deleteRecordsOffset: set an error in response
+   * 1) There was an error while checking if all replicas have caught up to the deleteRecordsOffset: set an error in response
    * 2) The low watermark of the partition has caught up to the deleteRecordsOffset. set the low watermark in response
    *
    */
@@ -76,12 +74,16 @@ class DelayedDeleteRecords(delayMs: Long,
       if (status.acksPending) {
         val (lowWatermarkReached, error, lw) = replicaManager.getPartition(topicPartition) match {
           case Some(partition) =>
-            partition.leaderReplicaIfLocal match {
-              case Some(_) =>
-                val leaderLW = partition.lowWatermarkIfLeader
-                (leaderLW >= status.requiredOffset, Errors.NONE, leaderLW)
-              case None =>
-                (false, Errors.NOT_LEADER_FOR_PARTITION, DeleteRecordsResponse.INVALID_LOW_WATERMARK)
+            if (partition eq ReplicaManager.OfflinePartition) {
+              (false, Errors.KAFKA_STORAGE_ERROR, DeleteRecordsResponse.INVALID_LOW_WATERMARK)
+            } else {
+              partition.leaderReplicaIfLocal match {
+                case Some(_) =>
+                  val leaderLW = partition.lowWatermarkIfLeader
+                  (leaderLW >= status.requiredOffset, Errors.NONE, leaderLW)
+                case None =>
+                  (false, Errors.NOT_LEADER_FOR_PARTITION, DeleteRecordsResponse.INVALID_LOW_WATERMARK)
+              }
             }
           case None =>
             (false, Errors.UNKNOWN_TOPIC_OR_PARTITION, DeleteRecordsResponse.INVALID_LOW_WATERMARK)

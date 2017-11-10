@@ -106,25 +106,25 @@ class KafkaSystemTestPathResolver(object):
         self.context = context
         self.project = project
 
-    def home(self, node_or_version=DEV_BRANCH):
+    def home(self, node_or_version=DEV_BRANCH, project=None):
         version = self._version(node_or_version)
-        home_dir = self.project
+        home_dir = project or self.project
         if version is not None:
             home_dir += "-%s" % str(version)
 
         return os.path.join(KAFKA_INSTALL_ROOT, home_dir)
 
-    def bin(self, node_or_version=DEV_BRANCH):
+    def bin(self, node_or_version=DEV_BRANCH, project=None):
         version = self._version(node_or_version)
-        return os.path.join(self.home(version), "bin")
+        return os.path.join(self.home(version, project=project), "bin")
 
-    def script(self, script_name, node_or_version=DEV_BRANCH):
+    def script(self, script_name, node_or_version=DEV_BRANCH, project=None):
         version = self._version(node_or_version)
-        return os.path.join(self.bin(version), script_name)
+        return os.path.join(self.bin(version, project=project), script_name)
 
-    def jar(self, jar_name, node_or_version=DEV_BRANCH):
+    def jar(self, jar_name, node_or_version=DEV_BRANCH, project=None):
         version = self._version(node_or_version)
-        return os.path.join(self.home(version), JARS[str(version)][jar_name])
+        return os.path.join(self.home(version, project=project), JARS[str(version)][jar_name])
 
     def scratch_space(self, service_instance):
         return os.path.join(SCRATCH_ROOT, service_instance.service_id)

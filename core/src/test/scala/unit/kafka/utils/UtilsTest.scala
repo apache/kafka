@@ -18,6 +18,8 @@
 package kafka.utils
 
 import java.util.{Arrays, UUID}
+import java.util.concurrent.{ ConcurrentHashMap, Executors }
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
 import java.nio.ByteBuffer
 import java.util.regex.Pattern
@@ -28,7 +30,9 @@ import org.junit.Assert._
 import kafka.common.KafkaException
 import kafka.utils.CoreUtils.inLock
 import org.junit.Test
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{Base64, Utils}
+
+import scala.collection.JavaConverters._
 
 class UtilsTest extends JUnitSuite {
 
@@ -157,13 +161,15 @@ class UtilsTest extends JUnitSuite {
   def testUrlSafeBase64EncodeUUID() {
 
     // Test a UUID that has no + or / characters in base64 encoding [a149b4a3-06e1-4b49-a8cb-8a9c4a59fa46 ->(base64)-> oUm0owbhS0moy4qcSln6Rg==]
-    val clusterId1 = CoreUtils.urlSafeBase64EncodeNoPadding(CoreUtils.getBytesFromUuid(UUID.fromString("a149b4a3-06e1-4b49-a8cb-8a9c4a59fa46")))
+    val clusterId1 = Base64.urlEncoderNoPadding.encodeToString(CoreUtils.getBytesFromUuid(UUID.fromString(
+      "a149b4a3-06e1-4b49-a8cb-8a9c4a59fa46")))
     assertEquals(clusterId1, "oUm0owbhS0moy4qcSln6Rg")
     assertEquals(clusterId1.length, 22)
     assertTrue(clusterIdPattern.matcher(clusterId1).matches())
 
     // Test a UUID that has + or / characters in base64 encoding [d418ec02-277e-4853-81e6-afe30259daec ->(base64)-> 1BjsAid+SFOB5q/jAlna7A==]
-    val clusterId2 = CoreUtils.urlSafeBase64EncodeNoPadding(CoreUtils.getBytesFromUuid(UUID.fromString("d418ec02-277e-4853-81e6-afe30259daec")))
+    val clusterId2 = Base64.urlEncoderNoPadding.encodeToString(CoreUtils.getBytesFromUuid(UUID.fromString(
+      "d418ec02-277e-4853-81e6-afe30259daec")))
     assertEquals(clusterId2, "1BjsAid-SFOB5q_jAlna7A")
     assertEquals(clusterId2.length, 22)
     assertTrue(clusterIdPattern.matcher(clusterId2).matches())
@@ -174,5 +180,34 @@ class UtilsTest extends JUnitSuite {
     val clusterId = CoreUtils.generateUuidAsBase64()
     assertEquals(clusterId.length, 22)
     assertTrue(clusterIdPattern.matcher(clusterId).matches())
+  }
+
+  @Test
+  def testGetOrElseUpdateAtomically(): Unit = {
+    val count = 1000
+    val nThreads = 5
+    val createdCount = new AtomicInteger
+    val map = new ConcurrentHashMap[Int, AtomicInteger]().asScala
+    val executor = Executors.newFixedThreadPool(nThreads)
+    try {
+      for (i <- 1 to count) {
+        executor.submit(new Runnable() {
+          def run() {
+            CoreUtils.atomicGetOrUpdate(map, 0, {
+              createdCount.incrementAndGet
+              new AtomicInteger
+            }).incrementAndGet()
+          }
+        })
+      }
+      executor.shutdown()
+      executor.awaitTermination(1000, java.util.concurrent.TimeUnit.MILLISECONDS)
+
+      assertEquals(count, map(0).get)
+      val created = createdCount.get
+      assertTrue(s"Too many creations $created", created > 0 && created <= nThreads)
+    } finally {
+      executor.shutdownNow()
+    }
   }
 }

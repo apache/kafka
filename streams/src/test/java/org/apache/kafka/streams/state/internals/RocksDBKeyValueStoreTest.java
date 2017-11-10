@@ -16,15 +16,12 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.test.MockProcessorContext;
 import org.junit.Test;
 import org.rocksdb.Options;
 
@@ -39,20 +36,11 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     @SuppressWarnings("unchecked")
     @Override
-    protected <K, V> KeyValueStore<K, V> createKeyValueStore(
-            ProcessorContext context,
-            Class<K> keyClass,
-            Class<V> valueClass,
-            boolean useContextSerdes) {
-
-        return createStore(context, keyClass, valueClass, useContextSerdes, false);
-
-    }
-
-    @SuppressWarnings("unchecked")
-    private <K, V> KeyValueStore<K, V> createStore(final ProcessorContext context, final Class<K> keyClass, final Class<V> valueClass, final boolean useContextSerdes, final boolean enableCaching) {
-
-        Stores.PersistentKeyValueFactory<?, ?> factory;
+    protected <K, V> KeyValueStore<K, V> createKeyValueStore(final ProcessorContext context,
+                                                             final Class<K> keyClass,
+                                                             final Class<V> valueClass,
+                                                             final boolean useContextSerdes) {
+        final Stores.PersistentKeyValueFactory<?, ?> factory;
         if (useContextSerdes) {
             factory = Stores
                     .create("my-store")
@@ -68,10 +56,7 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
                     .persistent();
         }
 
-        if (enableCaching) {
-            factory.enableCaching();
-        }
-        KeyValueStore<K, V> store = (KeyValueStore<K, V>) factory.build().get();
+        final KeyValueStore<K, V> store = (KeyValueStore<K, V>) factory.build().get();
         store.init(context, store);
         return store;
     }
@@ -87,18 +72,12 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldUseCustomRocksDbConfigSetter() throws Exception {
-        final KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
-        driver.setConfig(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, TheRocksDbConfigSetter.class);
-        createKeyValueStore(driver.context(), Integer.class, String.class, false);
+    public void shouldUseCustomRocksDbConfigSetter() {
         assertTrue(TheRocksDbConfigSetter.called);
     }
 
     @Test
-    public void shouldPerformRangeQueriesWithCachingDisabled() throws Exception {
-        final KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
-        final MockProcessorContext context = (MockProcessorContext) driver.context();
-        final KeyValueStore<Integer, String> store = createStore(context, Integer.class, String.class, false, false);
+    public void shouldPerformRangeQueriesWithCachingDisabled() {
         context.setTime(1L);
         store.put(1, "hi");
         store.put(2, "goodbye");
@@ -109,10 +88,7 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldPerformAllQueriesWithCachingDisabled() throws Exception {
-        final KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
-        final MockProcessorContext context = (MockProcessorContext) driver.context();
-        final KeyValueStore<Integer, String> store = createStore(context, Integer.class, String.class, false, false);
+    public void shouldPerformAllQueriesWithCachingDisabled() {
         context.setTime(1L);
         store.put(1, "hi");
         store.put(2, "goodbye");
@@ -123,11 +99,8 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldCloseOpenIteratorsWhenStoreClosedAndThrowInvalidStateStoreOnHasNextAndNext() throws Exception {
-        final KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
-        final MockProcessorContext context = (MockProcessorContext) driver.context();
+    public void shouldCloseOpenIteratorsWhenStoreClosedAndThrowInvalidStateStoreOnHasNextAndNext() {
         context.setTime(1L);
-        final KeyValueStore<Integer, String> store = createStore(context, Integer.class, String.class, false, false);
         store.put(1, "hi");
         store.put(2, "goodbye");
         final KeyValueIterator<Integer, String> iteratorOne = store.range(1, 5);
@@ -141,31 +114,30 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
         try {
             iteratorOne.hasNext();
             fail("should have thrown InvalidStateStoreException on closed store");
-        } catch (InvalidStateStoreException e) {
+        } catch (final InvalidStateStoreException e) {
             // ok
         }
 
         try {
             iteratorOne.next();
             fail("should have thrown InvalidStateStoreException on closed store");
-        } catch (InvalidStateStoreException e) {
+        } catch (final InvalidStateStoreException e) {
             // ok
         }
 
         try {
             iteratorTwo.hasNext();
             fail("should have thrown InvalidStateStoreException on closed store");
-        } catch (InvalidStateStoreException e) {
+        } catch (final InvalidStateStoreException e) {
             // ok
         }
 
         try {
             iteratorTwo.next();
             fail("should have thrown InvalidStateStoreException on closed store");
-        } catch (InvalidStateStoreException e) {
+        } catch (final InvalidStateStoreException e) {
             // ok
         }
-
     }
 
 }

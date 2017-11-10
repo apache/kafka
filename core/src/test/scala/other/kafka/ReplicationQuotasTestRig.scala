@@ -27,7 +27,7 @@ import org.apache.kafka.common.TopicPartition
 import kafka.server.{KafkaConfig, KafkaServer, QuotaType}
 import kafka.utils.TestUtils._
 import kafka.utils.ZkUtils._
-import kafka.utils.{CoreUtils, Exit, Logging, TestUtils, ZkUtils}
+import kafka.utils.{Exit, Logging, TestUtils, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.jfree.chart.plot.PlotOrientation
@@ -108,8 +108,7 @@ object ReplicationQuotasTestRig {
     }
 
     override def tearDown() {
-      servers.par.foreach(_.shutdown())
-      servers.par.foreach(server => CoreUtils.delete(server.config.logDirs))
+      TestUtils.shutdownServers(servers)
       super.tearDown()
     }
 
@@ -140,7 +139,7 @@ object ReplicationQuotasTestRig {
       val newAssignment = ReassignPartitionsCommand.generateAssignment(zkUtils, brokers, json(topicName), true)._1
 
       val start = System.currentTimeMillis()
-      ReassignPartitionsCommand.executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), Throttle(config.throttle))
+      ReassignPartitionsCommand.executeAssignment(zkUtils, None, ZkUtils.formatAsReassignmentJson(newAssignment), Throttle(config.throttle))
 
       //Await completion
       waitForReassignmentToComplete()
@@ -170,13 +169,12 @@ object ReplicationQuotasTestRig {
 
     def logOutput(config: ExperimentDef, replicas: Map[Int, Seq[Int]], newAssignment: Map[TopicAndPartition, Seq[Int]]): Unit = {
       val actual = zkUtils.getPartitionAssignmentForTopics(Seq(topicName))(topicName)
-      val existing = zkUtils.getReplicaAssignmentForTopics(newAssignment.map(_._1.topic).toSeq)
 
       //Long stats
       println("The replicas are " + replicas.toSeq.sortBy(_._1).map("\n" + _))
       println("This is the current replica assignment:\n" + actual.toSeq)
       println("proposed assignment is: \n" + newAssignment)
-      println("This is the assigment we eneded up with" + actual)
+      println("This is the assignment we ended up with" + actual)
 
       //Test Stats
       println(s"numBrokers: ${config.brokers}")
@@ -187,11 +185,6 @@ object ReplicationQuotasTestRig {
       println(s"We will write ${config.targetBytesPerBrokerMB}MB of data per broker")
       println(s"Worst case duration is ${config.targetBytesPerBrokerMB * 1000 * 1000/ config.throttle}")
     }
-
-    private def waitForOffsetsToMatch(offset: Int, partitionId: Int, broker: KafkaServer, topic: String): Boolean = waitUntilTrue(() => {
-      offset == broker.getLogManager.getLog(new TopicPartition(topic, partitionId))
-        .map(_.logEndOffset).getOrElse(0)
-    }, s"Offsets did not match for partition $partitionId on broker ${broker.config.brokerId}", 60000)
 
     def waitForReassignmentToComplete() {
       waitUntilTrue(() => {

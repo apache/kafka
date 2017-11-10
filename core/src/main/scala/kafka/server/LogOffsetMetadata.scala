@@ -44,7 +44,7 @@ case class LogOffsetMetadata(messageOffset: Long,
 
   // check if this offset is already on an older segment compared with the given offset
   def onOlderSegment(that: LogOffsetMetadata): Boolean = {
-    if (messageOffsetOnly())
+    if (messageOffsetOnly)
       throw new KafkaException(s"$this cannot compare its segment info with $that since it only has message offset info")
 
     this.segmentBaseOffset < that.segmentBaseOffset
@@ -52,7 +52,7 @@ case class LogOffsetMetadata(messageOffset: Long,
 
   // check if this offset is on the same segment with the given offset
   def onSameSegment(that: LogOffsetMetadata): Boolean = {
-    if (messageOffsetOnly())
+    if (messageOffsetOnly)
       throw new KafkaException(s"$this cannot compare its segment info with $that since it only has message offset info")
 
     this.segmentBaseOffset == that.segmentBaseOffset
@@ -68,14 +68,14 @@ case class LogOffsetMetadata(messageOffset: Long,
   def positionDiff(that: LogOffsetMetadata): Int = {
     if(!onSameSegment(that))
       throw new KafkaException(s"$this cannot compare its segment position with $that since they are not on the same segment")
-    if(messageOffsetOnly())
+    if(messageOffsetOnly)
       throw new KafkaException(s"$this cannot compare its segment position with $that since it only has message offset info")
 
     this.relativePositionInSegment - that.relativePositionInSegment
   }
 
   // decide if the offset metadata only contains message offset info
-  def messageOffsetOnly(): Boolean = {
+  def messageOffsetOnly: Boolean = {
     segmentBaseOffset == LogOffsetMetadata.UnknownSegBaseOffset && relativePositionInSegment == LogOffsetMetadata.UnknownFilePosition
   }
 

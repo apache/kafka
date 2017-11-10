@@ -19,6 +19,8 @@ package org.apache.kafka.common.record;
 import java.io.IOException;
 import java.nio.channels.GatheringByteChannel;
 
+import org.apache.kafka.common.utils.Time;
+
 /**
  * Interface for accessing the records contained in a log. The log itself is represented as a sequence of record
  * batches (see {@link RecordBatch}).
@@ -49,6 +51,8 @@ public interface Records {
     // the magic offset is at the same offset for all current message formats, but the 4 bytes
     // between the size and the magic is dependent on the version.
     int MAGIC_OFFSET = 16;
+    int MAGIC_LENGTH = 1;
+    int HEADER_SIZE_UP_TO_MAGIC = MAGIC_OFFSET + MAGIC_LENGTH;
 
     /**
      * The size of these records in bytes.
@@ -94,9 +98,12 @@ public interface Records {
      * Convert all batches in this buffer to the format passed as a parameter. Note that this requires
      * deep iteration since all of the deep records must also be converted to the desired format.
      * @param toMagic The magic value to convert to
-     * @return A Records instance (which may or may not be the same instance)
+     * @param firstOffset The starting offset for returned records. This only impacts some cases. See
+     *                    {@link AbstractRecords#downConvert(Iterable, byte, long, Time) for an explanation.
+     * @param time instance used for reporting stats
+     * @return A ConvertedRecords instance which may or may not contain the same instance in its records field.
      */
-    Records downConvert(byte toMagic);
+    ConvertedRecords<? extends Records> downConvert(byte toMagic, long firstOffset, Time time);
 
     /**
      * Get an iterator over the records in this log. Note that this generally requires decompression,

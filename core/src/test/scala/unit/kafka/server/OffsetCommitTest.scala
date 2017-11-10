@@ -24,7 +24,7 @@ import kafka.utils._
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.Time
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
 import java.util.Properties
@@ -68,8 +68,7 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
   @After
   override def tearDown() {
     simpleConsumer.close
-    server.shutdown
-    Utils.delete(logDir)
+    TestUtils.shutdownServers(Seq(server))
     super.tearDown()
   }
 

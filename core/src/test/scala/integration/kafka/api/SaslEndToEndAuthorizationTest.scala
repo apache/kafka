@@ -19,10 +19,11 @@ package kafka.api
 import java.util.Properties
 
 import kafka.utils.TestUtils
-import org.apache.kafka.common.protocol.SecurityProtocol
+import kafka.utils.Implicits._
 import org.apache.kafka.common.config.SaslConfigs
-import org.apache.kafka.common.errors.GroupAuthorizationException
-import org.junit.{Before,Test}
+import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.errors.TopicAuthorizationException
+import org.junit.{Before, Test}
 
 import scala.collection.immutable.List
 import scala.collection.JavaConverters._
@@ -37,19 +38,14 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   
   @Before
   override def setUp {
-    startSasl(kafkaServerSaslMechanisms, Option(kafkaClientSaslMechanism), Both)
-    super.setUp
-  }
-
-  // Use JAAS configuration properties for clients so that dynamic JAAS configuration is also tested by this set of tests
-  override protected def setJaasConfiguration(mode: SaslSetupMode, serverEntryName: String,
-                                              serverMechanisms: List[String], clientMechanism: Option[String]) {
-    // create static config with client login context with credentials for JaasTestUtils 'client2'
-    super.setJaasConfiguration(mode, serverEntryName, kafkaServerSaslMechanisms, clientMechanism)
-    // set dynamic properties with credentials for JaasTestUtils 'client1'
+    // create static config including client login context with credentials for JaasTestUtils 'client2'
+    startSasl(jaasSections(kafkaServerSaslMechanisms, Option(kafkaClientSaslMechanism), Both))
+    // set dynamic properties with credentials for JaasTestUtils 'client1' so that dynamic JAAS configuration is also
+    // tested by this set of tests
     val clientLoginContext = jaasClientLoginModule(kafkaClientSaslMechanism)
     producerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
     consumerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
+    super.setUp
   }
 
   /**
@@ -58,12 +54,12 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
     * the second one connects ok, but fails to consume messages due to the ACL.
     */
   @Test(timeout = 15000)
-  def testTwoConsumersWithDifferentSaslCredentials {
+  def testTwoConsumersWithDifferentSaslCredentials(): Unit = {
     setAclsAndProduce()
     val consumer1 = consumers.head
 
     val consumer2Config = new Properties
-    consumer2Config.putAll(consumerConfig)
+    consumer2Config ++= consumerConfig
     // consumer2 retrieves its credentials from the static JAAS configuration, so we test also this path
     consumer2Config.remove(SaslConfigs.SASL_JAAS_CONFIG)
 
@@ -81,9 +77,9 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
 
     try {
       consumeRecords(consumer2)
-      fail("Expected exception as consumer2 has no access to group")
+      fail("Expected exception as consumer2 has no access to topic")
     } catch {
-      case _: GroupAuthorizationException => //expected
+      case _: TopicAuthorizationException => //expected
     }
   }
 }

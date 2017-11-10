@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -17,24 +17,26 @@
 
 package kafka.tools
 
-import org.I0Itec.zkclient.ZkClient
 import kafka.consumer.{ConsumerConfig, SimpleConsumer}
 import kafka.api.{OffsetRequest, PartitionOffsetRequestInfo}
 import kafka.common.{KafkaException, TopicAndPartition}
-import kafka.utils.{CoreUtils, Exit, ZKGroupTopicDirs, ZkUtils}
+import kafka.utils.{Exit, Logging, ZKGroupTopicDirs, ZkUtils}
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.security.JaasUtils
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
 
 /**
  *  A utility that updates the offset of every broker partition to the offset of earliest or latest log segment file, in ZK.
  */
-object UpdateOffsetsInZK {
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
+object UpdateOffsetsInZK extends Logging {
   val Earliest = "earliest"
   val Latest = "latest"
 
   def main(args: Array[String]) {
+    warn("WARNING: UpdateOffsetsInZK is deprecated and will be dropped in releases following 0.11.0.0.")
+
     if(args.length < 3)
       usage
     val config = new ConsumerConfig(Utils.loadProps(args(1)))

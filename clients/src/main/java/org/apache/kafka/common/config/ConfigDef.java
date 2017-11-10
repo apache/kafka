@@ -26,6 +26,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
@@ -82,15 +83,17 @@ public class ConfigDef {
     private Set<String> configsWithNoParent;
 
     public ConfigDef() {
-        configKeys = new HashMap<>();
+        configKeys = new LinkedHashMap<>();
         groups = new LinkedList<>();
         configsWithNoParent = null;
     }
 
     public ConfigDef(ConfigDef base) {
-        configKeys = new HashMap<>(base.configKeys);
+        configKeys = new LinkedHashMap<>(base.configKeys);
         groups = new LinkedList<>(base.groups);
-        configsWithNoParent = base.configsWithNoParent == null ? null : new HashSet<>(base.configsWithNoParent);
+        // It is not safe to copy this from the parent because we may subsequently add to the set of configs and
+        // invalidate this
+        configsWithNoParent = null;
     }
 
     /**
@@ -527,7 +530,8 @@ public class ConfigDef {
         return new ArrayList<>(undefinedConfigKeys);
     }
 
-    private Set<String> getConfigsWithNoParent() {
+    // package accessible for testing
+    Set<String> getConfigsWithNoParent() {
         if (this.configsWithNoParent != null) {
             return this.configsWithNoParent;
         }
@@ -735,7 +739,7 @@ public class ConfigDef {
                 return Utils.join(valueList, ",");
             case CLASS:
                 Class<?> clazz = (Class<?>) parsedValue;
-                return clazz.getCanonicalName();
+                return clazz.getName();
             default:
                 throw new IllegalStateException("Unknown type.");
         }
@@ -863,6 +867,7 @@ public class ConfigDef {
 
         @Override
         public void ensureValid(final String name, final Object value) {
+            @SuppressWarnings("unchecked")
             List<String> values = (List<String>) value;
             for (String string : values) {
                 validString.ensureValid(name, string);
@@ -896,6 +901,22 @@ public class ConfigDef {
 
         public String toString() {
             return "[" + Utils.join(validStrings, ", ") + "]";
+        }
+    }
+
+    public static class NonEmptyString implements Validator {
+
+        @Override
+        public void ensureValid(String name, Object o) {
+            String s = (String) o;
+            if (s != null && s.isEmpty()) {
+                throw new ConfigException(name, o, "String must be non-empty");
+            }
+        }
+
+        @Override
+        public String toString() {
+            return "non-empty string";
         }
     }
 

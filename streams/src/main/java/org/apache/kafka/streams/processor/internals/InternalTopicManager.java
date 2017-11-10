@@ -17,12 +17,11 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -31,23 +30,30 @@ import java.util.concurrent.TimeUnit;
 
 public class InternalTopicManager {
 
-    private static final Logger log = LoggerFactory.getLogger(InternalTopicManager.class);
+    static final Long WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
+
     public static final String CLEANUP_POLICY_PROP = "cleanup.policy";
     public static final String RETENTION_MS = "retention.ms";
-    public static final Long WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
     private static final int MAX_TOPIC_READY_TRY = 5;
+
+    private final Logger log;
     private final Time time;
     private final long windowChangeLogAdditionalRetention;
 
     private final int replicationFactor;
     private final StreamsKafkaClient streamsKafkaClient;
 
-    public InternalTopicManager(final StreamsKafkaClient streamsKafkaClient, final int replicationFactor,
-                                final long windowChangeLogAdditionalRetention, final Time time) {
+    public InternalTopicManager(final StreamsKafkaClient streamsKafkaClient,
+                                final int replicationFactor,
+                                final long windowChangeLogAdditionalRetention,
+                                final Time time) {
         this.streamsKafkaClient = streamsKafkaClient;
         this.replicationFactor = replicationFactor;
         this.windowChangeLogAdditionalRetention = windowChangeLogAdditionalRetention;
         this.time = time;
+
+        LogContext logContext = new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName()));
+        this.log = logContext.logger(getClass());
     }
 
     /**
@@ -63,16 +69,18 @@ public class InternalTopicManager {
                 final MetadataResponse metadata = streamsKafkaClient.fetchMetadata();
                 final Map<String, Integer> existingTopicPartitions = fetchExistingPartitionCountByTopic(metadata);
                 final Map<InternalTopicConfig, Integer> topicsToBeCreated = validateTopicPartitions(topics, existingTopicPartitions);
-                if (metadata.brokers().size() < replicationFactor) {
-                    throw new StreamsException("Found only " + metadata.brokers().size() + " brokers, " +
-                        " but replication factor is " + replicationFactor + "." +
-                        " Decrease replication factor for internal topics via StreamsConfig parameter \"replication.factor\""  +
-                        " or add more brokers to your cluster.");
+                if (topicsToBeCreated.size() > 0) {
+                    if (metadata.brokers().size() < replicationFactor) {
+                        throw new StreamsException("Found only " + metadata.brokers().size() + " brokers, " +
+                            " but replication factor is " + replicationFactor + "." +
+                            " Decrease replication factor for internal topics via StreamsConfig parameter \"replication.factor\"" +
+                            " or add more brokers to your cluster.");
+                    }
+                    streamsKafkaClient.createTopics(topicsToBeCreated, replicationFactor, windowChangeLogAdditionalRetention, metadata);
                 }
-                streamsKafkaClient.createTopics(topicsToBeCreated, replicationFactor, windowChangeLogAdditionalRetention, metadata);
                 return;
             } catch (StreamsException ex) {
-                log.warn("Could not create internal topics: " + ex.getMessage() + " Retry #" + i);
+                log.warn("Could not create internal topics: {} Retry #{}", ex.getMessage(), i);
             }
             // backoff
             time.sleep(100L);
@@ -92,7 +100,7 @@ public class InternalTopicManager {
 
                 return existingTopicPartitions;
             } catch (StreamsException ex) {
-                log.warn("Could not get number of partitions: " + ex.getMessage() + " Retry #" + i);
+                log.warn("Could not get number of partitions: {} Retry #{}", ex.getMessage(), i);
             }
             // backoff
             time.sleep(100L);
@@ -101,11 +109,7 @@ public class InternalTopicManager {
     }
 
     public void close() {
-        try {
-            streamsKafkaClient.close();
-        } catch (IOException e) {
-            log.warn("Could not close StreamsKafkaClient.");
-        }
+        streamsKafkaClient.close();
     }
 
     /**

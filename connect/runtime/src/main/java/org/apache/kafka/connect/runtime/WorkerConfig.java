@@ -16,12 +16,20 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.metrics.Sensor;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
+
+import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 /**
  * Common base class providing configuration for Kafka Connect workers, whether standalone or distributed.
@@ -122,6 +130,23 @@ public class WorkerConfig extends AbstractConfig {
         + "The default value of the Access-Control-Allow-Methods header allows cross origin requests for GET, POST and HEAD.";
     protected static final String ACCESS_CONTROL_ALLOW_METHODS_DEFAULT = "";
 
+    public static final String PLUGIN_PATH_CONFIG = "plugin.path";
+    protected static final String PLUGIN_PATH_DOC = "List of paths separated by commas (,) that "
+            + "contain plugins (connectors, converters, transformations). The list should consist"
+            + " of top level directories that include any combination of: \n"
+            + "a) directories immediately containing jars with plugins and their dependencies\n"
+            + "b) uber-jars with plugins and their dependencies\n"
+            + "c) directories immediately containing the package directory structure of classes of "
+            + "plugins and their dependencies\n"
+            + "Note: symlinks will be followed to discover dependencies or plugins.\n"
+            + "Examples: plugin.path=/usr/local/share/java,/usr/local/share/kafka/plugins,"
+            + "/opt/connectors";
+
+    public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG;
+    public static final String METRICS_NUM_SAMPLES_CONFIG = CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG;
+    public static final String METRICS_RECORDING_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG;
+    public static final String METRIC_REPORTER_CLASSES_CONFIG = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG;
+
     /**
      * Get a basic ConfigDef for a WorkerConfig. This includes all the common settings. Subclasses can use this to
      * bootstrap their own ConfigDef.
@@ -155,7 +180,38 @@ public class WorkerConfig extends AbstractConfig {
                         ACCESS_CONTROL_ALLOW_ORIGIN_DOC)
                 .define(ACCESS_CONTROL_ALLOW_METHODS_CONFIG, Type.STRING,
                         ACCESS_CONTROL_ALLOW_METHODS_DEFAULT, Importance.LOW,
-                        ACCESS_CONTROL_ALLOW_METHODS_DOC);
+                        ACCESS_CONTROL_ALLOW_METHODS_DOC)
+                .define(PLUGIN_PATH_CONFIG,
+                        Type.LIST,
+                        null,
+                        Importance.LOW,
+                        PLUGIN_PATH_DOC)
+                .define(METRICS_SAMPLE_WINDOW_MS_CONFIG, Type.LONG,
+                        30000, atLeast(0), Importance.LOW,
+                        CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC)
+                .define(METRICS_NUM_SAMPLES_CONFIG, Type.INT,
+                        2, atLeast(1), Importance.LOW,
+                        CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
+                .define(METRICS_RECORDING_LEVEL_CONFIG, Type.STRING,
+                        Sensor.RecordingLevel.INFO.toString(),
+                        in(Sensor.RecordingLevel.INFO.toString(), Sensor.RecordingLevel.DEBUG.toString()),
+                        Importance.LOW,
+                        CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
+                .define(METRIC_REPORTER_CLASSES_CONFIG, Type.LIST,
+                        "", Importance.LOW,
+                        CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC);
+    }
+
+    @Override
+    protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
+        return CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
+    }
+
+    public static List<String> pluginLocations(Map<String, String> props) {
+        String locationList = props.get(WorkerConfig.PLUGIN_PATH_CONFIG);
+        return locationList == null
+                         ? new ArrayList<String>()
+                         : Arrays.asList(locationList.trim().split("\\s*,\\s*", -1));
     }
 
     public WorkerConfig(ConfigDef definition, Map<String, String> props) {

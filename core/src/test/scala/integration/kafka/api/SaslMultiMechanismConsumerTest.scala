@@ -13,21 +13,35 @@
 package kafka.api
 
 import java.io.File
-import org.apache.kafka.common.protocol.SecurityProtocol
+
 import kafka.server.KafkaConfig
-import org.junit.Test
-import kafka.utils.TestUtils
+import org.junit.{After, Before, Test}
+import kafka.utils.{JaasTestUtils, TestUtils}
+import org.apache.kafka.common.security.auth.SecurityProtocol
+
 import scala.collection.JavaConverters._
 
-class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslTestHarness {
-  override protected val zkSaslEnabled = true
-  override protected val kafkaClientSaslMechanism = "PLAIN"
-  override protected val kafkaServerSaslMechanisms = List("GSSAPI", "PLAIN")
+class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslSetup {
+  private val kafkaClientSaslMechanism = "PLAIN"
+  private val kafkaServerSaslMechanisms = List("GSSAPI", "PLAIN")
   this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
   override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
   override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
+
+  @Before
+  override def setUp(): Unit = {
+    startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), Both,
+      JaasTestUtils.KafkaServerContextName))
+    super.setUp()
+  }
+
+  @After
+  override def tearDown(): Unit = {
+    super.tearDown()
+    closeSasl()
+  }
 
   @Test
   def testMultipleBrokerMechanisms() {

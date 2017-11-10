@@ -29,7 +29,7 @@ import kafka.utils.{CommandLineUtils, Exit, ToolsUtils}
 object GetOffsetShell {
 
   def main(args: Array[String]): Unit = {
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     val brokerListOpt = parser.accepts("broker-list", "REQUIRED: The list of hostname and port of the server to connect to.")
                            .withRequiredArg
                            .describedAs("hostname:port,...,hostname:port")
@@ -71,8 +71,8 @@ object GetOffsetShell {
     ToolsUtils.validatePortOrDie(parser, brokerList)
     val metadataTargetBrokers = ClientUtils.parseBrokerList(brokerList)
     val topic = options.valueOf(topicOpt)
-    var partitionList = options.valueOf(partitionOpt)
-    var time = options.valueOf(timeOpt).longValue
+    val partitionList = options.valueOf(partitionOpt)
+    val time = options.valueOf(timeOpt).longValue
     val nOffsets = options.valueOf(nOffsetsOpt).intValue
     val maxWaitMs = options.valueOf(maxWaitMsOpt).intValue()
 

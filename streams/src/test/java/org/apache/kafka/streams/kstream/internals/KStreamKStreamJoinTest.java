@@ -18,17 +18,20 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsBuilderTest;
 import org.apache.kafka.streams.kstream.JoinWindows;
+import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.io.File;
@@ -48,16 +51,10 @@ public class KStreamKStreamJoinTest {
     final private Serde<Integer> intSerde = Serdes.Integer();
     final private Serde<String> stringSerde = Serdes.String();
 
-    private KStreamTestDriver driver = null;
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
     private File stateDir = null;
-
-    @After
-    public void tearDown() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
-    }
+    private final Consumed<Integer, String> consumed = Consumed.with(intSerde, stringSerde);
 
     @Before
     public void setUp() throws IOException {
@@ -65,8 +62,8 @@ public class KStreamKStreamJoinTest {
     }
 
     @Test
-    public void testJoin() throws Exception {
-        KStreamBuilder builder = new KStreamBuilder();
+    public void testJoin() {
+        StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
@@ -76,17 +73,20 @@ public class KStreamKStreamJoinTest {
         MockProcessorSupplier<Integer, String> processor;
 
         processor = new MockProcessorSupplier<>();
-        stream1 = builder.stream(intSerde, stringSerde, topic1);
-        stream2 = builder.stream(intSerde, stringSerde, topic2);
-        joined = stream1.join(stream2, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(100), intSerde, stringSerde, stringSerde);
+        stream1 = builder.stream(topic1, consumed);
+        stream2 = builder.stream(topic2, consumed);
+        joined = stream1.join(stream2,
+                              MockValueJoiner.TOSTRING_JOINER,
+                              JoinWindows.of(100),
+                              Joined.with(intSerde, stringSerde, stringSerde));
         joined.process(processor);
 
-        Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
+        Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
 
         assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
         driver.setTime(0L);
 
         // push two items to the primary stream. the other window is empty
@@ -163,8 +163,8 @@ public class KStreamKStreamJoinTest {
     }
 
     @Test
-    public void testOuterJoin() throws Exception {
-        KStreamBuilder builder = new KStreamBuilder();
+    public void testOuterJoin() {
+        StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
@@ -174,17 +174,20 @@ public class KStreamKStreamJoinTest {
         MockProcessorSupplier<Integer, String> processor;
 
         processor = new MockProcessorSupplier<>();
-        stream1 = builder.stream(intSerde, stringSerde, topic1);
-        stream2 = builder.stream(intSerde, stringSerde, topic2);
-        joined = stream1.outerJoin(stream2, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(100), intSerde, stringSerde, stringSerde);
-        joined.process(processor);
 
-        Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
+        stream1 = builder.stream(topic1, consumed);
+        stream2 = builder.stream(topic2, consumed);
+        joined = stream1.outerJoin(stream2,
+                                   MockValueJoiner.TOSTRING_JOINER,
+                                   JoinWindows.of(100),
+                                   Joined.with(intSerde, stringSerde, stringSerde));
+        joined.process(processor);
+        Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
 
         assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
         driver.setTime(0L);
 
         // push two items to the primary stream. the other window is empty.this should produce two items
@@ -261,10 +264,10 @@ public class KStreamKStreamJoinTest {
     }
 
     @Test
-    public void testWindowing() throws Exception {
+    public void testWindowing() {
         long time = 0L;
 
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
@@ -274,18 +277,21 @@ public class KStreamKStreamJoinTest {
         MockProcessorSupplier<Integer, String> processor;
 
         processor = new MockProcessorSupplier<>();
-        stream1 = builder.stream(intSerde, stringSerde, topic1);
-        stream2 = builder.stream(intSerde, stringSerde, topic2);
+        stream1 = builder.stream(topic1, consumed);
+        stream2 = builder.stream(topic2, consumed);
 
-        joined = stream1.join(stream2, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(100), intSerde, stringSerde, stringSerde);
+        joined = stream1.join(stream2,
+                              MockValueJoiner.TOSTRING_JOINER,
+                              JoinWindows.of(100),
+                              Joined.with(intSerde, stringSerde, stringSerde));
         joined.process(processor);
 
-        Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
+        Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
 
         assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
 
 
         // push two items to the primary stream. the other window is empty. this should produce no items.
@@ -488,10 +494,10 @@ public class KStreamKStreamJoinTest {
     }
 
     @Test
-    public void testAsymetricWindowingAfter() throws Exception {
+    public void testAsymetricWindowingAfter() {
         long time = 1000L;
 
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
@@ -501,18 +507,23 @@ public class KStreamKStreamJoinTest {
         MockProcessorSupplier<Integer, String> processor;
 
         processor = new MockProcessorSupplier<>();
-        stream1 = builder.stream(intSerde, stringSerde, topic1);
-        stream2 = builder.stream(intSerde, stringSerde, topic2);
+        stream1 = builder.stream(topic1, consumed);
+        stream2 = builder.stream(topic2, consumed);
 
-        joined = stream1.join(stream2, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(0).after(100), intSerde, stringSerde, stringSerde);
+        joined = stream1.join(stream2,
+                              MockValueJoiner.TOSTRING_JOINER,
+                              JoinWindows.of(0).after(100),
+                              Joined.with(intSerde,
+                                          stringSerde,
+                                          stringSerde));
         joined.process(processor);
 
-        Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
+        Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
 
         assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
 
         for (int i = 0; i < expectedKeys.length; i++) {
             setRecordContext(time + i, topic1);
@@ -597,10 +608,10 @@ public class KStreamKStreamJoinTest {
     }
 
     @Test
-    public void testAsymetricWindowingBefore() throws Exception {
+    public void testAsymetricWindowingBefore() {
         long time = 1000L;
 
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
@@ -610,18 +621,21 @@ public class KStreamKStreamJoinTest {
         MockProcessorSupplier<Integer, String> processor;
 
         processor = new MockProcessorSupplier<>();
-        stream1 = builder.stream(intSerde, stringSerde, topic1);
-        stream2 = builder.stream(intSerde, stringSerde, topic2);
+        stream1 = builder.stream(topic1, consumed);
+        stream2 = builder.stream(topic2, consumed);
 
-        joined = stream1.join(stream2, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(0).before(100), intSerde, stringSerde, stringSerde);
+        joined = stream1.join(stream2,
+                              MockValueJoiner.TOSTRING_JOINER,
+                              JoinWindows.of(0).before(100),
+                              Joined.with(intSerde, stringSerde, stringSerde));
         joined.process(processor);
 
-        Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
+        Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
 
         assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
 
         for (int i = 0; i < expectedKeys.length; i++) {
             setRecordContext(time + i, topic1);

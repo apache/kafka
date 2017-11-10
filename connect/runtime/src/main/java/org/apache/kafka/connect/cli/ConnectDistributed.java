@@ -20,10 +20,11 @@ import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.Connect;
-import org.apache.kafka.connect.runtime.ConnectorFactory;
 import org.apache.kafka.connect.runtime.Worker;
+import org.apache.kafka.connect.runtime.WorkerInfo;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
+import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
@@ -55,12 +56,19 @@ public class ConnectDistributed {
             Exit.exit(1);
         }
 
+        Time time = Time.SYSTEM;
+        log.info("Kafka Connect distributed worker initializing ...");
+        long initStart = time.hiResClockMs();
+        WorkerInfo initInfo = new WorkerInfo();
+        initInfo.logAll();
+
         String workerPropsFile = args[0];
         Map<String, String> workerProps = !workerPropsFile.isEmpty() ?
                 Utils.propsToStringMap(Utils.loadProps(workerPropsFile)) : Collections.<String, String>emptyMap();
 
-        Time time = Time.SYSTEM;
-        ConnectorFactory connectorFactory = new ConnectorFactory();
+        log.info("Scanning for plugin classes. This might take a moment ...");
+        Plugins plugins = new Plugins(workerProps);
+        plugins.compareAndSwapWithDelegatingLoader();
         DistributedConfig config = new DistributedConfig(workerProps);
 
         RestServer rest = new RestServer(config);
@@ -70,7 +78,7 @@ public class ConnectDistributed {
         KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore();
         offsetBackingStore.configure(config);
 
-        Worker worker = new Worker(workerId, time, connectorFactory, config, offsetBackingStore);
+        Worker worker = new Worker(workerId, time, plugins, config, offsetBackingStore);
 
         StatusBackingStore statusBackingStore = new KafkaStatusBackingStore(time, worker.getInternalValueConverter());
         statusBackingStore.configure(config);
@@ -80,6 +88,7 @@ public class ConnectDistributed {
         DistributedHerder herder = new DistributedHerder(config, time, worker, statusBackingStore, configBackingStore,
                 advertisedUrl.toString());
         final Connect connect = new Connect(herder, rest);
+        log.info("Kafka Connect distributed worker initialization took {}ms", time.hiResClockMs() - initStart);
         try {
             connect.start();
         } catch (Exception e) {

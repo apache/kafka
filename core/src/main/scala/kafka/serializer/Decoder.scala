@@ -17,6 +17,8 @@
 
 package kafka.serializer
 
+import java.nio.ByteBuffer
+
 import kafka.utils.VerifiableProperties
 
 /**
@@ -48,5 +50,23 @@ class StringDecoder(props: VerifiableProperties = null) extends Decoder[String] 
 
   def fromBytes(bytes: Array[Byte]): String = {
     new String(bytes, encoding)
+  }
+}
+
+/**
+  * The long decoder translates bytes into longs.
+  */
+class LongDecoder(props: VerifiableProperties = null) extends Decoder[Long] {
+  def fromBytes(bytes: Array[Byte]): Long = {
+    ByteBuffer.wrap(bytes).getLong
+  }
+}
+
+/**
+  * The integer decoder translates bytes into integers.
+  */
+class IntegerDecoder(props: VerifiableProperties = null) extends Decoder[Integer] {
+  def fromBytes(bytes: Array[Byte]): Integer = {
+    ByteBuffer.wrap(bytes).getInt()
   }
 }

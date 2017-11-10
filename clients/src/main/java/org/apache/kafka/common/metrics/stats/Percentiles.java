@@ -93,6 +93,7 @@ public class Percentiles extends SampledStat implements CompoundStat {
         return Double.POSITIVE_INFINITY;
     }
 
+    @Override
     public double combine(List<Sample> samples, MetricConfig config, long now) {
         return value(config, now, 0.5);
     }
@@ -114,6 +115,12 @@ public class Percentiles extends SampledStat implements CompoundStat {
         private HistogramSample(BinScheme scheme, long now) {
             super(0.0, now);
             this.histogram = new Histogram(scheme);
+        }
+
+        @Override
+        public void reset(long now) {
+            super.reset(now);
+            this.histogram.clear();
         }
     }
 

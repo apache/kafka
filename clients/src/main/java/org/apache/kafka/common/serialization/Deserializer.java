@@ -20,12 +20,13 @@ import java.io.Closeable;
 import java.util.Map;
 
 /**
+ * An interface for converting bytes to objects.
  *
- * @param <T> Type to be deserialized into.
- *
- * A class that implements this interface is expected to have a constructor with no parameter.
+ * A class that implements this interface is expected to have a constructor with no parameters.
  * <p>
  * Implement {@link org.apache.kafka.common.ClusterResourceListener} to receive cluster metadata once it's available. Please see the class documentation for ClusterResourceListener for more information.
+ *
+ * @param <T> Type to be deserialized into.
  */
 public interface Deserializer<T> extends Closeable {
 
@@ -34,16 +35,16 @@ public interface Deserializer<T> extends Closeable {
      * @param configs configs in key/value pairs
      * @param isKey whether is for key or value
      */
-    public void configure(Map<String, ?> configs, boolean isKey);
-    
+    void configure(Map<String, ?> configs, boolean isKey);
+
     /**
-     * Deserialize a record value from a bytearray into a value or object.
+     * Deserialize a record value from a byte array into a value or object.
      * @param topic topic associated with the data
      * @param data serialized bytes; may be null; implementations are recommended to handle null by returning a value or null rather than throwing an exception.
      * @return deserialized typed data; may be null
      */
-    public T deserialize(String topic, byte[] data);
+    T deserialize(String topic, byte[] data);
 
     @Override
-    public void close();
+    void close();
 }

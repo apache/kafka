@@ -19,6 +19,9 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
 
@@ -26,78 +29,125 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.kafka.common.protocol.CommonFields.GROUP_ID;
+import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
+import static org.apache.kafka.common.protocol.CommonFields.PRODUCER_EPOCH;
+import static org.apache.kafka.common.protocol.CommonFields.PRODUCER_ID;
+import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
+import static org.apache.kafka.common.protocol.CommonFields.TRANSACTIONAL_ID;
+import static org.apache.kafka.common.protocol.types.Type.INT64;
+import static org.apache.kafka.common.protocol.types.Type.NULLABLE_STRING;
+
 public class TxnOffsetCommitRequest extends AbstractRequest {
-    private static final String CONSUMER_GROUP_ID_KEY_NAME = "consumer_group_id";
-    private static final String PID_KEY_NAME = "producer_id";
-    private static final String EPOCH_KEY_NAME = "producer_epoch";
-    private static final String RETENTION_TIME_KEY_NAME = "retention_time";
-    private static final String TOPIC_PARTITIONS_KEY_NAME = "topics";
-    private static final String TOPIC_KEY_NAME = "topic";
+    private static final String TOPICS_KEY_NAME = "topics";
     private static final String PARTITIONS_KEY_NAME = "partitions";
-    private static final String PARTITION_KEY_NAME = "partition";
     private static final String OFFSET_KEY_NAME = "offset";
     private static final String METADATA_KEY_NAME = "metadata";
 
+    private static final Schema TXN_OFFSET_COMMIT_PARTITION_OFFSET_METADATA_REQUEST_V0 = new Schema(
+            PARTITION_ID,
+            new Field(OFFSET_KEY_NAME, INT64),
+            new Field(METADATA_KEY_NAME, NULLABLE_STRING));
+
+    private static final Schema TXN_OFFSET_COMMIT_REQUEST_V0 = new Schema(
+            TRANSACTIONAL_ID,
+            GROUP_ID,
+            PRODUCER_ID,
+            PRODUCER_EPOCH,
+            new Field(TOPICS_KEY_NAME, new ArrayOf(new Schema(
+                    TOPIC_NAME,
+                    new Field(PARTITIONS_KEY_NAME, new ArrayOf(TXN_OFFSET_COMMIT_PARTITION_OFFSET_METADATA_REQUEST_V0)))),
+                    "The partitions to write markers for."));
+
+    public static Schema[] schemaVersions() {
+        return new Schema[]{TXN_OFFSET_COMMIT_REQUEST_V0};
+    }
+
     public static class Builder extends AbstractRequest.Builder<TxnOffsetCommitRequest> {
+        private final String transactionalId;
         private final String consumerGroupId;
         private final long producerId;
         private final short producerEpoch;
-        private final long retentionTimeMs;
         private final Map<TopicPartition, CommittedOffset> offsets;
 
-        public Builder(String consumerGroupId, long producerId, short producerEpoch, long retentionTimeMs,
+        public Builder(String transactionalId, String consumerGroupId, long producerId, short producerEpoch,
                        Map<TopicPartition, CommittedOffset> offsets) {
             super(ApiKeys.TXN_OFFSET_COMMIT);
+            this.transactionalId = transactionalId;
             this.consumerGroupId = consumerGroupId;
             this.producerId = producerId;
             this.producerEpoch = producerEpoch;
-            this.retentionTimeMs = retentionTimeMs;
             this.offsets = offsets;
+        }
+
+        public String consumerGroupId() {
+            return consumerGroupId;
+        }
+
+        public Map<TopicPartition, CommittedOffset> offsets() {
+            return offsets;
         }
 
         @Override
         public TxnOffsetCommitRequest build(short version) {
-            return new TxnOffsetCommitRequest(version, consumerGroupId, producerId, producerEpoch, retentionTimeMs, offsets);
+            return new TxnOffsetCommitRequest(version, transactionalId, consumerGroupId, producerId, producerEpoch, offsets);
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("(type=TxnOffsetCommitRequest").
+                    append(", transactionalId=").append(transactionalId).
+                    append(", producerId=").append(producerId).
+                    append(", producerEpoch=").append(producerEpoch).
+                    append(", consumerGroupId=").append(consumerGroupId).
+                    append(", offsets=").append(offsets).
+                    append(")");
+            return bld.toString();
         }
     }
 
+    private final String transactionalId;
     private final String consumerGroupId;
     private final long producerId;
     private final short producerEpoch;
-    private final long retentionTimeMs;
     private final Map<TopicPartition, CommittedOffset> offsets;
 
-    public TxnOffsetCommitRequest(short version, String consumerGroupId, long producerId, short producerEpoch,
-                                  long retentionTimeMs, Map<TopicPartition, CommittedOffset> offsets) {
+    public TxnOffsetCommitRequest(short version, String transactionalId, String consumerGroupId, long producerId,
+                                  short producerEpoch, Map<TopicPartition, CommittedOffset> offsets) {
         super(version);
+        this.transactionalId = transactionalId;
         this.consumerGroupId = consumerGroupId;
         this.producerId = producerId;
         this.producerEpoch = producerEpoch;
-        this.retentionTimeMs = retentionTimeMs;
         this.offsets = offsets;
     }
 
     public TxnOffsetCommitRequest(Struct struct, short version) {
         super(version);
-        this.consumerGroupId = struct.getString(CONSUMER_GROUP_ID_KEY_NAME);
-        this.producerId = struct.getLong(PID_KEY_NAME);
-        this.producerEpoch = struct.getShort(EPOCH_KEY_NAME);
-        this.retentionTimeMs = struct.getLong(RETENTION_TIME_KEY_NAME);
+        this.transactionalId = struct.get(TRANSACTIONAL_ID);
+        this.consumerGroupId = struct.get(GROUP_ID);
+        this.producerId = struct.get(PRODUCER_ID);
+        this.producerEpoch = struct.get(PRODUCER_EPOCH);
 
         Map<TopicPartition, CommittedOffset> offsets = new HashMap<>();
-        Object[] topicPartitionsArray = struct.getArray(TOPIC_PARTITIONS_KEY_NAME);
+        Object[] topicPartitionsArray = struct.getArray(TOPICS_KEY_NAME);
         for (Object topicPartitionObj : topicPartitionsArray) {
             Struct topicPartitionStruct = (Struct) topicPartitionObj;
-            String topic = topicPartitionStruct.getString(TOPIC_KEY_NAME);
+            String topic = topicPartitionStruct.get(TOPIC_NAME);
             for (Object partitionObj : topicPartitionStruct.getArray(PARTITIONS_KEY_NAME)) {
                 Struct partitionStruct = (Struct) partitionObj;
-                TopicPartition partition = new TopicPartition(topic, partitionStruct.getInt(PARTITION_KEY_NAME));
+                TopicPartition partition = new TopicPartition(topic, partitionStruct.get(PARTITION_ID));
                 long offset = partitionStruct.getLong(OFFSET_KEY_NAME);
                 String metadata = partitionStruct.getString(METADATA_KEY_NAME);
                 offsets.put(partition, new CommittedOffset(offset, metadata));
             }
         }
         this.offsets = offsets;
+    }
+
+    public String transactionalId() {
+        return transactionalId;
     }
 
     public String consumerGroupId() {
@@ -112,10 +162,6 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         return producerEpoch;
     }
 
-    public long retentionTimeMs() {
-        return retentionTimeMs;
-    }
-
     public Map<TopicPartition, CommittedOffset> offsets() {
         return offsets;
     }
@@ -123,24 +169,24 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
     @Override
     protected Struct toStruct() {
         Struct struct = new Struct(ApiKeys.TXN_OFFSET_COMMIT.requestSchema(version()));
-        struct.set(CONSUMER_GROUP_ID_KEY_NAME, consumerGroupId);
-        struct.set(PID_KEY_NAME, producerId);
-        struct.set(EPOCH_KEY_NAME, producerEpoch);
-        struct.set(RETENTION_TIME_KEY_NAME, retentionTimeMs);
+        struct.set(TRANSACTIONAL_ID, transactionalId);
+        struct.set(GROUP_ID, consumerGroupId);
+        struct.set(PRODUCER_ID, producerId);
+        struct.set(PRODUCER_EPOCH, producerEpoch);
 
         Map<String, Map<Integer, CommittedOffset>> mappedPartitionOffsets = CollectionUtils.groupDataByTopic(offsets);
         Object[] partitionsArray = new Object[mappedPartitionOffsets.size()];
         int i = 0;
         for (Map.Entry<String, Map<Integer, CommittedOffset>> topicAndPartitions : mappedPartitionOffsets.entrySet()) {
-            Struct topicPartitionsStruct = struct.instance(TOPIC_PARTITIONS_KEY_NAME);
-            topicPartitionsStruct.set(TOPIC_KEY_NAME, topicAndPartitions.getKey());
+            Struct topicPartitionsStruct = struct.instance(TOPICS_KEY_NAME);
+            topicPartitionsStruct.set(TOPIC_NAME, topicAndPartitions.getKey());
 
             Map<Integer, CommittedOffset> partitionOffsets = topicAndPartitions.getValue();
             Object[] partitionOffsetsArray = new Object[partitionOffsets.size()];
             int j = 0;
             for (Map.Entry<Integer, CommittedOffset> partitionOffset : partitionOffsets.entrySet()) {
                 Struct partitionOffsetStruct = topicPartitionsStruct.instance(PARTITIONS_KEY_NAME);
-                partitionOffsetStruct.set(PARTITION_KEY_NAME, partitionOffset.getKey());
+                partitionOffsetStruct.set(PARTITION_ID, partitionOffset.getKey());
                 CommittedOffset committedOffset = partitionOffset.getValue();
                 partitionOffsetStruct.set(OFFSET_KEY_NAME, committedOffset.offset);
                 partitionOffsetStruct.set(METADATA_KEY_NAME, committedOffset.metadata);
@@ -150,17 +196,17 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
             partitionsArray[i++] = topicPartitionsStruct;
         }
 
-        struct.set(TOPIC_PARTITIONS_KEY_NAME, partitionsArray);
+        struct.set(TOPICS_KEY_NAME, partitionsArray);
         return struct;
     }
 
     @Override
-    public TxnOffsetCommitResponse getErrorResponse(Throwable e) {
+    public TxnOffsetCommitResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Errors error = Errors.forException(e);
         Map<TopicPartition, Errors> errors = new HashMap<>(offsets.size());
         for (TopicPartition partition : offsets.keySet())
             errors.put(partition, error);
-        return new TxnOffsetCommitResponse(errors);
+        return new TxnOffsetCommitResponse(throttleTimeMs, errors);
     }
 
     public static TxnOffsetCommitRequest parse(ByteBuffer buffer, short version) {

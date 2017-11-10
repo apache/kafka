@@ -22,7 +22,6 @@ import java.nio.charset.StandardCharsets
 
 import joptsimple._
 import kafka.utils.{CommandLineUtils, Exit, Logging, ZkUtils}
-import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.security.JaasUtils
 
 
@@ -44,7 +43,7 @@ import org.apache.kafka.common.security.JaasUtils
 object ImportZkOffsets extends Logging {
 
   def main(args: Array[String]) {
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     
     val zkConnectOpt = parser.accepts("zkconnect", "ZooKeeper connect string.")
                             .withRequiredArg()

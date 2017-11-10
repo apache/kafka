@@ -18,9 +18,12 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
+import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayDeque;
 
@@ -31,29 +34,32 @@ import java.util.ArrayDeque;
  * timestamp is monotonically increasing such that once it is advanced, it will not be decremented.
  */
 public class RecordQueue {
-
-    private static final Logger log = LoggerFactory.getLogger(RecordQueue.class);
-
     private final SourceNode source;
     private final TimestampExtractor timestampExtractor;
     private final TopicPartition partition;
     private final ArrayDeque<StampedRecord> fifoQueue;
     private final TimestampTracker<ConsumerRecord<Object, Object>> timeTracker;
     private final RecordDeserializer recordDeserializer;
+    private final ProcessorContext processorContext;
+    private final Logger log;
 
     private long partitionTime = TimestampTracker.NOT_KNOWN;
 
     RecordQueue(final TopicPartition partition,
                 final SourceNode source,
-                final TimestampExtractor timestampExtractor) {
+                final TimestampExtractor timestampExtractor,
+                final DeserializationExceptionHandler deserializationExceptionHandler,
+                final ProcessorContext processorContext,
+                final LogContext logContext) {
         this.partition = partition;
         this.source = source;
         this.timestampExtractor = timestampExtractor;
         this.fifoQueue = new ArrayDeque<>();
         this.timeTracker = new MinTimestampTracker<>();
-        this.recordDeserializer = new SourceNodeRecordDeserializer(source);
+        this.recordDeserializer = new RecordDeserializer(source, deserializationExceptionHandler, logContext);
+        this.processorContext = processorContext;
+        this.log = logContext.logger(RecordQueue.class);
     }
-
 
     /**
      * Returns the corresponding source node in the topology
@@ -79,10 +85,24 @@ public class RecordQueue {
      * @param rawRecords the raw records
      * @return the size of this queue
      */
-    public int addRawRecords(Iterable<ConsumerRecord<byte[], byte[]>> rawRecords) {
-        for (ConsumerRecord<byte[], byte[]> rawRecord : rawRecords) {
-            ConsumerRecord<Object, Object> record = recordDeserializer.deserialize(rawRecord);
-            long timestamp = timestampExtractor.extract(record, timeTracker.get());
+    int addRawRecords(final Iterable<ConsumerRecord<byte[], byte[]>> rawRecords) {
+        for (final ConsumerRecord<byte[], byte[]> rawRecord : rawRecords) {
+
+            final ConsumerRecord<Object, Object> record = recordDeserializer.deserialize(processorContext, rawRecord);
+            if (record == null) {
+                continue;
+            }
+
+            final long timestamp;
+            try {
+                timestamp = timestampExtractor.extract(record, timeTracker.get());
+            } catch (final StreamsException internalFatalExtractorException) {
+                throw internalFatalExtractorException;
+            } catch (final Exception fatalUserException) {
+                throw new StreamsException(
+                    String.format("Fatal user code error in TimestampExtractor callback for record %s.", record),
+                    fatalUserException);
+            }
             log.trace("Source node {} extracted timestamp {} for record {}", source.name(), timestamp, record);
 
             // drop message if TS is invalid, i.e., negative
@@ -90,7 +110,7 @@ public class RecordQueue {
                 continue;
             }
 
-            StampedRecord stampedRecord = new StampedRecord(record, timestamp);
+            final StampedRecord stampedRecord = new StampedRecord(record, timestamp);
             fifoQueue.addLast(stampedRecord);
             timeTracker.addElement(stampedRecord);
         }
@@ -98,10 +118,11 @@ public class RecordQueue {
         // update the partition timestamp if its currently
         // tracked min timestamp has exceed its value; this will
         // usually only take effect for the first added batch
-        long timestamp = timeTracker.get();
+        final long timestamp = timeTracker.get();
 
-        if (timestamp > partitionTime)
+        if (timestamp > partitionTime) {
             partitionTime = timestamp;
+        }
 
         return size();
     }
@@ -112,19 +133,21 @@ public class RecordQueue {
      * @return StampedRecord
      */
     public StampedRecord poll() {
-        StampedRecord elem = fifoQueue.pollFirst();
+        final StampedRecord elem = fifoQueue.pollFirst();
 
-        if (elem == null)
+        if (elem == null) {
             return null;
+        }
 
         timeTracker.removeElement(elem);
 
         // only advance the partition timestamp if its currently
         // tracked min timestamp has exceeded its value
-        long timestamp = timeTracker.get();
+        final long timestamp = timeTracker.get();
 
-        if (timestamp > partitionTime)
+        if (timestamp > partitionTime) {
             partitionTime = timestamp;
+        }
 
         return elem;
     }
@@ -157,9 +180,20 @@ public class RecordQueue {
     }
 
     /**
-     * Clear the fifo queue of its elements
+     * Clear the fifo queue of its elements, also clear the time tracker's kept stamped elements
      */
     public void clear() {
         fifoQueue.clear();
+        timeTracker.clear();
+        partitionTime = TimestampTracker.NOT_KNOWN;
+    }
+
+    /*
+     * Returns the timestamp tracker of the record queue
+     *
+     * This is only used for testing
+     */
+    TimestampTracker<ConsumerRecord<Object, Object>> timeTracker() {
+        return timeTracker;
     }
 }
