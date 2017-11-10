@@ -90,9 +90,7 @@ public class StreamThreadStateStoreProviderTest {
         properties.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         stateDir = TestUtils.tempDirectory();
-        final String stateConfigDir = stateDir.getPath();
-        properties.put(StreamsConfig.STATE_DIR_CONFIG,
-                stateConfigDir);
+        properties.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
 
         final StreamsConfig streamsConfig = new StreamsConfig(properties);
         final MockClientSupplier clientSupplier = new MockClientSupplier();
@@ -102,7 +100,7 @@ public class StreamThreadStateStoreProviderTest {
         builder.setApplicationId(applicationId);
         final ProcessorTopology topology = builder.build(null);
         tasks = new HashMap<>();
-        stateDirectory = new StateDirectory(applicationId, stateConfigDir, new MockTime());
+        stateDirectory = new StateDirectory(streamsConfig, new MockTime());
         taskOne = createStreamsTask(applicationId, streamsConfig, clientSupplier, topology,
                                     new TaskId(0, 0));
         taskOne.initialize();
@@ -183,7 +181,6 @@ public class StreamThreadStateStoreProviderTest {
                                          final TaskId taskId) {
         return new StreamTask(
             taskId,
-            applicationId,
             Collections.singletonList(new TopicPartition(topicName, taskId.partition)),
             topology,
             clientSupplier.consumer,

@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.test.TestUtils;
@@ -32,6 +33,7 @@ import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -53,7 +55,15 @@ public class StateDirectoryTest {
     @Before
     public void before() {
         stateDir = new File(TestUtils.IO_TMP_DIR, TestUtils.randomString(5));
-        directory = new StateDirectory(applicationId, stateDir.getPath(), time);
+        directory = new StateDirectory(
+            new StreamsConfig(new Properties() {
+                {
+                    put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+                    put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+                    put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
+                }
+            }),
+            time);
         appDir = new File(stateDir, applicationId);
     }
 
@@ -232,7 +242,15 @@ public class StateDirectoryTest {
     public void shouldCreateDirectoriesIfParentDoesntExist() {
         final File tempDir = TestUtils.tempDirectory();
         final File stateDir = new File(new File(tempDir, "foo"), "state-dir");
-        final StateDirectory stateDirectory = new StateDirectory(applicationId, stateDir.getPath(), time);
+        final StateDirectory stateDirectory = new StateDirectory(
+            new StreamsConfig(new Properties() {
+                {
+                    put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+                    put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+                    put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
+                }
+            }),
+            time);
         final File taskDir = stateDirectory.directoryForTask(new TaskId(0, 0));
         assertTrue(stateDir.exists());
         assertTrue(taskDir.exists());
@@ -240,7 +258,7 @@ public class StateDirectoryTest {
 
     @Test(expected = OverlappingFileLockException.class)
     public void shouldLockGlobalStateDirectory() throws IOException {
-        directory.lockGlobalState(1);
+        directory.lockGlobalState();
 
         try (
             final FileChannel channel = FileChannel.open(
@@ -256,7 +274,7 @@ public class StateDirectoryTest {
 
     @Test
     public void shouldUnlockGlobalStateDirectory() throws IOException {
-        directory.lockGlobalState(1);
+        directory.lockGlobalState();
         directory.unlockGlobalState();
 
         try (

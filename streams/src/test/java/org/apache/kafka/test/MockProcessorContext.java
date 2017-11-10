@@ -100,11 +100,10 @@ public class MockProcessorContext extends AbstractProcessorContext implements Re
                                 final RecordCollector.Supplier collectorSupplier,
                                 final ThreadCache cache) {
         super(new TaskId(0, 0),
-                config.getString(StreamsConfig.APPLICATION_ID_CONFIG),
-                config,
-                new MockStreamsMetrics(metrics),
-                null,
-                cache);
+              config,
+              new MockStreamsMetrics(metrics),
+              null,
+              cache);
         this.stateDir = stateDir;
         this.keySerde = keySerde;
         this.valSerde = valSerde;

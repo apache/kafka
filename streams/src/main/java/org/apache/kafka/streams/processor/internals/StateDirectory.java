@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
@@ -48,6 +49,8 @@ public class StateDirectory {
     private final HashMap<TaskId, FileChannel> channels = new HashMap<>();
     private final HashMap<TaskId, LockAndOwner> locks = new HashMap<>();
     private final Time time;
+    private final int retries;
+    private final long retryBackoffMs;
 
     private FileChannel globalStateChannel;
     private FileLock globalStateLock;
@@ -68,18 +71,22 @@ public class StateDirectory {
      * @throws ProcessorStateException if the base state directory or application state directory does not exist
      *                                 and could not be created
      */
-    public StateDirectory(final String applicationId, final String stateDirConfig, final Time time) {
+    public StateDirectory(final StreamsConfig config,
+                          final Time time) {
         this.time = time;
+        final String stateDirConfig = config.getString(StreamsConfig.STATE_DIR_CONFIG);
         final File baseDir = new File(stateDirConfig);
         if (!baseDir.exists() && !baseDir.mkdirs()) {
             throw new ProcessorStateException(
                 String.format("base state directory [%s] doesn't exist and couldn't be created", stateDirConfig));
         }
-        stateDir = new File(baseDir, applicationId);
+        stateDir = new File(baseDir, config.getString(StreamsConfig.APPLICATION_ID_CONFIG));
         if (!stateDir.exists() && !stateDir.mkdir()) {
             throw new ProcessorStateException(
                 String.format("state directory [%s] doesn't exist and couldn't be created", stateDir.getPath()));
         }
+        retries = config.getInt(StreamsConfig.RETRIES_CONFIG);
+        retryBackoffMs = config.getLong(StreamsConfig.RETRY_BACKOFF_MS_CONFIG);
     }
 
     /**
@@ -162,7 +169,7 @@ public class StateDirectory {
         return lock != null;
     }
 
-    synchronized boolean lockGlobalState(final int retry) throws IOException {
+    synchronized boolean lockGlobalState() throws IOException {
         if (globalStateLock != null) {
             log.trace("{} Found cached state dir lock for the global task", logPrefix());
             return true;
@@ -178,7 +185,7 @@ public class StateDirectory {
             // file, in this case we will return immediately indicating locking failed.
             return false;
         }
-        final FileLock fileLock = tryLock(retry, channel);
+        final FileLock fileLock = tryLock(retries, channel);
         if (fileLock == null) {
             channel.close();
             return false;
@@ -275,21 +282,19 @@ public class StateDirectory {
         });
     }
 
-    private FileLock tryLock(int retry, final FileChannel channel) throws IOException {
+    private FileLock tryLock(int retry,
+                             final FileChannel channel) throws IOException {
         FileLock lock = tryAcquireLock(channel);
         while (lock == null && retry > 0) {
-            try {
-                Thread.sleep(200);
-            } catch (Exception ex) {
-                // do nothing
-            }
+            Utils.sleep(retryBackoffMs);
             retry--;
             lock = tryAcquireLock(channel);
         }
         return lock;
     }
 
-    private FileChannel getOrCreateFileChannel(final TaskId taskId, final Path lockPath) throws IOException {
+    private FileChannel getOrCreateFileChannel(final TaskId taskId,
+                                               final Path lockPath) throws IOException {
         if (!channels.containsKey(taskId)) {
             channels.put(taskId, FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE));
         }

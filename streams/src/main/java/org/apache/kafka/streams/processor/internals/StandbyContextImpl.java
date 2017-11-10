@@ -67,11 +67,10 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
     };
 
     StandbyContextImpl(final TaskId id,
-                       final String applicationId,
                        final StreamsConfig config,
                        final ProcessorStateManager stateMgr,
                        final StreamsMetrics metrics) {
-        super(id, applicationId, config, metrics, stateMgr, new ThreadCache(new LogContext("zeroCache "), 0, metrics));
+        super(id, config, metrics, stateMgr, new ThreadCache(new LogContext("zeroCache "), 0, metrics));
     }
 
 

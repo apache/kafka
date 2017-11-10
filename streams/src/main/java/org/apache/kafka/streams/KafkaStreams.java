@@ -611,8 +611,7 @@ public class KafkaStreams {
         threads = new StreamThread[config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG)];
         try {
             stateDirectory = new StateDirectory(
-                applicationId,
-                config.getString(StreamsConfig.STATE_DIR_CONFIG),
+                config,
                 Time.SYSTEM);
         } catch (final ProcessorStateException fatal) {
             throw new StreamsException(fatal);

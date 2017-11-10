@@ -34,7 +34,7 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
                                       final StateManager stateMgr,
                                       final StreamsMetrics metrics,
                                       final ThreadCache cache) {
-        super(new TaskId(-1, -1), config.getString(StreamsConfig.APPLICATION_ID_CONFIG), config, metrics, stateMgr, cache);
+        super(new TaskId(-1, -1), config, metrics, stateMgr, cache);
     }
 
     @Override

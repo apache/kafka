@@ -53,6 +53,7 @@ public abstract class AbstractTask implements Task {
     final LogContext logContext;
     boolean taskInitialized;
     private final StateDirectory stateDirectory;
+    private final int retries;
 
     InternalProcessorContext processorContext;
 
@@ -60,7 +61,6 @@ public abstract class AbstractTask implements Task {
      * @throws ProcessorStateException if the state manager cannot be created
      */
     AbstractTask(final TaskId id,
-                 final String applicationId,
                  final Collection<TopicPartition> partitions,
                  final ProcessorTopology topology,
                  final Consumer<byte[], byte[]> consumer,
@@ -69,12 +69,13 @@ public abstract class AbstractTask implements Task {
                  final StateDirectory stateDirectory,
                  final StreamsConfig config) {
         this.id = id;
-        this.applicationId = applicationId;
+        this.applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         this.partitions = new HashSet<>(partitions);
         this.topology = topology;
         this.consumer = consumer;
         this.eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
         this.stateDirectory = stateDirectory;
+        this.retries = config.getInt(StreamsConfig.RETRIES_CONFIG);
 
         this.logPrefix = String.format("%s [%s] ", isStandby ? "standby-task" : "task", id());
         this.logContext = new LogContext(logPrefix);
@@ -206,7 +207,7 @@ public abstract class AbstractTask implements Task {
         }
 
         try {
-            if (!stateDirectory.lock(id, 5)) {
+            if (!stateDirectory.lock(id, retries)) {
                 throw new LockException(String.format("%sFailed to lock the state directory for task %s",
                                                       logPrefix, id));
             }
