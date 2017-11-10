@@ -56,7 +56,7 @@ class TransactionIndexTest extends JUnitSuite {
     assertEquals(abortedTxns ++ List(anotherAbortedTxn), reopenedIndex.allAbortedTxns)
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test(expected = classOf[CorruptIndexException])
   def testSanityCheck(): Unit = {
     val abortedTxns = List(
       new AbortedTxn(producerId = 0L, firstOffset = 0, lastOffset = 10, lastStableOffset = 11),

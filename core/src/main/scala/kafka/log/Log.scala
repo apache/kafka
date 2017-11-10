@@ -331,12 +331,12 @@ class Log(@volatile var dir: File,
           try {
             offsetIndex.sanityCheck()
             // Resize the time index file to 0 if it is newly created.
-            if (!segment.timeIndex.file.exists)
-              segment.timeIndex.resize(0)
-            segment.timeIndex.sanityCheck()
-            segment.txnIndex.sanityCheck()
+            if (!timeIndex.file.exists)
+              timeIndex.resize(0)
+            timeIndex.sanityCheck()
+            txnIndex.sanityCheck()
           } catch {
-            case e: java.lang.IllegalArgumentException =>
+            case e: CorruptIndexException =>
               warn(s"Found a corrupted index file due to ${e.getMessage}}. deleting ${timeIndex.file.getAbsolutePath}, " +
                 s"${offsetIndex.file.getAbsolutePath}, and ${txnIndex.file.getAbsolutePath} and rebuilding index files...")
               if (timeIndex.file.exists)

@@ -174,11 +174,17 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
     TxnIndexSearchResult(abortedTransactions.toList, isComplete = false)
   }
 
+  /**
+   * Do a basic sanity check on this index to detect obvious problems.
+   *
+   * @throws CorruptIndexException if any problems are found.
+   */
   def sanityCheck(): Unit = {
     val buffer = ByteBuffer.allocate(AbortedTxn.TotalSize)
     for ((abortedTxn, _) <- iterator(() => buffer)) {
-      require(abortedTxn.lastOffset >= startOffset, s"Last offset of aborted transaction $abortedTxn is less than " +
-        s"start offset $startOffset")
+      if (abortedTxn.lastOffset < startOffset)
+        throw new CorruptIndexException(s"Last offset of aborted transaction $abortedTxn is less than start offset " +
+          s"$startOffset")
     }
   }
 

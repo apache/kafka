@@ -202,7 +202,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   /**
    * Do a basic sanity check on this index to detect obvious problems
    *
-   * @throws IllegalArgumentException if any problems are found
+   * @throws CorruptIndexException if any problems are found
    */
   def sanityCheck(): Unit
 
