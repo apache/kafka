@@ -118,6 +118,7 @@ if (new File('.git').exists()) {
         '**/.git/**',
         '**/build/**',
         'CONTRIBUTING.md',
+        'PULL_REQUEST_TEMPLATE.md',
         'gradlew',
         'gradlew.bat',
         '**/README.md',
