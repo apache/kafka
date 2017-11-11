@@ -17,38 +17,31 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.Map;
-
 /**
- * The result of the {@link AdminClient#deleteRecords(Map)} call.
+ * Represents information about deleted records
  *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * The API for this class is still evolving and we may break compatibility in minor releases, if necessary.
  */
 @InterfaceStability.Evolving
-public class DeleteRecordsResult {
+public class DeleteRecords {
 
-    private final Map<TopicPartition, KafkaFuture<DeleteRecords>> futures;
+    private final long lowWatermark;
 
-    DeleteRecordsResult(Map<TopicPartition, KafkaFuture<DeleteRecords>> futures) {
-        this.futures = futures;
+    /**
+     * Create an instance of this class with the provided parameters.
+     *
+     * @param lowWatermark  "low watermark" for the topic partition on which the deletion was executed
+     */
+    public DeleteRecords(long lowWatermark) {
+        this.lowWatermark = lowWatermark;
     }
 
     /**
-     * Return a map from topic partition to futures which can be used to check the status of
-     * individual deletions.
+     * Return the "low watermark" for the topic partition on which the deletion was executed
      */
-    public Map<TopicPartition, KafkaFuture<DeleteRecords>> lowWatermarks() {
-        return futures;
-    }
-
-    /**
-     * Return a future which succeeds only if all the records deletions succeed.
-     */
-    public KafkaFuture<Void> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
+    public long lowWatermark() {
+        return lowWatermark;
     }
 }

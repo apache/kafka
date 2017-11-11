@@ -719,7 +719,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertEquals(0L, consumer.position(topicPartition))
 
     val result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(5L)).asJava)
-    val lowWatermark = result.lowWatermarks().get(topicPartition).get()
+    val lowWatermark = result.lowWatermarks().get(topicPartition).get().lowWatermark()
     assertEquals(5L, lowWatermark)
 
     consumer.seekToBeginning(Collections.singletonList(topicPartition))
@@ -741,7 +741,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     sendRecords(producers.head, 10, topicPartition)
     var result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(5L)).asJava)
-    var lowWatermark = result.lowWatermarks().get(topicPartition).get()
+    var lowWatermark = result.lowWatermarks().get(topicPartition).get().lowWatermark()
     assertEquals(5L, lowWatermark)
 
     for (i <- 0 until serverCount) {
@@ -759,7 +759,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
       val future = result.lowWatermarks().get(topicPartition)
       try {
-        lowWatermark = future.get(1000L, TimeUnit.MILLISECONDS)
+        lowWatermark = future.get(1000L, TimeUnit.MILLISECONDS).lowWatermark()
         lowWatermark == 5L
       } catch {
         case e: LeaderNotAvailableException => false
@@ -780,7 +780,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     sendRecords(producers.head, 10, topicPartition)
     val result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(3L)).asJava)
-    val lowWatermark = result.lowWatermarks().get(topicPartition).get()
+    val lowWatermark = result.lowWatermarks().get(topicPartition).get().lowWatermark()
     assertEquals(3L, lowWatermark)
 
     for (i <- 0 until serverCount)

@@ -1879,9 +1879,9 @@ public class KafkaAdminClient extends AdminClient {
         // requests need to be sent to partitions leader nodes so ...
         // ... from the provided map it's needed to create more maps grouping topic/partition per leader
 
-        final Map<TopicPartition, KafkaFutureImpl<Long>> futures = new HashMap<>(recordsToDelete.size());
+        final Map<TopicPartition, KafkaFutureImpl<DeleteRecords>> futures = new HashMap<>(recordsToDelete.size());
         for (TopicPartition topicPartition: recordsToDelete.keySet()) {
-            futures.put(topicPartition, new KafkaFutureImpl<Long>());
+            futures.put(topicPartition, new KafkaFutureImpl<DeleteRecords>());
         }
 
         // preparing topics list for asking metadata about them
@@ -1908,7 +1908,7 @@ public class KafkaAdminClient extends AdminClient {
                 // completing futures for topics with errors
                 for (Map.Entry<String, Errors> topicError: response.errors().entrySet()) {
 
-                    for (Map.Entry<TopicPartition, KafkaFutureImpl<Long>> future: futures.entrySet()) {
+                    for (Map.Entry<TopicPartition, KafkaFutureImpl<DeleteRecords>> future: futures.entrySet()) {
                         if (future.getKey().topic().equals(topicError.getKey())) {
                             future.getValue().completeExceptionally(topicError.getValue().exception());
                         }
@@ -1924,7 +1924,7 @@ public class KafkaAdminClient extends AdminClient {
                             leaders.put(node, new HashMap<TopicPartition, Long>());
                         leaders.get(node).put(entry.getKey(), entry.getValue().beforeOffset());
                     } else {
-                        KafkaFutureImpl<Long> future = futures.get(entry.getKey());
+                        KafkaFutureImpl<DeleteRecords> future = futures.get(entry.getKey());
                         future.completeExceptionally(Errors.LEADER_NOT_AVAILABLE.exception());
                     }
                 }
@@ -1948,9 +1948,9 @@ public class KafkaAdminClient extends AdminClient {
                             DeleteRecordsResponse response = (DeleteRecordsResponse) abstractResponse;
                             for (Map.Entry<TopicPartition, DeleteRecordsResponse.PartitionResponse> result: response.responses().entrySet()) {
 
-                                KafkaFutureImpl<Long> future = futures.get(result.getKey());
+                                KafkaFutureImpl<DeleteRecords> future = futures.get(result.getKey());
                                 if (result.getValue().error == Errors.NONE) {
-                                    future.complete(result.getValue().lowWatermark);
+                                    future.complete(new DeleteRecords(result.getValue().lowWatermark));
                                 } else {
                                     future.completeExceptionally(result.getValue().error.exception());
                                 }
@@ -1971,6 +1971,6 @@ public class KafkaAdminClient extends AdminClient {
             }
         }, nowMetadata);
 
-        return new DeleteRecordsResult(new HashMap<TopicPartition, KafkaFuture<Long>>(futures));
+        return new DeleteRecordsResult(new HashMap<TopicPartition, KafkaFuture<DeleteRecords>>(futures));
     }
 }
