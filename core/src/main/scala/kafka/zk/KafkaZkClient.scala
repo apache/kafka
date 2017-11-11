@@ -137,10 +137,8 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
         case Code.OK =>
           val updatedLeaderAndIsr = leaderAndIsrs(partition).withZkVersion(setDataResponse.stat.getVersion)
           successfulUpdates.put(partition, updatedLeaderAndIsr)
-        case Code.BADVERSION =>
-          updatesToRetry += partition
-        case _ =>
-          failed.put(partition, setDataResponse.resultException.get)
+        case Code.BADVERSION => updatesToRetry += partition
+        case _ => failed.put(partition, setDataResponse.resultException.get)
       }
     }
     UpdateLeaderAndIsrResult(successfulUpdates.toMap, updatesToRetry, failed.toMap)
@@ -175,8 +173,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
         case Code.NONODE =>
           val logConfig = LogConfig.fromProps(config, new Properties)
           logConfigs.put(topic, logConfig)
-        case _ =>
-          failed.put(topic, configResponse.resultException.get)
+        case _ => failed.put(topic, configResponse.resultException.get)
       }
     }
     (logConfigs.toMap, failed.toMap)
@@ -198,10 +195,8 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
           getDataResponse.resultCode match {
             case Code.OK =>
               Option(BrokerIdZNode.decode(brokerId, getDataResponse.data))
-            case Code.NONODE =>
-              None
-            case _ =>
-              throw getDataResponse.resultException.get
+            case Code.NONODE => None
+            case _ => throw getDataResponse.resultException.get
           }
         }
       case Code.NONODE =>
@@ -218,12 +213,9 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
   def getAllTopicsInCluster: Seq[String] = {
     val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(TopicsZNode.path))
     getChildrenResponse.resultCode match {
-      case Code.OK =>
-        getChildrenResponse.children
-      case Code.NONODE =>
-        Seq.empty
-      case _ =>
-        throw getChildrenResponse.resultException.get
+      case Code.OK => getChildrenResponse.children
+      case Code.NONODE => Seq.empty
+      case _ => throw getChildrenResponse.resultException.get
     }
 
   }
@@ -246,12 +238,9 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
   def getAllLogDirEventNotifications: Seq[String] = {
     val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(LogDirEventNotificationZNode.path))
     getChildrenResponse.resultCode match {
-      case Code.OK =>
-        getChildrenResponse.children.map(LogDirEventNotificationSequenceZNode.sequenceNumber)
-      case Code.NONODE =>
-        Seq.empty
-      case _ =>
-        throw getChildrenResponse.resultException.get
+      case Code.OK => getChildrenResponse.children.map(LogDirEventNotificationSequenceZNode.sequenceNumber)
+      case Code.NONODE => Seq.empty
+      case _ => throw getChildrenResponse.resultException.get
     }
   }
 
@@ -267,12 +256,9 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     val getDataResponses = retryRequestsUntilConnected(getDataRequests)
     getDataResponses.flatMap { getDataResponse =>
       getDataResponse.resultCode match {
-        case Code.OK =>
-          LogDirEventNotificationSequenceZNode.decode(getDataResponse.data)
-        case Code.NONODE =>
-          None
-        case _ =>
-          throw getDataResponse.resultException.get
+        case Code.OK => LogDirEventNotificationSequenceZNode.decode(getDataResponse.data)
+        case Code.NONODE => None
+        case _ => throw getDataResponse.resultException.get
       }
     }
   }
@@ -311,12 +297,9 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     getDataResponses.flatMap { getDataResponse =>
       val topic = getDataResponse.ctx.get.asInstanceOf[String]
       getDataResponse.resultCode match {
-        case Code.OK =>
-          TopicZNode.decode(topic, getDataResponse.data)
-        case Code.NONODE =>
-          Map.empty[TopicPartition, Seq[Int]]
-        case _ =>
-          throw getDataResponse.resultException.get
+        case Code.OK => TopicZNode.decode(topic, getDataResponse.data)
+        case Code.NONODE => Map.empty[TopicPartition, Seq[Int]]
+        case _ => throw getDataResponse.resultException.get
       }
     }.toMap
   }
@@ -342,21 +325,10 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    *         returns (None, -1) if node doesn't exists and throws exception for any error
    */
   def getDataAndVersion(path: String): (Option[String], Int) = {
-    val getDataRequest = GetDataRequest(path)
-    val getDataResponse = retryRequestUntilConnected(getDataRequest)
-
-    getDataResponse.resultCode match {
-      case Code.OK =>
-        if (getDataResponse.data == null)
-          (None, getDataResponse.stat.getVersion)
-        else {
-          val data = new String(getDataResponse.data, UTF_8)
-          (Some(data), getDataResponse.stat.getVersion)
-        }
-      case Code.NONODE =>
-        (None, -1)
-      case _ =>
-        throw getDataResponse.resultException.get
+    val (data, stat) = getDataAndStat(path)
+    stat match {
+      case ZkStat.NoStat => (data, -1)
+      case _ => (data, stat.getVersion)
     }
   }
 
@@ -376,13 +348,11 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
         if (getDataResponse.data == null)
           (None, getDataResponse.stat)
         else {
-          val data = new String(getDataResponse.data, UTF_8)
-          (Some(data), getDataResponse.stat)
+          val data = Option(getDataResponse.data).map(new String(_, UTF_8))
+          (data, getDataResponse.stat)
         }
-      case Code.NONODE =>
-        (None, new Stat())
-      case _ =>
-        throw getDataResponse.resultException.get
+      case Code.NONODE => (None, ZkStat.NoStat)
+      case _ => throw getDataResponse.resultException.get
     }
   }
 
@@ -394,12 +364,9 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
   def getChildren(path : String): Seq[String] = {
     val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(path))
     getChildrenResponse.resultCode match {
-      case Code.OK =>
-        getChildrenResponse.children
-      case Code.NONODE =>
-        Seq.empty
-      case _ =>
-        throw getChildrenResponse.resultException.get
+      case Code.OK => getChildrenResponse.children
+      case Code.NONODE => Seq.empty
+      case _ => throw getChildrenResponse.resultException.get
     }
   }
 
@@ -452,12 +419,9 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
   def getTopicDeletions: Seq[String] = {
     val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(DeleteTopicsZNode.path))
     getChildrenResponse.resultCode match {
-      case Code.OK =>
-        getChildrenResponse.children
-      case Code.NONODE =>
-        Seq.empty
-      case _ =>
-        throw getChildrenResponse.resultException.get
+      case Code.OK => getChildrenResponse.children
+      case Code.NONODE => Seq.empty
+      case _ => throw getChildrenResponse.resultException.get
     }
   }
 
@@ -478,12 +442,9 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     val getDataRequest = GetDataRequest(ReassignPartitionsZNode.path)
     val getDataResponse = retryRequestUntilConnected(getDataRequest)
     getDataResponse.resultCode match {
-      case  Code.OK =>
-        ReassignPartitionsZNode.decode(getDataResponse.data)
-      case Code.NONODE =>
-        Map.empty[TopicPartition, Seq[Int]]
-      case _ =>
-        throw getDataResponse.resultException.get
+      case  Code.OK => ReassignPartitionsZNode.decode(getDataResponse.data)
+      case Code.NONODE => Map.empty
+      case _ => throw getDataResponse.resultException.get
     }
   }
 
@@ -535,12 +496,9 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     getDataResponses.flatMap { getDataResponse =>
       val partition = getDataResponse.ctx.get.asInstanceOf[TopicPartition]
       getDataResponse.resultCode match {
-        case Code.OK =>
-          TopicPartitionStateZNode.decode(getDataResponse.data, getDataResponse.stat).map(partition -> _)
-        case Code.NONODE =>
-          None
-        case _ =>
-          throw getDataResponse.resultException.get
+        case Code.OK => TopicPartitionStateZNode.decode(getDataResponse.data, getDataResponse.stat).map(partition -> _)
+        case Code.NONODE => None
+        case _ => throw getDataResponse.resultException.get
       }
     }.toMap
   }
@@ -552,12 +510,9 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
   def getAllIsrChangeNotifications: Seq[String] = {
     val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(IsrChangeNotificationZNode.path))
     getChildrenResponse.resultCode match {
-      case Code.OK =>
-        getChildrenResponse.children.map(IsrChangeNotificationSequenceZNode.sequenceNumber)
-      case Code.NONODE =>
-        Seq.empty
-      case _ =>
-        throw getChildrenResponse.resultException.get
+      case Code.OK => getChildrenResponse.children.map(IsrChangeNotificationSequenceZNode.sequenceNumber)
+      case Code.NONODE => Seq.empty
+      case _ => throw getChildrenResponse.resultException.get
     }
   }
 
@@ -573,12 +528,9 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     val getDataResponses = retryRequestsUntilConnected(getDataRequests)
     getDataResponses.flatMap { getDataResponse =>
       getDataResponse.resultCode match {
-        case Code.OK =>
-          IsrChangeNotificationSequenceZNode.decode(getDataResponse.data)
-        case Code.NONODE =>
-          None
-        case _ =>
-        throw getDataResponse.resultException.get
+        case Code.OK => IsrChangeNotificationSequenceZNode.decode(getDataResponse.data)
+        case Code.NONODE => None
+        case _ => throw getDataResponse.resultException.get
       }
     }
   }
@@ -614,12 +566,9 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     val getDataRequest = GetDataRequest(PreferredReplicaElectionZNode.path)
     val getDataResponse = retryRequestUntilConnected(getDataRequest)
     getDataResponse.resultCode match {
-      case Code.OK =>
-        PreferredReplicaElectionZNode.decode(getDataResponse.data)
-      case Code.NONODE =>
-        Set.empty[TopicPartition]
-      case _ =>
-        throw getDataResponse.resultException.get
+      case Code.OK => PreferredReplicaElectionZNode.decode(getDataResponse.data)
+      case Code.NONODE => Set.empty
+      case _ => throw getDataResponse.resultException.get
     }
   }
 
@@ -639,12 +588,9 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     val getDataRequest = GetDataRequest(ControllerZNode.path)
     val getDataResponse = retryRequestUntilConnected(getDataRequest)
     getDataResponse.resultCode match {
-      case Code.OK =>
-        ControllerZNode.decode(getDataResponse.data)
-      case Code.NONODE =>
-        None
-      case _ =>
-        throw getDataResponse.resultException.get
+      case Code.OK => ControllerZNode.decode(getDataResponse.data)
+      case Code.NONODE => None
+      case _ => throw getDataResponse.resultException.get
     }
   }
 
@@ -667,10 +613,8 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
       case Code.OK =>
         val epoch = ControllerEpochZNode.decode(getDataResponse.data)
         Option(epoch, getDataResponse.stat)
-      case Code.NONODE =>
-        None
-      case _ =>
-        throw getDataResponse.resultException.get
+      case Code.NONODE => None
+      case _ => throw getDataResponse.resultException.get
     }
   }
 
@@ -711,12 +655,9 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     val getDataRequest = GetDataRequest(ResourceZNode.path(resource))
     val getDataResponse = retryRequestUntilConnected(getDataRequest)
     getDataResponse.resultCode match {
-      case Code.OK =>
-        ResourceZNode.decode(getDataResponse.data, getDataResponse.stat)
-      case Code.NONODE =>
-        VersionedAcls(Set(), -1)
-      case _ =>
-        throw getDataResponse.resultException.get
+      case Code.OK => ResourceZNode.decode(getDataResponse.data, getDataResponse.stat)
+      case Code.NONODE => VersionedAcls(Set(), -1)
+      case _ => throw getDataResponse.resultException.get
     }
   }
 
@@ -744,23 +685,17 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
 
     val setDataResponse = set(aclData, expectedVersion)
     setDataResponse.resultCode match {
-      case Code.OK =>
-        (true, setDataResponse.stat.getVersion)
+      case Code.OK => (true, setDataResponse.stat.getVersion)
       case Code.NONODE => {
         val createResponse = create(aclData)
         createResponse.resultCode match {
-          case Code.OK =>
-            (true, 0)
-          case Code.NODEEXISTS =>
-            (false, 0)
-          case _ =>
-            throw createResponse.resultException.get
+          case Code.OK => (true, 0)
+          case Code.NODEEXISTS => (false, 0)
+          case _ => throw createResponse.resultException.get
         }
       }
-      case Code.BADVERSION =>
-        (false, 0)
-      case _ =>
-        throw setDataResponse.resultException.get
+      case Code.BADVERSION => (false, 0)
+      case _ => throw setDataResponse.resultException.get
     }
   }
 
@@ -850,12 +785,9 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     val deleteRequest = DeleteRequest(ResourceZNode.path(resource), expectedVersion)
     val deleteResponse = retryRequestUntilConnected(deleteRequest)
     deleteResponse.resultCode match {
-      case Code.OK | Code.NONODE =>
-        true
-      case Code.BADVERSION =>
-        false
-      case _ =>
-        throw deleteResponse.resultException.get
+      case Code.OK | Code.NONODE => true
+      case Code.BADVERSION => false
+      case _ => throw deleteResponse.resultException.get
     }
   }
   
@@ -951,12 +883,9 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     val getDataRequest = GetDataRequest(ConsumerOffset.path(group, topicPartition.topic, topicPartition.partition))
     val getDataResponse = retryRequestUntilConnected(getDataRequest)
     getDataResponse.resultCode match {
-      case Code.OK =>
-        ConsumerOffset.decode(getDataResponse.data)
-      case Code.NONODE =>
-        None
-      case _ =>
-        throw getDataResponse.resultException.get
+      case Code.OK => ConsumerOffset.decode(getDataResponse.data)
+      case Code.NONODE => None
+      case _ => throw getDataResponse.resultException.get
     }
   }
 
@@ -1010,20 +939,18 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
           throw deleteResponse.resultException.get
         }
         true
-      case Code.NONODE =>
-        false
-      case _ =>
-        throw getChildrenResponse.resultException.get
+      case Code.NONODE => false
+      case _ => throw getChildrenResponse.resultException.get
     }
   }
 
   private[zk] def pathExists(path: String): Boolean = {
-    val existsRequest = ExistsRequest(path)
-    val existsResponse = retryRequestUntilConnected(existsRequest)
-    existsResponse.resultCode match {
+    val getDataRequest = GetDataRequest(path)
+    val getDataResponse = retryRequestUntilConnected(getDataRequest)
+    getDataResponse.resultCode match {
       case Code.OK => true
       case Code.NONODE => false
-      case _ => throw existsResponse.resultException.get
+      case _ => throw getDataResponse.resultException.get
     }
   }
 
@@ -1121,10 +1048,8 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
       val createResponse = retryRequestUntilConnected(createRequest)
       val code = createResponse.resultCode
       code match {
-        case Code.OK =>
-          code
-        case Code.NODEEXISTS =>
-          get()
+        case Code.OK => code
+        case Code.NODEEXISTS => get()
         case _ =>
           error(s"Error while creating ephemeral at $path with return code: $code")
           code
