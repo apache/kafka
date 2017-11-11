@@ -70,7 +70,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
     zkClient.createRecursive("/create/some/random/long/path")
     assertTrue(zkClient.pathExists("/create/some/random/long/path"))
-    zkClient.createRecursive("/create/some/random/long/path") // no errors if path already exists
+    zkClient.createRecursive("/create/some/random/long/path", throwIfPathExists = false) // no errors if path already exists
 
     intercept[IllegalArgumentException](zkClient.createRecursive("create-invalid-path"))
   }
