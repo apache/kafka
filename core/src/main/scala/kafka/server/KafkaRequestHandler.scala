@@ -60,7 +60,7 @@ class KafkaRequestHandler(id: Int,
 
         case request: RequestChannel.Request =>
           try {
-            request.requestDequeueTimeNanos = endTime
+            request.timers.requestDequeueTimeNanos = endTime
             trace(s"Kafka request handler $id on broker $brokerId handling request $request")
             apis.handle(request)
           } catch {
