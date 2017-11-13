@@ -17,12 +17,10 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 
 import java.util.Collection;
@@ -50,7 +48,7 @@ public abstract class AdminClient implements AutoCloseable {
      * @return The new KafkaAdminClient.
      */
     public static AdminClient create(Properties props) {
-        return KafkaAdminClient.createKafkaInternal(new AdminClientConfig(props), null);
+        return KafkaAdminClient.createInternal(new AdminClientConfig(props), null);
     }
 
     /**
