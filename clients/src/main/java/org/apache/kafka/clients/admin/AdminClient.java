@@ -48,11 +48,9 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * @param props The configuration.
      * @return The new KafkaAdminClient.
-     * @throws ConfigException
-     * @throws KafkaException
      */
     public static AdminClient create(Properties props) {
-        return KafkaAdminClient.createInternal(new AdminClientConfig(props), null);
+        return KafkaAdminClient.createKafkaInternal(new AdminClientConfig(props), null);
     }
 
     /**
@@ -60,8 +58,6 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * @param conf The configuration.
      * @return The new KafkaAdminClient.
-     * @throws ConfigException
-     * @throws KafkaException
      */
     public static AdminClient create(Map<String, Object> conf) {
         return KafkaAdminClient.createInternal(new AdminClientConfig(conf), null);
@@ -321,7 +317,7 @@ public abstract class AdminClient implements AutoCloseable {
      * {@link DescribeAclsResult#values() values()} method of the  returned {@code DescribeAclsResult}</p>
      * <ul>
      *     <li>{@link org.apache.kafka.common.errors.SecurityDisabledException}
-     *     if security features are disabled</li>
+     *     if no authorizer is configured on the broker</li>
      *     <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
      *     if cluster authorization failed</li>
      *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
@@ -365,7 +361,7 @@ public abstract class AdminClient implements AutoCloseable {
      *     <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
      *     if cluster authorization failed</li>
      *     <li>{@link org.apache.kafka.common.errors.InvalidRequestException}
-     *     if invalid resource name was provided</li>
+     *     if the request was invalid</li>
      *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
      *     if the request was not completed in within the given {@link CreateAclsOptions#timeoutMs()}.
      *     </li>
@@ -404,7 +400,7 @@ public abstract class AdminClient implements AutoCloseable {
      *     <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
      *     if cluster authorization failed</li>
      *     <li>{@link org.apache.kafka.common.errors.InvalidRequestException}
-     *     if invalid resource name was provided</li>
+     *     if the request was invalid</li>
      *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
      *     if the request was not completed in within the given {@link DeleteAclsOptions#timeoutMs()}.
      *     </li>
