@@ -717,12 +717,11 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
           false
         else {
           val offsetFetchResponse = offsetFetchResponseOpt.get
-          topicPartitions.foreach(topicAndPartition => {
-            val (topic, partition) = topicAndPartition.asTuple
-            val offset = offsetFetchResponse.requestInfo(topicAndPartition).offset
-            val threadId = partitionAssignment(topicAndPartition)
+          topicPartitions.foreach { case tp@ TopicAndPartition(topic, partition) =>
+            val offset = offsetFetchResponse.requestInfo(tp).offset
+            val threadId = partitionAssignment(tp)
             addPartitionTopicInfo(currentTopicRegistry, partition, topic, offset, threadId)
-          })
+          }
 
           /**
            * move the partition ownership here, since that can be used to indicate a truly successful re-balancing attempt

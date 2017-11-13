@@ -157,16 +157,22 @@ def merge_pr(pr_num, target_ref, title, body, pr_repo_desc):
     merge_message_flags = []
 
     merge_message_flags += ["-m", title]
+    
     if body is not None:
-        # We remove @ symbols from the body to avoid triggering e-mails
-        # to people every time someone creates a public fork of the project.
-        merge_message_flags += ["-m", body.replace("@", "")]
+        # Remove "Committer Checklist" section
+        checklist_index = body.find("### Committer Checklist")
+        if checklist_index != -1:
+            body = body[:checklist_index].rstrip()
+        # Remove @ symbols from the body to avoid triggering e-mails to people every time someone creates a
+        # public fork of the project.
+        body = body.replace("@", "")
+        merge_message_flags += ["-m", body]
 
     authors = "\n".join(["Author: %s" % a for a in distinct_authors])
 
     merge_message_flags += ["-m", authors]
 
-    if (reviewers != ""):
+    if reviewers != "":
         merge_message_flags += ["-m", "Reviewers: %s" % reviewers]
 
     if had_conflicts:

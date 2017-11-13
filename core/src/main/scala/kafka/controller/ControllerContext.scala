@@ -18,7 +18,7 @@
 package kafka.controller
 
 import kafka.cluster.Broker
-import kafka.common.TopicAndPartition
+import org.apache.kafka.common.TopicPartition
 
 import scala.collection.{Seq, Set, mutable}
 
@@ -31,10 +31,10 @@ class ControllerContext {
   var epoch: Int = KafkaController.InitialControllerEpoch - 1
   var epochZkVersion: Int = KafkaController.InitialControllerEpochZkVersion - 1
   var allTopics: Set[String] = Set.empty
-  var partitionReplicaAssignment: mutable.Map[TopicAndPartition, Seq[Int]] = mutable.Map.empty
-  var partitionLeadershipInfo: mutable.Map[TopicAndPartition, LeaderIsrAndControllerEpoch] = mutable.Map.empty
-  val partitionsBeingReassigned: mutable.Map[TopicAndPartition, ReassignedPartitionsContext] = mutable.Map.empty
-  val replicasOnOfflineDirs: mutable.Map[Int, Set[TopicAndPartition]] = mutable.Map.empty
+  var partitionReplicaAssignment: mutable.Map[TopicPartition, Seq[Int]] = mutable.Map.empty
+  var partitionLeadershipInfo: mutable.Map[TopicPartition, LeaderIsrAndControllerEpoch] = mutable.Map.empty
+  val partitionsBeingReassigned: mutable.Map[TopicPartition, ReassignedPartitionsContext] = mutable.Map.empty
+  val replicasOnOfflineDirs: mutable.Map[Int, Set[TopicPartition]] = mutable.Map.empty
 
   private var liveBrokersUnderlying: Set[Broker] = Set.empty
   private var liveBrokerIdsUnderlying: Set[Int] = Set.empty
@@ -52,58 +52,55 @@ class ControllerContext {
   def liveOrShuttingDownBrokerIds = liveBrokerIdsUnderlying
   def liveOrShuttingDownBrokers = liveBrokersUnderlying
 
-  def partitionsOnBroker(brokerId: Int): Set[TopicAndPartition] = {
+  def partitionsOnBroker(brokerId: Int): Set[TopicPartition] = {
     partitionReplicaAssignment.collect {
-      case (topicAndPartition, replicas) if replicas.contains(brokerId) => topicAndPartition
+      case (topicPartition, replicas) if replicas.contains(brokerId) => topicPartition
     }.toSet
   }
 
-  def isReplicaOnline(brokerId: Int, topicAndPartition: TopicAndPartition, includeShuttingDownBrokers: Boolean = false): Boolean = {
+  def isReplicaOnline(brokerId: Int, topicPartition: TopicPartition, includeShuttingDownBrokers: Boolean = false): Boolean = {
     val brokerOnline = {
       if (includeShuttingDownBrokers) liveOrShuttingDownBrokerIds.contains(brokerId)
       else liveBrokerIds.contains(brokerId)
     }
-    brokerOnline && !replicasOnOfflineDirs.getOrElse(brokerId, Set.empty).contains(topicAndPartition)
+    brokerOnline && !replicasOnOfflineDirs.getOrElse(brokerId, Set.empty).contains(topicPartition)
   }
 
   def replicasOnBrokers(brokerIds: Set[Int]): Set[PartitionAndReplica] = {
     brokerIds.flatMap { brokerId =>
-      partitionReplicaAssignment.collect {
-        case (topicAndPartition, replicas) if replicas.contains(brokerId) =>
-          PartitionAndReplica(topicAndPartition.topic, topicAndPartition.partition, brokerId)
+      partitionReplicaAssignment.collect { case (topicPartition, replicas) if replicas.contains(brokerId) =>
+        PartitionAndReplica(topicPartition, brokerId)
       }
     }.toSet
   }
 
   def replicasForTopic(topic: String): Set[PartitionAndReplica] = {
     partitionReplicaAssignment
-      .filter { case (topicAndPartition, _) => topicAndPartition.topic == topic }
-      .flatMap { case (topicAndPartition, replicas) =>
-        replicas.map { r =>
-          PartitionAndReplica(topicAndPartition.topic, topicAndPartition.partition, r)
-        }
+      .filter { case (topicPartition, _) => topicPartition.topic == topic }
+      .flatMap { case (topicPartition, replicas) =>
+        replicas.map(PartitionAndReplica(topicPartition, _))
       }.toSet
   }
 
-  def partitionsForTopic(topic: String): collection.Set[TopicAndPartition] =
-    partitionReplicaAssignment.keySet.filter(topicAndPartition => topicAndPartition.topic == topic)
+  def partitionsForTopic(topic: String): collection.Set[TopicPartition] =
+    partitionReplicaAssignment.keySet.filter(topicPartition => topicPartition.topic == topic)
 
   def allLiveReplicas(): Set[PartitionAndReplica] = {
     replicasOnBrokers(liveBrokerIds).filter { partitionAndReplica =>
-      isReplicaOnline(partitionAndReplica.replica, TopicAndPartition(partitionAndReplica.topic, partitionAndReplica.partition))
+      isReplicaOnline(partitionAndReplica.replica, partitionAndReplica.topicPartition)
     }
   }
 
-  def replicasForPartition(partitions: collection.Set[TopicAndPartition]): collection.Set[PartitionAndReplica] = {
+  def replicasForPartition(partitions: collection.Set[TopicPartition]): collection.Set[PartitionAndReplica] = {
     partitions.flatMap { p =>
       val replicas = partitionReplicaAssignment(p)
-      replicas.map(r => PartitionAndReplica(p.topic, p.partition, r))
+      replicas.map(PartitionAndReplica(p, _))
     }
   }
 
   def removeTopic(topic: String) = {
-    partitionLeadershipInfo = partitionLeadershipInfo.filter { case (topicAndPartition, _) => topicAndPartition.topic != topic }
-    partitionReplicaAssignment = partitionReplicaAssignment.filter { case (topicAndPartition, _) => topicAndPartition.topic != topic }
+    partitionLeadershipInfo = partitionLeadershipInfo.filter { case (topicPartition, _) => topicPartition.topic != topic }
+    partitionReplicaAssignment = partitionReplicaAssignment.filter { case (topicPartition, _) => topicPartition.topic != topic }
     allTopics -= topic
   }
 
