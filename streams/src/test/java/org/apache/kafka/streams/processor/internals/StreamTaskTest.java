@@ -483,6 +483,8 @@ public class StreamTaskTest {
             });
             fail("Should've thrown StreamsException");
         } catch (final StreamsException e) {
+            final String message = e.getMessage();
+            assertTrue("message=" + message + " should contain processor", message.contains("processor 'test'"));
             assertThat(((ProcessorContextImpl) task.processorContext()).currentNode(), nullValue());
         }
     }
@@ -516,6 +518,8 @@ public class StreamTaskTest {
             });
             fail("Should've thrown StreamsException");
         } catch (final StreamsException e) {
+            final String message = e.getMessage();
+            assertTrue("message=" + message + " should contain processor", message.contains("processor 'test'"));
             assertThat(((ProcessorContextImpl) task.processorContext()).currentNode(), nullValue());
         }
     }
@@ -591,7 +595,7 @@ public class StreamTaskTest {
         task = createStatelessTask(false);
         task.initialize();
         task.punctuate(processorStreamTime, 5, PunctuationType.STREAM_TIME, punctuator);
-        assertThat(((ProcessorContextImpl) task.processorContext()).currentNode(), nullValue());
+        assertThat(((ProcessorContextImpl) task.context()).currentNode(), nullValue());
     }
 
     @Test(expected = IllegalStateException.class)

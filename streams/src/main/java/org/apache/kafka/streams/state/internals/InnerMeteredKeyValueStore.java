@@ -159,7 +159,6 @@ class InnerMeteredKeyValueStore<K, IK, V, IV> extends WrappedStateStore.Abstract
         } else {
             inner.init(InnerMeteredKeyValueStore.this.context, InnerMeteredKeyValueStore.this.root);
         }
-
     }
 
     @Override

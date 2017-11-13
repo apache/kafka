@@ -25,29 +25,43 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.test.MockProcessorContext;
+import org.apache.kafka.test.MockRestoreCallback;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.File;
 import java.io.IOException;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Properties;
 
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class AbstractTaskTest {
 
     private final TaskId id = new TaskId(0, 0);
     private StateDirectory stateDirectory  = EasyMock.createMock(StateDirectory.class);
-
+    private final TopicPartition storeTopicPartition1 = new TopicPartition("t1", 0);
+    private final TopicPartition storeTopicPartition2 = new TopicPartition("t2", 0);
+    private final TopicPartition storeTopicPartition3 = new TopicPartition("t3", 0);
+    private final TopicPartition storeTopicPartition4 = new TopicPartition("t4", 0);
+    private final Collection<TopicPartition> storeTopicPartitions
+        = Utils.mkSet(storeTopicPartition1, storeTopicPartition2, storeTopicPartition3, storeTopicPartition4);
     @Before
     public void before() {
         EasyMock.expect(stateDirectory.directoryForTask(id)).andReturn(TestUtils.tempDirectory());
@@ -105,20 +119,106 @@ public class AbstractTaskTest {
         EasyMock.verify(stateDirectory);
     }
 
+    @Test
+    public void shouldDeleteAndRecreateStoreDirectoryOnReinitialize() throws IOException {
+        final StreamsConfig streamsConfig = new StreamsConfig(new Properties() {
+            {
+                put(StreamsConfig.APPLICATION_ID_CONFIG, "app-id");
+                put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+                put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
+            }
+        });
+        final Consumer consumer = EasyMock.createNiceMock(Consumer.class);
+
+        final StateStore store1 = EasyMock.createNiceMock(StateStore.class);
+        final StateStore store2 = EasyMock.createNiceMock(StateStore.class);
+        final StateStore store3 = EasyMock.createNiceMock(StateStore.class);
+        final StateStore store4 = EasyMock.createNiceMock(StateStore.class);
+        final String storeName1 = "storeName1";
+        final String storeName2 = "storeName2";
+        final String storeName3 = "storeName3";
+        final String storeName4 = "storeName4";
+
+        EasyMock.expect(store1.name()).andReturn(storeName1).andReturn(storeName1);
+        EasyMock.replay(store1);
+        EasyMock.expect(store2.name()).andReturn(storeName2).andReturn(storeName2);
+        EasyMock.replay(store2);
+        EasyMock.expect(store3.name()).andReturn(storeName3).andReturn(storeName3);
+        EasyMock.replay(store3);
+        EasyMock.expect(store4.name()).andReturn(storeName4).andReturn(storeName4);
+        EasyMock.replay(store4);
+
+        final StateDirectory stateDirectory = new StateDirectory(streamsConfig, new MockTime());
+        final AbstractTask task = createTask(consumer, Utils.mkList(store1, store2, store3, store4), stateDirectory);
+
+        final String taskDir = stateDirectory.directoryForTask(task.id).getAbsolutePath();
+        final File storeDirectory1 = new File(taskDir
+            + File.separator + "rocksdb"
+            + File.separator + storeName1);
+        final File storeDirectory2 = new File(taskDir
+            + File.separator + "rocksdb"
+            + File.separator + storeName2);
+        final File storeDirectory3 = new File(taskDir
+            + File.separator + storeName3);
+        final File storeDirectory4 = new File(taskDir
+            + File.separator + storeName4);
+        final File testFile1 = new File(storeDirectory1.getAbsolutePath() + File.separator + "testFile");
+        final File testFile2 = new File(storeDirectory2.getAbsolutePath() + File.separator + "testFile");
+        final File testFile3 = new File(storeDirectory3.getAbsolutePath() + File.separator + "testFile");
+        final File testFile4 = new File(storeDirectory4.getAbsolutePath() + File.separator + "testFile");
+
+        storeDirectory1.mkdirs();
+        storeDirectory2.mkdirs();
+        storeDirectory3.mkdirs();
+        storeDirectory4.mkdirs();
+
+        testFile1.createNewFile();
+        assertTrue(testFile1.exists());
+        testFile2.createNewFile();
+        assertTrue(testFile2.exists());
+        testFile3.createNewFile();
+        assertTrue(testFile3.exists());
+        testFile4.createNewFile();
+        assertTrue(testFile4.exists());
+
+        task.processorContext = new MockProcessorContext(stateDirectory.directoryForTask(task.id), streamsConfig);
+
+        task.stateMgr.register(store1, new MockRestoreCallback());
+        task.stateMgr.register(store2, new MockRestoreCallback());
+        task.stateMgr.register(store3, new MockRestoreCallback());
+        task.stateMgr.register(store4, new MockRestoreCallback());
+
+        // only reinitialize store1 and store3 -- store2 and store4 should be untouched
+        task.reinitializeStateStoresForPartitions(Utils.mkSet(storeTopicPartition1, storeTopicPartition3));
+
+        assertFalse(testFile1.exists());
+        assertTrue(testFile2.exists());
+        assertFalse(testFile3.exists());
+        assertTrue(testFile4.exists());
+    }
+
     @SuppressWarnings("unchecked")
-    private AbstractTask createTask(final Consumer consumer, final List<StateStore> stateStores) {
+    private AbstractTask createTask(final Consumer consumer,
+                                    final List<StateStore> stateStores) {
+        return createTask(consumer, stateStores, stateDirectory);
+    }
+
+    private AbstractTask createTask(final Consumer consumer,
+                                    final List<StateStore> stateStores,
+                                    final StateDirectory stateDirectory) {
         final Properties properties = new Properties();
         properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "app");
         properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummyhost:9092");
         final StreamsConfig config = new StreamsConfig(properties);
         return new AbstractTask(id,
-                                Collections.singletonList(new TopicPartition("t", 0)),
+                                storeTopicPartitions,
                                 ProcessorTopology.withLocalStores(stateStores, Collections.<String, String>emptyMap()),
                                 (Consumer<byte[], byte[]>) consumer,
                                 new StoreChangelogReader((Consumer<byte[], byte[]>) consumer, new MockStateRestoreListener(), new LogContext("stream-task-test ")),
                                 false,
                                 stateDirectory,
                                 config) {
+
             @Override
             public void resume() {}
 

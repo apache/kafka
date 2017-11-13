@@ -102,8 +102,6 @@ public class MeteredKeyValueBytesStore<K, V> extends WrappedStateStore.AbstractS
                                         keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
                                         valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
         innerMetered.init(context, root);
-
-
     }
 
     @Override
