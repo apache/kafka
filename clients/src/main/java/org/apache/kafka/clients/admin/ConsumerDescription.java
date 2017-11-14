@@ -23,7 +23,7 @@ import org.apache.kafka.common.utils.Utils;
 import java.util.List;
 
 /**
- *
+ * A detailed description of a single consumer group instance in the cluster.
  */
 public class ConsumerDescription {
 

@@ -22,20 +22,20 @@ import org.apache.kafka.common.utils.Utils;
 import java.util.List;
 
 /**
- *
+ * A detailed description of a single consumer group in the cluster.
  */
 public class ConsumerGroupDescription {
 
-    private final String name;
+    private final String groupId;
     private final List<ConsumerDescription> consumers;
 
-    public ConsumerGroupDescription(String name, List<ConsumerDescription> consumers) {
-        this.name = name;
+    public ConsumerGroupDescription(String groupId, List<ConsumerDescription> consumers) {
+        this.groupId = groupId;
         this.consumers = consumers;
     }
 
     public String name() {
-        return name;
+        return groupId;
     }
 
     public List<ConsumerDescription> consumers() {
@@ -44,7 +44,7 @@ public class ConsumerGroupDescription {
 
     @Override
     public String toString() {
-        return "(name=" + name + ", consumers=" +
+        return "(groupId=" + groupId + ", consumers=" +
             Utils.join(consumers, ",") + ")";
     }
 }
