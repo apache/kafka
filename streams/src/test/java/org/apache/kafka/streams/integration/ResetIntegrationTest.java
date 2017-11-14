@@ -131,9 +131,10 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         }
     }
 
-    private void invokeGetDateTimeMethod(SimpleDateFormat format) throws ParseException {
+    private void invokeGetDateTimeMethod(final SimpleDateFormat format) throws ParseException {
         final Date checkpoint = new Date();
-        StreamsResetter streamsResetter = new StreamsResetter();
-        streamsResetter.getDateTime(format.format(checkpoint));
+        final StreamsResetter streamsResetter = new StreamsResetter();
+        final String formattedCheckpoint = format.format(checkpoint);
+        streamsResetter.getDateTime(formattedCheckpoint);
     }
 }
