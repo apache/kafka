@@ -587,7 +587,7 @@ abstract class AbstractResetIntegrationTest {
 
         // RESET
         final File resetFile = File.createTempFile("reset", ".csv");
-        try(BufferedWriter writer = new BufferedWriter(new FileWriter(resetFile))) {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(resetFile))) {
             writer.write(INPUT_TOPIC + ",0,1");
             writer.close();
         }
@@ -662,7 +662,7 @@ abstract class AbstractResetIntegrationTest {
 
         // RESET
         final File resetFile = File.createTempFile("reset", ".csv");
-        try(BufferedWriter writer = new BufferedWriter(new FileWriter(resetFile))) {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(resetFile))) {
             writer.write(INPUT_TOPIC + ",0,1");
             writer.close();
         }
@@ -741,7 +741,7 @@ abstract class AbstractResetIntegrationTest {
 
         // RESET
         final File resetFile = File.createTempFile("reset", ".csv");
-        try(BufferedWriter writer = new BufferedWriter(new FileWriter(resetFile))) {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(resetFile))) {
             writer.write(INPUT_TOPIC + ",0,1");
             writer.close();
         }
