@@ -455,52 +455,72 @@ public class StreamsResetter {
         }
     }
 
-    public Long getDateTime(String ts) throws ParseException {
-        if (!(ts.split("T")[1].contains("+") || ts.split("T")[1].contains("-") || ts.split("T")[1].contains("Z"))) {
-            ts = ts + "Z";
+    // visible for testing
+    public Long getDateTime(String timestamp) throws ParseException {
+        final String[] timestampParts = timestamp.split("T");
+        if (timestampParts.length < 2) {
+            throw new ParseException("Error parsing timestamp. It does not contain a 'T' according to ISO8601 format", timestamp.length());
         }
 
-        Date date;
+        final String secondPart = timestampParts[1];
+        if (secondPart == null || secondPart.isEmpty()) {
+            throw new ParseException("Error parsing timestamp. Time part after 'T' is null or empty", timestamp.length());
+        }
+
+        if (!(secondPart.contains("+") || secondPart.contains("-") || secondPart.contains("Z"))) {
+            timestamp = timestamp + "Z";
+        }
+
         try {
-            date = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX").parse(ts);
+            final Date date = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX").parse(timestamp);
+            return date.getTime();
         } catch (ParseException e) {
-            date = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX").parse(ts);
+            final Date date = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX").parse(timestamp);
+            return date.getTime();
         }
-
-        return date.getTime();
     }
 
-    private Map<TopicPartition, Long> parseResetPlan(String resetPlanCsv) {
+    private Map<TopicPartition, Long> parseResetPlan(final String resetPlanCsv) throws ParseException {
         final Map<TopicPartition, Long> topicPartitionAndOffset = new HashMap<>();
-        for (final String line : resetPlanCsv.split("\n")) {
-            final String[] parts = line.split(",");
-            final String topic = parts[0];
-            final int partition = Integer.parseInt(parts[1]);
-            final long offset = Long.parseLong(parts[2]);
+        if (resetPlanCsv == null || resetPlanCsv.isEmpty()) {
+            throw new ParseException("Error parsing reset plan CSV file. It is empty,", 0);
+        }
+
+        final String[] resetPlanCsvParts = resetPlanCsv.split("\n");
+
+        for (final String line : resetPlanCsvParts) {
+            final String[] lineParts = line.split(",");
+            if (lineParts.length != 3) {
+                throw new ParseException("Reset plan CSV file is not following the format `TOPIC,PARTITION,OFFSET`.", 0);
+            }
+            final String topic = lineParts[0];
+            final int partition = Integer.parseInt(lineParts[1]);
+            final long offset = Long.parseLong(lineParts[2]);
             final TopicPartition topicPartition = new TopicPartition(topic, partition);
             topicPartitionAndOffset.put(topicPartition, offset);
         }
+
         return topicPartitionAndOffset;
     }
 
-    private Map<TopicPartition, Long> checkOffsetRange(Map<TopicPartition, Long> inputTopicPartitionsAndOffset,
-                                                       Map<TopicPartition, Long> beginningOffsets,
-                                                       Map<TopicPartition, Long> endOffsets) {
-        Map<TopicPartition, Long> validatedTopicPartitionsOffsets = new HashMap<>();
-        for (final TopicPartition topicPartition : inputTopicPartitionsAndOffset.keySet()) {
-            final Long endOffset = endOffsets.get(topicPartition);
-            final Long offset = inputTopicPartitionsAndOffset.get(topicPartition);
+    private Map<TopicPartition, Long> checkOffsetRange(final Map<TopicPartition, Long> inputTopicPartitionsAndOffset,
+                                                       final Map<TopicPartition, Long> beginningOffsets,
+                                                       final Map<TopicPartition, Long> endOffsets) {
+        final Map<TopicPartition, Long> validatedTopicPartitionsOffsets = new HashMap<>();
+        for (final Map.Entry<TopicPartition, Long> topicPartitionAndOffset : inputTopicPartitionsAndOffset.entrySet()) {
+            final Long endOffset = endOffsets.get(topicPartitionAndOffset.getKey());
+            final Long offset = topicPartitionAndOffset.getValue();
             if (offset < endOffset) {
-                final Long beginningOffset = beginningOffsets.get(topicPartition);
+                final Long beginningOffset = beginningOffsets.get(topicPartitionAndOffset.getKey());
                 if (offset > beginningOffset) {
-                    validatedTopicPartitionsOffsets.put(topicPartition, offset);
+                    validatedTopicPartitionsOffsets.put(topicPartitionAndOffset.getKey(), offset);
                 } else {
                     System.out.println("New offset (" + offset + ") is lower than earliest offset. Value will be set to " + beginningOffset);
-                    validatedTopicPartitionsOffsets.put(topicPartition, beginningOffset);
+                    validatedTopicPartitionsOffsets.put(topicPartitionAndOffset.getKey(), beginningOffset);
                 }
             } else {
                 System.out.println("New offset (" + offset + ") is higher than latest offset. Value will be set to " + endOffset);
-                validatedTopicPartitionsOffsets.put(topicPartition, endOffset);
+                validatedTopicPartitionsOffsets.put(topicPartitionAndOffset.getKey(), endOffset);
             }
         }
         return validatedTopicPartitionsOffsets;
