@@ -35,18 +35,26 @@ public abstract class KafkaFuture<T> implements Future<T> {
     /**
      * A function which takes objects of type A and returns objects of type B.
      */
-    public static abstract class Function<A, B> {
-        public abstract B apply(A a);
+    public interface FunctionInterface<A, B> {
+        B apply(A a);
     }
+    
+    /**
+     * A function which takes objects of type A and returns objects of type B.
+     *
+     * @deprecated use {@link FunctionInterface} instead
+     */
+    @Deprecated
+    public static abstract class Function<A, B> implements FunctionInterface<A, B> { }
 
     /**
      * A consumer of two different types of object.
      */
-    public static abstract class BiConsumer<A, B> {
-        public abstract void accept(A a, B b);
+    public interface BiConsumer<A, B> {
+        void accept(A a, B b);
     }
 
-    private static class AllOfAdapter<R> extends BiConsumer<R, Throwable> {
+    private static class AllOfAdapter<R> implements BiConsumer<R, Throwable> {
         private int remainingResponses;
         private KafkaFuture<?> future;
 
@@ -102,9 +110,23 @@ public abstract class KafkaFuture<T> implements Future<T> {
      * Returns a new KafkaFuture that, when this future completes normally, is executed with this
      * futures's result as the argument to the supplied function.
      */
+    public abstract <R> KafkaFuture<R> thenApply(FunctionInterface<T, R> function);
+
+    /**
+     * @see KafkaFuture#thenApply(FunctionInterface)
+     *
+     * @deprecated use {@link KafkaFuture#thenApply(FunctionInterface)}
+     */
+    @Deprecated
     public abstract <R> KafkaFuture<R> thenApply(Function<T, R> function);
 
-    protected abstract void addWaiter(BiConsumer<? super T, ? super Throwable> action);
+    /**
+     * When this future is done, the given action is invoked with the result (or null if none)
+     * and the exception (or null if none) of this future as arguments.
+     *
+     * @param action the action to perform
+     */
+    public abstract void addWaiter(BiConsumer<? super T, ? super Throwable> action);
 
     /**
      * If not already completed, sets the value returned by get() and related methods to the given

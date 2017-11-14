@@ -52,7 +52,7 @@ public class DescribeReplicaLogDirsResult {
      */
     public KafkaFuture<Map<TopicPartitionReplica, ReplicaLogDirInfo>> all() {
         return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).
-            thenApply(new KafkaFuture.Function<Void, Map<TopicPartitionReplica, ReplicaLogDirInfo>>() {
+            thenApply(new KafkaFuture.FunctionInterface<Void, Map<TopicPartitionReplica, ReplicaLogDirInfo>>() {
                 @Override
                 public Map<TopicPartitionReplica, ReplicaLogDirInfo> apply(Void v) {
                     Map<TopicPartitionReplica, ReplicaLogDirInfo> replicaLogDirInfos = new HashMap<>();

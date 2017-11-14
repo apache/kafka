@@ -83,6 +83,47 @@ public class KafkaFutureTest {
         assertEquals(null, myThread.testException);
     }
 
+    @Test
+    public void testThenApply() throws Exception {
+        KafkaFutureImpl<Integer> future = new KafkaFutureImpl<>();
+        KafkaFuture<Integer> doubledFuture = future.thenApply(new KafkaFuture.FunctionInterface<Integer, Integer>() {
+            @Override
+            public Integer apply(Integer integer) {
+                return 2 * integer;
+            }
+        });
+        assertFalse(doubledFuture.isDone());
+        KafkaFuture<Integer> tripledFuture = future.thenApply(new KafkaFuture.Function<Integer, Integer>() {
+            @Override
+            public Integer apply(Integer integer) {
+                return 3 * integer;
+            }
+        });
+        assertFalse(tripledFuture.isDone());
+        future.complete(21);
+        assertEquals(Integer.valueOf(21), future.getNow(-1));
+        assertEquals(Integer.valueOf(42), doubledFuture.getNow(-1));
+        assertEquals(Integer.valueOf(63), tripledFuture.getNow(-1));
+        KafkaFuture<Integer> quadrupledFuture = future.thenApply(new KafkaFuture.FunctionInterface<Integer, Integer>() {
+            @Override
+            public Integer apply(Integer integer) {
+                return 4 * integer;
+            }
+        });
+        assertEquals(Integer.valueOf(84), quadrupledFuture.getNow(-1));
+
+        KafkaFutureImpl<Integer> futureFail = new KafkaFutureImpl<>();
+        KafkaFuture<Integer> futureAppliedFail = futureFail.thenApply(new KafkaFuture.FunctionInterface<Integer, Integer>() {
+            @Override
+            public Integer apply(Integer integer) {
+                return 2 * integer;
+            }
+        });
+        futureFail.completeExceptionally(new RuntimeException());
+        assertTrue(futureFail.isCompletedExceptionally());
+        assertTrue(futureAppliedFail.isCompletedExceptionally());
+    }
+
     private static class CompleterThread<T> extends Thread {
 
         private final KafkaFutureImpl<T> future;

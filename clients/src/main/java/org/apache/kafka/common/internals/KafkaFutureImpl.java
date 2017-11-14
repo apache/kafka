@@ -46,11 +46,11 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
         }
     }
 
-    private static class Applicant<A, B> extends BiConsumer<A, Throwable> {
-        private final Function<A, B> function;
+    private static class Applicant<A, B> implements BiConsumer<A, Throwable> {
+        private final FunctionInterface<A, B> function;
         private final KafkaFutureImpl<B> future;
 
-        Applicant(Function<A, B> function, KafkaFutureImpl<B> future) {
+        Applicant(FunctionInterface<A, B> function, KafkaFutureImpl<B> future) {
             this.function = function;
             this.future = future;
         }
@@ -70,7 +70,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
         }
     }
 
-    private static class SingleWaiter<R> extends BiConsumer<R, Throwable> {
+    private static class SingleWaiter<R> implements BiConsumer<R, Throwable> {
         private R value = null;
         private Throwable exception = null;
         private boolean done = false;
@@ -140,14 +140,23 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
      * futures's result as the argument to the supplied function.
      */
     @Override
-    public <R> KafkaFuture<R> thenApply(Function<T, R> function) {
+    public <R> KafkaFuture<R> thenApply(FunctionInterface<T, R> function) {
         KafkaFutureImpl<R> future = new KafkaFutureImpl<R>();
         addWaiter(new Applicant<>(function, future));
         return future;
     }
 
+    /**
+     * @See KafkaFutureImpl#thenApply(FunctionInterface)
+     */
+    @Deprecated
     @Override
-    protected synchronized void addWaiter(BiConsumer<? super T, ? super Throwable> action) {
+    public <R> KafkaFuture<R> thenApply(Function<T, R> function) {
+        return thenApply((FunctionInterface<T, R>) function);
+    }
+
+    @Override
+    public synchronized void addWaiter(BiConsumer<? super T, ? super Throwable> action) {
         if (exception != null) {
             action.accept(null, exception);
         } else if (done) {

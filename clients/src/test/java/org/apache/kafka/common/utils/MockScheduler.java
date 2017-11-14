@@ -87,7 +87,7 @@ public class MockScheduler implements Scheduler, MockTime.MockTimeListener {
                                   final Callable<T> callable, long delayMs) {
         final KafkaFutureImpl<T> future = new KafkaFutureImpl<>();
         KafkaFutureImpl<Long> waiter = new KafkaFutureImpl<>();
-        waiter.thenApply(new KafkaFuture.Function<Long, Void>() {
+        waiter.thenApply(new KafkaFuture.FunctionInterface<Long, Void>() {
             @Override
             public Void apply(final Long now) {
                 executor.submit(new Callable<Void>() {
