@@ -653,7 +653,6 @@ public class StreamThread extends Thread {
                 log);
         TaskManager taskManager = new TaskManager(changelogReader,
                 logPrefix,
-                consumer,
                 restoreConsumer,
                 activeTaskCreator,
                 standbyTaskCreator,
