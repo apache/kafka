@@ -134,7 +134,6 @@ class SocketServerTest extends JUnitSuite {
   }
 
   def shutdownServerAndMetrics(server: SocketServer): Unit = {
-    server.stop()
     server.shutdown()
     server.metrics.close()
   }
@@ -577,7 +576,7 @@ class SocketServerTest extends JUnitSuite {
 
   @Test
   def testRequestMetricsAfterStop(): Unit = {
-    server.stop()
+    server.stopProcessingRequests()
 
     server.requestChannel.metrics(ApiKeys.PRODUCE.name).requestRate.mark()
     server.requestChannel.updateErrorMetrics(ApiKeys.PRODUCE, Map(Errors.NONE -> 1))
@@ -597,7 +596,6 @@ class SocketServerTest extends JUnitSuite {
 
   @Test
   def testMetricCollectionAfterShutdown(): Unit = {
-    server.stop()
     server.shutdown()
 
     val nonZeroMetricNamesAndValues = YammerMetrics

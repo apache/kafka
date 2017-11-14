@@ -529,7 +529,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         // Stop socket server to stop accepting any more connections and requests.
         // Socket server will be shutdown towards the end of the sequence.
         if (socketServer != null)
-          CoreUtils.swallow(socketServer.stop())
+          CoreUtils.swallow(socketServer.stopProcessingRequests())
         if (requestHandlerPool != null)
           CoreUtils.swallow(requestHandlerPool.shutdown())
 
