@@ -37,18 +37,20 @@ class TaskManager {
     // activeTasks needs to be concurrent as it can be accessed
     // by QueryableState
     private final Logger log;
+    private final String logPrefix;
     private final AssignedStreamsTasks active;
     private final AssignedStandbyTasks standby;
     private final ChangelogReader changelogReader;
-    private final String logPrefix;
+    private final Consumer<byte[], byte[]> consumer;
     private final Consumer<byte[], byte[]> restoreConsumer;
     private final StreamThread.AbstractTaskCreator<StreamTask> taskCreator;
     private final StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator;
+
     private ThreadMetadataProvider threadMetadataProvider;
-    private Consumer<byte[], byte[]> consumer;
 
     TaskManager(final ChangelogReader changelogReader,
                 final String logPrefix,
+                final Consumer<byte[], byte[]> consumer,
                 final Consumer<byte[], byte[]> restoreConsumer,
                 final StreamThread.AbstractTaskCreator<StreamTask> taskCreator,
                 final StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator,
@@ -56,6 +58,7 @@ class TaskManager {
                 final AssignedStandbyTasks standby) {
         this.changelogReader = changelogReader;
         this.logPrefix = logPrefix;
+        this.consumer = consumer;
         this.restoreConsumer = restoreConsumer;
         this.taskCreator = taskCreator;
         this.standbyTaskCreator = standbyTaskCreator;
@@ -73,9 +76,6 @@ class TaskManager {
     void createTasks(final Collection<TopicPartition> assignment) {
         if (threadMetadataProvider == null) {
             throw new IllegalStateException(logPrefix + "taskIdProvider has not been initialized while adding stream tasks. This should not happen.");
-        }
-        if (consumer == null) {
-            throw new IllegalStateException(logPrefix + "consumer has not been initialized while adding stream tasks. This should not happen.");
         }
 
         changelogReader.reset();
@@ -255,10 +255,6 @@ class TaskManager {
 
     Map<TaskId, StandbyTask> standbyTasks() {
         return standby.runningTaskMap();
-    }
-
-    void setConsumer(final Consumer<byte[], byte[]> consumer) {
-        this.consumer = consumer;
     }
 
     /**

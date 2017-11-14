@@ -82,13 +82,13 @@ public class TaskManagerTest {
     public void setUp() throws Exception {
         taskManager = new TaskManager(changeLogReader,
                                       "",
+                                      consumer,
                                       restoreConsumer,
                                       activeTaskCreator,
                                       standbyTaskCreator,
                                       active,
                                       standby);
         taskManager.setThreadMetadataProvider(threadMetadataProvider);
-        taskManager.setConsumer(consumer);
     }
 
     private void replay() {

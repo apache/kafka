@@ -169,7 +169,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
         }
     };
 
-    private ThreadDataProvider threadDataProvider;
+    private TaskManager taskManager;
 
     private String userEndPoint;
     private int numStandbyReplicas;
@@ -213,14 +213,14 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
             throw ex;
         }
 
-        if (!(o instanceof ThreadDataProvider)) {
+        if (!(o instanceof TaskManager)) {
             KafkaException ex = new KafkaException(String.format("%s is not an instance of %s", o.getClass().getName(), ThreadDataProvider.class.getName()));
             log.error(ex.getMessage(), ex);
             throw ex;
         }
 
-        threadDataProvider = (ThreadDataProvider) o;
-        threadDataProvider.setThreadMetadataProvider(this);
+        taskManager = (TaskManager) o;
+        taskManager.setThreadMetadataProvider(this);
 
         String userEndPoint = (String) configs.get(StreamsConfig.APPLICATION_SERVER_CONFIG);
         if (userEndPoint != null && !userEndPoint.isEmpty()) {
@@ -241,13 +241,13 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
         }
 
         internalTopicManager = new InternalTopicManager(
-                StreamsKafkaClient.create(this.threadDataProvider.config()),
+                StreamsKafkaClient.create(configs),
                 configs.containsKey(StreamsConfig.REPLICATION_FACTOR_CONFIG) ? (Integer) configs.get(StreamsConfig.REPLICATION_FACTOR_CONFIG) : 1,
                 configs.containsKey(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG) ?
                         (Long) configs.get(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG)
                         : WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT, time);
 
-        this.copartitionedTopicsValidator = new CopartitionedTopicsValidator(threadDataProvider.name());
+        this.copartitionedTopicsValidator = new CopartitionedTopicsValidator(taskManager.name());
     }
 
     @Override
@@ -262,13 +262,13 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
         // 2. Task ids of previously running tasks
         // 3. Task ids of valid local states on the client's state directory.
 
-        final Set<TaskId> previousActiveTasks = threadDataProvider.prevActiveTasks();
-        Set<TaskId> standbyTasks = threadDataProvider.cachedTasks();
+        final Set<TaskId> previousActiveTasks = taskManager.prevActiveTasks();
+        Set<TaskId> standbyTasks = taskManager.cachedTasks();
         standbyTasks.removeAll(previousActiveTasks);
-        SubscriptionInfo data = new SubscriptionInfo(threadDataProvider.processId(), previousActiveTasks, standbyTasks, this.userEndPoint);
+        SubscriptionInfo data = new SubscriptionInfo(taskManager.processId(), previousActiveTasks, standbyTasks, this.userEndPoint);
 
-        if (threadDataProvider.builder().sourceTopicPattern() != null &&
-            !threadDataProvider.builder().subscriptionUpdates().getUpdates().equals(topics)) {
+        if (taskManager.builder().sourceTopicPattern() != null &&
+            !taskManager.builder().subscriptionUpdates().getUpdates().equals(topics)) {
             updateSubscribedTopics(topics);
         }
 
@@ -280,7 +280,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
         log.debug("found {} topics possibly matching regex", topics);
         // update the topic groups with the returned subscription set for regex pattern subscriptions
         subscriptionUpdates.updateTopics(topics);
-        threadDataProvider.builder().updateSubscriptions(subscriptionUpdates, threadDataProvider.name());
+        taskManager.builder().updateSubscriptions(subscriptionUpdates, taskManager.name());
     }
 
     /*
@@ -333,7 +333,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
         // parse the topology to determine the repartition source topics,
         // making sure they are created with the number of partitions as
         // the maximum of the depending sub-topologies source topics' number of partitions
-        Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = threadDataProvider.builder().topicGroups();
+        Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = taskManager.builder().topicGroups();
 
         Map<String, InternalTopicMetadata> repartitionTopicMetadata = new HashMap<>();
         for (InternalTopologyBuilder.TopicsInfo topicsInfo : topicGroups.values()) {
@@ -405,7 +405,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
         // ensure the co-partitioning topics within the group have the same number of partitions,
         // and enforce the number of partitions for those repartition topics to be the same if they
         // are co-partitioned as well.
-        ensureCopartitioning(threadDataProvider.builder().copartitionGroups(), repartitionTopicMetadata, metadata);
+        ensureCopartitioning(taskManager.builder().copartitionGroups(), repartitionTopicMetadata, metadata);
 
         // make sure the repartition source topics exist with the right number of partitions,
         // create these topics if necessary
@@ -425,7 +425,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
             sourceTopicsByGroup.put(entry.getKey(), entry.getValue().sourceTopics);
         }
 
-        Map<TaskId, Set<TopicPartition>> partitionsForTask = threadDataProvider.partitionGrouper().partitionGroups(
+        Map<TaskId, Set<TopicPartition>> partitionsForTask = taskManager.partitionGrouper().partitionGroups(
                 sourceTopicsByGroup, metadataWithInternalTopics);
 
         // check if all partitions are assigned, and there are no duplicates of partitions in multiple tasks
@@ -631,13 +631,13 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
     }
 
     private void checkForNewTopicAssignments(Assignment assignment) {
-        if (threadDataProvider.builder().sourceTopicPattern() != null) {
+        if (taskManager.builder().sourceTopicPattern() != null) {
             final Set<String> assignedTopics = new HashSet<>();
             for (final TopicPartition topicPartition : assignment.partitions()) {
                 assignedTopics.add(topicPartition.topic());
             }
-            if (!threadDataProvider.builder().subscriptionUpdates().getUpdates().containsAll(assignedTopics)) {
-                assignedTopics.addAll(threadDataProvider.builder().subscriptionUpdates().getUpdates());
+            if (!taskManager.builder().subscriptionUpdates().getUpdates().containsAll(assignedTopics)) {
+                assignedTopics.addAll(taskManager.builder().subscriptionUpdates().getUpdates());
                 updateSubscribedTopics(assignedTopics);
             }
         }

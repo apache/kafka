@@ -79,10 +79,9 @@ public class StreamsKafkaClientTest {
     public void testConfigFromStreamsConfig() {
         for (final String expectedMechanism : asList("PLAIN", "SCRAM-SHA-512")) {
             config.put(SaslConfigs.SASL_MECHANISM, expectedMechanism);
-            final StreamsConfig streamsConfig = new StreamsConfig(config);
-            final AbstractConfig config = StreamsKafkaClient.Config.fromStreamsConfig(streamsConfig);
-            assertEquals(expectedMechanism, config.values().get(SaslConfigs.SASL_MECHANISM));
-            assertEquals(expectedMechanism, config.getString(SaslConfigs.SASL_MECHANISM));
+            final AbstractConfig abstractConfig = StreamsKafkaClient.Config.fromStreamsConfig(config);
+            assertEquals(expectedMechanism, abstractConfig.values().get(SaslConfigs.SASL_MECHANISM));
+            assertEquals(expectedMechanism, abstractConfig.getString(SaslConfigs.SASL_MECHANISM));
         }
     }
 
@@ -138,39 +137,11 @@ public class StreamsKafkaClientTest {
     public void metricsShouldBeTaggedWithClientId() {
         config.put(StreamsConfig.CLIENT_ID_CONFIG, "some_client_id");
         config.put(StreamsConfig.METRIC_REPORTER_CLASSES_CONFIG, TestMetricsReporter.class.getName());
-        StreamsKafkaClient.create(new StreamsConfig(config));
+        StreamsKafkaClient.create(config);
         assertFalse(TestMetricsReporter.METRICS.isEmpty());
         for (KafkaMetric kafkaMetric : TestMetricsReporter.METRICS.values()) {
             assertEquals("some_client_id", kafkaMetric.metricName().tags().get("client-id"));
         }
-    }
-
-    @Test(expected = StreamsException.class)
-    public void shouldThrowStreamsExceptionOnEmptyBrokerCompatibilityResponse() {
-        kafkaClient.prepareResponse(null);
-        final StreamsKafkaClient streamsKafkaClient = createStreamsKafkaClient();
-        streamsKafkaClient.checkBrokerCompatibility(false);
-    }
-
-    @Test(expected = StreamsException.class)
-    public void shouldThrowStreamsExceptionWhenBrokerCompatibilityResponseInconsistent() {
-        kafkaClient.prepareResponse(new ProduceResponse(Collections.<TopicPartition, ProduceResponse.PartitionResponse>emptyMap()));
-        final StreamsKafkaClient streamsKafkaClient = createStreamsKafkaClient();
-        streamsKafkaClient.checkBrokerCompatibility(false);
-    }
-
-    @Test(expected = StreamsException.class)
-    public void shouldRequireBrokerVersion0101OrHigherWhenEosDisabled() {
-        kafkaClient.prepareResponse(new ApiVersionsResponse(Errors.NONE, Collections.singletonList(new ApiVersionsResponse.ApiVersion(ApiKeys.PRODUCE))));
-        final StreamsKafkaClient streamsKafkaClient = createStreamsKafkaClient();
-        streamsKafkaClient.checkBrokerCompatibility(false);
-    }
-
-    @Test(expected = StreamsException.class)
-    public void shouldRequireBrokerVersions0110OrHigherWhenEosEnabled() {
-        kafkaClient.prepareResponse(new ApiVersionsResponse(Errors.NONE, Collections.singletonList(new ApiVersionsResponse.ApiVersion(ApiKeys.CREATE_TOPICS))));
-        final StreamsKafkaClient streamsKafkaClient = createStreamsKafkaClient();
-        streamsKafkaClient.checkBrokerCompatibility(true);
     }
 
     @Test(expected = StreamsException.class)
@@ -213,8 +184,7 @@ public class StreamsKafkaClientTest {
     }
 
     private StreamsKafkaClient createStreamsKafkaClient() {
-        final StreamsConfig streamsConfig = new StreamsConfig(config);
-        return new StreamsKafkaClient(StreamsKafkaClient.Config.fromStreamsConfig(streamsConfig),
+        return new StreamsKafkaClient(StreamsKafkaClient.Config.fromStreamsConfig(config),
                                       kafkaClient,
                                       reporters,
                                       new LogContext());

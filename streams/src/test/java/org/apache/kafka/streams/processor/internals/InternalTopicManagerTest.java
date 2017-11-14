@@ -161,7 +161,7 @@ public class InternalTopicManagerTest {
         Map<String, Integer> replicationFactorPerTopic = new HashMap<>();
 
         MockStreamKafkaClient(final StreamsConfig streamsConfig) {
-            super(StreamsKafkaClient.Config.fromStreamsConfig(streamsConfig),
+            super(StreamsKafkaClient.Config.fromStreamsConfig(streamsConfig.originals()),
                   new MockClient(new MockTime()),
                   Collections.<MetricsReporter>emptyList(),
                   new LogContext());

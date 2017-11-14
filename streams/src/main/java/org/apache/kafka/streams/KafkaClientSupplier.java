@@ -20,7 +20,6 @@ import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.internals.StreamThread;
 
 import java.util.Map;
 
@@ -50,7 +49,7 @@ public interface KafkaClientSupplier {
     /**
      * Create a {@link Consumer} which is used to read records of source topics.
      *
-     * @param config {@link StreamsConfig#getConsumerConfigs(StreamThread, String, String) consumer config} which is
+     * @param config {@link StreamsConfig#getConsumerConfigs(String, String) consumer config} which is
      *               supplied by the {@link StreamsConfig} given to the {@link KafkaStreams} instance
      * @return an instance of Kafka consumer
      */

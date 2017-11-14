@@ -27,6 +27,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
@@ -356,6 +357,7 @@ public class StreamThreadTest {
         return StreamThread.create(internalTopologyBuilder,
                                    config,
                                    clientSupplier,
+                                   clientSupplier.getAdminClient(config.getAdminConfigs(clientId)),
                                    processId,
                                    clientId,
                                    metrics,
@@ -528,18 +530,20 @@ public class StreamThreadTest {
         final TaskManager taskManager = mockTaskManagerCommit(consumer, 1, 1);
 
         StreamThread.StreamsMetricsThreadImpl streamsMetrics = new StreamThread.StreamsMetricsThreadImpl(metrics, "", "", Collections.<String, String>emptyMap());
-        final StreamThread thread = new StreamThread(internalTopologyBuilder,
-                                                     clientId,
-                                                     "",
-                                                     config,
-                                                     processId,
-                                                     mockTime,
-                                                     streamsMetadataState,
-                                                     taskManager,
-                                                     streamsMetrics,
-                                                     clientSupplier,
-                                                     consumer,
-                                                     stateDirectory);
+        final StreamThread thread = new StreamThread(mockTime,
+                processId,
+                config,
+                consumer,
+                consumer,
+                clientSupplier.getAdminClient(config.getAdminConfigs(clientId)),
+                taskManager,
+                streamsMetrics,
+                streamsMetadataState,
+                internalTopologyBuilder,
+                stateDirectory,
+                clientId,
+                new LogContext("")
+        );
         thread.maybeCommit(mockTime.milliseconds());
         mockTime.sleep(commitInterval - 10L);
         thread.maybeCommit(mockTime.milliseconds());
@@ -560,18 +564,19 @@ public class StreamThreadTest {
         final TaskManager taskManager = mockTaskManagerCommit(consumer, 1, 0);
 
         StreamThread.StreamsMetricsThreadImpl streamsMetrics = new StreamThread.StreamsMetricsThreadImpl(metrics, "", "", Collections.<String, String>emptyMap());
-        final StreamThread thread = new StreamThread(internalTopologyBuilder,
-                                                     clientId,
-                                                     "",
-                                                     config,
-                                                     processId,
-                                                     mockTime,
-                                                     streamsMetadataState,
-                                                     taskManager,
-                                                     streamsMetrics,
-                                                     clientSupplier,
-                                                     consumer,
-                                                     stateDirectory);
+        final StreamThread thread = new StreamThread(mockTime,
+                processId,
+                config,
+                consumer,
+                consumer,
+                clientSupplier.getAdminClient(config.getAdminConfigs(clientId)),
+                taskManager,
+                streamsMetrics,
+                streamsMetadataState,
+                internalTopologyBuilder,
+                stateDirectory,
+                clientId,
+                new LogContext(""));
         thread.maybeCommit(mockTime.milliseconds());
         mockTime.sleep(commitInterval - 10L);
         thread.maybeCommit(mockTime.milliseconds());
@@ -593,18 +598,19 @@ public class StreamThreadTest {
         final TaskManager taskManager = mockTaskManagerCommit(consumer, 2, 1);
 
         StreamThread.StreamsMetricsThreadImpl streamsMetrics = new StreamThread.StreamsMetricsThreadImpl(metrics, "", "", Collections.<String, String>emptyMap());
-        final StreamThread thread = new StreamThread(internalTopologyBuilder,
-                                                     clientId,
-                                                     "",
-                                                     config,
-                                                     processId,
-                                                     mockTime,
-                                                     streamsMetadataState,
-                                                     taskManager,
-                                                     streamsMetrics,
-                                                     clientSupplier,
-                                                     consumer,
-                                                     stateDirectory);
+        final StreamThread thread = new StreamThread(mockTime,
+                processId,
+                config,
+                consumer,
+                consumer,
+                clientSupplier.getAdminClient(config.getAdminConfigs(clientId)),
+                taskManager,
+                streamsMetrics,
+                streamsMetadataState,
+                internalTopologyBuilder,
+                stateDirectory,
+                clientId,
+                new LogContext(""));
         thread.maybeCommit(mockTime.milliseconds());
         mockTime.sleep(commitInterval + 1);
         thread.maybeCommit(mockTime.milliseconds());
@@ -615,7 +621,6 @@ public class StreamThreadTest {
     @SuppressWarnings({"ThrowableNotThrown", "unchecked"})
     private TaskManager mockTaskManagerCommit(final Consumer<byte[], byte[]> consumer, final int numberOfCommits, final int commits) {
         final TaskManager taskManager = EasyMock.createMock(TaskManager.class);
-        taskManager.setConsumer(EasyMock.anyObject(Consumer.class));
         EasyMock.expectLastCall();
         EasyMock.expect(taskManager.commitAll()).andReturn(commits).times(numberOfCommits);
         EasyMock.replay(taskManager, consumer);
@@ -702,25 +707,25 @@ public class StreamThreadTest {
     public void shouldShutdownTaskManagerOnClose() throws InterruptedException {
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
-        taskManager.setConsumer(EasyMock.anyObject(Consumer.class));
         EasyMock.expectLastCall();
         taskManager.shutdown(true);
         EasyMock.expectLastCall();
         EasyMock.replay(taskManager, consumer);
 
         StreamThread.StreamsMetricsThreadImpl streamsMetrics = new StreamThread.StreamsMetricsThreadImpl(metrics, "", "", Collections.<String, String>emptyMap());
-        final StreamThread thread = new StreamThread(internalTopologyBuilder,
-                                                     clientId,
-                                                     "",
-                                                     config,
-                                                     processId,
-                                                     mockTime,
-                                                     streamsMetadataState,
-                                                     taskManager,
-                                                     streamsMetrics,
-                                                     clientSupplier,
-                                                     consumer,
-                                                     stateDirectory);
+        final StreamThread thread = new StreamThread(mockTime,
+                processId,
+                config,
+                consumer,
+                consumer,
+                clientSupplier.getAdminClient(config.getAdminConfigs(clientId)),
+                taskManager,
+                streamsMetrics,
+                streamsMetadataState,
+                internalTopologyBuilder,
+                stateDirectory,
+                clientId,
+                new LogContext(""));
         thread.setState(StreamThread.State.RUNNING);
         thread.shutdown();
         thread.run();
