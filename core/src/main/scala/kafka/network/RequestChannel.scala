@@ -320,6 +320,7 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
   }
 
   def shutdown() {
+    clear()
     metrics.close()
   }
 
