@@ -136,7 +136,6 @@ class SocketServerTest extends JUnitSuite {
   def shutdownServerAndMetrics(server: SocketServer): Unit = {
     server.shutdown()
     server.metrics.close()
-    server.requestChannel.metrics.close()
   }
 
   @After
@@ -576,8 +575,8 @@ class SocketServerTest extends JUnitSuite {
   }
 
   @Test
-  def testRequestMetricsAfterShutdown(): Unit = {
-    server.shutdown()
+  def testRequestMetricsAfterStop(): Unit = {
+    server.stopProcessingRequests()
 
     server.requestChannel.metrics(ApiKeys.PRODUCE.name).requestRate.mark()
     server.requestChannel.updateErrorMetrics(ApiKeys.PRODUCE, Map(Errors.NONE -> 1))
@@ -591,7 +590,7 @@ class SocketServerTest extends JUnitSuite {
       .collect { case (k, metric: Meter) => (k.toString, metric.count) }
 
     assertEquals(nonZeroMeters, requestMetricMeters.filter { case (_, value) => value != 0 })
-    server.requestChannel.metrics.close()
+    server.shutdown()
     assertEquals(Map.empty, requestMetricMeters)
   }
 
