@@ -583,24 +583,22 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     }
   }
 
-  // ZKStateChecker ins tarted
+  // ZKStateChecker is started
   class ZKStateChecker extends Thread {
 
     override def run(): Unit = {
       val startTimeMillis = System.currentTimeMillis()
-      val endTimeMillis = startTimeMillis + config.zkConnectionRetryTimeoutMs;
       while(true) {
         var currentTimeMillis = System.currentTimeMillis()
         if (zkState != null && zkState != "SessionEstablishmentError"){
           info("Zookeeper session set to %s, exiting the ZKStateChecker".format(zkState))
           isWaitingForZKReconnect.set(false)
+          if (!isStartingUp.get()){
+            startup()
+          }
           return
         }
-        if (currentTimeMillis >= endTimeMillis){
-          error("Timed out waiting for zookeeper session to be re-established. Shutting down.")
-          shutdown()
-          return
-        }
+
         // watch it frequently but not too frequently
         // I don't want to run an executorService too frequently and all the time
         // without enough gain.

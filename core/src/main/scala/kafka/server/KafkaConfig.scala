@@ -44,7 +44,6 @@ object Defaults {
   val ZkSessionTimeoutMs = 6000
   val ZkSyncTimeMs = 2000
   val ZkEnableSecureAcls = false
-  var ZkConnectionRetryTimeoutMs = 60000
   val ZkMaxInFlightRequests = 10
 
   /** ********* General Configuration ***********/
@@ -233,7 +232,6 @@ object KafkaConfig {
   val ZkConnectionTimeoutMsProp = "zookeeper.connection.timeout.ms"
   val ZkSyncTimeMsProp = "zookeeper.sync.time.ms"
   val ZkEnableSecureAclsProp = "zookeeper.set.acl"
-  val ZkConnectionRetryTimeoutMsProp = "zookeeper.connection.retry.timeout.ms"
   val ZkMaxInFlightRequestsProp = "zookeeper.max.in.flight.requests"
   /** ********* General Configuration ***********/
   val BrokerIdGenerationEnableProp = "broker.id.generation.enable"
@@ -422,7 +420,6 @@ object KafkaConfig {
   val ZkConnectionTimeoutMsDoc = "The max time that the client waits to establish a connection to zookeeper. If not set, the value in " + ZkSessionTimeoutMsProp + " is used"
   val ZkSyncTimeMsDoc = "How far a ZK follower can be behind a ZK leader"
   val ZkEnableSecureAclsDoc = "Set client to use secure ACLs"
-  val ZkConnectionRetryTimeoutMsDoc = "How long to wait and retry after zk connection error"
   val ZkMaxInFlightRequestsDoc = "The maximum number of unacknowledged requests the client will send to Zookeeper before blocking."
 
   /** ********* General Configuration ***********/
@@ -702,7 +699,6 @@ object KafkaConfig {
       .define(ZkConnectionTimeoutMsProp, INT, null, HIGH, ZkConnectionTimeoutMsDoc)
       .define(ZkSyncTimeMsProp, INT, Defaults.ZkSyncTimeMs, LOW, ZkSyncTimeMsDoc)
       .define(ZkEnableSecureAclsProp, BOOLEAN, Defaults.ZkEnableSecureAcls, HIGH, ZkEnableSecureAclsDoc)
-      .define(ZkConnectionRetryTimeoutMsProp, INT, Defaults.ZkConnectionRetryTimeoutMs, HIGH, ZkConnectionTimeoutMsDoc)
       .define(ZkMaxInFlightRequestsProp, INT, Defaults.ZkMaxInFlightRequests, atLeast(1), HIGH, ZkMaxInFlightRequestsDoc)
 
       /** ********* General Configuration ***********/
@@ -925,8 +921,6 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
     Option(getInt(KafkaConfig.ZkConnectionTimeoutMsProp)).map(_.toInt).getOrElse(getInt(KafkaConfig.ZkSessionTimeoutMsProp))
   val zkSyncTimeMs: Int = getInt(KafkaConfig.ZkSyncTimeMsProp)
   val zkEnableSecureAcls: Boolean = getBoolean(KafkaConfig.ZkEnableSecureAclsProp)
-  val zkConnectionRetryTimeoutMs: Int =
-    Option(getInt(KafkaConfig.ZkConnectionRetryTimeoutMsProp)).map(_.toInt).getOrElse((getInt(KafkaConfig.ZkConnectionRetryTimeoutMsProp)))
 
   val zkMaxInFlightRequests: Int = getInt(KafkaConfig.ZkMaxInFlightRequestsProp)
   /** ********* General Configuration ***********/
