@@ -235,12 +235,22 @@ public class KafkaConsumerTest {
         }
     }
 
+    @Test(expected = IllegalStateException.class)
+    public void testSubscriptionWithEmptyPartitionAssignment() {
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "");
+
+        KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        try {
+            consumer.subscribe(singletonList(topic));
+        } finally {
+            consumer.close();
+        }
+    }
+
     @Test(expected = IllegalArgumentException.class)
     public void testSeekNegative() {
-        Properties props = new Properties();
-        props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testSeekNegative");
-        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
         KafkaConsumer<byte[], byte[]> consumer = newConsumer();
         try {
             consumer.assign(Arrays.asList(new TopicPartition("nonExistTopic", 0)));
@@ -252,10 +262,6 @@ public class KafkaConsumerTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testAssignOnNullTopicPartition() {
-        Properties props = new Properties();
-        props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testAssignOnNullTopicPartition");
-        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
         KafkaConsumer<byte[], byte[]> consumer = newConsumer();
         try {
             consumer.assign(null);
@@ -277,10 +283,6 @@ public class KafkaConsumerTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testAssignOnNullTopicInPartition() {
-        Properties props = new Properties();
-        props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testAssignOnNullTopicInPartition");
-        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
         KafkaConsumer<byte[], byte[]> consumer = newConsumer();
         try {
             consumer.assign(Arrays.asList(new TopicPartition(null, 0)));
@@ -291,10 +293,6 @@ public class KafkaConsumerTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testAssignOnEmptyTopicInPartition() {
-        Properties props = new Properties();
-        props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testAssignOnEmptyTopicInPartition");
-        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
         KafkaConsumer<byte[], byte[]> consumer = newConsumer();
         try {
             consumer.assign(Arrays.asList(new TopicPartition("  ", 0)));
@@ -1624,7 +1622,7 @@ public class KafkaConsumerTest {
         SubscriptionState subscriptions = new SubscriptionState(autoResetStrategy);
         LogContext loggerFactory = new LogContext();
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(loggerFactory, client, metadata, time,
-                retryBackoffMs, requestTimeoutMs);
+                retryBackoffMs, requestTimeoutMs, heartbeatIntervalMs);
         ConsumerCoordinator consumerCoordinator = new ConsumerCoordinator(
                 loggerFactory,
                 consumerClient,
@@ -1678,7 +1676,8 @@ public class KafkaConsumerTest {
                 subscriptions,
                 metadata,
                 retryBackoffMs,
-                requestTimeoutMs);
+                requestTimeoutMs,
+                assignors);
     }
 
     private static class FetchInfo {

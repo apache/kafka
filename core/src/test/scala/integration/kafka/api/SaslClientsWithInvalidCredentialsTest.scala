@@ -14,22 +14,21 @@ package kafka.api
 
 import java.io.FileOutputStream
 import java.util.Collections
-import java.util.concurrent.{ExecutionException, Future, TimeUnit}
-import scala.collection.JavaConverters._
+import java.util.concurrent.{ExecutionException, TimeUnit}
 
+import scala.collection.JavaConverters._
 import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
-import org.apache.kafka.clients.consumer.{KafkaConsumer, ConsumerConfig}
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
+import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.SaslAuthenticationException
-import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
-
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, KafkaConsumerGroupService}
 import kafka.server.KafkaConfig
 import kafka.utils.{JaasTestUtils, TestUtils, ZkUtils}
+import org.apache.kafka.common.security.auth.SecurityProtocol
 
 class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with SaslSetup {
   private val kafkaClientSaslMechanism = "SCRAM-SHA-256"

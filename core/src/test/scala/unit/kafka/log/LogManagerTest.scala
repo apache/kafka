@@ -31,9 +31,9 @@ import org.junit.{After, Before, Test}
 
 class LogManagerTest {
 
-  val time: MockTime = new MockTime()
+  val time = new MockTime()
   val maxRollInterval = 100
-  val maxLogAgeMs = 10*60*1000
+  val maxLogAgeMs = 10 * 60 * 1000
   val logProps = new Properties()
   logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
   logProps.put(LogConfig.SegmentIndexBytesProp, 4096: java.lang.Integer)
@@ -50,7 +50,6 @@ class LogManagerTest {
     logDir = TestUtils.tempDir()
     logManager = createLogManager()
     logManager.startup()
-    logDir = logManager.liveLogDirs(0)
   }
 
   @After
@@ -58,6 +57,7 @@ class LogManagerTest {
     if (logManager != null)
       logManager.shutdown()
     Utils.delete(logDir)
+    // Some tests assign a new LogManager
     logManager.liveLogDirs.foreach(Utils.delete)
   }
 
@@ -154,7 +154,7 @@ class LogManagerTest {
     time.sleep(log.config.fileDeleteDelayMs + 1)
 
     // there should be a log file, two indexes (the txn index is created lazily),
-    // the leader epoch checkpoint and two pid mapping files (one for the active and previous segments)
+    // the leader epoch checkpoint and two producer snapshot files (one for the active and previous segments)
     assertEquals("Files should have been deleted", log.numberOfSegments * 3 + 3, log.dir.list.length)
     assertEquals("Should get empty fetch off new log.", 0, log.readUncommitted(offset + 1, 1024).records.sizeInBytes)
     try {
@@ -211,7 +211,7 @@ class LogManagerTest {
       log.appendAsLeader(set, leaderEpoch = 0)
     }
     time.sleep(logManager.InitialTaskDelayMs)
-    assertTrue("Time based flush should have been triggered triggered", lastFlush != log.lastFlushTime)
+    assertTrue("Time based flush should have been triggered", lastFlush != log.lastFlushTime)
   }
 
   /**
@@ -220,7 +220,7 @@ class LogManagerTest {
   @Test
   def testLeastLoadedAssignment() {
     // create a log manager with multiple data directories
-    val dirs = Array(TestUtils.tempDir(),
+    val dirs = Seq(TestUtils.tempDir(),
                      TestUtils.tempDir(),
                      TestUtils.tempDir())
     logManager.shutdown()
@@ -253,7 +253,7 @@ class LogManagerTest {
    */
   @Test
   def testCheckpointRecoveryPoints() {
-    verifyCheckpointRecovery(Seq(new TopicPartition("test-a", 1), new TopicPartition("test-b", 1)), logManager)
+    verifyCheckpointRecovery(Seq(new TopicPartition("test-a", 1), new TopicPartition("test-b", 1)), logManager, logDir)
   }
 
   /**
@@ -262,11 +262,9 @@ class LogManagerTest {
   @Test
   def testRecoveryDirectoryMappingWithTrailingSlash() {
     logManager.shutdown()
-    logDir = TestUtils.tempDir()
-    logManager = TestUtils.createLogManager(
-      logDirs = Array(new File(logDir.getAbsolutePath + File.separator)))
+    logManager = TestUtils.createLogManager(logDirs = Seq(new File(TestUtils.tempDir().getAbsolutePath + File.separator)))
     logManager.startup()
-    verifyCheckpointRecovery(Seq(new TopicPartition("test-a", 1)), logManager)
+    verifyCheckpointRecovery(Seq(new TopicPartition("test-a", 1)), logManager, logManager.liveLogDirs.head)
   }
 
   /**
@@ -275,34 +273,30 @@ class LogManagerTest {
   @Test
   def testRecoveryDirectoryMappingWithRelativeDirectory() {
     logManager.shutdown()
-    logDir = new File("data" + File.separator + logDir.getName).getAbsoluteFile
-    logDir.mkdirs()
-    logDir.deleteOnExit()
-    logManager = createLogManager()
+    logManager = createLogManager(Seq(new File("data", logDir.getName).getAbsoluteFile))
     logManager.startup()
-    verifyCheckpointRecovery(Seq(new TopicPartition("test-a", 1)), logManager)
+    verifyCheckpointRecovery(Seq(new TopicPartition("test-a", 1)), logManager, logManager.liveLogDirs.head)
   }
 
-
-  private def verifyCheckpointRecovery(topicPartitions: Seq[TopicPartition],
-                                       logManager: LogManager) {
-    val logs = topicPartitions.map(this.logManager.getOrCreateLog(_, logConfig))
-    logs.foreach(log => {
+  private def verifyCheckpointRecovery(topicPartitions: Seq[TopicPartition], logManager: LogManager, logDir: File) {
+    val logs = topicPartitions.map(logManager.getOrCreateLog(_, logConfig))
+    logs.foreach { log =>
       for (_ <- 0 until 50)
         log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
 
       log.flush()
-    })
+    }
 
     logManager.checkpointLogRecoveryOffsets()
-    val checkpoints = new OffsetCheckpointFile(new File(logDir, logManager.RecoveryPointCheckpointFile)).read()
+    val checkpoints = new OffsetCheckpointFile(new File(logDir, LogManager.RecoveryPointCheckpointFile)).read()
 
     topicPartitions.zip(logs).foreach { case (tp, log) =>
       assertEquals("Recovery point should equal checkpoint", checkpoints(tp), log.recoveryPoint)
+      assertEquals(Some(log.minSnapshotsOffsetToRetain), log.oldestProducerSnapshotOffset)
     }
   }
 
-  private def createLogManager(logDirs: Array[File] = Array(this.logDir)): LogManager = {
+  private def createLogManager(logDirs: Seq[File] = Seq(this.logDir)): LogManager = {
     TestUtils.createLogManager(
       defaultConfig = logConfig,
       logDirs = logDirs,

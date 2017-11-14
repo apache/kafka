@@ -247,7 +247,7 @@ public abstract class AdminClient implements AutoCloseable {
     public abstract DescribeAclsResult describeAcls(AclBindingFilter filter, DescribeAclsOptions options);
 
     /**
-     * This is a convenience method for #{@link AdminClient#createAcls(Collection<AclBinding>, CreateAclsOptions)} with
+     * This is a convenience method for #{@link AdminClient#createAcls(Collection, CreateAclsOptions)} with
      * default options. See the overload for more details.
      *
      * This operation is supported by brokers with version 0.11.0.0 or higher.
@@ -276,7 +276,7 @@ public abstract class AdminClient implements AutoCloseable {
     public abstract CreateAclsResult createAcls(Collection<AclBinding> acls, CreateAclsOptions options);
 
     /**
-     * This is a convenience method for #{@link AdminClient#deleteAcls(Collection<AclBinding>, DeleteAclsOptions)} with default options.
+     * This is a convenience method for #{@link AdminClient#deleteAcls(Collection, DeleteAclsOptions)} with default options.
      * See the overload for more details.
      *
      * This operation is supported by brokers with version 0.11.0.0 or higher.
@@ -373,16 +373,16 @@ public abstract class AdminClient implements AutoCloseable {
      * before the replica has been created on the broker. It will support moving replicas that have already been created after
      * KIP-113 is fully implemented.
      *
-     * This is a convenience method for #{@link AdminClient#alterReplicaDir(Map, AlterReplicaDirOptions)} with default options.
+     * This is a convenience method for #{@link AdminClient#alterReplicaLogDirs(Map, AlterReplicaLogDirsOptions)} with default options.
      * See the overload for more details.
      *
      * This operation is supported by brokers with version 1.0.0 or higher.
      *
      * @param replicaAssignment  The replicas with their log directory absolute path
-     * @return                   The AlterReplicaDirResult
+     * @return                   The AlterReplicaLogDirsResult
      */
-    public AlterReplicaDirResult alterReplicaDir(Map<TopicPartitionReplica, String> replicaAssignment) {
-        return alterReplicaDir(replicaAssignment, new AlterReplicaDirOptions());
+    public AlterReplicaLogDirsResult alterReplicaLogDirs(Map<TopicPartitionReplica, String> replicaAssignment) {
+        return alterReplicaLogDirs(replicaAssignment, new AlterReplicaLogDirsOptions());
     }
 
     /**
@@ -396,9 +396,9 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * @param replicaAssignment  The replicas with their log directory absolute path
      * @param options            The options to use when changing replica dir
-     * @return                   The AlterReplicaDirResult
+     * @return                   The AlterReplicaLogDirsResult
      */
-    public abstract AlterReplicaDirResult alterReplicaDir(Map<TopicPartitionReplica, String> replicaAssignment, AlterReplicaDirOptions options);
+    public abstract AlterReplicaLogDirsResult alterReplicaLogDirs(Map<TopicPartitionReplica, String> replicaAssignment, AlterReplicaLogDirsOptions options);
 
     /**
      * Query the information of all log directories on the given set of brokers
@@ -429,16 +429,16 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * Query the replica log directory information for the specified replicas.
      *
-     * This is a convenience method for #{@link AdminClient#describeReplicaLogDir(Collection, DescribeReplicaLogDirOptions)}
+     * This is a convenience method for #{@link AdminClient#describeReplicaLogDirs(Collection, DescribeReplicaLogDirsOptions)}
      * with default options. See the overload for more details.
      *
      * This operation is supported by brokers with version 1.0.0 or higher.
      *
      * @param replicas      The replicas to query
-     * @return              The DescribeReplicaLogDirResult
+     * @return              The DescribeReplicaLogDirsResult
      */
-    public DescribeReplicaLogDirResult describeReplicaLogDir(Collection<TopicPartitionReplica> replicas) {
-        return describeReplicaLogDir(replicas, new DescribeReplicaLogDirOptions());
+    public DescribeReplicaLogDirsResult describeReplicaLogDirs(Collection<TopicPartitionReplica> replicas) {
+        return describeReplicaLogDirs(replicas, new DescribeReplicaLogDirsOptions());
     }
 
     /**
@@ -448,16 +448,17 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * @param replicas      The replicas to query
      * @param options       The options to use when querying replica log dir info
-     * @return              The DescribeReplicaLogDirResult
+     * @return              The DescribeReplicaLogDirsResult
      */
-    public abstract DescribeReplicaLogDirResult describeReplicaLogDir(Collection<TopicPartitionReplica> replicas, DescribeReplicaLogDirOptions options);
+    public abstract DescribeReplicaLogDirsResult describeReplicaLogDirs(Collection<TopicPartitionReplica> replicas, DescribeReplicaLogDirsOptions options);
 
     /**
-     * Increase the number of partitions of the topics given as the keys of {@code newPartitions}
-     * according to the corresponding values.
+     * <p>Increase the number of partitions of the topics given as the keys of {@code newPartitions}
+     * according to the corresponding values. <strong>If partitions are increased for a topic that has a key,
+     * the partition logic or ordering of the messages will be affected.</strong></p>
      *
-     * This is a convenience method for {@link #createPartitions(Map, CreatePartitionsOptions)} with default options.
-     * See the overload for more details.
+     * <p>This is a convenience method for {@link #createPartitions(Map, CreatePartitionsOptions)} with default options.
+     * See the overload for more details.</p>
      *
      * @param newPartitions The topics which should have new partitions created, and corresponding parameters
      *                      for the created partitions.
@@ -468,17 +469,36 @@ public abstract class AdminClient implements AutoCloseable {
     }
 
     /**
-     * Increase the number of partitions of the topics given as the keys of {@code newPartitions}
-     * according to the corresponding values.
+     * <p>Increase the number of partitions of the topics given as the keys of {@code newPartitions}
+     * according to the corresponding values. <strong>If partitions are increased for a topic that has a key,
+     * the partition logic or ordering of the messages will be affected.</strong></p>
      *
-     * This operation is not transactional so it may succeed for some topics while fail for others.
+     * <p>This operation is not transactional so it may succeed for some topics while fail for others.</p>
      *
-     * It may take several seconds after this method returns
+     * <p>It may take several seconds after this method returns
      * success for all the brokers to become aware that the partitions have been created.
      * During this time, {@link AdminClient#describeTopics(Collection)}
-     * may not return information about the new partitions.
+     * may not return information about the new partitions.</p>
      *
-     * This operation is supported by brokers with version 1.0.0 or higher.
+     * <p>This operation is supported by brokers with version 1.0.0 or higher.</p>
+     *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link CreatePartitionsResult#values() values()} method of the returned {@code CreatePartitionsResult}</p>
+     * <ul>
+     *     <li>{@link org.apache.kafka.common.errors.AuthorizationException}
+     *     if the authenticated user is not authorized to alter the topic</li>
+     *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *     if the request was not completed in within the given {@link CreatePartitionsOptions#timeoutMs()}.</li>
+     *     <li>{@link org.apache.kafka.common.errors.ReassignmentInProgressException}
+     *     if a partition reassignment is currently in progress</li>
+     *     <li>{@link org.apache.kafka.common.errors.BrokerNotAvailableException}
+     *     if the requested {@link NewPartitions#assignments()} contain a broker that is currently unavailable.</li>
+     *     <li>{@link org.apache.kafka.common.errors.InvalidReplicationFactorException}
+     *     if no {@link NewPartitions#assignments()} are given and it is impossible for the broker to assign
+     *     replicas with the topics replication factor.</li>
+     *     <li>Subclasses of {@link org.apache.kafka.common.KafkaException}
+     *     if the request is invalid in some way.</li>
+     * </ul>
      *
      * @param newPartitions The topics which should have new partitions created, and corresponding parameters
      *                      for the created partitions.

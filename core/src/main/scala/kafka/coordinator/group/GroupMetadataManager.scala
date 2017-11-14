@@ -31,6 +31,7 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.server.ReplicaManager
 import kafka.utils.CoreUtils.inLock
 import kafka.utils._
+import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
@@ -50,7 +51,7 @@ class GroupMetadataManager(brokerId: Int,
                            interBrokerProtocolVersion: ApiVersion,
                            config: OffsetConfig,
                            replicaManager: ReplicaManager,
-                           zkUtils: ZkUtils,
+                           zkClient: KafkaZkClient,
                            time: Time) extends Logging with KafkaMetricsGroup {
 
   private val compressionType: CompressionType = CompressionType.forId(config.offsetsTopicCompressionCodec.codec)
@@ -82,19 +83,57 @@ class GroupMetadataManager(brokerId: Int,
 
   this.logIdent = s"[GroupMetadataManager brokerId=$brokerId] "
 
-  newGauge("NumOffsets",
+  private def recreateGauge[T](name: String, gauge: Gauge[T]): Gauge[T] = {
+    removeMetric(name)
+    newGauge(name, gauge)
+  }
+
+  recreateGauge("NumOffsets",
     new Gauge[Int] {
       def value = groupMetadataCache.values.map(group => {
-        group synchronized { group.numOffsets }
+        group.inLock { group.numOffsets }
       }).sum
-    }
-  )
+    })
 
-  newGauge("NumGroups",
+  recreateGauge("NumGroups",
     new Gauge[Int] {
       def value = groupMetadataCache.size
-    }
-  )
+    })
+
+  recreateGauge("NumGroupsPreparingRebalance",
+    new Gauge[Int] {
+      def value(): Int = groupMetadataCache.values.count(group => {
+        group synchronized { group.is(PreparingRebalance) }
+      })
+    })
+
+  recreateGauge("NumGroupsCompletingRebalance",
+    new Gauge[Int] {
+      def value(): Int = groupMetadataCache.values.count(group => {
+        group synchronized { group.is(CompletingRebalance) }
+      })
+    })
+
+  recreateGauge("NumGroupsStable",
+    new Gauge[Int] {
+      def value(): Int = groupMetadataCache.values.count(group => {
+        group synchronized { group.is(Stable) }
+      })
+    })
+
+  recreateGauge("NumGroupsDead",
+    new Gauge[Int] {
+      def value(): Int = groupMetadataCache.values.count(group => {
+        group synchronized { group.is(Dead) }
+      })
+    })
+
+  recreateGauge("NumGroupsEmpty",
+    new Gauge[Int] {
+      def value(): Int = groupMetadataCache.values.count(group => {
+        group synchronized { group.is(Empty) }
+      })
+    })
 
   def enableMetadataExpiration() {
     scheduler.startup()
@@ -243,8 +282,8 @@ class GroupMetadataManager(brokerId: Int,
       internalTopicsAllowed = true,
       isFromClient = false,
       entriesPerPartition = records,
-      responseCallback = callback,
-      delayedProduceLock = Some(group))
+      delayedProduceLock = Some(group.lock),
+      responseCallback = callback)
   }
 
   /**
@@ -261,7 +300,7 @@ class GroupMetadataManager(brokerId: Int,
       validateOffsetMetadataLength(offsetAndMetadata.metadata)
     }
 
-    group synchronized {
+    group.inLock {
       if (!group.hasReceivedConsistentOffsetCommits)
         warn(s"group: ${group.groupId} with leader: ${group.leaderId} has received offset commits from consumers as well " +
           s"as transactional producers. Mixing both types of offset commits will generally result in surprises and " +
@@ -310,7 +349,7 @@ class GroupMetadataManager(brokerId: Int,
             // the offset and metadata to cache if the append status has no error
             val status = responseStatus(offsetTopicPartition)
 
-            val responseError = group synchronized {
+            val responseError = group.inLock {
               if (status.error == Errors.NONE) {
                 if (!group.is(Dead)) {
                   filteredOffsetMetadata.foreach { case (topicPartition, offsetAndMetadata) =>
@@ -370,12 +409,12 @@ class GroupMetadataManager(brokerId: Int,
           }
 
           if (isTxnOffsetCommit) {
-            group synchronized {
+            group.inLock {
               addProducerGroup(producerId, group.groupId)
               group.prepareTxnOffsetCommit(producerId, offsetMetadata)
             }
           } else {
-            group synchronized {
+            group.inLock {
               group.prepareOffsetCommit(offsetMetadata)
             }
           }
@@ -404,7 +443,7 @@ class GroupMetadataManager(brokerId: Int,
         (topicPartition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.NONE))
       }.toMap
     } else {
-      group synchronized {
+      group.inLock {
         if (group.is(Dead)) {
           topicPartitionsOpt.getOrElse(Seq.empty[TopicPartition]).map { topicPartition =>
             (topicPartition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.NONE))
@@ -676,7 +715,7 @@ class GroupMetadataManager(brokerId: Int,
     var offsetsRemoved = 0
 
     groupMetadataCache.foreach { case (groupId, group) =>
-      val (removedOffsets, groupIsDead, generation) = group synchronized {
+      val (removedOffsets, groupIsDead, generation) = group.inLock {
         val removedOffsets = deletedTopicPartitions match {
           case Some(topicPartitions) => group.removeOffsets(topicPartitions)
           case None => group.removeExpiredOffsets(startMs)
@@ -697,8 +736,7 @@ class GroupMetadataManager(brokerId: Int,
           val timestampType = TimestampType.CREATE_TIME
           val timestamp = time.milliseconds()
 
-          val partitionOpt = replicaManager.getPartition(appendPartition).filter(_ ne ReplicaManager.OfflinePartition)
-          partitionOpt.foreach { partition =>
+          replicaManager.nonOfflinePartition(appendPartition).foreach { partition =>
             val tombstones = ListBuffer.empty[SimpleRecord]
             removedOffsets.foreach { case (topicPartition, offsetAndMetadata) =>
               trace(s"Removing expired/deleted offset and metadata for $groupId, $topicPartition: $offsetAndMetadata")
@@ -749,7 +787,7 @@ class GroupMetadataManager(brokerId: Int,
     val pendingGroups = groupsBelongingToPartitions(producerId, completedPartitions)
     pendingGroups.foreach { case (groupId) =>
       getGroup(groupId) match {
-        case Some(group) => group synchronized {
+        case Some(group) => group.inLock {
           if (!group.is(Dead)) {
             group.completePendingTxnOffsetCommit(producerId, isCommit)
             removeProducerGroup(producerId, groupId)
@@ -805,7 +843,7 @@ class GroupMetadataManager(brokerId: Int,
    * If the topic does not exist, the configured partition count is returned.
    */
   private def getGroupMetadataTopicPartitionCount: Int = {
-    zkUtils.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicNumPartitions)
+    zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicNumPartitions)
   }
 
   /**

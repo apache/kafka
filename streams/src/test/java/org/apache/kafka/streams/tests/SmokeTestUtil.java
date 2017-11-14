@@ -60,6 +60,7 @@ public class SmokeTestUtil {
                         }
                         numRecordsProcessed++;
                         if (numRecordsProcessed % 100 == 0) {
+                            System.out.println(System.currentTimeMillis());
                             System.out.println("processed " + numRecordsProcessed + " records from topic=" + topic);
                         }
                     }

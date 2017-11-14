@@ -27,21 +27,24 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
 
     private final boolean queryable;
 
-    public MaterializedInternal(final Materialized<K, V, S> materialized) {
-        this(materialized, true);
-    }
-    
+
     public MaterializedInternal(final Materialized<K, V, S> materialized,
-                                final boolean queryable) {
+                                final InternalNameProvider nameProvider,
+                                final String generatedStorePrefix) {
         super(materialized);
-        this.queryable = queryable;
+        if (storeName() == null) {
+            queryable = false;
+            storeName = nameProvider.newStoreName(generatedStorePrefix);
+        } else {
+            queryable = true;
+        }
     }
 
     public String storeName() {
-        if (storeName != null) {
-            return storeName;
+        if (storeSupplier != null) {
+            return storeSupplier.name();
         }
-        return storeSupplier.name();
+        return storeName;
     }
 
     public StoreSupplier<S> storeSupplier() {

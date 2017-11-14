@@ -35,8 +35,9 @@ import org.apache.kafka.common.errors.BrokerNotAvailableException
 import org.apache.kafka.common.{KafkaException, Node, TopicPartition}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.security.JaasUtils
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.common.utils.Utils
 
@@ -88,7 +89,7 @@ object ConsumerGroupCommand extends Logging {
                 case Some("Empty") =>
                   System.err.println(s"Consumer group '$groupId' has no active members.")
                   printAssignment(assignments, true)
-                case Some("PreparingRebalance") | Some("AwaitingSync") =>
+                case Some("PreparingRebalance") | Some("CompletingRebalance") =>
                   System.err.println(s"Warning: Consumer group '$groupId' is rebalancing.")
                   printAssignment(assignments, true)
                 case Some("Stable") =>

@@ -75,16 +75,19 @@ public class KGroupedStreamImplTest {
         groupedStream = stream.groupByKey(Serialized.with(Serdes.String(), Serdes.String()));
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullReducerOnReduce() {
         groupedStream.reduce(null, "store");
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldAllowNullStoreNameOnReduce() {
         groupedStream.reduce(MockReducer.STRING_ADDER, (String) null);
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = InvalidTopicException.class)
     public void shouldNotHaveInvalidStoreNameOnReduce() {
         groupedStream.reduce(MockReducer.STRING_ADDER, INVALID_STORE_NAME);
@@ -109,66 +112,79 @@ public class KGroupedStreamImplTest {
         groupedStream.count(TimeWindows.of(10), (StateStoreSupplier<WindowStore>) null);
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullReducerWithWindowedReduce() {
         groupedStream.reduce(null, TimeWindows.of(10), "store");
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullWindowsWithWindowedReduce() {
         groupedStream.reduce(MockReducer.STRING_ADDER, (Windows) null, "store");
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldAllowNullStoreNameWithWindowedReduce() {
         groupedStream.reduce(MockReducer.STRING_ADDER, TimeWindows.of(10), (String) null);
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = InvalidTopicException.class)
     public void shouldNotHaveInvalidStoreNameWithWindowedReduce() {
         groupedStream.reduce(MockReducer.STRING_ADDER, TimeWindows.of(10), INVALID_STORE_NAME);
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullInitializerOnAggregate() {
         groupedStream.aggregate(null, MockAggregator.TOSTRING_ADDER, Serdes.String(), "store");
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullAdderOnAggregate() {
         groupedStream.aggregate(MockInitializer.STRING_INIT, null, Serdes.String(), "store");
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldAllowNullStoreNameOnAggregate() {
         groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Serdes.String(), null);
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = InvalidTopicException.class)
     public void shouldNotHaveInvalidStoreNameOnAggregate() {
         groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Serdes.String(), INVALID_STORE_NAME);
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullInitializerOnWindowedAggregate() {
         groupedStream.aggregate(null, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10), Serdes.String(), "store");
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullAdderOnWindowedAggregate() {
         groupedStream.aggregate(MockInitializer.STRING_INIT, null, TimeWindows.of(10), Serdes.String(), "store");
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullWindowsOnWindowedAggregate() {
         groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, null, Serdes.String(), "store");
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldAllowNullStoreNameOnWindowedAggregate() {
         groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10), Serdes.String(), null);
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = InvalidTopicException.class)
     public void shouldNotHaveInvalidStoreNameOnWindowedAggregate() {
         groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10), Serdes.String(), INVALID_STORE_NAME);
@@ -200,10 +216,11 @@ public class KGroupedStreamImplTest {
         assertEquals(Integer.valueOf(3), results.get(new Windowed<>("1", new SessionWindow(70, 100))));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldAggregateSessionWindows() {
         final Map<Windowed<String>, Integer> results = new HashMap<>();
-        KTable table = groupedStream.aggregate(new Initializer<Integer>() {
+        KTable<Windowed<String>, Integer> table = groupedStream.aggregate(new Initializer<Integer>() {
             @Override
             public Integer apply() {
                 return 0;
@@ -230,10 +247,11 @@ public class KGroupedStreamImplTest {
         assertEquals(table.queryableStoreName(), "session-store");
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldAggregateSessionWindowsWithInternalStoreName() {
         final Map<Windowed<String>, Integer> results = new HashMap<>();
-        KTable table = groupedStream.aggregate(new Initializer<Integer>() {
+        KTable<Windowed<String>, Integer> table = groupedStream.aggregate(new Initializer<Integer>() {
             @Override
             public Integer apply() {
                 return 0;
@@ -279,10 +297,11 @@ public class KGroupedStreamImplTest {
         assertEquals(Long.valueOf(3), results.get(new Windowed<>("1", new SessionWindow(70, 100))));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldCountSessionWindows() {
         final Map<Windowed<String>, Long> results = new HashMap<>();
-        KTable table = groupedStream.count(SessionWindows.with(30), "session-store");
+        KTable<Windowed<String>, Long> table = groupedStream.count(SessionWindows.with(30), "session-store");
         table.toStream().foreach(new ForeachAction<Windowed<String>, Long>() {
             @Override
             public void apply(final Windowed<String> key, final Long value) {
@@ -293,10 +312,11 @@ public class KGroupedStreamImplTest {
         assertEquals(table.queryableStoreName(), "session-store");
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldCountSessionWindowsWithInternalStoreName() {
         final Map<Windowed<String>, Long> results = new HashMap<>();
-        KTable table = groupedStream.count(SessionWindows.with(30));
+        KTable<Windowed<String>, Long> table = groupedStream.count(SessionWindows.with(30));
         table.toStream().foreach(new ForeachAction<Windowed<String>, Long>() {
             @Override
             public void apply(final Windowed<String> key, final Long value) {
@@ -327,10 +347,11 @@ public class KGroupedStreamImplTest {
         assertEquals("A:B:C", results.get(new Windowed<>("1", new SessionWindow(70, 100))));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldReduceSessionWindows() {
         final Map<Windowed<String>, String> results = new HashMap<>();
-        KTable table = groupedStream.reduce(
+        KTable<Windowed<String>, String> table = groupedStream.reduce(
                 new Reducer<String>() {
                     @Override
                     public String apply(final String value1, final String value2) {
@@ -348,10 +369,11 @@ public class KGroupedStreamImplTest {
         assertEquals(table.queryableStoreName(), "session-store");
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldReduceSessionWindowsWithInternalStoreName() {
         final Map<Windowed<String>, String> results = new HashMap<>();
-        KTable table = groupedStream.reduce(
+        KTable<Windowed<String>, String> table = groupedStream.reduce(
                 new Reducer<String>() {
                     @Override
                     public String apply(final String value1, final String value2) {
@@ -368,22 +390,25 @@ public class KGroupedStreamImplTest {
         assertNull(table.queryableStoreName());
     }
 
-
+    @SuppressWarnings("deprecation")
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullReducerWhenReducingSessionWindows() {
         groupedStream.reduce(null, SessionWindows.with(10), "store");
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullSessionWindowsReducingSessionWindows() {
         groupedStream.reduce(MockReducer.STRING_ADDER, (SessionWindows) null, "store");
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldAcceptNullStoreNameWhenReducingSessionWindows() {
         groupedStream.reduce(MockReducer.STRING_ADDER, SessionWindows.with(10), (String) null);
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = InvalidTopicException.class)
     public void shouldNotAcceptInvalidStoreNameWhenReducingSessionWindows() {
         groupedStream.reduce(MockReducer.STRING_ADDER, SessionWindows.with(10), INVALID_STORE_NAME);
@@ -395,6 +420,7 @@ public class KGroupedStreamImplTest {
         groupedStream.reduce(MockReducer.STRING_ADDER, SessionWindows.with(10), (StateStoreSupplier<SessionStore>) null);
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullInitializerWhenAggregatingSessionWindows() {
         groupedStream.aggregate(null, MockAggregator.TOSTRING_ADDER, new Merger<String, String>() {
@@ -405,6 +431,7 @@ public class KGroupedStreamImplTest {
         }, SessionWindows.with(10), Serdes.String(), "storeName");
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullAggregatorWhenAggregatingSessionWindows() {
         groupedStream.aggregate(MockInitializer.STRING_INIT, null, new Merger<String, String>() {
@@ -415,6 +442,7 @@ public class KGroupedStreamImplTest {
         }, SessionWindows.with(10), Serdes.String(), "storeName");
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullSessionMergerWhenAggregatingSessionWindows() {
         groupedStream.aggregate(MockInitializer.STRING_INIT,
@@ -425,6 +453,7 @@ public class KGroupedStreamImplTest {
                 "storeName");
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullSessionWindowsWhenAggregatingSessionWindows() {
         groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, new Merger<String, String>() {
@@ -435,6 +464,7 @@ public class KGroupedStreamImplTest {
         }, null, Serdes.String(), "storeName");
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldAcceptNullStoreNameWhenAggregatingSessionWindows() {
         groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, new Merger<String, String>() {
@@ -445,6 +475,7 @@ public class KGroupedStreamImplTest {
         }, SessionWindows.with(10), Serdes.String(), (String) null);
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = InvalidTopicException.class)
     public void shouldNotAcceptInvalidStoreNameWhenAggregatingSessionWindows() {
         groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, new Merger<String, String>() {
@@ -466,16 +497,19 @@ public class KGroupedStreamImplTest {
         }, SessionWindows.with(10), Serdes.String(), (StateStoreSupplier<SessionStore>) null);
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullSessionWindowsWhenCountingSessionWindows() {
         groupedStream.count((SessionWindows) null, "store");
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldAcceptNullStoreNameWhenCountingSessionWindows() {
         groupedStream.count(SessionWindows.with(90), (String) null);
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = InvalidTopicException.class)
     public void shouldNotAcceptInvalidStoreNameWhenCountingSessionWindows() {
         groupedStream.count(SessionWindows.with(90), INVALID_STORE_NAME);
@@ -612,6 +646,7 @@ public class KGroupedStreamImplTest {
         )));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldCountWindowed() {
         final List<KeyValue<Windowed<String>, Long>> results = new ArrayList<>();

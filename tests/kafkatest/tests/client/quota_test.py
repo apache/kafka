@@ -136,8 +136,7 @@ class QuotaTest(Test):
         # Produce all messages
         producer = ProducerPerformanceService(
             self.test_context, producer_num, self.kafka,
-            topic=self.topic, num_records=self.num_records, record_size=self.record_size, throughput=-1, client_id=producer_client_id,
-            jmx_object_names=['kafka.producer:type=producer-metrics,client-id=%s' % producer_client_id], jmx_attributes=['outgoing-byte-rate'])
+            topic=self.topic, num_records=self.num_records, record_size=self.record_size, throughput=-1, client_id=producer_client_id)
 
         producer.run()
 
@@ -178,8 +177,9 @@ class QuotaTest(Test):
             msg += "number of produced messages %d doesn't equal number of consumed messages %d" % (produced_num, consumed_num)
 
         # validate that maximum_producer_throughput <= producer_quota * (1 + maximum_client_deviation_percentage/100)
-        producer_attribute_name = 'kafka.producer:type=producer-metrics,client-id=%s:outgoing-byte-rate' % producer.client_id
-        producer_maximum_bps = producer.maximum_jmx_value[producer_attribute_name]
+        producer_maximum_bps = max(
+            metric.value for k, metrics in producer.metrics(group='producer-metrics', name='outgoing-byte-rate', client_id=producer.client_id) for metric in metrics
+        )
         producer_quota_bps = self.quota_config.producer_quota
         self.logger.info('producer has maximum throughput %.2f bps with producer quota %.2f bps' % (producer_maximum_bps, producer_quota_bps))
         if producer_maximum_bps > producer_quota_bps*(self.maximum_client_deviation_percentage/100+1):

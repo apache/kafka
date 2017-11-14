@@ -30,7 +30,8 @@ import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Time
 import org.junit.{After, Before, Test}
 
@@ -135,7 +136,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
       securityProtocol))
     val nodes = brokers.map(_.getNode(listenerName))
 
-    val controllerContext = new ControllerContext(zkUtils)
+    val controllerContext = new ControllerContext
     controllerContext.liveBrokers = brokers.toSet
     val metrics = new Metrics
     val controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig, Time.SYSTEM,

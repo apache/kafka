@@ -1105,6 +1105,103 @@ public class SenderTest {
     }
 
     @Test
+    public void testResetOfProducerStateShouldAllowQueuedBatchesToDrain() throws Exception {
+        final long producerId = 343434L;
+        TransactionManager transactionManager = new TransactionManager();
+        transactionManager.setProducerIdAndEpoch(new ProducerIdAndEpoch(producerId, (short) 0));
+        setupWithTransactionState(transactionManager);
+        client.setNode(new Node(1, "localhost", 33343));
+
+        int maxRetries = 10;
+        Metrics m = new Metrics();
+        SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
+
+        Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
+                senderMetrics, time, REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
+
+        Future<RecordMetadata> failedResponse = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
+        Future<RecordMetadata> successfulResponse = accumulator.append(tp1, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
+        sender.run(time.milliseconds());  // connect.
+        sender.run(time.milliseconds());  // send.
+
+        assertEquals(1, client.inFlightRequestCount());
+
+        Map<TopicPartition, OffsetAndError> responses = new LinkedHashMap<>();
+        responses.put(tp1, new OffsetAndError(-1, Errors.NOT_LEADER_FOR_PARTITION));
+        responses.put(tp0, new OffsetAndError(-1, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER));
+        client.respond(produceResponse(responses));
+        sender.run(time.milliseconds());
+        assertTrue(failedResponse.isDone());
+        assertFalse("Expected transaction state to be reset upon receiving an OutOfOrderSequenceException", transactionManager.hasProducerId());
+        prepareAndReceiveInitProducerId(producerId + 1, Errors.NONE);
+        assertEquals(producerId + 1, transactionManager.producerIdAndEpoch().producerId);
+        sender.run(time.milliseconds());  // send request to tp1
+
+        assertFalse(successfulResponse.isDone());
+        client.respond(produceResponse(tp1, 10, Errors.NONE, -1));
+        sender.run(time.milliseconds());
+
+        assertTrue(successfulResponse.isDone());
+        assertEquals(10, successfulResponse.get().offset());
+
+        // Since the response came back for the old producer id, we shouldn't update the next sequence.
+        assertEquals(0, transactionManager.sequenceNumber(tp1).longValue());
+    }
+
+    @Test
+    public void testBatchesDrainedWithOldProducerIdShouldFailWithOutOfOrderSequenceOnSubsequentRetry() throws Exception {
+        final long producerId = 343434L;
+        TransactionManager transactionManager = new TransactionManager();
+        transactionManager.setProducerIdAndEpoch(new ProducerIdAndEpoch(producerId, (short) 0));
+        setupWithTransactionState(transactionManager);
+        client.setNode(new Node(1, "localhost", 33343));
+
+        int maxRetries = 10;
+        Metrics m = new Metrics();
+        SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
+
+        Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
+                senderMetrics, time, REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
+
+        Future<RecordMetadata> failedResponse = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
+        Future<RecordMetadata> successfulResponse = accumulator.append(tp1, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
+        sender.run(time.milliseconds());  // connect.
+        sender.run(time.milliseconds());  // send.
+
+        assertEquals(1, client.inFlightRequestCount());
+
+        Map<TopicPartition, OffsetAndError> responses = new LinkedHashMap<>();
+        responses.put(tp1, new OffsetAndError(-1, Errors.NOT_LEADER_FOR_PARTITION));
+        responses.put(tp0, new OffsetAndError(-1, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER));
+        client.respond(produceResponse(responses));
+        sender.run(time.milliseconds());
+        assertTrue(failedResponse.isDone());
+        assertFalse("Expected transaction state to be reset upon receiving an OutOfOrderSequenceException", transactionManager.hasProducerId());
+        prepareAndReceiveInitProducerId(producerId + 1, Errors.NONE);
+        assertEquals(producerId + 1, transactionManager.producerIdAndEpoch().producerId);
+        sender.run(time.milliseconds());  // send request to tp1 with the old producerId
+
+        assertFalse(successfulResponse.isDone());
+        // The response comes back with a retriable error.
+        client.respond(produceResponse(tp1, 0, Errors.NOT_LEADER_FOR_PARTITION, -1));
+        sender.run(time.milliseconds());
+
+        assertTrue(successfulResponse.isDone());
+        // Since the batch has an old producerId, it will not be retried yet again, but will be failed with a Fatal
+        // exception.
+        try {
+            successfulResponse.get();
+            fail("Should have raised an OutOfOrderSequenceException");
+        } catch (Exception e) {
+            assertTrue(e.getCause() instanceof OutOfOrderSequenceException);
+        }
+    }
+
+    @Test
     public void testCorrectHandlingOfDuplicateSequenceError() throws Exception {
         final long producerId = 343434L;
         TransactionManager transactionManager = new TransactionManager();
@@ -1799,12 +1896,31 @@ public class SenderTest {
         };
     }
 
+    class OffsetAndError {
+        long offset;
+        Errors error;
+        OffsetAndError(long offset, Errors error) {
+            this.offset = offset;
+            this.error = error;
+        }
+    }
+
     private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs, long logStartOffset) {
         ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(error, offset, RecordBatch.NO_TIMESTAMP, logStartOffset);
         Map<TopicPartition, ProduceResponse.PartitionResponse> partResp = Collections.singletonMap(tp, resp);
         return new ProduceResponse(partResp, throttleTimeMs);
     }
 
+    private ProduceResponse produceResponse(Map<TopicPartition, OffsetAndError> responses) {
+        Map<TopicPartition, ProduceResponse.PartitionResponse> partResponses = new LinkedHashMap<>();
+        for (Map.Entry<TopicPartition, OffsetAndError> entry : responses.entrySet()) {
+            ProduceResponse.PartitionResponse response = new ProduceResponse.PartitionResponse(entry.getValue().error,
+                    entry.getValue().offset, RecordBatch.NO_TIMESTAMP, -1);
+            partResponses.put(entry.getKey(), response);
+        }
+        return new ProduceResponse(partResponses);
+
+    }
     private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs) {
         return produceResponse(tp, offset, error, throttleTimeMs, -1L);
     }

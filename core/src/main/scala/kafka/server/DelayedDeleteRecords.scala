@@ -62,7 +62,7 @@ class DelayedDeleteRecords(delayMs: Long,
   /**
    * The delayed delete records operation can be completed if every partition specified in the request satisfied one of the following:
    *
-   * 1) There was an error while checking if all replicas have caught up to to the deleteRecordsOffset: set an error in response
+   * 1) There was an error while checking if all replicas have caught up to the deleteRecordsOffset: set an error in response
    * 2) The low watermark of the partition has caught up to the deleteRecordsOffset. set the low watermark in response
    *
    */

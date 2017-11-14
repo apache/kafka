@@ -33,8 +33,8 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SaslConfigs, SslConfigs, TopicConfig}
 import org.apache.kafka.common.metrics.Sensor
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.record.TimestampType
+import org.apache.kafka.common.security.auth.SecurityProtocol
 
 import scala.collection.JavaConverters._
 import scala.collection.Map
@@ -45,6 +45,7 @@ object Defaults {
   val ZkSyncTimeMs = 2000
   val ZkEnableSecureAcls = false
   var ZkConnectionRetryTimeoutMs = 60000
+  val ZkMaxInFlightRequests = 10
 
   /** ********* General Configuration ***********/
   val BrokerIdGenerationEnable = true
@@ -179,6 +180,8 @@ object Defaults {
   val QuotaWindowSizeSeconds: Int = ClientQuotaManagerConfig.DefaultQuotaWindowSizeSeconds
   val NumReplicationQuotaSamples: Int = ReplicationQuotaManagerConfig.DefaultNumQuotaSamples
   val ReplicationQuotaWindowSizeSeconds: Int = ReplicationQuotaManagerConfig.DefaultQuotaWindowSizeSeconds
+  val NumAlterLogDirsReplicationQuotaSamples: Int = ReplicationQuotaManagerConfig.DefaultNumQuotaSamples
+  val AlterLogDirsReplicationQuotaWindowSizeSeconds: Int = ReplicationQuotaManagerConfig.DefaultQuotaWindowSizeSeconds
 
   /** ********* Transaction Configuration ***********/
   val TransactionalIdExpirationMsDefault = 604800000
@@ -231,6 +234,7 @@ object KafkaConfig {
   val ZkSyncTimeMsProp = "zookeeper.sync.time.ms"
   val ZkEnableSecureAclsProp = "zookeeper.set.acl"
   val ZkConnectionRetryTimeoutMsProp = "zookeeper.connection.retry.timeout.ms"
+  val ZkMaxInFlightRequestsProp = "zookeeper.max.in.flight.requests"
   /** ********* General Configuration ***********/
   val BrokerIdGenerationEnableProp = "broker.id.generation.enable"
   val MaxReservedBrokerIdProp = "reserved.broker.max.id"
@@ -239,6 +243,7 @@ object KafkaConfig {
   val NumNetworkThreadsProp = "num.network.threads"
   val NumIoThreadsProp = "num.io.threads"
   val BackgroundThreadsProp = "background.threads"
+  val NumReplicaAlterLogDirsThreadsProp = "num.replica.alter.log.dirs.threads"
   val QueuedMaxRequestsProp = "queued.max.requests"
   val QueuedMaxBytesProp = "queued.max.request.bytes"
   val RequestTimeoutMsProp = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG
@@ -365,8 +370,10 @@ object KafkaConfig {
   val ConsumerQuotaBytesPerSecondDefaultProp = "quota.consumer.default"
   val NumQuotaSamplesProp = "quota.window.num"
   val NumReplicationQuotaSamplesProp = "replication.quota.window.num"
+  val NumAlterLogDirsReplicationQuotaSamplesProp = "alter.log.dirs.replication.quota.window.num"
   val QuotaWindowSizeSecondsProp = "quota.window.size.seconds"
   val ReplicationQuotaWindowSizeSecondsProp = "replication.quota.window.size.seconds"
+  val AlterLogDirsReplicationQuotaWindowSizeSecondsProp = "alter.log.dirs.replication.quota.window.size.seconds"
 
   val DeleteTopicEnableProp = "delete.topic.enable"
   val CompressionTypeProp = "compression.type"
@@ -416,6 +423,8 @@ object KafkaConfig {
   val ZkSyncTimeMsDoc = "How far a ZK follower can be behind a ZK leader"
   val ZkEnableSecureAclsDoc = "Set client to use secure ACLs"
   val ZkConnectionRetryTimeoutMsDoc = "How long to wait and retry after zk connection error"
+  val ZkMaxInFlightRequestsDoc = "The maximum number of unacknowledged requests the client will send to Zookeeper before blocking."
+
   /** ********* General Configuration ***********/
   val BrokerIdGenerationEnableDoc = s"Enable automatic broker id generation on the server. When enabled the value configured for $MaxReservedBrokerIdProp should be reviewed."
   val MaxReservedBrokerIdDoc = "Max number that can be used for a broker.id"
@@ -426,6 +435,7 @@ object KafkaConfig {
     s"<p>This can be set per topic with the topic level <code>${TopicConfig.MAX_MESSAGE_BYTES_CONFIG}</code> config.</p>"
   val NumNetworkThreadsDoc = "The number of threads that the server uses for receiving requests from the network and sending responses to the network"
   val NumIoThreadsDoc = "The number of threads that the server uses for processing requests, which may include disk I/O"
+  val NumReplicaAlterLogDirsThreadsDoc = "The number of threads that can move replicas between log directories, which may include disk I/O"
   val BackgroundThreadsDoc = "The number of threads to use for various background processing tasks"
   val QueuedMaxRequestsDoc = "The number of queued requests allowed before blocking the network threads"
   val QueuedMaxRequestBytesDoc = "The number of queued bytes allowed before no more requests are read"
@@ -462,10 +472,14 @@ object KafkaConfig {
   " If this is not set, the value for `listeners` will be used." +
   " Unlike `listeners` it is not valid to advertise the 0.0.0.0 meta-address."
   val ListenerSecurityProtocolMapDoc = "Map between listener names and security protocols. This must be defined for " +
-    "the same security protocol to be usable in more than one port or IP. For example, we can separate internal and " +
-    "external traffic even if SSL is required for both. Concretely, we could define listeners with names INTERNAL " +
-    "and EXTERNAL and this property as: `INTERNAL:SSL,EXTERNAL:SSL`. As shown, key and value are separated by a colon " +
-    "and map entries are separated by commas. Each listener name should only appear once in the map."
+    "the same security protocol to be usable in more than one port or IP. For example, internal and " +
+    "external traffic can be separated even if SSL is required for both. Concretely, the user could define listeners " +
+    "with names INTERNAL and EXTERNAL and this property as: `INTERNAL:SSL,EXTERNAL:SSL`. As shown, key and value are " +
+    "separated by a colon and map entries are separated by commas. Each listener name should only appear once in the map. " +
+    "Different security (SSL and SASL) settings can be configured for each listener by adding a normalised " +
+    "prefix (the listener name is lowercased) to the config name. For example, to set a different keystore for the " +
+    "INTERNAL listener, a config with name `listener.name.internal.ssl.keystore.location` would be set. " +
+    "If the config for the listener name is not set, the config will fallback to the generic config (i.e. `ssl.keystore.location`). "
 
   val SocketSendBufferBytesDoc = "The SO_SNDBUF buffer of the socket sever sockets. If the value is -1, the OS default will be used."
   val SocketReceiveBufferBytesDoc = "The SO_RCVBUF buffer of the socket sever sockets. If the value is -1, the OS default will be used."
@@ -622,8 +636,10 @@ object KafkaConfig {
   "Any consumer distinguished by clientId/consumer group will get throttled if it fetches more bytes than this value per-second"
   val NumQuotaSamplesDoc = "The number of samples to retain in memory for client quotas"
   val NumReplicationQuotaSamplesDoc = "The number of samples to retain in memory for replication quotas"
+  val NumAlterLogDirsReplicationQuotaSamplesDoc = "The number of samples to retain in memory for alter log dirs replication quotas"
   val QuotaWindowSizeSecondsDoc = "The time span of each sample for client quotas"
   val ReplicationQuotaWindowSizeSecondsDoc = "The time span of each sample for replication quotas"
+  val AlterLogDirsReplicationQuotaWindowSizeSecondsDoc = "The time span of each sample for alter log dirs replication quotas"
   /** ********* Transaction Configuration ***********/
   val TransactionIdExpirationMsDoc = "The maximum time of inactivity before a transactional id is expired by the " +
     "transaction coordinator. Note that this also influences producer id expiration: Producer ids are guaranteed to expire " +
@@ -686,7 +702,8 @@ object KafkaConfig {
       .define(ZkConnectionTimeoutMsProp, INT, null, HIGH, ZkConnectionTimeoutMsDoc)
       .define(ZkSyncTimeMsProp, INT, Defaults.ZkSyncTimeMs, LOW, ZkSyncTimeMsDoc)
       .define(ZkEnableSecureAclsProp, BOOLEAN, Defaults.ZkEnableSecureAcls, HIGH, ZkEnableSecureAclsDoc)
-        .define(ZkConnectionRetryTimeoutMsProp, INT, Defaults.ZkConnectionRetryTimeoutMs, HIGH, ZkConnectionTimeoutMsDoc)
+      .define(ZkConnectionRetryTimeoutMsProp, INT, Defaults.ZkConnectionRetryTimeoutMs, HIGH, ZkConnectionTimeoutMsDoc)
+      .define(ZkMaxInFlightRequestsProp, INT, Defaults.ZkMaxInFlightRequests, atLeast(1), HIGH, ZkMaxInFlightRequestsDoc)
 
       /** ********* General Configuration ***********/
       .define(BrokerIdGenerationEnableProp, BOOLEAN, Defaults.BrokerIdGenerationEnable, MEDIUM, BrokerIdGenerationEnableDoc)
@@ -695,6 +712,7 @@ object KafkaConfig {
       .define(MessageMaxBytesProp, INT, Defaults.MessageMaxBytes, atLeast(0), HIGH, MessageMaxBytesDoc)
       .define(NumNetworkThreadsProp, INT, Defaults.NumNetworkThreads, atLeast(1), HIGH, NumNetworkThreadsDoc)
       .define(NumIoThreadsProp, INT, Defaults.NumIoThreads, atLeast(1), HIGH, NumIoThreadsDoc)
+      .define(NumReplicaAlterLogDirsThreadsProp, INT, null, HIGH, NumReplicaAlterLogDirsThreadsDoc)
       .define(BackgroundThreadsProp, INT, Defaults.BackgroundThreads, atLeast(1), HIGH, BackgroundThreadsDoc)
       .define(QueuedMaxRequestsProp, INT, Defaults.QueuedMaxRequests, atLeast(1), HIGH, QueuedMaxRequestsDoc)
       .define(QueuedMaxBytesProp, LONG, Defaults.QueuedMaxRequestBytes, MEDIUM, QueuedMaxRequestBytesDoc)
@@ -838,8 +856,10 @@ object KafkaConfig {
       .define(ConsumerQuotaBytesPerSecondDefaultProp, LONG, Defaults.ConsumerQuotaBytesPerSecondDefault, atLeast(1), HIGH, ConsumerQuotaBytesPerSecondDefaultDoc)
       .define(NumQuotaSamplesProp, INT, Defaults.NumQuotaSamples, atLeast(1), LOW, NumQuotaSamplesDoc)
       .define(NumReplicationQuotaSamplesProp, INT, Defaults.NumReplicationQuotaSamples, atLeast(1), LOW, NumReplicationQuotaSamplesDoc)
+      .define(NumAlterLogDirsReplicationQuotaSamplesProp, INT, Defaults.NumAlterLogDirsReplicationQuotaSamples, atLeast(1), LOW, NumAlterLogDirsReplicationQuotaSamplesDoc)
       .define(QuotaWindowSizeSecondsProp, INT, Defaults.QuotaWindowSizeSeconds, atLeast(1), LOW, QuotaWindowSizeSecondsDoc)
       .define(ReplicationQuotaWindowSizeSecondsProp, INT, Defaults.ReplicationQuotaWindowSizeSeconds, atLeast(1), LOW, ReplicationQuotaWindowSizeSecondsDoc)
+      .define(AlterLogDirsReplicationQuotaWindowSizeSecondsProp, INT, Defaults.AlterLogDirsReplicationQuotaWindowSizeSeconds, atLeast(1), LOW, AlterLogDirsReplicationQuotaWindowSizeSecondsDoc)
 
       /** ********* SSL Configuration ****************/
       .define(PrincipalBuilderClassProp, CLASS, null, MEDIUM, PrincipalBuilderClassDoc)
@@ -908,6 +928,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val zkConnectionRetryTimeoutMs: Int =
     Option(getInt(KafkaConfig.ZkConnectionRetryTimeoutMsProp)).map(_.toInt).getOrElse((getInt(KafkaConfig.ZkConnectionRetryTimeoutMsProp)))
 
+  val zkMaxInFlightRequests: Int = getInt(KafkaConfig.ZkMaxInFlightRequestsProp)
   /** ********* General Configuration ***********/
   val brokerIdGenerationEnable: Boolean = getBoolean(KafkaConfig.BrokerIdGenerationEnableProp)
   val maxReservedBrokerId: Int = getInt(KafkaConfig.MaxReservedBrokerIdProp)
@@ -920,6 +941,11 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val numIoThreads = getInt(KafkaConfig.NumIoThreadsProp)
   val messageMaxBytes = getInt(KafkaConfig.MessageMaxBytesProp)
   val requestTimeoutMs = getInt(KafkaConfig.RequestTimeoutMsProp)
+
+  def getNumReplicaAlterLogDirsThreads: Int = {
+    val numThreads: Integer = Option(getInt(KafkaConfig.NumReplicaAlterLogDirsThreadsProp)).getOrElse(logDirs.size)
+    numThreads
+  }
 
   /************* Authorizer Configuration ***********/
   val authorizerClassName: String = getString(KafkaConfig.AuthorizerClassNameProp)
@@ -1082,6 +1108,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val quotaWindowSizeSeconds = getInt(KafkaConfig.QuotaWindowSizeSecondsProp)
   val numReplicationQuotaSamples = getInt(KafkaConfig.NumReplicationQuotaSamplesProp)
   val replicationQuotaWindowSizeSeconds = getInt(KafkaConfig.ReplicationQuotaWindowSizeSecondsProp)
+  val numAlterLogDirsReplicationQuotaSamples = getInt(KafkaConfig.NumAlterLogDirsReplicationQuotaSamplesProp)
+  val alterLogDirsReplicationQuotaWindowSizeSeconds = getInt(KafkaConfig.AlterLogDirsReplicationQuotaWindowSizeSecondsProp)
 
   /** ********* Transaction Configuration **************/
   val transactionIdExpirationMs = getInt(KafkaConfig.TransactionalIdExpirationMsProp)

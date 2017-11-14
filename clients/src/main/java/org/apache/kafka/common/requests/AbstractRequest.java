@@ -206,8 +206,8 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 return new DescribeConfigsRequest(struct, apiVersion);
             case ALTER_CONFIGS:
                 return new AlterConfigsRequest(struct, apiVersion);
-            case ALTER_REPLICA_DIR:
-                return new AlterReplicaDirRequest(struct, apiVersion);
+            case ALTER_REPLICA_LOG_DIRS:
+                return new AlterReplicaLogDirsRequest(struct, apiVersion);
             case DESCRIBE_LOG_DIRS:
                 return new DescribeLogDirsRequest(struct, apiVersion);
             case SASL_AUTHENTICATE:

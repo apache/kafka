@@ -117,7 +117,8 @@ public class WorkerGroupMember {
                     metadata,
                     time,
                     retryBackoffMs,
-                    config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG));
+                    config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
+                    Integer.MAX_VALUE);
             this.coordinator = new WorkerCoordinator(
                     logContext,
                     this.client,

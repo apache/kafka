@@ -25,7 +25,6 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -38,23 +37,23 @@ class TaskManager {
     // activeTasks needs to be concurrent as it can be accessed
     // by QueryableState
     private final Logger log;
-    private final AssignedTasks active;
-    private final AssignedTasks standby;
+    private final AssignedStreamsTasks active;
+    private final AssignedStandbyTasks standby;
     private final ChangelogReader changelogReader;
     private final String logPrefix;
     private final Consumer<byte[], byte[]> restoreConsumer;
-    private final StreamThread.AbstractTaskCreator taskCreator;
-    private final StreamThread.AbstractTaskCreator standbyTaskCreator;
+    private final StreamThread.AbstractTaskCreator<StreamTask> taskCreator;
+    private final StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator;
     private ThreadMetadataProvider threadMetadataProvider;
     private Consumer<byte[], byte[]> consumer;
 
     TaskManager(final ChangelogReader changelogReader,
                 final String logPrefix,
                 final Consumer<byte[], byte[]> restoreConsumer,
-                final StreamThread.AbstractTaskCreator taskCreator,
-                final StreamThread.AbstractTaskCreator standbyTaskCreator,
-                final AssignedTasks active,
-                final AssignedTasks standby) {
+                final StreamThread.AbstractTaskCreator<StreamTask> taskCreator,
+                final StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator,
+                final AssignedStreamsTasks active,
+                final AssignedStandbyTasks standby) {
         this.changelogReader = changelogReader;
         this.logPrefix = logPrefix;
         this.restoreConsumer = restoreConsumer;
@@ -134,7 +133,7 @@ class TaskManager {
         // -> other thread will call removeSuspendedTasks(); eventually
         log.trace("New active tasks to be created: {}", newTasks);
 
-        for (final Task task : taskCreator.createTasks(consumer, newTasks)) {
+        for (final StreamTask task : taskCreator.createTasks(consumer, newTasks)) {
             active.addNewTask(task);
         }
     }
@@ -167,7 +166,7 @@ class TaskManager {
         // -> other thread will call removeSuspendedStandbyTasks(); eventually
         log.trace("New standby tasks to be created: {}", newStandbyTasks);
 
-        for (final Task task : standbyTaskCreator.createTasks(consumer, newStandbyTasks)) {
+        for (final StandbyTask task : standbyTaskCreator.createTasks(consumer, newStandbyTasks)) {
             standby.addNewTask(task);
         }
     }
@@ -197,7 +196,7 @@ class TaskManager {
         firstException.compareAndSet(null, active.suspend());
         firstException.compareAndSet(null, standby.suspend());
         // remove the changelog partitions from restore consumer
-        restoreConsumer.assign(Collections.<TopicPartition>emptyList());
+        restoreConsumer.unsubscribe();
 
         final Exception exception = firstException.get();
         if (exception != null) {
@@ -206,10 +205,16 @@ class TaskManager {
     }
 
     void shutdown(final boolean clean) {
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
+
         log.debug("Shutting down all active tasks {}, standby tasks {}, suspended tasks {}, and suspended standby tasks {}", active.runningTaskIds(), standby.runningTaskIds(),
                   active.previousTaskIds(), standby.previousTaskIds());
 
-        active.close(clean);
+        try {
+            active.close(clean);
+        } catch (final RuntimeException fatalException) {
+            firstException.compareAndSet(null, fatalException);
+        }
         standby.close(clean);
         try {
             threadMetadataProvider.close();
@@ -217,9 +222,14 @@ class TaskManager {
             log.error("Failed to close KafkaStreamClient due to the following error:", e);
         }
         // remove the changelog partitions from restore consumer
-        restoreConsumer.assign(Collections.<TopicPartition>emptyList());
+        restoreConsumer.unsubscribe();
         taskCreator.close();
         standbyTaskCreator.close();
+
+        final RuntimeException fatalException = firstException.get();
+        if (fatalException != null) {
+            throw fatalException;
+        }
     }
 
     Set<TaskId> suspendedActiveTaskIds() {
@@ -230,20 +240,20 @@ class TaskManager {
         return standby.previousTaskIds();
     }
 
-    Task activeTask(final TopicPartition partition) {
+    StreamTask activeTask(final TopicPartition partition) {
         return active.runningTaskFor(partition);
     }
 
 
-    Task standbyTask(final TopicPartition partition) {
+    StandbyTask standbyTask(final TopicPartition partition) {
         return standby.runningTaskFor(partition);
     }
 
-    Map<TaskId, Task> activeTasks() {
+    Map<TaskId, StreamTask> activeTasks() {
         return active.runningTaskMap();
     }
 
-    Map<TaskId, Task> standbyTasks() {
+    Map<TaskId, StandbyTask> standbyTasks() {
         return standby.runningTaskMap();
     }
 
@@ -257,11 +267,11 @@ class TaskManager {
      * @throws TaskMigratedException if another thread wrote to the changelog topic that is currently restored
      */
     boolean updateNewAndRestoringTasks() {
-        active.initializeNewTasks();
+        final Set<TopicPartition> resumed = active.initializeNewTasks();
         standby.initializeNewTasks();
 
         final Collection<TopicPartition> restored = changelogReader.restore(active);
-        final Set<TopicPartition> resumed = active.updateRestored(restored);
+        resumed.addAll(active.updateRestored(restored));
 
         if (!resumed.isEmpty()) {
             log.trace("resuming partitions {}", resumed);
@@ -283,9 +293,9 @@ class TaskManager {
     }
 
     private void assignStandbyPartitions() {
-        final Collection<Task> running = standby.running();
+        final Collection<StandbyTask> running = standby.running();
         final Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
-        for (final Task standbyTask : running) {
+        for (final StandbyTask standbyTask : running) {
             checkpointedOffsets.putAll(standbyTask.checkpointedOffsets());
         }
 

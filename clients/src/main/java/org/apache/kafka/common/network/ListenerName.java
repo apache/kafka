@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.network;
 
-import org.apache.kafka.common.protocol.SecurityProtocol;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 
 import java.util.Locale;
 import java.util.Objects;

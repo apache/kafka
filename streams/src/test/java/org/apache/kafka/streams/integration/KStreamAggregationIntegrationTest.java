@@ -25,6 +25,7 @@ import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -38,6 +39,7 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.Serialized;
@@ -48,6 +50,7 @@ import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
+import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.TestUtils;
@@ -148,7 +151,7 @@ public class KStreamAggregationIntegrationTest {
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
 
-
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldReduce() throws Exception {
         produceMessages(mockTime.milliseconds());
@@ -256,6 +259,7 @@ public class KStreamAggregationIntegrationTest {
         ));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldAggregate() throws Exception {
         produceMessages(mockTime.milliseconds());
@@ -308,7 +312,8 @@ public class KStreamAggregationIntegrationTest {
         groupedStream.windowedBy(TimeWindows.of(500L))
                 .aggregate(
                         initializer,
-                        aggregator
+                        aggregator,
+                        Materialized.<String, Integer, WindowStore<Bytes, byte[]>>with(null, Serdes.Integer())
                 )
                 .toStream(new KeyValueMapper<Windowed<String>, Integer, String>() {
                     @Override
@@ -390,6 +395,7 @@ public class KStreamAggregationIntegrationTest {
         )));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldCount() throws Exception {
         produceMessages(mockTime.milliseconds());
@@ -400,6 +406,7 @@ public class KStreamAggregationIntegrationTest {
         shouldCountHelper();
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldCountWithInternalStore() throws Exception {
         produceMessages(mockTime.milliseconds());
@@ -455,6 +462,7 @@ public class KStreamAggregationIntegrationTest {
 
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldCountSessionWindows() throws Exception {
         final long sessionGap = 5 * 60 * 1000L;

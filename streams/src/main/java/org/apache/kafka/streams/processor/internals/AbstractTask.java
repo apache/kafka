@@ -46,7 +46,7 @@ public abstract class AbstractTask implements Task {
     final ProcessorTopology topology;
     final ProcessorStateManager stateMgr;
     final Set<TopicPartition> partitions;
-    final Consumer consumer;
+    final Consumer<byte[], byte[]> consumer;
     final String logPrefix;
     final boolean eosEnabled;
     final Logger log;
@@ -102,22 +102,22 @@ public abstract class AbstractTask implements Task {
     }
 
     @Override
-    public final String applicationId() {
+    public String applicationId() {
         return applicationId;
     }
 
     @Override
-    public final Set<TopicPartition> partitions() {
+    public Set<TopicPartition> partitions() {
         return partitions;
     }
 
     @Override
-    public final ProcessorTopology topology() {
+    public ProcessorTopology topology() {
         return topology;
     }
 
     @Override
-    public final ProcessorContext context() {
+    public ProcessorContext context() {
         return processorContext;
     }
 

@@ -18,6 +18,9 @@ package org.apache.kafka.streams.kstream;
 
 import org.junit.Test;
 
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.IsNot.not;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
@@ -62,4 +65,18 @@ public class SessionWindowsTest {
         }
     }
 
+    @Test
+    public void shouldBeEqualWhenGapAndMaintainMsAreTheSame() {
+        assertThat(SessionWindows.with(5), equalTo(SessionWindows.with(5)));
+    }
+
+    @Test
+    public void shouldNotBeEqualWhenMaintainMsDifferent() {
+        assertThat(SessionWindows.with(5), not(equalTo(SessionWindows.with(5).until(10))));
+    }
+
+    @Test
+    public void shouldNotBeEqualWhenGapIsDifferent() {
+        assertThat(SessionWindows.with(5), not(equalTo(SessionWindows.with(10))));
+    }
 }

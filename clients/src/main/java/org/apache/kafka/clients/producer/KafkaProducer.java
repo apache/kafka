@@ -37,6 +37,8 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
@@ -51,7 +53,6 @@ import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
-import org.apache.kafka.common.metrics.Sanitizer;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
@@ -151,10 +152,9 @@ import static org.apache.kafka.common.serialization.ExtendedSerializer.Wrapper.e
  * </p>
  * <p>
  * To enable idempotence, the <code>enable.idempotence</code> configuration must be set to true. If set, the
- * <code>retries</code> config will be defaulted to <code>Integer.MAX_VALUE</code>, the
- * <code>max.inflight.requests.per.connection</code> config will be defaulted to <code>1</code>,
- * and <code>acks</code> config will be defaulted to <code>all</code>. There are no API changes for the idempotent
- * producer, so existing applications will not need to be modified to take advantage of this feature.
+ * <code>retries</code> config will default to <code>Integer.MAX_VALUE</code> and the <code>acks</code> config will
+ * default to <code>all</code>. There are no API changes for the idempotent producer, so existing applications will
+ * not need to be modified to take advantage of this feature.
  * </p>
  * <p>
  * To take advantage of the idempotent producer, it is imperative to avoid application level re-sends since these cannot
@@ -317,7 +317,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             if (clientId.length() <= 0)
                 clientId = "producer-" + PRODUCER_CLIENT_ID_SEQUENCE.getAndIncrement();
             this.clientId = clientId;
-            String sanitizedClientId = Sanitizer.sanitize(clientId);
 
             String transactionalId = userProvidedConfigs.containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG) ?
                     (String) userProvidedConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG) : null;
@@ -329,7 +328,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             log = logContext.logger(KafkaProducer.class);
             log.trace("Starting the Kafka producer");
 
-            Map<String, String> metricTags = Collections.singletonMap("client-id", sanitizedClientId);
+            Map<String, String> metricTags = Collections.singletonMap("client-id", clientId);
             MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
                     .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
                     .recordLevel(Sensor.RecordingLevel.forName(config.getString(ProducerConfig.METRICS_RECORDING_LEVEL_CONFIG)))
@@ -427,7 +426,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.ioThread.start();
             this.errors = this.metrics.sensor("errors");
             config.logUnused();
-            AppInfoParser.registerAppInfo(JMX_PREFIX, sanitizedClientId, metrics);
+            AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics);
             log.debug("Kafka producer started");
         } catch (Throwable t) {
             // call close methods if internal objects are already constructed this is to prevent resource leak. see KAFKA-2121
@@ -749,6 +748,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *        indicates no callback)
      *
      * @throws AuthenticationException if authentication fails. See the exception for more details
+     * @throws AuthorizationException fatal error indicating that the producer is not allowed to write
      * @throws IllegalStateException if a transactional.id has been configured and no transaction has been started
      * @throws InterruptException If the thread is interrupted while blocked
      * @throws SerializationException If the key or value are not valid objects given the configured serializers
@@ -951,7 +951,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * </p>
      * <p>
      * Applications don't need to call this method for transactional producers, since the {@link #commitTransaction()} will
-     * flush all buffered records before performing the commit. This ensures that all the the {@link #send(ProducerRecord)}
+     * flush all buffered records before performing the commit. This ensures that all the {@link #send(ProducerRecord)}
      * calls made since the previous {@link #beginTransaction()} are completed before the commit.
      * </p>
      *
@@ -972,7 +972,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     /**
      * Get the partition metadata for the given topic. This can be used for custom partitioning.
      * @throws AuthenticationException if authentication fails. See the exception for more details
+     * @throws AuthorizationException if not authorized to the specified topic. See the exception for more details
      * @throws InterruptException If the thread is interrupted while blocked
+     * @throws TimeoutException if metadata could not be refreshed within {@code max.block.ms}
      */
     @Override
     public List<PartitionInfo> partitionsFor(String topic) {
@@ -1075,7 +1077,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         ClientUtils.closeQuietly(keySerializer, "producer keySerializer", firstException);
         ClientUtils.closeQuietly(valueSerializer, "producer valueSerializer", firstException);
         ClientUtils.closeQuietly(partitioner, "producer partitioner", firstException);
-        AppInfoParser.unregisterAppInfo(JMX_PREFIX, Sanitizer.sanitize(clientId), metrics);
+        AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId, metrics);
         log.debug("Kafka producer has been closed");
         if (firstException.get() != null && !swallowException)
             throw new KafkaException("Failed to close kafka producer", firstException.get());

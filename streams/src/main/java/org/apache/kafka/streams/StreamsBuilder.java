@@ -59,7 +59,7 @@ public class StreamsBuilder {
     final InternalTopologyBuilder internalTopologyBuilder = topology.internalTopologyBuilder;
 
     private final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
-    
+
     /**
      * Create a {@link KStream} from the specified topics.
      * The default {@code "auto.offset.reset"} strategy, default {@link TimestampExtractor}, and default key and value
@@ -224,7 +224,7 @@ public class StreamsBuilder {
         materialized.withKeySerde(consumed.keySerde).withValueSerde(consumed.valueSerde);
         return internalStreamsBuilder.table(topic,
                                             new ConsumedInternal<>(consumed),
-                                            new MaterializedInternal<>(materialized));
+                                            new MaterializedInternal<>(materialized, internalStreamsBuilder, topic));
     }
 
     /**
@@ -237,7 +237,7 @@ public class StreamsBuilder {
      * If this is not the case the returned {@link KTable} will be corrupted.
      * <p>
      * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} with an internal
-     * store name. Note that that store name may not be queriable through Interactive Queries.
+     * store name. Note that store name may not be queriable through Interactive Queries.
      * No internal changelog topic is created since the original input topic can be used for recovery (cf.
      * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
      *
@@ -258,7 +258,7 @@ public class StreamsBuilder {
      * If this is not the case the returned {@link KTable} will be corrupted.
      * <p>
      * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} with an internal
-     * store name. Note that that store name may not be queriable through Interactive Queries.
+     * store name. Note that store name may not be queriable through Interactive Queries.
      * No internal changelog topic is created since the original input topic can be used for recovery (cf.
      * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
      *
@@ -273,11 +273,9 @@ public class StreamsBuilder {
         return internalStreamsBuilder.table(topic,
                                             new ConsumedInternal<>(consumed),
                                             new MaterializedInternal<>(
-                                                    Materialized.<K, V, KeyValueStore<Bytes, byte[]>>as(
-                                                            internalStreamsBuilder.newStoreName(topic))
-                                                    .withKeySerde(consumed.keySerde)
-                                                    .withValueSerde(consumed.valueSerde),
-                                                    false));
+                                                    Materialized.<K, V, KeyValueStore<Bytes, byte[]>>with(consumed.keySerde, consumed.valueSerde),
+                                                    internalStreamsBuilder,
+                                                    topic));
     }
 
     /**
@@ -301,11 +299,12 @@ public class StreamsBuilder {
                                                   final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
+        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal
+                = new MaterializedInternal<>(materialized, internalStreamsBuilder, topic);
         return internalStreamsBuilder.table(topic,
                                             new ConsumedInternal<>(Consumed.with(materializedInternal.keySerde(),
                                                                                  materializedInternal.valueSerde())),
-                                            new MaterializedInternal<>(materialized));
+                                            materializedInternal);
     }
 
     /**
@@ -313,7 +312,7 @@ public class StreamsBuilder {
      * Input {@link KeyValue records} with {@code null} key will be dropped.
      * <p>
      * The resulting {@link GlobalKTable} will be materialized in a local {@link KeyValueStore} with an internal
-     * store name. Note that that store name may not be queriable through Interactive Queries.
+     * store name. Note that store name may not be queriable through Interactive Queries.
      * No internal changelog topic is created since the original input topic can be used for recovery (cf.
      * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
      * <p>
@@ -329,11 +328,12 @@ public class StreamsBuilder {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
         final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized =
-                new MaterializedInternal<>(Materialized.<K, V, KeyValueStore<Bytes, byte[]>>as(
-                        internalStreamsBuilder.newStoreName(topic))
-                                                   .withKeySerde(consumed.keySerde)
-                                                   .withValueSerde(consumed.valueSerde),
-                                           false);
+                new MaterializedInternal<>(
+                        Materialized.<K, V, KeyValueStore<Bytes, byte[]>>with(consumed.keySerde, consumed.valueSerde),
+                        internalStreamsBuilder,
+                        topic);
+
+
         return internalStreamsBuilder.globalTable(topic, new ConsumedInternal<>(consumed), materialized);
     }
 
@@ -343,7 +343,7 @@ public class StreamsBuilder {
      * Input {@link KeyValue records} with {@code null} key will be dropped.
      * <p>
      * The resulting {@link GlobalKTable} will be materialized in a local {@link KeyValueStore} with an internal
-     * store name. Note that that store name may not be queriable through Interactive Queries.
+     * store name. Note that store name may not be queriable through Interactive Queries.
      * No internal changelog topic is created since the original input topic can be used for recovery (cf.
      * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
      * <p>
@@ -399,7 +399,7 @@ public class StreamsBuilder {
         materialized.withKeySerde(consumed.keySerde).withValueSerde(consumed.valueSerde);
         return internalStreamsBuilder.globalTable(topic,
                                                   new ConsumedInternal<>(consumed),
-                                                  new MaterializedInternal<>(materialized));
+                                                  new MaterializedInternal<>(materialized, internalStreamsBuilder, topic));
     }
 
     /**
@@ -431,7 +431,8 @@ public class StreamsBuilder {
                                                               final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
+        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal =
+                new MaterializedInternal<>(materialized, internalStreamsBuilder, topic);
         return internalStreamsBuilder.globalTable(topic,
                                                   new ConsumedInternal<>(Consumed.with(materializedInternal.keySerde(),
                                                                                        materializedInternal.valueSerde())),

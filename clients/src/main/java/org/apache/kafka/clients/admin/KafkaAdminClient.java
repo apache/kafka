@@ -17,7 +17,6 @@
 
 package org.apache.kafka.clients.admin;
 
-import java.util.Set;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
@@ -27,7 +26,7 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResult;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
-import org.apache.kafka.clients.admin.DescribeReplicaLogDirResult.ReplicaLogDirInfo;
+import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
@@ -55,7 +54,6 @@ import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
-import org.apache.kafka.common.metrics.Sanitizer;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
@@ -64,15 +62,15 @@ import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.AlterConfigsRequest;
 import org.apache.kafka.common.requests.AlterConfigsResponse;
-import org.apache.kafka.common.requests.AlterReplicaDirRequest;
-import org.apache.kafka.common.requests.AlterReplicaDirResponse;
-import org.apache.kafka.common.requests.CreatePartitionsRequest;
-import org.apache.kafka.common.requests.CreatePartitionsResponse;
+import org.apache.kafka.common.requests.AlterReplicaLogDirsRequest;
+import org.apache.kafka.common.requests.AlterReplicaLogDirsResponse;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.CreateAclsRequest;
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation;
 import org.apache.kafka.common.requests.CreateAclsResponse;
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse;
+import org.apache.kafka.common.requests.CreatePartitionsRequest;
+import org.apache.kafka.common.requests.CreatePartitionsResponse;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.DeleteAclsRequest;
@@ -109,6 +107,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -290,7 +289,6 @@ public class KafkaAdminClient extends AdminClient {
         NetworkClient networkClient = null;
         Time time = Time.SYSTEM;
         String clientId = generateClientId(config);
-        String sanitizedClientId = Sanitizer.sanitize(clientId);
         ChannelBuilder channelBuilder = null;
         Selector selector = null;
         ApiVersions apiVersions = new ApiVersions();
@@ -303,7 +301,7 @@ public class KafkaAdminClient extends AdminClient {
                     config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG), true);
             List<MetricsReporter> reporters = config.getConfiguredInstances(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG,
                 MetricsReporter.class);
-            Map<String, String> metricTags = Collections.singletonMap("client-id", sanitizedClientId);
+            Map<String, String> metricTags = Collections.singletonMap("client-id", clientId);
             MetricConfig metricConfig = new MetricConfig().samples(config.getInt(AdminClientConfig.METRICS_NUM_SAMPLES_CONFIG))
                 .timeWindow(config.getLong(AdminClientConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
                 .recordLevel(Sensor.RecordingLevel.forName(config.getString(AdminClientConfig.METRICS_RECORDING_LEVEL_CONFIG)))
@@ -328,7 +326,7 @@ public class KafkaAdminClient extends AdminClient {
                 true,
                 apiVersions,
                 logContext);
-            return new KafkaAdminClient(config, clientId, sanitizedClientId, time, metadata, metrics, networkClient,
+            return new KafkaAdminClient(config, clientId, time, metadata, metrics, networkClient,
                 timeoutProcessorFactory, logContext);
         } catch (Throwable exc) {
             closeQuietly(metrics, "Metrics");
@@ -345,7 +343,7 @@ public class KafkaAdminClient extends AdminClient {
 
         try {
             metrics = new Metrics(new MetricConfig(), new LinkedList<MetricsReporter>(), time);
-            return new KafkaAdminClient(config, clientId, Sanitizer.sanitize(clientId), time, metadata, metrics, client, null,
+            return new KafkaAdminClient(config, clientId, time, metadata, metrics, client, null,
                     createLogContext(clientId));
         } catch (Throwable exc) {
             closeQuietly(metrics, "Metrics");
@@ -357,7 +355,7 @@ public class KafkaAdminClient extends AdminClient {
         return new LogContext("[AdminClient clientId=" + clientId + "] ");
     }
 
-    private KafkaAdminClient(AdminClientConfig config, String clientId, String sanitizedClientId, Time time, Metadata metadata,
+    private KafkaAdminClient(AdminClientConfig config, String clientId, Time time, Metadata metadata,
                      Metrics metrics, KafkaClient client, TimeoutProcessorFactory timeoutProcessorFactory,
                      LogContext logContext) {
         this.defaultTimeoutMs = config.getInt(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG);
@@ -377,7 +375,7 @@ public class KafkaAdminClient extends AdminClient {
             new TimeoutProcessorFactory() : timeoutProcessorFactory;
         this.maxRetries = config.getInt(AdminClientConfig.RETRIES_CONFIG);
         config.logUnused();
-        AppInfoParser.registerAppInfo(JMX_PREFIX, sanitizedClientId, metrics);
+        AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics);
         log.debug("Kafka admin client initialized");
         thread.start();
     }
@@ -418,7 +416,7 @@ public class KafkaAdminClient extends AdminClient {
             // Wait for the thread to be joined.
             thread.join();
 
-            AppInfoParser.unregisterAppInfo(JMX_PREFIX, Sanitizer.sanitize(clientId), metrics);
+            AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId, metrics);
 
             log.debug("Kafka admin client closed.");
         } catch (InterruptedException e) {
@@ -955,22 +953,22 @@ public class KafkaAdminClient extends AdminClient {
 
         @Override
         public void run() {
-            /**
+            /*
              * Maps nodes to calls that we want to send.
              */
             Map<Node, List<Call>> callsToSend = new HashMap<>();
 
-            /**
+            /*
              * Maps node ID strings to calls that have been sent.
              */
             Map<String, List<Call>> callsInFlight = new HashMap<>();
 
-            /**
+            /*
              * Maps correlation IDs to calls that have been sent.
              */
             Map<Integer, Call> correlationIdToCalls = new HashMap<>();
 
-            /**
+            /*
              * The previous metadata version which wasn't usable, or null if there is none.
              */
             Integer prevMetadataVersion = null;
@@ -1653,15 +1651,13 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public AlterReplicaDirResult alterReplicaDir(Map<TopicPartitionReplica, String> replicaAssignment, final AlterReplicaDirOptions options) {
+    public AlterReplicaLogDirsResult alterReplicaLogDirs(Map<TopicPartitionReplica, String> replicaAssignment, final AlterReplicaLogDirsOptions options) {
         final Map<TopicPartitionReplica, KafkaFutureImpl<Void>> futures = new HashMap<>(replicaAssignment.size());
 
-        for (TopicPartitionReplica replica : replicaAssignment.keySet()) {
+        for (TopicPartitionReplica replica : replicaAssignment.keySet())
             futures.put(replica, new KafkaFutureImpl<Void>());
-        }
 
         Map<Integer, Map<TopicPartition, String>> replicaAssignmentByBroker = new HashMap<>();
-
         for (Map.Entry<TopicPartitionReplica, String> entry: replicaAssignment.entrySet()) {
             TopicPartitionReplica replica = entry.getKey();
             String logDir = entry.getValue();
@@ -1677,17 +1673,17 @@ public class KafkaAdminClient extends AdminClient {
             final int brokerId = entry.getKey();
             final Map<TopicPartition, String> assignment = entry.getValue();
 
-            runnable.call(new Call("alterReplicaDir", calcDeadlineMs(now, options.timeoutMs()),
+            runnable.call(new Call("alterReplicaLogDirs", calcDeadlineMs(now, options.timeoutMs()),
                 new ConstantNodeIdProvider(brokerId)) {
 
                 @Override
                 public AbstractRequest.Builder createRequest(int timeoutMs) {
-                    return new AlterReplicaDirRequest.Builder(assignment);
+                    return new AlterReplicaLogDirsRequest.Builder(assignment);
                 }
 
                 @Override
                 public void handleResponse(AbstractResponse abstractResponse) {
-                    AlterReplicaDirResponse response = (AlterReplicaDirResponse) abstractResponse;
+                    AlterReplicaLogDirsResponse response = (AlterReplicaLogDirsResponse) abstractResponse;
                     for (Map.Entry<TopicPartition, Errors> responseEntry: response.responses().entrySet()) {
                         TopicPartition tp = responseEntry.getKey();
                         Errors error = responseEntry.getValue();
@@ -1710,7 +1706,7 @@ public class KafkaAdminClient extends AdminClient {
             }, now);
         }
 
-        return new AlterReplicaDirResult(new HashMap<TopicPartitionReplica, KafkaFuture<Void>>(futures));
+        return new AlterReplicaLogDirsResult(new HashMap<TopicPartitionReplica, KafkaFuture<Void>>(futures));
     }
 
     @Override
@@ -1754,11 +1750,11 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public DescribeReplicaLogDirResult describeReplicaLogDir(Collection<TopicPartitionReplica> replicas, DescribeReplicaLogDirOptions options) {
-        final Map<TopicPartitionReplica, KafkaFutureImpl<DescribeReplicaLogDirResult.ReplicaLogDirInfo>> futures = new HashMap<>(replicas.size());
+    public DescribeReplicaLogDirsResult describeReplicaLogDirs(Collection<TopicPartitionReplica> replicas, DescribeReplicaLogDirsOptions options) {
+        final Map<TopicPartitionReplica, KafkaFutureImpl<DescribeReplicaLogDirsResult.ReplicaLogDirInfo>> futures = new HashMap<>(replicas.size());
 
         for (TopicPartitionReplica replica : replicas) {
-            futures.put(replica, new KafkaFutureImpl<DescribeReplicaLogDirResult.ReplicaLogDirInfo>());
+            futures.put(replica, new KafkaFutureImpl<DescribeReplicaLogDirsResult.ReplicaLogDirInfo>());
         }
 
         Map<Integer, Set<TopicPartition>> partitionsByBroker = new HashMap<>();
@@ -1777,7 +1773,7 @@ public class KafkaAdminClient extends AdminClient {
             for (TopicPartition topicPartition: topicPartitions)
                 replicaDirInfoByPartition.put(topicPartition, new ReplicaLogDirInfo());
 
-            runnable.call(new Call("describeReplicaLogDir", calcDeadlineMs(now, options.timeoutMs()),
+            runnable.call(new Call("describeReplicaLogDirs", calcDeadlineMs(now, options.timeoutMs()),
                 new ConstantNodeIdProvider(brokerId)) {
 
                 @Override
@@ -1834,7 +1830,7 @@ public class KafkaAdminClient extends AdminClient {
             }, now);
         }
 
-        return new DescribeReplicaLogDirResult(new HashMap<TopicPartitionReplica, KafkaFuture<ReplicaLogDirInfo>>(futures));
+        return new DescribeReplicaLogDirsResult(new HashMap<TopicPartitionReplica, KafkaFuture<ReplicaLogDirInfo>>(futures));
     }
 
     public CreatePartitionsResult createPartitions(Map<String, NewPartitions> newPartitions,

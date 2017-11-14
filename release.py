@@ -204,11 +204,11 @@ starting_branch = cmd_output('git rev-parse --abbrev-ref HEAD')
 cmd("Verifying that you have no unstaged git changes", 'git diff --exit-code --quiet')
 cmd("Verifying that you have no staged git changes", 'git diff --cached --exit-code --quiet')
 
-release_version = raw_input("Release version (without any RC info, e.g. 0.10.2.0): ")
+release_version = raw_input("Release version (without any RC info, e.g. 1.0.0): ")
 try:
     release_version_parts = release_version.split('.')
-    if len(release_version_parts) != 4:
-        fail("Invalid release version, should have 4 version number components")
+    if len(release_version_parts) != 3:
+        fail("Invalid release version, should have 3 version number components")
     # Validate each part is a number
     [int(x) for x in release_version_parts]
 except ValueError:
@@ -216,8 +216,8 @@ except ValueError:
 
 rc = raw_input("Release candidate number: ")
 
-dev_branch = '.'.join(release_version_parts[:3])
-docs_version = ''.join(release_version_parts[:3])
+dev_branch = '.'.join(release_version_parts[:2])
+docs_version = ''.join(release_version_parts[:2])
 
 # Validate that the release doesn't already exist and that the
 cmd("Fetching tags from upstream", 'git fetch --tags %s' % PUSH_REMOTE_NAME)
@@ -340,7 +340,7 @@ cmd("Creating source archive", "git archive --format tar.gz --prefix kafka-%(rel
 
 cmd("Building artifacts", "gradle", cwd=kafka_dir, env=jdk7_env)
 cmd("Building artifacts", "./gradlew clean releaseTarGzAll aggregatedJavadoc", cwd=kafka_dir, env=jdk7_env)
-# This should be removed with KAFKA-4421
+# we need extra cmd to build 2.12 with jdk8 specifically
 cmd("Building artifacts for Scala 2.12", "./gradlew releaseTarGz -PscalaVersion=2.12", cwd=kafka_dir, env=jdk8_env)
 cmd("Copying artifacts", "cp %s/core/build/distributions/* %s" % (kafka_dir, artifacts_dir), shell=True)
 cmd("Copying artifacts", "cp -R %s/build/docs/javadoc %s" % (kafka_dir, artifacts_dir))
@@ -441,7 +441,7 @@ if not user_ok("Ok to push RC tag %s (y/n)?: " % rc_tag):
     fail("Ok, giving up")
 cmd("Pushing RC tag", "git push %s %s" % (PUSH_REMOTE_NAME, rc_tag))
 
-# Move back to starting branch and clean out the temporary release branch (e.g. 0.10.2.0) we used to generate everything
+# Move back to starting branch and clean out the temporary release branch (e.g. 1.0.0) we used to generate everything
 cmd("Resetting repository working state", "git reset --hard HEAD && git checkout %s" % starting_branch, shell=True)
 cmd("Deleting git branches %s" % release_version, "git branch -D %s" % release_version, shell=True)
 

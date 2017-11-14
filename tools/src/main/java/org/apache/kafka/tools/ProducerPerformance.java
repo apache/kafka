@@ -289,7 +289,7 @@ public class ProducerPerformance {
                .metavar("TRANSACTION-DURATION")
                .dest("transactionDurationMs")
                .setDefault(0L)
-               .help("The max age of each transaction. The commitTransaction will be called after this this time has elapsed. Transactions are only enabled if this value is positive.");
+               .help("The max age of each transaction. The commitTransaction will be called after this time has elapsed. Transactions are only enabled if this value is positive.");
 
 
         return parser;

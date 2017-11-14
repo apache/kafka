@@ -308,7 +308,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         }
     }
 
-    static abstract class AbstractTaskCreator {
+    static abstract class AbstractTaskCreator<T extends Task> {
         final String applicationId;
         final InternalTopologyBuilder builder;
         final StreamsConfig config;
@@ -342,12 +342,12 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         /**
          * @throws TaskMigratedException if the task producer got fenced (EOS only)
          */
-        Collection<Task> createTasks(final Consumer<byte[], byte[]> consumer, final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
-            final List<Task> createdTasks = new ArrayList<>();
+        Collection<T> createTasks(final Consumer<byte[], byte[]> consumer, final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
+            final List<T> createdTasks = new ArrayList<>();
             for (final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions : tasksToBeCreated.entrySet()) {
                 final TaskId taskId = newTaskAndPartitions.getKey();
                 final Set<TopicPartition> partitions = newTaskAndPartitions.getValue();
-                Task task = createTask(consumer, taskId, partitions);
+                T task = createTask(consumer, taskId, partitions);
                 if (task != null) {
                     log.trace("Created task {} with assigned partitions {}", taskId, partitions);
                     createdTasks.add(task);
@@ -357,12 +357,12 @@ public class StreamThread extends Thread implements ThreadDataProvider {
             return createdTasks;
         }
 
-        abstract Task createTask(final Consumer<byte[], byte[]> consumer, final TaskId id, final Set<TopicPartition> partitions);
+        abstract T createTask(final Consumer<byte[], byte[]> consumer, final TaskId id, final Set<TopicPartition> partitions);
 
         public void close() {}
     }
 
-    static class TaskCreator extends AbstractTaskCreator {
+    static class TaskCreator extends AbstractTaskCreator<StreamTask> {
         private final ThreadCache cache;
         private final KafkaClientSupplier clientSupplier;
         private final String threadClientId;
@@ -441,7 +441,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         }
     }
 
-    static class StandbyTaskCreator extends AbstractTaskCreator {
+    static class StandbyTaskCreator extends AbstractTaskCreator<StandbyTask> {
         StandbyTaskCreator(final InternalTopologyBuilder builder,
                            final StreamsConfig config,
                            final StreamsMetrics streamsMetrics,
@@ -706,12 +706,8 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                                                         restoreConsumer,
                                                         activeTaskCreator,
                                                         standbyTaskCreator,
-                                                        new AssignedTasks(logContext,
-                                                                          "stream task"
-                                                        ),
-                                                        new AssignedTasks(logContext,
-                                                                          "standby task"
-                                                        ));
+                                                        new AssignedStreamsTasks(logContext),
+                                                        new AssignedStandbyTasks(logContext));
 
         return new StreamThread(builder,
                                 clientId,
@@ -790,14 +786,29 @@ public class StreamThread extends Thread implements ThreadDataProvider {
     // Visible for testing
     long runOnce(final long recordsProcessedBeforeCommit) {
         long processedBeforeCommit = recordsProcessedBeforeCommit;
+
+        ConsumerRecords<byte[], byte[]> records;
+
         timerStartedMs = time.milliseconds();
 
-        // try to fetch some records if necessary
-        final ConsumerRecords<byte[], byte[]> records = pollRequests();
-
         if (state == State.PARTITIONS_ASSIGNED) {
+            // try to fetch some records with zero poll millis
+            // to unblock the restoration as soon as possible
+            records = pollRequests(0L);
+
             if (taskManager.updateNewAndRestoringTasks()) {
                 setState(State.RUNNING);
+            }
+        } else {
+            // try to fetch some records if necessary
+            records = pollRequests(pollTimeMs);
+
+            // if state changed after the poll call,
+            // try to initialize the assigned tasks again
+            if (state == State.PARTITIONS_ASSIGNED) {
+                if (taskManager.updateNewAndRestoringTasks()) {
+                    setState(State.RUNNING);
+                }
             }
         }
 
@@ -824,10 +835,12 @@ public class StreamThread extends Thread implements ThreadDataProvider {
 
     /**
      * Get the next batch of records by polling.
+     *
+     * @param pollTimeMs poll time millis parameter for the consumer poll
      * @return Next batch of records or null if no records available.
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    private ConsumerRecords<byte[], byte[]> pollRequests() {
+    private ConsumerRecords<byte[], byte[]> pollRequests(final long pollTimeMs) {
         ConsumerRecords<byte[], byte[]> records = null;
 
         try {
@@ -862,7 +875,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                 if (originalReset == null || (!originalReset.equals("earliest") && !originalReset.equals("latest"))) {
                     final String errorMessage = "No valid committed offset found for input topic %s (partition %s) and no valid reset policy configured." +
                         " You need to set configuration parameter \"auto.offset.reset\" or specify a topic specific reset " +
-                        "policy via KStreamBuilder#stream(StreamsConfig.AutoOffsetReset offsetReset, ...) or KStreamBuilder#table(StreamsConfig.AutoOffsetReset offsetReset, ...)";
+                        "policy via StreamsBuilder#stream(..., Consumed.with(Topology.AutoOffsetReset)) or StreamsBuilder#table(..., Consumed.with(Topology.AutoOffsetReset))";
                     throw new StreamsException(String.format(errorMessage, partition.topic(), partition.partition()), e);
                 }
 
@@ -899,7 +912,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
             int numAddedRecords = 0;
 
             for (final TopicPartition partition : records.partitions()) {
-                final Task task = taskManager.activeTask(partition);
+                final StreamTask task = taskManager.activeTask(partition);
                 numAddedRecords += task.addRecords(partition, records.records(partition));
             }
             streamsMetrics.skippedRecordsSensor.record(records.count() - numAddedRecords, timerStartedMs);
@@ -1023,7 +1036,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                         final TopicPartition partition = entry.getKey();
                         List<ConsumerRecord<byte[], byte[]>> remaining = entry.getValue();
                         if (remaining != null) {
-                            final Task task = taskManager.standbyTask(partition);
+                            final StandbyTask task = taskManager.standbyTask(partition);
                             remaining = task.update(partition, remaining);
                             if (remaining != null) {
                                 remainingStandbyRecords.put(partition, remaining);
@@ -1044,7 +1057,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
 
             if (!records.isEmpty()) {
                 for (final TopicPartition partition : records.partitions()) {
-                    final Task task = taskManager.standbyTask(partition);
+                    final StandbyTask task = taskManager.standbyTask(partition);
 
                     if (task == null) {
                         throw new StreamsException(logPrefix + "Missing standby task for partition " + partition);
@@ -1084,7 +1097,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         setState(State.PENDING_SHUTDOWN);
     }
 
-    public Map<TaskId, Task> tasks() {
+    public Map<TaskId, StreamTask> tasks() {
         return taskManager.activeTasks();
     }
 
@@ -1193,7 +1206,11 @@ public class StreamThread extends Thread implements ThreadDataProvider {
 
         log.info("Shutting down");
 
-        taskManager.shutdown(cleanRun);
+        try {
+            taskManager.shutdown(cleanRun);
+        } catch (final Throwable e) {
+            log.error("Failed to close task manager due to the following error:", e);
+        }
         try {
             consumer.close();
         } catch (final Throwable e) {
@@ -1227,16 +1244,16 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         return threadMetadata;
     }
 
-    private void updateThreadMetadata(final Map<TaskId, Task> activeTasks, final Map<TaskId, Task> standbyTasks) {
+    private void updateThreadMetadata(final Map<TaskId, StreamTask> activeTasks, final Map<TaskId, StandbyTask> standbyTasks) {
         final Set<TaskMetadata> activeTasksMetadata = new HashSet<>();
         if (activeTasks != null) {
-            for (Map.Entry<TaskId, Task> task : activeTasks.entrySet()) {
+            for (Map.Entry<TaskId, StreamTask> task : activeTasks.entrySet()) {
                 activeTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().partitions()));
             }
         }
         final Set<TaskMetadata> standbyTasksMetadata = new HashSet<>();
         if (standbyTasks != null) {
-            for (Map.Entry<TaskId, Task> task : standbyTasks.entrySet()) {
+            for (Map.Entry<TaskId, StandbyTask> task : standbyTasks.entrySet()) {
                 standbyTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().partitions()));
             }
         }

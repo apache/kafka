@@ -25,12 +25,11 @@ import kafka.utils.{ShutdownableThread, TestUtils}
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.junit.Assert._
 import org.junit.Test
 
 import scala.collection.JavaConverters._
-import org.junit.Assert._
-
 import scala.collection.mutable
 
 

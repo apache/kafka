@@ -47,7 +47,7 @@ private[log] case object LogCleaningPaused extends LogCleaningState
  *  While a partition is in the LogCleaningPaused state, it won't be scheduled for cleaning again, until cleaning is
  *  requested to be resumed.
  */
-private[log] class LogCleanerManager(val logDirs: Array[File],
+private[log] class LogCleanerManager(val logDirs: Seq[File],
                                      val logs: Pool[TopicPartition, Log],
                                      val logDirFailureChannel: LogDirFailureChannel) extends Logging with KafkaMetricsGroup {
 
@@ -59,7 +59,8 @@ private[log] class LogCleanerManager(val logDirs: Array[File],
   private[log] val offsetCheckpointFile = "cleaner-offset-checkpoint"
 
   /* the offset checkpoints holding the last cleaned point for each log */
-  @volatile private var checkpoints = logDirs.map(dir => (dir, new OffsetCheckpointFile(new File(dir, offsetCheckpointFile), logDirFailureChannel))).toMap
+  @volatile private var checkpoints = logDirs.map(dir =>
+    (dir, new OffsetCheckpointFile(new File(dir, offsetCheckpointFile), logDirFailureChannel))).toMap
 
   /* the set of logs currently being cleaned */
   private val inProgress = mutable.HashMap[TopicPartition, LogCleaningState]()
@@ -88,7 +89,7 @@ private[log] class LogCleanerManager(val logDirs: Array[File],
           checkpoint.read()
         } catch {
           case e: KafkaStorageException =>
-            error(s"Failed to access checkpoint file ${checkpoint.f.getName} in dir ${checkpoint.f.getParentFile.getAbsolutePath}", e)
+            error(s"Failed to access checkpoint file ${checkpoint.file.getName} in dir ${checkpoint.file.getParentFile.getAbsolutePath}", e)
             Map.empty[TopicPartition, Long]
         }
       }).toMap
@@ -176,6 +177,7 @@ private[log] class LogCleanerManager(val logDirs: Array[File],
           state match {
             case LogCleaningInProgress =>
               inProgress.put(topicPartition, LogCleaningAborted)
+            case LogCleaningPaused =>
             case s =>
               throw new IllegalStateException(s"Compaction for partition $topicPartition cannot be aborted and paused since it is in $s state.")
           }
@@ -239,8 +241,26 @@ private[log] class LogCleanerManager(val logDirs: Array[File],
           checkpoint.write(existing)
         } catch {
           case e: KafkaStorageException =>
-            error(s"Failed to access checkpoint file ${checkpoint.f.getName} in dir ${checkpoint.f.getParentFile.getAbsolutePath}", e)
+            error(s"Failed to access checkpoint file ${checkpoint.file.getName} in dir ${checkpoint.file.getParentFile.getAbsolutePath}", e)
         }
+      }
+    }
+  }
+
+  def alterCheckpointDir(topicPartition: TopicPartition, sourceLogDir: File, destLogDir: File): Unit = {
+    inLock(lock) {
+      try {
+        checkpoints.get(sourceLogDir).flatMap(_.read().get(topicPartition)) match {
+          case Some(offset) =>
+            // Remove this partition from the checkpoint file in the source log directory
+            updateCheckpoints(sourceLogDir, None)
+            // Add offset for this partition to the checkpoint file in the source log directory
+            updateCheckpoints(destLogDir, Option(topicPartition, offset))
+          case None =>
+        }
+      } catch {
+        case e: KafkaStorageException =>
+          error(s"Failed to access checkpoint file in dir ${sourceLogDir.getAbsolutePath}", e)
       }
     }
   }

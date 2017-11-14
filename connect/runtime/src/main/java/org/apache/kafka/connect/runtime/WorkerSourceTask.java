@@ -27,6 +27,7 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Total;
+import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
@@ -205,10 +206,12 @@ class WorkerSourceTask extends WorkerTask {
     private boolean sendRecords() {
         int processed = 0;
         recordBatch(toSend.size());
+        final SourceRecordWriteCounter counter = new SourceRecordWriteCounter(toSend.size(), sourceTaskMetricsGroup);
         for (final SourceRecord preTransformRecord : toSend) {
             final SourceRecord record = transformationChain.apply(preTransformRecord);
 
             if (record == null) {
+                counter.skipRecord();
                 commitTaskRecord(preTransformRecord);
                 continue;
             }
@@ -256,6 +259,7 @@ class WorkerSourceTask extends WorkerTask {
                                     commitTaskRecord(preTransformRecord);
                                 }
                                 recordSent(producerRecord);
+                                counter.completeRecord();
                             }
                         });
                 lastSendFailed = false;
@@ -263,6 +267,7 @@ class WorkerSourceTask extends WorkerTask {
                 log.warn("{} Failed to send {}, backing off before retrying:", this, producerRecord, e);
                 toSend = toSend.subList(processed, toSend.size());
                 lastSendFailed = true;
+                counter.retryRemaining();
                 return false;
             } catch (KafkaException e) {
                 throw new ConnectException("Unrecoverable exception trying to send", e);
@@ -282,7 +287,6 @@ class WorkerSourceTask extends WorkerTask {
     }
 
     private synchronized void recordSent(final ProducerRecord<byte[], byte[]> record) {
-        recordWriteCompleted(1);
         ProducerRecord<byte[], byte[]> removed = outstandingMessages.remove(record);
         // While flushing, we may also see callbacks for items in the backlog
         if (removed == null && flushing)
@@ -440,77 +444,73 @@ class WorkerSourceTask extends WorkerTask {
         sourceTaskMetricsGroup.recordPoll(numRecordsInBatch, duration);
     }
 
-    protected void recordWriteCompleted(int numRecords) {
-        sourceTaskMetricsGroup.recordWrite(numRecords);
-    }
-
     SourceTaskMetricsGroup sourceTaskMetricsGroup() {
         return sourceTaskMetricsGroup;
+    }
+
+    static class SourceRecordWriteCounter {
+        private final SourceTaskMetricsGroup metricsGroup;
+        private final int batchSize;
+        private boolean completed = false;
+        private int counter;
+        public SourceRecordWriteCounter(int batchSize, SourceTaskMetricsGroup metricsGroup) {
+            assert batchSize > 0;
+            assert metricsGroup != null;
+            this.batchSize = batchSize;
+            counter = batchSize;
+            this.metricsGroup = metricsGroup;
+        }
+        public void skipRecord() {
+            if (counter > 0 && --counter == 0) {
+                finishedAllWrites();
+            }
+        }
+        public void completeRecord() {
+            if (counter > 0 && --counter == 0) {
+                finishedAllWrites();
+            }
+        }
+        public void retryRemaining() {
+            finishedAllWrites();
+        }
+        private void finishedAllWrites() {
+            if (!completed) {
+                metricsGroup.recordWrite(batchSize - counter);
+                completed = true;
+            }
+        }
     }
 
     static class SourceTaskMetricsGroup {
         private final MetricGroup metricGroup;
         private final Sensor sourceRecordPoll;
         private final Sensor sourceRecordWrite;
+        private final Sensor sourceRecordActiveCount;
         private final Sensor pollTime;
+        private int activeRecordCount;
 
         public SourceTaskMetricsGroup(ConnectorTaskId id, ConnectMetrics connectMetrics) {
-            metricGroup = connectMetrics.group("source-task-metrics",
-                    "connector", id.connector(), "task", Integer.toString(id.task()));
+            ConnectMetricsRegistry registry = connectMetrics.registry();
+            metricGroup = connectMetrics.group(registry.sourceTaskGroupName(),
+                    registry.connectorTagName(), id.connector(),
+                    registry.taskTagName(), Integer.toString(id.task()));
 
             sourceRecordPoll = metricGroup.sensor("source-record-poll");
-            sourceRecordPoll.add(metricGroup.metricName("source-record-poll-rate",
-                    "The average per-second number of records produced/polled (before transformation) by this " +
-                            "task belonging to the named source connector in this worker."),
-                    new Rate());
-            sourceRecordPoll.add(metricGroup.metricName("source-record-poll-total",
-                    "The number of records produced/polled (before transformation) by this task belonging to " +
-                            "the named source connector in this worker, since the task was last restarted."),
-                    new Total());
+            sourceRecordPoll.add(metricGroup.metricName(registry.sourceRecordPollRate), new Rate());
+            sourceRecordPoll.add(metricGroup.metricName(registry.sourceRecordPollTotal), new Total());
 
             sourceRecordWrite = metricGroup.sensor("source-record-write");
-            sourceRecordWrite.add(metricGroup.metricName("source-record-write-rate",
-                    "The average per-second number of records output from the transformations and written to " +
-                            "Kafka for this task belonging to the named source connector in this worker. " +
-                            "This is after transformations are applied and excludes any records filtered out " +
-                            "by the transformations."),
-                    new Rate());
-            sourceRecordWrite.add(metricGroup.metricName("source-record-write-total",
-                    "The number of records output from the transformations and written to Kafka for this task " +
-                            "belonging to the named source connector in this worker, since the task was last " +
-                            "restarted."),
-                    new Total());
-
+            sourceRecordWrite.add(metricGroup.metricName(registry.sourceRecordWriteRate), new Rate());
+            sourceRecordWrite.add(metricGroup.metricName(registry.sourceRecordWriteTotal), new Total());
 
             pollTime = metricGroup.sensor("poll-batch-time");
-            pollTime.add(metricGroup.metricName("poll-batch-max-time-ms",
-                    "The maximum time in milliseconds taken by this task to poll for a batch of source records"),
-                    new Max());
-            pollTime.add(metricGroup.metricName("poll-batch-avg-time-ms",
-                    "The average time in milliseconds taken by this task to poll for a batch of source records"),
-                    new Avg());
+            pollTime.add(metricGroup.metricName(registry.sourceRecordPollBatchTimeMax), new Max());
+            pollTime.add(metricGroup.metricName(registry.sourceRecordPollBatchTimeAvg), new Avg());
 
-//            int buckets = 100;
-//            MetricName p99 = metricGroup.metricName("poll-batch-99p-time-ms",
-//                    "The 99th percentile time in milliseconds spent by this task to poll for a batch of source records");
-//            MetricName p95 = metricGroup.metricName("poll-batch-95p-time-ms",
-//                    "The 95th percentile time in milliseconds spent by this task to poll for a batch of source records");
-//            MetricName p90 = metricGroup.metricName("poll-batch-90p-time-ms",
-//                    "The 90th percentile time in milliseconds spent by this task to poll for a batch of source records");
-//            MetricName p75 = metricGroup.metricName("poll-batch-75p-time-ms",
-//                    "The 75th percentile time in milliseconds spent by this task to poll for a batch of source records");
-//            MetricName p50 = metricGroup.metricName("poll-batch-50p-time-ms",
-//                    "The 50th percentile (median) time in milliseconds spent by this task to poll for a batch of source records");
-//            Percentiles pollTimePercentiles = new Percentiles(4 * buckets,
-//                                                            0.0,
-//                                                            10*1000.0,
-//                                                            BucketSizing.LINEAR,
-//                                                            new Percentile(p50, 50),
-//                                                            new Percentile(p75, 75),
-//                                                            new Percentile(p90, 90),
-//                                                            new Percentile(p95, 95),
-//                                                            new Percentile(p99, 99));
-//            pollTime.add(pollTimePercentiles);
+            sourceRecordActiveCount = metricGroup.metrics().sensor("sink-record-active-count");
+            sourceRecordActiveCount.add(metricGroup.metricName(registry.sourceRecordActiveCount), new Value());
+            sourceRecordActiveCount.add(metricGroup.metricName(registry.sourceRecordActiveCountMax), new Max());
+            sourceRecordActiveCount.add(metricGroup.metricName(registry.sourceRecordActiveCountAvg), new Avg());
         }
 
         void close() {
@@ -520,10 +520,15 @@ class WorkerSourceTask extends WorkerTask {
         void recordPoll(int batchSize, long duration) {
             sourceRecordPoll.record(batchSize);
             pollTime.record(duration);
+            activeRecordCount += batchSize;
+            sourceRecordActiveCount.record(activeRecordCount);
         }
 
         void recordWrite(int recordCount) {
             sourceRecordWrite.record(recordCount);
+            activeRecordCount -= recordCount;
+            activeRecordCount = Math.max(0, activeRecordCount);
+            sourceRecordActiveCount.record(activeRecordCount);
         }
 
         protected MetricGroup metricGroup() {

@@ -304,6 +304,7 @@ object AdminUtils extends Logging with AdminUtilities {
       AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, proposedAssignment, update = true)
     }
     proposedAssignment
+
   }
 
   /**
@@ -354,7 +355,7 @@ object AdminUtils extends Logging with AdminUtilities {
       val repFactors = sortedBadRepFactors.map { case (_, rf) => rf }
       throw new InvalidReplicaAssignmentException(s"Inconsistent replication factor between partitions, " +
         s"partition 0 has ${existingAssignmentPartition0.size} while partitions [${partitions.mkString(", ")}] have " +
-        s"replication factors [${repFactors.mkString(", ")}], respectively")
+        s"replication factors [${repFactors.mkString(", ")}], respectively.")
     }
   }
 
@@ -639,7 +640,7 @@ object AdminUtils extends Logging with AdminUtilities {
   def fetchEntityConfig(zkUtils: ZkUtils, rootEntityType: String, sanitizedEntityName: String): Properties = {
     val entityConfigPath = getEntityConfigPath(rootEntityType, sanitizedEntityName)
     // readDataMaybeNull returns Some(null) if the path exists, but there is no data
-    val str: String = zkUtils.readDataMaybeNull(entityConfigPath)._1.orNull
+    val str = zkUtils.readDataMaybeNull(entityConfigPath)._1.orNull
     val props = new Properties()
     if (str != null) {
       Json.parseFull(str).foreach { jsValue =>

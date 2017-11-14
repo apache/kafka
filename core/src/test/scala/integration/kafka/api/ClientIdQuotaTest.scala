@@ -18,8 +18,8 @@ import java.util.Properties
 
 import kafka.admin.AdminUtils
 import kafka.server.{DynamicConfig, KafkaConfig, QuotaId}
-import org.apache.kafka.common.metrics.Sanitizer
 import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.utils.Sanitizer
 import org.junit.Before
 
 class ClientIdQuotaTest extends BaseQuotaTest {
@@ -27,8 +27,8 @@ class ClientIdQuotaTest extends BaseQuotaTest {
   override val userPrincipal = KafkaPrincipal.ANONYMOUS.getName
   override def producerClientId = "QuotasTestProducer-!@#$%^&*()"
   override def consumerClientId = "QuotasTestConsumer-!@#$%^&*()"
-  override val producerQuotaId = QuotaId(None, Some(Sanitizer.sanitize(producerClientId)))
-  override val consumerQuotaId = QuotaId(None, Some(Sanitizer.sanitize(consumerClientId)))
+  override val producerQuotaId = QuotaId(None, Some(producerClientId), Some(Sanitizer.sanitize(producerClientId)))
+  override val consumerQuotaId = QuotaId(None, Some(consumerClientId), Some(Sanitizer.sanitize(consumerClientId)))
 
   @Before
   override def setUp() {
