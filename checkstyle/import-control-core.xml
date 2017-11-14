@@ -61,6 +61,7 @@
     <allow pkg="joptsimple" />
     <allow pkg="org.apache.kafka.clients.consumer" />
     <allow class="javax.xml.datatype.Duration" />
+    <allow class="javax.xml.datatype.DatatypeFactory" />
   </subpackage>
 
   <subpackage name="coordinator">
