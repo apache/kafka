@@ -49,8 +49,6 @@ public class StateDirectory {
     private final HashMap<TaskId, FileChannel> channels = new HashMap<>();
     private final HashMap<TaskId, LockAndOwner> locks = new HashMap<>();
     private final Time time;
-    private final int retries;
-    private final long retryBackoffMs;
 
     private FileChannel globalStateChannel;
     private FileLock globalStateLock;
@@ -85,8 +83,6 @@ public class StateDirectory {
             throw new ProcessorStateException(
                 String.format("state directory [%s] doesn't exist and couldn't be created", stateDir.getPath()));
         }
-        retries = config.getInt(StreamsConfig.RETRIES_CONFIG);
-        retryBackoffMs = config.getLong(StreamsConfig.RETRY_BACKOFF_MS_CONFIG);
     }
 
     /**
@@ -124,11 +120,10 @@ public class StateDirectory {
     /**
      * Get the lock for the {@link TaskId}s directory if it is available
      * @param taskId
-     * @param retry
      * @return true if successful
      * @throws IOException
      */
-    synchronized boolean lock(final TaskId taskId, int retry) throws IOException {
+    synchronized boolean lock(final TaskId taskId) throws IOException {
 
         final File lockFile;
         // we already have the lock so bail out here
@@ -160,7 +155,7 @@ public class StateDirectory {
             return false;
         }
 
-        final FileLock lock = tryLock(retry, channel);
+        final FileLock lock = tryLock(channel);
         if (lock != null) {
             locks.put(taskId, new LockAndOwner(Thread.currentThread().getName(), lock));
 
@@ -185,7 +180,7 @@ public class StateDirectory {
             // file, in this case we will return immediately indicating locking failed.
             return false;
         }
-        final FileLock fileLock = tryLock(retries, channel);
+        final FileLock fileLock = tryLock(channel);
         if (fileLock == null) {
             channel.close();
             return false;
@@ -244,7 +239,7 @@ public class StateDirectory {
             TaskId id = TaskId.parse(dirName);
             if (!locks.containsKey(id)) {
                 try {
-                    if (lock(id, 0)) {
+                    if (lock(id)) {
                         long now = time.milliseconds();
                         long lastModifiedMs = taskDir.lastModified();
                         if (now > lastModifiedMs + cleanupDelayMs) {
@@ -282,17 +277,6 @@ public class StateDirectory {
         });
     }
 
-    private FileLock tryLock(int retry,
-                             final FileChannel channel) throws IOException {
-        FileLock lock = tryAcquireLock(channel);
-        while (lock == null && retry > 0) {
-            Utils.sleep(retryBackoffMs);
-            retry--;
-            lock = tryAcquireLock(channel);
-        }
-        return lock;
-    }
-
     private FileChannel getOrCreateFileChannel(final TaskId taskId,
                                                final Path lockPath) throws IOException {
         if (!channels.containsKey(taskId)) {
@@ -301,7 +285,7 @@ public class StateDirectory {
         return channels.get(taskId);
     }
 
-    private FileLock tryAcquireLock(final FileChannel channel) throws IOException {
+    private FileLock tryLock(final FileChannel channel) throws IOException {
         try {
             return channel.tryLock();
         } catch (OverlappingFileLockException e) {

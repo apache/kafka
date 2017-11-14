@@ -93,7 +93,7 @@ public class StateDirectoryTest {
         final TaskId taskId = new TaskId(0, 0);
         final File taskDirectory = directory.directoryForTask(taskId);
 
-        directory.lock(taskId, 0);
+        directory.lock(taskId);
 
         try (
             final FileChannel channel = FileChannel.open(
@@ -113,9 +113,9 @@ public class StateDirectoryTest {
     public void shouldBeTrueIfAlreadyHoldsLock() throws IOException {
         final TaskId taskId = new TaskId(0, 0);
         directory.directoryForTask(taskId);
-        directory.lock(taskId, 0);
+        directory.lock(taskId);
         try {
-            assertTrue(directory.lock(taskId, 0));
+            assertTrue(directory.lock(taskId));
         } finally {
             directory.unlock(taskId);
         }
@@ -134,7 +134,7 @@ public class StateDirectoryTest {
         final TaskId taskId = new TaskId(0, 0);
 
         Utils.delete(stateDir);
-        assertFalse(directory.lock(taskId, 0));
+        assertFalse(directory.lock(taskId));
     }
     
     @Test
@@ -154,8 +154,8 @@ public class StateDirectoryTest {
                 StandardOpenOption.CREATE,
                 StandardOpenOption.WRITE)
         ) {
-            directory.lock(taskId, 0);
-            directory.lock(taskId2, 0);
+            directory.lock(taskId);
+            directory.lock(taskId2);
 
             channel1.tryLock();
             channel2.tryLock();
@@ -173,7 +173,7 @@ public class StateDirectoryTest {
         final TaskId taskId = new TaskId(0, 0);
         final File taskDirectory = directory.directoryForTask(taskId);
 
-        directory.lock(taskId, 1);
+        directory.lock(taskId);
         directory.unlock(taskId);
 
         try (
@@ -191,8 +191,8 @@ public class StateDirectoryTest {
         final TaskId task0 = new TaskId(0, 0);
         final TaskId task1 = new TaskId(1, 0);
         try {
-            directory.lock(task0, 0);
-            directory.lock(task1, 0);
+            directory.lock(task0);
+            directory.lock(task1);
             directory.directoryForTask(new TaskId(2, 0));
 
             time.sleep(1000);
@@ -296,7 +296,7 @@ public class StateDirectoryTest {
             @Override
             public void run() {
                 try {
-                    directory.lock(taskId, 1);
+                    directory.lock(taskId);
                 } catch (final IOException e) {
                     exceptionOnThread.set(e);
                 }
@@ -305,7 +305,7 @@ public class StateDirectoryTest {
         thread.start();
         thread.join(30000);
         assertNull("should not have had an exception during locking on other thread", exceptionOnThread.get());
-        assertFalse(directory.lock(taskId, 1));
+        assertFalse(directory.lock(taskId));
     }
 
     @Test
@@ -318,7 +318,7 @@ public class StateDirectoryTest {
             @Override
             public void run() {
                 try {
-                    directory.lock(taskId, 1);
+                    directory.lock(taskId);
                     lockLatch.countDown();
                     unlockLatch.await();
                     directory.unlock(taskId);
@@ -332,13 +332,13 @@ public class StateDirectoryTest {
 
         assertNull("should not have had an exception on other thread", exceptionOnThread.get());
         directory.unlock(taskId);
-        assertFalse(directory.lock(taskId, 1));
+        assertFalse(directory.lock(taskId));
 
         unlockLatch.countDown();
         thread.join(30000);
 
         assertNull("should not have had an exception on other thread", exceptionOnThread.get());
-        assertTrue(directory.lock(taskId, 1));
+        assertTrue(directory.lock(taskId));
     }
 
 }

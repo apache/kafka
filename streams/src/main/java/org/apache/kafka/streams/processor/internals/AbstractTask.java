@@ -53,7 +53,6 @@ public abstract class AbstractTask implements Task {
     final LogContext logContext;
     boolean taskInitialized;
     private final StateDirectory stateDirectory;
-    private final int retries;
 
     InternalProcessorContext processorContext;
 
@@ -75,7 +74,6 @@ public abstract class AbstractTask implements Task {
         this.consumer = consumer;
         this.eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
         this.stateDirectory = stateDirectory;
-        this.retries = config.getInt(StreamsConfig.RETRIES_CONFIG);
 
         this.logPrefix = String.format("%s [%s] ", isStandby ? "standby-task" : "task", id());
         this.logContext = new LogContext(logPrefix);
@@ -207,7 +205,7 @@ public abstract class AbstractTask implements Task {
         }
 
         try {
-            if (!stateDirectory.lock(id, retries)) {
+            if (!stateDirectory.lock(id)) {
                 throw new LockException(String.format("%sFailed to lock the state directory for task %s",
                                                       logPrefix, id));
             }
