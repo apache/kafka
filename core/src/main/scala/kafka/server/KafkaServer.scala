@@ -593,10 +593,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         if (zkState != null && zkState != "SessionEstablishmentError"){
           info("Zookeeper session set to %s, exiting the ZKStateChecker".format(zkState))
           isWaitingForZKReconnect.set(false)
-          if (!isStartingUp.get()){
-            startup()
-          }
-          return
+          // this is a hack to re-register the broker-id
+          // until I re-implement the corresponding the changes to KafkaZKClient to do the same on reconnect
+          // this has to be handled by ZKClient so that there's no race conditions too
+          kafkaHealthcheck.register()
         }
 
         // watch it frequently but not too frequently
