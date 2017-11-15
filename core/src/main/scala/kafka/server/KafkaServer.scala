@@ -517,8 +517,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         if (kafkaHealthcheck != null)
           CoreUtils.swallow(kafkaHealthcheck.shutdown())
 
+        // Stop socket server to stop accepting any more connections and requests.
+        // Socket server will be shutdown towards the end of the sequence.
         if (socketServer != null)
-          CoreUtils.swallow(socketServer.shutdown())
+          CoreUtils.swallow(socketServer.stopProcessingRequests())
         if (requestHandlerPool != null)
           CoreUtils.swallow(requestHandlerPool.shutdown())
 
@@ -547,6 +549,11 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         if (quotaManagers != null)
           CoreUtils.swallow(quotaManagers.shutdown())
+        // Even though socket server is stopped much earlier, controller can generate
+        // response for controlled shutdown request. Shutdown server at the end to
+        // avoid any failures (e.g. when metrics are recorded)
+        if (socketServer != null)
+          CoreUtils.swallow(socketServer.shutdown())
         if (metrics != null)
           CoreUtils.swallow(metrics.close())
         if (brokerTopicStats != null)
