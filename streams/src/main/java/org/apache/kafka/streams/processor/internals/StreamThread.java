@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -576,6 +577,8 @@ public class StreamThread extends Thread implements ThreadDataProvider {
     private ThreadMetadataProvider metadataProvider;
     private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords;
 
+    private final AdminClient adminClient;
+
     // package-private for testing
     final ConsumerRebalanceListener rebalanceListener;
     final Consumer<byte[], byte[]> restoreConsumer;
@@ -600,6 +603,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                         final StreamsMetricsThreadImpl streamsMetrics,
                         final KafkaClientSupplier clientSupplier,
                         final Consumer<byte[], byte[]> restoreConsumer,
+                        final AdminClient adminClient,
                         final StateDirectory stateDirectory) {
         super(threadClientId);
         this.builder = builder;
@@ -614,6 +618,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         this.logPrefix = String.format("stream-thread [%s] ", threadClientId);
         this.streamsMetrics = streamsMetrics;
         this.restoreConsumer = restoreConsumer;
+        this.adminClient = adminClient;
         this.stateDirectory = stateDirectory;
         this.config = config;
         this.stateLock = new Object();
@@ -640,6 +645,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,
                                       final KafkaClientSupplier clientSupplier,
+                                      final AdminClient adminClient,
                                       final UUID processId,
                                       final String clientId,
                                       final Metrics metrics,
@@ -720,6 +726,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                                 streamsMetrics,
                                 clientSupplier,
                                 restoreConsumer,
+                                adminClient,
                                 stateDirectory);
 
 

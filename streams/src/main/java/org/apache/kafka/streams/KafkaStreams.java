@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams;
 
+import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -647,12 +648,16 @@ public class KafkaStreams {
             globalThreadState = globalStreamThread.state();
         }
 
+        // use client id instead of thread client id since this admin client may be shared among threads
+        AdminClient adminClient = clientSupplier.getAdminClient(config.getAdminConfigs(clientId));
+
         final Map<Long, StreamThread.State> threadState = new HashMap<>(threads.length);
         final ArrayList<StateStoreProvider> storeProviders = new ArrayList<>();
         for (int i = 0; i < threads.length; i++) {
             threads[i] = StreamThread.create(internalTopologyBuilder,
                                              config,
                                              clientSupplier,
+                                             adminClient,
                                              processId,
                                              clientId,
                                              metrics,

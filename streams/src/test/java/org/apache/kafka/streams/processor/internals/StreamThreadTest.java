@@ -356,6 +356,7 @@ public class StreamThreadTest {
         return StreamThread.create(internalTopologyBuilder,
                                    config,
                                    clientSupplier,
+                                   clientSupplier.getAdminClient(config.getAdminConfigs(clientId)),
                                    processId,
                                    clientId,
                                    metrics,
@@ -539,6 +540,7 @@ public class StreamThreadTest {
                                                      streamsMetrics,
                                                      clientSupplier,
                                                      consumer,
+                                                     clientSupplier.getAdminClient(config.getAdminConfigs(clientId)),
                                                      stateDirectory);
         thread.maybeCommit(mockTime.milliseconds());
         mockTime.sleep(commitInterval - 10L);
@@ -571,6 +573,7 @@ public class StreamThreadTest {
                                                      streamsMetrics,
                                                      clientSupplier,
                                                      consumer,
+                                                     clientSupplier.getAdminClient(config.getAdminConfigs(clientId)),
                                                      stateDirectory);
         thread.maybeCommit(mockTime.milliseconds());
         mockTime.sleep(commitInterval - 10L);
@@ -604,6 +607,7 @@ public class StreamThreadTest {
                                                      streamsMetrics,
                                                      clientSupplier,
                                                      consumer,
+                                                     clientSupplier.getAdminClient(config.getAdminConfigs(clientId)),
                                                      stateDirectory);
         thread.maybeCommit(mockTime.milliseconds());
         mockTime.sleep(commitInterval + 1);
@@ -720,6 +724,7 @@ public class StreamThreadTest {
                                                      streamsMetrics,
                                                      clientSupplier,
                                                      consumer,
+                                                     clientSupplier.getAdminClient(config.getAdminConfigs(clientId)),
                                                      stateDirectory);
         thread.setState(StreamThread.State.RUNNING);
         thread.shutdown();
