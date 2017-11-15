@@ -1344,16 +1344,14 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             String name = partitionLeadMetricName(tp);
             Sensor recordsLead = this.metrics.getSensor(name);
             if (recordsLead == null) {
+                Map<String, String> tags = new HashMap<>(2);
+                tags.put("topic", tp.topic().replace('.', '_'));
+                tags.put("partition", String.valueOf(tp.partition()));
+
                 recordsLead = this.metrics.sensor(name);
                 recordsLead.add(this.metrics.metricName(name,
                         metricsRegistry.partitionRecordsLead.group(),
-                        metricsRegistry.partitionRecordsLead.description()), new Value());
-                recordsLead.add(this.metrics.metricName(name + "-min",
-                        metricsRegistry.partitionRecordsLeadMin.group(),
-                        metricsRegistry.partitionRecordsLeadMin.description()), new Min());
-                recordsLead.add(this.metrics.metricName(name + "-avg",
-                        metricsRegistry.partitionRecordsLeadAvg.group(),
-                        metricsRegistry.partitionRecordsLeadAvg.description()), new Avg());
+                        metricsRegistry.partitionRecordsLead.description(), tags), new Value());
             }
             recordsLead.record(lead);
         }

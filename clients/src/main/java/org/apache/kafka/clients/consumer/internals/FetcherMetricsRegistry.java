@@ -51,9 +51,6 @@ public class FetcherMetricsRegistry {
     public MetricNameTemplate partitionRecordsLagMax;
     public MetricNameTemplate partitionRecordsLagAvg;
     public MetricNameTemplate partitionRecordsLead;
-    public MetricNameTemplate partitionRecordsLeadMin;
-    public MetricNameTemplate partitionRecordsLeadAvg;
-
 
     public FetcherMetricsRegistry() {
         this(new HashSet<String>(), "");
@@ -126,6 +123,8 @@ public class FetcherMetricsRegistry {
                 "The total number of records consumed for a topic", topicTags);
         
         /***** Partition level *****/
+        Set<String> partitionTags = new HashSet<>(topicTags);
+        partitionTags.add("partition");
         this.partitionRecordsLag = new MetricNameTemplate("{topic}-{partition}.records-lag", groupName, 
                 "The latest lag of the partition", tags);
         this.partitionRecordsLagMax = new MetricNameTemplate("{topic}-{partition}.records-lag-max", groupName, 
@@ -133,12 +132,7 @@ public class FetcherMetricsRegistry {
         this.partitionRecordsLagAvg = new MetricNameTemplate("{topic}-{partition}.records-lag-avg", groupName, 
                 "The average lag of the partition", tags);
         this.partitionRecordsLead = new MetricNameTemplate("{topic}-{partition}.records-lead", groupName,
-                "The latest lead of the partition", tags);
-        this.partitionRecordsLeadMin = new MetricNameTemplate("{topic}-{partition}.records-lead-min", groupName,
-                "The min lead of the partition", tags);
-        this.partitionRecordsLeadAvg = new MetricNameTemplate("{topic}-{partition}.records-lead-avg", groupName,
-                "The average lead of the partition", tags);
-
+                "The latest lead of the partition", partitionTags);
     }
     
     public List<MetricNameTemplate> getAllTemplates() {
@@ -168,9 +162,7 @@ public class FetcherMetricsRegistry {
             partitionRecordsLag,
             partitionRecordsLagAvg,
             partitionRecordsLagMax,
-            partitionRecordsLead,
-            partitionRecordsLeadAvg,
-            partitionRecordsLeadMin
+            partitionRecordsLead
         );
     }
 
