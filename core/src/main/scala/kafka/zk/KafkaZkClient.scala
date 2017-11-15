@@ -1285,43 +1285,37 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     info(s"Creating $path (is it secure? $isSecure)")
     val code = checkedEphemeral.create()
     info(s"Result of znode creation at $path is: $code")
-    code match {
-      case Code.OK =>
-      case _ => throw KeeperException.create(code)
-    }
+    if (code != Code.OK)
+      throw KeeperException.create(code)
   }
 
   private class CheckedEphemeral(path: String, data: Array[Byte]) extends Logging {
     def create(): Code = {
       val createRequest = CreateRequest(path, data, acls(path), CreateMode.EPHEMERAL)
       val createResponse = retryRequestUntilConnected(createRequest)
-      val code = createResponse.resultCode
-      code match {
-        case Code.OK => code
-        case Code.NODEEXISTS => get()
-        case _ =>
+      createResponse.resultCode match {
+        case code@ Code.OK => code
+        case Code.NODEEXISTS => getAfterNodeExists()
+        case code =>
           error(s"Error while creating ephemeral at $path with return code: $code")
           code
       }
     }
 
-    private def get(): Code = {
+    private def getAfterNodeExists(): Code = {
       val getDataRequest = GetDataRequest(path)
       val getDataResponse = retryRequestUntilConnected(getDataRequest)
-      val code = getDataResponse.resultCode
-      code match {
-        case Code.OK =>
-          if (getDataResponse.stat.getEphemeralOwner != zooKeeperClient.sessionId) {
-            error(s"Error while creating ephemeral at $path with return code: $code")
-            Code.NODEEXISTS
-          } else {
-            code
-          }
+      getDataResponse.resultCode match {
+        case Code.OK if getDataResponse.stat.getEphemeralOwner != zooKeeperClient.sessionId =>
+          error(s"Error while creating ephemeral at $path, node already exists and owner " +
+            s"'${getDataResponse.stat.getEphemeralOwner}' does not match current session '${zooKeeperClient.sessionId}'")
+          Code.NODEEXISTS
+        case code@ Code.OK => code
         case Code.NONODE =>
-          info(s"The ephemeral node at $path went away while reading it")
+          info(s"The ephemeral node at $path went away while reading it, attempting create() again")
           create()
-        case _ =>
-          error(s"Error while creating ephemeral at $path with return code: $code")
+        case code =>
+          error(s"Error while creating ephemeral at $path as it already exists and error getting the node data due to $code")
           code
       }
     }
