@@ -122,14 +122,14 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         try {
             invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss"));
             fail("Call to getDateTime should fail");
-        } catch (Exception e) {
+        } catch (final Exception e) {
             e.printStackTrace();
         }
 
         try {
             invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.X"));
             fail("Call to getDateTime should fail");
-        } catch (Exception e) {
+        } catch (final Exception e) {
             e.printStackTrace();
         }
     }
