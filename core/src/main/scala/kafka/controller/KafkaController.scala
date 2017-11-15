@@ -492,7 +492,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
   private def watchIsrChangesForReassignedPartition(partition: TopicPartition,
                                                     reassignedPartitionContext: ReassignedPartitionsContext) {
     val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(this, eventManager, partition)
-    reassignedPartitionContext.reassignIsrChangeHandler = reassignIsrChangeHandler
+    reassignedPartitionContext.reassignIsrChangeHandler = Some(reassignIsrChangeHandler)
     // register listener on the leader and isr path to wait until they catch up with the current leader
     zkClient.registerZNodeChangeHandler(reassignIsrChangeHandler)
   }
@@ -779,8 +779,8 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
   }
 
   private def unregisterPartitionReassignmentIsrChangeHandlers() {
-    controllerContext.partitionsBeingReassigned.values.foreach { reassignedPartitionsContext =>
-      zkClient.unregisterZNodeChangeHandler(reassignedPartitionsContext.reassignIsrChangeHandler.path)
+    controllerContext.partitionsBeingReassigned.values.foreach { reassignContext =>
+      reassignContext.reassignIsrChangeHandler.map(_.path).foreach(zkClient.unregisterZNodeChangeHandler)
     }
   }
 
@@ -797,7 +797,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
   private def removePartitionFromReassignedPartitions(topicPartition: TopicPartition) {
     controllerContext.partitionsBeingReassigned.get(topicPartition).foreach { reassignContext =>
       // stop watching the ISR changes for this partition
-      zkClient.unregisterZNodeChangeHandler(reassignContext.reassignIsrChangeHandler.path)
+      reassignContext.reassignIsrChangeHandler.map(_.path).foreach(zkClient.unregisterZNodeChangeHandler)
     }
 
     val updatedPartitionsBeingReassigned = controllerContext.partitionsBeingReassigned - topicPartition
@@ -1488,7 +1488,7 @@ class ControllerChangeHandler(controller: KafkaController, eventManager: Control
 }
 
 case class ReassignedPartitionsContext(var newReplicas: Seq[Int] = Seq.empty,
-                                       var reassignIsrChangeHandler: PartitionReassignmentIsrChangeHandler = null)
+                                       var reassignIsrChangeHandler: Option[PartitionReassignmentIsrChangeHandler] = None)
 
 case class PartitionAndReplica(topicPartition: TopicPartition, replica: Int) {
   def topic: String = topicPartition.topic
