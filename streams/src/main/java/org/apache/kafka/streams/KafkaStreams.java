@@ -134,7 +134,6 @@ public class KafkaStreams {
     // of the co-location of stream thread's consumers. It is for internal
     // usage only and should not be exposed to users at all.
     private final Logger log;
-    private final String logPrefix;
     private final UUID processId;
     private final Metrics metrics;
     private final StreamsConfig config;
@@ -143,6 +142,7 @@ public class KafkaStreams {
     private final StreamsMetadataState streamsMetadataState;
     private final ScheduledExecutorService stateDirCleaner;
     private final QueryableStoreProvider queryableStoreProvider;
+    private final AdminClient adminClient;
 
     private GlobalStreamThread globalStreamThread;
     private KafkaStreams.StateListener stateListener;
@@ -258,7 +258,7 @@ public class KafkaStreams {
                 return false;
             } else if (!state.isValidTransition(newState)) {
                 log.error("Unexpected state transition from {} to {}", oldState, newState);
-                throw new IllegalStateException(logPrefix + "Unexpected state transition from " + oldState + " to " + newState);
+                throw new IllegalStateException("Unexpected state transition from " + oldState + " to " + newState);
             } else {
                 log.info("State transition from {} to {}", oldState, newState);
             }
@@ -277,8 +277,8 @@ public class KafkaStreams {
     private boolean setRunningFromCreated() {
         synchronized (stateLock) {
             if (state != State.CREATED) {
-                log.error("{} Unexpected state transition from {} to {}", logPrefix, state, State.RUNNING);
-                throw new IllegalStateException(logPrefix + " Unexpected state transition from " + state + " to " + State.RUNNING);
+                log.error("Unexpected state transition from {} to {}", state, State.RUNNING);
+                throw new IllegalStateException("Unexpected state transition from " + state + " to " + State.RUNNING);
             }
             state = State.RUNNING;
             stateLock.notifyAll();
@@ -594,10 +594,8 @@ public class KafkaStreams {
             clientId = applicationId + "-" + processId;
         }
 
-        this.logPrefix = String.format("stream-client [%s]", clientId);
-        final LogContext logContext = new LogContext(logPrefix);
+        final LogContext logContext = new LogContext(String.format("stream-client [%s] ", clientId));
         this.log = logContext.logger(getClass());
-        final String cleanupThreadName = clientId + "-CleanupThread";
 
         internalTopologyBuilder.setApplicationId(applicationId);
         // sanity check to fail-fast in case we cannot build a ProcessorTopology due to an exception
@@ -626,8 +624,7 @@ public class KafkaStreams {
 
         final MetricConfig metricConfig = new MetricConfig().samples(config.getInt(StreamsConfig.METRICS_NUM_SAMPLES_CONFIG))
             .recordLevel(Sensor.RecordingLevel.forName(config.getString(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG)))
-            .timeWindow(config.getLong(StreamsConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
-                TimeUnit.MILLISECONDS);
+            .timeWindow(config.getLong(StreamsConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS);
         final List<MetricsReporter> reporters = config.getConfiguredInstances(StreamsConfig.METRIC_REPORTER_CLASSES_CONFIG,
             MetricsReporter.class);
         reporters.add(new JmxReporter(JMX_PREFIX));
@@ -649,7 +646,7 @@ public class KafkaStreams {
         }
 
         // use client id instead of thread client id since this admin client may be shared among threads
-        AdminClient adminClient = clientSupplier.getAdminClient(config.getAdminConfigs(clientId));
+        this.adminClient = clientSupplier.getAdminClient(config.getAdminConfigs(clientId));
 
         final Map<Long, StreamThread.State> threadState = new HashMap<>(threads.length);
         final ArrayList<StateStoreProvider> storeProviders = new ArrayList<>();
@@ -680,6 +677,8 @@ public class KafkaStreams {
 
         final GlobalStateStoreProvider globalStateStoreProvider = new GlobalStateStoreProvider(internalTopologyBuilder.globalStateStores());
         queryableStoreProvider = new QueryableStoreProvider(storeProviders, globalStateStoreProvider);
+
+        final String cleanupThreadName = clientId + "-CleanupThread";
         stateDirCleaner = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
             @Override
             public Thread newThread(final Runnable r) {
@@ -836,6 +835,8 @@ public class KafkaStreams {
                         }
                         globalStreamThread = null;
                     }
+
+                    adminClient.close();
 
                     metrics.close();
                     setState(State.NOT_RUNNING);

@@ -108,27 +108,32 @@ public class StreamsConfig extends AbstractConfig {
     private final static long EOS_DEFAULT_COMMIT_INTERVAL_MS = 100L;
 
     /**
-     * Prefix used to isolate {@link KafkaConsumer consumer} configs from {@link KafkaProducer producer} configs.
-     * It is recommended to use {@link #consumerPrefix(String)} to add this prefix to {@link ConsumerConfig consumer
-     * properties}.
-     */
-    public static final String CONSUMER_PREFIX = "consumer.";
-
-
-    /**
      * Prefix used to provide default topic configs to be applied when creating internal topics.
      * These should be valid properties from {@link org.apache.kafka.common.config.TopicConfig TopicConfig}.
      * It is recommended to use {@link #topicPrefix(String)}.
      */
     public static final String TOPIC_PREFIX = "topic.";
 
+    /**
+     * Prefix used to isolate {@link KafkaConsumer consumer} configs from other client configs.
+     * It is recommended to use {@link #consumerPrefix(String)} to add this prefix to {@link ConsumerConfig consumer
+     * properties}.
+     */
+    public static final String CONSUMER_PREFIX = "consumer.";
 
     /**
-     * Prefix used to isolate {@link KafkaProducer producer} configs from {@link KafkaConsumer consumer} configs.
+     * Prefix used to isolate {@link KafkaProducer producer} configs from other client configs.
      * It is recommended to use {@link #producerPrefix(String)} to add this prefix to {@link ProducerConfig producer
      * properties}.
      */
     public static final String PRODUCER_PREFIX = "producer.";
+
+    /**
+     * Prefix used to isolate {@link org.apache.kafka.clients.admin.AdminClient admin} configs from other client configs.
+     * It is recommended to use {@link #producerPrefix(String)} to add this prefix to {@link ProducerConfig producer
+     * properties}.
+     */
+    public static final String ADMIN_CLIENT_PREFIX = "admin.";
 
     /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for at-least-once processing guarantees.
@@ -572,7 +577,7 @@ public class StreamsConfig extends AbstractConfig {
 
     /**
      * Prefix a property with {@link #CONSUMER_PREFIX}. This is used to isolate {@link ConsumerConfig consumer configs}
-     * from {@link ProducerConfig producer configs}.
+     * from other client configs.
      *
      * @param consumerProp the consumer property to be masked
      * @return {@link #CONSUMER_PREFIX} + {@code consumerProp}
@@ -583,13 +588,24 @@ public class StreamsConfig extends AbstractConfig {
 
     /**
      * Prefix a property with {@link #PRODUCER_PREFIX}. This is used to isolate {@link ProducerConfig producer configs}
-     * from {@link ConsumerConfig consumer configs}.
+     * from other client configs.
      *
      * @param producerProp the producer property to be masked
      * @return PRODUCER_PREFIX + {@code producerProp}
      */
     public static String producerPrefix(final String producerProp) {
         return PRODUCER_PREFIX + producerProp;
+    }
+
+    /**
+     * Prefix a property with {@link #ADMIN_CLIENT_PREFIX}. This is used to isolate {@link AdminClientConfig admin configs}
+     * from other client configs.
+     *
+     * @param adminClientProp the producer property to be masked
+     * @return PRODUCER_PREFIX + {@code producerProp}
+     */
+    public static String adminClientPrefix(final String adminClientProp) {
+        return ADMIN_CLIENT_PREFIX + adminClientProp;
     }
 
     /**
@@ -773,7 +789,7 @@ public class StreamsConfig extends AbstractConfig {
      * @return Map of the admin client configuration.
      */
     public Map<String, Object> getAdminConfigs(final String clientId) {
-        final Map<String, Object> props = clientProps(AdminClientConfig.configNames(), originals());
+        final Map<String, Object> props = getClientPropsWithPrefix(ADMIN_CLIENT_PREFIX, AdminClientConfig.configNames());
 
         // add client id with stream client id prefix
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-admin");
