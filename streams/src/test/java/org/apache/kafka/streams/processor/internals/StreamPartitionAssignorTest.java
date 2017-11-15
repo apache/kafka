@@ -110,7 +110,7 @@ public class StreamPartitionAssignorTest {
     private final MockClientSupplier mockClientSupplier = new MockClientSupplier();
     private final InternalTopologyBuilder builder = new InternalTopologyBuilder();
     private final StreamsConfig config = new StreamsConfig(configProps());
-    private final ThreadDataProvider threadDataProvider = EasyMock.createNiceMock(ThreadDataProvider.class);
+    private final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
     private final Map<String, Object> configurationMap = new HashMap<>();
     private final DefaultPartitionGrouper defaultPartitionGrouper = new DefaultPartitionGrouper();
     private final SingleGroupPartitionGrouperStub stubPartitionGrouper = new SingleGroupPartitionGrouperStub();
@@ -128,7 +128,7 @@ public class StreamPartitionAssignorTest {
     }
 
     private void configurePartitionAssignor(final int standbyReplicas, final String endPoint) {
-        configurationMap.put(StreamsConfig.InternalConfig.STREAM_THREAD_INSTANCE, threadDataProvider);
+        configurationMap.put(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR, taskManager);
         configurationMap.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, standbyReplicas);
         configurationMap.put(StreamsConfig.APPLICATION_SERVER_CONFIG, endPoint);
         partitionAssignor.configure(configurationMap);
@@ -139,14 +139,11 @@ public class StreamPartitionAssignorTest {
                                         final UUID processId,
                                         final PartitionGrouper partitionGrouper,
                                         final InternalTopologyBuilder builder) throws NoSuchFieldException, IllegalAccessException {
-        EasyMock.expect(threadDataProvider.name()).andReturn("name").anyTimes();
-        EasyMock.expect(threadDataProvider.prevActiveTasks()).andReturn(prevTasks).anyTimes();
-        EasyMock.expect(threadDataProvider.cachedTasks()).andReturn(cachedTasks).anyTimes();
-        EasyMock.expect(threadDataProvider.config()).andReturn(config).anyTimes();
-        EasyMock.expect(threadDataProvider.builder()).andReturn(builder).anyTimes();
-        EasyMock.expect(threadDataProvider.processId()).andReturn(processId).anyTimes();
-        EasyMock.expect(threadDataProvider.partitionGrouper()).andReturn(partitionGrouper).anyTimes();
-        EasyMock.replay(threadDataProvider);
+        EasyMock.expect(taskManager.prevActiveTaskIds()).andReturn(prevTasks).anyTimes();
+        EasyMock.expect(taskManager.cachedTasksIds()).andReturn(cachedTasks).anyTimes();
+        EasyMock.expect(taskManager.builder()).andReturn(builder).anyTimes();
+        EasyMock.expect(taskManager.processId()).andReturn(processId).anyTimes();
+        EasyMock.replay(taskManager);
     }
 
 
@@ -979,7 +976,7 @@ public class StreamPartitionAssignorTest {
     public void shouldThrowKafkaExceptionIfStreamThreadConfigIsNotThreadDataProviderInstance() {
         final Map<String, Object> config = new HashMap<>();
         config.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
-        config.put(StreamsConfig.InternalConfig.STREAM_THREAD_INSTANCE, "i am not a stream thread");
+        config.put(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR, "i am not a stream thread");
 
         partitionAssignor.configure(config);
     }

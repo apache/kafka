@@ -16,25 +16,14 @@
  */
 package org.apache.kafka.clients;
 
-import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.clients.admin.KafkaAdminClient;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.metrics.JmxReporter;
-import org.apache.kafka.common.metrics.MetricConfig;
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.ChannelState;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.Selectable;
-import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -57,16 +46,12 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.concurrent.TimeUnit;
-
-import static org.apache.kafka.common.utils.Utils.closeQuietly;
 
 /**
  * A network client for asynchronous request/response network i/o. This is an internal class used to implement the
@@ -123,44 +108,6 @@ public class NetworkClient implements KafkaClient {
     private final List<ClientResponse> abortedSends = new LinkedList<>();
 
     private final Sensor throttleTimeSensor;
-
-    /**
-     * Create a new network client from the given configs; always use the provided
-     * client id and log context values to override whatever provided in the config
-     */
-    public static NetworkClient create(final AbstractConfig config,
-                                       final LogContext logContext,
-                                       final String metricGrpPrefix,
-                                       final boolean discoverBrokerVersions,
-                                       final Metrics metrics) {
-        Time time = Time.SYSTEM;
-        ApiVersions apiVersions = new ApiVersions();
-        String clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
-
-        // we enable allow auto topic by default
-        Metadata metadata = new Metadata(config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG),
-                config.getLong(CommonClientConfigs.METADATA_MAX_AGE_CONFIG), true);
-        ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config);
-        Selector selector = new Selector(config.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG),
-                metrics, time, metricGrpPrefix, channelBuilder, logContext);
-
-        // note the only un-common client config here is the max.in.flight.request;
-        // it is caller's responsibility to set this value before calling it.
-        return new NetworkClient(
-                selector,
-                metadata,
-                clientId,
-                config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION),
-                config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG),
-                config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG),
-                config.getInt(CommonClientConfigs.SEND_BUFFER_CONFIG),
-                config.getInt(CommonClientConfigs.RECEIVE_BUFFER_CONFIG),
-                config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
-                time,
-                true,
-                apiVersions,
-                logContext);
-    }
 
     public NetworkClient(Selectable selector,
                          Metadata metadata,

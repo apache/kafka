@@ -108,10 +108,6 @@ public class InternalTopicManager {
         throw new StreamsException("Could not get number of partitions.");
     }
 
-    public void close() {
-        streamsKafkaClient.close();
-    }
-
     /**
      * Check the existing topics to have correct number of partitions; and return the non existing topics to be created
      */

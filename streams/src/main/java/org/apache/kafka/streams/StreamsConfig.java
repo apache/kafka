@@ -566,7 +566,7 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     public static class InternalConfig {
-        public static final String STREAM_THREAD_INSTANCE = "__stream.thread.instance__";
+        public static final String TASK_MANAGER_FOR_PARTITION_ASSIGNOR = "__task.manager.instance__";
     }
 
     /**
@@ -619,6 +619,10 @@ public class StreamsConfig extends AbstractConfig {
     public StreamsConfig(final Map<?, ?> props) {
         super(CONFIG, props);
         eosEnabled = EXACTLY_ONCE.equals(getString(PROCESSING_GUARANTEE_CONFIG));
+    }
+
+    public Object getObject(final String key) {
+        return get(key);
     }
 
     @Override
@@ -708,7 +712,6 @@ public class StreamsConfig extends AbstractConfig {
         consumerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-consumer");
 
         // add configs required for stream partition assignor
-        consumerProps.put(InternalConfig.STREAM_THREAD_INSTANCE, streamThread);
         consumerProps.put(REPLICATION_FACTOR_CONFIG, getInt(REPLICATION_FACTOR_CONFIG));
         consumerProps.put(NUM_STANDBY_REPLICAS_CONFIG, getInt(NUM_STANDBY_REPLICAS_CONFIG));
         consumerProps.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, StreamPartitionAssignor.class.getName());

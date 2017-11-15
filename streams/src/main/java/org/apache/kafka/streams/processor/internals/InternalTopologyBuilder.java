@@ -25,7 +25,6 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
-import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor.SubscriptionUpdates;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
@@ -1246,9 +1245,9 @@ public class InternalTopologyBuilder {
     }
 
     public synchronized void updateSubscriptions(final SubscriptionUpdates subscriptionUpdates,
-                                                 final String threadId) {
-        log.debug("stream-thread [{}] updating builder with {} topic(s) with possible matching regex subscription(s)",
-            threadId, subscriptionUpdates);
+                                                 final String logPrefix) {
+        log.debug("{}updating builder with {} topic(s) with possible matching regex subscription(s)",
+                logPrefix, subscriptionUpdates);
         this.subscriptionUpdates = subscriptionUpdates;
         setRegexMatchedTopicsToSourceNodes();
         setRegexMatchedTopicToStateStore();
@@ -1811,4 +1810,40 @@ public class InternalTopologyBuilder {
         return sb.toString();
     }
 
+    /**
+     * Used to capture subscribed topic via Patterns discovered during the
+     * partition assignment process.
+     */
+    public static class SubscriptionUpdates {
+
+        private final Set<String> updatedTopicSubscriptions = new HashSet<>();
+
+        private  void updateTopics(Collection<String> topicNames) {
+            updatedTopicSubscriptions.clear();
+            updatedTopicSubscriptions.addAll(topicNames);
+        }
+
+        public Collection<String> getUpdates() {
+            return Collections.unmodifiableSet(new HashSet<>(updatedTopicSubscriptions));
+        }
+
+        boolean hasUpdates() {
+            return !updatedTopicSubscriptions.isEmpty();
+        }
+
+        @Override
+        public String toString() {
+            return "SubscriptionUpdates{" +
+                    "updatedTopicSubscriptions=" + updatedTopicSubscriptions +
+                    '}';
+        }
+    }
+
+    void updateSubscribedTopics(Set<String> topics, String logPrefix) {
+        SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
+        log.debug("{}found {} topics possibly matching regex", topics, logPrefix);
+        // update the topic groups with the returned subscription set for regex pattern subscriptions
+        subscriptionUpdates.updateTopics(topics);
+        updateSubscriptions(subscriptionUpdates, logPrefix);
+    }
 }
