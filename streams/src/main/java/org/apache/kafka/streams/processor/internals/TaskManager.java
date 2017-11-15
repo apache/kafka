@@ -494,7 +494,7 @@ class TaskManager {
         return partitionsByHostState;
     }
 
-    Cluster clusterMetadata(){
+    Cluster clusterMetadata() {
         return cluster;
     }
 
