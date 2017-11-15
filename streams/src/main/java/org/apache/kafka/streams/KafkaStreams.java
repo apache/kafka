@@ -465,6 +465,53 @@ public class KafkaStreams {
         }
     }
 
+    final class DelegatingStateRestoreListener implements StateRestoreListener {
+        @Override
+        public void onRestoreStart(final TopicPartition topicPartition, final String storeName, final long startingOffset, final long endingOffset) {
+            if (globalStateRestoreListener != null) {
+                try {
+                    globalStateRestoreListener.onRestoreStart(topicPartition, storeName, startingOffset, endingOffset);
+                } catch (final Exception fatalUserException) {
+                    throw new StreamsException(
+                            String.format("Fatal user code error in store restore listener for store %s, partition %s.",
+                                    storeName,
+                                    topicPartition),
+                            fatalUserException);
+                }
+            }
+        }
+
+        @Override
+        public void onBatchRestored(final TopicPartition topicPartition, final String storeName, final long batchEndOffset, final long numRestored) {
+            if (globalStateRestoreListener != null) {
+                try {
+                    globalStateRestoreListener.onBatchRestored(topicPartition, storeName, batchEndOffset, numRestored);
+                } catch (final Exception fatalUserException) {
+                    throw new StreamsException(
+                            String.format("Fatal user code error in store restore listener for store %s, partition %s.",
+                                    storeName,
+                                    topicPartition),
+                            fatalUserException);
+                }
+            }
+        }
+
+        @Override
+        public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {
+            if (globalStateRestoreListener != null) {
+                try {
+                    globalStateRestoreListener.onRestoreEnd(topicPartition, storeName, totalRestored);
+                } catch (final Exception fatalUserException) {
+                    throw new StreamsException(
+                            String.format("Fatal user code error in store restore listener for store %s, partition %s.",
+                                    storeName,
+                                    topicPartition),
+                            fatalUserException);
+                }
+            }
+        }
+    }
+
     /**
      * @deprecated use {@link #KafkaStreams(Topology, Properties)} instead
      */
@@ -561,52 +608,7 @@ public class KafkaStreams {
             log.warn("Negative cache size passed in. Reverting to cache size of 0 bytes.");
         }
 
-        final StateRestoreListener delegatingStateRestoreListener = new StateRestoreListener() {
-            @Override
-            public void onRestoreStart(final TopicPartition topicPartition, final String storeName, final long startingOffset, final long endingOffset) {
-                if (globalStateRestoreListener != null) {
-                    try {
-                        globalStateRestoreListener.onRestoreStart(topicPartition, storeName, startingOffset, endingOffset);
-                    } catch (final Exception fatalUserException) {
-                        throw new StreamsException(
-                            String.format("Fatal user code error in store restore listener for store %s, partition %s.",
-                                storeName,
-                                topicPartition),
-                            fatalUserException);
-                    }
-                }
-            }
-
-            @Override
-            public void onBatchRestored(final TopicPartition topicPartition, final String storeName, final long batchEndOffset, final long numRestored) {
-                if (globalStateRestoreListener != null) {
-                    try {
-                        globalStateRestoreListener.onBatchRestored(topicPartition, storeName, batchEndOffset, numRestored);
-                    } catch (final Exception fatalUserException) {
-                        throw new StreamsException(
-                            String.format("Fatal user code error in store restore listener for store %s, partition %s.",
-                                storeName,
-                                topicPartition),
-                            fatalUserException);
-                    }
-                }
-            }
-
-            @Override
-            public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {
-                if (globalStateRestoreListener != null) {
-                    try {
-                        globalStateRestoreListener.onRestoreEnd(topicPartition, storeName, totalRestored);
-                    } catch (final Exception fatalUserException) {
-                        throw new StreamsException(
-                            String.format("Fatal user code error in store restore listener for store %s, partition %s.",
-                                storeName,
-                                topicPartition),
-                            fatalUserException);
-                    }
-                }
-            }
-        };
+        final StateRestoreListener delegatingStateRestoreListener = new DelegatingStateRestoreListener();
 
         threads = new StreamThread[config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG)];
         try {
