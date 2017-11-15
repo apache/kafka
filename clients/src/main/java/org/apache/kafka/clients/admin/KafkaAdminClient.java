@@ -1918,14 +1918,19 @@ public class KafkaAdminClient extends AdminClient {
                 // grouping topic partitions per leader
                 Map<Node, Map<TopicPartition, Long>> leaders = new HashMap<>();
                 for (Map.Entry<TopicPartition, RecordsToDelete> entry: recordsToDelete.entrySet()) {
-                    Node node = response.cluster().leaderFor(entry.getKey());
-                    if (node != null) {
-                        if (!leaders.containsKey(node))
-                            leaders.put(node, new HashMap<TopicPartition, Long>());
-                        leaders.get(node).put(entry.getKey(), entry.getValue().beforeOffset());
-                    } else {
-                        KafkaFutureImpl<DeletedRecords> future = futures.get(entry.getKey());
-                        future.completeExceptionally(Errors.LEADER_NOT_AVAILABLE.exception());
+
+                    // avoiding to send deletion request for topics with errors
+                    if (!response.errors().containsKey(entry.getKey().topic())) {
+
+                        Node node = response.cluster().leaderFor(entry.getKey());
+                        if (node != null) {
+                            if (!leaders.containsKey(node))
+                                leaders.put(node, new HashMap<TopicPartition, Long>());
+                            leaders.get(node).put(entry.getKey(), entry.getValue().beforeOffset());
+                        } else {
+                            KafkaFutureImpl<DeletedRecords> future = futures.get(entry.getKey());
+                            future.completeExceptionally(Errors.LEADER_NOT_AVAILABLE.exception());
+                        }
                     }
                 }
 
