@@ -23,9 +23,9 @@
       <div class="sticky-top">
         <div style="height:35px">
           <a href="/{{version}}/documentation/streams/">Introduction</a>
-          <a href="/{{version}}/documentation/streams/developer-guide">Developer Guide</a>
+          <a class="active-menu-item" href="/{{version}}/documentation/streams/developer-guide">Developer Guide</a>
           <a href="/{{version}}/documentation/streams/core-concepts">Concepts</a>
-          <a class="active-menu-item" href="/{{version}}/documentation/streams/quickstart">Run Demo App</a>
+          <a href="/{{version}}/documentation/streams/quickstart">Run Demo App</a>
           <a href="/{{version}}/documentation/streams/tutorial">Tutorial: Write App</a>
         </div>
       </div>
@@ -3004,7 +3004,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
 $(function() {
   // Show selected style on nav item
   $('.b-nav__streams').addClass('selected');
-  
+
      //sticky secondary nav
           var $navbar = $(".sub-nav-sticky"),
                y_pos = $navbar.offset().top,
