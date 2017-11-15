@@ -17,6 +17,7 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -762,6 +763,20 @@ public class StreamsConfig extends AbstractConfig {
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, originals().get(BOOTSTRAP_SERVERS_CONFIG));
         // add client id with stream client id prefix
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-producer");
+
+        return props;
+    }
+
+    /**
+     * Get the configs fro the {@link org.apache.kafka.clients.admin.AdminClient}.
+     * @param clientId clientId
+     * @return Map of the admin client configuration.
+     */
+    public Map<String, Object> getAdminConfigs(final String clientId) {
+        final Map<String, Object> props = clientProps(AdminClientConfig.configNames(), originals());
+
+        // add client id with stream client id prefix
+        props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-admin");
 
         return props;
     }
