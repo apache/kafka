@@ -68,7 +68,7 @@ class TopicFilterTest extends JUnitSuite {
       topicCount.getTopicCountMap.head._1
     }
     //lets make sure that the JSON strings are escaping as we expect
-    //if they are not then when they get saved to zookeeper and read back out they will be broken on parse
+    //if they are not then when they get saved to ZooKeeper and read back out they will be broken on parse
     assertEquals("-\\\"-", getTopicCountMapKey("-\"-"))
     assertEquals("-\\\\-", getTopicCountMapKey("-\\-"))
     assertEquals("-\\/-", getTopicCountMapKey("-/-"))

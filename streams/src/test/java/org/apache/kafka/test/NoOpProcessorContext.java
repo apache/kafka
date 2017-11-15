@@ -84,7 +84,9 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     }
 
     @Override
-    public void register(final StateStore store, final boolean loggingEnabled, final StateRestoreCallback stateRestoreCallback) {
+    public void register(final StateStore store,
+                         final boolean deprecatedAndIgnoredLoggingEnabled,
+                         final StateRestoreCallback stateRestoreCallback) {
         // no-op
     }
 }

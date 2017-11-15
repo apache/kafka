@@ -20,7 +20,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.memory.SimpleMemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.protocol.SecurityProtocol;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -34,6 +34,7 @@ import org.junit.Test;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.nio.ByteBuffer;
@@ -85,9 +86,13 @@ public class SelectorTest {
 
     @After
     public void tearDown() throws Exception {
-        this.selector.close();
-        this.server.close();
-        this.metrics.close();
+        try {
+            verifySelectorEmpty();
+        } finally {
+            this.selector.close();
+            this.server.close();
+            this.metrics.close();
+        }
     }
 
     public SecurityProtocol securityProtocol() {
@@ -506,7 +511,7 @@ public class SelectorTest {
         // record void method invocations
         kafkaChannel.disconnect();
         kafkaChannel.close();
-        expect(kafkaChannel.ready()).andReturn(false);
+        expect(kafkaChannel.ready()).andReturn(false).anyTimes();
         // prepare throws an exception
         kafkaChannel.prepare();
         expectLastCall().andThrow(new IOException());
@@ -526,7 +531,6 @@ public class SelectorTest {
 
         control.verify();
     }
-
 
     private String blockingRequest(String node, String s) throws IOException {
         selector.send(createSend(node, s));
@@ -585,5 +589,21 @@ public class SelectorTest {
         }
     }
 
+    private void verifySelectorEmpty() throws Exception {
+        for (KafkaChannel channel : selector.channels())
+            selector.close(channel.id());
+        selector.poll(0);
+        selector.poll(0); // Poll a second time to clear everything
+        for (Field field : selector.getClass().getDeclaredFields()) {
+            field.setAccessible(true);
+            Object obj = field.get(selector);
+            if (obj instanceof Set)
+                assertTrue("Field not empty: " + field + " " + obj, ((Set<?>) obj).isEmpty());
+            else if (obj instanceof Map)
+                assertTrue("Field not empty: " + field + " " + obj, ((Map<?, ?>) obj).isEmpty());
+            else if (obj instanceof List)
+                assertTrue("Field not empty: " + field + " " + obj, ((List<?>) obj).isEmpty());
+        }
+    }
 
 }

@@ -16,7 +16,7 @@
  */
 package kafka.client
 
-import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
+import org.apache.kafka.common.protocol.Errors
 
 import scala.collection._
 import kafka.cluster._
@@ -30,6 +30,8 @@ import util.Random
 import kafka.network.BlockingChannel
 import kafka.utils.ZkUtils
 import java.io.IOException
+
+import org.apache.kafka.common.security.auth.SecurityProtocol
 
  /**
  * Helper functions common to clients (producer, consumer, or admin)

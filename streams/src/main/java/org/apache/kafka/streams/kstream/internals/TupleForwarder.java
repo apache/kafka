@@ -42,7 +42,7 @@ class TupleForwarder<K, V> {
         this.context = context;
         this.sendOldValues = sendOldValues;
         if (this.cachedStateStore != null) {
-            cachedStateStore.setFlushListener(flushListener);
+            cachedStateStore.setFlushListener(flushListener, sendOldValues);
         }
     }
 

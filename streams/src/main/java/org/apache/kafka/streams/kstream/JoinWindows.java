@@ -59,7 +59,7 @@ import java.util.Map;
  * @see KStream#leftJoin(KStream, ValueJoiner, JoinWindows)
  * @see KStream#leftJoin(KStream, ValueJoiner, JoinWindows, Joined)
  * @see KStream#outerJoin(KStream, ValueJoiner, JoinWindows)
- * @see KStream#outerJoin(KStream, ValueJoiner, JoinWindows)
+ * @see KStream#outerJoin(KStream, ValueJoiner, JoinWindows, Joined)
  * @see TimestampExtractor
  */
 public final class JoinWindows extends Windows<Window> {

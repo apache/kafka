@@ -109,6 +109,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+@SuppressWarnings("deprecation")
 public class FetcherTest {
     private ConsumerRebalanceListener listener = new NoOpConsumerRebalanceListener();
     private String topicName = "test";
@@ -133,7 +134,7 @@ public class FetcherTest {
     private SubscriptionState subscriptionsNoAutoReset = new SubscriptionState(OffsetResetStrategy.NONE);
     private static final double EPSILON = 0.0001;
     private ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(new LogContext(),
-            client, metadata, time, 100, 1000);
+            client, metadata, time, 100, 1000, Integer.MAX_VALUE);
 
     private MemoryRecords records;
     private MemoryRecords nextRecords;

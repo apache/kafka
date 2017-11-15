@@ -18,11 +18,11 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.SessionStore;
@@ -84,7 +84,9 @@ public interface KGroupedStream<K, V> {
      * alphanumerics, '.', '_' and '-'. If {@code null} then this will be equivalent to {@link KGroupedStream#count()}.
      * @return a {@link KTable} that contains "update" records with unmodified keys and {@link Long} values that
      * represent the latest (rolling) count (i.e., number of records) for each key
+     * @deprecated use {@link #count(Materialized) count(Materialized.as(queryableStoreName))}
      */
+    @Deprecated
     KTable<K, Long> count(final String queryableStoreName);
 
     /**
@@ -129,7 +131,7 @@ public interface KGroupedStream<K, V> {
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
-     * Use {@link StateStoreSupplier#name()} to get the store name:
+     * Use {@link org.apache.kafka.streams.processor.StateStoreSupplier#name()} to get the store name:
      * <pre>{@code
      * KafkaStreams streams = ... // counting words
      * String queryableStoreName = storeSupplier.name();
@@ -143,8 +145,10 @@ public interface KGroupedStream<K, V> {
      * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a {@link KTable} that contains "update" records with unmodified keys and {@link Long} values that
      * represent the latest (rolling) count (i.e., number of records) for each key
+     * @deprecated use {@link #count(Materialized) count(Materialized.as(KeyValueByteStoreSupplier))}
      */
-    KTable<K, Long> count(final StateStoreSupplier<KeyValueStore> storeSupplier);
+    @Deprecated
+    KTable<K, Long> count(final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
      * Count the number of records in this stream by the grouped key.
@@ -173,6 +177,7 @@ public interface KGroupedStream<K, V> {
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
      * @param materialized  an instance of {@link Materialized} used to materialize a state store. Cannot be {@code null}.
+     *                      Note: the valueSerde will be automatically set to {@link Serdes#Long()} if there is no valueSerde provided
      * @return a {@link KTable} that contains "update" records with unmodified keys and {@link Long} values that
      * represent the latest (rolling) count (i.e., number of records) for each key
      */
@@ -222,8 +227,11 @@ public interface KGroupedStream<K, V> {
      * @param queryableStoreName the name of the underlying {@link KTable} state store; valid characters are ASCII
      * alphanumerics, '.', '_' and '-'. If {@code null} then this will be equivalent to {@link KGroupedStream#count(Windows)}.
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys and {@link Long} values
-     * that represent the latest (rolling) count (i.e., number of records) for each key within a window
+     * that represent the latest (rolling) count (i.e., number of records) for each key within a window.
+     * @deprecated use {@link #windowedBy(Windows) windowedBy(windows)} followed by
+     * {@link TimeWindowedKStream#count(Materialized) count(Materialized.as(queryableStoreName))}
      */
+    @Deprecated
     <W extends Window> KTable<Windowed<K>, Long> count(final Windows<W> windows,
                                                        final String queryableStoreName);
 
@@ -256,7 +264,7 @@ public interface KGroupedStream<K, V> {
      * @param windows   the specification of the aggregation {@link Windows}
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys and {@link Long} values
      * that represent the latest (rolling) count (i.e., number of records) for each key within a window
-     * @deprecated use {@link #windowedBy(Windows)}
+     * @deprecated use {@link #windowedBy(Windows) windowedBy(windows)} followed by {@link TimeWindowedKStream#count() count()}
      */
     @Deprecated
     <W extends Window> KTable<Windowed<K>, Long> count(final Windows<W> windows);
@@ -281,7 +289,7 @@ public interface KGroupedStream<K, V> {
      * <p>
      * To query the local windowed {@link KeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
-     * Use {@link StateStoreSupplier#name()} to get the store name:
+     * Use {@link org.apache.kafka.streams.processor.StateStoreSupplier#name()} to get the store name:
      * <pre>{@code
      * KafkaStreams streams = ... // counting words
      * String queryableStoreName = storeSupplier.name();
@@ -298,9 +306,12 @@ public interface KGroupedStream<K, V> {
      * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys and {@link Long} values
      * that represent the latest (rolling) count (i.e., number of records) for each key within a window
+     * @deprecated use {@link #windowedBy(Windows) windowedBy(windows)} followed by
+     * {@link TimeWindowedKStream#count(Materialized) count(Materialized.as(KeyValueByteStoreSupplier))}
      */
+    @Deprecated
     <W extends Window> KTable<Windowed<K>, Long> count(final Windows<W> windows,
-                                                       final StateStoreSupplier<WindowStore> storeSupplier);
+                                                       final org.apache.kafka.streams.processor.StateStoreSupplier<WindowStore> storeSupplier);
 
 
     /**
@@ -321,10 +332,8 @@ public interface KGroupedStream<K, V> {
      * <p>
      * To query the local windowed {@link KeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
-     * Use {@link StateStoreSupplier#name()} to get the store name:
      * <pre>{@code
      * KafkaStreams streams = ... // compute sum
-     * Sting queryableStoreName = storeSupplier.name();
      * ReadOnlySessionStore<String,Long> localWindowStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>ReadOnlySessionStore<String, Long>);
      * String key = "some-key";
      * KeyValueIterator<Windowed<String>, Long> sumForKeyForWindows = localWindowStore.fetch(key); // key must be local (application state is shared over all running Kafka Streams instances)
@@ -334,10 +343,13 @@ public interface KGroupedStream<K, V> {
      *
      * @param sessionWindows the specification of the aggregation {@link SessionWindows}
      * @param queryableStoreName  the name of the state store created from this operation; valid characters are ASCII
-     * alphanumerics, '.', '_' and '-. If {@code null} then this will be equivalent to {@link KGroupedStream#count(SessionWindows)} ()}.
+     * alphanumerics, '.', '_' and '-. If {@code null} then this will be equivalent to {@link KGroupedStream#count(SessionWindows)}.
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys and {@link Long} values
      * that represent the latest (rolling) count (i.e., number of records) for each key within a window
+     * @deprecated use {@link #windowedBy(SessionWindows) windowedBy(sessionWindows)} followed by
+     * {@link SessionWindowedKStream#count(Materialized) count(Materialized.as(queryableStoreName))}
      */
+    @Deprecated
     KTable<Windowed<K>, Long> count(final SessionWindows sessionWindows, final String queryableStoreName);
 
     /**
@@ -359,7 +371,10 @@ public interface KGroupedStream<K, V> {
      * @param sessionWindows the specification of the aggregation {@link SessionWindows}
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys and {@link Long} values
      * that represent the latest (rolling) count (i.e., number of records) for each key within a window
+     * @deprecated use {@link #windowedBy(SessionWindows) windowedBy(sessionWindows)} followed by
+     * {@link SessionWindowedKStream#count() count()}
      */
+    @Deprecated
     KTable<Windowed<K>, Long> count(final SessionWindows sessionWindows);
 
     /**
@@ -380,7 +395,7 @@ public interface KGroupedStream<K, V> {
      * <p>
      * To query the local windowed {@link KeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
-     * Use {@link StateStoreSupplier#name()} to get the store name:
+     * Use {@link org.apache.kafka.streams.processor.StateStoreSupplier#name()} to get the store name:
      * <pre>{@code
      * KafkaStreams streams = ... // compute sum
      * Sting queryableStoreName = storeSupplier.name();
@@ -395,15 +410,18 @@ public interface KGroupedStream<K, V> {
      * @param storeSupplier  user defined state store supplier. Cannot be {@code null}.
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys and {@link Long} values
      * that represent the latest (rolling) count (i.e., number of records) for each key within a window
+     * @deprecated use {@link #windowedBy(SessionWindows) windowedBy(sessionWindows)} followed by
+     * {@link SessionWindowedKStream#count(Materialized) count(Materialized.as(KeyValueByteStoreSupplier))}
      */
+    @Deprecated
     KTable<Windowed<K>, Long> count(final SessionWindows sessionWindows,
-                                    final StateStoreSupplier<SessionStore> storeSupplier);
+                                    final org.apache.kafka.streams.processor.StateStoreSupplier<SessionStore> storeSupplier);
 
     /**
      * Combine the values of records in this stream by the grouped key.
      * Records with {@code null} key or value are ignored.
      * Combining implies that the type of the aggregate result is the same as the type of the input value
-     * (c.f. {@link #aggregate(Initializer, Aggregator, Serde, String)}).
+     * (c.f. {@link #aggregate(Initializer, Aggregator)}).
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
      * that can be queried using the provided {@code queryableStoreName}.
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
@@ -448,10 +466,10 @@ public interface KGroupedStream<K, V> {
      * <pre>{@code
      * // At the example of a Reducer<Long>
      * new Reducer<Long>() {
-     *   @Override
      *   public Long apply(Long aggValue, Long currValue) {
      *     return aggValue + currValue;
      *   }
+     * }
      * }</pre>
      * <p>
      * If there is no current aggregate the {@link Reducer} is not applied and the new aggregate will be the record's
@@ -490,7 +508,7 @@ public interface KGroupedStream<K, V> {
      * alphanumerics, '.', '_' and '-'. If {@code null} then this will be equivalent to {@link KGroupedStream#reduce(Reducer)} ()}.
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
-     * @deprectated use {@link #reduce(Reducer, Materialized)}
+     * @deprecated  use {@link #reduce(Reducer, Materialized) reduce(reducer, Materialized.as(queryableStoreName))}
      */
     @Deprecated
     KTable<K, V> reduce(final Reducer<V> reducer,
@@ -501,7 +519,7 @@ public interface KGroupedStream<K, V> {
      * Combine the value of records in this stream by the grouped key.
      * Records with {@code null} key or value are ignored.
      * Combining implies that the type of the aggregate result is the same as the type of the input value
-     * (c.f. {@link #aggregate(Initializer, Aggregator, StateStoreSupplier)}).
+     * (c.f. {@link #aggregate(Initializer, Aggregator, org.apache.kafka.streams.processor.StateStoreSupplier)}).
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
      * provided by the given {@code storeSupplier}.
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
@@ -511,16 +529,16 @@ public interface KGroupedStream<K, V> {
      * <pre>{@code
      * // At the example of a Reducer<Long>
      * new Reducer<Long>() {
-     *   @Override
      *   public Long apply(Long aggValue, Long currValue) {
      *     return aggValue + currValue;
      *   }
+     * }
      * }</pre>
      * <p>
      * If there is no current aggregate the {@link Reducer} is not applied and the new aggregate will be the record's
      * value as-is.
-     * Thus, {@code reduce(Reducer, StateStoreSupplier)} can be used to compute aggregate functions like sum, min, or
-     * max.
+     * Thus, {@code reduce(Reducer, org.apache.kafka.streams.processor.StateStoreSupplier)} can be used to compute
+     * aggregate functions like sum, min, or max.
      * <p>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same key.
@@ -531,7 +549,7 @@ public interface KGroupedStream<K, V> {
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
-     * Use {@link StateStoreSupplier#name()} to get the store name:
+     * Use {@link org.apache.kafka.streams.processor.StateStoreSupplier#name()} to get the store name:
      * <pre>{@code
      * KafkaStreams streams = ... // compute sum
      * String queryableStoreName = storeSupplier.name();
@@ -546,11 +564,11 @@ public interface KGroupedStream<K, V> {
      * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
-     * @deprectated use {@link #reduce(Reducer, Materialized)}
+     * @deprecated use {@link #reduce(Reducer, Materialized) reduce(reducer, Materialized.as(KeyValueByteStoreSupplier))}
      */
     @Deprecated
     KTable<K, V> reduce(final Reducer<V> reducer,
-                        final StateStoreSupplier<KeyValueStore> storeSupplier);
+                        final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
      * Combine the value of records in this stream by the grouped key.
@@ -566,15 +584,15 @@ public interface KGroupedStream<K, V> {
      * <pre>{@code
      * // At the example of a Reducer<Long>
      * new Reducer<Long>() {
-     *   @Override
      *   public Long apply(Long aggValue, Long currValue) {
      *     return aggValue + currValue;
      *   }
+     * }
      * }</pre>
      * <p>
      * If there is no current aggregate the {@link Reducer} is not applied and the new aggregate will be the record's
      * value as-is.
-     * Thus, {@code reduce(Reducer, StateStoreSupplier)} can be used to compute aggregate functions like sum, min, or
+     * Thus, {@code reduce(Reducer, org.apache.kafka.streams.processor.StateStoreSupplier)} can be used to compute aggregate functions like sum, min, or
      * max.
      * <p>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
@@ -622,10 +640,10 @@ public interface KGroupedStream<K, V> {
      * <pre>{@code
      * // At the example of a Reducer<Long>
      * new Reducer<Long>() {
-     *   @Override
      *   public Long apply(Long aggValue, Long currValue) {
      *     return aggValue + currValue;
      *   }
+     * }
      * }</pre>
      * <p>
      * If there is no current aggregate the {@link Reducer} is not applied and the new aggregate will be the record's
@@ -664,10 +682,13 @@ public interface KGroupedStream<K, V> {
      * @param reducer   a {@link Reducer} that computes a new aggregate result
      * @param windows   the specification of the aggregation {@link Windows}
      * @param queryableStoreName the name of the state store created from this operation; valid characters are ASCII
-     * alphanumerics, '.', '_' and '-'. If {@code null} then this will be equivalent to {@link KGroupedStream#reduce(Reducer, Windows)} ()}.
+     * alphanumerics, '.', '_' and '-'. If {@code null} then this will be equivalent to {@link KGroupedStream#reduce(Reducer, Windows)}.
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
+     * @deprecated use {@link #windowedBy(Windows) windowedBy(windows)} followed by
+     * {@link TimeWindowedKStream#reduce(Reducer, Materialized) reduce(reducer, Materialized.as(queryableStoreName))}
      */
+    @Deprecated
     <W extends Window> KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
                                                      final Windows<W> windows,
                                                      final String queryableStoreName);
@@ -710,7 +731,8 @@ public interface KGroupedStream<K, V> {
      * @param windows   the specification of the aggregation {@link Windows}
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
-     * @deprecated use {@link #windowedBy(Windows)}
+     * @deprecated use {@link #windowedBy(Windows) windowedBy(windows)} followed by
+     * {@link TimeWindowedKStream#reduce(Reducer) reduce(reducer)}
      */
     @Deprecated
     <W extends Window> KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
@@ -734,16 +756,16 @@ public interface KGroupedStream<K, V> {
      * <pre>{@code
      * // At the example of a Reducer<Long>
      * new Reducer<Long>() {
-     *   @Override
      *   public Long apply(Long aggValue, Long currValue) {
      *     return aggValue + currValue;
      *   }
+     * }
      * }</pre>
      * <p>
      * If there is no current aggregate the {@link Reducer} is not applied and the new aggregate will be the record's
      * value as-is.
-     * Thus, {@code reduce(Reducer, Windows, StateStoreSupplier)} can be used to compute aggregate functions like sum,
-     * min, or max.
+     * Thus, {@code reduce(Reducer, Windows, org.apache.kafka.streams.processor.StateStoreSupplier)} can be used to
+     * compute aggregate functions like sum, min, or max.
      * <p>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same window and key.
@@ -754,7 +776,7 @@ public interface KGroupedStream<K, V> {
      * <p>
      * To query the local windowed {@link KeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
-     * Use {@link StateStoreSupplier#name()} to get the store name:
+     * Use {@link org.apache.kafka.streams.processor.StateStoreSupplier#name()} to get the store name:
      * <pre>{@code
      * KafkaStreams streams = ... // compute sum
      * Sting queryableStoreName = storeSupplier.name();
@@ -772,10 +794,13 @@ public interface KGroupedStream<K, V> {
      * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
+     * @deprecated use {@link #windowedBy(Windows) windowedBy(windows)} followed by
+     * {@link TimeWindowedKStream#reduce(Reducer, Materialized) reduce(reducer, Materialized.as(KeyValueByteStoreSupplier))}
      */
+    @Deprecated
     <W extends Window> KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
                                                      final Windows<W> windows,
-                                                     final StateStoreSupplier<WindowStore> storeSupplier);
+                                                     final org.apache.kafka.streams.processor.StateStoreSupplier<WindowStore> storeSupplier);
 
     /**
      * Combine values of this stream by the grouped key into {@link SessionWindows}.
@@ -793,10 +818,10 @@ public interface KGroupedStream<K, V> {
      * <pre>{@code
      * // At the example of a Reducer<Long>
      * new Reducer<Long>() {
-     *   @Override
      *   public Long apply(Long aggValue, Long currValue) {
      *     return aggValue + currValue;
      *   }
+     * }
      * }</pre>
      * <p>
      * If there is no current aggregate the {@link Reducer} is not applied and the new aggregate will be the record's
@@ -813,10 +838,8 @@ public interface KGroupedStream<K, V> {
      * <p>
      * To query the local windowed {@link KeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
-     * Use {@link StateStoreSupplier#name()} to get the store name:
      * <pre>{@code
      * KafkaStreams streams = ... // compute sum
-     * Sting queryableStoreName = storeSupplier.name();
      * ReadOnlySessionStore<String,Long> localWindowStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>ReadOnlySessionStore<String, Long>);
      * String key = "some-key";
      * KeyValueIterator<Windowed<String>, Long> sumForKeyForWindows = localWindowStore.fetch(key); // key must be local (application state is shared over all running Kafka Streams instances)
@@ -835,10 +858,13 @@ public interface KGroupedStream<K, V> {
      * @param reducer           a {@link Reducer} that computes a new aggregate result. Cannot be {@code null}.
      * @param sessionWindows    the specification of the aggregation {@link SessionWindows}
      * @param queryableStoreName     the name of the state store created from this operation; valid characters are ASCII
-     * alphanumerics, '.', '_' and '-'. If {@code null} then this will be equivalent to {@link KGroupedStream#reduce(Reducer, SessionWindows)} ()}.
+     * alphanumerics, '.', '_' and '-'. If {@code null} then this will be equivalent to {@link KGroupedStream#reduce(Reducer, SessionWindows)}.
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
+     * @deprecated use {@link #windowedBy(SessionWindows) windowedBy(sessionWindows)} followed by
+     * {@link SessionWindowedKStream#reduce(Reducer, Materialized) reduce(reducer, Materialized.as(queryableStoreName))}
      */
+    @Deprecated
     KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
                                   final SessionWindows sessionWindows,
                                   final String queryableStoreName);
@@ -871,7 +897,10 @@ public interface KGroupedStream<K, V> {
      * @param sessionWindows    the specification of the aggregation {@link SessionWindows}
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
+     * @deprecated use {@link #windowedBy(SessionWindows) windowedBy(sessionWindows)} followed by
+     * {@link SessionWindowedKStream#reduce(Reducer) reduce(reducer)}
      */
+    @Deprecated
     KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
                                   final SessionWindows sessionWindows);
 
@@ -891,16 +920,16 @@ public interface KGroupedStream<K, V> {
      * <pre>{@code
      * // At the example of a Reducer<Long>
      * new Reducer<Long>() {
-     *   @Override
      *   public Long apply(Long aggValue, Long currValue) {
      *     return aggValue + currValue;
      *   }
+     * }
      * }</pre>
      * <p>
      * If there is no current aggregate the {@link Reducer} is not applied and the new aggregate will be the record's
      * value as-is.
-     * Thus, {@code reduce(Reducer, SessionWindows, StateStoreSupplier)} can be used to compute aggregate functions like
-     * sum, min, or max.
+     * Thus, {@code reduce(Reducer, SessionWindows, org.apache.kafka.streams.processor.StateStoreSupplier)} can be used
+     * to compute aggregate functions like sum, min, or max.
      * <p>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same window and key.
@@ -911,7 +940,7 @@ public interface KGroupedStream<K, V> {
      * <p>
      * To query the local windowed {@link KeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
-     * Use {@link StateStoreSupplier#name()} to get the store name:
+     * Use {@link org.apache.kafka.streams.processor.StateStoreSupplier#name()} to get the store name:
      * <pre>{@code
      * KafkaStreams streams = ... // compute sum
      * Sting queryableStoreName = storeSupplier.name();
@@ -935,10 +964,13 @@ public interface KGroupedStream<K, V> {
      * @param storeSupplier     user defined state store supplier. Cannot be {@code null}.
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
+     * @deprecated use {@link #windowedBy(SessionWindows) windowedBy(sessionWindows)} followed by
+     * {@link SessionWindowedKStream#reduce(Reducer, Materialized) reduce(reducer, Materialized.as(KeyValueByteStoreSupplier))}
      */
+    @Deprecated
     KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
                                   final SessionWindows sessionWindows,
-                                  final StateStoreSupplier<SessionStore> storeSupplier);
+                                  final org.apache.kafka.streams.processor.StateStoreSupplier<SessionStore> storeSupplier);
 
 
     /**
@@ -990,11 +1022,11 @@ public interface KGroupedStream<K, V> {
      * @param aggValueSerde aggregate value serdes for materializing the aggregated table,
      *                      if not specified the default serdes defined in the configs will be used
      * @param queryableStoreName the name of the state store created from this operation; valid characters are ASCII
-     * alphanumerics, '.', '_' and '-'. If {@code null} then this will be equivalent to {@link KGroupedStream#aggregate(Initializer, Aggregator, Serde)} ()} ()}.
+     * alphanumerics, '.', '_' and '-'. If {@code null} then this will be equivalent to {@link KGroupedStream#aggregate(Initializer, Aggregator, Serde)}.
      * @param <VR>          the value type of the resulting {@link KTable}
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
-     * @deprecated use {@link #aggregate(Initializer, Aggregator, Materialized)}
+     * @deprecated use {@link #aggregate(Initializer, Aggregator, Materialized) aggregate(initializer, aggregator, Materialized.as(queryableStoreName).withValueSerde(aggValueSerde))}
      */
     @Deprecated
     <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
@@ -1005,7 +1037,7 @@ public interface KGroupedStream<K, V> {
     /**
      * Aggregate the values of records in this stream by the grouped key.
      * Records with {@code null} key or value are ignored.
-     * Aggregating is a generalization of {@link #reduce(Reducer, String) combining via reduce(...)} as it, for example,
+     * Aggregating is a generalization of {@link #reduce(Reducer) combining via reduce(...)} as it, for example,
      * allows the result to have a different type than the input values.
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
      * that can be queried using the provided {@code queryableStoreName}.
@@ -1017,7 +1049,7 @@ public interface KGroupedStream<K, V> {
      * aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value.
      * Thus, {@code aggregate(Initializer, Aggregator, Serde, String)} can be used to compute aggregate functions like
-     * count (c.f. {@link #count(String)}).
+     * count (c.f. {@link #count()}).
      * <p>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same key.
@@ -1061,7 +1093,7 @@ public interface KGroupedStream<K, V> {
     /**
      * Aggregate the values of records in this stream by the grouped key.
      * Records with {@code null} key or value are ignored.
-     * Aggregating is a generalization of {@link #reduce(Reducer, String) combining via reduce(...)} as it, for example,
+     * Aggregating is a generalization of {@link #reduce(Reducer) combining via reduce(...)} as it, for example,
      * allows the result to have a different type than the input values.
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
      * that can be queried using the provided {@code queryableStoreName}.
@@ -1073,7 +1105,7 @@ public interface KGroupedStream<K, V> {
      * aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value.
      * Thus, {@code aggregate(Initializer, Aggregator)} can be used to compute aggregate functions like
-     * count (c.f. {@link #count(String)}).
+     * count (c.f. {@link #count()}).
      * <p>
      * The default value serde from config will be used for serializing the result.
      * If a different serde is required then you should use {@link #aggregate(Initializer, Aggregator, Materialized)}.
@@ -1101,10 +1133,11 @@ public interface KGroupedStream<K, V> {
      */
     <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
                                  final Aggregator<? super K, ? super V, VR> aggregator);
+
     /**
      * Aggregate the values of records in this stream by the grouped key.
      * Records with {@code null} key or value are ignored.
-     * Aggregating is a generalization of {@link #reduce(Reducer, String) combining via reduce(...)} as it, for example,
+     * Aggregating is a generalization of {@link #reduce(Reducer) combining via reduce(...)} as it, for example,
      * allows the result to have a different type than the input values.
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
      * that can be queried using the provided {@code queryableStoreName}.
@@ -1116,7 +1149,7 @@ public interface KGroupedStream<K, V> {
      * aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value.
      * Thus, {@code aggregate(Initializer, Aggregator, Serde, String)} can be used to compute aggregate functions like
-     * count (c.f. {@link #count(String)}).
+     * count (c.f. {@link #count()}).
      * <p>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same key.
@@ -1140,19 +1173,18 @@ public interface KGroupedStream<K, V> {
      * @param <VR>          the value type of the resulting {@link KTable}
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
-     * @deprecated use {@link #aggregate(Initializer, Aggregator, Materialized)}
+     * @deprecated use {@link #aggregate(Initializer, Aggregator, Materialized) aggregate(initializer, aggregator, Materialized.with(null, aggValueSerde))}
      */
     @Deprecated
     <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
                                  final Aggregator<? super K, ? super V, VR> aggregator,
                                  final Serde<VR> aggValueSerde);
 
-
     /**
      * Aggregate the values of records in this stream by the grouped key.
      * Records with {@code null} key or value are ignored.
-     * Aggregating is a generalization of {@link #reduce(Reducer, StateStoreSupplier) combining via reduce(...)} as it,
-     * for example, allows the result to have a different type than the input values.
+     * Aggregating is a generalization of {@link #reduce(Reducer, org.apache.kafka.streams.processor.StateStoreSupplier)
+     * combining via reduce(...)} as it, for example, allows the result to have a different type than the input values.
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
      * provided by the given {@code storeSupplier}.
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
@@ -1162,8 +1194,8 @@ public interface KGroupedStream<K, V> {
      * The specified {@link Aggregator} is applied for each input record and computes a new aggregate using the current
      * aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value.
-     * Thus, {@code aggregate(Initializer, Aggregator, StateStoreSupplier)} can be used to compute aggregate functions
-     * like count (c.f. {@link #count(String)}).
+     * Thus, {@code aggregate(Initializer, Aggregator, org.apache.kafka.streams.processor.StateStoreSupplier)} can be
+     * used to compute aggregate functions like count (c.f. {@link #count()}).
      * <p>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same key.
@@ -1174,7 +1206,7 @@ public interface KGroupedStream<K, V> {
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
-     * Use {@link StateStoreSupplier#name()} to get the store name:
+     * Use {@link org.apache.kafka.streams.processor.StateStoreSupplier#name()} to get the store name:
      * <pre>{@code
      * KafkaStreams streams = ... // some aggregation on value type double
      * Sting queryableStoreName = storeSupplier.name();
@@ -1191,12 +1223,12 @@ public interface KGroupedStream<K, V> {
      * @param <VR>          the value type of the resulting {@link KTable}
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
-     * @deprecated use {@link #aggregate(Initializer, Aggregator, Materialized)}
+     * @deprecated use {@link #aggregate(Initializer, Aggregator, Materialized) aggregate(initializer, aggregator, Materialized.as(KeyValueByteStoreSupplier))}
      */
     @Deprecated
     <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
                                  final Aggregator<? super K, ? super V, VR> aggregator,
-                                 final StateStoreSupplier<KeyValueStore> storeSupplier);
+                                 final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
      * Aggregate the values of records in this stream by the grouped key and defined windows.
@@ -1217,7 +1249,7 @@ public interface KGroupedStream<K, V> {
      * aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value.
      * Thus, {@code aggregate(Initializer, Aggregator, Windows, Serde, String)} can be used to compute aggregate
-     * functions like count (c.f. {@link #count(String)}).
+     * functions like count (c.f. {@link #count(Windows)}).
      * <p>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same window and key.
@@ -1256,10 +1288,13 @@ public interface KGroupedStream<K, V> {
      *                      if not specified the default serdes defined in the configs will be used
      * @param <VR>          the value type of the resulting {@link KTable}
      * @param queryableStoreName the name of the state store created from this operation; valid characters are ASCII
-     * alphanumerics, '.', '_' and '-'. If {@code null} then this will be equivalent to {@link KGroupedStream#aggregate(Initializer, Aggregator, Windows, Serde)} ()} ()}.
+     * alphanumerics, '.', '_' and '-'. If {@code null} then this will be equivalent to {@link KGroupedStream#aggregate(Initializer, Aggregator, Windows, Serde)}.
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
+     * @deprecated use {@link #windowedBy(Windows) windowedBy(windows)} followed by
+     * {@link TimeWindowedKStream#aggregate(Initializer, Aggregator, Materialized) aggregate(initializer, aggregator, Materialized.as(queryableStoreName).withValueSerde(aggValueSerde))}
      */
+    @Deprecated
     <W extends Window, VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
                                                              final Aggregator<? super K, ? super V, VR> aggregator,
                                                              final Windows<W> windows,
@@ -1285,7 +1320,7 @@ public interface KGroupedStream<K, V> {
      * aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value.
      * Thus, {@code aggregate(Initializer, Aggregator, Windows, Serde, String)} can be used to compute aggregate
-     * functions like count (c.f. {@link #count(String)}).
+     * functions like count (c.f. {@link #count(Windows)}).
      * <p>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same window and key.
@@ -1310,7 +1345,8 @@ public interface KGroupedStream<K, V> {
      * @param <VR>          the value type of the resulting {@link KTable}
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
-     * @deprecated use {@link #windowedBy(Windows)}
+     * @deprecated use {@link #windowedBy(Windows) windowedBy(windows)} followed by
+     * {@link TimeWindowedKStream#aggregate(Initializer, Aggregator, Materialized)} aggregate(initializer, aggregator, Materialized.with(null, aggValueSerde))}
      */
     @Deprecated
     <W extends Window, VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
@@ -1318,12 +1354,12 @@ public interface KGroupedStream<K, V> {
                                                              final Windows<W> windows,
                                                              final Serde<VR> aggValueSerde);
 
-
     /**
      * Aggregate the values of records in this stream by the grouped key and defined windows.
      * Records with {@code null} key or value are ignored.
-     * Aggregating is a generalization of {@link #reduce(Reducer, Windows, StateStoreSupplier) combining via
-     * reduce(...)} as it, for example, allows the result to have a different type than the input values.
+     * Aggregating is a generalization of
+     * {@link #reduce(Reducer, Windows, org.apache.kafka.streams.processor.StateStoreSupplier) combining via reduce(...)}
+     * as it, for example, allows the result to have a different type than the input values.
      * The specified {@code windows} define either hopping time windows that can be overlapping or tumbling (c.f.
      * {@link TimeWindows}) or they define landmark windows (c.f. {@link UnlimitedWindows}).
      * The result is written into a local windowed {@link KeyValueStore} (which is basically an ever-updating
@@ -1337,8 +1373,8 @@ public interface KGroupedStream<K, V> {
      * The specified {@link Aggregator} is applied for each input record and computes a new aggregate using the current
      * aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value.
-     * Thus, {@code aggregate(Initializer, Aggregator, Windows, StateStoreSupplier)} can be used to compute aggregate
-     * functions like count (c.f. {@link #count(String)}).
+     * Thus, {@code aggregate(Initializer, Aggregator, Windows, org.apache.kafka.streams.processor.StateStoreSupplier)}
+     * can be used to compute aggregate functions like count (c.f. {@link #count(Windows)}).
      * <p>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same window and key.
@@ -1349,7 +1385,7 @@ public interface KGroupedStream<K, V> {
      * <p>
      * To query the local windowed {@link KeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
-     * Use {@link StateStoreSupplier#name()} to get the store name:
+     * Use {@link org.apache.kafka.streams.processor.StateStoreSupplier#name()} to get the store name:
      * <pre>{@code
      * KafkaStreams streams = ... // some windowed aggregation on value type Long
      * Sting queryableStoreName = storeSupplier.name();
@@ -1369,11 +1405,14 @@ public interface KGroupedStream<K, V> {
      * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
+     * @deprecated use {@link #windowedBy(Windows) windowedBy(windows)} followed by
+     * {@link TimeWindowedKStream#aggregate(Initializer, Aggregator, Materialized) aggregate(initializer, aggregator, Materialized.as(KeyValueByteStoreSupplier))}
      */
+    @Deprecated
     <W extends Window, VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
                                                              final Aggregator<? super K, ? super V, VR> aggregator,
                                                              final Windows<W> windows,
-                                                             final StateStoreSupplier<WindowStore> storeSupplier);
+                                                             final org.apache.kafka.streams.processor.StateStoreSupplier<WindowStore> storeSupplier);
 
     /**
      * Aggregate the values of records in this stream by the grouped key and defined {@link SessionWindows}.
@@ -1392,7 +1431,7 @@ public interface KGroupedStream<K, V> {
      * aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value.
      * Thus, {@code aggregate(Initializer, Aggregator, Merger, SessionWindows, Serde, String)} can be used to compute
-     * aggregate functions like count (c.f. {@link #count(String)})
+     * aggregate functions like count (c.f. {@link #count(SessionWindows)})
      * <p>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same window and key.
@@ -1403,10 +1442,8 @@ public interface KGroupedStream<K, V> {
      * <p>
      * To query the local {@link SessionStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
-     * Use {@link StateStoreSupplier#name()} to get the store name:
      * <pre>{@code
      * KafkaStreams streams = ... // some windowed aggregation on value type double
-     * Sting queryableStoreName = storeSupplier.name();
      * ReadOnlySessionStore<String, Long> sessionStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>sessionStore());
      * String key = "some-key";
      * KeyValueIterator<Windowed<String>, Long> aggForKeyForSession = localWindowStore.fetch(key); // key must be local (application state is shared over all running Kafka Streams instances)
@@ -1422,10 +1459,13 @@ public interface KGroupedStream<K, V> {
      *                      if not specified the default serdes defined in the configs will be used
      * @param <T>           the value type of the resulting {@link KTable}
      * @param queryableStoreName the name of the state store created from this operation; valid characters are ASCII
-     * alphanumerics, '.', '_' and '-'. If {@code null} then this will be equivalent to {@link KGroupedStream#aggregate(Initializer, Aggregator, Merger, SessionWindows, Serde)} ()} ()}.
+     * alphanumerics, '.', '_' and '-'. If {@code null} then this will be equivalent to {@link KGroupedStream#aggregate(Initializer, Aggregator, Merger, SessionWindows, Serde)}.
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
+     * @deprecated use {@link #windowedBy(SessionWindows) windowedBy(sessionWindows)} followed by
+     * {@link SessionWindowedKStream#aggregate(Initializer, Aggregator, Merger, Materialized) aggregate(initializer, aggregator, sessionMerger, Materialized.as(queryableStoreName).withValueSerde(aggValueSerde))}
      */
+    @Deprecated
     <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
                                          final Aggregator<? super K, ? super V, T> aggregator,
                                          final Merger<? super K, T> sessionMerger,
@@ -1450,7 +1490,7 @@ public interface KGroupedStream<K, V> {
      * aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value.
      * Thus, {@code aggregate(Initializer, Aggregator, Merger, SessionWindows, Serde, String)} can be used to compute
-     * aggregate functions like count (c.f. {@link #count(String)})
+     * aggregate functions like count (c.f. {@link #count(SessionWindows)})
      * <p>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same window and key.
@@ -1468,7 +1508,10 @@ public interface KGroupedStream<K, V> {
      * @param <T>           the value type of the resulting {@link KTable}
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
+     * @deprecated use {@link #windowedBy(SessionWindows) windowedBy(sessionWindows)} followed by
+     * {@link SessionWindowedKStream#aggregate(Initializer, Aggregator, Merger, Materialized) aggregate(initializer, aggregator, sessionMerger, Materialized.with(null, aggValueSerde))}
      */
+    @Deprecated
     <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
                                          final Aggregator<? super K, ? super V, T> aggregator,
                                          final Merger<? super K, T> sessionMerger,
@@ -1491,8 +1534,8 @@ public interface KGroupedStream<K, V> {
      * The specified {@link Aggregator} is applied for each input record and computes a new aggregate using the current
      * aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value.
-     * Thus, {@code #aggregate(Initializer, Aggregator, Merger, SessionWindows, Serde, StateStoreSupplier)} can be used
-     * to compute aggregate functions like count (c.f. {@link #count(String)}).
+     * Thus, {@code #aggregate(Initializer, Aggregator, Merger, SessionWindows, Serde, org.apache.kafka.streams.processor.StateStoreSupplier)}
+     * can be used to compute aggregate functions like count (c.f. {@link #count(SessionWindows)}).
      * <p>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same window and key.
@@ -1503,7 +1546,7 @@ public interface KGroupedStream<K, V> {
      * <p>
      * To query the local {@link SessionStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
-     * Use {@link StateStoreSupplier#name()} to get the store name:
+     * Use {@link org.apache.kafka.streams.processor.StateStoreSupplier#name()} to get the store name:
      * <pre>{@code
      * KafkaStreams streams = ... // some windowed aggregation on value type double
      * Sting queryableStoreName = storeSupplier.name();
@@ -1525,20 +1568,30 @@ public interface KGroupedStream<K, V> {
      * @param <T>           the value type of the resulting {@link KTable}
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
+     * @deprecated use {@link #windowedBy(SessionWindows) windowedBy(sessionWindows)} followed by
+     * {@link SessionWindowedKStream#aggregate(Initializer, Aggregator, Merger, Materialized) aggregate(initializer, aggregator, sessionMerger, Materialized.as(KeyValueByteStoreSupplier).withValueSerde(aggValueSerde))}
      */
+    @Deprecated
     <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
                                          final Aggregator<? super K, ? super V, T> aggregator,
                                          final Merger<? super K, T> sessionMerger,
                                          final SessionWindows sessionWindows,
                                          final Serde<T> aggValueSerde,
-                                         final StateStoreSupplier<SessionStore> storeSupplier);
+                                         final org.apache.kafka.streams.processor.StateStoreSupplier<SessionStore> storeSupplier);
 
     /**
-     * Create a new {@link WindowedKStream} instance that can be used to perform windowed aggregations.
+     * Create a new {@link TimeWindowedKStream} instance that can be used to perform windowed aggregations.
      * @param windows the specification of the aggregation {@link Windows}
      * @param <W>     the window type
-     * @return an instance of {@link WindowedKStream}
+     * @return an instance of {@link TimeWindowedKStream}
      */
-    <W extends Window> WindowedKStream<K, V> windowedBy(final Windows<W> windows);
+    <W extends Window> TimeWindowedKStream<K, V> windowedBy(final Windows<W> windows);
+
+    /**
+     * Create a new {@link SessionWindowedKStream} instance that can be used to perform session windowed aggregations.
+     * @param windows the specification of the aggregation {@link SessionWindows}
+     * @return an instance of {@link TimeWindowedKStream}
+     */
+    SessionWindowedKStream<K, V> windowedBy(final SessionWindows windows);
 
 }

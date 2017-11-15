@@ -46,7 +46,7 @@ public abstract class AbstractTask implements Task {
     final ProcessorTopology topology;
     final ProcessorStateManager stateMgr;
     final Set<TopicPartition> partitions;
-    final Consumer consumer;
+    final Consumer<byte[], byte[]> consumer;
     final String logPrefix;
     final boolean eosEnabled;
     final Logger log;
@@ -90,7 +90,7 @@ public abstract class AbstractTask implements Task {
                 topology.storeToChangelogTopic(),
                 changelogReader,
                 eosEnabled,
-                    logContext);
+                logContext);
         } catch (final IOException e) {
             throw new ProcessorStateException(String.format("%sError while creating the state manager", logPrefix), e);
         }
@@ -102,22 +102,22 @@ public abstract class AbstractTask implements Task {
     }
 
     @Override
-    public final String applicationId() {
+    public String applicationId() {
         return applicationId;
     }
 
     @Override
-    public final Set<TopicPartition> partitions() {
+    public Set<TopicPartition> partitions() {
         return partitions;
     }
 
     @Override
-    public final ProcessorTopology topology() {
+    public ProcessorTopology topology() {
         return topology;
     }
 
     @Override
-    public final ProcessorContext context() {
+    public ProcessorContext context() {
         return processorContext;
     }
 
@@ -196,6 +196,10 @@ public abstract class AbstractTask implements Task {
         stateMgr.flush();
     }
 
+    /**
+     * @throws IllegalStateException If store gets registered after initialized is already finished
+     * @throws StreamsException if the store's change log does not contain the partition
+     */
     void initializeStateStores() {
         if (topology.stateStores().isEmpty()) {
             return;
@@ -226,6 +230,7 @@ public abstract class AbstractTask implements Task {
      * @throws ProcessorStateException if there is an error while closing the state manager
      * @param writeCheckpoint boolean indicating if a checkpoint file should be written
      */
+    // visible for testing
     void closeStateManager(final boolean writeCheckpoint) throws ProcessorStateException {
         ProcessorStateException exception = null;
         log.trace("Closing state manager");

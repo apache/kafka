@@ -27,6 +27,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
@@ -49,6 +50,7 @@ public class GlobalStreamThreadTest {
     private final KStreamBuilder builder = new KStreamBuilder();
     private final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final MockTime time = new MockTime();
+    private final MockStateRestoreListener stateRestoreListener = new MockStateRestoreListener();
     private GlobalStreamThread globalStreamThread;
     private StreamsConfig config;
 
@@ -65,7 +67,8 @@ public class GlobalStreamThreadTest {
                                                     new StateDirectory("appId", TestUtils.tempDirectory().getPath(), time),
                                                     new Metrics(),
                                                     new MockTime(),
-                                                    "clientId");
+                                                    "clientId",
+                                                     stateRestoreListener);
     }
 
     @Test
@@ -96,7 +99,8 @@ public class GlobalStreamThreadTest {
                                                     new StateDirectory("appId", TestUtils.tempDirectory().getPath(), time),
                                                     new Metrics(),
                                                     new MockTime(),
-                                                    "clientId");
+                                                    "clientId",
+                                                    stateRestoreListener);
 
         try {
             globalStreamThread.start();

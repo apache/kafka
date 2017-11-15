@@ -23,7 +23,7 @@
               files="AbstractResponse.java"/>
 
     <suppress checks="MethodLength"
-              files="KerberosLogin.java|RequestResponseTest.java"/>
+              files="KerberosLogin.java|RequestResponseTest.java|ConnectMetricsRegistry.java"/>
 
     <suppress checks="ParameterNumber"
               files="NetworkClient.java"/>
@@ -60,7 +60,7 @@
               files="AbstractRequest.java"/>
 
     <suppress checks="NPathComplexity"
-              files="(BufferPool|MetricName|Node|ConfigDef|SslTransportLayer|MetadataResponse|KerberosLogin|SslTransportLayer|Sender|Serdes|Agent).java"/>
+              files="(BufferPool|MetricName|Node|ConfigDef|SslTransportLayer|MetadataResponse|KerberosLogin|Selector|Sender|Serdes|Agent).java"/>
 
     <!-- clients tests -->
     <suppress checks="ClassDataAbstractionCoupling"

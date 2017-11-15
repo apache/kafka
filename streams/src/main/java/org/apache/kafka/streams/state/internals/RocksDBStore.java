@@ -372,6 +372,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         // query rocksdb
         final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(name, db.newIterator(), serdes, from, to);
         openIterators.add(rocksDBRangeIterator);
+
         return rocksDBRangeIterator;
     }
 

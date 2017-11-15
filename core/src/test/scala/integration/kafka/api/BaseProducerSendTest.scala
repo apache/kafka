@@ -30,8 +30,8 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.record.TimestampType
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
@@ -372,7 +372,10 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       case _: KafkaException => // this is ok
     }
 
-    AdminUtils.addPartitions(zkUtils, topic, 2)
+    val existingAssignment = zkUtils.getReplicaAssignmentForTopics(List(topic)).map {
+      case (topicPartition, replicas) => topicPartition.partition -> replicas
+    }
+    AdminUtils.addPartitions(zkUtils, topic, existingAssignment, AdminUtils.getBrokerMetadatas(zkUtils), 2)
     // read metadata from a broker and verify the new topic partitions exist
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0)
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 1)

@@ -17,7 +17,7 @@
 package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.errors.ApiException;
-import org.apache.kafka.common.errors.AuthenticationFailedException;
+import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.ConcurrentTransactionsException;
@@ -60,6 +60,7 @@ import org.apache.kafka.common.errors.OperationNotAttemptedException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.ReassignmentInProgressException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
@@ -72,6 +73,7 @@ import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.TransactionCoordinatorFencedException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
@@ -264,7 +266,8 @@ public enum Errors {
             }
         }),
     INCONSISTENT_GROUP_PROTOCOL(23,
-            "The group member's supported protocols are incompatible with those of existing members.",
+            "The group member's supported protocols are incompatible with those of existing members" +
+                " or first group member tried to join with empty protocol type or empty protocol list.",
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {
@@ -518,13 +521,31 @@ public enum Errors {
                 return new LogDirNotFoundException(message);
             }
     }),
-    AUTHENTICATION_FAILED(58, "Authentication failed.",
+    SASL_AUTHENTICATION_FAILED(58, "SASL Authentication failed.",
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {
-                return new AuthenticationFailedException(message);
+                return new SaslAuthenticationException(message);
             }
-        });
+    }),
+    UNKNOWN_PRODUCER_ID(59, "This exception is raised by the broker if it could not locate the producer metadata " +
+            "associated with the producerId in question. This could happen if, for instance, the producer's records " +
+            "were deleted because their retention time had elapsed. Once the last records of the producerId are " +
+            "removed, the producer's metadata is removed from the broker, and future appends by the producer will " +
+            "return this exception.",
+        new ApiExceptionBuilder() {
+            @Override
+            public ApiException build(String message) {
+                return new UnknownProducerIdException(message);
+            }
+    }),
+    REASSIGNMENT_IN_PROGRESS(60, "A partition reassignment is in progress",
+        new ApiExceptionBuilder() {
+            @Override
+            public ApiException build(String message) {
+                return new ReassignmentInProgressException(message);
+            }
+    });
 
     private interface ApiExceptionBuilder {
         ApiException build(String message);

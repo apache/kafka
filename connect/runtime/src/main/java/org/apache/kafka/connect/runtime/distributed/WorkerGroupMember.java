@@ -117,7 +117,8 @@ public class WorkerGroupMember {
                     metadata,
                     time,
                     retryBackoffMs,
-                    config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG));
+                    config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
+                    Integer.MAX_VALUE);
             this.coordinator = new WorkerCoordinator(
                     logContext,
                     this.client,
@@ -133,7 +134,7 @@ public class WorkerGroupMember {
                     configStorage,
                     listener);
 
-            AppInfoParser.registerAppInfo(JMX_PREFIX, clientId);
+            AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics);
             log.debug("Connect group member created");
         } catch (Throwable t) {
             // call close methods if internal objects are already constructed
@@ -200,7 +201,7 @@ public class WorkerGroupMember {
         ClientUtils.closeQuietly(coordinator, "coordinator", firstException);
         ClientUtils.closeQuietly(metrics, "consumer metrics", firstException);
         ClientUtils.closeQuietly(client, "consumer network client", firstException);
-        AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId);
+        AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId, metrics);
         if (firstException.get() != null && !swallowException)
             throw new KafkaException("Failed to stop the Connect group member", firstException.get());
         else

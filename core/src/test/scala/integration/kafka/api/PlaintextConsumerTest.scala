@@ -21,7 +21,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.{Metric, MetricName, TopicPartition}
+import org.apache.kafka.common.{MetricName, TopicPartition}
 import org.apache.kafka.common.errors.InvalidTopicException
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
@@ -1506,55 +1506,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
         assertNull("Metric should not hanve been created " + metricName, broker.metrics.metric(metricName))
     }
     servers.foreach(assertNoExemptRequestMetric(_))
-  }
-
-  // Rate metrics of both Producer and Consumer are verified by this test
-  @Test
-  def testRateMetricsHaveCumulativeCount() {
-    val numRecords = 100
-    sendRecords(numRecords)
-
-    val consumer = this.consumers.head
-    consumer.assign(List(tp).asJava)
-    consumer.seek(tp, 0)
-    consumeAndVerifyRecords(consumer, numRecords = numRecords, startingOffset = 0)
-
-    def exists(name: String, rateMetricName: MetricName, allMetricNames: Set[MetricName]): Boolean = {
-      allMetricNames.contains(new MetricName(name, rateMetricName.group, "", rateMetricName.tags))
-    }
-
-    def verify(rateMetricName: MetricName, allMetricNames: Set[MetricName]): Unit = {
-      val name = rateMetricName.name
-      val totalExists = exists(name.replace("-rate", "-total"), rateMetricName, allMetricNames)
-      val totalTimeExists = exists(name.replace("-rate", "-time"), rateMetricName, allMetricNames)
-      assertTrue(s"No cumulative count/time metric for rate metric $rateMetricName",
-          totalExists || totalTimeExists)
-    }
-
-    val consumerMetricNames = consumer.metrics.keySet.asScala.toSet
-    consumerMetricNames.filter(_.name.endsWith("-rate"))
-        .foreach(verify(_, consumerMetricNames))
-
-    val producer = this.producers.head
-    val producerMetricNames = producer.metrics.keySet.asScala.toSet
-    val producerExclusions = Set("compression-rate") // compression-rate is an Average metric, not Rate
-    producerMetricNames.filter(_.name.endsWith("-rate"))
-        .filterNot(metricName => producerExclusions.contains(metricName.name))
-        .foreach(verify(_, producerMetricNames))
-
-    def verifyMetric(name: String, metrics: java.util.Map[MetricName, _ <: Metric], entity: String): Unit = {
-      val entry = metrics.asScala.find { case (metricName, _) => metricName.name == name }
-      assertTrue(s"$entity metric not defined $name", entry.nonEmpty)
-      entry.foreach { case (metricName, metric) =>
-        assertTrue(s"$entity metric not recorded $metricName", metric.value > 0.0)
-      }
-    }
-
-    // Check a couple of metrics of consumer and producer to ensure that values are set
-    verifyMetric("records-consumed-rate", consumer.metrics, "Consumer")
-    verifyMetric("records-consumed-total", consumer.metrics, "Consumer")
-    verifyMetric("record-send-rate", producer.metrics, "Producer")
-    verifyMetric("record-send-total", producer.metrics, "Producer")
   }
 
   def runMultiConsumerSessionTimeoutTest(closeConsumer: Boolean): Unit = {

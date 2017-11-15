@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -468,5 +469,59 @@ public class KStreamImplTest {
     public void shouldThrowNullPointerOnOuterJoinJoinedIsNull() {
         testStream.outerJoin(testStream, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(10), null);
     }
+    
+    @Test
+    public void shouldMergeTwoStreams() {
+        final String topic1 = "topic-1";
+        final String topic2 = "topic-2";
 
+        final KStream<String, String> source1 = builder.stream(topic1);
+        final KStream<String, String> source2 = builder.stream(topic2);
+        final KStream<String, String> merged = source1.merge(source2);
+
+        final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+        merged.process(processorSupplier);
+
+        driver.setUp(builder);
+        driver.setTime(0L);
+
+        driver.process(topic1, "A", "aa");
+        driver.process(topic2, "B", "bb");
+        driver.process(topic2, "C", "cc");
+        driver.process(topic1, "D", "dd");
+
+        assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd"), processorSupplier.processed);
+    }
+    
+    @Test
+    public void shouldMergeMultipleStreams() {
+        final String topic1 = "topic-1";
+        final String topic2 = "topic-2";
+        final String topic3 = "topic-3";
+        final String topic4 = "topic-4";
+
+        final KStream<String, String> source1 = builder.stream(topic1);
+        final KStream<String, String> source2 = builder.stream(topic2);
+        final KStream<String, String> source3 = builder.stream(topic3);
+        final KStream<String, String> source4 = builder.stream(topic4);
+        final KStream<String, String> merged = source1.merge(source2).merge(source3).merge(source4);
+
+        final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+        merged.process(processorSupplier);
+
+        driver.setUp(builder);
+        driver.setTime(0L);
+
+        driver.process(topic1, "A", "aa");
+        driver.process(topic2, "B", "bb");
+        driver.process(topic3, "C", "cc");
+        driver.process(topic4, "D", "dd");
+        driver.process(topic4, "E", "ee");
+        driver.process(topic3, "F", "ff");
+        driver.process(topic2, "G", "gg");
+        driver.process(topic1, "H", "hh");
+
+        assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee", "F:ff", "G:gg", "H:hh"),
+                     processorSupplier.processed);
+    }
 }

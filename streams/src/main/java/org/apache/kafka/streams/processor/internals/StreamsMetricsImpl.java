@@ -112,7 +112,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
 
     private Map<String, String> constructTags(final String scopeName, final String entityName, final String... tags) {
-        List<String> updatedTagList = new ArrayList(Arrays.asList(tags));
+        List<String> updatedTagList = new ArrayList<>(Arrays.asList(tags));
         updatedTagList.add(scopeName + "-id");
         updatedTagList.add(entityName);
         return tagMap(updatedTagList.toArray(new String[updatedTagList.size()]));

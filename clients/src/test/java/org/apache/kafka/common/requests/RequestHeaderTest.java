@@ -33,13 +33,13 @@ public class RequestHeaderTest {
 
         int correlationId = 2342;
         ByteBuffer rawBuffer = ByteBuffer.allocate(32);
-        rawBuffer.putShort(ApiKeys.CONTROLLED_SHUTDOWN_KEY.id);
+        rawBuffer.putShort(ApiKeys.CONTROLLED_SHUTDOWN.id);
         rawBuffer.putShort((short) 0);
         rawBuffer.putInt(correlationId);
         rawBuffer.flip();
 
         RequestHeader deserialized = RequestHeader.parse(rawBuffer);
-        assertEquals(ApiKeys.CONTROLLED_SHUTDOWN_KEY, deserialized.apiKey());
+        assertEquals(ApiKeys.CONTROLLED_SHUTDOWN, deserialized.apiKey());
         assertEquals(0, deserialized.apiVersion());
         assertEquals(correlationId, deserialized.correlationId());
         assertEquals("", deserialized.clientId());
@@ -47,7 +47,7 @@ public class RequestHeaderTest {
         Struct serialized = deserialized.toStruct();
         ByteBuffer serializedBuffer = toBuffer(serialized);
 
-        assertEquals(ApiKeys.CONTROLLED_SHUTDOWN_KEY.id, serializedBuffer.getShort(0));
+        assertEquals(ApiKeys.CONTROLLED_SHUTDOWN.id, serializedBuffer.getShort(0));
         assertEquals(0, serializedBuffer.getShort(2));
         assertEquals(correlationId, serializedBuffer.getInt(4));
         assertEquals(8, serializedBuffer.limit());

@@ -104,6 +104,8 @@ public class SmokeTestClient extends SmokeTestUtil {
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
         props.put(ProducerConfig.ACKS_CONFIG, "all");
+        //TODO remove this config or set to smaller value when KIP-91 is merged
+        props.put(StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG), 60000);
 
         StreamsBuilder builder = new StreamsBuilder();
         Consumed<String, Integer> stringIntConsumed = Consumed.with(stringSerde, intSerde);
@@ -115,7 +117,6 @@ public class SmokeTestClient extends SmokeTestUtil {
                 return value == null || value != END;
             }
         });
-
         data.process(SmokeTestUtil.printProcessorSupplier("data"));
 
         // min
@@ -189,7 +190,6 @@ public class SmokeTestClient extends SmokeTestUtil {
         Consumed<String, Long> stringLongConsumed = Consumed.with(stringSerde, longSerde);
         KTable<String, Long> sumTable = builder.table("sum", stringLongConsumed);
         sumTable.toStream().process(SmokeTestUtil.printProcessorSupplier("sum"));
-
         // cnt
         groupedData.count(TimeWindows.of(TimeUnit.DAYS.toMillis(2)), "uwin-cnt")
             .toStream().map(

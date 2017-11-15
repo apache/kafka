@@ -20,7 +20,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.memory.MemoryPool;
-import org.apache.kafka.common.protocol.SecurityProtocol;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.authenticator.LoginManager;
@@ -81,6 +81,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
             this.configs = configs;
             boolean hasKerberos;
             if (mode == Mode.SERVER) {
+                @SuppressWarnings("unchecked")
                 List<String> enabledMechanisms = (List<String>) this.configs.get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG);
                 hasKerberos = enabledMechanisms == null || enabledMechanisms.contains(SaslConfigs.GSSAPI_MECHANISM);
             } else {
@@ -177,7 +178,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
         Class<?> classRef;
         Method getInstanceMethod;
         Method getDefaultRealmMethod;
-        if (Java.isIBMJdk()) {
+        if (Java.isIbmJdk()) {
             classRef = Class.forName("com.ibm.security.krb5.internal.Config");
         } else {
             classRef = Class.forName("sun.security.krb5.Config");

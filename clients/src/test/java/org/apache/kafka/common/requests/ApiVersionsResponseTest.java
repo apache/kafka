@@ -40,7 +40,7 @@ public class ApiVersionsResponseTest {
 
     @Test
     public void shouldCreateApiResponseThatHasAllApiKeysSupportedByBroker() throws Exception {
-        assertEquals(apiKeysInResponse(ApiVersionsResponse.API_VERSIONS_RESPONSE), Utils.mkSet(ApiKeys.values()));
+        assertEquals(apiKeysInResponse(ApiVersionsResponse.defaultApiVersionsResponse()), Utils.mkSet(ApiKeys.values()));
     }
 
     @Test

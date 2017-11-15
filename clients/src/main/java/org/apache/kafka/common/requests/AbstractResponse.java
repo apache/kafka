@@ -19,12 +19,15 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 public abstract class AbstractResponse extends AbstractRequestResponse {
-    public static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     public static final int DEFAULT_THROTTLE_TIME = 0;
 
     protected Send toSend(String destination, ResponseHeader header, short apiVersion) {
@@ -36,6 +39,31 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
      */
     public ByteBuffer serialize(short version, ResponseHeader responseHeader) {
         return serialize(responseHeader.toStruct(), toStruct(version));
+    }
+
+    public abstract Map<Errors, Integer> errorCounts();
+
+    protected Map<Errors, Integer> errorCounts(Errors error) {
+        return Collections.singletonMap(error, 1);
+    }
+
+    protected Map<Errors, Integer> errorCounts(Map<?, Errors> errors) {
+        Map<Errors, Integer> errorCounts = new HashMap<>();
+        for (Errors error : errors.values())
+            updateErrorCounts(errorCounts, error);
+        return errorCounts;
+    }
+
+    protected Map<Errors, Integer> apiErrorCounts(Map<?, ApiError> errors) {
+        Map<Errors, Integer> errorCounts = new HashMap<>();
+        for (ApiError apiError : errors.values())
+            updateErrorCounts(errorCounts, apiError.error());
+        return errorCounts;
+    }
+
+    protected void updateErrorCounts(Map<Errors, Integer> errorCounts, Errors error) {
+        Integer count = errorCounts.get(error);
+        errorCounts.put(error, count == null ? 1 : count + 1);
     }
 
     protected abstract Struct toStruct(short version);
@@ -66,9 +94,9 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
                 return new SyncGroupResponse(struct);
             case STOP_REPLICA:
                 return new StopReplicaResponse(struct);
-            case CONTROLLED_SHUTDOWN_KEY:
+            case CONTROLLED_SHUTDOWN:
                 return new ControlledShutdownResponse(struct);
-            case UPDATE_METADATA_KEY:
+            case UPDATE_METADATA:
                 return new UpdateMetadataResponse(struct);
             case LEADER_AND_ISR:
                 return new LeaderAndIsrResponse(struct);
@@ -110,12 +138,14 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
                 return new DescribeConfigsResponse(struct);
             case ALTER_CONFIGS:
                 return new AlterConfigsResponse(struct);
-            case ALTER_REPLICA_DIR:
-                return new AlterReplicaDirResponse(struct);
+            case ALTER_REPLICA_LOG_DIRS:
+                return new AlterReplicaLogDirsResponse(struct);
             case DESCRIBE_LOG_DIRS:
                 return new DescribeLogDirsResponse(struct);
             case SASL_AUTHENTICATE:
                 return new SaslAuthenticateResponse(struct);
+            case CREATE_PARTITIONS:
+                return new CreatePartitionsResponse(struct);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

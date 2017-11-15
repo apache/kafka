@@ -186,9 +186,10 @@ my test message 2
 
 On Windows use:
 <pre class="brush: bash;">
-&gt; wmic process get processid,caption,commandline | find "java.exe" | find "server-1.properties"
-java.exe    java  -Xmx1G -Xms1G -server -XX:+UseG1GC ... build\libs\kafka_2.11-{{fullDotVersion}}.jar"  kafka.Kafka config\server-1.properties    644
-&gt; taskkill /pid 644 /f
+&gt; wmic process where "caption = 'java.exe' and commandline like '%server-1.properties%'" get processid
+ProcessId
+6016
+&gt; taskkill /pid 6016 /f
 </pre>
 
 <p>Leadership has switched to one of the slaves and node 1 is no longer in the in-sync replica set:</p>

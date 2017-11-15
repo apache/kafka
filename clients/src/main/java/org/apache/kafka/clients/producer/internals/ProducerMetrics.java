@@ -17,32 +17,37 @@
 package org.apache.kafka.clients.producer.internals;
 
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.Collections;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 
 import org.apache.kafka.common.MetricNameTemplate;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 
 public class ProducerMetrics {
 
-    public SenderMetricsRegistry senderMetrics;
+    public final SenderMetricsRegistry senderMetrics;
+    private final Metrics metrics;
 
-    public ProducerMetrics(Set<String> tags, String metricGrpPrefix) {
-        this.senderMetrics = new SenderMetricsRegistry(tags);
+    public ProducerMetrics(Metrics metrics) {
+        this.metrics = metrics;
+        this.senderMetrics = new SenderMetricsRegistry(this.metrics);
     }
 
     private List<MetricNameTemplate> getAllTemplates() {
         List<MetricNameTemplate> l = new ArrayList<>();
-        l.addAll(this.senderMetrics.getAllTemplates());
+        l.addAll(this.senderMetrics.allTemplates());
         return l;
     }
 
     public static void main(String[] args) {
-        Set<String> tags = new HashSet<>();
-        tags.add("client-id");
-        ProducerMetrics metrics = new ProducerMetrics(tags, "producer");
-        System.out.println(Metrics.toHtmlTable("kafka.producer", metrics.getAllTemplates()));
+        Map<String, String> metricTags = Collections.singletonMap("client-id", "client-id");
+        MetricConfig metricConfig = new MetricConfig().tags(metricTags);
+        Metrics metrics = new Metrics(metricConfig);
+
+        ProducerMetrics metricsRegistry = new ProducerMetrics(metrics);
+        System.out.println(Metrics.toHtmlTable("kafka.producer", metricsRegistry.getAllTemplates()));
     }
 
 }

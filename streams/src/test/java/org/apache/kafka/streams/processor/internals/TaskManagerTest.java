@@ -32,6 +32,7 @@ import org.junit.runner.RunWith;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -60,17 +61,19 @@ public class TaskManagerTest {
     @Mock(type = MockType.NICE)
     private Consumer<byte[], byte[]> consumer;
     @Mock(type = MockType.NICE)
-    private StreamThread.AbstractTaskCreator activeTaskCreator;
+    private StreamThread.AbstractTaskCreator<StreamTask> activeTaskCreator;
     @Mock(type = MockType.NICE)
-    private StreamThread.AbstractTaskCreator standbyTaskCreator;
+    private StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator;
     @Mock(type = MockType.NICE)
     private ThreadMetadataProvider threadMetadataProvider;
     @Mock(type = MockType.NICE)
-    private Task firstTask;
+    private StreamTask streamTask;
     @Mock(type = MockType.NICE)
-    private AssignedTasks active;
+    private StandbyTask standbyTask;
     @Mock(type = MockType.NICE)
-    private AssignedTasks standby;
+    private AssignedStreamsTasks active;
+    @Mock(type = MockType.NICE)
+    private AssignedStandbyTasks standby;
 
     private TaskManager taskManager;
 
@@ -138,7 +141,7 @@ public class TaskManagerTest {
     public void shouldAddNonResumedActiveTasks() {
         mockSingleActiveTask();
         EasyMock.expect(active.maybeResumeSuspendedTask(taskId0, taskId0Partitions)).andReturn(false);
-        active.addNewTask(EasyMock.same(firstTask));
+        active.addNewTask(EasyMock.same(streamTask));
         replay();
 
         taskManager.createTasks(taskId0Partitions);
@@ -163,7 +166,7 @@ public class TaskManagerTest {
     public void shouldAddNonResumedStandbyTasks() {
         mockStandbyTaskExpectations();
         EasyMock.expect(standby.maybeResumeSuspendedTask(taskId0, taskId0Partitions)).andReturn(false);
-        standby.addNewTask(EasyMock.same(firstTask));
+        standby.addNewTask(EasyMock.same(standbyTask));
         replay();
 
         taskManager.createTasks(taskId0Partitions);
@@ -217,7 +220,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldUnassignChangelogPartitionsOnSuspend() {
-        restoreConsumer.assign(Collections.<TopicPartition>emptyList());
+        restoreConsumer.unsubscribe();
         EasyMock.expectLastCall();
         replay();
 
@@ -230,7 +233,7 @@ public class TaskManagerTest {
         EasyMock.expect(active.suspend()).andReturn(new RuntimeException(""));
         EasyMock.expect(standby.suspend()).andReturn(new RuntimeException(""));
         EasyMock.expectLastCall();
-        restoreConsumer.assign(Collections.<TopicPartition>emptyList());
+        restoreConsumer.unsubscribe();
 
         replay();
         try {
@@ -264,7 +267,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldUnassignChangelogPartitionsOnShutdown() {
-        restoreConsumer.assign(Collections.<TopicPartition>emptyList());
+        restoreConsumer.unsubscribe();
         EasyMock.expectLastCall();
         replay();
 
@@ -293,7 +296,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldInitializeNewActiveTasks() {
-        active.initializeNewTasks();
+        EasyMock.expect(active.initializeNewTasks()).andReturn(new HashSet<TopicPartition>());
         EasyMock.expect(active.updateRestored(EasyMock.<Collection<TopicPartition>>anyObject())).
                 andReturn(Collections.<TopicPartition>emptySet());
         EasyMock.expectLastCall();
@@ -304,7 +307,8 @@ public class TaskManagerTest {
 
     @Test
     public void shouldInitializeNewStandbyTasks() {
-        standby.initializeNewTasks();
+        EasyMock.expect(standby.initializeNewTasks()).andReturn(new HashSet<TopicPartition>());
+        EasyMock.expect(active.initializeNewTasks()).andReturn(new HashSet<TopicPartition>());
         EasyMock.expect(active.updateRestored(EasyMock.<Collection<TopicPartition>>anyObject())).
                 andReturn(Collections.<TopicPartition>emptySet());
         EasyMock.expectLastCall();
@@ -316,7 +320,8 @@ public class TaskManagerTest {
 
     @Test
     public void shouldRestoreStateFromChangeLogReader() {
-        EasyMock.expect(changeLogReader.restore()).andReturn(taskId0Partitions);
+        EasyMock.expect(active.initializeNewTasks()).andReturn(new HashSet<TopicPartition>());
+        EasyMock.expect(changeLogReader.restore(active)).andReturn(taskId0Partitions);
         EasyMock.expect(active.updateRestored(taskId0Partitions)).
                 andReturn(Collections.<TopicPartition>emptySet());
 
@@ -327,7 +332,8 @@ public class TaskManagerTest {
 
     @Test
     public void shouldResumeRestoredPartitions() {
-        EasyMock.expect(changeLogReader.restore()).andReturn(taskId0Partitions);
+        EasyMock.expect(active.initializeNewTasks()).andReturn(new HashSet<TopicPartition>());
+        EasyMock.expect(changeLogReader.restore(active)).andReturn(taskId0Partitions);
         EasyMock.expect(active.updateRestored(taskId0Partitions)).
                 andReturn(taskId0Partitions);
 
@@ -350,6 +356,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldReturnFalseWhenThereAreStillNonRunningTasks() {
+        EasyMock.expect(active.initializeNewTasks()).andReturn(new HashSet<TopicPartition>());
         EasyMock.expect(active.allTasksRunning()).andReturn(false);
         EasyMock.expect(active.updateRestored(EasyMock.<Collection<TopicPartition>>anyObject())).
                 andReturn(Collections.<TopicPartition>emptySet());
@@ -449,8 +456,24 @@ public class TaskManagerTest {
         verify(active);
     }
 
+    @Test
+    public void shouldResumeConsumptionOfInitializedPartitions() {
+        final Set<TopicPartition> resumed = Collections.singleton(new TopicPartition("topic", 0));
+        EasyMock.expect(active.initializeNewTasks()).andReturn(resumed);
+        EasyMock.expect(active.updateRestored(EasyMock.<Collection<TopicPartition>>anyObject())).
+                andReturn(Collections.<TopicPartition>emptySet());
+        consumer.resume(resumed);
+        EasyMock.expectLastCall();
+
+        EasyMock.replay(active, consumer);
+
+        taskManager.updateNewAndRestoringTasks();
+        EasyMock.verify(consumer);
+    }
+
     private void mockAssignStandbyPartitions(final long offset) {
-        final Task task = EasyMock.createNiceMock(Task.class);
+        final StandbyTask task = EasyMock.createNiceMock(StandbyTask.class);
+        EasyMock.expect(active.initializeNewTasks()).andReturn(new HashSet<TopicPartition>());
         EasyMock.expect(active.allTasksRunning()).andReturn(true);
         EasyMock.expect(active.updateRestored(EasyMock.<Collection<TopicPartition>>anyObject())).
                 andReturn(Collections.<TopicPartition>emptySet());
@@ -462,13 +485,11 @@ public class TaskManagerTest {
         EasyMock.replay(task);
     }
 
-
-
     private void mockStandbyTaskExpectations() {
         mockThreadMetadataProvider(taskId0Assignment, Collections.<TaskId, Set<TopicPartition>>emptyMap());
         expect(standbyTaskCreator.createTasks(EasyMock.<Consumer<byte[], byte[]>>anyObject(),
                                                    EasyMock.eq(taskId0Assignment)))
-                .andReturn(Collections.singletonList(firstTask));
+                .andReturn(Collections.singletonList(standbyTask));
 
     }
 
@@ -478,7 +499,7 @@ public class TaskManagerTest {
 
         expect(activeTaskCreator.createTasks(EasyMock.anyObject(Consumer.class),
                                                   EasyMock.eq(taskId0Assignment)))
-                .andReturn(Collections.singletonList(firstTask));
+                .andReturn(Collections.singletonList(streamTask));
 
     }
 

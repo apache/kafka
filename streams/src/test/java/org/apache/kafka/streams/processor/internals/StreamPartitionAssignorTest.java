@@ -23,6 +23,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -31,6 +32,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.DefaultPartitionGrouper;
 import org.apache.kafka.streams.processor.PartitionGrouper;
@@ -38,6 +40,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
 import org.apache.kafka.streams.state.HostInfo;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockInternalTopicManager;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -781,7 +784,7 @@ public class StreamPartitionAssignorTest {
             // force repartitioning for aggregation
             .selectKey(new KeyValueMapper<Object, Object, Object>() {
                 @Override
-                public Object apply(Object key, Object value) {
+                public Object apply(final Object key, final Object value) {
                     return null;
                 }
             })
@@ -789,14 +792,14 @@ public class StreamPartitionAssignorTest {
 
             // Task 2 (should get created):
             // create repartioning and changelog topic as task 1 exists
-            .count("count")
+            .count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("count"))
 
             // force repartitioning for join, but second join input topic unknown
             // -> internal repartitioning topic should not get created
             .toStream()
             .map(new KeyValueMapper<Object, Long, KeyValue<Object, Object>>() {
                 @Override
-                public KeyValue<Object, Object> apply(Object key, Long value) {
+                public KeyValue<Object, Object> apply(final Object key, final Long value) {
                     return null;
                 }
             });
@@ -809,7 +812,7 @@ public class StreamPartitionAssignorTest {
             // -> thus should not create internal repartitioning topic
             .selectKey(new KeyValueMapper<Object, Object, Object>() {
                 @Override
-                public Object apply(Object key, Object value) {
+                public Object apply(final Object key, final Object value) {
                     return null;
                 }
             })
@@ -820,7 +823,7 @@ public class StreamPartitionAssignorTest {
                 stream1,
                 new ValueJoiner() {
                     @Override
-                    public Object apply(Object value1, Object value2) {
+                    public Object apply(final Object value1, final Object value2) {
                         return null;
                     }
                 },
@@ -923,7 +926,7 @@ public class StreamPartitionAssignorTest {
         final InternalTopologyBuilder internalTopologyBuilder = StreamsBuilderTest.internalTopologyBuilder(builder);
         internalTopologyBuilder.setApplicationId(applicationId);
 
-        builder.stream("topic1").groupByKey().count("count");
+        builder.stream("topic1").groupByKey().count();
 
         final UUID uuid = UUID.randomUUID();
         mockThreadDataProvider(Collections.<TaskId>emptySet(),

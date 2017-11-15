@@ -17,7 +17,7 @@
 
 package kafka.utils
 
-import kafka.controller.LogDirEventNotificationListener
+import kafka.controller.LogDirEventNotificationHandler
 import scala.collection.Map
 
 object LogDirUtils extends Logging {
@@ -32,7 +32,7 @@ object LogDirUtils extends Logging {
   }
 
   private def logDirFailureEventZkData(brokerId: Int): String = {
-    Json.encode(Map("version" -> LogDirEventNotificationListener.version, "broker" -> brokerId, "event" -> LogDirFailureEvent))
+    Json.encode(Map("version" -> LogDirEventNotificationHandler.Version, "broker" -> brokerId, "event" -> LogDirFailureEvent))
   }
 
   def deleteLogDirEvents(zkUtils: ZkUtils) {

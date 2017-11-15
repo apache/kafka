@@ -22,10 +22,9 @@ import org.junit.Test;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 
-import javax.security.sasl.SaslException;
-
 import static org.junit.Assert.assertTrue;
 
+import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 
 public class ScramSaslServerTest {
@@ -60,7 +59,7 @@ public class ScramSaslServerTest {
         assertTrue("Next challenge is empty", nextChallenge.length > 0);
     }
 
-    @Test(expected = SaslException.class)
+    @Test(expected = SaslAuthenticationException.class)
     public void authorizatonIdNotEqualsAuthenticationId() throws Exception {
         saslServer.evaluateResponse(clientFirstMessage(USER_A, USER_B));
     }

@@ -38,7 +38,7 @@ case class LeaderAndIsr(leader: Int,
 
   def newLeader(leader: Int) = newLeaderAndIsr(leader, isr)
 
-  def newLeaderAndIsr(leader: Int, isr: List[Int]) = LeaderAndIsr(leader, leaderEpoch + 1, isr, zkVersion + 1)
+  def newLeaderAndIsr(leader: Int, isr: List[Int]) = LeaderAndIsr(leader, leaderEpoch + 1, isr, zkVersion)
 
   def newEpochAndZkVersion = newLeaderAndIsr(leader, isr)
 

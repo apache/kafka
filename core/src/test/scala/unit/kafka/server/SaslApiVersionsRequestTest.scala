@@ -19,7 +19,7 @@ package kafka.server
 import java.net.Socket
 import java.util.Collections
 
-import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse}
 import org.apache.kafka.common.requests.SaslHandshakeRequest
 import org.apache.kafka.common.requests.SaslHandshakeResponse
@@ -27,6 +27,7 @@ import org.junit.{After, Before, Test}
 import org.junit.Assert._
 import kafka.api.{KafkaSasl, SaslSetup}
 import kafka.utils.JaasTestUtils
+import org.apache.kafka.common.security.auth.SecurityProtocol
 
 class SaslApiVersionsRequestTest extends BaseRequestTest with SaslSetup {
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
@@ -89,13 +90,13 @@ class SaslApiVersionsRequestTest extends BaseRequestTest with SaslSetup {
 
   private def sendApiVersionsRequest(socket: Socket, request: ApiVersionsRequest,
                                      apiVersion: Option[Short] = None): ApiVersionsResponse = {
-    val response = send(request, ApiKeys.API_VERSIONS, socket, apiVersion)
+    val response = sendAndReceive(request, ApiKeys.API_VERSIONS, socket, apiVersion)
     ApiVersionsResponse.parse(response, request.version)
   }
 
   private def sendSaslHandshakeRequestValidateResponse(socket: Socket) {
     val request = new SaslHandshakeRequest("PLAIN")
-    val response = send(request, ApiKeys.SASL_HANDSHAKE, socket)
+    val response = sendAndReceive(request, ApiKeys.SASL_HANDSHAKE, socket)
     val handshakeResponse = SaslHandshakeResponse.parse(response, request.version)
     assertEquals(Errors.NONE, handshakeResponse.error)
     assertEquals(Collections.singletonList("PLAIN"), handshakeResponse.enabledMechanisms)

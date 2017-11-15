@@ -22,6 +22,7 @@ import kafka.common.LongRef
 import kafka.message.{CompressionCodec, DefaultCompressionCodec, GZIPCompressionCodec, NoCompressionCodec, SnappyCompressionCodec}
 import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
+import org.apache.kafka.common.utils.Time
 import org.apache.kafka.test.TestUtils
 import org.junit.Assert._
 import org.junit.Test
@@ -29,6 +30,8 @@ import org.junit.Test
 import scala.collection.JavaConverters._
 
 class LogValidatorTest {
+
+  val time = Time.SYSTEM
 
   @Test
   def testLogAppendTimeNonCompressedV1() {
@@ -41,6 +44,7 @@ class LogValidatorTest {
     val records = createRecords(magicValue = magic, timestamp = 1234L, codec = CompressionType.NONE)
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(0),
+      time= time,
       now = now,
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
@@ -56,6 +60,9 @@ class LogValidatorTest {
     assertEquals(s"Max timestamp should be $now", now, validatedResults.maxTimestamp)
     assertEquals(s"The offset of max timestamp should be 0", 0, validatedResults.shallowOffsetOfMaxTimestamp)
     assertFalse("Message size should not have been changed", validatedResults.messageSizeMaybeChanged)
+
+    verifyRecordsProcessingStats(validatedResults.recordsProcessingStats, numConvertedRecords = 0, records,
+      compressed = false)
   }
 
   def testLogAppendTimeNonCompressedV2() {
@@ -74,6 +81,7 @@ class LogValidatorTest {
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(
       records,
       offsetCounter = new LongRef(0),
+      time = time,
       now = now,
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -92,6 +100,9 @@ class LogValidatorTest {
     assertEquals(s"The offset of max timestamp should be ${records.records.asScala.size - 1}",
       records.records.asScala.size - 1, validatedResults.shallowOffsetOfMaxTimestamp)
     assertTrue("Message size may have been changed", validatedResults.messageSizeMaybeChanged)
+
+    val stats = validatedResults.recordsProcessingStats
+    verifyRecordsProcessingStats(stats, numConvertedRecords = 3, records, compressed = true)
   }
 
   @Test
@@ -111,6 +122,7 @@ class LogValidatorTest {
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(
       records,
       offsetCounter = new LongRef(0),
+      time = time,
       now = now,
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -130,6 +142,9 @@ class LogValidatorTest {
     assertEquals(s"The offset of max timestamp should be ${records.records.asScala.size - 1}",
       records.records.asScala.size - 1, validatedResults.shallowOffsetOfMaxTimestamp)
     assertFalse("Message size should not have been changed", validatedResults.messageSizeMaybeChanged)
+
+    verifyRecordsProcessingStats(validatedResults.recordsProcessingStats, numConvertedRecords = 0, records,
+      compressed = true)
   }
 
   @Test
@@ -161,6 +176,7 @@ class LogValidatorTest {
 
     val validatingResults = LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(0),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
@@ -192,6 +208,9 @@ class LogValidatorTest {
     assertEquals(s"Max timestamp should be ${now + 1}", now + 1, validatingResults.maxTimestamp)
     assertEquals(s"Offset of max timestamp should be 1", 1, validatingResults.shallowOffsetOfMaxTimestamp)
     assertFalse("Message size should not have been changed", validatingResults.messageSizeMaybeChanged)
+
+    verifyRecordsProcessingStats(validatingResults.recordsProcessingStats, numConvertedRecords = 0, records,
+      compressed = false)
   }
 
   @Test
@@ -223,6 +242,7 @@ class LogValidatorTest {
 
     val validatingResults = LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(0),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = GZIPCompressionCodec,
@@ -253,6 +273,9 @@ class LogValidatorTest {
     assertEquals(s"Max timestamp should be ${now + 1}", now + 1, validatingResults.maxTimestamp)
     assertEquals("Offset of max timestamp should be 2", 2, validatingResults.shallowOffsetOfMaxTimestamp)
     assertTrue("Message size should have been changed", validatingResults.messageSizeMaybeChanged)
+
+    verifyRecordsProcessingStats(validatingResults.recordsProcessingStats, numConvertedRecords = 3, records,
+      compressed = true)
   }
 
   @Test
@@ -269,6 +292,7 @@ class LogValidatorTest {
     val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V0, codec = CompressionType.GZIP)
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(0),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -293,6 +317,9 @@ class LogValidatorTest {
     assertEquals(s"Offset of max timestamp should be ${validatedRecords.records.asScala.size - 1}",
       validatedRecords.records.asScala.size - 1, validatedResults.shallowOffsetOfMaxTimestamp)
     assertTrue("Message size should have been changed", validatedResults.messageSizeMaybeChanged)
+
+    verifyRecordsProcessingStats(validatedResults.recordsProcessingStats, numConvertedRecords = 3, records,
+      compressed = true)
   }
 
   @Test
@@ -306,6 +333,7 @@ class LogValidatorTest {
     val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V1, codec = CompressionType.GZIP, timestamp = timestamp)
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(0),
+      time = time,
       now = timestamp,
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -330,6 +358,9 @@ class LogValidatorTest {
     assertEquals(s"Offset of max timestamp should be ${validatedRecords.records.asScala.size - 1}",
       validatedRecords.records.asScala.size - 1, validatedResults.shallowOffsetOfMaxTimestamp)
     assertTrue("Message size should have been changed", validatedResults.messageSizeMaybeChanged)
+
+    verifyRecordsProcessingStats(validatedResults.recordsProcessingStats, numConvertedRecords = 3, records,
+      compressed = true)
   }
 
   @Test
@@ -356,6 +387,7 @@ class LogValidatorTest {
 
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(0),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -387,6 +419,9 @@ class LogValidatorTest {
     assertEquals(s"Offset of max timestamp should be ${validatedRecords.records.asScala.size - 1}",
       validatedRecords.records.asScala.size - 1, validatedResults.shallowOffsetOfMaxTimestamp)
     assertFalse("Message size should not have been changed", validatedResults.messageSizeMaybeChanged)
+
+    verifyRecordsProcessingStats(validatedResults.recordsProcessingStats, numConvertedRecords = 0, records,
+      compressed = true)
   }
 
   @Test
@@ -402,6 +437,7 @@ class LogValidatorTest {
     LogValidator.validateMessagesAndAssignOffsets(
       records,
       offsetCounter = new LongRef(0),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
@@ -421,6 +457,7 @@ class LogValidatorTest {
     LogValidator.validateMessagesAndAssignOffsets(
       records,
       offsetCounter = new LongRef(0),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
@@ -440,6 +477,7 @@ class LogValidatorTest {
     LogValidator.validateMessagesAndAssignOffsets(
       records,
       offsetCounter = new LongRef(0),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -459,6 +497,7 @@ class LogValidatorTest {
     LogValidator.validateMessagesAndAssignOffsets(
       records,
       offsetCounter = new LongRef(0),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -477,6 +516,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
@@ -495,6 +535,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -514,6 +555,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     val messageWithOffset = LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
@@ -534,6 +576,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     val messageWithOffset = LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
@@ -555,6 +598,7 @@ class LogValidatorTest {
     val compressedMessagesWithOffset = LogValidator.validateMessagesAndAssignOffsets(
       records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -576,6 +620,7 @@ class LogValidatorTest {
     val compressedMessagesWithOffset = LogValidator.validateMessagesAndAssignOffsets(
       records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -595,6 +640,7 @@ class LogValidatorTest {
     val offset = 1234567
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
@@ -613,6 +659,7 @@ class LogValidatorTest {
     val offset = 1234567
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
@@ -631,6 +678,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -649,6 +697,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -667,6 +716,7 @@ class LogValidatorTest {
     val records = MemoryRecords.withEndTransactionMarker(23423L, 5, endTxnMarker)
     LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
@@ -685,6 +735,7 @@ class LogValidatorTest {
     val records = MemoryRecords.withEndTransactionMarker(23423L, 5, endTxnMarker)
     val result = LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = SnappyCompressionCodec,
@@ -708,6 +759,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
@@ -727,6 +779,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -745,6 +798,7 @@ class LogValidatorTest {
     val offset = 1234567
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
@@ -763,6 +817,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -782,6 +837,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
@@ -801,6 +857,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -822,6 +879,7 @@ class LogValidatorTest {
       new SimpleRecord("hello".getBytes), new SimpleRecord("there".getBytes), new SimpleRecord("beautiful".getBytes))
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -843,6 +901,7 @@ class LogValidatorTest {
       new SimpleRecord("hello".getBytes), new SimpleRecord("there".getBytes), new SimpleRecord("beautiful".getBytes))
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -862,6 +921,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
@@ -881,6 +941,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -898,6 +959,7 @@ class LogValidatorTest {
     val records = recordsWithInvalidInnerMagic(offset)
     LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = SnappyCompressionCodec,
       targetCodec = SnappyCompressionCodec,
@@ -936,6 +998,7 @@ class LogValidatorTest {
     val records = MemoryRecords.readableRecords(buffer)
     LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = sourceCodec,
       targetCodec = targetCodec,
@@ -1010,4 +1073,19 @@ class LogValidatorTest {
     }
   }
 
+  def verifyRecordsProcessingStats(stats: RecordsProcessingStats, numConvertedRecords: Int, records: MemoryRecords,
+                                   compressed: Boolean): Unit = {
+    assertNotNull("Records processing info is null", stats)
+    assertEquals(numConvertedRecords, stats.numRecordsConverted)
+    if (numConvertedRecords > 0)
+      assertTrue(s"Conversion time not recorded $stats", stats.conversionTimeNanos >= 0)
+    val originalSize = records.sizeInBytes
+    val tempBytes = stats.temporaryMemoryBytes
+    if (numConvertedRecords > 0 && compressed)
+      assertTrue(s"Temp bytes too small, orig=$originalSize actual=$tempBytes", tempBytes > originalSize)
+    else if (numConvertedRecords > 0 || compressed)
+      assertTrue("Temp bytes not updated", tempBytes > 0)
+    else
+      assertEquals(0, tempBytes)
+  }
 }

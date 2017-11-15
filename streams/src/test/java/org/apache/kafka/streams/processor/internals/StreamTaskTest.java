@@ -53,6 +53,7 @@ import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockProcessorNode;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockStateRestoreListener;
+import org.apache.kafka.test.MockStateStoreSupplier;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.NoOpProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
@@ -125,7 +126,6 @@ public class StreamTaskTest {
     private final MockTime time = new MockTime();
     private File baseDir = TestUtils.tempDirectory();
     private StateDirectory stateDirectory;
-    private final RecordCollectorImpl recordCollector = new RecordCollectorImpl(producer, "taskId", new LogContext("taskId "));
     private StreamsConfig config;
     private StreamsConfig eosConfig;
     private StreamTask task;
@@ -573,7 +573,7 @@ public class StreamTaskTest {
         final InMemoryKeyValueStore inMemoryStore = new InMemoryKeyValueStore(storeName, null, null) {
             @Override
             public void init(final ProcessorContext context, final StateStore root) {
-                context.register(root, true, null);
+                context.register(root, false, null);
             }
 
             @Override
@@ -639,7 +639,7 @@ public class StreamTaskTest {
         final InMemoryKeyValueStore inMemoryStore = new InMemoryKeyValueStore(storeName, null, null) {
             @Override
             public void init(final ProcessorContext context, final StateStore root) {
-                context.register(root, true, null);
+                context.register(root, false, null);
             }
 
             @Override
@@ -1016,6 +1016,62 @@ public class StreamTaskTest {
         } catch (Exception e) {
             fail("should have not closed unitialized topology");
         }
+    }
+
+    @Test
+    public void shouldBeInitializedIfChangelogPartitionsIsEmpty() {
+        final ProcessorTopology topology = new ProcessorTopology(Collections.<ProcessorNode>singletonList(source1),
+                                                                 Collections.<String, SourceNode>singletonMap(topic1[0], source1),
+                                                                 Collections.<String, SinkNode>emptyMap(),
+                                                                 Collections.<StateStore>singletonList(
+                                                                         new MockStateStoreSupplier.MockStateStore("store",
+                                                                                                                   false)),
+                                                                 Collections.<String, String>emptyMap(),
+                                                                 Collections.<StateStore>emptyList());
+
+
+        final StreamTask task = new StreamTask(taskId00,
+                                               applicationId,
+                                               Utils.mkSet(partition1),
+                                               topology,
+                                               consumer,
+                                               changelogReader,
+                                               config,
+                                               streamsMetrics,
+                                               stateDirectory,
+                                               null,
+                                               time,
+                                               producer);
+
+        assertTrue(task.initialize());
+    }
+
+    @Test
+    public void shouldNotBeInitializedIfChangelogPartitionsIsNonEmpty() {
+        final ProcessorTopology topology = new ProcessorTopology(Collections.<ProcessorNode>singletonList(source1),
+                                                                 Collections.<String, SourceNode>singletonMap(topic1[0], source1),
+                                                                 Collections.<String, SinkNode>emptyMap(),
+                                                                 Collections.<StateStore>singletonList(
+                                                                         new MockStateStoreSupplier.MockStateStore("store",
+                                                                                                                   false)),
+                                                                 Collections.singletonMap("store", "changelog"),
+                                                                 Collections.<StateStore>emptyList());
+
+
+        final StreamTask task = new StreamTask(taskId00,
+                                               applicationId,
+                                               Utils.mkSet(partition1),
+                                               topology,
+                                               consumer,
+                                               changelogReader,
+                                               config,
+                                               streamsMetrics,
+                                               stateDirectory,
+                                               null,
+                                               time,
+                                               producer);
+
+        assertFalse(task.initialize());
     }
 
     @SuppressWarnings("unchecked")

@@ -87,39 +87,39 @@ public class PageViewUntypedDemo {
         });
 
         KStream<JsonNode, JsonNode> regionCount = views
-                .leftJoin(userRegions, new ValueJoiner<JsonNode, String, JsonNode>() {
-                    @Override
-                    public JsonNode apply(JsonNode view, String region) {
-                        ObjectNode jNode = JsonNodeFactory.instance.objectNode();
+            .leftJoin(userRegions, new ValueJoiner<JsonNode, String, JsonNode>() {
+                @Override
+                public JsonNode apply(JsonNode view, String region) {
+                    ObjectNode jNode = JsonNodeFactory.instance.objectNode();
 
-                        return jNode.put("user", view.get("user").textValue())
-                                .put("page", view.get("page").textValue())
-                                .put("region", region == null ? "UNKNOWN" : region);
-                    }
-                })
-                .map(new KeyValueMapper<String, JsonNode, KeyValue<String, JsonNode>>() {
-                    @Override
-                    public KeyValue<String, JsonNode> apply(String user, JsonNode viewRegion) {
-                        return new KeyValue<>(viewRegion.get("region").textValue(), viewRegion);
-                    }
-                })
-                .groupByKey(Serialized.with(Serdes.String(), jsonSerde))
-                .count(TimeWindows.of(7 * 24 * 60 * 60 * 1000L).advanceBy(1000), "RollingSevenDaysOfPageViewsByRegion")
-                // TODO: we can merge ths toStream().map(...) with a single toStream(...)
-                .toStream()
-                .map(new KeyValueMapper<Windowed<String>, Long, KeyValue<JsonNode, JsonNode>>() {
-                    @Override
-                    public KeyValue<JsonNode, JsonNode> apply(Windowed<String> key, Long value) {
-                        ObjectNode keyNode = JsonNodeFactory.instance.objectNode();
-                        keyNode.put("window-start", key.window().start())
-                                .put("region", key.key());
+                    return jNode.put("user", view.get("user").textValue())
+                            .put("page", view.get("page").textValue())
+                            .put("region", region == null ? "UNKNOWN" : region);
+                }
+            })
+            .map(new KeyValueMapper<String, JsonNode, KeyValue<String, JsonNode>>() {
+                @Override
+                public KeyValue<String, JsonNode> apply(String user, JsonNode viewRegion) {
+                    return new KeyValue<>(viewRegion.get("region").textValue(), viewRegion);
+                }
+            })
+            .groupByKey(Serialized.with(Serdes.String(), jsonSerde))
+            .windowedBy(TimeWindows.of(7 * 24 * 60 * 60 * 1000L).advanceBy(1000))
+            .count()
+            .toStream()
+            .map(new KeyValueMapper<Windowed<String>, Long, KeyValue<JsonNode, JsonNode>>() {
+                @Override
+                public KeyValue<JsonNode, JsonNode> apply(Windowed<String> key, Long value) {
+                    ObjectNode keyNode = JsonNodeFactory.instance.objectNode();
+                    keyNode.put("window-start", key.window().start())
+                            .put("region", key.key());
 
-                        ObjectNode valueNode = JsonNodeFactory.instance.objectNode();
-                        valueNode.put("count", value);
+                    ObjectNode valueNode = JsonNodeFactory.instance.objectNode();
+                    valueNode.put("count", value);
 
-                        return new KeyValue<>((JsonNode) keyNode, (JsonNode) valueNode);
-                    }
-                });
+                    return new KeyValue<>((JsonNode) keyNode, (JsonNode) valueNode);
+                }
+            });
 
         // write to the result topic
         regionCount.to("streams-pageviewstats-untyped-output", Produced.with(jsonSerde, jsonSerde));

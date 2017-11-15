@@ -20,9 +20,9 @@ import java.util.Properties
 
 import kafka.utils.TestUtils
 import kafka.utils.Implicits._
-import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.config.SaslConfigs
-import org.apache.kafka.common.errors.GroupAuthorizationException
+import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.errors.TopicAuthorizationException
 import org.junit.{Before, Test}
 
 import scala.collection.immutable.List
@@ -77,9 +77,9 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
 
     try {
       consumeRecords(consumer2)
-      fail("Expected exception as consumer2 has no access to group")
+      fail("Expected exception as consumer2 has no access to topic")
     } catch {
-      case _: GroupAuthorizationException => //expected
+      case _: TopicAuthorizationException => //expected
     }
   }
 }

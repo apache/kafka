@@ -19,10 +19,9 @@ package kafka.server
 import java.util.Collections
 
 import org.apache.kafka.common.metrics.{MetricConfig, Metrics, Quota}
-import org.apache.kafka.common.utils.MockTime
+import org.apache.kafka.common.utils.{MockTime, Sanitizer}
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{Before, Test}
-import kafka.admin.ConfigCommand
 
 class ClientQuotaManagerTest {
   private val time = new MockTime
@@ -40,12 +39,12 @@ class ClientQuotaManagerTest {
   }
 
   private def testQuotaParsing(config: ClientQuotaManagerConfig, client1: UserClient, client2: UserClient, randomClient: UserClient, defaultConfigClient: UserClient) {
-    val clientMetrics = new ClientQuotaManager(config, newMetrics, QuotaType.Produce, time)
+    val clientMetrics = new ClientQuotaManager(config, newMetrics, QuotaType.Produce, time, "")
 
     try {
       // Case 1: Update the quota. Assert that the new quota value is returned
-      clientMetrics.updateQuota(client1.configUser, client1.configClientId, Some(new Quota(2000, true)))
-      clientMetrics.updateQuota(client2.configUser, client2.configClientId, Some(new Quota(4000, true)))
+      clientMetrics.updateQuota(client1.configUser, client1.configClientId, client1.sanitizedConfigClientId, Some(new Quota(2000, true)))
+      clientMetrics.updateQuota(client2.configUser, client2.configClientId, client2.sanitizedConfigClientId, Some(new Quota(4000, true)))
 
       assertEquals("Default producer quota should be " + config.quotaBytesPerSecondDefault, new Quota(config.quotaBytesPerSecondDefault, true), clientMetrics.quota(randomClient.user, randomClient.clientId))
       assertEquals("Should return the overridden value (2000)", new Quota(2000, true), clientMetrics.quota(client1.user, client1.clientId))
@@ -57,22 +56,22 @@ class ClientQuotaManagerTest {
 
       // Case 2: Change quota again. The quota should be updated within KafkaMetrics as well since the sensor was created.
       // p1 should not longer be throttled after the quota change
-      clientMetrics.updateQuota(client1.configUser, client1.configClientId, Some(new Quota(3000, true)))
+      clientMetrics.updateQuota(client1.configUser, client1.configClientId, client1.sanitizedConfigClientId, Some(new Quota(3000, true)))
       assertEquals("Should return the newly overridden value (3000)", new Quota(3000, true), clientMetrics.quota(client1.user, client1.clientId))
 
       throttleTimeMs = clientMetrics.maybeRecordAndThrottle(client1.user, client1.clientId, 0, this.callback)
       assertEquals(s"throttleTimeMs should be 0. was $throttleTimeMs", 0, throttleTimeMs)
 
       // Case 3: Change quota back to default. Should be throttled again
-      clientMetrics.updateQuota(client1.configUser, client1.configClientId, Some(new Quota(500, true)))
+      clientMetrics.updateQuota(client1.configUser, client1.configClientId, client1.sanitizedConfigClientId, Some(new Quota(500, true)))
       assertEquals("Should return the default value (500)", new Quota(500, true), clientMetrics.quota(client1.user, client1.clientId))
 
       throttleTimeMs = clientMetrics.maybeRecordAndThrottle(client1.user, client1.clientId, 0, this.callback)
       assertTrue(s"throttleTimeMs should be > 0. was $throttleTimeMs", throttleTimeMs > 0)
 
       // Case 4: Set high default quota, remove p1 quota. p1 should no longer be throttled
-      clientMetrics.updateQuota(client1.configUser, client1.configClientId, None)
-      clientMetrics.updateQuota(defaultConfigClient.configUser, defaultConfigClient.configClientId, Some(new Quota(4000, true)))
+      clientMetrics.updateQuota(client1.configUser, client1.configClientId, client1.sanitizedConfigClientId, None)
+      clientMetrics.updateQuota(defaultConfigClient.configUser, defaultConfigClient.configClientId, defaultConfigClient.sanitizedConfigClientId, Some(new Quota(4000, true)))
       assertEquals("Should return the newly overridden value (4000)", new Quota(4000, true), clientMetrics.quota(client1.user, client1.clientId))
 
       throttleTimeMs = clientMetrics.maybeRecordAndThrottle(client1.user, client1.clientId, 1000 * config.numQuotaSamples, this.callback)
@@ -85,7 +84,7 @@ class ClientQuotaManagerTest {
 
   /**
    * Tests parsing for <client-id> quotas.
-   * Quota overrides persisted in Zookeeper in /config/clients/<client-id>, default persisted in /config/clients/<default>
+   * Quota overrides persisted in ZooKeeper in /config/clients/<client-id>, default persisted in /config/clients/<default>
    */
   @Test
   def testClientIdQuotaParsing() {
@@ -98,7 +97,7 @@ class ClientQuotaManagerTest {
 
   /**
    * Tests parsing for <user> quotas.
-   * Quota overrides persisted in Zookeeper in /config/users/<user>, default persisted in /config/users/<default>
+   * Quota overrides persisted in ZooKeeper in /config/users/<user>, default persisted in /config/users/<default>
    */
   @Test
   def testUserQuotaParsing() {
@@ -112,7 +111,7 @@ class ClientQuotaManagerTest {
 
   /**
    * Tests parsing for <user, client-id> quotas.
-   * Quotas persisted in Zookeeper in /config/users/<user>/clients/<client-id>, default in /config/users/<default>/clients/<default>
+   * Quotas persisted in ZooKeeper in /config/users/<user>/clients/<client-id>, default in /config/users/<default>/clients/<default>
    */
   @Test
   def testUserClientIdQuotaParsing() {
@@ -150,7 +149,8 @@ class ClientQuotaManagerTest {
 
   @Test
   def testQuotaConfigPrecedence() {
-    val quotaManager = new ClientQuotaManager(ClientQuotaManagerConfig(quotaBytesPerSecondDefault=Long.MaxValue), newMetrics, QuotaType.Produce, time)
+    val quotaManager = new ClientQuotaManager(ClientQuotaManagerConfig(quotaBytesPerSecondDefault=Long.MaxValue),
+        newMetrics, QuotaType.Produce, time, "")
 
     def checkQuota(user: String, clientId: String, expectedBound: Int, value: Int, expectThrottle: Boolean) {
       assertEquals(new Quota(expectedBound, true), quotaManager.quota(user, clientId))
@@ -162,16 +162,16 @@ class ClientQuotaManagerTest {
     }
 
     try {
-      quotaManager.updateQuota(Some(ConfigEntityName.Default), None, Some(new Quota(1000, true)))
-      quotaManager.updateQuota(None, Some(ConfigEntityName.Default), Some(new Quota(2000, true)))
-      quotaManager.updateQuota(Some(ConfigEntityName.Default), Some(ConfigEntityName.Default), Some(new Quota(3000, true)))
-      quotaManager.updateQuota(Some("userA"), None, Some(new Quota(4000, true)))
-      quotaManager.updateQuota(Some("userA"), Some("client1"), Some(new Quota(5000, true)))
-      quotaManager.updateQuota(Some("userB"), None, Some(new Quota(6000, true)))
-      quotaManager.updateQuota(Some("userB"), Some("client1"), Some(new Quota(7000, true)))
-      quotaManager.updateQuota(Some("userB"), Some(ConfigEntityName.Default), Some(new Quota(8000, true)))
-      quotaManager.updateQuota(Some("userC"), None, Some(new Quota(10000, true)))
-      quotaManager.updateQuota(None, Some("client1"), Some(new Quota(9000, true)))
+      quotaManager.updateQuota(Some(ConfigEntityName.Default), None, None, Some(new Quota(1000, true)))
+      quotaManager.updateQuota(None, Some(ConfigEntityName.Default), Some(ConfigEntityName.Default), Some(new Quota(2000, true)))
+      quotaManager.updateQuota(Some(ConfigEntityName.Default), Some(ConfigEntityName.Default), Some(ConfigEntityName.Default), Some(new Quota(3000, true)))
+      quotaManager.updateQuota(Some("userA"), None, None, Some(new Quota(4000, true)))
+      quotaManager.updateQuota(Some("userA"), Some("client1"), Some("client1"), Some(new Quota(5000, true)))
+      quotaManager.updateQuota(Some("userB"), None, None, Some(new Quota(6000, true)))
+      quotaManager.updateQuota(Some("userB"), Some("client1"), Some("client1"), Some(new Quota(7000, true)))
+      quotaManager.updateQuota(Some("userB"), Some(ConfigEntityName.Default), Some(ConfigEntityName.Default), Some(new Quota(8000, true)))
+      quotaManager.updateQuota(Some("userC"), None, None, Some(new Quota(10000, true)))
+      quotaManager.updateQuota(None, Some("client1"), Some("client1"), Some(new Quota(9000, true)))
 
       checkQuota("userA", "client1", 5000, 4500, false) // <user, client> quota takes precedence over <user>
       checkQuota("userA", "client2", 4000, 4500, true)  // <user> quota takes precedence over <client> and defaults
@@ -187,32 +187,32 @@ class ClientQuotaManagerTest {
       checkQuota("userE", "client1", 3000, 2500, false)
 
       // Remove default <user, client> quota config, revert to <user> default
-      quotaManager.updateQuota(Some(ConfigEntityName.Default), Some(ConfigEntityName.Default), None)
+      quotaManager.updateQuota(Some(ConfigEntityName.Default), Some(ConfigEntityName.Default), Some(ConfigEntityName.Default), None)
       checkQuota("userD", "client1", 1000, 0, false)    // Metrics tags changed, restart counter
       checkQuota("userE", "client4", 1000, 1500, true)
       checkQuota("userF", "client4", 1000, 800, false)  // Default <user> quota shared across clients of user
       checkQuota("userF", "client5", 1000, 800, true)
 
       // Remove default <user> quota config, revert to <client-id> default
-      quotaManager.updateQuota(Some(ConfigEntityName.Default), None, None)
+      quotaManager.updateQuota(Some(ConfigEntityName.Default), None, None, None)
       checkQuota("userF", "client4", 2000, 0, false)  // Default <client-id> quota shared across client-id of all users
       checkQuota("userF", "client5", 2000, 0, false)
       checkQuota("userF", "client5", 2000, 2500, true)
       checkQuota("userG", "client5", 2000, 0, true)
 
       // Update quotas
-      quotaManager.updateQuota(Some("userA"), None, Some(new Quota(8000, true)))
-      quotaManager.updateQuota(Some("userA"), Some("client1"), Some(new Quota(10000, true)))
+      quotaManager.updateQuota(Some("userA"), None, None, Some(new Quota(8000, true)))
+      quotaManager.updateQuota(Some("userA"), Some("client1"), Some("client1"), Some(new Quota(10000, true)))
       checkQuota("userA", "client2", 8000, 0, false)
       checkQuota("userA", "client2", 8000, 4500, true) // Throttled due to sum of new and earlier values
       checkQuota("userA", "client1", 10000, 0, false)
       checkQuota("userA", "client1", 10000, 6000, true)
-      quotaManager.updateQuota(Some("userA"), Some("client1"), None)
+      quotaManager.updateQuota(Some("userA"), Some("client1"), Some("client1"), None)
       checkQuota("userA", "client6", 8000, 0, true)    // Throttled due to shared user quota
-      quotaManager.updateQuota(Some("userA"), Some("client6"), Some(new Quota(11000, true)))
+      quotaManager.updateQuota(Some("userA"), Some("client6"), Some("client6"), Some(new Quota(11000, true)))
       checkQuota("userA", "client6", 11000, 8500, false)
-      quotaManager.updateQuota(Some("userA"), Some(ConfigEntityName.Default), Some(new Quota(12000, true)))
-      quotaManager.updateQuota(Some("userA"), Some("client6"), None)
+      quotaManager.updateQuota(Some("userA"), Some(ConfigEntityName.Default), Some(ConfigEntityName.Default), Some(new Quota(12000, true)))
+      quotaManager.updateQuota(Some("userA"), Some("client6"), Some("client6"), None)
       checkQuota("userA", "client6", 12000, 4000, true) // Throttled due to sum of new and earlier values
 
     } finally {
@@ -223,7 +223,7 @@ class ClientQuotaManagerTest {
   @Test
   def testQuotaViolation() {
     val metrics = newMetrics
-    val clientMetrics = new ClientQuotaManager(config, metrics, QuotaType.Produce, time)
+    val clientMetrics = new ClientQuotaManager(config, metrics, QuotaType.Produce, time, "")
     val queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", "Produce", ""))
     try {
       /* We have 10 second windows. Make sure that there is no quota violation
@@ -271,8 +271,8 @@ class ClientQuotaManagerTest {
   @Test
   def testRequestPercentageQuotaViolation() {
     val metrics = newMetrics
-    val quotaManager = new ClientRequestQuotaManager(config, metrics, time)
-    quotaManager.updateQuota(Some("ANONYMOUS"), Some("test-client"), Some(Quota.upperBound(1)))
+    val quotaManager = new ClientRequestQuotaManager(config, metrics, time, "")
+    quotaManager.updateQuota(Some("ANONYMOUS"), Some("test-client"), Some("test-client"), Some(Quota.upperBound(1)))
     val queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", "Request", ""))
     def millisToPercent(millis: Double) = millis * 1000 * 1000 * ClientQuotaManagerConfig.NanosToPercentagePerSecond
     try {
@@ -333,7 +333,7 @@ class ClientQuotaManagerTest {
   @Test
   def testExpireThrottleTimeSensor() {
     val metrics = newMetrics
-    val clientMetrics = new ClientQuotaManager(config, metrics, QuotaType.Produce, time)
+    val clientMetrics = new ClientQuotaManager(config, metrics, QuotaType.Produce, time, "")
     try {
       clientMetrics.maybeRecordAndThrottle("ANONYMOUS", "client1", 100, callback)
       // remove the throttle time sensor
@@ -352,7 +352,7 @@ class ClientQuotaManagerTest {
   @Test
   def testExpireQuotaSensors() {
     val metrics = newMetrics
-    val clientMetrics = new ClientQuotaManager(config, metrics, QuotaType.Produce, time)
+    val clientMetrics = new ClientQuotaManager(config, metrics, QuotaType.Produce, time, "")
     try {
       clientMetrics.maybeRecordAndThrottle("ANONYMOUS", "client1", 100, callback)
       // remove all the sensors
@@ -374,17 +374,32 @@ class ClientQuotaManagerTest {
   }
 
   @Test
-  def testQuotaUserSanitize() {
-    val principal = "CN=Some characters !@#$%&*()_-+=';:,/~"
-    val sanitizedPrincipal = QuotaId.sanitize(principal)
-    // Apart from % used in percent-encoding all characters of sanitized principal must be characters allowed in client-id
-    ConfigCommand.validateChars("sanitized-principal", sanitizedPrincipal.replace('%', '_'))
-    assertEquals(principal, QuotaId.desanitize(sanitizedPrincipal))
+  def testClientIdNotSanitized() {
+    val metrics = newMetrics
+    val clientMetrics = new ClientQuotaManager(config, metrics, QuotaType.Produce, time, "")
+    val clientId = "client@#$%"
+    try {
+      clientMetrics.maybeRecordAndThrottle("ANONYMOUS", clientId, 100, callback)
+
+      // The metrics should use the raw client ID, even if the reporters internally sanitize them
+      val throttleTimeSensor = metrics.getSensor("ProduceThrottleTime-:" + clientId)
+      assertTrue("Throttle time sensor should exist", throttleTimeSensor != null)
+
+      val byteRateSensor = metrics.getSensor("Produce-:"  + clientId)
+      assertTrue("Byte rate sensor should exist", byteRateSensor != null)
+    } finally {
+      clientMetrics.shutdown()
+    }
   }
 
   def newMetrics: Metrics = {
     new Metrics(new MetricConfig(), Collections.emptyList(), time)
   }
 
-  private case class UserClient(val user: String, val clientId: String, val configUser: Option[String] = None, val configClientId: Option[String] = None)
+  private case class UserClient(val user: String, val clientId: String, val configUser: Option[String] = None, val configClientId: Option[String] = None) {
+    // The class under test expects only sanitized client configs. We pass both the default value (which should not be
+    // sanitized to ensure it remains unique) and non-default values, so we need to take care in generating the sanitized
+    // client ID
+    def sanitizedConfigClientId = configClientId.map(x => if (x == ConfigEntityName.Default) ConfigEntityName.Default else Sanitizer.sanitize(x))
+  }
 }

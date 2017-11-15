@@ -16,14 +16,17 @@
  */
 package org.apache.kafka.trogdor.agent;
 
-import org.apache.kafka.trogdor.rest.AgentFaultsResponse;
 import org.apache.kafka.trogdor.rest.AgentStatusResponse;
-import org.apache.kafka.trogdor.rest.CreateAgentFaultRequest;
+import org.apache.kafka.trogdor.rest.CreateWorkerRequest;
+import org.apache.kafka.trogdor.rest.CreateWorkerResponse;
 import org.apache.kafka.trogdor.rest.Empty;
+import org.apache.kafka.trogdor.rest.StopWorkerRequest;
+import org.apache.kafka.trogdor.rest.StopWorkerResponse;
 
 import javax.servlet.ServletContext;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
+import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
@@ -47,20 +50,19 @@ public class AgentRestResource {
     @GET
     @Path("/status")
     public AgentStatusResponse getStatus() throws Throwable {
-        return new AgentStatusResponse(agent().startTimeMs());
+        return agent().status();
     }
 
-    @GET
-    @Path("/faults")
-    public AgentFaultsResponse getAgentFaults() throws Throwable {
-        return agent().faults();
+    @POST
+    @Path("/worker/create")
+    public CreateWorkerResponse createWorker(CreateWorkerRequest req) throws Throwable {
+        return agent().createWorker(req);
     }
 
     @PUT
-    @Path("/fault")
-    public Empty putAgentFault(CreateAgentFaultRequest request) throws Throwable {
-        agent().createFault(request);
-        return Empty.INSTANCE;
+    @Path("/worker/stop")
+    public StopWorkerResponse stopWorker(StopWorkerRequest req) throws Throwable {
+        return agent().stopWorker(req);
     }
 
     @PUT

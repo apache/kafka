@@ -25,12 +25,14 @@ import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.trogdor.common.JsonUtil;
-import org.apache.kafka.trogdor.rest.AgentFaultsResponse;
 import org.apache.kafka.trogdor.rest.AgentStatusResponse;
-import org.apache.kafka.trogdor.rest.CreateAgentFaultRequest;
+import org.apache.kafka.trogdor.rest.CreateWorkerRequest;
+import org.apache.kafka.trogdor.rest.CreateWorkerResponse;
 import org.apache.kafka.trogdor.rest.Empty;
 import org.apache.kafka.trogdor.rest.JsonRestServer;
 import org.apache.kafka.trogdor.rest.JsonRestServer.HttpResponse;
+import org.apache.kafka.trogdor.rest.StopWorkerRequest;
+import org.apache.kafka.trogdor.rest.StopWorkerResponse;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
@@ -40,51 +42,64 @@ import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
  */
 public class AgentClient {
     /**
+     * The maximum number of tries to make.
+     */
+    private final int maxTries;
+
+    /**
      * The URL target.
      */
     private final String target;
 
-    public AgentClient(String host, int port) {
-        this(String.format("%s:%d", host, port));
+    public AgentClient(int maxTries, String host, int port) {
+        this(maxTries, String.format("%s:%d", host, port));
     }
 
-    public AgentClient(String target) {
+    public AgentClient(int maxTries, String target) {
         this.target = target;
+        this.maxTries = maxTries;
     }
 
     public String target() {
         return target;
     }
 
+    public int maxTries() {
+        return maxTries;
+    }
+
     private String url(String suffix) {
         return String.format("http://%s%s", target, suffix);
     }
 
-    public AgentStatusResponse getStatus() throws Exception {
+    public AgentStatusResponse status() throws Exception {
         HttpResponse<AgentStatusResponse> resp =
             JsonRestServer.<AgentStatusResponse>httpRequest(url("/agent/status"), "GET",
-                null, new TypeReference<AgentStatusResponse>() { });
+                null, new TypeReference<AgentStatusResponse>() { }, maxTries);
         return resp.body();
     }
 
-    public AgentFaultsResponse getFaults() throws Exception {
-        HttpResponse<AgentFaultsResponse> resp =
-            JsonRestServer.<AgentFaultsResponse>httpRequest(url("/agent/faults"), "GET",
-                null, new TypeReference<AgentFaultsResponse>() { });
+    public CreateWorkerResponse createWorker(CreateWorkerRequest request) throws Exception {
+        HttpResponse<CreateWorkerResponse> resp =
+            JsonRestServer.<CreateWorkerResponse>httpRequest(
+                url("/agent/worker/create"), "POST",
+                request, new TypeReference<CreateWorkerResponse>() { }, maxTries);
         return resp.body();
     }
 
-    public void putFault(CreateAgentFaultRequest request) throws Exception {
-        HttpResponse<AgentFaultsResponse> resp =
-            JsonRestServer.<AgentFaultsResponse>httpRequest(url("/agent/fault"), "PUT",
-                request, new TypeReference<AgentFaultsResponse>() { });
-        resp.body();
+    public StopWorkerResponse stopWorker(StopWorkerRequest request) throws Exception {
+        HttpResponse<StopWorkerResponse> resp =
+            JsonRestServer.<StopWorkerResponse>httpRequest(url(
+                "/agent/worker/stop"), "PUT",
+                request, new TypeReference<StopWorkerResponse>() { }, maxTries);
+        return resp.body();
     }
 
     public void invokeShutdown() throws Exception {
         HttpResponse<Empty> resp =
-            JsonRestServer.<Empty>httpRequest(url("/agent/shutdown"), "PUT",
-                null, new TypeReference<Empty>() { });
+            JsonRestServer.<Empty>httpRequest(url(
+                "/agent/shutdown"), "PUT",
+                null, new TypeReference<Empty>() { }, maxTries);
         resp.body();
     }
 
@@ -106,16 +121,17 @@ public class AgentClient {
             .type(Boolean.class)
             .dest("status")
             .help("Get agent status.");
-        actions.addArgument("--get-faults")
-            .action(storeTrue())
-            .type(Boolean.class)
-            .dest("get_faults")
-            .help("Get agent faults.");
-        actions.addArgument("--create-fault")
+        actions.addArgument("--create-worker")
             .action(store())
             .type(String.class)
-            .dest("create_fault")
-            .metavar("FAULT_JSON")
+            .dest("create_worker")
+            .metavar("SPEC_JSON")
+            .help("Create a new fault.");
+        actions.addArgument("--stop-worker")
+            .action(store())
+            .type(String.class)
+            .dest("stop_worker")
+            .metavar("SPEC_JSON")
             .help("Create a new fault.");
         actions.addArgument("--shutdown")
             .action(storeTrue())
@@ -136,16 +152,14 @@ public class AgentClient {
             }
         }
         String target = res.getString("target");
-        AgentClient client = new AgentClient(target);
+        AgentClient client = new AgentClient(3, target);
         if (res.getBoolean("status")) {
             System.out.println("Got agent status: " +
-                JsonUtil.toPrettyJsonString(client.getStatus()));
-        } else if (res.getBoolean("get_faults")) {
-            System.out.println("Got agent faults: " +
-                JsonUtil.toPrettyJsonString(client.getFaults()));
-        } else if (res.getString("create_fault") != null) {
-            client.putFault(JsonUtil.JSON_SERDE.readValue(res.getString("create_fault"),
-                CreateAgentFaultRequest.class));
+                JsonUtil.toPrettyJsonString(client.status()));
+        } else if (res.getString("create_worker") != null) {
+            client.createWorker(JsonUtil.JSON_SERDE.
+                readValue(res.getString("create_worker"),
+                    CreateWorkerRequest.class));
             System.out.println("Created fault.");
         } else if (res.getBoolean("shutdown")) {
             client.invokeShutdown();

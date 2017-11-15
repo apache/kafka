@@ -22,6 +22,7 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -50,7 +51,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * are held when they are invoked.
  */
 public class ConsumerNetworkClient implements Closeable {
-    private static final long MAX_POLL_TIMEOUT_MS = 5000L;
+    private static final int MAX_POLL_TIMEOUT_MS = 5000;
 
     // the mutable state of this class is protected by the object's monitor (excluding the wakeup
     // flag and the request completion queue below).
@@ -60,6 +61,7 @@ public class ConsumerNetworkClient implements Closeable {
     private final Metadata metadata;
     private final Time time;
     private final long retryBackoffMs;
+    private final int maxPollTimeoutMs;
     private final long unsentExpiryMs;
     private final AtomicBoolean wakeupDisabled = new AtomicBoolean();
 
@@ -76,12 +78,14 @@ public class ConsumerNetworkClient implements Closeable {
                                  Metadata metadata,
                                  Time time,
                                  long retryBackoffMs,
-                                 long requestTimeoutMs) {
+                                 long requestTimeoutMs,
+                                 int maxPollTimeoutMs) {
         this.log = logContext.logger(ConsumerNetworkClient.class);
         this.client = client;
         this.metadata = metadata;
         this.time = time;
         this.retryBackoffMs = retryBackoffMs;
+        this.maxPollTimeoutMs = Math.min(maxPollTimeoutMs, MAX_POLL_TIMEOUT_MS);
         this.unsentExpiryMs = requestTimeoutMs;
     }
 
@@ -134,6 +138,9 @@ public class ConsumerNetworkClient implements Closeable {
         int version = this.metadata.requestUpdate();
         do {
             poll(timeout);
+            AuthenticationException ex = this.metadata.getAndClearAuthenticationException();
+            if (ex != null)
+                throw ex;
         } while (this.metadata.version() == version && time.milliseconds() - startMs < timeout);
         return this.metadata.version() > version;
     }
@@ -167,7 +174,7 @@ public class ConsumerNetworkClient implements Closeable {
      */
     public void poll(RequestFuture<?> future) {
         while (!future.isDone())
-            poll(MAX_POLL_TIMEOUT_MS, time.milliseconds(), future);
+            poll(Long.MAX_VALUE, time.milliseconds(), future);
     }
 
     /**
@@ -231,7 +238,7 @@ public class ConsumerNetworkClient implements Closeable {
                 // if there are no requests in flight, do not block longer than the retry backoff
                 if (client.inFlightRequestCount() == 0)
                     timeout = Math.min(timeout, retryBackoffMs);
-                client.poll(Math.min(MAX_POLL_TIMEOUT_MS, timeout), now);
+                client.poll(Math.min(maxPollTimeoutMs, timeout), now);
                 now = time.milliseconds();
             } else {
                 client.poll(0, now);
@@ -367,9 +374,13 @@ public class ConsumerNetworkClient implements Closeable {
                 Collection<ClientRequest> requests = unsent.remove(node);
                 for (ClientRequest request : requests) {
                     RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) request.callback();
-                    handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().desiredOrLatestVersion()),
-                        request.callback(), request.destination(), request.createdTimeMs(), now, true,
-                        null, null));
+                    AuthenticationException authenticationException = client.authenticationException(node);
+                    if (authenticationException != null)
+                        handler.onFailure(authenticationException);
+                    else
+                        handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().latestAllowedVersion()),
+                            request.callback(), request.destination(), request.createdTimeMs(), now, true,
+                            null, null));
                 }
             }
         }

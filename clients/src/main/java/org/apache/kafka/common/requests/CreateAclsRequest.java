@@ -20,6 +20,9 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.utils.Utils;
@@ -28,8 +31,28 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.apache.kafka.common.protocol.CommonFields.HOST;
+import static org.apache.kafka.common.protocol.CommonFields.OPERATION;
+import static org.apache.kafka.common.protocol.CommonFields.PERMISSION_TYPE;
+import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL;
+import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME;
+import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_TYPE;
+
 public class CreateAclsRequest extends AbstractRequest {
-    private final static String CREATIONS = "creations";
+    private final static String CREATIONS_KEY_NAME = "creations";
+
+    private static final Schema CREATE_ACLS_REQUEST_V0 = new Schema(
+            new Field(CREATIONS_KEY_NAME, new ArrayOf(new Schema(
+                    RESOURCE_TYPE,
+                    RESOURCE_NAME,
+                    PRINCIPAL,
+                    HOST,
+                    OPERATION,
+                    PERMISSION_TYPE))));
+
+    public static Schema[] schemaVersions() {
+        return new Schema[]{CREATE_ACLS_REQUEST_V0};
+    }
 
     public static class AclCreation {
         private final AclBinding acl;
@@ -88,7 +111,7 @@ public class CreateAclsRequest extends AbstractRequest {
     public CreateAclsRequest(Struct struct, short version) {
         super(version);
         this.aclCreations = new ArrayList<>();
-        for (Object creationStructObj : struct.getArray(CREATIONS)) {
+        for (Object creationStructObj : struct.getArray(CREATIONS_KEY_NAME)) {
             Struct creationStruct = (Struct) creationStructObj;
             aclCreations.add(AclCreation.fromStruct(creationStruct));
         }
@@ -99,11 +122,11 @@ public class CreateAclsRequest extends AbstractRequest {
         Struct struct = new Struct(ApiKeys.CREATE_ACLS.requestSchema(version()));
         List<Struct> requests = new ArrayList<>();
         for (AclCreation creation : aclCreations) {
-            Struct creationStruct = struct.instance(CREATIONS);
+            Struct creationStruct = struct.instance(CREATIONS_KEY_NAME);
             creation.setStructFields(creationStruct);
             requests.add(creationStruct);
         }
-        struct.set(CREATIONS, requests.toArray());
+        struct.set(CREATIONS_KEY_NAME, requests.toArray());
         return struct;
     }
 

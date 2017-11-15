@@ -69,26 +69,21 @@ public class KafkaChannel {
     }
 
     /**
-     * Does handshake of transportLayer and authentication using configured authenticator
+     * Does handshake of transportLayer and authentication using configured authenticator.
+     * For SSL with client authentication enabled, {@link TransportLayer#handshake()} performs
+     * authentication. For SASL, authentication is performed by {@link Authenticator#authenticate()}.
      */
-    public void prepare() throws IOException {
-        if (!transportLayer.ready())
-            transportLayer.handshake();
-        if (transportLayer.ready() && !authenticator.complete()) {
-            try {
+    public void prepare() throws AuthenticationException, IOException {
+        try {
+            if (!transportLayer.ready())
+                transportLayer.handshake();
+            if (transportLayer.ready() && !authenticator.complete())
                 authenticator.authenticate();
-            } catch (AuthenticationException e) {
-                switch (authenticator.error()) {
-                    case AUTHENTICATION_FAILED:
-                    case ILLEGAL_SASL_STATE:
-                    case UNSUPPORTED_SASL_MECHANISM:
-                        state = new ChannelState(ChannelState.State.AUTHENTICATION_FAILED, e);
-                        break;
-                    default:
-                        // Other errors are handled as network exceptions in Selector
-                }
-                throw e;
-            }
+        } catch (AuthenticationException e) {
+            // Clients are notified of authentication exceptions to enable operations to be terminated
+            // without retries. Other errors are handled as network exceptions in Selector.
+            state = new ChannelState(ChannelState.State.AUTHENTICATION_FAILED, e);
+            throw e;
         }
         if (ready())
             state = ChannelState.READY;

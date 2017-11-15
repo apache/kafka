@@ -32,15 +32,20 @@ import scala.collection.JavaConverters._
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator
 import kafka.controller.ControllerEventManager
+import kafka.zookeeper.ZooKeeperClient
 
 @Category(Array(classOf[IntegrationTest]))
 abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
 
   val zkConnectionTimeout = 10000
   val zkSessionTimeout = 6000
+  val zkMaxInFlightRequests = Int.MaxValue
+
   protected val zkAclsEnabled: Option[Boolean] = None
 
   var zkUtils: ZkUtils = null
+  var zooKeeperClient: ZooKeeperClient = null
+  var zkClient: KafkaZkClient = null
   var zookeeper: EmbeddedZookeeper = null
 
   def zkPort: Int = zookeeper.port
@@ -50,12 +55,17 @@ abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
   def setUp() {
     zookeeper = new EmbeddedZookeeper()
     zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled()))
+
+    zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests)
+    zkClient = new KafkaZkClient(zooKeeperClient, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled()))
   }
 
   @After
   def tearDown() {
     if (zkUtils != null)
      CoreUtils.swallow(zkUtils.close())
+    if (zkClient != null)
+     zkClient.close()
     if (zookeeper != null)
       CoreUtils.swallow(zookeeper.shutdown())
     Configuration.setConfiguration(null)
@@ -81,7 +91,7 @@ object ZooKeeperTestHarness {
    */
   @BeforeClass
   def setUpClass() {
-    verifyNoUnexpectedThreads()
+    verifyNoUnexpectedThreads("@BeforeClass")
   }
 
   /**
@@ -89,18 +99,18 @@ object ZooKeeperTestHarness {
    */
   @AfterClass
   def tearDownClass() {
-    verifyNoUnexpectedThreads()
+    verifyNoUnexpectedThreads("@AfterClass")
   }
 
   /**
    * Verifies that threads which are known to cause transient failures in subsequent tests
    * have been shutdown.
    */
-  def verifyNoUnexpectedThreads() {
+  def verifyNoUnexpectedThreads(context: String) {
     def allThreads = Thread.getAllStackTraces.keySet.asScala.map(thread => thread.getName)
     val (threads, noUnexpected) = TestUtils.computeUntilTrue(allThreads) { threads =>
       threads.forall(t => unexpectedThreadNames.forall(s => !t.contains(s)))
     }
-    assertTrue(s"Found unexpected threads, allThreads=$threads", noUnexpected)
+    assertTrue(s"Found unexpected threads during $context, allThreads=$threads", noUnexpected)
   }
 }

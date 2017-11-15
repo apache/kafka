@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 
@@ -81,7 +80,7 @@ public interface KGroupedTable<K, V> {
      * alphanumerics, '.', '_' and '-'. If {@code null} this is the equivalent of {@link KGroupedTable#count()}.
      * @return a {@link KTable} that contains "update" records with unmodified keys and {@link Long} values that
      * represent the latest (rolling) count (i.e., number of records) for each key
-     * @deprecated use {@link #count(Materialized)}
+     * @deprecated use {@link #count(Materialized) count(Materialized.as(queryableStoreName))}
      */
     @Deprecated
     KTable<K, Long> count(final String queryableStoreName);
@@ -192,10 +191,10 @@ public interface KGroupedTable<K, V> {
      * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a {@link KTable} that contains "update" records with unmodified keys and {@link Long} values that
      * represent the latest (rolling) count (i.e., number of records) for each key
-     * @deprecated use {@link #count(Materialized)}
+     * @deprecated use {@link #count(Materialized) count(Materialized.as(KeyValueByteStoreSupplier)}
      */
     @Deprecated
-    KTable<K, Long> count(final StateStoreSupplier<KeyValueStore> storeSupplier);
+    KTable<K, Long> count(final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
      * Combine the value of records of the original {@link KTable} that got {@link KTable#groupBy(KeyValueMapper)
@@ -264,7 +263,7 @@ public interface KGroupedTable<K, V> {
      * '.', '_' and '-'. If {@code null} this is the equivalent of {@link KGroupedTable#reduce(Reducer, Reducer)} ()}.
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
-     * @deprecated use {@link #reduce(Reducer, Reducer, Materialized)}
+     * @deprecated use {@link #reduce(Reducer, Reducer, Materialized) reduce(adder, subtractor, Materialized.as(queryableStoreName))}
      */
     @Deprecated
     KTable<K, V> reduce(final Reducer<V> adder,
@@ -346,7 +345,7 @@ public interface KGroupedTable<K, V> {
      * mapped} to the same key into a new instance of {@link KTable}.
      * Records with {@code null} key are ignored.
      * Combining implies that the type of the aggregate result is the same as the type of the input value
-     * (c.f. {@link #aggregate(Initializer, Aggregator, Aggregator, Serde, String)}).
+     * (c.f. {@link #aggregate(Initializer, Aggregator, Aggregator)}).
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
      * that can be queried using the provided {@code queryableStoreName}.
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
@@ -462,12 +461,12 @@ public interface KGroupedTable<K, V> {
      * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
-     * @deprecated use {@link #reduce(Reducer, Reducer, Materialized)}
+     * @deprecated use {@link #reduce(Reducer, Reducer, Materialized) reduce(adder, subtractor, Materialized.as(KeyValueByteStoreSupplier))}
      */
     @Deprecated
     KTable<K, V> reduce(final Reducer<V> adder,
                         final Reducer<V> subtractor,
-                        final StateStoreSupplier<KeyValueStore> storeSupplier);
+                        final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
      * Aggregate the value of records of the original {@link KTable} that got {@link KTable#groupBy(KeyValueMapper)
@@ -547,7 +546,7 @@ public interface KGroupedTable<K, V> {
      * @param <VR>        the value type of the aggregated {@link KTable}
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
-     * @deprecated use {@link #aggregate(Initializer, Aggregator, Aggregator, Materialized)}
+     * @deprecated use {@link #aggregate(Initializer, Aggregator, Aggregator, Materialized) aggregate(initializer, adder, subtractor, Materialized.as(queryableStoreName))}
      */
     @Deprecated
     <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
@@ -559,7 +558,7 @@ public interface KGroupedTable<K, V> {
      * Aggregate the value of records of the original {@link KTable} that got {@link KTable#groupBy(KeyValueMapper)
      * mapped} to the same key into a new instance of {@link KTable} using default serializers and deserializers.
      * Records with {@code null} key are ignored.
-     * Aggregating is a generalization of {@link #reduce(Reducer, Reducer, String) combining via reduce(...)} as it,
+     * Aggregating is a generalization of {@link #reduce(Reducer, Reducer, Materialized) combining via reduce(...)} as it,
      * for example, allows the result to have a different type than the input values.
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
      * provided by the given {@code storeSupplier}.
@@ -639,11 +638,10 @@ public interface KGroupedTable<K, V> {
      * Aggregate the value of records of the original {@link KTable} that got {@link KTable#groupBy(KeyValueMapper)
      * mapped} to the same key into a new instance of {@link KTable} using default serializers and deserializers.
      * Records with {@code null} key are ignored.
-     * Aggregating is a generalization of {@link #reduce(Reducer, Reducer, String) combining via reduce(...)} as it,
+     * Aggregating is a generalization of {@link #reduce(Reducer, Reducer) combining via reduce(...)} as it,
      * for example, allows the result to have a different type than the input values.
      * If the result value type does not match the {@link StreamsConfig#VALUE_SERDE_CLASS_CONFIG default value
-     * serde} you should use {@link KGroupedTable#aggregate(Initializer, Aggregator, Aggregator, Serde, String)
-     * aggregate(Initializer, Aggregator, Aggregator, Serde, String)}.
+     * serde} you should use {@link #aggregate(Initializer, Aggregator, Aggregator, Serde)}.
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
      * provided by the given {@code storeSupplier}.
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
@@ -784,7 +782,7 @@ public interface KGroupedTable<K, V> {
      * @param <VR>          the value type of the aggregated {@link KTable}
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
-     * @deprecated use {@link #aggregate(Initializer, Aggregator, Aggregator, Materialized)}
+     * @deprecated use {@link #aggregate(Initializer, Aggregator, Aggregator, Materialized) aggregate(initializer, adder, subtractor, Materialized.as(queryableStoreName).withValueSerde(aggValueSerde))}
      */
     @Deprecated
     <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
@@ -797,7 +795,7 @@ public interface KGroupedTable<K, V> {
      * Aggregate the value of records of the original {@link KTable} that got {@link KTable#groupBy(KeyValueMapper)
      * mapped} to the same key into a new instance of {@link KTable} using default serializers and deserializers.
      * Records with {@code null} key are ignored.
-     * Aggregating is a generalization of {@link #reduce(Reducer, Reducer, String) combining via reduce(...)} as it,
+     * Aggregating is a generalization of {@link #reduce(Reducer, Reducer, Materialized) combining via reduce(...)} as it,
      * for example, allows the result to have a different type than the input values.
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
      * that can be queried using the provided {@code queryableStoreName}.
@@ -857,7 +855,9 @@ public interface KGroupedTable<K, V> {
      * @param <VR>          the value type of the aggregated {@link KTable}
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
+     * @deprecated use {@link #aggregate(Initializer, Aggregator, Aggregator, Materialized) aggregate(initializer, adder, subtractor, Materialized.with(null, aggValueSerde))}
      */
+    @Deprecated
     <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
                                  final Aggregator<? super K, ? super V, VR> adder,
                                  final Aggregator<? super K, ? super V, VR> subtractor,
@@ -938,10 +938,12 @@ public interface KGroupedTable<K, V> {
      * @param <VR>          the value type of the aggregated {@link KTable}
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
+     * @deprecated use {@link #aggregate(Initializer, Aggregator, Aggregator, Materialized) aggregate(initializer, adder, subtractor, Materialized.as(KeyValueByteStoreSupplier))}
      */
+    @Deprecated
     <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
                                  final Aggregator<? super K, ? super V, VR> adder,
                                  final Aggregator<? super K, ? super V, VR> subtractor,
-                                 final StateStoreSupplier<KeyValueStore> storeSupplier);
+                                 final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier);
 
 }

@@ -22,6 +22,7 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.network.Authenticator;
@@ -34,8 +35,7 @@ import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.SecurityProtocol;
-import org.apache.kafka.common.protocol.Protocol;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
@@ -47,7 +47,6 @@ import org.apache.kafka.common.requests.SaslAuthenticateResponse;
 import org.apache.kafka.common.requests.SaslHandshakeRequest;
 import org.apache.kafka.common.requests.SaslHandshakeResponse;
 import org.apache.kafka.common.security.JaasContext;
-import org.apache.kafka.common.security.auth.AuthCallbackHandler;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
 import org.apache.kafka.common.security.auth.SaslAuthenticationContext;
@@ -114,7 +113,7 @@ public class SaslServerAuthenticator implements Authenticator {
     // Next SASL state to be set when outgoing writes associated with the current SASL state complete
     private SaslState pendingSaslState = null;
     // Exception that will be thrown by `authenticate()` when SaslState is set to FAILED after outbound writes complete
-    private IOException pendingException = null;
+    private AuthenticationException pendingException = null;
     private SaslServer saslServer;
     private String saslMechanism;
     private AuthCallbackHandler callbackHandler;
@@ -124,8 +123,6 @@ public class SaslServerAuthenticator implements Authenticator {
     private Send netOutBuffer;
     // flag indicating if sasl tokens are sent as Kafka SaslAuthenticate request/responses
     private boolean enableKafkaSaslAuthenticateHeaders;
-    // authentication error if authentication failed
-    private Errors error;
 
     public SaslServerAuthenticator(Map<String, ?> configs,
                                    String connectionId,
@@ -145,11 +142,11 @@ public class SaslServerAuthenticator implements Authenticator {
         this.listenerName = listenerName;
         this.securityProtocol = securityProtocol;
         this.enableKafkaSaslAuthenticateHeaders = false;
-        this.error = Errors.NONE;
 
         this.transportLayer = transportLayer;
 
         this.configs = configs;
+        @SuppressWarnings("unchecked")
         List<String> enabledMechanisms = (List<String>) this.configs.get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG);
         if (enabledMechanisms == null || enabledMechanisms.isEmpty())
             throw new IllegalArgumentException("No SASL mechanisms are enabled");
@@ -276,8 +273,15 @@ public class SaslServerAuthenticator implements Authenticator {
                     default:
                         break;
                 }
+            } catch (SaslException | AuthenticationException e) {
+                // Exception will be propagated after response is sent to client
+                AuthenticationException authException = (e instanceof AuthenticationException) ?
+                        (AuthenticationException) e : new AuthenticationException("SASL authentication failed", e);
+                setSaslState(SaslState.FAILED, authException);
             } catch (Exception e) {
-                setSaslState(SaslState.FAILED, new IOException(e));
+                // In the case of IOExceptions and other unexpected exceptions, fail immediately
+                saslState = SaslState.FAILED;
+                throw e;
             }
         }
     }
@@ -286,11 +290,6 @@ public class SaslServerAuthenticator implements Authenticator {
     public KafkaPrincipal principal() {
         SaslAuthenticationContext context = new SaslAuthenticationContext(saslServer, securityProtocol, clientAddress());
         return principalBuilder.build(context);
-    }
-
-    @Override
-    public Errors error() {
-        return error;
     }
 
     @Override
@@ -312,7 +311,7 @@ public class SaslServerAuthenticator implements Authenticator {
         setSaslState(saslState, null);
     }
 
-    private void setSaslState(SaslState saslState, IOException exception) throws IOException {
+    private void setSaslState(SaslState saslState, AuthenticationException exception) throws IOException {
         if (netOutBuffer != null && !netOutBuffer.completed()) {
             pendingSaslState = saslState;
             pendingException = exception;
@@ -367,13 +366,11 @@ public class SaslServerAuthenticator implements Authenticator {
                     KafkaPrincipal.ANONYMOUS, listenerName, securityProtocol);
             RequestAndSize requestAndSize = requestContext.parseRequest(requestBuffer);
             if (apiKey != ApiKeys.SASL_AUTHENTICATE) {
-                this.error = Errors.ILLEGAL_SASL_STATE;
                 IllegalSaslStateException e = new IllegalSaslStateException("Unexpected Kafka request of type " + apiKey + " during SASL authentication.");
                 sendKafkaResponse(requestContext, requestAndSize.request.getErrorResponse(e));
                 throw e;
             }
-            if (!Protocol.apiVersionSupported(apiKey.id, version)) {
-                this.error = Errors.UNSUPPORTED_VERSION;
+            if (!apiKey.isVersionSupported(version)) {
                 // We cannot create an error response if the request version of SaslAuthenticate is not supported
                 // This should not normally occur since clients typically check supported versions using ApiVersionsRequest
                 throw new UnsupportedVersionException("Version " + version + " is not supported for apiKey " + apiKey);
@@ -385,10 +382,11 @@ public class SaslServerAuthenticator implements Authenticator {
                 // For versions with SASL_AUTHENTICATE header, send a response to SASL_AUTHENTICATE request even if token is empty.
                 ByteBuffer responseBuf = responseToken == null ? EMPTY_BUFFER : ByteBuffer.wrap(responseToken);
                 sendKafkaResponse(requestContext, new SaslAuthenticateResponse(Errors.NONE, null, responseBuf));
-            } catch (SaslException e) {
-                this.error = Errors.AUTHENTICATION_FAILED;
-                sendKafkaResponse(requestContext, new SaslAuthenticateResponse(this.error,
-                        "Authentication failed due to invalid credentials with SASL mechanism " + saslMechanism));
+            } catch (SaslAuthenticationException | SaslException e) {
+                String errorMessage = e instanceof SaslAuthenticationException ? e.getMessage() :
+                    "Authentication failed due to invalid credentials with SASL mechanism " + saslMechanism;
+                sendKafkaResponse(requestContext, new SaslAuthenticateResponse(Errors.SASL_AUTHENTICATION_FAILED,
+                        errorMessage));
                 throw e;
             }
         }
@@ -463,15 +461,14 @@ public class SaslServerAuthenticator implements Authenticator {
             return clientMechanism;
         } else {
             LOG.debug("SASL mechanism '{}' requested by client is not supported", clientMechanism);
-            this.error = Errors.UNSUPPORTED_SASL_MECHANISM;
-            sendKafkaResponse(context, new SaslHandshakeResponse(this.error, enabledMechanisms));
+            sendKafkaResponse(context, new SaslHandshakeResponse(Errors.UNSUPPORTED_SASL_MECHANISM, enabledMechanisms));
             throw new UnsupportedSaslMechanismException("Unsupported SASL mechanism " + clientMechanism);
         }
     }
 
     // Visible to override for testing
     protected ApiVersionsResponse apiVersionsResponse() {
-        return ApiVersionsResponse.API_VERSIONS_RESPONSE;
+        return ApiVersionsResponse.defaultApiVersionsResponse();
     }
 
     // Visible to override for testing
