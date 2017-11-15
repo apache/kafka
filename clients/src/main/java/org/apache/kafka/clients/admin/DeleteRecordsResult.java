@@ -31,9 +31,9 @@ import java.util.Map;
 @InterfaceStability.Evolving
 public class DeleteRecordsResult {
 
-    private final Map<TopicPartition, KafkaFuture<DeleteRecords>> futures;
+    private final Map<TopicPartition, KafkaFuture<DeletedRecords>> futures;
 
-    DeleteRecordsResult(Map<TopicPartition, KafkaFuture<DeleteRecords>> futures) {
+    DeleteRecordsResult(Map<TopicPartition, KafkaFuture<DeletedRecords>> futures) {
         this.futures = futures;
     }
 
@@ -41,7 +41,7 @@ public class DeleteRecordsResult {
      * Return a map from topic partition to futures which can be used to check the status of
      * individual deletions.
      */
-    public Map<TopicPartition, KafkaFuture<DeleteRecords>> lowWatermarks() {
+    public Map<TopicPartition, KafkaFuture<DeletedRecords>> lowWatermarks() {
         return futures;
     }
 

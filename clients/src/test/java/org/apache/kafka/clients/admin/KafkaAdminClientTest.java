@@ -486,13 +486,13 @@ public class KafkaAdminClientTest {
             DeleteRecordsResult results = env.adminClient().deleteRecords(recordsToDelete);
 
             // success on records deletion for partition 0
-            Map<TopicPartition, KafkaFuture<DeleteRecords>> values = results.lowWatermarks();
-            KafkaFuture<DeleteRecords> myTopicPartition0Result = values.get(myTopicPartition0);
+            Map<TopicPartition, KafkaFuture<DeletedRecords>> values = results.lowWatermarks();
+            KafkaFuture<DeletedRecords> myTopicPartition0Result = values.get(myTopicPartition0);
             long lowWatermark = myTopicPartition0Result.get().lowWatermark();
             assertEquals(lowWatermark, 3);
 
             // "offset out of range" failure on records deletion for partition 1
-            KafkaFuture<DeleteRecords> myTopicPartition1Result = values.get(myTopicPartition1);
+            KafkaFuture<DeletedRecords> myTopicPartition1Result = values.get(myTopicPartition1);
             try {
                 myTopicPartition1Result.get();
                 fail("get() should throw ExecutionException");
@@ -501,7 +501,7 @@ public class KafkaAdminClientTest {
             }
 
             // "leader not available" failure on metadata request for partition 2
-            KafkaFuture<DeleteRecords> myTopicPartition2Result = values.get(myTopicPartition2);
+            KafkaFuture<DeletedRecords> myTopicPartition2Result = values.get(myTopicPartition2);
             try {
                 myTopicPartition2Result.get();
                 fail("get() should throw ExecutionException");
@@ -510,7 +510,7 @@ public class KafkaAdminClientTest {
             }
 
             // "not leader for partition" failure on records deletion for partition 3
-            KafkaFuture<DeleteRecords> myTopicPartition3Result = values.get(myTopicPartition3);
+            KafkaFuture<DeletedRecords> myTopicPartition3Result = values.get(myTopicPartition3);
             try {
                 myTopicPartition3Result.get();
                 fail("get() should throw ExecutionException");
@@ -519,7 +519,7 @@ public class KafkaAdminClientTest {
             }
 
             // "unknown topic or partition" failure on records deletion for partition 4
-            KafkaFuture<DeleteRecords> myTopicPartition4Result = values.get(myTopicPartition4);
+            KafkaFuture<DeletedRecords> myTopicPartition4Result = values.get(myTopicPartition4);
             try {
                 myTopicPartition4Result.get();
                 fail("get() should throw ExecutionException");

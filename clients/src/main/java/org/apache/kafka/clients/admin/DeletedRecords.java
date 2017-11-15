@@ -25,7 +25,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * The API for this class is still evolving and we may break compatibility in minor releases, if necessary.
  */
 @InterfaceStability.Evolving
-public class DeleteRecords {
+public class DeletedRecords {
 
     private final long lowWatermark;
 
@@ -34,7 +34,7 @@ public class DeleteRecords {
      *
      * @param lowWatermark  "low watermark" for the topic partition on which the deletion was executed
      */
-    public DeleteRecords(long lowWatermark) {
+    public DeletedRecords(long lowWatermark) {
         this.lowWatermark = lowWatermark;
     }
 
