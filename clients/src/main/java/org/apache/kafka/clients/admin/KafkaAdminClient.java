@@ -1905,8 +1905,11 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse abstractResponse) {
                 MetadataResponse response = (MetadataResponse) abstractResponse;
 
+                Map<String, Errors> errors = response.errors();
+                Cluster cluster = response.cluster();
+
                 // completing futures for topics with errors
-                for (Map.Entry<String, Errors> topicError: response.errors().entrySet()) {
+                for (Map.Entry<String, Errors> topicError: errors.entrySet()) {
 
                     for (Map.Entry<TopicPartition, KafkaFutureImpl<DeletedRecords>> future: futures.entrySet()) {
                         if (future.getKey().topic().equals(topicError.getKey())) {
@@ -1920,9 +1923,9 @@ public class KafkaAdminClient extends AdminClient {
                 for (Map.Entry<TopicPartition, RecordsToDelete> entry: recordsToDelete.entrySet()) {
 
                     // avoiding to send deletion request for topics with errors
-                    if (!response.errors().containsKey(entry.getKey().topic())) {
+                    if (!errors.containsKey(entry.getKey().topic())) {
 
-                        Node node = response.cluster().leaderFor(entry.getKey());
+                        Node node = cluster.leaderFor(entry.getKey());
                         if (node != null) {
                             if (!leaders.containsKey(node))
                                 leaders.put(node, new HashMap<TopicPartition, Long>());
