@@ -22,10 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Implementation of OffsetStorageReader. Unlike OffsetStorageWriter which is implemented
@@ -50,7 +47,7 @@ public class OffsetStorageReaderImpl implements OffsetStorageReader {
 
     @Override
     public <T> Map<String, Object> offset(Map<String, T> partition) {
-        return offsets(Arrays.asList(partition)).get(partition);
+        return offsets(Collections.singletonList(partition)).get(partition);
     }
 
     @Override
