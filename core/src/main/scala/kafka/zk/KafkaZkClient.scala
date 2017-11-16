@@ -946,12 +946,12 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
   }
 
   private[zk] def pathExists(path: String): Boolean = {
-    val getDataRequest = GetDataRequest(path)
-    val getDataResponse = retryRequestUntilConnected(getDataRequest)
-    getDataResponse.resultCode match {
+    val existsRequest = ExistsRequest(path)
+    val existsResponse = retryRequestUntilConnected(existsRequest)
+    existsResponse.resultCode match {
       case Code.OK => true
       case Code.NONODE => false
-      case _ => throw getDataResponse.resultException.get
+      case _ => throw existsResponse.resultException.get
     }
   }
 
