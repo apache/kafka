@@ -19,7 +19,17 @@
 
 <script id="content-template" type="text/x-handlebars-template">
     <h1>Developer Guide for Kafka Streams API</h1>
-    
+    <div class="sub-nav-sticky">
+      <div class="sticky-top">
+        <div style="height:35px">
+          <a href="/{{version}}/documentation/streams/">Introduction</a>
+          <a class="active-menu-item" href="/{{version}}/documentation/streams/developer-guide">Developer Guide</a>
+          <a href="/{{version}}/documentation/streams/core-concepts">Concepts</a>
+          <a href="/{{version}}/documentation/streams/quickstart">Run Demo App</a>
+          <a href="/{{version}}/documentation/streams/tutorial">Tutorial: Write App</a>
+        </div>
+      </div>
+  </div> 
     <p>
         This developer guide describes how to write, configure, and execute a Kafka Streams application. There is a <a href="/{{version}}/documentation/#quickstart_kafkastreams">quickstart</a> example that provides how to run a stream processing program coded in the Kafka Streams library.
     </p>
@@ -2994,6 +3004,21 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
 $(function() {
   // Show selected style on nav item
   $('.b-nav__streams').addClass('selected');
+
+     //sticky secondary nav
+          var $navbar = $(".sub-nav-sticky"),
+               y_pos = $navbar.offset().top,
+               height = $navbar.height();
+       
+           $(window).scroll(function() {
+               var scrollTop = $(window).scrollTop();
+           
+               if (scrollTop > y_pos - height) {
+                   $navbar.addClass("navbar-fixed")
+               } else if (scrollTop <= y_pos) {
+                   $navbar.removeClass("navbar-fixed")
+               }
+           });
 
   // Display docs subnav items
   $('.b-nav__docs').parent().toggleClass('nav__item__with__subs--expanded');
