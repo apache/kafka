@@ -214,6 +214,11 @@ public class PlaintextTransportLayer implements TransportLayer {
     }
 
     @Override
+    public boolean hasBytesBuffered() {
+        return false;
+    }
+
+    @Override
     public long transferFrom(FileChannel fileChannel, long position, long count) throws IOException {
         return fileChannel.transferTo(position, count, socketChannel);
     }

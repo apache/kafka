@@ -47,7 +47,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
   private var consumerGroupExecutor: ConsumerGroupExecutor = _
 
   // configure the servers and clients
-  override def generateConfigs() = {
+  override def generateConfigs = {
     TestUtils.createBrokerConfigs(1, zkConnect, enableControlledShutdown = false).map { props =>
       KafkaConfig.fromProps(props)
     }
@@ -274,6 +274,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     }
   }
 
+  @deprecated("This test has been deprecated and will be removed in a future release.", "0.11.1.0")
   private def createOldConsumer(): Unit = {
     val consumerProps = new Properties
     consumerProps.setProperty("group.id", group)

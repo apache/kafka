@@ -17,7 +17,6 @@
 package kafka.javaapi
 
 import kafka.cluster.BrokerEndPoint
-import org.apache.kafka.common.protocol.Errors
 import scala.collection.JavaConverters._
 
 private[javaapi] object MetadataListImplicits {

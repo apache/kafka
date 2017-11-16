@@ -24,7 +24,7 @@ package org.apache.kafka.streams.processor.internals;
  */
 public interface TimestampTracker<E> {
 
-    static final long NOT_KNOWN = -1L;
+    long NOT_KNOWN = -1L;
 
     /**
      * Adds a stamped elements to this tracker.
@@ -54,4 +54,8 @@ public interface TimestampTracker<E> {
      */
     int size();
 
+    /**
+     * Empty the tracker by removing any tracked stamped elements
+     */
+    void clear();
 }

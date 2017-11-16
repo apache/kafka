@@ -21,10 +21,13 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.slf4j.Logger;
@@ -52,22 +55,25 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     private static final Logger log = LoggerFactory.getLogger(GlobalStateManagerImpl.class);
 
     private final ProcessorTopology topology;
-    private final Consumer<byte[], byte[]> consumer;
+    private final Consumer<byte[], byte[]> globalConsumer;
     private final StateDirectory stateDirectory;
     private final Map<String, StateStore> stores = new LinkedHashMap<>();
     private final File baseDir;
     private final OffsetCheckpoint checkpoint;
     private final Set<String> globalStoreNames = new HashSet<>();
     private final Map<TopicPartition, Long> checkpointableOffsets = new HashMap<>();
+    private final StateRestoreListener stateRestoreListener;
 
     public GlobalStateManagerImpl(final ProcessorTopology topology,
-                                  final Consumer<byte[], byte[]> consumer,
-                                  final StateDirectory stateDirectory) {
+                                  final Consumer<byte[], byte[]> globalConsumer,
+                                  final StateDirectory stateDirectory,
+                                  final StateRestoreListener stateRestoreListener) {
         this.topology = topology;
-        this.consumer = consumer;
+        this.globalConsumer = globalConsumer;
         this.stateDirectory = stateDirectory;
         this.baseDir = stateDirectory.globalStateDir();
         this.checkpoint = new OffsetCheckpoint(new File(this.baseDir, CHECKPOINT_FILE_NAME));
+        this.stateRestoreListener = stateRestoreListener;
     }
 
     @Override
@@ -114,7 +120,6 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     }
 
     public void register(final StateStore store,
-                         final boolean ignored,
                          final StateRestoreCallback stateRestoreCallback) {
 
         if (stores.containsKey(store.name())) {
@@ -131,19 +136,19 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
         log.info("Restoring state for global store {}", store.name());
         final List<TopicPartition> topicPartitions = topicPartitionsForStore(store);
-        final Map<TopicPartition, Long> highWatermarks = consumer.endOffsets(topicPartitions);
+        final Map<TopicPartition, Long> highWatermarks = globalConsumer.endOffsets(topicPartitions);
         try {
-            restoreState(stateRestoreCallback, topicPartitions, highWatermarks);
+            restoreState(stateRestoreCallback, topicPartitions, highWatermarks, store.name());
             stores.put(store.name(), store);
         } finally {
-            consumer.assign(Collections.<TopicPartition>emptyList());
+            globalConsumer.unsubscribe();
         }
 
     }
 
     private List<TopicPartition> topicPartitionsForStore(final StateStore store) {
         final String sourceTopic = topology.storeToChangelogTopic().get(store.name());
-        final List<PartitionInfo> partitionInfos = consumer.partitionsFor(sourceTopic);
+        final List<PartitionInfo> partitionInfos = globalConsumer.partitionsFor(sourceTopic);
         if (partitionInfos == null || partitionInfos.isEmpty()) {
             throw new StreamsException(String.format("There are no partitions available for topic %s when initializing global store %s", sourceTopic, store.name()));
         }
@@ -157,28 +162,43 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
     private void restoreState(final StateRestoreCallback stateRestoreCallback,
                               final List<TopicPartition> topicPartitions,
-                              final Map<TopicPartition, Long> highWatermarks) {
+                              final Map<TopicPartition, Long> highWatermarks,
+                              final String storeName) {
         for (final TopicPartition topicPartition : topicPartitions) {
-            consumer.assign(Collections.singletonList(topicPartition));
+            globalConsumer.assign(Collections.singletonList(topicPartition));
             final Long checkpoint = checkpointableOffsets.get(topicPartition);
             if (checkpoint != null) {
-                consumer.seek(topicPartition, checkpoint);
+                globalConsumer.seek(topicPartition, checkpoint);
             } else {
-                consumer.seekToBeginning(Collections.singletonList(topicPartition));
+                globalConsumer.seekToBeginning(Collections.singletonList(topicPartition));
             }
 
-            long offset = consumer.position(topicPartition);
+            long offset = globalConsumer.position(topicPartition);
             final Long highWatermark = highWatermarks.get(topicPartition);
+            BatchingStateRestoreCallback
+                stateRestoreAdapter =
+                (BatchingStateRestoreCallback) ((stateRestoreCallback instanceof
+                                                     BatchingStateRestoreCallback)
+                                                ? stateRestoreCallback
+                                                : new WrappedBatchingStateRestoreCallback(stateRestoreCallback));
+
+            stateRestoreListener.onRestoreStart(topicPartition, storeName, offset, highWatermark);
+            long restoreCount = 0L;
 
             while (offset < highWatermark) {
-                final ConsumerRecords<byte[], byte[]> records = consumer.poll(100);
+                final ConsumerRecords<byte[], byte[]> records = globalConsumer.poll(100);
+                final List<KeyValue<byte[], byte[]>> restoreRecords = new ArrayList<>();
                 for (ConsumerRecord<byte[], byte[]> record : records) {
-                    offset = record.offset() + 1;
                     if (record.key() != null) {
-                        stateRestoreCallback.restore(record.key(), record.value());
+                        restoreRecords.add(KeyValue.pair(record.key(), record.value()));
                     }
+                    offset = globalConsumer.position(topicPartition);
                 }
+                stateRestoreAdapter.restoreAll(restoreRecords);
+                stateRestoreListener.onBatchRestored(topicPartition, storeName, offset, restoreRecords.size());
+                restoreCount += restoreRecords.size();
             }
+            stateRestoreListener.onRestoreEnd(topicPartition, storeName, restoreCount);
             checkpointableOffsets.put(topicPartition, offset);
         }
     }

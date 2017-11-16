@@ -19,7 +19,7 @@ from ducktape.mark import parametrize, ignore
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService
-from kafkatest.version import LATEST_0_10_1, LATEST_0_10_2, DEV_BRANCH, KafkaVersion
+from kafkatest.version import LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, DEV_BRANCH, KafkaVersion
 import time
 
 
@@ -80,6 +80,9 @@ class StreamsUpgradeTest(Test):
     @cluster(num_nodes=6)
     @parametrize(from_version=str(LATEST_0_10_1), to_version=str(DEV_BRANCH))
     @parametrize(from_version=str(LATEST_0_10_2), to_version=str(DEV_BRANCH))
+    @parametrize(from_version=str(LATEST_0_10_1), to_version=str(LATEST_0_11_0))
+    @parametrize(from_version=str(LATEST_0_10_2), to_version=str(LATEST_0_11_0))
+    @parametrize(from_version=str(LATEST_0_11_0), to_version=str(LATEST_0_10_2))
     @parametrize(from_version=str(DEV_BRANCH), to_version=str(LATEST_0_10_2))
     def test_upgrade_downgrade_streams(self, from_version, to_version):
         """

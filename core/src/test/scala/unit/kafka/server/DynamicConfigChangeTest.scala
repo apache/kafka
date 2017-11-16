@@ -26,14 +26,13 @@ import org.easymock.EasyMock
 import org.junit.Test
 import kafka.integration.KafkaServerTestHarness
 import kafka.utils._
-import kafka.common._
 import kafka.admin.{AdminOperationException, AdminUtils}
 import org.apache.kafka.common.TopicPartition
 
 import scala.collection.Map
 
 class DynamicConfigChangeTest extends KafkaServerTestHarness {
-  def generateConfigs() = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
+  def generateConfigs = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
 
   @Test
   def testConfigChange() {
@@ -174,7 +173,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testProcessNotification {
+  def testProcessNotification(): Unit = {
     val props = new Properties()
     props.put("a.b", "10")
 
@@ -188,7 +187,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     EasyMock.expectLastCall().once()
     EasyMock.replay(handler)
 
-    val configManager = new DynamicConfigManager(zkUtils, Map(ConfigType.Topic -> handler))
+    val configManager = new DynamicConfigManager(zkUtils, zkClient, Map(ConfigType.Topic -> handler))
     // Notifications created using the old TopicConfigManager are ignored.
     configManager.ConfigChangedNotificationHandler.processNotification("not json")
 
@@ -230,7 +229,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def shouldParseReplicationQuotaProperties {
+  def shouldParseReplicationQuotaProperties(): Unit = {
     val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null)
     val props: Properties = new Properties()
 
@@ -243,7 +242,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def shouldParseWildcardReplicationQuotaProperties {
+  def shouldParseWildcardReplicationQuotaProperties(): Unit = {
     val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null)
     val props: Properties = new Properties()
 
@@ -258,7 +257,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def shouldParseReplicationQuotaReset {
+  def shouldParseReplicationQuotaReset(): Unit = {
     val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null)
     val props: Properties = new Properties()
 

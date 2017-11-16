@@ -21,6 +21,8 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 
+import java.util.Objects;
+
 /**
  * Factory for creating serializers / deserializers for state stores in Kafka Streams.
  *
@@ -61,19 +63,12 @@ public final class StateSerdes<K, V> {
      * @param valueSerde    the serde for values; cannot be null
      * @throws IllegalArgumentException if key or value serde is null
      */
-    @SuppressWarnings("unchecked")
     public StateSerdes(final String topic,
                        final Serde<K> keySerde,
                        final Serde<V> valueSerde) {
-        if (topic == null) {
-            throw new IllegalArgumentException("topic cannot be null");
-        }
-        if (keySerde == null) {
-            throw new IllegalArgumentException("key serde cannot be null");
-        }
-        if (valueSerde == null) {
-            throw new IllegalArgumentException("value serde cannot be null");
-        }
+        Objects.requireNonNull(topic, "topic cannot be null");
+        Objects.requireNonNull(keySerde, "key serde cannot be null");
+        Objects.requireNonNull(valueSerde, "value serde cannot be null");
 
         this.topic = topic;
         this.keySerde = keySerde;

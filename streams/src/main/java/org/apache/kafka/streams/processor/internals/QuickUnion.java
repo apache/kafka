@@ -52,6 +52,7 @@ public class QuickUnion<T> {
         return current;
     }
 
+    @SuppressWarnings("unchecked")
     public void unite(T id1, T... idList) {
         for (T id2 : idList) {
             unitePair(id1, id2);

@@ -426,11 +426,11 @@ public class ConnectorPluginsResourceTest {
         ConnectorPluginInfo sinkInfo = newInfo(TestSinkConnector.class);
         ConnectorPluginInfo sourceInfo =
                 newInfo(TestSourceConnector.class);
-        ConnectorPluginInfo unkownInfo =
+        ConnectorPluginInfo unknownInfo =
             newInfo(ConnectorPluginsResourceTestConnector.class);
         assertEquals(ConnectorType.SINK, sinkInfo.type());
         assertEquals(ConnectorType.SOURCE, sourceInfo.type());
-        assertEquals(ConnectorType.UNKNOWN, unkownInfo.type());
+        assertEquals(ConnectorType.UNKNOWN, unknownInfo.type());
         assertEquals(TestSinkConnector.VERSION, sinkInfo.version());
         assertEquals(TestSourceConnector.VERSION, sourceInfo.version());
 

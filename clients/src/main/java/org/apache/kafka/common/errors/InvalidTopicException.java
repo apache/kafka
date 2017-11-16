@@ -18,6 +18,10 @@ package org.apache.kafka.common.errors;
 
 /**
  * The client has attempted to perform an operation on an invalid topic.
+ * For example the topic name is too long, contains invalid characters etc.
+ * This exception is not retriable because the operation won't suddenly become valid.
+ *
+ * @see UnknownTopicOrPartitionException
  */
 public class InvalidTopicException extends ApiException {
 

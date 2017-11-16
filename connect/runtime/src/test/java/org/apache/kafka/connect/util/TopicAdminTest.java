@@ -22,7 +22,6 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
@@ -36,20 +35,17 @@ import java.util.Set;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 public class TopicAdminTest {
 
     /**
-     * 0.10.x clients can't talk with 0.9.x brokers, and 0.10.0.0 introduced the new protocol with API versions.
-     * That means we can simulate an API version mismatch.
-     *
-     * @throws Exception
+     * 0.11.0.0 clients can talk with older brokers, but the CREATE_TOPIC API was added in 0.10.1.0. That means,
+     * if our TopicAdmin talks to a pre 0.10.1 broker, it should receive an UnsupportedVersionException, should
+     * create no topics, and return false.
      */
     @Test
     public void returnNullWithApiVersionMismatch() {
         final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
-        boolean internal = false;
         Cluster cluster = createCluster(1);
         try (MockKafkaAdminClientEnv env = new MockKafkaAdminClientEnv(cluster)) {
             env.kafkaClient().setNode(cluster.controller());
@@ -57,10 +53,8 @@ public class TopicAdminTest {
             env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
             env.kafkaClient().prepareResponse(createTopicResponseWithUnsupportedVersion(newTopic));
             TopicAdmin admin = new TopicAdmin(null, env.adminClient());
-            admin.createTopic(newTopic);
-            fail();
-        } catch (UnsupportedVersionException e) {
-            // expected
+            boolean created = admin.createTopic(newTopic);
+            assertFalse(created);
         }
     }
 

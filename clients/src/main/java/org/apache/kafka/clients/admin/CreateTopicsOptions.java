@@ -27,26 +27,9 @@ import java.util.Collection;
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
 @InterfaceStability.Evolving
-public class CreateTopicsOptions {
-    private Integer timeoutMs = null;
+public class CreateTopicsOptions extends AbstractOptions<CreateTopicsOptions> {
+
     private boolean validateOnly = false;
-
-    /**
-     * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
-     * AdminClient should be used.
-     */
-    public CreateTopicsOptions timeoutMs(Integer timeoutMs) {
-        this.timeoutMs = timeoutMs;
-        return this;
-    }
-
-    /**
-     * The request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
-     * AdminClient should be used.
-     */
-    public Integer timeoutMs() {
-        return timeoutMs;
-    }
 
     /**
      * Set to true if the request should be validated without creating the topic.

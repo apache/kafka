@@ -20,14 +20,15 @@ import java.util.Properties
 
 import kafka.admin.ConfigCommand.ConfigCommandOptions
 import kafka.common.InvalidConfigException
-import kafka.server.{ConfigEntityName, QuotaId}
+import kafka.server.ConfigEntityName
 import kafka.utils.{Logging, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
-
-import org.apache.kafka.common.security.scram.{ScramCredential, ScramCredentialUtils, ScramMechanism}
+import org.apache.kafka.common.security.scram.ScramCredentialUtils
+import org.apache.kafka.common.utils.Sanitizer
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
+
 import scala.collection.mutable
 import scala.collection.JavaConverters._
 
@@ -326,9 +327,9 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
     // <user> quota
     val principal = "CN=ConfigCommandTest,O=Apache,L=<default>"
-    val sanitizedPrincipal = QuotaId.sanitize(principal)
+    val sanitizedPrincipal = Sanitizer.sanitize(principal)
     assertEquals(-1, sanitizedPrincipal.indexOf('='))
-    assertEquals(principal, QuotaId.desanitize(sanitizedPrincipal))
+    assertEquals(principal, Sanitizer.desanitize(sanitizedPrincipal))
     for (opts <- Seq(describeOpts, alterOpts)) {
       checkEntity("users", Some(principal), sanitizedPrincipal, opts)
       checkEntity("users", Some(""), ConfigEntityName.Default, opts)
@@ -362,38 +363,36 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       assertEquals(expectedEntityName, entity.fullSanitizedName)
     }
 
-    // <default> is a valid user principal (can be handled with URL-encoding),
-    // but an invalid client-id (cannot be handled since client-ids are not encoded)
-    checkEntity("users", QuotaId.sanitize("<default>"),
+    // <default> is a valid user principal and client-id (can be handled with URL-encoding),
+    checkEntity("users", Sanitizer.sanitize("<default>"),
         "--entity-type", "users", "--entity-name", "<default>",
         "--alter", "--add-config", "a=b,c=d")
-    try {
-      checkEntity("clients", QuotaId.sanitize("<default>"),
-          "--entity-type", "clients", "--entity-name", "<default>",
-          "--alter", "--add-config", "a=b,c=d")
-      fail("Did not fail with invalid client-id")
-    } catch {
-      case _: InvalidConfigException => // expected
-    }
+    checkEntity("clients", Sanitizer.sanitize("<default>"),
+        "--entity-type", "clients", "--entity-name", "<default>",
+        "--alter", "--add-config", "a=b,c=d")
 
-    checkEntity("users", QuotaId.sanitize("CN=user1") + "/clients/client1",
+
+    checkEntity("users", Sanitizer.sanitize("CN=user1") + "/clients/client1",
         "--entity-type", "users", "--entity-name", "CN=user1", "--entity-type", "clients", "--entity-name", "client1",
         "--alter", "--add-config", "a=b,c=d")
-    checkEntity("users", QuotaId.sanitize("CN=user1") + "/clients/client1",
+    checkEntity("users", Sanitizer.sanitize("CN=user1") + "/clients/client1",
         "--entity-name", "CN=user1", "--entity-type", "users", "--entity-name", "client1", "--entity-type", "clients",
         "--alter", "--add-config", "a=b,c=d")
-    checkEntity("users", QuotaId.sanitize("CN=user1") + "/clients/client1",
+    checkEntity("users", Sanitizer.sanitize("CN=user1") + "/clients/client1",
         "--entity-type", "clients", "--entity-name", "client1", "--entity-type", "users", "--entity-name", "CN=user1",
         "--alter", "--add-config", "a=b,c=d")
-    checkEntity("users", QuotaId.sanitize("CN=user1") + "/clients/client1",
+    checkEntity("users", Sanitizer.sanitize("CN=user1") + "/clients/client1",
         "--entity-name", "client1", "--entity-type", "clients", "--entity-name", "CN=user1", "--entity-type", "users",
         "--alter", "--add-config", "a=b,c=d")
-    checkEntity("users", QuotaId.sanitize("CN=user1") + "/clients",
+    checkEntity("users", Sanitizer.sanitize("CN=user1") + "/clients",
         "--entity-type", "clients", "--entity-name", "CN=user1", "--entity-type", "users",
         "--describe")
     checkEntity("users", "/clients",
         "--entity-type", "clients", "--entity-type", "users",
         "--describe")
+    checkEntity("users", Sanitizer.sanitize("CN=user1") + "/clients/" + Sanitizer.sanitize("client1?@%"),
+        "--entity-name", "client1?@%", "--entity-type", "clients", "--entity-name", "CN=user1", "--entity-type", "users",
+        "--alter", "--add-config", "a=b,c=d")
   }
 
   @Test
@@ -413,7 +412,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
     val clientId = "a-client"
     val principal = "CN=ConfigCommandTest.testQuotaDescribeEntities , O=Apache, L=<default>"
-    val sanitizedPrincipal = QuotaId.sanitize(principal)
+    val sanitizedPrincipal = Sanitizer.sanitize(principal)
     val userClient = sanitizedPrincipal + "/clients/" + clientId
 
     var opts = Array("--entity-type", "clients", "--entity-name", clientId)

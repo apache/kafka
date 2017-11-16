@@ -48,10 +48,7 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
     //Create a suitable response based on the API key
     val response = requestBuilder.apiKey() match {
       case ApiKeys.OFFSET_FOR_LEADER_EPOCH =>
-        callback match {
-          case Some(f) => f()
-          case None => //nothing
-        }
+        callback.foreach(_.apply())
         epochFetchCount += 1
         new OffsetsForLeaderEpochResponse(offsets)
 

@@ -17,8 +17,10 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.CloseableIterator;
+import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -110,8 +112,8 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     @Override
-    public MemoryRecords downConvert(byte toMagic, long firstOffset) {
-        return downConvert(batches(), toMagic, firstOffset);
+    public ConvertedRecords<MemoryRecords> downConvert(byte toMagic, long firstOffset, Time time) {
+        return downConvert(batches(), toMagic, firstOffset, time);
     }
 
     /**
@@ -151,7 +153,8 @@ public class MemoryRecords extends AbstractRecords {
         for (MutableRecordBatch batch : batches) {
             bytesRead += batch.sizeInBytes();
 
-            if (filter.shouldDiscard(batch))
+            BatchRetention batchRetention = filter.checkBatchRetention(batch);
+            if (batchRetention == BatchRetention.DELETE)
                 continue;
 
             // We use the absolute offset to decide whether to retain the message or not. Due to KAFKA-4298, we have to
@@ -168,7 +171,7 @@ public class MemoryRecords extends AbstractRecords {
                     Record record = iterator.next();
                     messagesRead += 1;
 
-                    if (filter.shouldRetain(batch, record)) {
+                    if (filter.shouldRetainRecord(batch, record)) {
                         // Check for log corruption due to KAFKA-4298. If we find it, make sure that we overwrite
                         // the corrupted batch with correct data.
                         if (!record.hasMagic(batchMagic))
@@ -184,33 +187,44 @@ public class MemoryRecords extends AbstractRecords {
                 }
             }
 
-            if (writeOriginalBatch) {
-                batch.writeTo(bufferOutputStream);
-                messagesRetained += retainedRecords.size();
-                bytesRetained += batch.sizeInBytes();
-                if (batch.maxTimestamp() > maxTimestamp) {
-                    maxTimestamp = batch.maxTimestamp();
-                    shallowOffsetOfMaxTimestamp = batch.lastOffset();
+            if (!retainedRecords.isEmpty()) {
+                if (writeOriginalBatch) {
+                    batch.writeTo(bufferOutputStream);
+                    messagesRetained += retainedRecords.size();
+                    bytesRetained += batch.sizeInBytes();
+                    if (batch.maxTimestamp() > maxTimestamp) {
+                        maxTimestamp = batch.maxTimestamp();
+                        shallowOffsetOfMaxTimestamp = batch.lastOffset();
+                    }
+                } else {
+                    MemoryRecordsBuilder builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream);
+                    MemoryRecords records = builder.build();
+                    int filteredBatchSize = records.sizeInBytes();
+
+                    messagesRetained += retainedRecords.size();
+                    bytesRetained += filteredBatchSize;
+
+                    if (filteredBatchSize > batch.sizeInBytes() && filteredBatchSize > maxRecordBatchSize)
+                        log.warn("Record batch from {} with last offset {} exceeded max record batch size {} after cleaning " +
+                                        "(new size is {}). Consumers with version earlier than 0.10.1.0 may need to " +
+                                        "increase their fetch sizes.",
+                                partition, batch.lastOffset(), maxRecordBatchSize, filteredBatchSize);
+
+                    MemoryRecordsBuilder.RecordsInfo info = builder.info();
+                    if (info.maxTimestamp > maxTimestamp) {
+                        maxTimestamp = info.maxTimestamp;
+                        shallowOffsetOfMaxTimestamp = info.shallowOffsetOfMaxTimestamp;
+                    }
                 }
-            } else if (!retainedRecords.isEmpty()) {
-                MemoryRecordsBuilder builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream);
-                MemoryRecords records = builder.build();
-                int filteredBatchSize = records.sizeInBytes();
+            } else if (batchRetention == BatchRetention.RETAIN_EMPTY) {
+                if (batchMagic < RecordBatch.MAGIC_VALUE_V2)
+                    throw new IllegalStateException("Empty batches are only supported for magic v2 and above");
 
-                messagesRetained += retainedRecords.size();
-                bytesRetained += filteredBatchSize;
-
-                if (filteredBatchSize > batch.sizeInBytes() && filteredBatchSize > maxRecordBatchSize)
-                    log.warn("Record batch from {} with last offset {} exceeded max record batch size {} after cleaning " +
-                                    "(new size is {}). Consumers with version earlier than 0.10.1.0 may need to " +
-                                    "increase their fetch sizes.",
-                            partition, batch.lastOffset(), maxRecordBatchSize, filteredBatchSize);
-
-                MemoryRecordsBuilder.RecordsInfo info = builder.info();
-                if (info.maxTimestamp > maxTimestamp) {
-                    maxTimestamp = info.maxTimestamp;
-                    shallowOffsetOfMaxTimestamp = info.shallowOffsetOfMaxTimestamp;
-                }
+                bufferOutputStream.ensureRemaining(DefaultRecordBatch.RECORD_BATCH_OVERHEAD);
+                DefaultRecordBatch.writeEmptyHeader(bufferOutputStream.buffer(), batchMagic, batch.producerId(),
+                        batch.producerEpoch(), batch.baseSequence(), batch.baseOffset(), batch.lastOffset(),
+                        batch.partitionLeaderEpoch(), batch.timestampType(), batch.maxTimestamp(),
+                        batch.isTransactional(), batch.isControlBatch());
             }
 
             // If we had to allocate a new buffer to fit the filtered output (see KAFKA-5316), return early to
@@ -300,20 +314,24 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     public static abstract class RecordFilter {
+        public enum BatchRetention {
+            DELETE, // Delete the batch without inspecting records
+            RETAIN_EMPTY, // Retain the batch even if it is empty
+            DELETE_EMPTY  // Delete the batch if it is empty
+        }
+
         /**
          * Check whether the full batch can be discarded (i.e. whether we even need to
          * check the records individually).
          */
-        protected boolean shouldDiscard(RecordBatch batch) {
-            return false;
-        }
+        protected abstract BatchRetention checkBatchRetention(RecordBatch batch);
 
         /**
-         * Check whether a record should be retained in the log. Only records from
-         * batches which were not discarded with {@link #shouldDiscard(RecordBatch)}
-         * will be considered.
+         * Check whether a record should be retained in the log. Note that {@link #checkBatchRetention(RecordBatch)}
+         * is used prior to checking individual record retention. Only records from batches which were not
+         * explicitly discarded with {@link BatchRetention#DELETE} will be considered.
          */
-        protected abstract boolean shouldRetain(RecordBatch recordBatch, Record record);
+        protected abstract boolean shouldRetainRecord(RecordBatch recordBatch, Record record);
     }
 
     public static class FilterResult {

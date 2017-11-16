@@ -28,8 +28,8 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.test.TestUtils;
 
 import java.io.File;
@@ -43,7 +43,7 @@ public class BrokerCompatibilityTest {
     private static final String SOURCE_TOPIC = "brokerCompatibilitySourceTopic";
     private static final String SINK_TOPIC = "brokerCompatibilitySinkTopic";
 
-    public static void main(final String[] args) throws Exception {
+    public static void main(final String[] args) {
         System.out.println("StreamsTest instance started");
 
         final String kafka = args.length > 0 ? args[0] : "localhost:9092";
@@ -68,12 +68,14 @@ public class BrokerCompatibilityTest {
         streamsProperties.put(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), timeout);
         streamsProperties.put(StreamsConfig.consumerPrefix(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG), timeout);
         streamsProperties.put(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG, timeout + 1);
+        //TODO remove this config or set to smaller value when KIP-91 is merged
+        streamsProperties.put(StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG), 60000);
 
 
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(SOURCE_TOPIC).to(SINK_TOPIC);
 
-        final KafkaStreams streams = new KafkaStreams(builder, streamsProperties);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), streamsProperties);
         streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
             public void uncaughtException(final Thread t, final Throwable e) {
@@ -101,6 +103,7 @@ public class BrokerCompatibilityTest {
 
 
         System.out.println("close Kafka Streams");
+        producer.close();
         streams.close();
     }
 

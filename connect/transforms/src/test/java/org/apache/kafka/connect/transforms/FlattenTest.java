@@ -22,6 +22,7 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.source.SourceRecord;
+import org.junit.After;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -36,25 +37,30 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class FlattenTest {
+    private final Flatten<SourceRecord> xformKey = new Flatten.Key<>();
+    private final Flatten<SourceRecord> xformValue = new Flatten.Value<>();
+
+    @After
+    public void teardown() {
+        xformKey.close();
+        xformValue.close();
+    }
 
     @Test(expected = DataException.class)
     public void topLevelStructRequired() {
-        final Flatten<SourceRecord> xform = new Flatten.Value<>();
-        xform.configure(Collections.<String, String>emptyMap());
-        xform.apply(new SourceRecord(null, null, "topic", 0, Schema.INT32_SCHEMA, 42));
+        xformValue.configure(Collections.<String, String>emptyMap());
+        xformValue.apply(new SourceRecord(null, null, "topic", 0, Schema.INT32_SCHEMA, 42));
     }
 
     @Test(expected = DataException.class)
     public void topLevelMapRequired() {
-        final Flatten<SourceRecord> xform = new Flatten.Value<>();
-        xform.configure(Collections.<String, String>emptyMap());
-        xform.apply(new SourceRecord(null, null, "topic", 0, null, 42));
+        xformValue.configure(Collections.<String, String>emptyMap());
+        xformValue.apply(new SourceRecord(null, null, "topic", 0, null, 42));
     }
 
     @Test
     public void testNestedStruct() {
-        final Flatten<SourceRecord> xform = new Flatten.Value<>();
-        xform.configure(Collections.<String, String>emptyMap());
+        xformValue.configure(Collections.<String, String>emptyMap());
 
         SchemaBuilder builder = SchemaBuilder.struct();
         builder.field("int8", Schema.INT8_SCHEMA);
@@ -93,7 +99,7 @@ public class FlattenTest {
         Struct twoLevelNestedStruct = new Struct(twoLevelNestedSchema);
         twoLevelNestedStruct.put("A", oneLevelNestedStruct);
 
-        SourceRecord transformed = xform.apply(new SourceRecord(null, null,
+        SourceRecord transformed = xformValue.apply(new SourceRecord(null, null,
                 "topic", 0,
                 twoLevelNestedSchema, twoLevelNestedStruct));
 
@@ -113,8 +119,7 @@ public class FlattenTest {
 
     @Test
     public void testNestedMapWithDelimiter() {
-        final Flatten<SourceRecord> xform = new Flatten.Value<>();
-        xform.configure(Collections.singletonMap("delimiter", "#"));
+        xformValue.configure(Collections.singletonMap("delimiter", "#"));
 
         Map<String, Object> supportedTypes = new HashMap<>();
         supportedTypes.put("int8", (byte) 8);
@@ -130,7 +135,7 @@ public class FlattenTest {
         Map<String, Object> oneLevelNestedMap = Collections.singletonMap("B", (Object) supportedTypes);
         Map<String, Object> twoLevelNestedMap = Collections.singletonMap("A", (Object) oneLevelNestedMap);
 
-        SourceRecord transformed = xform.apply(new SourceRecord(null, null,
+        SourceRecord transformed = xformValue.apply(new SourceRecord(null, null,
                 "topic", 0,
                 null, twoLevelNestedMap));
 
@@ -151,8 +156,7 @@ public class FlattenTest {
 
     @Test
     public void testOptionalFieldStruct() {
-        final Flatten<SourceRecord> xform = new Flatten.Value<>();
-        xform.configure(Collections.<String, String>emptyMap());
+        xformValue.configure(Collections.<String, String>emptyMap());
 
         SchemaBuilder builder = SchemaBuilder.struct();
         builder.field("opt_int32", Schema.OPTIONAL_INT32_SCHEMA);
@@ -168,7 +172,7 @@ public class FlattenTest {
         Struct oneLevelNestedStruct = new Struct(oneLevelNestedSchema);
         oneLevelNestedStruct.put("B", supportedTypes);
 
-        SourceRecord transformed = xform.apply(new SourceRecord(null, null,
+        SourceRecord transformed = xformValue.apply(new SourceRecord(null, null,
                 "topic", 0,
                 oneLevelNestedSchema, oneLevelNestedStruct));
 
@@ -179,15 +183,14 @@ public class FlattenTest {
 
     @Test
     public void testOptionalFieldMap() {
-        final Flatten<SourceRecord> xform = new Flatten.Value<>();
-        xform.configure(Collections.<String, String>emptyMap());
+        xformValue.configure(Collections.<String, String>emptyMap());
 
         Map<String, Object> supportedTypes = new HashMap<>();
         supportedTypes.put("opt_int32", null);
 
         Map<String, Object> oneLevelNestedMap = Collections.singletonMap("B", (Object) supportedTypes);
 
-        SourceRecord transformed = xform.apply(new SourceRecord(null, null,
+        SourceRecord transformed = xformValue.apply(new SourceRecord(null, null,
                 "topic", 0,
                 null, oneLevelNestedMap));
 
@@ -200,12 +203,11 @@ public class FlattenTest {
 
     @Test
     public void testKey() {
-        final Flatten<SourceRecord> xform = new Flatten.Key<>();
-        xform.configure(Collections.<String, String>emptyMap());
+        xformKey.configure(Collections.<String, String>emptyMap());
 
         Map<String, Map<String, Integer>> key = Collections.singletonMap("A", Collections.singletonMap("B", 12));
         SourceRecord src = new SourceRecord(null, null, "topic", null, key, null, null);
-        SourceRecord transformed = xform.apply(src);
+        SourceRecord transformed = xformKey.apply(src);
 
         assertNull(transformed.keySchema());
         assertTrue(transformed.key() instanceof Map);
@@ -215,10 +217,9 @@ public class FlattenTest {
 
     @Test(expected = DataException.class)
     public void testUnsupportedTypeInMap() {
-        final Flatten<SourceRecord> xform = new Flatten.Value<>();
-        xform.configure(Collections.<String, String>emptyMap());
+        xformValue.configure(Collections.<String, String>emptyMap());
         Object value = Collections.singletonMap("foo", Arrays.asList("bar", "baz"));
-        xform.apply(new SourceRecord(null, null, "topic", 0, null, value));
+        xformValue.apply(new SourceRecord(null, null, "topic", 0, null, value));
     }
 
     @Test
@@ -227,8 +228,7 @@ public class FlattenTest {
         // children should also be optional. Similarly, if the parent Struct has a default value, the default value for
         // the flattened field
 
-        final Flatten<SourceRecord> xform = new Flatten.Value<>();
-        xform.configure(Collections.<String, String>emptyMap());
+        xformValue.configure(Collections.<String, String>emptyMap());
 
         SchemaBuilder builder = SchemaBuilder.struct().optional();
         builder.field("req_field", Schema.STRING_SCHEMA);
@@ -240,7 +240,7 @@ public class FlattenTest {
         // Intentionally leave this entire value empty since it is optional
         Struct value = new Struct(schema);
 
-        SourceRecord transformed = xform.apply(new SourceRecord(null, null, "topic", 0, schema, value));
+        SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0, schema, value));
 
         assertNotNull(transformed);
         Schema transformedSchema = transformed.valueSchema();

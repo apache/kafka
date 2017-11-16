@@ -98,7 +98,7 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
                         V oldAgg = entry.value;
                         V newAgg = oldAgg;
 
-                        // try to add the new new value (there will never be old value)
+                        // try to add the new value (there will never be old value)
                         if (newAgg == null) {
                             newAgg = value;
                         } else {

@@ -19,10 +19,9 @@ package kafka.api
 
 import java.nio.ByteBuffer
 
-import kafka.network.{RequestOrResponseSend, RequestChannel}
-import kafka.network.RequestChannel.Response
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.ApiKeys
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 object GroupCoordinatorRequest {
   val CurrentVersion = 0.shortValue
   val DefaultClientId = ""
@@ -40,6 +39,7 @@ object GroupCoordinatorRequest {
 
 }
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 case class GroupCoordinatorRequest(group: String,
                                    versionId: Short = GroupCoordinatorRequest.CurrentVersion,
                                    correlationId: Int = 0,
@@ -60,12 +60,6 @@ case class GroupCoordinatorRequest(group: String,
 
     // consumer metadata request
     ApiUtils.writeShortString(buffer, group)
-  }
-
-  override def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
-    // return ConsumerCoordinatorNotAvailable for all uncaught errors
-    val errorResponse = GroupCoordinatorResponse(None, Errors.COORDINATOR_NOT_AVAILABLE, correlationId)
-    requestChannel.sendResponse(Response(request, new RequestOrResponseSend(request.connectionId, errorResponse)))
   }
 
   def describe(details: Boolean) = {

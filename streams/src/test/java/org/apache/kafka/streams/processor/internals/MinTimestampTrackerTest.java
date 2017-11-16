@@ -26,18 +26,18 @@ public class MinTimestampTrackerTest {
     private MinTimestampTracker<String> tracker = new MinTimestampTracker<>();
 
     @Test
-    public void shouldReturnNotKnownTimestampWhenNoRecordsEverAdded() throws Exception {
+    public void shouldReturnNotKnownTimestampWhenNoRecordsEverAdded() {
         assertThat(tracker.get(), equalTo(TimestampTracker.NOT_KNOWN));
     }
 
     @Test
-    public void shouldReturnTimestampOfOnlyRecord() throws Exception {
+    public void shouldReturnTimestampOfOnlyRecord() {
         tracker.addElement(elem(100));
         assertThat(tracker.get(), equalTo(100L));
     }
 
     @Test
-    public void shouldReturnLowestAvailableTimestampFromAllInputs() throws Exception {
+    public void shouldReturnLowestAvailableTimestampFromAllInputs() {
         tracker.addElement(elem(100));
         tracker.addElement(elem(99));
         tracker.addElement(elem(102));
@@ -45,7 +45,7 @@ public class MinTimestampTrackerTest {
     }
 
     @Test
-    public void shouldReturnLowestAvailableTimestampAfterPreviousLowestRemoved() throws Exception {
+    public void shouldReturnLowestAvailableTimestampAfterPreviousLowestRemoved() {
         final Stamped<String> lowest = elem(88);
         tracker.addElement(lowest);
         tracker.addElement(elem(101));
@@ -55,7 +55,7 @@ public class MinTimestampTrackerTest {
     }
 
     @Test
-    public void shouldReturnLastKnownTimestampWhenAllElementsHaveBeenRemoved() throws Exception {
+    public void shouldReturnLastKnownTimestampWhenAllElementsHaveBeenRemoved() {
         final Stamped<String> record = elem(98);
         tracker.addElement(record);
         tracker.removeElement(record);
@@ -63,12 +63,12 @@ public class MinTimestampTrackerTest {
     }
 
     @Test
-    public void shouldIgnoreNullRecordOnRemove() throws Exception {
+    public void shouldIgnoreNullRecordOnRemove() {
         tracker.removeElement(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerExceptionWhenTryingToAddNullElement() throws Exception {
+    public void shouldThrowNullPointerExceptionWhenTryingToAddNullElement() {
         tracker.addElement(null);
     }
 

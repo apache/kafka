@@ -17,9 +17,6 @@
 
 package kafka.server
 
-import java.io.File
-
-import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.{After, Before, Test}
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.TestUtils

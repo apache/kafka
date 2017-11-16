@@ -260,7 +260,7 @@ public class AbstractConfig {
      * @return The list of configured instances
      */
     public <T> List<T> getConfiguredInstances(String key, Class<T> t) {
-        return getConfiguredInstances(key, t, Collections.EMPTY_MAP);
+        return getConfiguredInstances(key, t, Collections.<String, Object>emptyMap());
     }
 
     /**

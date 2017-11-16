@@ -27,7 +27,6 @@ import java.util.Map;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.security.JaasContext;
-import org.apache.kafka.common.security.auth.Login;
 import org.apache.kafka.common.security.kerberos.KerberosLogin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

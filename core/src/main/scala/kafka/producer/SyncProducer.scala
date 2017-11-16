@@ -58,7 +58,7 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
      */
     if (logger.isDebugEnabled) {
       val buffer = new RequestOrResponseSend("", request).buffer
-      trace("verifying sendbuffer of size " + buffer.limit)
+      trace("verifying sendbuffer of size " + buffer.limit())
       val requestTypeId = buffer.getShort()
       if(requestTypeId == ApiKeys.PRODUCE.id) {
         val request = ProducerRequest.readFrom(buffer)

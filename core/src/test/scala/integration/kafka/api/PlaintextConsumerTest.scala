@@ -33,6 +33,8 @@ import org.junit.Test
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.Buffer
+import kafka.server.QuotaType
+import kafka.server.KafkaServer
 
 /* We have some tests in this class instead of `BaseConsumerTest` in order to keep the build time under control. */
 class PlaintextConsumerTest extends BaseConsumerTest {
@@ -40,9 +42,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @Test
   def testHeaders() {
     val numRecords = 1
-    val record = new ProducerRecord(tp.topic(), tp.partition(), null, s"key".getBytes, s"value".getBytes)
+    val record = new ProducerRecord(tp.topic, tp.partition, null, "key".getBytes, "value".getBytes)
     
-    record.headers().add(s"headerKey", s"headerValue".getBytes)
+    record.headers().add("headerKey", "headerValue".getBytes)
     
     this.producers.head.send(record)
     
@@ -57,22 +59,22 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     for (i <- 0 until numRecords) {
       val record = records(i)
-      val header = record.headers().lastHeader(s"headerKey")
-      assertEquals(s"headerValue", if (header == null) null else new String(header.value()))
+      val header = record.headers().lastHeader("headerKey")
+      assertEquals("headerValue", if (header == null) null else new String(header.value()))
     }
   }
   
   @Test
   def testHeadersExtendedSerializerDeserializer() {
     val numRecords = 1
-    val record = new ProducerRecord(tp.topic(), tp.partition(), null, s"key".getBytes, s"value".getBytes)
+    val record = new ProducerRecord(tp.topic, tp.partition, null, "key".getBytes, "value".getBytes)
 
     val extendedSerializer = new ExtendedSerializer[Array[Byte]] {
       
       var serializer = new ByteArraySerializer()
       
       override def serialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
-        headers.add(s"content-type", s"application/octet-stream".getBytes)
+        headers.add("content-type", "application/octet-stream".getBytes)
         serializer.serialize(topic, data)
       }
 
@@ -92,8 +94,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       var deserializer = new ByteArrayDeserializer()
       
       override def deserialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
-        var header = headers.lastHeader(s"content-type")
-        assertEquals(s"application/octet-stream", if (header == null) null else new String(header.value()))
+        val header = headers.lastHeader("content-type")
+        assertEquals("application/octet-stream", if (header == null) null else new String(header.value()))
         deserializer.deserialize(topic, data)
       }
 
@@ -1470,6 +1472,40 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     } finally {
       consumer.close()
     }
+  }
+
+  @Test
+  def testQuotaMetricsNotCreatedIfNoQuotasConfigured() {
+    val numRecords = 1000
+    sendRecords(numRecords)
+
+    this.consumers.head.assign(List(tp).asJava)
+    this.consumers.head.seek(tp, 0)
+    consumeAndVerifyRecords(consumer = this.consumers.head, numRecords = numRecords, startingOffset = 0)
+
+    def assertNoMetric(broker: KafkaServer, name: String, quotaType: QuotaType, clientId: String) {
+        val metricName = broker.metrics.metricName("throttle-time",
+                                  quotaType.toString,
+                                  "",
+                                  "user", "",
+                                  "client-id", clientId)
+        assertNull("Metric should not hanve been created " + metricName, broker.metrics.metric(metricName))
+    }
+    servers.foreach(assertNoMetric(_, "byte-rate", QuotaType.Produce, producerClientId))
+    servers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Produce, producerClientId))
+    servers.foreach(assertNoMetric(_, "byte-rate", QuotaType.Fetch, consumerClientId))
+    servers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Fetch, consumerClientId))
+
+    servers.foreach(assertNoMetric(_, "request-time", QuotaType.Request, producerClientId))
+    servers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Request, producerClientId))
+    servers.foreach(assertNoMetric(_, "request-time", QuotaType.Request, consumerClientId))
+    servers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Request, consumerClientId))
+
+    def assertNoExemptRequestMetric(broker: KafkaServer) {
+        val metricName = broker.metrics.metricName("exempt-request-time", QuotaType.Request.toString, "")
+        assertNull("Metric should not hanve been created " + metricName, broker.metrics.metric(metricName))
+    }
+    servers.foreach(assertNoExemptRequestMetric(_))
   }
 
   def runMultiConsumerSessionTimeoutTest(closeConsumer: Boolean): Unit = {

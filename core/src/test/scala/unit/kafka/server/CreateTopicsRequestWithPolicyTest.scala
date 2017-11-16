@@ -96,11 +96,11 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
     validateErrorCreateTopicsRequests(new CreateTopicsRequest.Builder(
       Map("error-replication" -> new CreateTopicsRequest.TopicDetails(10, (numBrokers + 1).toShort)).asJava, timeout, true).build(),
       Map("error-replication" -> error(Errors.INVALID_REPLICATION_FACTOR,
-        Some("replication factor: 4 larger than available brokers: 3"))))
+        Some("Replication factor: 4 larger than available brokers: 3."))))
 
     validateErrorCreateTopicsRequests(new CreateTopicsRequest.Builder(
       Map("error-replication2" -> new CreateTopicsRequest.TopicDetails(10, -1: Short)).asJava, timeout, true).build(),
-      Map("error-replication2" -> error(Errors.INVALID_REPLICATION_FACTOR, Some("replication factor must be larger than 0"))))
+      Map("error-replication2" -> error(Errors.INVALID_REPLICATION_FACTOR, Some("Replication factor must be larger than 0."))))
   }
 
 }

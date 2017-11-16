@@ -16,10 +16,15 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.WorkerTask.TaskMetricsGroup;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.MockTime;
 import org.easymock.EasyMock;
 import org.easymock.IAnswer;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.HashMap;
@@ -30,6 +35,7 @@ import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.partialMockBuilder;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
+import static org.junit.Assert.assertEquals;
 
 public class WorkerTaskTest {
 
@@ -38,6 +44,18 @@ public class WorkerTaskTest {
         TASK_PROPS.put(TaskConfig.TASK_CLASS_CONFIG, TestSinkTask.class.getName());
     }
     private static final TaskConfig TASK_CONFIG = new TaskConfig(TASK_PROPS);
+
+    private ConnectMetrics metrics;
+
+    @Before
+    public void setup() {
+        metrics = new MockConnectMetrics();
+    }
+
+    @After
+    public void tearDown() {
+        if (metrics != null) metrics.stop();
+    }
 
     @Test
     public void standardStartup() {
@@ -51,9 +69,10 @@ public class WorkerTaskTest {
                         ConnectorTaskId.class,
                         TaskStatus.Listener.class,
                         TargetState.class,
-                        ClassLoader.class
+                        ClassLoader.class,
+                        ConnectMetrics.class
                 )
-                .withArgs(taskId, statusListener, TargetState.STARTED, loader)
+                .withArgs(taskId, statusListener, TargetState.STARTED, loader, metrics)
                 .addMockedMethod("initialize")
                 .addMockedMethod("execute")
                 .addMockedMethod("close")
@@ -70,6 +89,9 @@ public class WorkerTaskTest {
 
         workerTask.close();
         expectLastCall();
+
+        workerTask.releaseResources();
+        EasyMock.expectLastCall();
 
         statusListener.onShutdown(taskId);
         expectLastCall();
@@ -96,9 +118,10 @@ public class WorkerTaskTest {
                         ConnectorTaskId.class,
                         TaskStatus.Listener.class,
                         TargetState.class,
-                        ClassLoader.class
+                        ClassLoader.class,
+                        ConnectMetrics.class
                 )
-                .withArgs(taskId, statusListener, TargetState.STARTED, loader)
+                .withArgs(taskId, statusListener, TargetState.STARTED, loader, metrics)
                 .addMockedMethod("initialize")
                 .addMockedMethod("execute")
                 .addMockedMethod("close")
@@ -108,6 +131,9 @@ public class WorkerTaskTest {
         EasyMock.expectLastCall();
 
         workerTask.close();
+        EasyMock.expectLastCall();
+
+        workerTask.releaseResources();
         EasyMock.expectLastCall();
 
         replay(workerTask);
@@ -134,9 +160,10 @@ public class WorkerTaskTest {
                         ConnectorTaskId.class,
                         TaskStatus.Listener.class,
                         TargetState.class,
-                        ClassLoader.class
+                        ClassLoader.class,
+                        ConnectMetrics.class
                 )
-                .withArgs(taskId, statusListener, TargetState.STARTED, loader)
+                .withArgs(taskId, statusListener, TargetState.STARTED, loader, metrics)
                 .addMockedMethod("initialize")
                 .addMockedMethod("execute")
                 .addMockedMethod("close")
@@ -171,6 +198,9 @@ public class WorkerTaskTest {
         workerTask.close();
         expectLastCall();
 
+        workerTask.releaseResources();
+        EasyMock.expectLastCall();
+
         // there should be no call to onShutdown()
 
         replay(workerTask);
@@ -186,7 +216,124 @@ public class WorkerTaskTest {
         verify(workerTask);
     }
 
+    @Test
+    public void updateMetricsOnListenerEventsForStartupPauseResumeAndShutdown() {
+        ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
+        ConnectMetrics metrics = new MockConnectMetrics();
+        TaskStatus.Listener statusListener = EasyMock.createMock(TaskStatus.Listener.class);
+        TaskMetricsGroup group = new TaskMetricsGroup(taskId, metrics, statusListener);
+
+        statusListener.onStartup(taskId);
+        expectLastCall();
+
+        statusListener.onPause(taskId);
+        expectLastCall();
+
+        statusListener.onResume(taskId);
+        expectLastCall();
+
+        statusListener.onShutdown(taskId);
+        expectLastCall();
+
+        replay(statusListener);
+
+        group.onStartup(taskId);
+        assertRunningMetric(group);
+        group.onPause(taskId);
+        assertPausedMetric(group);
+        group.onResume(taskId);
+        assertRunningMetric(group);
+        group.onShutdown(taskId);
+        assertStoppedMetric(group);
+
+        verify(statusListener);
+    }
+
+    @Test
+    public void updateMetricsOnListenerEventsForStartupPauseResumeAndFailure() {
+        ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
+        MockConnectMetrics metrics = new MockConnectMetrics();
+        MockTime time = metrics.time();
+        ConnectException error = new ConnectException("error");
+        TaskStatus.Listener statusListener = EasyMock.createMock(TaskStatus.Listener.class);
+        TaskMetricsGroup group = new TaskMetricsGroup(taskId, metrics, statusListener);
+
+        statusListener.onStartup(taskId);
+        expectLastCall();
+
+        statusListener.onPause(taskId);
+        expectLastCall();
+
+        statusListener.onResume(taskId);
+        expectLastCall();
+
+        statusListener.onPause(taskId);
+        expectLastCall();
+
+        statusListener.onResume(taskId);
+        expectLastCall();
+
+        statusListener.onFailure(taskId, error);
+        expectLastCall();
+
+        statusListener.onShutdown(taskId);
+        expectLastCall();
+
+        replay(statusListener);
+
+        time.sleep(1000L);
+        group.onStartup(taskId);
+        assertRunningMetric(group);
+
+        time.sleep(2000L);
+        group.onPause(taskId);
+        assertPausedMetric(group);
+
+        time.sleep(3000L);
+        group.onResume(taskId);
+        assertRunningMetric(group);
+
+        time.sleep(4000L);
+        group.onPause(taskId);
+        assertPausedMetric(group);
+
+        time.sleep(5000L);
+        group.onResume(taskId);
+        assertRunningMetric(group);
+
+        time.sleep(6000L);
+        group.onFailure(taskId, error);
+        assertFailedMetric(group);
+
+        time.sleep(7000L);
+        group.onShutdown(taskId);
+        assertStoppedMetric(group);
+
+        verify(statusListener);
+
+        long totalTime = 27000L;
+        double pauseTimeRatio = (double) (3000L + 5000L) / totalTime;
+        double runningTimeRatio = (double) (2000L + 4000L + 6000L) / totalTime;
+        assertEquals(pauseTimeRatio, metrics.currentMetricValueAsDouble(group.metricGroup(), "pause-ratio"), 0.000001d);
+        assertEquals(runningTimeRatio, metrics.currentMetricValueAsDouble(group.metricGroup(), "running-ratio"), 0.000001d);
+    }
+
     private static abstract class TestSinkTask extends SinkTask {
     }
 
+    protected void assertFailedMetric(TaskMetricsGroup metricsGroup) {
+        assertEquals(AbstractStatus.State.FAILED, metricsGroup.state());
+    }
+
+    protected void assertPausedMetric(TaskMetricsGroup metricsGroup) {
+        assertEquals(AbstractStatus.State.PAUSED, metricsGroup.state());
+    }
+
+    protected void assertRunningMetric(TaskMetricsGroup metricsGroup) {
+        assertEquals(AbstractStatus.State.RUNNING, metricsGroup.state());
+    }
+
+    protected void assertStoppedMetric(TaskMetricsGroup metricsGroup) {
+        assertEquals(AbstractStatus.State.UNASSIGNED, metricsGroup.state());
+    }
 }

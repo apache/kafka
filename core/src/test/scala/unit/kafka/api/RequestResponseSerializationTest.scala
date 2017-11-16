@@ -26,7 +26,8 @@ import TestUtils.createBroker
 import java.nio.ByteBuffer
 
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Time
 import org.junit._
 import org.scalatest.junit.JUnitSuite

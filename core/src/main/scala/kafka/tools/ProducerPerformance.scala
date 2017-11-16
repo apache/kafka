@@ -20,6 +20,7 @@ package kafka.tools
 import kafka.metrics.KafkaMetricsReporter
 import kafka.producer.{NewShinyProducer, OldProducer}
 import kafka.utils.{CommandLineUtils, Exit, Logging, ToolsUtils, VerifiableProperties}
+import kafka.utils.Implicits._
 import kafka.message.CompressionCodec
 import kafka.serializer._
 import java.util.concurrent.{CountDownLatch, Executors}
@@ -125,6 +126,21 @@ object ProducerPerformance extends Logging {
       .describedAs("metrics directory")
       .ofType(classOf[java.lang.String])
     val useNewProducerOpt = parser.accepts("new-producer", "Use the new producer implementation.")
+    val messageSizeOpt = parser.accepts("message-size", "The size of each message.")
+      .withRequiredArg
+      .describedAs("size")
+      .ofType(classOf[java.lang.Integer])
+      .defaultsTo(100)
+    val batchSizeOpt = parser.accepts("batch-size", "Number of messages to write in a single batch.")
+      .withRequiredArg
+      .describedAs("size")
+      .ofType(classOf[java.lang.Integer])
+      .defaultsTo(200)
+    val compressionCodecOpt = parser.accepts("compression-codec", "If set, messages are sent compressed")
+      .withRequiredArg
+      .describedAs("supported codec: NoCompressionCodec as 0, GZIPCompressionCodec as 1, SnappyCompressionCodec as 2, LZ4CompressionCodec as 3")
+      .ofType(classOf[java.lang.Integer])
+      .defaultsTo(0)
 
     val options = parser.parse(args: _*)
     CommandLineUtils.checkRequiredArgs(parser, options, topicsOpt, brokerListOpt, numMessagesOpt)
@@ -190,7 +206,7 @@ object ProducerPerformance extends Logging {
     val producer =
       if (config.useNewProducer) {
         import org.apache.kafka.clients.producer.ProducerConfig
-        props.putAll(config.producerProps)
+        props ++= config.producerProps
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.brokerList)
         props.put(ProducerConfig.SEND_BUFFER_CONFIG, (64 * 1024).toString)
         props.put(ProducerConfig.CLIENT_ID_CONFIG, "producer-performance")
@@ -202,7 +218,7 @@ object ProducerPerformance extends Logging {
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
         new NewShinyProducer(props)
       } else {
-        props.putAll(config.producerProps)
+        props ++= config.producerProps
         props.put("metadata.broker.list", config.brokerList)
         props.put("compression.codec", config.compressionCodec.codec.toString)
         props.put("send.buffer.bytes", (64 * 1024).toString)

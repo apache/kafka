@@ -16,15 +16,13 @@
  */
 package kafka.common
 
+import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.atomic.AtomicBoolean
 
-import kafka.utils.{Logging, ZkUtils}
-import org.apache.zookeeper.Watcher.Event.KeeperState
-import org.I0Itec.zkclient.exception.ZkInterruptedException
-import org.I0Itec.zkclient.{IZkChildListener, IZkStateListener}
+import kafka.utils.{Logging, ShutdownableThread}
+import kafka.zk.{KafkaZkClient, StateChangeHandlers}
+import kafka.zookeeper.{StateChangeHandler, ZNodeChildChangeHandler}
 import org.apache.kafka.common.utils.Time
-
-import scala.collection.JavaConverters._
 
 /**
  * Handle the notificationMessage.
@@ -40,73 +38,75 @@ trait NotificationHandler {
  * notificationHandler's processNotification() method with the child's data as argument. As part of processing these changes it also
  * purges any children with currentTime - createTime > changeExpirationMs.
  *
- * The caller/user of this class should ensure that they use zkClient.subscribeStateChanges and call processAllNotifications
- * method of this class from ZkStateChangeListener's handleNewSession() method. This is necessary to ensure that if zk session
- * is terminated and reestablished any missed notification will be processed immediately.
- * @param zkUtils
+ * @param zkClient
  * @param seqNodeRoot
  * @param seqNodePrefix
  * @param notificationHandler
  * @param changeExpirationMs
  * @param time
  */
-class ZkNodeChangeNotificationListener(private val zkUtils: ZkUtils,
+class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
                                        private val seqNodeRoot: String,
                                        private val seqNodePrefix: String,
                                        private val notificationHandler: NotificationHandler,
                                        private val changeExpirationMs: Long = 15 * 60 * 1000,
                                        private val time: Time = Time.SYSTEM) extends Logging {
   private var lastExecutedChange = -1L
+  private val queue = new LinkedBlockingQueue[ChangeNotification]
+  private val thread = new ChangeEventProcessThread(s"$seqNodeRoot-event-process-thread")
   private val isClosed = new AtomicBoolean(false)
 
-  /**
-   * create seqNodeRoot and begin watching for any new children nodes.
-   */
   def init() {
-    zkUtils.makeSurePersistentPathExists(seqNodeRoot)
-    zkUtils.zkClient.subscribeChildChanges(seqNodeRoot, NodeChangeListener)
-    zkUtils.zkClient.subscribeStateChanges(ZkStateChangeListener)
-    processAllNotifications()
+    zkClient.registerStateChangeHandler(ZkStateChangeHandler)
+    zkClient.registerZNodeChildChangeHandler(ChangeNotificationHandler)
+    addChangeNotification()
+    thread.start()
   }
 
   def close() = {
     isClosed.set(true)
+    zkClient.unregisterStateChangeHandler(ZkStateChangeHandler.name)
+    zkClient.unregisterZNodeChildChangeHandler(ChangeNotificationHandler.path)
+    queue.clear()
+    thread.shutdown()
   }
 
   /**
-   * Process all changes
+   * Process notifications
    */
-  def processAllNotifications() {
-    val changes = zkUtils.zkClient.getChildren(seqNodeRoot)
-    processNotifications(changes.asScala.sorted)
-  }
-
-  /**
-   * Process the given list of notifications
-   */
-  private def processNotifications(notifications: Seq[String]) {
-    if (notifications.nonEmpty) {
-      info(s"Processing notification(s) to $seqNodeRoot")
-      try {
+  private def processNotifications() {
+    try {
+      val notifications = zkClient.getChildren(seqNodeRoot).sorted
+      if (notifications.nonEmpty) {
+        info(s"Processing notification(s) to $seqNodeRoot")
         val now = time.milliseconds
         for (notification <- notifications) {
           val changeId = changeNumber(notification)
           if (changeId > lastExecutedChange) {
             val changeZnode = seqNodeRoot + "/" + notification
-            val (data, _) = zkUtils.readDataMaybeNull(changeZnode)
-            data.map(notificationHandler.processNotification(_)).getOrElse {
-              logger.warn(s"read null data from $changeZnode when processing notification $notification")
+            val (data, _) = zkClient.getDataAndStat(changeZnode)
+            data match {
+              case Some(d) => notificationHandler.processNotification(d)
+              case None => logger.warn(s"read null data from $changeZnode when processing notification $notification")
             }
+            lastExecutedChange = changeId
           }
-          lastExecutedChange = changeId
         }
         purgeObsoleteNotifications(now, notifications)
-      } catch {
-        case e: ZkInterruptedException =>
-          if (!isClosed.get)
-            throw e
       }
+    } catch {
+      case e: InterruptedException => if (!isClosed.get) error(s"Error while processing notification change for path = $seqNodeRoot", e)
+      case e: Exception => error(s"Error while processing notification change for path = $seqNodeRoot", e)
     }
+  }
+
+  private def addChangeNotification(): Unit = {
+    if (!isClosed.get && queue.peek() == null)
+      queue.put(new ChangeNotification)
+  }
+
+  class ChangeNotification {
+    def process(): Unit = processNotifications
   }
 
   /**
@@ -118,11 +118,11 @@ class ZkNodeChangeNotificationListener(private val zkUtils: ZkUtils,
   private def purgeObsoleteNotifications(now: Long, notifications: Seq[String]) {
     for (notification <- notifications.sorted) {
       val notificationNode = seqNodeRoot + "/" + notification
-      val (data, stat) = zkUtils.readDataMaybeNull(notificationNode)
+      val (data, stat) = zkClient.getDataAndStat(notificationNode)
       if (data.isDefined) {
         if (now - stat.getCtime > changeExpirationMs) {
           debug(s"Purging change notification $notificationNode")
-          zkUtils.deletePath(notificationNode)
+          zkClient.deletePath(notificationNode)
         }
       }
     }
@@ -131,35 +131,19 @@ class ZkNodeChangeNotificationListener(private val zkUtils: ZkUtils,
   /* get the change number from a change notification znode */
   private def changeNumber(name: String): Long = name.substring(seqNodePrefix.length).toLong
 
-  /**
-   * A listener that gets invoked when a node is created to notify changes.
-   */
-  object NodeChangeListener extends IZkChildListener {
-    override def handleChildChange(path: String, notifications: java.util.List[String]) {
-      try {
-        import scala.collection.JavaConverters._
-        if (notifications != null)
-          processNotifications(notifications.asScala.sorted)
-      } catch {
-        case e: Exception => error(s"Error processing notification change for path = $path and notification= $notifications :", e)
-      }
-    }
+  class ChangeEventProcessThread(name: String) extends ShutdownableThread(name = name) {
+    override def doWork(): Unit = queue.take().process
   }
 
-  object ZkStateChangeListener extends IZkStateListener {
-
-    override def handleNewSession() {
-      processAllNotifications
-    }
-
-    override def handleSessionEstablishmentError(error: Throwable) {
-      fatal("Could not establish session with zookeeper", error)
-    }
-
-    override def handleStateChanged(state: KeeperState) {
-      debug(s"New zookeeper state: ${state}")
-    }
+  object ChangeNotificationHandler extends ZNodeChildChangeHandler {
+    override val path: String = seqNodeRoot
+    override def handleChildChange(): Unit = addChangeNotification
   }
 
+  object ZkStateChangeHandler extends  StateChangeHandler {
+    override val name: String = StateChangeHandlers.zkNodeChangeListenerHandler(seqNodeRoot)
+    override def afterInitializingSession(): Unit = addChangeNotification
+    override def onReconnectionTimeout(): Unit = error("Reconnection timeout.")
+  }
 }
 

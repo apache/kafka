@@ -19,11 +19,10 @@ package kafka.message
 
 import java.io.ByteArrayOutputStream
 import scala.collection._
-import org.scalatest.junit.JUnitSuite
 import org.junit._
 import org.junit.Assert._
 
-class MessageCompressionTest extends JUnitSuite {
+class MessageCompressionTest {
 
   @Test
   def testSimpleCompressDecompress() {
@@ -49,7 +48,7 @@ class MessageCompressionTest extends JUnitSuite {
     testCompressSize(GZIPCompressionCodec, messages, 396)
 
     if (isSnappyAvailable)
-      testCompressSize(SnappyCompressionCodec, messages, 502)
+      testCompressSize(SnappyCompressionCodec, messages, 503)
 
     if (isLZ4Available)
       testCompressSize(LZ4CompressionCodec, messages, 387)

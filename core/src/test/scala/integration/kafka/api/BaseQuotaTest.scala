@@ -39,8 +39,8 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
   val consumerCount = 1
 
   private val producerBufferSize = 300000
-  protected val producerClientId = "QuotasTestProducer-1"
-  protected val consumerClientId = "QuotasTestConsumer-1"
+  protected def producerClientId = "QuotasTestProducer-1"
+  protected def consumerClientId = "QuotasTestConsumer-1"
 
   this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false")
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "2")
@@ -147,7 +147,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     consumer.subscribe(Collections.singleton(topic1))
     val endTimeMs = System.currentTimeMillis + 10000
     var throttled = false
-    while (!throttled && System.currentTimeMillis < endTimeMs) {
+    while ((!throttled || exemptRequestMetric == null) && System.currentTimeMillis < endTimeMs) {
       consumer.poll(100)
       val throttleMetric = consumerRequestThrottleMetric
       throttled = throttleMetric != null && throttleMetric.value > 0

@@ -46,7 +46,8 @@ class EndToEndLatencyService(PerformanceService):
     }
 
     def __init__(self, context, num_nodes, kafka, topic, num_records, compression_type="none", version=DEV_BRANCH, acks=1):
-        super(EndToEndLatencyService, self).__init__(context, num_nodes)
+        super(EndToEndLatencyService, self).__init__(context, num_nodes,
+                                                     root=EndToEndLatencyService.PERSISTENT_ROOT)
         self.kafka = kafka
         self.security_config = kafka.security_config.client_config()
 
@@ -73,15 +74,16 @@ class EndToEndLatencyService(PerformanceService):
     def start_cmd(self, node):
         args = self.args.copy()
         args.update({
-            'zk_connect': self.kafka.zk.connect_setting(),
+            'zk_connect': self.kafka.zk_connect_setting(),
             'bootstrap_servers': self.kafka.bootstrap_servers(self.security_config.security_protocol),
             'config_file': EndToEndLatencyService.CONFIG_FILE,
-            'kafka_run_class': self.path.script("kafka-run-class.sh", node)
+            'kafka_run_class': self.path.script("kafka-run-class.sh", node),
+            'java_class_name': self.java_class_name()
         })
 
         cmd = "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % EndToEndLatencyService.LOG4J_CONFIG
         if node.version >= V_0_9_0_0:
-            cmd += "KAFKA_OPTS=%(kafka_opts)s %(kafka_run_class)s kafka.tools.EndToEndLatency " % args
+            cmd += "KAFKA_OPTS=%(kafka_opts)s %(kafka_run_class)s %(java_class_name)s " % args
             cmd += "%(bootstrap_servers)s %(topic)s %(num_records)d %(acks)d %(message_bytes)d %(config_file)s" % args
         else:
             # Set fetch max wait to 0 to match behavior in later versions
@@ -117,3 +119,6 @@ class EndToEndLatencyService(PerformanceService):
                 results['latency_99th_ms'] = float(line.split()[6][:-1])
                 results['latency_999th_ms'] = float(line.split()[9])
         self.results[idx-1] = results
+
+    def java_class_name(self):
+        return "kafka.tools.EndToEndLatency"

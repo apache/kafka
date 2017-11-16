@@ -867,6 +867,7 @@ public class ConfigDef {
 
         @Override
         public void ensureValid(final String name, final Object value) {
+            @SuppressWarnings("unchecked")
             List<String> values = (List<String>) value;
             for (String string : values) {
                 validString.ensureValid(name, string);
@@ -904,12 +905,18 @@ public class ConfigDef {
     }
 
     public static class NonEmptyString implements Validator {
+
         @Override
         public void ensureValid(String name, Object o) {
             String s = (String) o;
             if (s != null && s.isEmpty()) {
                 throw new ConfigException(name, o, "String must be non-empty");
             }
+        }
+
+        @Override
+        public String toString() {
+            return "non-empty string";
         }
     }
 

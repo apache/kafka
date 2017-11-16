@@ -17,8 +17,6 @@
 
 package kafka.admin
 
-import java.util.concurrent.LinkedBlockingQueue
-
 import joptsimple.OptionParser
 import org.I0Itec.zkclient.exception.ZkException
 import kafka.utils.{CommandLineUtils, Logging, ZkUtils}
@@ -64,7 +62,7 @@ object ZkSecurityMigrator extends Logging {
                       + "authentication.")
 
   def run(args: Array[String]) {
-    var jaasFile = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
+    val jaasFile = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     val parser = new OptionParser(false)
     val zkAclOpt = parser.accepts("zookeeper.acl", "Indicates whether to make the Kafka znodes in ZooKeeper secure or unsecure."
         + " The options are 'secure' and 'unsecure'").withRequiredArg().ofType(classOf[String])

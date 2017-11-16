@@ -35,7 +35,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testBrokerCreatesZKChroot {
+  def testBrokerCreatesZKChroot(): Unit = {
     val brokerId = 0
     val zookeeperChroot = "/kafka-chroot-for-unittest"
     val props = TestUtils.createBrokerConfig(brokerId, zkConnect)
@@ -48,7 +48,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testConflictBrokerStartupWithSamePort {
+  def testConflictBrokerStartupWithSamePort(): Unit = {
     // Create and start first broker
     val brokerId1 = 0
     val props1 = TestUtils.createBrokerConfig(brokerId1, zkConnect)
@@ -67,7 +67,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testConflictBrokerRegistration {
+  def testConflictBrokerRegistration(): Unit = {
     // Try starting a broker with the a conflicting broker id.
     // This shouldn't affect the existing broker registration.
 
@@ -90,7 +90,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testBrokerSelfAware {
+  def testBrokerSelfAware(): Unit = {
     val brokerId = 0
     val props = TestUtils.createBrokerConfig(brokerId, zkConnect)
     server = TestUtils.createServer(KafkaConfig.fromProps(props))
@@ -101,7 +101,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testBrokerStateRunningAfterZK {
+  def testBrokerStateRunningAfterZK(): Unit = {
     val brokerId = 0
     val mockBrokerState = EasyMock.niceMock(classOf[kafka.server.BrokerState])
 

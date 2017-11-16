@@ -20,6 +20,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.junit.After;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -29,10 +30,15 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
 public class ValueToKeyTest {
+    private final ValueToKey<SinkRecord> xform = new ValueToKey<>();
+
+    @After
+    public void teardown() {
+        xform.close();
+    }
 
     @Test
     public void schemaless() {
-        final ValueToKey<SinkRecord> xform = new ValueToKey<>();
         xform.configure(Collections.singletonMap("fields", "a,b"));
 
         final HashMap<String, Integer> value = new HashMap<>();
@@ -53,7 +59,6 @@ public class ValueToKeyTest {
 
     @Test
     public void withSchema() {
-        final ValueToKey<SinkRecord> xform = new ValueToKey<>();
         xform.configure(Collections.singletonMap("fields", "a,b"));
 
         final Schema valueSchema = SchemaBuilder.struct()

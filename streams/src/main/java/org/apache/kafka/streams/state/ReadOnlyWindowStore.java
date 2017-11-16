@@ -31,6 +31,8 @@ public interface ReadOnlyWindowStore<K, V> {
     /**
      * Get all the key-value pairs with the given key and the time range from all
      * the existing windows.
+     *
+     * This iterator must be closed after use.
      * <p>
      * The time range is inclusive and applies to the starting timestamp of the window.
      * For example, if we have the following windows:
@@ -63,6 +65,8 @@ public interface ReadOnlyWindowStore<K, V> {
     /**
      * Get all the key-value pairs in the given key range and time range from all
      * the existing windows.
+     *
+     * This iterator must be closed after use.
      *
      * @param from      the first key in the range
      * @param to        the last key in the range

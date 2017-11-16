@@ -23,6 +23,7 @@ import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Wrapper over the underlying {@link ReadOnlySessionStore}s found in a {@link
@@ -41,15 +42,14 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
         this.storeName = storeName;
     }
 
-    private interface Fetcher<K, V> {
-        KeyValueIterator<Windowed<K>, V> fetch(ReadOnlySessionStore<K, V> store);
-    }
 
-    private KeyValueIterator<Windowed<K>, V> fetch(Fetcher<K, V> fetcher) {
+    @Override
+    public KeyValueIterator<Windowed<K>, V> fetch(final K key) {
+        Objects.requireNonNull(key, "key can't be null");
         final List<ReadOnlySessionStore<K, V>> stores = storeProvider.stores(storeName, queryableStoreType);
         for (final ReadOnlySessionStore<K, V> store : stores) {
             try {
-                final KeyValueIterator<Windowed<K>, V> result = fetcher.fetch(store);
+                final KeyValueIterator<Windowed<K>, V> result = store.fetch(key);
                 if (!result.hasNext()) {
                     result.close();
                 } else {
@@ -57,31 +57,26 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
                 }
             } catch (final InvalidStateStoreException ise) {
                 throw new InvalidStateStoreException("State store  [" + storeName + "] is not available anymore" +
-                                                     " and may have been migrated to another instance; " +
-                                                     "please re-discover its location from the state metadata.");
+                                                             " and may have been migrated to another instance; " +
+                                                             "please re-discover its location from the state metadata.");
             }
         }
         return KeyValueIterators.emptyIterator();
     }
 
-
-    @Override
-    public KeyValueIterator<Windowed<K>, V> fetch(final K key) {
-        return fetch(new Fetcher<K, V>() {
-            @Override
-            public KeyValueIterator<Windowed<K>, V> fetch(ReadOnlySessionStore<K, V> store) {
-                return store.fetch(key);
-            }
-        });
-    }
-
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to) {
-        return fetch(new Fetcher<K, V>() {
+        Objects.requireNonNull(from, "from can't be null");
+        Objects.requireNonNull(to, "to can't be null");
+        final NextIteratorFunction<Windowed<K>, V, ReadOnlySessionStore<K, V>> nextIteratorFunction = new NextIteratorFunction<Windowed<K>, V, ReadOnlySessionStore<K, V>>() {
             @Override
-            public KeyValueIterator<Windowed<K>, V> fetch(ReadOnlySessionStore<K, V> store) {
+            public KeyValueIterator<Windowed<K>, V> apply(final ReadOnlySessionStore<K, V> store) {
                 return store.fetch(from, to);
             }
-        });
+        };
+        return new DelegatingPeekingKeyValueIterator<>(storeName,
+                                                       new CompositeKeyValueIterator<>(
+                                                               storeProvider.stores(storeName, queryableStoreType).iterator(),
+                                                               nextIteratorFunction));
     }
 }

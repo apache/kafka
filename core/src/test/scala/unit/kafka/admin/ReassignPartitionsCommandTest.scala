@@ -40,7 +40,7 @@ class ReassignPartitionsCommandTest extends Logging {
   @Test
   def shouldFindMovingReplicas() {
     val control = TopicAndPartition("topic1", 1) -> Seq(100, 102)
-    val assigner = new ReassignPartitionsCommand(null, null)
+    val assigner = new ReassignPartitionsCommand(null, null, null, null)
 
     //Given partition 0 moves from broker 100 -> 102. Partition 1 does not move.
     val existing = Map(TopicAndPartition("topic1", 0) -> Seq(100, 101), control)
@@ -61,7 +61,7 @@ class ReassignPartitionsCommandTest extends Logging {
 
   @Test
   def shouldFindMovingReplicasWhenProposedIsSubsetOfExisting() {
-    val assigner = new ReassignPartitionsCommand(null, null)
+    val assigner = new ReassignPartitionsCommand(null, null, null, null)
 
     //Given we have more existing partitions than we are proposing
     val existingSuperset = Map(
@@ -94,7 +94,7 @@ class ReassignPartitionsCommandTest extends Logging {
   @Test
   def shouldFindMovingReplicasMultiplePartitions() {
     val control = TopicAndPartition("topic1", 2) -> Seq(100, 102)
-    val assigner = new ReassignPartitionsCommand(null, null)
+    val assigner = new ReassignPartitionsCommand(null, null, null, null)
 
     //Given partitions 0 & 1 moves from broker 100 -> 102. Partition 2 does not move.
     val existing = Map(TopicAndPartition("topic1", 0) -> Seq(100, 101), TopicAndPartition("topic1", 1) -> Seq(100, 101), control)
@@ -117,7 +117,7 @@ class ReassignPartitionsCommandTest extends Logging {
   @Test
   def shouldFindMovingReplicasMultipleTopics() {
     val control = TopicAndPartition("topic1", 1) -> Seq(100, 102)
-    val assigner = new ReassignPartitionsCommand(null, null)
+    val assigner = new ReassignPartitionsCommand(null, null, null, null)
 
     //Given topics 1 -> move from broker 100 -> 102, topics 2 -> move from broker 101 -> 100
     val existing = Map(TopicAndPartition("topic1", 0) -> Seq(100, 101), TopicAndPartition("topic2", 0) -> Seq(101, 102), control)
@@ -133,7 +133,7 @@ class ReassignPartitionsCommandTest extends Logging {
           case "topic2" =>
             assertEquals("0:101,0:102", configChange.get(LeaderReplicationThrottledReplicasProp))
             assertEquals("0:100", configChange.get(FollowerReplicationThrottledReplicasProp))
-          case _ => fail("Unexpected topic $topic")
+          case _ => fail(s"Unexpected topic $topic")
         }
         calls += 1
       }
@@ -146,7 +146,7 @@ class ReassignPartitionsCommandTest extends Logging {
 
   @Test
   def shouldFindMovingReplicasMultipleTopicsAndPartitions() {
-    val assigner = new ReassignPartitionsCommand(null, null)
+    val assigner = new ReassignPartitionsCommand(null, null, null, null)
 
     //Given
     val existing = Map(
@@ -186,7 +186,7 @@ class ReassignPartitionsCommandTest extends Logging {
   @Test
   def shouldFindTwoMovingReplicasInSamePartition() {
     val control = TopicAndPartition("topic1", 1) -> Seq(100, 102)
-    val assigner = new ReassignPartitionsCommand(null, null)
+    val assigner = new ReassignPartitionsCommand(null, null, null, null)
 
     //Given partition 0 has 2 moves from broker 102 -> 104 & 103 -> 105
     val existing = Map(TopicAndPartition("topic1", 0) -> Seq(100, 101, 102, 103), control)
@@ -209,7 +209,7 @@ class ReassignPartitionsCommandTest extends Logging {
   @Test
   def shouldNotOverwriteEntityConfigsWhenUpdatingThrottledReplicas(): Unit = {
     val control = TopicAndPartition("topic1", 1) -> Seq(100, 102)
-    val assigner = new ReassignPartitionsCommand(null, null)
+    val assigner = new ReassignPartitionsCommand(null, null, null, null)
     val existing = Map(TopicAndPartition("topic1", 0) -> Seq(100, 101), control)
     val proposed = Map(TopicAndPartition("topic1", 0) -> Seq(101, 102), control)
 
@@ -243,7 +243,7 @@ class ReassignPartitionsCommandTest extends Logging {
     val zk = stubZK(existing)
     val admin = createMock(classOf[AdminUtilities])
     val propsCapture: Capture[Properties] = newCapture(CaptureType.ALL)
-    val assigner = new ReassignPartitionsCommand(zk, proposed, admin)
+    val assigner = new ReassignPartitionsCommand(zk, None, proposed, Map.empty, admin)
     expect(admin.fetchEntityConfig(is(zk), anyString(), anyString())).andStubReturn(new Properties)
     expect(admin.changeBrokerConfig(is(zk), anyObject().asInstanceOf[List[Int]], capture(propsCapture))).anyTimes()
     replay(admin)
@@ -269,7 +269,7 @@ class ReassignPartitionsCommandTest extends Logging {
     val zk = stubZK(existing)
     val admin = createMock(classOf[AdminUtilities])
     val propsCapture: Capture[Properties] = newCapture(CaptureType.ALL)
-    val assigner = new ReassignPartitionsCommand(zk, proposed, admin)
+    val assigner = new ReassignPartitionsCommand(zk, None, proposed, Map.empty, admin)
     expect(admin.changeBrokerConfig(is(zk), anyObject().asInstanceOf[List[Int]], capture(propsCapture))).anyTimes()
 
     //Expect the existing broker config to be changed from 10/100 to 1000
@@ -303,7 +303,7 @@ class ReassignPartitionsCommandTest extends Logging {
     val zk = stubZK(existing)
     val admin = createMock(classOf[AdminUtilities])
     val propsCapture: Capture[Properties] = newCapture(CaptureType.ALL)
-    val assigner = new ReassignPartitionsCommand(zk, proposed, admin)
+    val assigner = new ReassignPartitionsCommand(zk, None, proposed, Map.empty, admin)
     expect(admin.changeBrokerConfig(is(zk), anyObject().asInstanceOf[List[Int]], capture(propsCapture))).anyTimes()
 
     //Given there is some existing config
@@ -328,7 +328,6 @@ class ReassignPartitionsCommandTest extends Logging {
   def shouldRemoveThrottleLimitFromAllBrokers(): Unit = {
     //Given 3 brokers, but with assignment only covering 2 of them
     val brokers = Seq(100, 101, 102)
-    val proposed = mutable.Map(TopicAndPartition("topic1", 0) -> Seq(100, 101))
     val status = mutable.Map(TopicAndPartition("topic1", 0) -> ReassignmentCompleted)
     val existingBrokerConfigs = propsWith(
       (DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "10"),
@@ -349,7 +348,7 @@ class ReassignPartitionsCommandTest extends Logging {
     replay(admin)
 
     //When
-    ReassignPartitionsCommand.removeThrottle(zk, proposed, status, admin)
+    ReassignPartitionsCommand.removeThrottle(zk, status, Map.empty, admin)
 
     //Then props should have gone (dummy remains)
     for (capture <- propsCapture.getValues) {
@@ -362,13 +361,9 @@ class ReassignPartitionsCommandTest extends Logging {
 
   @Test
   def shouldRemoveThrottleReplicaListBasedOnProposedAssignment(): Unit = {
-
     //Given two topics with existing config
-    val proposed = mutable.Map(
-      TopicAndPartition("topic1", 0) -> Seq(100, 101),
-      TopicAndPartition("topic2", 0) -> Seq(100, 101)
-    )
-    val status = mutable.Map(TopicAndPartition("topic1", 0) -> ReassignmentCompleted)
+    val status = mutable.Map(TopicAndPartition("topic1", 0) -> ReassignmentCompleted,
+                             TopicAndPartition("topic2", 0) -> ReassignmentCompleted)
     val existingConfigs = CoreUtils.propsWith(
       (LogConfig.LeaderReplicationThrottledReplicasProp, "1:100:2:100"),
       (LogConfig.FollowerReplicationThrottledReplicasProp, "1:101,2:101"),
@@ -390,7 +385,7 @@ class ReassignPartitionsCommandTest extends Logging {
     replay(admin)
 
     //When
-    ReassignPartitionsCommand.removeThrottle(zk, proposed, status, admin)
+    ReassignPartitionsCommand.removeThrottle(zk, status, Map.empty, admin)
 
     //Then props should have gone (dummy remains)
     for (actual <- propsCapture.getValues) {

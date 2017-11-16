@@ -112,4 +112,14 @@ public class InternalTopicConfig {
     public int hashCode() {
         return Objects.hash(name, logConfig, retentionMs, cleanupPolicies);
     }
+
+    @Override
+    public String toString() {
+        return "InternalTopicConfig(" +
+                "name=" + name +
+                ", logConfig=" + logConfig +
+                ", cleanupPolicies=" + cleanupPolicies +
+                ", retentionMs=" + retentionMs +
+                ")";
+    }
 }

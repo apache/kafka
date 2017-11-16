@@ -30,7 +30,7 @@ import scala.collection.JavaConverters._
 import scala.collection._
 
 class LogSegmentTest {
-  
+
   val topicPartition = new TopicPartition("topic", 0)
   val segments = mutable.ArrayBuffer[LogSegment]()
   var logDir: File = _
@@ -52,7 +52,7 @@ class LogSegmentTest {
     segments += seg
     seg
   }
-  
+
   /* create a ByteBufferMessageSet for the given messages starting from the given offset */
   def records(offset: Long, records: String*): MemoryRecords = {
     MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, offset, CompressionType.NONE, TimestampType.CREATE_TIME,
@@ -274,7 +274,7 @@ class LogSegmentTest {
     val segment = createSegment(100)
     val producerEpoch = 0.toShort
     val partitionLeaderEpoch = 15
-    val sequence = 0
+    val sequence = 100
 
     val pid1 = 5L
     val pid2 = 10L
@@ -317,7 +317,8 @@ class LogSegmentTest {
 
     // recover again, but this time assuming the transaction from pid2 began on a previous segment
     stateManager = new ProducerStateManager(topicPartition, logDir)
-    stateManager.loadProducerEntry(ProducerIdEntry(pid2, producerEpoch, 10, 90L, 5, RecordBatch.NO_TIMESTAMP, 0, Some(75L)))
+    stateManager.loadProducerEntry(new ProducerIdEntry(pid2,
+      mutable.Queue[BatchMetadata](BatchMetadata(10, 10L, 5, RecordBatch.NO_TIMESTAMP)), producerEpoch, 0, Some(75L)))
     segment.recover(stateManager)
     assertEquals(108L, stateManager.mapEndOffset)
 
@@ -333,7 +334,7 @@ class LogSegmentTest {
   private def endTxnRecords(controlRecordType: ControlRecordType,
                             producerId: Long,
                             producerEpoch: Short,
-                            offset: Long = 0L,
+                            offset: Long,
                             partitionLeaderEpoch: Int = 0,
                             coordinatorEpoch: Int = 0,
                             timestamp: Long = RecordBatch.NO_TIMESTAMP): MemoryRecords = {

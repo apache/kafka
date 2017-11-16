@@ -25,12 +25,12 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.test.IntegrationTest;
@@ -68,7 +68,7 @@ public class JoinIntegrationTest {
     private final static Properties RESULT_CONSUMER_CONFIG = new Properties();
     private final static Properties STREAMS_CONFIG = new Properties();
 
-    private KStreamBuilder builder;
+    private StreamsBuilder builder;
     private KStream<Long, String> leftStream;
     private KStream<Long, String> rightStream;
     private KTable<Long, String> leftTable;
@@ -100,7 +100,7 @@ public class JoinIntegrationTest {
     };
 
     @BeforeClass
-    public static void setupConfigsAndUtils() throws Exception {
+    public static void setupConfigsAndUtils() {
         PRODUCER_CONFIG.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         PRODUCER_CONFIG.put(ProducerConfig.ACKS_CONFIG, "all");
         PRODUCER_CONFIG.put(ProducerConfig.RETRIES_CONFIG, 0);
@@ -124,22 +124,22 @@ public class JoinIntegrationTest {
     }
 
     @Before
-    public void prepareTopology() throws Exception {
+    public void prepareTopology() throws InterruptedException {
         CLUSTER.createTopics(INPUT_TOPIC_1, INPUT_TOPIC_2, OUTPUT_TOPIC);
 
-        builder = new KStreamBuilder();
-        leftTable = builder.table(INPUT_TOPIC_1, "leftTable");
-        rightTable = builder.table(INPUT_TOPIC_2, "rightTable");
+        builder = new StreamsBuilder();
+        leftTable = builder.table(INPUT_TOPIC_1);
+        rightTable = builder.table(INPUT_TOPIC_2);
         leftStream = leftTable.toStream();
         rightStream = rightTable.toStream();
     }
 
     @After
-    public void cleanup() throws Exception {
+    public void cleanup() throws InterruptedException {
         CLUSTER.deleteTopicsAndWait(120000, INPUT_TOPIC_1, INPUT_TOPIC_2, OUTPUT_TOPIC);
     }
 
-    private void checkResult(final String outputTopic, final List<String> expectedResult) throws Exception {
+    private void checkResult(final String outputTopic, final List<String> expectedResult) throws InterruptedException {
         if (expectedResult != null) {
             final List<String> result = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(RESULT_CONSUMER_CONFIG, outputTopic, expectedResult.size(), 30 * 1000L);
             assertThat(result, is(expectedResult));
@@ -154,7 +154,7 @@ public class JoinIntegrationTest {
         assert expectedResult.size() == input.size();
 
         IntegrationTestUtils.purgeLocalStreamsState(STREAMS_CONFIG);
-        final KafkaStreams streams = new KafkaStreams(builder, STREAMS_CONFIG);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), STREAMS_CONFIG);
         try {
             streams.start();
 

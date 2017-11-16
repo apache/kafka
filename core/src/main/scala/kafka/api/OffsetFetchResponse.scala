@@ -25,6 +25,7 @@ import kafka.utils.Logging
 
 import org.apache.kafka.common.protocol.Errors
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 object OffsetFetchResponse extends Logging {
 
   def readFrom(buffer: ByteBuffer): OffsetFetchResponse = {
@@ -55,6 +56,7 @@ object OffsetFetchResponse extends Logging {
   }
 }
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 case class OffsetFetchResponse(requestInfo: Map[TopicAndPartition, OffsetMetadataAndError],
                                requestVersion: Int = OffsetFetchRequest.CurrentVersion,
                                correlationId: Int = 0,

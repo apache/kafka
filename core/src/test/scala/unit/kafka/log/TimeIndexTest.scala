@@ -35,7 +35,7 @@ class TimeIndexTest extends JUnitSuite {
 
   @Before
   def setup() {
-    this.idx = new TimeIndex(file = nonExistantTempFile(), baseOffset = baseOffset, maxIndexSize = maxEntries * 12)
+    this.idx = new TimeIndex(nonExistantTempFile(), baseOffset = baseOffset, maxIndexSize = maxEntries * 12)
   }
 
   @After

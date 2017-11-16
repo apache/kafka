@@ -17,8 +17,13 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.test.MockRestoreCallback;
+import org.apache.kafka.test.MockStateRestoreListener;
+import org.junit.Before;
 import org.junit.Test;
+
+import java.util.Collections;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -28,37 +33,48 @@ public class StateRestorerTest {
 
     private static final long OFFSET_LIMIT = 50;
     private final MockRestoreCallback callback = new MockRestoreCallback();
-    private final StateRestorer restorer = new StateRestorer(new TopicPartition("topic", 1), callback, null, OFFSET_LIMIT, true);
+    private final MockStateRestoreListener reportingListener = new MockStateRestoreListener();
+    private final CompositeRestoreListener compositeRestoreListener = new CompositeRestoreListener(callback);
+    private final StateRestorer restorer = new StateRestorer(new TopicPartition("topic", 1), compositeRestoreListener,
+                                                             null, OFFSET_LIMIT, true, "storeName");
+
+    @Before
+    public void setUp() {
+        compositeRestoreListener.setUserRestoreListener(reportingListener);
+    }
 
     @Test
-    public void shouldCallRestoreOnRestoreCallback() throws Exception {
-        restorer.restore(new byte[0], new byte[0]);
+    public void shouldCallRestoreOnRestoreCallback() {
+        restorer.restore(Collections.singletonList(KeyValue.pair(new byte[0], new byte[0])));
         assertThat(callback.restored.size(), equalTo(1));
     }
 
     @Test
-    public void shouldBeCompletedIfRecordOffsetGreaterThanEndOffset() throws Exception {
+    public void shouldBeCompletedIfRecordOffsetGreaterThanEndOffset() {
         assertTrue(restorer.hasCompleted(11, 10));
     }
 
     @Test
-    public void shouldBeCompletedIfRecordOffsetGreaterThanOffsetLimit() throws Exception {
+    public void shouldBeCompletedIfRecordOffsetGreaterThanOffsetLimit() {
         assertTrue(restorer.hasCompleted(51, 100));
     }
 
     @Test
-    public void shouldBeCompletedIfEndOffsetAndRecordOffsetAreZero() throws Exception {
+    public void shouldBeCompletedIfEndOffsetAndRecordOffsetAreZero() {
         assertTrue(restorer.hasCompleted(0, 0));
     }
 
     @Test
-    public void shouldBeCompletedIfOffsetAndOffsetLimitAreZero() throws Exception {
-        final StateRestorer restorer = new StateRestorer(new TopicPartition("topic", 1), callback, null, 0, true);
+    public void shouldBeCompletedIfOffsetAndOffsetLimitAreZero() {
+        final StateRestorer
+            restorer =
+            new StateRestorer(new TopicPartition("topic", 1), compositeRestoreListener, null, 0, true,
+                              "storeName");
         assertTrue(restorer.hasCompleted(0, 10));
     }
 
     @Test
-    public void shouldSetRestoredOffsetToMinOfLimitAndOffset() throws Exception {
+    public void shouldSetRestoredOffsetToMinOfLimitAndOffset() {
         restorer.setRestoredOffset(20);
         assertThat(restorer.restoredOffset(), equalTo(20L));
         restorer.setRestoredOffset(100);
@@ -66,7 +82,7 @@ public class StateRestorerTest {
     }
 
     @Test
-    public void shouldSetStartingOffsetToMinOfLimitAndOffset() throws Exception {
+    public void shouldSetStartingOffsetToMinOfLimitAndOffset() {
         restorer.setStartingOffset(20);
         assertThat(restorer.startingOffset(), equalTo(20L));
         restorer.setRestoredOffset(100);
@@ -74,7 +90,7 @@ public class StateRestorerTest {
     }
 
     @Test
-    public void shouldReturnCorrectNumRestoredRecords() throws Exception {
+    public void shouldReturnCorrectNumRestoredRecords() {
         restorer.setStartingOffset(20);
         restorer.setRestoredOffset(40);
         assertThat(restorer.restoredNumRecords(), equalTo(20L));

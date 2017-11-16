@@ -18,15 +18,26 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
+import static org.apache.kafka.common.protocol.CommonFields.GROUP_ID;
+import static org.apache.kafka.common.protocol.CommonFields.PRODUCER_EPOCH;
+import static org.apache.kafka.common.protocol.CommonFields.PRODUCER_ID;
+import static org.apache.kafka.common.protocol.CommonFields.TRANSACTIONAL_ID;
+
 public class AddOffsetsToTxnRequest extends AbstractRequest {
-    private static final String TRANSACTIONAL_ID_KEY_NAME = "transactional_id";
-    private static final String PRODUCER_ID_KEY_NAME = "producer_id";
-    private static final String EPOCH_KEY_NAME = "producer_epoch";
-    private static final String CONSUMER_GROUP_ID_KEY_NAME = "consumer_group_id";
+    private static final Schema ADD_OFFSETS_TO_TXN_REQUEST_V0 = new Schema(
+            TRANSACTIONAL_ID,
+            PRODUCER_ID,
+            PRODUCER_EPOCH,
+            GROUP_ID);
+
+    public static Schema[] schemaVersions() {
+        return new Schema[]{ADD_OFFSETS_TO_TXN_REQUEST_V0};
+    }
 
     public static class Builder extends AbstractRequest.Builder<AddOffsetsToTxnRequest> {
         private final String transactionalId;
@@ -79,10 +90,10 @@ public class AddOffsetsToTxnRequest extends AbstractRequest {
 
     public AddOffsetsToTxnRequest(Struct struct, short version) {
         super(version);
-        this.transactionalId = struct.getString(TRANSACTIONAL_ID_KEY_NAME);
-        this.producerId = struct.getLong(PRODUCER_ID_KEY_NAME);
-        this.producerEpoch = struct.getShort(EPOCH_KEY_NAME);
-        this.consumerGroupId = struct.getString(CONSUMER_GROUP_ID_KEY_NAME);
+        this.transactionalId = struct.get(TRANSACTIONAL_ID);
+        this.producerId = struct.get(PRODUCER_ID);
+        this.producerEpoch = struct.get(PRODUCER_EPOCH);
+        this.consumerGroupId = struct.get(GROUP_ID);
     }
 
     public String transactionalId() {
@@ -104,10 +115,10 @@ public class AddOffsetsToTxnRequest extends AbstractRequest {
     @Override
     protected Struct toStruct() {
         Struct struct = new Struct(ApiKeys.ADD_OFFSETS_TO_TXN.requestSchema(version()));
-        struct.set(TRANSACTIONAL_ID_KEY_NAME, transactionalId);
-        struct.set(PRODUCER_ID_KEY_NAME, producerId);
-        struct.set(EPOCH_KEY_NAME, producerEpoch);
-        struct.set(CONSUMER_GROUP_ID_KEY_NAME, consumerGroupId);
+        struct.set(TRANSACTIONAL_ID, transactionalId);
+        struct.set(PRODUCER_ID, producerId);
+        struct.set(PRODUCER_EPOCH, producerEpoch);
+        struct.set(GROUP_ID, consumerGroupId);
         return struct;
     }
 

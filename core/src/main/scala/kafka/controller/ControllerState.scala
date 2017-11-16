@@ -78,6 +78,15 @@ object ControllerState {
     def value = 9
   }
 
+  case object LeaderAndIsrResponseReceived extends ControllerState {
+    def value = 10
+  }
+
+  case object LogDirChange extends ControllerState {
+    def value = 11
+  }
+
   val values: Seq[ControllerState] = Seq(Idle, ControllerChange, BrokerChange, TopicChange, TopicDeletion,
-    PartitionReassignment, AutoLeaderBalance, ManualLeaderBalance, ControlledShutdown, IsrChange)
+    PartitionReassignment, AutoLeaderBalance, ManualLeaderBalance, ControlledShutdown, IsrChange, LeaderAndIsrResponseReceived,
+    LogDirChange)
 }

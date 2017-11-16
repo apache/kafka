@@ -166,7 +166,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
    * Tests the migration tool when chroot is being used.
    */
   @Test
-  def testChroot {
+  def testChroot(): Unit = {
     val zkUrl = zkConnect + "/kafka"
     zkUtils.createPersistentPath("/kafka")
     val unsecureZkUtils = ZkUtils(zkUrl, 6000, 6000, false)

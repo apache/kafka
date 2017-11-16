@@ -25,10 +25,11 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
+import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.DefaultPartitionGrouper;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
@@ -50,7 +51,7 @@ import static org.apache.kafka.common.requests.IsolationLevel.READ_COMMITTED;
 
 /**
  * Configuration for a {@link KafkaStreams} instance.
- * Can also be use to configure the Kafka Streams internal {@link KafkaConsumer} and {@link KafkaProducer}.
+ * Can also be used to configure the Kafka Streams internal {@link KafkaConsumer} and {@link KafkaProducer}.
  * To avoid consumer/producer property conflicts, you should prefix those properties using
  * {@link #consumerPrefix(String)} and {@link #producerPrefix(String)}, respectively.
  * <p>
@@ -71,12 +72,27 @@ import static org.apache.kafka.common.requests.IsolationLevel.READ_COMMITTED;
  *
  * StreamsConfig streamsConfig = new StreamsConfig(streamsProperties);
  * }</pre>
- * Kafka Streams required to set at least properties {@link #APPLICATION_ID_CONFIG "application.id"} and
- * {@link #BOOTSTRAP_SERVERS_CONFIG "bootstrap.servers"}.
- * Furthermore, it is not allowed to enable {@link ConsumerConfig#ENABLE_AUTO_COMMIT_CONFIG "enable.auto.commit"} that
- * is disabled by Kafka Streams by default.
+ * 
+ * Kafka Streams requires at least the following properties to be set:
+ * <ul>
+ *  <li>{@link #APPLICATION_ID_CONFIG "application.id"}</li>
+ *  <li>{@link #BOOTSTRAP_SERVERS_CONFIG "bootstrap.servers"}</li>
+ * </ul>
+ * 
+ * By default, Kafka Streams does not allow users to overwrite the following properties (Streams setting shown in parentheses):
+ * <ul>
+ *   <li>{@link ConsumerConfig#ENABLE_AUTO_COMMIT_CONFIG "enable.auto.commit"} (false) - Streams client will always disable/turn off auto committing</li>
+ * </ul>
+ * 
+ * If {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} is set to {@link #EXACTLY_ONCE "exactly_once"}, Kafka Streams does not allow users to overwrite the following properties (Streams setting shown in parentheses):
+ * <ul>
+ *   <li>{@link ConsumerConfig#ISOLATION_LEVEL_CONFIG "isolation.level"} (read_committed) - Consumers will always read committed data only</li>
+ *   <li>{@link ProducerConfig#ENABLE_IDEMPOTENCE_CONFIG "enable.idempotence"} (true) - Producer will always have idempotency enabled</li>
+ *   <li>{@link ProducerConfig#MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION "max.in.flight.requests.per.connection"} (1) - Producer will always have one in-flight request per connection</li>
+ * </ul>
  *
- * @see KafkaStreams#KafkaStreams(org.apache.kafka.streams.processor.TopologyBuilder, StreamsConfig)
+ *
+ * @see KafkaStreams#KafkaStreams(org.apache.kafka.streams.Topology, StreamsConfig)
  * @see ConsumerConfig
  * @see ProducerConfig
  */
@@ -97,7 +113,15 @@ public class StreamsConfig extends AbstractConfig {
      */
     public static final String CONSUMER_PREFIX = "consumer.";
 
-    // Prefix used to isolate producer configs from consumer configs.
+
+    /**
+     * Prefix used to provide default topic configs to be applied when creating internal topics.
+     * These should be valid properties from {@link org.apache.kafka.common.config.TopicConfig TopicConfig}.
+     * It is recommended to use {@link #topicPrefix(String)}.
+     */
+    public static final String TOPIC_PREFIX = "topic.";
+
+
     /**
      * Prefix used to isolate {@link KafkaProducer producer} configs from {@link KafkaConsumer consumer} configs.
      * It is recommended to use {@link #producerPrefix(String)} to add this prefix to {@link ProducerConfig producer
@@ -136,6 +160,8 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code client.id} */
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
+    private static final String CLIENT_ID_DOC = "An ID prefix string used for the client IDs of internal consumer, producer and restore-consumer," +
+        " with pattern '<client.id>-StreamThread-<threadSequenceNumber>-<consumer|producer|restore-consumer>'.";
 
     /** {@code commit.interval.ms} */
     public static final String COMMIT_INTERVAL_MS_CONFIG = "commit.interval.ms";
@@ -146,17 +172,24 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code connections.max.idle.ms} */
     public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG;
 
+    /**
+     * {@code default.deserialization.exception.handler}
+     */
+    public static final String DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG = "default.deserialization.exception.handler";
+    private static final String DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.DeserializationExceptionHandler</code> interface.";
+
+
     /** {@code default key.serde} */
     public static final String DEFAULT_KEY_SERDE_CLASS_CONFIG = "default.key.serde";
-    private static final String DEFAULT_KEY_SERDE_CLASS_DOC = " Default serializer / deserializer class for key that implements the <code>Serde</code> interface.";
+    private static final String DEFAULT_KEY_SERDE_CLASS_DOC = " Default serializer / deserializer class for key that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface.";
 
     /** {@code default timestamp.extractor} */
     public static final String DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG = "default.timestamp.extractor";
-    private static final String DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC = "Default timestamp extractor class that implements the <code>TimestampExtractor</code> interface.";
+    private static final String DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC = "Default timestamp extractor class that implements the <code>org.apache.kafka.streams.processor.TimestampExtractor</code> interface.";
 
     /** {@code default value.serde} */
     public static final String DEFAULT_VALUE_SERDE_CLASS_CONFIG = "default.value.serde";
-    private static final String DEFAULT_VALUE_SERDE_CLASS_DOC = "Default serializer / deserializer class for value that implements the <code>Serde</code> interface.";
+    private static final String DEFAULT_VALUE_SERDE_CLASS_DOC = "Default serializer / deserializer class for value that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface.";
 
     /**
      * {@code key.serde}
@@ -164,7 +197,7 @@ public class StreamsConfig extends AbstractConfig {
      */
     @Deprecated
     public static final String KEY_SERDE_CLASS_CONFIG = "key.serde";
-    private static final String KEY_SERDE_CLASS_DOC = "Serializer / deserializer class for key that implements the <code>Serde</code> interface. This config is deprecated, use <code>" + DEFAULT_KEY_SERDE_CLASS_CONFIG + "</code> instead";
+    private static final String KEY_SERDE_CLASS_DOC = "Serializer / deserializer class for key that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface. This config is deprecated, use <code>" + DEFAULT_KEY_SERDE_CLASS_CONFIG + "</code> instead";
 
     /** {@code metadata.max.age.ms} */
     public static final String METADATA_MAX_AGE_CONFIG = CommonClientConfigs.METADATA_MAX_AGE_CONFIG;
@@ -191,13 +224,13 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code partition.grouper} */
     public static final String PARTITION_GROUPER_CLASS_CONFIG = "partition.grouper";
-    private static final String PARTITION_GROUPER_CLASS_DOC = "Partition grouper class that implements the <code>PartitionGrouper</code> interface.";
+    private static final String PARTITION_GROUPER_CLASS_DOC = "Partition grouper class that implements the <code>org.apache.kafka.streams.processor.PartitionGrouper</code> interface.";
 
     /** {@code poll.ms} */
     public static final String POLL_MS_CONFIG = "poll.ms";
     private static final String POLL_MS_DOC = "The amount of time in milliseconds to block waiting for input.";
 
-    /** {@code cache.max.bytes.buffering} */
+    /** {@code processing.guarantee} */
     public static final String PROCESSING_GUARANTEE_CONFIG = "processing.guarantee";
     private static final String PROCESSING_GUARANTEE_DOC = "The processing guarantee that should be used. Possible values are <code>" + AT_LEAST_ONCE + "</code> (default) and <code>" + EXACTLY_ONCE + "</code>.";
 
@@ -222,7 +255,7 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code rocksdb.config.setter} */
     public static final String ROCKSDB_CONFIG_SETTER_CLASS_CONFIG = "rocksdb.config.setter";
-    private static final String ROCKSDB_CONFIG_SETTER_CLASS_DOC = "A Rocks DB config setter class or class name that implements the <code>RocksDBConfigSetter</code> interface";
+    private static final String ROCKSDB_CONFIG_SETTER_CLASS_DOC = "A Rocks DB config setter class or class name that implements the <code>org.apache.kafka.streams.state.RocksDBConfigSetter</code> interface";
 
     /** {@code security.protocol} */
     public static final String SECURITY_PROTOCOL_CONFIG = CommonClientConfigs.SECURITY_PROTOCOL_CONFIG;
@@ -244,7 +277,7 @@ public class StreamsConfig extends AbstractConfig {
      */
     @Deprecated
     public static final String TIMESTAMP_EXTRACTOR_CLASS_CONFIG = "timestamp.extractor";
-    private static final String TIMESTAMP_EXTRACTOR_CLASS_DOC = "Timestamp extractor class that implements the <code>TimestampExtractor</code> interface. This config is deprecated, use <code>" + DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG + "</code> instead";
+    private static final String TIMESTAMP_EXTRACTOR_CLASS_DOC = "Timestamp extractor class that implements the <code>org.apache.kafka.streams.processor.TimestampExtractor</code> interface. This config is deprecated, use <code>" + DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG + "</code> instead";
 
     /**
      * {@code value.serde}
@@ -252,7 +285,7 @@ public class StreamsConfig extends AbstractConfig {
      */
     @Deprecated
     public static final String VALUE_SERDE_CLASS_CONFIG = "value.serde";
-    private static final String VALUE_SERDE_CLASS_DOC = "Serializer / deserializer class for value that implements the <code>Serde</code> interface. This config is deprecated, use <code>" + DEFAULT_VALUE_SERDE_CLASS_CONFIG + "</code> instead";
+    private static final String VALUE_SERDE_CLASS_DOC = "Serializer / deserializer class for value that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface. This config is deprecated, use <code>" + DEFAULT_VALUE_SERDE_CLASS_CONFIG + "</code> instead";
 
     /** {@code windowstore.changelog.additional.retention.ms} */
     public static final String WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG = "windowstore.changelog.additional.retention.ms";
@@ -265,6 +298,11 @@ public class StreamsConfig extends AbstractConfig {
     @Deprecated
     public static final String ZOOKEEPER_CONNECT_CONFIG = "zookeeper.connect";
     private static final String ZOOKEEPER_CONNECT_DOC = "Zookeeper connect string for Kafka topics management. This config is deprecated and will be ignored as Streams API does not use Zookeeper anymore.";
+
+    private static final String[] NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS = new String[] {ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG};
+    private static final String[] NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS = new String[] {ConsumerConfig.ISOLATION_LEVEL_CONFIG};
+    private static final String[] NON_CONFIGURABLE_PRODUCER_EOS_CONFIGS = new String[] {ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG,
+                                                                                        ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION};
 
     static {
         CONFIG = new ConfigDef()
@@ -302,7 +340,12 @@ public class StreamsConfig extends AbstractConfig {
                     Type.STRING,
                     "",
                     Importance.MEDIUM,
-                    CommonClientConfigs.CLIENT_ID_DOC)
+                    CLIENT_ID_DOC)
+            .define(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
+                    Type.CLASS,
+                    LogAndFailExceptionHandler.class.getName(),
+                    Importance.MEDIUM,
+                    DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC)
             .define(DEFAULT_KEY_SERDE_CLASS_CONFIG,
                     Type.CLASS,
                     Serdes.ByteArraySerde.class.getName(),
@@ -549,6 +592,17 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     /**
+     * Prefix a property with {@link #TOPIC_PREFIX}
+     * used to provide default topic configs to be applied when creating internal topics.
+     *
+     * @param topicProp the topic property to be masked
+     * @return TOPIC_PREFIX + {@code topicProp}
+     */
+    public static String topicPrefix(final String topicProp) {
+        return TOPIC_PREFIX + topicProp;
+    }
+
+    /**
      * Return a copy of the config definition.
      *
      * @return a copy of the config definition
@@ -582,22 +636,12 @@ public class StreamsConfig extends AbstractConfig {
         return configUpdates;
     }
 
-    private Map<String, Object> getCommonConsumerConfigs() throws ConfigException {
+    private Map<String, Object> getCommonConsumerConfigs() {
         final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(CONSUMER_PREFIX, ConsumerConfig.configNames());
 
-        // disable auto commit and throw exception if there is user overridden values,
-        // this is necessary for streams commit semantics
-        if (clientProvidedProps.containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
-            throw new ConfigException("Unexpected user-specified consumer config " + ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG
-                + ", as the streams client will always turn off auto committing.");
-        }
-        if (eosEnabled) {
-            if (clientProvidedProps.containsKey(ConsumerConfig.ISOLATION_LEVEL_CONFIG)) {
-                throw new ConfigException("Unexpected user-specified consumer config " + ConsumerConfig.ISOLATION_LEVEL_CONFIG
-                    + "; because " + PROCESSING_GUARANTEE_CONFIG + " is set to '" + EXACTLY_ONCE + "' consumers will always read committed data only.");
-            }
-        }
-
+        checkIfUnexpectedUserSpecifiedConsumerConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
+        checkIfUnexpectedUserSpecifiedConsumerConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS);
+        
         final Map<String, Object> consumerProps = new HashMap<>(eosEnabled ? CONSUMER_EOS_OVERRIDES : CONSUMER_DEFAULT_OVERRIDES);
         consumerProps.putAll(clientProvidedProps);
 
@@ -608,7 +652,43 @@ public class StreamsConfig extends AbstractConfig {
 
         return consumerProps;
     }
+                 
+    private void checkIfUnexpectedUserSpecifiedConsumerConfig(final Map<String, Object> clientProvidedProps, final String[] nonConfigurableConfigs) {
+        // Streams does not allow users to configure certain consumer/producer configurations, for example,
+        // enable.auto.commit. In cases where user tries to override such non-configurable
+        // consumer/producer configurations, log a warning and remove the user defined value from the Map.
+        // Thus the default values for these consumer/producer configurations that are suitable for
+        // Streams will be used instead.
+        for (final String config: nonConfigurableConfigs) {
+            if (clientProvidedProps.containsKey(config)) {
+                final String eosMessage =  PROCESSING_GUARANTEE_CONFIG + " is set to " + EXACTLY_ONCE + ". Hence, ";
+                final String nonConfigurableConfigMessage = "Unexpected user-specified %s config: %s found. %sUser setting (%s) will be ignored and the Streams default setting (%s) will be used ";
 
+                if (CONSUMER_DEFAULT_OVERRIDES.containsKey(config)) {
+                    if (!clientProvidedProps.get(config).equals(CONSUMER_DEFAULT_OVERRIDES.get(config))) {
+                        log.warn(String.format(nonConfigurableConfigMessage, "consumer", config, "", clientProvidedProps.get(config),  CONSUMER_DEFAULT_OVERRIDES.get(config)));
+                        clientProvidedProps.remove(config);
+                    }
+                } else if (eosEnabled) {
+                    if (CONSUMER_EOS_OVERRIDES.containsKey(config)) {
+                        if (!clientProvidedProps.get(config).equals(CONSUMER_EOS_OVERRIDES.get(config))) {
+                            log.warn(String.format(nonConfigurableConfigMessage,
+                                    "consumer", config, eosMessage, clientProvidedProps.get(config), CONSUMER_EOS_OVERRIDES.get(config)));
+                            clientProvidedProps.remove(config);
+                        }
+                    } else if (PRODUCER_EOS_OVERRIDES.containsKey(config)) {
+                        if (!clientProvidedProps.get(config).equals(PRODUCER_EOS_OVERRIDES.get(config))) {
+                            log.warn(String.format(nonConfigurableConfigMessage,
+                                    "producer", config, eosMessage, clientProvidedProps.get(config), PRODUCER_EOS_OVERRIDES.get(config)));
+                            clientProvidedProps.remove(config);
+                        }
+                    }
+                }
+            }
+
+        }
+    }
+    
     /**
      * Get the configs to the {@link KafkaConsumer consumer}.
      * Properties using the prefix {@link #CONSUMER_PREFIX} will be used in favor over their non-prefixed versions
@@ -619,11 +699,10 @@ public class StreamsConfig extends AbstractConfig {
      * @param groupId      consumer groupId
      * @param clientId     clientId
      * @return Map of the consumer configuration.
-     * @throws ConfigException if {@code "enable.auto.commit"} was set to {@code false} by the user
      */
     public Map<String, Object> getConsumerConfigs(final StreamThread streamThread,
                                                   final String groupId,
-                                                  final String clientId) throws ConfigException {
+                                                  final String clientId) {
         final Map<String, Object> consumerProps = getCommonConsumerConfigs();
 
         // add client id with stream client id prefix, and group id
@@ -650,9 +729,8 @@ public class StreamsConfig extends AbstractConfig {
      *
      * @param clientId clientId
      * @return Map of the consumer configuration.
-     * @throws ConfigException if {@code "enable.auto.commit"} was set to {@code false} by the user
      */
-    public Map<String, Object> getRestoreConsumerConfigs(final String clientId) throws ConfigException {
+    public Map<String, Object> getRestoreConsumerConfigs(final String clientId) {
         final Map<String, Object> consumerProps = getCommonConsumerConfigs();
 
         // no need to set group id for a restore consumer
@@ -675,17 +753,7 @@ public class StreamsConfig extends AbstractConfig {
     public Map<String, Object> getProducerConfigs(final String clientId) {
         final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(PRODUCER_PREFIX, ProducerConfig.configNames());
 
-        if (eosEnabled) {
-            if (clientProvidedProps.containsKey(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG)) {
-                throw new ConfigException("Unexpected user-specified consumer config " + ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG
-                    + "; because " + PROCESSING_GUARANTEE_CONFIG + " is set to '" + EXACTLY_ONCE + "' producer will always have idempotency enabled.");
-            }
-
-            if (clientProvidedProps.containsKey(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION)) {
-                throw new ConfigException("Unexpected user-specified consumer config " + ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION
-                    + "; because " + PROCESSING_GUARANTEE_CONFIG + " is set to '" + EXACTLY_ONCE + "' producer will always have only one in-flight request per connection.");
-            }
-        }
+        checkIfUnexpectedUserSpecifiedConsumerConfig(clientProvidedProps, NON_CONFIGURABLE_PRODUCER_EOS_CONFIGS);
 
         // generate producer configs from original properties and overridden maps
         final Map<String, Object> props = new HashMap<>(eosEnabled ? PRODUCER_EOS_OVERRIDES : PRODUCER_DEFAULT_OVERRIDES);
@@ -713,18 +781,7 @@ public class StreamsConfig extends AbstractConfig {
      */
     @Deprecated
     public Serde keySerde() {
-        try {
-            Serde<?> serde = getConfiguredInstance(KEY_SERDE_CLASS_CONFIG, Serde.class);
-            // the default value of deprecated key serde is null
-            if (serde == null) {
-                serde = defaultKeySerde();
-            } else {
-                serde.configure(originals(), true);
-            }
-            return serde;
-        } catch (final Exception e) {
-            throw new StreamsException(String.format("Failed to configure key serde %s", get(KEY_SERDE_CLASS_CONFIG)), e);
-        }
+        return defaultKeySerde();
     }
 
     /**
@@ -734,12 +791,18 @@ public class StreamsConfig extends AbstractConfig {
      * @return an configured instance of key Serde class
      */
     public Serde defaultKeySerde() {
+        Object keySerdeConfigSetting = get(KEY_SERDE_CLASS_CONFIG);
         try {
-            Serde<?> serde = getConfiguredInstance(DEFAULT_KEY_SERDE_CLASS_CONFIG, Serde.class);
+            Serde<?> serde = getConfiguredInstance(KEY_SERDE_CLASS_CONFIG, Serde.class);
+            if (serde == null) {
+                keySerdeConfigSetting = get(DEFAULT_KEY_SERDE_CLASS_CONFIG);
+                serde = getConfiguredInstance(DEFAULT_KEY_SERDE_CLASS_CONFIG, Serde.class);
+            }
             serde.configure(originals(), true);
             return serde;
         } catch (final Exception e) {
-            throw new StreamsException(String.format("Failed to configure key serde %s", get(DEFAULT_KEY_SERDE_CLASS_CONFIG)), e);
+            throw new StreamsException(
+                String.format("Failed to configure key serde %s", keySerdeConfigSetting), e);
         }
     }
 
@@ -751,18 +814,7 @@ public class StreamsConfig extends AbstractConfig {
      */
     @Deprecated
     public Serde valueSerde() {
-        try {
-            Serde<?> serde = getConfiguredInstance(VALUE_SERDE_CLASS_CONFIG, Serde.class);
-            // the default value of deprecated value serde is null
-            if (serde == null) {
-                serde = defaultValueSerde();
-            } else {
-                serde.configure(originals(), false);
-            }
-            return serde;
-        } catch (final Exception e) {
-            throw new StreamsException(String.format("Failed to configure value serde %s", get(VALUE_SERDE_CLASS_CONFIG)), e);
-        }
+        return defaultValueSerde();
     }
 
     /**
@@ -772,12 +824,19 @@ public class StreamsConfig extends AbstractConfig {
      * @return an configured instance of value Serde class
      */
     public Serde defaultValueSerde() {
+        Object valueSerdeConfigSetting = get(VALUE_SERDE_CLASS_CONFIG);
         try {
-            Serde<?> serde = getConfiguredInstance(DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serde.class);
+            Serde<?> serde = getConfiguredInstance(VALUE_SERDE_CLASS_CONFIG, Serde.class);
+            if (serde == null) {
+                valueSerdeConfigSetting = get(DEFAULT_VALUE_SERDE_CLASS_CONFIG);
+                serde = getConfiguredInstance(DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serde.class);
+            }
             serde.configure(originals(), false);
+
             return serde;
         } catch (final Exception e) {
-            throw new StreamsException(String.format("Failed to configure value serde %s", get(DEFAULT_VALUE_SERDE_CLASS_CONFIG)), e);
+            throw new StreamsException(
+                String.format("Failed to configure value serde %s", valueSerdeConfigSetting), e);
         }
     }
 
@@ -788,6 +847,10 @@ public class StreamsConfig extends AbstractConfig {
             return getConfiguredInstance(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
         }
         return timestampExtractor;
+    }
+
+    public DeserializationExceptionHandler defaultDeserializationExceptionHandler() {
+        return getConfiguredInstance(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, DeserializationExceptionHandler.class);
     }
 
     /**

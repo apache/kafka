@@ -104,7 +104,7 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
                         if (oldAgg == null)
                             oldAgg = initializer.apply();
 
-                        // try to add the new new value (there will never be old value)
+                        // try to add the new value (there will never be old value)
                         T newAgg = aggregator.apply(key, value, oldAgg);
 
                         // update the store with the new value

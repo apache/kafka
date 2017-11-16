@@ -18,7 +18,6 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -38,9 +37,6 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
         super(new TaskId(-1, -1), config.getString(StreamsConfig.APPLICATION_ID_CONFIG), config, metrics, stateMgr, cache);
     }
 
-    /**
-     * @throws TopologyBuilderException if an attempt is made to access this state store from an unknown node
-     */
     @Override
     public StateStore getStateStore(final String name) {
         return stateManager.getGlobalStore(name);
@@ -95,6 +91,7 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
     /**
      * @throws UnsupportedOperationException on every invocation
      */
+    @SuppressWarnings("deprecation")
     @Override
     public void schedule(long interval) {
         throw new UnsupportedOperationException("this should not happen: schedule() not supported in global processor context.");

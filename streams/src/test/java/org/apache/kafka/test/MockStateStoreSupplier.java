@@ -27,24 +27,23 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Map;
 
+@Deprecated
 public class MockStateStoreSupplier implements StateStoreSupplier {
     private String name;
     private boolean persistent;
     private boolean loggingEnabled;
-    private MockStateStore stateStore;
 
-    public MockStateStoreSupplier(String name, boolean persistent) {
+    public MockStateStoreSupplier(final String name,
+                                  final boolean persistent) {
         this(name, persistent, true);
     }
 
-    public MockStateStoreSupplier(String name, boolean persistent, boolean loggingEnabled) {
+    public MockStateStoreSupplier(final String name,
+                                  final boolean persistent,
+                                  final boolean loggingEnabled) {
         this.name = name;
         this.persistent = persistent;
         this.loggingEnabled = loggingEnabled;
-    }
-
-    public MockStateStoreSupplier(final MockStateStore stateStore) {
-        this.stateStore = stateStore;
     }
 
     @Override
@@ -54,14 +53,7 @@ public class MockStateStoreSupplier implements StateStoreSupplier {
 
     @Override
     public StateStore get() {
-        if (stateStore != null) {
-            return stateStore;
-        }
-        if (loggingEnabled) {
-            return new MockStateStore(name, persistent).enableLogging();
-        } else {
-            return new MockStateStore(name, persistent);
-        }
+        return new MockStateStore(name, persistent);
     }
 
     @Override
@@ -78,20 +70,15 @@ public class MockStateStoreSupplier implements StateStoreSupplier {
         private final String name;
         private final boolean persistent;
 
-        public boolean loggingEnabled = false;
         public boolean initialized = false;
         public boolean flushed = false;
         public boolean closed = true;
         public final ArrayList<Integer> keys = new ArrayList<>();
 
-        public MockStateStore(String name, boolean persistent) {
+        public MockStateStore(final String name,
+                              final boolean persistent) {
             this.name = name;
             this.persistent = persistent;
-        }
-
-        public MockStateStore enableLogging() {
-            loggingEnabled = true;
-            return this;
         }
 
         @Override
@@ -100,8 +87,9 @@ public class MockStateStoreSupplier implements StateStoreSupplier {
         }
 
         @Override
-        public void init(ProcessorContext context, StateStore root) {
-            context.register(root, loggingEnabled, stateRestoreCallback);
+        public void init(final ProcessorContext context,
+                         final StateStore root) {
+            context.register(root, false, stateRestoreCallback);
             initialized = true;
             closed = false;
         }
@@ -130,7 +118,8 @@ public class MockStateStoreSupplier implements StateStoreSupplier {
             private final Deserializer<Integer> deserializer = new IntegerDeserializer();
 
             @Override
-            public void restore(byte[] key, byte[] value) {
+            public void restore(final byte[] key,
+                                final byte[] value) {
                 keys.add(deserializer.deserialize("", key));
             }
         };

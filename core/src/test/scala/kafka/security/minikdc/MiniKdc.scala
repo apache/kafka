@@ -28,7 +28,6 @@ import java.util.{Locale, Properties, UUID}
 import kafka.utils.{CoreUtils, Exit, Logging}
 
 import scala.collection.JavaConverters._
-import org.apache.commons.io.IOUtils
 import org.apache.commons.lang.text.StrSubstitutor
 import org.apache.directory.api.ldap.model.entry.{DefaultEntry, Entry}
 import org.apache.directory.api.ldap.model.ldif.LdifReader
@@ -198,9 +197,15 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
         "3" -> orgDomain.toUpperCase(Locale.ENGLISH),
         "4" -> bindAddress
       )
-      val inputStream = MiniKdc.getResourceAsStream("minikdc.ldiff")
-      try addEntriesToDirectoryService(StrSubstitutor.replace(IOUtils.toString(inputStream), map.asJava))
-      finally CoreUtils.swallow(inputStream.close())
+      val reader = new BufferedReader(new InputStreamReader(MiniKdc.getResourceAsStream("minikdc.ldiff")))
+      try {
+        var line: String = null
+        val builder = new StringBuilder
+        while ({line = reader.readLine(); line != null})
+          builder.append(line).append("\n")
+        addEntriesToDirectoryService(StrSubstitutor.replace(builder, map.asJava))
+      }
+      finally CoreUtils.swallow(reader.close())
     }
 
     val bindAddress = config.getProperty(MiniKdc.KdcBindAddress)
@@ -256,7 +261,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
 
   private def refreshJvmKerberosConfig(): Unit = {
     val klass =
-      if (Java.isIBMJdk)
+      if (Java.isIbmJdk)
         Class.forName("com.ibm.security.krb5.internal.Config")
       else
         Class.forName("sun.security.krb5.Config")

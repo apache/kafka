@@ -27,27 +27,9 @@ import java.util.Map;
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
 @InterfaceStability.Evolving
-public class AlterConfigsOptions {
+public class AlterConfigsOptions extends AbstractOptions<AlterConfigsOptions> {
 
-    private Integer timeoutMs = null;
     private boolean validateOnly = false;
-
-    /**
-     * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
-     * AdminClient should be used.
-     */
-    public AlterConfigsOptions timeoutMs(Integer timeoutMs) {
-        this.timeoutMs = timeoutMs;
-        return this;
-    }
-
-    /**
-     * The request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
-     * AdminClient should be used.
-     */
-    public Integer timeoutMs() {
-        return timeoutMs;
-    }
 
     /**
      * Return true if the request should be validated without altering the configs.

@@ -18,6 +18,7 @@
 package kafka.metrics
 
 import java.util.Properties
+import javax.management.ObjectName
 
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.{Meter, MetricPredicate}
@@ -44,7 +45,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   val overridingProps = new Properties
   overridingProps.put(KafkaConfig.NumPartitionsProp, numParts.toString)
 
-  def generateConfigs() =
+  def generateConfigs =
     TestUtils.createBrokerConfigs(numNodes, zkConnect, enableDeleteTopic=true).map(KafkaConfig.fromProps(_, overridingProps))
 
   val nMessages = 2
@@ -99,6 +100,15 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.server:type=KafkaServer,name=ClusterId"), 1)
   }
 
+  @Test
+  def testWindowsStyleTagNames(): Unit = {
+    val path = "C:\\windows-path\\kafka-logs"
+    val tags = Map("dir" -> path)
+    val expectedMBeanName = Set(tags.keySet.head, ObjectName.quote(path)).mkString("=")
+    val metric = KafkaMetricsGroup.metricName("test-metric", tags)
+    assert(metric.getMBeanName.endsWith(expectedMBeanName))
+  }
+
   @deprecated("This test has been deprecated and it will be removed in a future release", "0.10.0.0")
   def createAndShutdownStep(topic: String, group: String, consumerId: String, producerId: String): Unit = {
     sendMessages(servers, topic, nMessages)
@@ -129,7 +139,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     // versus failures caused by the metrics
     val topicPartition = new TopicPartition(topic, 0)
     servers.foreach { server =>
-      val log = server.logManager.logsByTopicPartition.get(new TopicPartition(topic, 0))
+      val log = server.logManager.getLog(new TopicPartition(topic, 0))
       val brokerId = server.config.brokerId
       val logSize = log.map(_.size)
       assertTrue(s"Expected broker $brokerId to have a Log for $topicPartition with positive size, actual: $logSize",
@@ -154,6 +164,17 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     TestUtils.consumeTopicRecords(servers, topic, nMessages * 2)
 
     assertTrue(meterCount(bytesOut) > initialBytesOut)
+  }
+
+  @Test
+  def testControllerMetrics(): Unit = {
+    val metrics = Metrics.defaultRegistry.allMetrics
+
+    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=ActiveControllerCount"), 1)
+    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=OfflinePartitionsCount"), 1)
+    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=PreferredReplicaImbalanceCount"), 1)
+    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=GlobalTopicCount"), 1)
+    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=GlobalPartitionCount"), 1)
   }
 
   private def meterCount(metricName: String): Long = {

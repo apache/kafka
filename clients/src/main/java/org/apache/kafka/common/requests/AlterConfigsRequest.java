@@ -18,6 +18,9 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -26,6 +29,11 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.kafka.common.protocol.types.Type.BOOLEAN;
+import static org.apache.kafka.common.protocol.types.Type.INT8;
+import static org.apache.kafka.common.protocol.types.Type.NULLABLE_STRING;
+import static org.apache.kafka.common.protocol.types.Type.STRING;
 
 public class AlterConfigsRequest extends AbstractRequest {
 
@@ -37,6 +45,24 @@ public class AlterConfigsRequest extends AbstractRequest {
     private static final String CONFIG_ENTRIES_KEY_NAME = "config_entries";
     private static final String CONFIG_NAME = "config_name";
     private static final String CONFIG_VALUE = "config_value";
+
+    private static final Schema CONFIG_ENTRY = new Schema(
+            new Field(CONFIG_NAME, STRING, "Configuration name"),
+            new Field(CONFIG_VALUE, NULLABLE_STRING, "Configuration value"));
+
+    private static final Schema ALTER_CONFIGS_REQUEST_RESOURCE_V0 = new Schema(
+            new Field(RESOURCE_TYPE_KEY_NAME, INT8),
+            new Field(RESOURCE_NAME_KEY_NAME, STRING),
+            new Field(CONFIG_ENTRIES_KEY_NAME, new ArrayOf(CONFIG_ENTRY)));
+
+    private static final Schema ALTER_CONFIGS_REQUEST_V0 = new Schema(
+            new Field(RESOURCES_KEY_NAME, new ArrayOf(ALTER_CONFIGS_REQUEST_RESOURCE_V0),
+                    "An array of resources to update with the provided configs."),
+            new Field(VALIDATE_ONLY_KEY_NAME, BOOLEAN));
+
+    public static Schema[] schemaVersions() {
+        return new Schema[] {ALTER_CONFIGS_REQUEST_V0};
+    }
 
     public static class Config {
         private final Collection<ConfigEntry> entries;

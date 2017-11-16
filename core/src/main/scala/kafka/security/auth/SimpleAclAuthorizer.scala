@@ -18,19 +18,20 @@ package kafka.security.auth
 
 import java.util
 import java.util.concurrent.locks.ReentrantReadWriteLock
-import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 
+import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.network.RequestChannel.Session
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
-import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException}
-import org.apache.kafka.common.security.JaasUtils
+import kafka.zk.{AclChangeNotificationSequenceZNode, AclChangeNotificationZNode, KafkaZkClient}
+import kafka.zookeeper.ZooKeeperClient
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import scala.collection.JavaConverters._
+import org.apache.kafka.common.utils.SecurityUtils
 import org.apache.log4j.Logger
 
+import scala.collection.JavaConverters._
 import scala.util.Random
 
 object SimpleAclAuthorizer {
@@ -39,39 +40,21 @@ object SimpleAclAuthorizer {
   val ZkUrlProp = "authorizer.zookeeper.url"
   val ZkConnectionTimeOutProp = "authorizer.zookeeper.connection.timeout.ms"
   val ZkSessionTimeOutProp = "authorizer.zookeeper.session.timeout.ms"
+  val ZkMaxInFlightRequests = "authorizer.zookeeper.max.in.flight.requests"
 
   //List of users that will be treated as super users and will have access to all the resources for all actions from all hosts, defaults to no super users.
   val SuperUsersProp = "super.users"
   //If set to true when no acls are found for a resource , authorizer allows access to everyone. Defaults to false.
   val AllowEveryoneIfNoAclIsFoundProp = "allow.everyone.if.no.acl.found"
 
-  /**
-   * The root acl storage node. Under this node there will be one child node per resource type (Topic, Cluster, Group).
-   * under each resourceType there will be a unique child for each resource instance and the data for that child will contain
-   * list of its acls as a json object. Following gives an example:
-   *
-   * <pre>
-   * /kafka-acl/Topic/topic-1 => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
-   * /kafka-acl/Cluster/kafka-cluster => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
-   * /kafka-acl/Group/group-1 => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
-   * </pre>
-   */
-  val AclZkPath = ZkUtils.KafkaAclPath
-
-  //notification node which gets updated with the resource name when acl on a resource is changed.
-  val AclChangedZkPath = ZkUtils.KafkaAclChangesPath
-
-  //prefix of all the change notification sequence node.
-  val AclChangedPrefix = "acl_changes_"
-
-  private case class VersionedAcls(acls: Set[Acl], zkVersion: Int)
+  case class VersionedAcls(acls: Set[Acl], zkVersion: Int)
 }
 
 class SimpleAclAuthorizer extends Authorizer with Logging {
   private val authorizerLogger = Logger.getLogger("kafka.authorizer.logger")
   private var superUsers = Set.empty[KafkaPrincipal]
   private var shouldAllowEveryoneIfNoAclIsFound = false
-  private var zkUtils: ZkUtils = null
+  private var zkClient: KafkaZkClient = null
   private var aclChangeListener: ZkNodeChangeNotificationListener = null
 
   private val aclCache = new scala.collection.mutable.HashMap[Resource, VersionedAcls]
@@ -93,7 +76,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     configs.foreach { case (key, value) => props.put(key, value.toString) }
 
     superUsers = configs.get(SimpleAclAuthorizer.SuperUsersProp).collect {
-      case str: String if str.nonEmpty => str.split(";").map(s => KafkaPrincipal.fromString(s.trim)).toSet
+      case str: String if str.nonEmpty => str.split(";").map(s => SecurityUtils.parseKafkaPrincipal(s.trim)).toSet
     }.getOrElse(Set.empty[KafkaPrincipal])
 
     shouldAllowEveryoneIfNoAclIsFound = configs.get(SimpleAclAuthorizer.AllowEveryoneIfNoAclIsFoundProp).exists(_.toString.toBoolean)
@@ -105,17 +88,16 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     val zkUrl = configs.get(SimpleAclAuthorizer.ZkUrlProp).map(_.toString).getOrElse(kafkaConfig.zkConnect)
     val zkConnectionTimeoutMs = configs.get(SimpleAclAuthorizer.ZkConnectionTimeOutProp).map(_.toString.toInt).getOrElse(kafkaConfig.zkConnectionTimeoutMs)
     val zkSessionTimeOutMs = configs.get(SimpleAclAuthorizer.ZkSessionTimeOutProp).map(_.toString.toInt).getOrElse(kafkaConfig.zkSessionTimeoutMs)
+    val zkMaxInFlightRequests = configs.get(SimpleAclAuthorizer.ZkMaxInFlightRequests).map(_.toString.toInt).getOrElse(kafkaConfig.zkMaxInFlightRequests)
 
-    zkUtils = ZkUtils(zkUrl,
-                      sessionTimeout = zkSessionTimeOutMs,
-                      connectionTimeout = zkConnectionTimeoutMs,
-                      kafkaConfig.zkEnableSecureAcls)
-    zkUtils.makeSurePersistentPathExists(SimpleAclAuthorizer.AclZkPath)
+    val zooKeeperClient = new ZooKeeperClient(zkUrl, zkSessionTimeOutMs, zkConnectionTimeoutMs, zkMaxInFlightRequests)
+
+    zkClient = new KafkaZkClient(zooKeeperClient, kafkaConfig.zkEnableSecureAcls)
+    zkClient.createAclPaths()
 
     loadCache()
 
-    zkUtils.makeSurePersistentPathExists(SimpleAclAuthorizer.AclChangedZkPath)
-    aclChangeListener = new ZkNodeChangeNotificationListener(zkUtils, SimpleAclAuthorizer.AclChangedZkPath, SimpleAclAuthorizer.AclChangedPrefix, AclChangedNotificationHandler)
+    aclChangeListener = new ZkNodeChangeNotificationListener(zkClient, AclChangeNotificationZNode.path, AclChangeNotificationSequenceZNode.SequenceNumberPrefix, AclChangedNotificationHandler)
     aclChangeListener.init()
   }
 
@@ -193,7 +175,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   override def removeAcls(resource: Resource): Boolean = {
     inWriteLock(lock) {
-      val result = zkUtils.deletePath(toResourcePath(resource))
+      val result = zkClient.deleteResource(resource)
       updateCache(resource, VersionedAcls(Set(), 0))
       updateAclChangedFlag(resource)
       result
@@ -224,31 +206,31 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   def close() {
     if (aclChangeListener != null) aclChangeListener.close()
-    if (zkUtils != null) zkUtils.close()
+    if (zkClient != null) zkClient.close()
   }
 
   private def loadCache()  {
     inWriteLock(lock) {
-      val resourceTypes = zkUtils.getChildren(SimpleAclAuthorizer.AclZkPath)
+      val resourceTypes = zkClient.getResourceTypes()
       for (rType <- resourceTypes) {
         val resourceType = ResourceType.fromString(rType)
-        val resourceTypePath = SimpleAclAuthorizer.AclZkPath + "/" + resourceType.name
-        val resourceNames = zkUtils.getChildren(resourceTypePath)
+        val resourceNames = zkClient.getResourceNames(resourceType.name)
         for (resourceName <- resourceNames) {
-          val versionedAcls = getAclsFromZk(Resource(resourceType, resourceName.toString))
+          val versionedAcls = getAclsFromZk(Resource(resourceType, resourceName))
           updateCache(new Resource(resourceType, resourceName), versionedAcls)
         }
       }
     }
   }
 
-  def toResourcePath(resource: Resource): String = {
-    SimpleAclAuthorizer.AclZkPath + "/" + resource.resourceType + "/" + resource.name
-  }
-
   private def logAuditMessage(principal: KafkaPrincipal, authorized: Boolean, operation: Operation, resource: Resource, host: String) {
-    val permissionType = if (authorized) "Allowed" else "Denied"
-    authorizerLogger.debug(s"Principal = $principal is $permissionType Operation = $operation from host = $host on resource = $resource")
+    def logMessage: String = {
+      val authResult = if (authorized) "Allowed" else "Denied"
+      s"Principal = $principal is $authResult Operation = $operation from host = $host on resource = $resource"
+    }
+
+    if (authorized) authorizerLogger.debug(logMessage)
+    else authorizerLogger.info(logMessage)
   }
 
   /**
@@ -262,8 +244,6 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     * @return boolean indicating if a change was made
     */
   private def updateResourceAcls(resource: Resource)(getNewAcls: Set[Acl] => Set[Acl]): Boolean = {
-    val path = toResourcePath(resource)
-
     var currentVersionedAcls =
       if (aclCache.contains(resource))
         getAclsFromCache(resource)
@@ -274,13 +254,12 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     var retries = 0
     while (!writeComplete && retries <= maxUpdateRetries) {
       val newAcls = getNewAcls(currentVersionedAcls.acls)
-      val data = Json.encode(Acl.toJsonCompatibleMap(newAcls))
       val (updateSucceeded, updateVersion) =
         if (newAcls.nonEmpty) {
-         updatePath(path, data, currentVersionedAcls.zkVersion)
+          zkClient.conditionalSetOrCreateAclsForResource(resource, newAcls, currentVersionedAcls.zkVersion)
         } else {
           trace(s"Deleting path for $resource because it had no ACLs remaining")
-          (zkUtils.conditionalDeletePath(path, currentVersionedAcls.zkVersion), 0)
+          (zkClient.conditionalDelete(resource, currentVersionedAcls.zkVersion), 0)
         }
 
       if (!updateSucceeded) {
@@ -309,34 +288,12 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     }
   }
 
-  /**
-    * Updates a zookeeper path with an expected version. If the topic does not exist, it will create it.
-    * Returns if the update was successful and the new version.
-    */
-  private def updatePath(path: String, data: String, expectedVersion: Int): (Boolean, Int) = {
-    try {
-      zkUtils.conditionalUpdatePersistentPathIfExists(path, data, expectedVersion)
-    } catch {
-      case _: ZkNoNodeException =>
-        try {
-          debug(s"Node $path does not exist, attempting to create it.")
-          zkUtils.createPersistentPath(path, data)
-          (true, 0)
-        } catch {
-          case _: ZkNodeExistsException =>
-            debug(s"Failed to create node for $path because it already exists.")
-            (false, 0)
-        }
-    }
-  }
-
   private def getAclsFromCache(resource: Resource): VersionedAcls = {
     aclCache.getOrElse(resource, throw new IllegalArgumentException(s"ACLs do not exist in the cache for resource $resource"))
   }
 
   private def getAclsFromZk(resource: Resource): VersionedAcls = {
-    val (aclJson, stat) = zkUtils.readDataMaybeNull(toResourcePath(resource))
-    VersionedAcls(aclJson.map(Acl.fromJson).getOrElse(Set()), stat.getVersion)
+    zkClient.getVersionedAclsForResource(resource)
   }
 
   private def updateCache(resource: Resource, versionedAcls: VersionedAcls) {
@@ -348,7 +305,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   private def updateAclChangedFlag(resource: Resource) {
-    zkUtils.createSequentialPersistentPath(SimpleAclAuthorizer.AclChangedZkPath + "/" + SimpleAclAuthorizer.AclChangedPrefix, resource.toString)
+    zkClient.createAclChangeNotification(resource.toString)
   }
 
   private def backoffTime = {
@@ -364,4 +321,5 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       }
     }
   }
+
 }

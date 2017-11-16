@@ -17,8 +17,9 @@
 
 package kafka.api
 
+import java.lang.{Long => JLong}
 import java.util.Properties
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{ExecutionException, TimeUnit}
 
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
@@ -28,7 +29,7 @@ import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, OffsetA
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ProducerFencedException
-import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
 
@@ -124,27 +125,39 @@ class TransactionsTest extends KafkaServerTestHarness {
 
     producer1.beginTransaction()
     producer2.beginTransaction()
-    producer2.send(new ProducerRecord(topic1, 0, "x".getBytes, "1".getBytes))
-    producer2.send(new ProducerRecord(topic2, 0, "x".getBytes, "1".getBytes))
+
+    val latestVisibleTimestamp = System.currentTimeMillis()
+    producer2.send(new ProducerRecord(topic1, 0, latestVisibleTimestamp, "x".getBytes, "1".getBytes))
+    producer2.send(new ProducerRecord(topic2, 0, latestVisibleTimestamp, "x".getBytes, "1".getBytes))
     producer2.flush()
 
-    producer1.send(new ProducerRecord(topic1, 0, "a".getBytes, "1".getBytes))
-    producer1.send(new ProducerRecord(topic1, 0, "b".getBytes, "2".getBytes))
-    producer1.send(new ProducerRecord(topic2, 0, "c".getBytes, "3".getBytes))
-    producer1.send(new ProducerRecord(topic2, 0, "d".getBytes, "4".getBytes))
+    val latestWrittenTimestamp = latestVisibleTimestamp + 1
+    producer1.send(new ProducerRecord(topic1, 0, latestWrittenTimestamp, "a".getBytes, "1".getBytes))
+    producer1.send(new ProducerRecord(topic1, 0, latestWrittenTimestamp, "b".getBytes, "2".getBytes))
+    producer1.send(new ProducerRecord(topic2, 0, latestWrittenTimestamp, "c".getBytes, "3".getBytes))
+    producer1.send(new ProducerRecord(topic2, 0, latestWrittenTimestamp, "d".getBytes, "4".getBytes))
     producer1.flush()
 
-    producer2.send(new ProducerRecord(topic1, 0, "x".getBytes, "2".getBytes))
-    producer2.send(new ProducerRecord(topic2, 0, "x".getBytes, "2".getBytes))
+    producer2.send(new ProducerRecord(topic1, 0, latestWrittenTimestamp, "x".getBytes, "2".getBytes))
+    producer2.send(new ProducerRecord(topic2, 0, latestWrittenTimestamp, "x".getBytes, "2".getBytes))
     producer2.commitTransaction()
 
     // ensure the records are visible to the read uncommitted consumer
-    readUncommittedConsumer.assign(Set(new TopicPartition(topic1, 0), new TopicPartition(topic2, 0)).asJava)
+    val tp1 = new TopicPartition(topic1, 0)
+    val tp2 = new TopicPartition(topic2, 0)
+    readUncommittedConsumer.assign(Set(tp1, tp2).asJava)
     consumeRecords(readUncommittedConsumer, 8)
+    val readUncommittedOffsetsForTimes = readUncommittedConsumer.offsetsForTimes(Map(
+      tp1 -> (latestWrittenTimestamp: JLong),
+      tp2 -> (latestWrittenTimestamp: JLong)
+    ).asJava)
+    assertEquals(2, readUncommittedOffsetsForTimes.size)
+    assertEquals(latestWrittenTimestamp, readUncommittedOffsetsForTimes.get(tp1).timestamp)
+    assertEquals(latestWrittenTimestamp, readUncommittedOffsetsForTimes.get(tp2).timestamp)
     readUncommittedConsumer.unsubscribe()
 
     // we should only see the first two records which come before the undecided second transaction
-    readCommittedConsumer.assign(Set(new TopicPartition(topic1, 0), new TopicPartition(topic2, 0)).asJava)
+    readCommittedConsumer.assign(Set(tp1, tp2).asJava)
     val records = consumeRecords(readCommittedConsumer, 2)
     records.foreach { record =>
       assertEquals("x", new String(record.key))
@@ -157,6 +170,14 @@ class TransactionsTest extends KafkaServerTestHarness {
     readCommittedConsumer.assignment.asScala.foreach { tp =>
       assertEquals(1L, readCommittedConsumer.position(tp))
     }
+
+    // undecided timestamps should not be searchable either
+    val readCommittedOffsetsForTimes = readCommittedConsumer.offsetsForTimes(Map(
+      tp1 -> (latestWrittenTimestamp: JLong),
+      tp2 -> (latestWrittenTimestamp: JLong)
+    ).asJava)
+    assertNull(readCommittedOffsetsForTimes.get(tp1))
+    assertNull(readCommittedOffsetsForTimes.get(tp2))
   }
 
   @Test
@@ -368,7 +389,7 @@ class TransactionsTest extends KafkaServerTestHarness {
       val recordMetadata = result.get()
       error(s"Missed a producer fenced exception when writing to ${recordMetadata.topic}-${recordMetadata.partition}. Grab the logs!!")
       servers.foreach { server =>
-        error(s"log dirs: ${server.logManager.logDirs.map(_.getAbsolutePath).head}")
+        error(s"log dirs: ${server.logManager.liveLogDirs.map(_.getAbsolutePath).head}")
       }
       fail("Should not be able to send messages from a fenced producer.")
     } catch {
@@ -415,7 +436,7 @@ class TransactionsTest extends KafkaServerTestHarness {
       val recordMetadata = result.get()
       error(s"Missed a producer fenced exception when writing to ${recordMetadata.topic}-${recordMetadata.partition}. Grab the logs!!")
       servers.foreach { case (server) =>
-        error(s"log dirs: ${server.logManager.logDirs.map(_.getAbsolutePath).head}")
+        error(s"log dirs: ${server.logManager.liveLogDirs.map(_.getAbsolutePath).head}")
       }
       fail("Should not be able to send messages from a fenced producer.")
     } catch {
@@ -432,6 +453,44 @@ class TransactionsTest extends KafkaServerTestHarness {
     records.foreach { record =>
       TestUtils.assertCommittedAndGetValue(record)
     }
+  }
+
+  @Test
+  def testFencingOnTransactionExpiration(): Unit = {
+    val producer = createTransactionalProducer("expiringProducer", transactionTimeoutMs = 100)
+
+    producer.initTransactions()
+    producer.beginTransaction()
+
+    // The first message and hence the first AddPartitions request should be successfully sent.
+    val firstMessageResult = producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, "1", "1", willBeCommitted = false)).get()
+    assertTrue(firstMessageResult.hasOffset)
+
+    // Wait for the expiration cycle to kick in.
+    Thread.sleep(600)
+
+    try {
+      // Now that the transaction has expired, the second send should fail with a ProducerFencedException.
+      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, "2", "2", willBeCommitted = false)).get()
+      fail("should have raised a ProducerFencedException since the transaction has expired")
+    } catch {
+      case _: ProducerFencedException =>
+      case e: ExecutionException =>
+      assertTrue(e.getCause.isInstanceOf[ProducerFencedException])
+    }
+
+    // Verify that the first message was aborted and the second one was never written at all.
+    val nonTransactionalConsumer = nonTransactionalConsumers(0)
+    nonTransactionalConsumer.subscribe(List(topic1).asJava)
+    val records = TestUtils.consumeRecordsFor(nonTransactionalConsumer, 1000)
+    assertEquals(1, records.size)
+    assertEquals("1", TestUtils.recordValueAsString(records.head))
+
+    val transactionalConsumer = transactionalConsumers.head
+    transactionalConsumer.subscribe(List(topic1).asJava)
+
+    val transactionalRecords = TestUtils.consumeRecordsFor(transactionalConsumer, 1000)
+    assertTrue(transactionalRecords.isEmpty)
   }
 
   @Test
@@ -494,6 +553,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     serverProps.put(KafkaConfig.UncleanLeaderElectionEnableProp, false.toString)
     serverProps.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
     serverProps.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
+    serverProps.put(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp, "200")
     serverProps
   }
 
@@ -508,7 +568,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     consumer
   }
 
-  private def createReadUncommittedConsumer(group: String = "group") = {
+  private def createReadUncommittedConsumer(group: String) = {
     val props = new Properties()
     props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_uncommitted")
     props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
@@ -518,8 +578,9 @@ class TransactionsTest extends KafkaServerTestHarness {
     consumer
   }
 
-  private def createTransactionalProducer(transactionalId: String): KafkaProducer[Array[Byte], Array[Byte]] = {
-    val producer = TestUtils.createTransactionalProducer(transactionalId, servers)
+  private def createTransactionalProducer(transactionalId: String, transactionTimeoutMs: Long = 60000): KafkaProducer[Array[Byte], Array[Byte]] = {
+    val producer = TestUtils.createTransactionalProducer(transactionalId, servers,
+      transactionTimeoutMs = transactionTimeoutMs)
     transactionalProducers += producer
     producer
   }

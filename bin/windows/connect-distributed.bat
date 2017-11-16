@@ -30,5 +30,5 @@ IF ["%KAFKA_LOG4J_OPTS%"] EQU [""] (
 	set KAFKA_LOG4J_OPTS=-Dlog4j.configuration=file:%BASE_DIR%/config/tools-log4j.properties
 )
 
-%~dp0kafka-run-class.bat org.apache.kafka.connect.cli.ConnectDistributed %*
+"%~dp0kafka-run-class.bat" org.apache.kafka.connect.cli.ConnectDistributed %*
 EndLocal

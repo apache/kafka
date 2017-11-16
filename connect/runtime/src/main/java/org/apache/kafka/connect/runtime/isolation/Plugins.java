@@ -137,7 +137,6 @@ public class Plugins {
         return delegatingLoader.transformations();
     }
 
-    @SuppressWarnings("unchecked")
     public Connector newConnector(String connectorClassOrAlias) {
         Class<? extends Connector> klass;
         try {

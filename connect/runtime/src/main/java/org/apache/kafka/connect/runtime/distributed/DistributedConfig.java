@@ -194,23 +194,6 @@ public class DistributedConfig extends WorkerConfig {
                         atLeast(0L),
                         ConfigDef.Importance.LOW,
                         CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
-                .define(CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG,
-                        ConfigDef.Type.LONG,
-                        30000,
-                        atLeast(0),
-                        ConfigDef.Importance.LOW,
-                        CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC)
-                .define(CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG,
-                        ConfigDef.Type.INT,
-                        2,
-                        atLeast(1),
-                        ConfigDef.Importance.LOW,
-                        CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
-                .define(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG,
-                        ConfigDef.Type.LIST,
-                        "",
-                        ConfigDef.Importance.LOW,
-                        CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
                 .define(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG,
                         ConfigDef.Type.INT,
                         40 * 1000,

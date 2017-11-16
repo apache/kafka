@@ -98,4 +98,15 @@ public class ConfigEntry {
     public boolean isReadOnly() {
         return isReadOnly;
     }
+
+    @Override
+    public String toString() {
+        return "ConfigEntry(" +
+                "name=" + name +
+                ", value=" + value +
+                ", isDefault=" + isDefault +
+                ", isSensitive=" + isSensitive +
+                ", isReadOnly=" + isReadOnly +
+                ")";
+    }
 }

@@ -18,6 +18,7 @@ package org.apache.kafka.common.utils;
 
 import org.junit.Test;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -49,6 +50,7 @@ public class ByteBufferOutputStreamTest {
         byte[] bytes = new byte[5];
         buffer.get(bytes);
         assertArrayEquals("hello".getBytes(), bytes);
+        output.close();
     }
 
     @Test
@@ -75,19 +77,20 @@ public class ByteBufferOutputStreamTest {
         byte[] bytes = new byte[5];
         buffer.get(bytes);
         assertArrayEquals("hello".getBytes(), bytes);
+        output.close();
     }
 
     @Test
-    public void testWriteByteBuffer() {
+    public void testWriteByteBuffer() throws IOException {
         testWriteByteBuffer(ByteBuffer.allocate(16));
     }
 
     @Test
-    public void testWriteDirectByteBuffer() {
+    public void testWriteDirectByteBuffer() throws IOException {
         testWriteByteBuffer(ByteBuffer.allocateDirect(16));
     }
 
-    private void testWriteByteBuffer(ByteBuffer input) {
+    private void testWriteByteBuffer(ByteBuffer input) throws IOException {
         long value = 234239230L;
         input.putLong(value);
         input.flip();
@@ -97,6 +100,7 @@ public class ByteBufferOutputStreamTest {
         assertEquals(8, input.position());
         assertEquals(8, output.position());
         assertEquals(value, output.buffer().getLong(0));
+        output.close();
     }
 
 }

@@ -36,6 +36,7 @@ import java.util.Map;
  * When finished, be sure to {@link #close() close} the environment object.
  */
 public class MockKafkaAdminClientEnv implements AutoCloseable {
+    private final Time time;
     private final AdminClientConfig adminClientConfig;
     private final Metadata metadata;
     private final MockClient mockClient;
@@ -43,16 +44,25 @@ public class MockKafkaAdminClientEnv implements AutoCloseable {
     private final Cluster cluster;
 
     public MockKafkaAdminClientEnv(Cluster cluster, String...vals) {
-        this(cluster, newStrMap(vals));
+        this(Time.SYSTEM, cluster, vals);
     }
 
-    public MockKafkaAdminClientEnv(Cluster cluster, Map<String, Object> config) {
+    public MockKafkaAdminClientEnv(Time time, Cluster cluster, String...vals) {
+        this(time, cluster, newStrMap(vals));
+    }
+
+    public MockKafkaAdminClientEnv(Time time, Cluster cluster, Map<String, Object> config) {
+        this.time = time;
         this.adminClientConfig = new AdminClientConfig(config);
         this.cluster = cluster;
         this.metadata = new Metadata(adminClientConfig.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
                 adminClientConfig.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG), false);
-        this.mockClient = new MockClient(Time.SYSTEM, this.metadata);
-        this.client = KafkaAdminClient.createInternal(adminClientConfig, mockClient, metadata);
+        this.mockClient = new MockClient(time, this.metadata);
+        this.client = KafkaAdminClient.createInternal(adminClientConfig, mockClient, metadata, time);
+    }
+
+    public Time time() {
+        return time;
     }
 
     public Cluster cluster() {

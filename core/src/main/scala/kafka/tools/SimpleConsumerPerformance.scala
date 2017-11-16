@@ -145,6 +145,8 @@ object SimpleConsumerPerformance {
                            .describedAs("clientId")
                            .ofType(classOf[String])
                            .defaultsTo("SimpleConsumerPerformanceClient")
+    val showDetailedStatsOpt = parser.accepts("show-detailed-stats", "If set, stats are reported for each reporting " +
+      "interval as configured by reporting-interval")
 
     val options = parser.parse(args : _*)
 
