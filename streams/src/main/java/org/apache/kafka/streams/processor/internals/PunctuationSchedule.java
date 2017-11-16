@@ -85,4 +85,40 @@ public class PunctuationSchedule extends Stamped<ProcessorNode> {
             schedule.markCancelled();
         }
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        if (!super.equals(o)) {
+            return false;
+        }
+
+        PunctuationSchedule that = (PunctuationSchedule) o;
+
+        if (interval != that.interval) {
+            return false;
+        }
+        if (isCancelled != that.isCancelled) {
+            return false;
+        }
+        if (punctuator != null ? !punctuator.equals(that.punctuator) : that.punctuator != null) {
+            return false;
+        }
+        return cancellable != null ? cancellable.equals(that.cancellable) : that.cancellable == null;
+    }
+
+    @Override
+    public int hashCode() {
+        int result = super.hashCode();
+        result = 31 * result + (int) (interval ^ (interval >>> 32));
+        result = 31 * result + (punctuator != null ? punctuator.hashCode() : 0);
+        result = 31 * result + (isCancelled ? 1 : 0);
+        result = 31 * result + (cancellable != null ? cancellable.hashCode() : 0);
+        return result;
+    }
 }
