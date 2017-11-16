@@ -115,7 +115,7 @@ public class VerifiableSourceTask extends SourceTask {
 
         Map<String, Long> ccOffset = Collections.singletonMap(SEQNO_FIELD, seqno);
         SourceRecord srcRecord = new SourceRecord(partition, ccOffset, topic, Schema.INT32_SCHEMA, id, Schema.INT64_SCHEMA, seqno);
-        List<SourceRecord> result = Arrays.asList(srcRecord);
+        List<SourceRecord> result = Collections.singletonList(srcRecord);
         seqno++;
         return result;
     }
