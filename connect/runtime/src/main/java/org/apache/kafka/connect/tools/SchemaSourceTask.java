@@ -154,7 +154,7 @@ public class SchemaSourceTask extends SourceTask {
             }
 
             System.out.println("{\"task\": " + id + ", \"seqno\": " + seqno + "}");
-            List<SourceRecord> result = Arrays.asList(srcRecord);
+            List<SourceRecord> result = Collections.singletonList(srcRecord);
             seqno++;
             count++;
             return result;
