@@ -554,6 +554,8 @@ public class StreamThread extends Thread {
     private final Object stateLock;
     private final Logger log;
     private final String logPrefix;
+    // TODO: adminClient will be passeed to taskManager to be accessed in StreamPartitionAssignor
+    private final AdminClient adminClient;
     private final TaskManager taskManager;
     private final StreamsMetricsThreadImpl streamsMetrics;
 
@@ -571,7 +573,6 @@ public class StreamThread extends Thread {
     final ConsumerRebalanceListener rebalanceListener;
     final Consumer<byte[], byte[]> restoreConsumer;
     final Consumer<byte[], byte[]> consumer;
-    final AdminClient adminClient;
     final InternalTopologyBuilder builder;
 
     public static StreamThread create(final InternalTopologyBuilder builder,

@@ -84,11 +84,10 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
           val changeId = changeNumber(notification)
           if (changeId > lastExecutedChange) {
             val changeZnode = seqNodeRoot + "/" + notification
-            val data = zkClient.getDataAndStat(changeZnode)._1.orNull
-            if (data != null) {
-              notificationHandler.processNotification(data)
-            } else {
-              logger.warn(s"read null data from $changeZnode when processing notification $notification")
+            val (data, _) = zkClient.getDataAndStat(changeZnode)
+            data match {
+              case Some(d) => notificationHandler.processNotification(d)
+              case None => logger.warn(s"read null data from $changeZnode when processing notification $notification")
             }
             lastExecutedChange = changeId
           }
