@@ -130,7 +130,7 @@ public class StreamsConfig extends AbstractConfig {
 
     /**
      * Prefix used to isolate {@link org.apache.kafka.clients.admin.AdminClient admin} configs from other client configs.
-     * It is recommended to use {@link #producerPrefix(String)} to add this prefix to {@link ProducerConfig producer
+     * It is recommended to use {@link #adminClientPrefix(String)} to add this prefix to {@link ProducerConfig producer
      * properties}.
      */
     public static final String ADMIN_CLIENT_PREFIX = "admin.";
@@ -602,7 +602,7 @@ public class StreamsConfig extends AbstractConfig {
      * from other client configs.
      *
      * @param adminClientProp the producer property to be masked
-     * @return PRODUCER_PREFIX + {@code producerProp}
+     * @return ADMIN_CLIENT_PREFIX + {@code adminClientProp}
      */
     public static String adminClientPrefix(final String adminClientProp) {
         return ADMIN_CLIENT_PREFIX + adminClientProp;

@@ -31,7 +31,7 @@ import java.util.Map;
  */
 public interface KafkaClientSupplier {
     /**
-     * Create a {@link AdminClient} which is used for internal topic management.
+     * Create an {@link AdminClient} which is used for internal topic management.
      *
      * @param config Supplied by the {@link StreamsConfig} given to the {@link KafkaStreams}
      * @return an instance of {@link AdminClient}
