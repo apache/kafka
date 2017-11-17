@@ -88,7 +88,7 @@ object ConsoleConsumer extends Logging {
       reportRecordCount()
 
       // if we generated a random group id (as none specified explicitly) then avoid polluting zookeeper with persistent group data, this is a hack
-      if (!conf.groupIdPassed)
+      if (conf.useOldConsumer && !conf.groupIdPassed)
         ZkUtils.maybeDeletePath(conf.options.valueOf(conf.zkConnectOpt), "/consumers/" + conf.consumerProps.get("group.id"))
 
       shutdownLatch.countDown()
