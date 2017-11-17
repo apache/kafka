@@ -476,7 +476,7 @@ public class KafkaStreamsTest {
                 }
             }
         });
-        final String appDir = props.get(StreamsConfig.STATE_DIR_CONFIG) + File.separator + props.get(StreamsConfig.APPLICATION_ID_CONFIG);
+        final String appDir = props.getProperty(StreamsConfig.STATE_DIR_CONFIG) + File.separator + props.getProperty(StreamsConfig.APPLICATION_ID_CONFIG);
         final File oldTaskDir = new File(appDir, "10_1");
         assertTrue(oldTaskDir.mkdirs());
         try {

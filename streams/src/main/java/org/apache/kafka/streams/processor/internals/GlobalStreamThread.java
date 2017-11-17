@@ -327,11 +327,10 @@ public class GlobalStreamThread extends Thread {
             stateConsumer.initialize();
             return stateConsumer;
         } catch (final LockException fatalException) {
-            log.error("Could not lock global state directory. This could happen if multiple KafkaStreams instances " +
-                "are running on the same host using the same state directory.", fatalException);
-            startupException = new StreamsException("Could not lock global state directory. " +
-                "This could happen if multiple KafkaStreams instances are running on the same host using the same " +
-                "state directory.", fatalException);
+            final String errorMsg = "Could not lock global state directory. This could happen if multiple KafkaStreams " +
+                "instances are running on the same host using the same state directory.";
+            log.error(errorMsg, fatalException);
+            startupException = new StreamsException(errorMsg, fatalException);
         } catch (final StreamsException fatalException) {
             startupException = fatalException;
         } catch (final Exception fatalException) {

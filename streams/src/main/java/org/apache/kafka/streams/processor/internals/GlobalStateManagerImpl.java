@@ -153,17 +153,20 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 highWatermarks = globalConsumer.endOffsets(topicPartitions);
             } catch (final TimeoutException retryableException) {
                 if (++attempts > retries) {
-                    log.error("Failed to get end offsets for topic partitions of global store {} after " + retries + " retry attempts. " +
+                    log.error("Failed to get end offsets for topic partitions of global store {} after {} retry attempts. " +
                         "You can increase the number of retries via configuration parameter `retries`.",
                         store.name(),
+                        retries,
                         retryableException);
-                    throw new StreamsException(String.format("Failed to get end offsets for topic partitions of global store %s after " + retries + " retry attempts. " +
-                            "You can increase the number of retries via configuration parameter `retries`.", store.name()),
+                    throw new StreamsException(String.format("Failed to get end offsets for topic partitions of global store %s after %d retry attempts. " +
+                            "You can increase the number of retries via configuration parameter `retries`.", store.name(), retries),
                         retryableException);
                 }
-                log.debug("Failed to get end offsets for partitions {}, backing off for " + retryBackoffMs + " ms to retry (attempt {} of " + retries + ")",
+                log.debug("Failed to get end offsets for partitions {}, backing off for {} ms to retry (attempt {} of {})",
                     topicPartitions,
+                    retryBackoffMs,
                     attempts,
+                    retries,
                     retryableException);
                 Utils.sleep(retryBackoffMs);
             }
@@ -179,7 +182,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
     private List<TopicPartition> topicPartitionsForStore(final StateStore store) {
         final String sourceTopic = topology.storeToChangelogTopic().get(store.name());
-        List<PartitionInfo> partitionInfos = null;
+        List<PartitionInfo> partitionInfos;
         int attempts = 0;
         while (true) {
             try {
@@ -187,17 +190,23 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 break;
             } catch (final TimeoutException retryableException) {
                 if (++attempts > retries) {
-                    log.error("Failed to get partitions for topic {} after " + retries + " retry attempts. " +
+                    log.error("Failed to get partitions for topic {} after {} retry attempts due to timeout. " +
+                            "The broker may be transiently unavailable at the moment. " +
                             "You can increase the number of retries via configuration parameter `retries`.",
                         sourceTopic,
+                        retries,
                         retryableException);
-                    throw new StreamsException(String.format("Failed to get partitions for topic %s after " + retries + " retry attempts. " +
-                        "You can increase the number of retries via configuration parameter `retries`.", sourceTopic),
+                    throw new StreamsException(String.format("Failed to get partitions for topic %s after %d retry attempts due to timeout. " +
+                        "The broker may be transiently unavailable at the moment. " +
+                        "You can increase the number of retries via configuration parameter `retries`.", sourceTopic, retries),
                         retryableException);
                 }
-                log.debug("Failed to get partitions for topic {}, backing off for " + retryBackoffMs + " ms to retry (attempt {} of " + retries + ")",
+                log.debug("Failed to get partitions for topic {} due to timeout. The broker may be transiently unavailable at the moment. " +
+                        "Backing off for {} ms to retry (attempt {} of {})",
                     sourceTopic,
+                    retryBackoffMs,
                     attempts,
+                    retries,
                     retryableException);
                 Utils.sleep(retryBackoffMs);
             }
