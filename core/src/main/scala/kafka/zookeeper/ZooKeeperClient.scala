@@ -22,6 +22,7 @@ import java.util.concurrent.{ArrayBlockingQueue, ConcurrentHashMap, CountDownLat
 
 import kafka.utils.CoreUtils.{inLock, inReadLock, inWriteLock}
 import kafka.utils.Logging
+import kafka.zk.KafkaZkClient
 import org.apache.zookeeper.AsyncCallback.{ACLCallback, Children2Callback, DataCallback, StatCallback, StringCallback, VoidCallback}
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.Watcher.Event.{EventType, KeeperState}
@@ -51,6 +52,8 @@ class ZooKeeperClient(connectString: String,
   private val zNodeChildChangeHandlers = new ConcurrentHashMap[String, ZNodeChildChangeHandler]().asScala
   private val inFlightRequests = new Semaphore(maxInFlightRequests)
   private val stateChangeHandlers = new ConcurrentHashMap[String, StateChangeHandler]().asScala
+  // this is to keep reference to the KafkaZKClient instance for registering the broker on reconnects
+  private var kafkaZKClient:KafkaZkClient = null;
 
   info(s"Initializing a new session to $connectString.")
   @volatile private var zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher)
@@ -64,6 +67,14 @@ class ZooKeeperClient(connectString: String,
    */
   def handleRequest[Req <: AsyncRequest](request: Req): Req#Response = {
     handleRequests(Seq(request)).head
+  }
+
+  /**
+    * Set the reference to KafkaZkClient object for initializing brokerId on reconnect
+    * @param _kafkaZkClient
+    */
+  def setKafkaZKClient(_kafkaZkClient: KafkaZkClient): Unit = {
+    kafkaZKClient = _kafkaZkClient
   }
 
   /**
@@ -271,6 +282,11 @@ class ZooKeeperClient(connectString: String,
           zooKeeper.close()
           zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher)
           waitUntilConnected(threshold - now, TimeUnit.MILLISECONDS)
+          if (kafkaZKClient != null){
+            // this assumes that kafkaZKClient has all the information to
+            // register itself back with Zookeeper.
+            kafkaZKClient.registerBrokerInZK()
+          }
           return
         } catch {
           case _: Exception =>
