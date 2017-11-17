@@ -723,7 +723,6 @@ public class InternalTopologyBuilderTest {
         updatedTopicsField.setAccessible(true);
 
         final Set<String> updatedTopics = (Set<String>) updatedTopicsField.get(subscriptionUpdates);
-        final Set<String> updatedTopics = subscriptionUpdates.getUpdates();
 
         updatedTopics.add("topic-2");
         updatedTopics.add("topic-3");
