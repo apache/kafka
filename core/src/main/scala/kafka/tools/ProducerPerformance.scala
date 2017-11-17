@@ -40,7 +40,6 @@ import org.slf4j.LoggerFactory
 object ProducerPerformance extends Logging {
 
   def main(args: Array[String]) {
-    val logger = LoggerFactory.getLogger(getClass)
     val config = new ProducerPerfConfig(args)
     if (!config.isFixedSize)
       logger.info("WARN: Throughput will be slower due to changing message size per request")

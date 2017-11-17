@@ -94,7 +94,7 @@ object Kafka extends Logging {
     }
     catch {
       case e: Throwable =>
-        fatal(e)
+        fatal("", e)
         Exit.exit(1)
     }
     Exit.exit(0)

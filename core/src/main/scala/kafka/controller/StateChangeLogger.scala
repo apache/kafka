@@ -17,10 +17,11 @@
 
 package kafka.controller
 
+import com.typesafe.scalalogging.Logger
 import kafka.utils.Logging
 
 object StateChangeLogger {
-  private val Logger = com.typesafe.scalalogging.Logger("state.change.logger")
+  private val logger = Logger("state.change.logger")
 }
 
 /**
@@ -33,7 +34,7 @@ class StateChangeLogger(brokerId: Int, inControllerContext: Boolean, controllerE
   if (controllerEpoch.isDefined && !inControllerContext)
     throw new IllegalArgumentException("Controller epoch should only be defined if inControllerContext is true")
 
-  override lazy val logger = StateChangeLogger.Logger
+  override lazy val logger = StateChangeLogger.logger
 
   locally {
     val prefix = if (inControllerContext) "Controller" else "Broker"
