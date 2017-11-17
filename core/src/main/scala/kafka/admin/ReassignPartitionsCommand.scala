@@ -19,21 +19,26 @@ package kafka.admin
 import java.util.Properties
 import java.util.concurrent.ExecutionException
 
-import scala.collection._
-import scala.collection.JavaConverters._
+import joptsimple.OptionParser
+import kafka.common.{AdminCommandFailedException, TopicAndPartition}
+import kafka.controller.ReassignedPartitionsContext
+import kafka.log.LogConfig
+import kafka.log.LogConfig._
 import kafka.server.{ConfigType, DynamicConfig}
 import kafka.utils._
-import kafka.common.{AdminCommandFailedException, TopicAndPartition}
-import kafka.log.LogConfig
-import org.I0Itec.zkclient.exception.ZkNodeExistsException
-import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.security.JaasUtils
+import kafka.zk.{AdminZkClient, KafkaZkClient}
+import kafka.zookeeper.ZooKeeperClient
+import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo
+import org.apache.kafka.clients.admin.{AdminClientConfig, AlterReplicaLogDirsOptions, AdminClient => JAdminClient}
 import org.apache.kafka.common.TopicPartitionReplica
 import org.apache.kafka.common.errors.ReplicaNotAvailableException
-import org.apache.kafka.clients.admin.{AdminClientConfig, AlterReplicaLogDirsOptions, AdminClient => JAdminClient}
-import LogConfig._
-import joptsimple.OptionParser
-import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo
+import org.apache.kafka.common.security.JaasUtils
+import org.apache.kafka.common.utils.Utils
+import org.apache.zookeeper.KeeperException.NodeExistsException
+import org.apache.kafka.common.TopicPartition
+
+import scala.collection.JavaConverters._
+import scala.collection._
 
 object ReassignPartitionsCommand extends Logging {
 
@@ -45,24 +50,23 @@ object ReassignPartitionsCommand extends Logging {
   def main(args: Array[String]): Unit = {
     val opts = validateAndParseArgs(args)
     val zkConnect = opts.options.valueOf(opts.zkConnectOpt)
-    val zkUtils = ZkUtils(zkConnect,
-                          30000,
-                          30000,
-                          JaasUtils.isZkSecurityEnabled())
+    val zooKeeperClient = new ZooKeeperClient(zkConnect, 30000, 30000, Int.MaxValue)
+    val zkClient = new KafkaZkClient(zooKeeperClient, JaasUtils.isZkSecurityEnabled())
+
     val adminClientOpt = createAdminClient(opts)
 
     try {
       if(opts.options.has(opts.verifyOpt))
-        verifyAssignment(zkUtils, adminClientOpt, opts)
+        verifyAssignment(zkClient, adminClientOpt, opts)
       else if(opts.options.has(opts.generateOpt))
-        generateAssignment(zkUtils, opts)
+        generateAssignment(zkClient, opts)
       else if (opts.options.has(opts.executeOpt))
-        executeAssignment(zkUtils, adminClientOpt, opts)
+        executeAssignment(zkClient, adminClientOpt, opts)
     } catch {
       case e: Throwable =>
         println("Partitions reassignment failed due to " + e.getMessage)
         println(Utils.stackTrace(e))
-    } finally zkUtils.close()
+    } finally zkClient.close()
   }
 
   private def createAdminClient(opts: ReassignPartitionsCommandOptions): Option[JAdminClient] = {
@@ -76,16 +80,17 @@ object ReassignPartitionsCommand extends Logging {
     }
   }
 
-  def verifyAssignment(zkUtils: ZkUtils, adminClientOpt: Option[JAdminClient], opts: ReassignPartitionsCommandOptions) {
+  def verifyAssignment(zkClient: KafkaZkClient, adminClientOpt: Option[JAdminClient], opts: ReassignPartitionsCommandOptions) {
     val jsonFile = opts.options.valueOf(opts.reassignmentJsonFileOpt)
     val jsonString = Utils.readFileAsString(jsonFile)
-    verifyAssignment(zkUtils, adminClientOpt, jsonString)
+    verifyAssignment(zkClient, adminClientOpt, jsonString)
   }
 
-  def verifyAssignment(zkUtils: ZkUtils, adminClientOpt: Option[JAdminClient], jsonString: String): Unit = {
+  def verifyAssignment(zkClient: KafkaZkClient, adminClientOpt: Option[JAdminClient], jsonString: String): Unit = {
     println("Status of partition reassignment: ")
+    val adminZkClient = new AdminZkClient(zkClient)
     val (partitionsToBeReassigned, replicaAssignment) = parsePartitionReassignmentData(jsonString)
-    val reassignedPartitionsStatus = checkIfPartitionReassignmentSucceeded(zkUtils, partitionsToBeReassigned.toMap)
+    val reassignedPartitionsStatus = checkIfPartitionReassignmentSucceeded(zkClient, partitionsToBeReassigned.toMap)
     val replicasReassignmentStatus = checkIfReplicaReassignmentSucceeded(adminClientOpt, replicaAssignment)
 
     reassignedPartitionsStatus.foreach { case (topicPartition, status) =>
@@ -109,28 +114,28 @@ object ReassignPartitionsCommand extends Logging {
           println("Reassignment of replica %s is still in progress".format(replica))
       }
     }
-
-    removeThrottle(zkUtils, reassignedPartitionsStatus, replicasReassignmentStatus)
+    removeThrottle(zkClient, reassignedPartitionsStatus, replicasReassignmentStatus, adminZkClient)
   }
 
-  private[admin] def removeThrottle(zkUtils: ZkUtils,
+  private[admin] def removeThrottle(zkClient: KafkaZkClient,
                                     reassignedPartitionsStatus: Map[TopicAndPartition, ReassignmentStatus],
                                     replicasReassignmentStatus: Map[TopicPartitionReplica, ReassignmentStatus],
-                                    admin: AdminUtilities = AdminUtils): Unit = {
+                                    adminZkClient: AdminZkClient): Unit = {
 
     //If both partition assignment and replica reassignment have completed remove both the inter-broker and replica-alter-dir throttle
     if (reassignedPartitionsStatus.forall { case (_, status) => status == ReassignmentCompleted } &&
         replicasReassignmentStatus.forall { case (_, status) => status == ReassignmentCompleted }) {
       var changed = false
+
       //Remove the throttle limit from all brokers in the cluster
       //(as we no longer know which specific brokers were involved in the move)
-      for (brokerId <- zkUtils.getAllBrokersInCluster().map(_.id)) {
-        val configs = admin.fetchEntityConfig(zkUtils, ConfigType.Broker, brokerId.toString)
+      for (brokerId <- zkClient.getAllBrokersInCluster.map(_.id)) {
+        val configs = adminZkClient.fetchEntityConfig(ConfigType.Broker, brokerId.toString)
         // bitwise OR as we don't want to short-circuit
         if (configs.remove(DynamicConfig.Broker.LeaderReplicationThrottledRateProp) != null
           | configs.remove(DynamicConfig.Broker.FollowerReplicationThrottledRateProp) != null
           | configs.remove(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp) != null){
-          admin.changeBrokerConfig(zkUtils, Seq(brokerId), configs)
+          adminZkClient.changeBrokerConfig(Seq(brokerId), configs)
           changed = true
         }
       }
@@ -138,11 +143,11 @@ object ReassignPartitionsCommand extends Logging {
       //Remove the list of throttled replicas from all topics with partitions being moved
       val topics = (reassignedPartitionsStatus.keySet.map(tp => tp.topic) ++ replicasReassignmentStatus.keySet.map(replica => replica.topic)).toSeq.distinct
       for (topic <- topics) {
-        val configs = admin.fetchEntityConfig(zkUtils, ConfigType.Topic, topic)
+        val configs = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
         // bitwise OR as we don't want to short-circuit
         if (configs.remove(LogConfig.LeaderReplicationThrottledReplicasProp) != null
           | configs.remove(LogConfig.FollowerReplicationThrottledReplicasProp) != null) {
-          admin.changeTopicConfig(zkUtils, topic, configs)
+          adminZkClient.changeTopicConfig(topic, configs)
           changed = true
         }
       }
@@ -151,7 +156,7 @@ object ReassignPartitionsCommand extends Logging {
     }
   }
 
-  def generateAssignment(zkUtils: ZkUtils, opts: ReassignPartitionsCommandOptions) {
+  def generateAssignment(zkClient: KafkaZkClient, opts: ReassignPartitionsCommandOptions) {
     val topicsToMoveJsonFile = opts.options.valueOf(opts.topicsToMoveJsonFileOpt)
     val brokerListToReassign = opts.options.valueOf(opts.brokerListOpt).split(',').map(_.toInt)
     val duplicateReassignments = CoreUtils.duplicates(brokerListToReassign)
@@ -159,21 +164,22 @@ object ReassignPartitionsCommand extends Logging {
       throw new AdminCommandFailedException("Broker list contains duplicate entries: %s".format(duplicateReassignments.mkString(",")))
     val topicsToMoveJsonString = Utils.readFileAsString(topicsToMoveJsonFile)
     val disableRackAware = opts.options.has(opts.disableRackAware)
-    val (proposedAssignments, currentAssignments) = generateAssignment(zkUtils, brokerListToReassign, topicsToMoveJsonString, disableRackAware)
+    val (proposedAssignments, currentAssignments) = generateAssignment(zkClient, brokerListToReassign, topicsToMoveJsonString, disableRackAware)
     println("Current partition replica assignment\n%s\n".format(formatAsReassignmentJson(currentAssignments, Map.empty)))
     println("Proposed partition reassignment configuration\n%s".format(formatAsReassignmentJson(proposedAssignments, Map.empty)))
   }
 
-  def generateAssignment(zkUtils: ZkUtils, brokerListToReassign: Seq[Int], topicsToMoveJsonString: String, disableRackAware: Boolean): (Map[TopicAndPartition, Seq[Int]], Map[TopicAndPartition, Seq[Int]]) = {
+  def generateAssignment(zkClient: KafkaZkClient, brokerListToReassign: Seq[Int], topicsToMoveJsonString: String, disableRackAware: Boolean): (Map[TopicAndPartition, Seq[Int]], Map[TopicAndPartition, Seq[Int]]) = {
     val topicsToReassign = ZkUtils.parseTopicsData(topicsToMoveJsonString)
     val duplicateTopicsToReassign = CoreUtils.duplicates(topicsToReassign)
     if (duplicateTopicsToReassign.nonEmpty)
       throw new AdminCommandFailedException("List of topics to reassign contains duplicate entries: %s".format(duplicateTopicsToReassign.mkString(",")))
-    val currentAssignment = zkUtils.getReplicaAssignmentForTopics(topicsToReassign)
+    val currentAssignment = getReplicaAssignmentForTopics(zkClient, topicsToReassign.toSet)
 
     val groupedByTopic = currentAssignment.groupBy { case (tp, _) => tp.topic }
     val rackAwareMode = if (disableRackAware) RackAwareMode.Disabled else RackAwareMode.Enforced
-    val brokerMetadatas = AdminUtils.getBrokerMetadatas(zkUtils, rackAwareMode, Some(brokerListToReassign))
+    val adminZkClient = new AdminZkClient(zkClient)
+    val brokerMetadatas = adminZkClient.getBrokerMetadatas(rackAwareMode, Some(brokerListToReassign))
 
     val partitionsToBeReassigned = mutable.Map[TopicAndPartition, Seq[Int]]()
     groupedByTopic.foreach { case (topic, assignment) =>
@@ -186,25 +192,26 @@ object ReassignPartitionsCommand extends Logging {
     (partitionsToBeReassigned, currentAssignment)
   }
 
-  def executeAssignment(zkUtils: ZkUtils, adminClientOpt: Option[JAdminClient], opts: ReassignPartitionsCommandOptions) {
+  def executeAssignment(zkClient: KafkaZkClient, adminClientOpt: Option[JAdminClient], opts: ReassignPartitionsCommandOptions) {
     val reassignmentJsonFile =  opts.options.valueOf(opts.reassignmentJsonFileOpt)
     val reassignmentJsonString = Utils.readFileAsString(reassignmentJsonFile)
     val interBrokerThrottle = opts.options.valueOf(opts.interBrokerThrottleOpt)
     val replicaAlterLogDirsThrottle = opts.options.valueOf(opts.replicaAlterLogDirsThrottleOpt)
     val timeoutMs = opts.options.valueOf(opts.timeoutOpt)
-    executeAssignment(zkUtils, adminClientOpt, reassignmentJsonString, Throttle(interBrokerThrottle, replicaAlterLogDirsThrottle), timeoutMs)
+    executeAssignment(zkClient, adminClientOpt, reassignmentJsonString, Throttle(interBrokerThrottle, replicaAlterLogDirsThrottle), timeoutMs)
   }
 
-  def executeAssignment(zkUtils: ZkUtils, adminClientOpt: Option[JAdminClient], reassignmentJsonString: String, throttle: Throttle, timeoutMs: Long = 10000L) {
-    val (partitionAssignment, replicaAssignment) = parseAndValidate(zkUtils, reassignmentJsonString)
-    val reassignPartitionsCommand = new ReassignPartitionsCommand(zkUtils, adminClientOpt, partitionAssignment.toMap, replicaAssignment)
+  def executeAssignment(zkClient: KafkaZkClient, adminClientOpt: Option[JAdminClient], reassignmentJsonString: String, throttle: Throttle, timeoutMs: Long = 10000L) {
+    val (partitionAssignment, replicaAssignment) = parseAndValidate(zkClient, reassignmentJsonString)
+    val adminZkClient = new AdminZkClient(zkClient)
+    val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, adminClientOpt, partitionAssignment.toMap, replicaAssignment, adminZkClient)
 
     // If there is an existing rebalance running, attempt to change its throttle
-    if (zkUtils.pathExists(ZkUtils.ReassignPartitionsPath)) {
+    if (zkClient.reassignPartitionsInProgress()) {
       println("There is an existing assignment running.")
       reassignPartitionsCommand.maybeLimit(throttle)
     } else {
-      printCurrentAssignment(zkUtils, partitionAssignment.map(_._1.topic))
+      printCurrentAssignment(zkClient, partitionAssignment.map(_._1.topic))
       if (throttle.interBrokerLimit >= 0 || throttle.replicaAlterLogDirsLimit >= 0)
         println(String.format("Warning: You must run Verify periodically, until the reassignment completes, to ensure the throttle is removed. You can also alter the throttle by rerunning the Execute command passing a new value."))
       if (reassignPartitionsCommand.reassignPartitions(throttle, timeoutMs)) {
@@ -214,9 +221,9 @@ object ReassignPartitionsCommand extends Logging {
     }
   }
 
-  def printCurrentAssignment(zkUtils: ZkUtils, topics: Seq[String]): Unit = {
+  def printCurrentAssignment(zkClient: KafkaZkClient, topics: Seq[String]): Unit = {
     // before starting assignment, output the current replica assignment to facilitate rollback
-    val currentPartitionReplicaAssignment = zkUtils.getReplicaAssignmentForTopics(topics)
+    val currentPartitionReplicaAssignment = getReplicaAssignmentForTopics(zkClient, topics.toSet)
     println("Current partition replica assignment\n\n%s\n\nSave this to use as the --reassignment-json-file option during rollback"
       .format(formatAsReassignmentJson(currentPartitionReplicaAssignment, Map.empty)))
   }
@@ -264,7 +271,7 @@ object ReassignPartitionsCommand extends Logging {
     (partitionAssignment, replicaAssignment)
   }
 
-  def parseAndValidate(zkUtils: ZkUtils, reassignmentJsonString: String): (Seq[(TopicAndPartition, Seq[Int])], Map[TopicPartitionReplica, String]) = {
+  def parseAndValidate(zkClient: KafkaZkClient, reassignmentJsonString: String): (Seq[(TopicAndPartition, Seq[Int])], Map[TopicPartitionReplica, String]) = {
     val (partitionsToBeReassigned, replicaAssignment) = parsePartitionReassignmentData(reassignmentJsonString)
 
     if (partitionsToBeReassigned.isEmpty)
@@ -286,14 +293,14 @@ object ReassignPartitionsCommand extends Logging {
     }
     // check that all partitions in the proposed assignment exist in the cluster
     val proposedTopics = partitionsToBeReassigned.map { case (tp, _) => tp.topic }.distinct
-    val existingAssignment = zkUtils.getReplicaAssignmentForTopics(proposedTopics)
+    val existingAssignment = getReplicaAssignmentForTopics(zkClient, proposedTopics.toSet)
     val nonExistentPartitions = partitionsToBeReassigned.map { case (tp, _) => tp }.filterNot(existingAssignment.contains)
     if (nonExistentPartitions.nonEmpty)
       throw new AdminCommandFailedException("The proposed assignment contains non-existent partitions: " +
         nonExistentPartitions)
 
     // check that all brokers in the proposed assignment exist in the cluster
-    val existingBrokerIDs = zkUtils.getSortedBrokerList()
+    val existingBrokerIDs = zkClient.getSortedBrokerList
     val nonExistingBrokerIDs = partitionsToBeReassigned.toMap.values.flatten.filterNot(existingBrokerIDs.contains).toSet
     if (nonExistingBrokerIDs.nonEmpty)
       throw new AdminCommandFailedException("The proposed assignment contains non-existent brokerIDs: " + nonExistingBrokerIDs.mkString(","))
@@ -301,13 +308,32 @@ object ReassignPartitionsCommand extends Logging {
     (partitionsToBeReassigned, replicaAssignment)
   }
 
-  private def checkIfPartitionReassignmentSucceeded(zkUtils: ZkUtils, partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]])
+  private def checkIfPartitionReassignmentSucceeded(zkClient: KafkaZkClient, partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]])
   :Map[TopicAndPartition, ReassignmentStatus] = {
-    val partitionsBeingReassigned = zkUtils.getPartitionsBeingReassigned().mapValues(_.newReplicas)
+    val partitionsBeingReassigned = getPartitionReassignment(zkClient).mapValues(replicas => ReassignedPartitionsContext(replicas)).
+      mapValues(_.newReplicas)
+
     partitionsToBeReassigned.keys.map { topicAndPartition =>
-      (topicAndPartition, checkIfPartitionReassignmentSucceeded(zkUtils, topicAndPartition, partitionsToBeReassigned,
+      (topicAndPartition, checkIfPartitionReassignmentSucceeded(zkClient, topicAndPartition, partitionsToBeReassigned,
         partitionsBeingReassigned))
     }.toMap
+  }
+
+  /**
+   * Returns all reassignments.
+   * @return the reassignments for each partition.
+   */
+  def getPartitionReassignment(zkClient: KafkaZkClient) : Map[TopicAndPartition, Seq[Int]] = {
+    zkClient.getPartitionReassignment.map({case (key, value) => (new TopicAndPartition(key.topic, key.partition), value)})
+  }
+
+  /**
+   * Gets the assignments for the given topics.
+   * @param topics the topics whose partitions we wish to get the assignments for.
+   * @return the replica assignment for each partition from the given topics.
+   */
+  def getReplicaAssignmentForTopics(zkClient: KafkaZkClient, topics: Set[String]): Map[TopicAndPartition, Seq[Int]] = {
+    zkClient.getReplicaAssignmentForTopics(topics.toSet).map({case (key, value) => (new TopicAndPartition(key.topic, key.partition), value)})
   }
 
   private def checkIfReplicaReassignmentSucceeded(adminClientOpt: Option[JAdminClient], replicaAssignment: Map[TopicPartitionReplica, String])
@@ -351,7 +377,7 @@ object ReassignPartitionsCommand extends Logging {
     }
   }
 
-  def checkIfPartitionReassignmentSucceeded(zkUtils: ZkUtils, topicAndPartition: TopicAndPartition,
+  def checkIfPartitionReassignmentSucceeded(zkClient: KafkaZkClient, topicAndPartition: TopicAndPartition,
                                             partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]],
                                             partitionsBeingReassigned: Map[TopicAndPartition, Seq[Int]]): ReassignmentStatus = {
     val newReplicas = partitionsToBeReassigned(topicAndPartition)
@@ -359,7 +385,7 @@ object ReassignPartitionsCommand extends Logging {
       case Some(_) => ReassignmentInProgress
       case None =>
         // check if the current replica assignment matches the expected one after reassignment
-        val assignedReplicas = zkUtils.getReplicasForPartition(topicAndPartition.topic, topicAndPartition.partition)
+        val assignedReplicas = zkClient.getReplicasForPartition(new TopicPartition(topicAndPartition.topic, topicAndPartition.partition))
         if(assignedReplicas == newReplicas)
           ReassignmentCompleted
         else {
@@ -458,23 +484,23 @@ object ReassignPartitionsCommand extends Logging {
   }
 }
 
-class ReassignPartitionsCommand(zkUtils: ZkUtils,
+class ReassignPartitionsCommand(zkClient: KafkaZkClient,
                                 adminClientOpt: Option[JAdminClient],
                                 proposedPartitionAssignment: Map[TopicAndPartition, Seq[Int]],
                                 proposedReplicaAssignment: Map[TopicPartitionReplica, String] = Map.empty,
-                                admin: AdminUtilities = AdminUtils)
+                                adminZkClient: AdminZkClient)
   extends Logging {
 
   import ReassignPartitionsCommand._
 
   def existingAssignment(): Map[TopicAndPartition, Seq[Int]] = {
     val proposedTopics = proposedPartitionAssignment.keySet.map(_.topic).toSeq
-    zkUtils.getReplicaAssignmentForTopics(proposedTopics)
+    getReplicaAssignmentForTopics(zkClient, proposedTopics.toSet)
   }
 
   private def maybeThrottle(throttle: Throttle): Unit = {
     if (throttle.interBrokerLimit >= 0)
-      assignThrottledReplicas(existingAssignment(), proposedPartitionAssignment)
+      assignThrottledReplicas(existingAssignment(), proposedPartitionAssignment, adminZkClient)
     maybeLimit(throttle)
     if (throttle.interBrokerLimit >= 0 || throttle.replicaAlterLogDirsLimit >= 0)
       throttle.postUpdateAction()
@@ -495,7 +521,7 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils,
       val brokers = (existingBrokers ++ proposedBrokers).distinct
 
       for (id <- brokers) {
-        val configs = admin.fetchEntityConfig(zkUtils, ConfigType.Broker, id.toString)
+        val configs = adminZkClient.fetchEntityConfig(ConfigType.Broker, id.toString)
         if (throttle.interBrokerLimit >= 0) {
           configs.put(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, throttle.interBrokerLimit.toString)
           configs.put(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, throttle.interBrokerLimit.toString)
@@ -503,7 +529,7 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils,
         if (throttle.replicaAlterLogDirsLimit >= 0)
           configs.put(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp, throttle.replicaAlterLogDirsLimit.toString)
 
-        admin.changeBrokerConfig(zkUtils, Seq(id), configs)
+        adminZkClient.changeBrokerConfig(Seq(id), configs)
       }
     }
   }
@@ -511,7 +537,7 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils,
   /** Set throttles to replicas that are moving. Note: this method should only be used when the assignment is initiated. */
   private[admin] def assignThrottledReplicas(existingPartitionAssignment: Map[TopicAndPartition, Seq[Int]],
                                              proposedPartitionAssignment: Map[TopicAndPartition, Seq[Int]],
-                                             admin: AdminUtilities = AdminUtils): Unit = {
+                                             adminZkClient: AdminZkClient): Unit = {
     for (topic <- proposedPartitionAssignment.keySet.map(_.topic).toSeq) {
       val existingPartitionAssignmentForTopic = existingPartitionAssignment.filter { case (tp, _) => tp.topic == topic }
       val proposedPartitionAssignmentForTopic = proposedPartitionAssignment.filter { case (tp, _) => tp.topic == topic }
@@ -522,10 +548,10 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils,
       //Apply follower throttle to all "move destinations".
       val follower = format(postRebalanceReplicasThatMoved(existingPartitionAssignmentForTopic, proposedPartitionAssignmentForTopic))
 
-      val configs = admin.fetchEntityConfig(zkUtils, ConfigType.Topic, topic)
+      val configs = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
       configs.put(LeaderReplicationThrottledReplicasProp, leader)
       configs.put(FollowerReplicationThrottledReplicasProp, follower)
-      admin.changeTopicConfig(zkUtils, topic, configs)
+      adminZkClient.changeTopicConfig(topic, configs)
 
       debug(s"Updated leader-throttled replicas for topic $topic with: $leader")
       debug(s"Updated follower-throttled replicas for topic $topic with: $follower")
@@ -574,7 +600,7 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils,
   def reassignPartitions(throttle: Throttle = NoThrottle, timeoutMs: Long = 10000L): Boolean = {
     maybeThrottle(throttle)
     try {
-      val validPartitions = proposedPartitionAssignment.filter { case (p, _) => validatePartition(zkUtils, p.topic, p.partition) }
+      val validPartitions = proposedPartitionAssignment.filter { case (p, _) => validatePartition(zkClient, p.topic, p.partition) }
       if (validPartitions.isEmpty) false
       else {
         if (proposedReplicaAssignment.nonEmpty && adminClientOpt.isEmpty)
@@ -586,8 +612,7 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils,
           alterReplicaLogDirsIgnoreReplicaNotAvailable(proposedReplicaAssignment, adminClientOpt.get, timeoutMs)
 
         // Create reassignment znode so that controller will send LeaderAndIsrRequest to create replica in the broker
-        val jsonReassignmentData = ZkUtils.formatAsReassignmentJson(validPartitions)
-        zkUtils.createPersistentPath(ZkUtils.ReassignPartitionsPath, jsonReassignmentData)
+        zkClient.createPartitionReassignment(validPartitions.map({case (key, value) => (new TopicPartition(key.topic, key.partition), value)}).toMap)
 
         // Send AlterReplicaLogDirsRequest again to make sure broker will start to move replica to the specified log directory.
         // It may take some time for controller to create replica in the broker. Retry if the replica has not been created.
@@ -602,16 +627,16 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils,
         replicasAssignedToFutureDir.size == proposedReplicaAssignment.size
       }
     } catch {
-      case _: ZkNodeExistsException =>
-        val partitionsBeingReassigned = zkUtils.getPartitionsBeingReassigned()
+      case _: NodeExistsException =>
+        val partitionsBeingReassigned = zkClient.getPartitionsBeingReassigned()
         throw new AdminCommandFailedException("Partition reassignment currently in " +
           "progress for %s. Aborting operation".format(partitionsBeingReassigned))
     }
   }
 
-  def validatePartition(zkUtils: ZkUtils, topic: String, partition: Int): Boolean = {
+  def validatePartition(zkClient: KafkaZkClient, topic: String, partition: Int): Boolean = {
     // check if partition exists
-    val partitionsOpt = zkUtils.getPartitionsForTopics(List(topic)).get(topic)
+    val partitionsOpt = zkClient.getPartitionsForTopics(immutable.Set(topic)).get(topic)
     partitionsOpt match {
       case Some(partitions) =>
         if(partitions.contains(partition)) {

@@ -20,18 +20,15 @@ package kafka.server
 import java.nio.charset.StandardCharsets
 
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
-import kafka.utils.Json
-import kafka.utils.Logging
-import kafka.utils.ZkUtils
-
-import scala.collection._
-import scala.collection.JavaConverters._
-import kafka.admin.AdminUtils
+import kafka.utils.{Json, Logging}
 import kafka.utils.json.JsonObject
-import kafka.zk.{AdminZkClient, KafkaZkClient}
+import kafka.zk.{KafkaZkClient, AdminZkClient, ConfigEntityChangeNotificationZNode, ConfigEntityChangeNotificationSequenceZNode}
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.security.scram.ScramMechanism
 import org.apache.kafka.common.utils.Time
+
+import scala.collection.JavaConverters._
+import scala.collection._
 
 /**
  * Represents all the entities that can be configured via ZK
@@ -155,8 +152,8 @@ class DynamicConfigManager(private val zkClient: KafkaZkClient,
     }
   }
 
-  private val configChangeListener = new ZkNodeChangeNotificationListener(zkClient, ZkUtils.ConfigChangesPath,
-    AdminUtils.EntityConfigChangeZnodePrefix, ConfigChangedNotificationHandler)
+  private val configChangeListener = new ZkNodeChangeNotificationListener(zkClient, ConfigEntityChangeNotificationZNode.path,
+    ConfigEntityChangeNotificationSequenceZNode.SequenceNumberPrefix, ConfigChangedNotificationHandler)
 
   /**
    * Begin watching for config changes
