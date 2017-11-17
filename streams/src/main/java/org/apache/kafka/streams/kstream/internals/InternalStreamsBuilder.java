@@ -49,8 +49,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         internalTopologyBuilder.addSource(consumed.offsetResetPolicy(),
                                           name,
                                           consumed.timestampExtractor(),
-                                          consumed.keySerde() == null ? null : consumed.keySerde().deserializer(),
-                                          consumed.valueSerde() == null ? null : consumed.valueSerde().deserializer(),
+                                          consumed.keyDeserializer(),
+                                          consumed.valueDeserializer(),
                                           topics.toArray(new String[topics.size()]));
 
         return new KStreamImpl<>(this, name, Collections.singleton(name), false);
@@ -62,8 +62,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         internalTopologyBuilder.addSource(consumed.offsetResetPolicy(),
                                           name,
                                           consumed.timestampExtractor(),
-                                          consumed.keySerde() == null ? null : consumed.keySerde().deserializer(),
-                                          consumed.valueSerde() == null ? null : consumed.valueSerde().deserializer(),
+                                          consumed.keyDeserializer(),
+                                          consumed.valueDeserializer(),
                                           topicPattern);
 
         return new KStreamImpl<>(this, name, Collections.singleton(name), false);
@@ -124,8 +124,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         internalTopologyBuilder.addSource(consumed.offsetResetPolicy(),
                                           source,
                                           consumed.timestampExtractor(),
-                                          consumed.keySerde() == null ? null : consumed.keySerde().deserializer(),
-                                          consumed.valueSerde() == null ? null : consumed.valueSerde().deserializer(),
+                                          consumed.keyDeserializer(),
+                                          consumed.valueDeserializer(),
                                           topic);
         internalTopologyBuilder.addProcessor(name, processorSupplier, source);
 
@@ -147,14 +147,11 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         final KTableSource<K, V> tableSource = new KTableSource<>(storeBuilder.name());
 
 
-        final Deserializer<K> keyDeserializer = consumed.keySerde() == null ? null : consumed.keySerde().deserializer();
-        final Deserializer<V> valueDeserializer = consumed.valueSerde() == null ? null : consumed.valueSerde().deserializer();
-
         internalTopologyBuilder.addGlobalStore(storeBuilder,
                                                sourceName,
                                                consumed.timestampExtractor(),
-                                               keyDeserializer,
-                                               valueDeserializer,
+                                               consumed.keyDeserializer(),
+                                               consumed.valueDeserializer(),
                                                topic,
                                                processorName,
                                                tableSource);
@@ -183,13 +180,11 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                             final ProcessorSupplier stateUpdateSupplier) {
         // explicitly disable logging for global stores
         storeBuilder.withLoggingDisabled();
-        final Deserializer keyDeserializer = consumed.keySerde() == null ? null : consumed.keySerde().deserializer();
-        final Deserializer valueDeserializer = consumed.valueSerde() == null ? null : consumed.valueSerde().deserializer();
         internalTopologyBuilder.addGlobalStore(storeBuilder,
                                                sourceName,
                                                consumed.timestampExtractor(),
-                                               keyDeserializer,
-                                               valueDeserializer,
+                                               consumed.keyDeserializer(),
+                                               consumed.valueDeserializer(),
                                                topic,
                                                processorName,
                                                stateUpdateSupplier);
