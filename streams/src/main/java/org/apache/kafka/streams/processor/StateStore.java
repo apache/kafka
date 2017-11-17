@@ -18,13 +18,22 @@ package org.apache.kafka.streams.processor;
 
 /**
  * A storage engine for managing state maintained by a stream processor.
- *
+ * <p>
+ * If the store is implemented as a persistent store, it <em>must</em> use the store name as directory name and write
+ * all data into this store directory.
+ * The store directory must be created with the state directory.
+ * The state directory can be obtained via {@link ProcessorContext#stateDir() #stateDir()} using the
+ * {@link ProcessorContext} provided via {@link #init(ProcessorContext, StateStore) init(...)}.
+ * <p>
+ * Using nested store directories within the state directory isolates different state stores.
+ * If a state store would write into the state directory directly, it might conflict with others state stores and thus,
+ * data might get corrupted and/or Streams might fail with an error.
+ * Furthermore, Kafka Streams relies on using the store name as store directory name to perform internal cleanup tasks.
  * <p>
  * This interface does not specify any query capabilities, which, of course,
  * would be query engine specific. Instead it just specifies the minimum
  * functionality required to reload a storage engine from its changelog as well
  * as basic lifecycle management.
- * </p>
  */
 public interface StateStore {
 
