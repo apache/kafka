@@ -20,13 +20,17 @@ import org.apache.kafka.streams.errors.StreamsException;
 
 /**
  * A storage engine for managing state maintained by a stream processor.
- *
+ * <p>
+ * If the store is implemented as a persistent store, it <em>must</em> use the store name as directory to write to disk.
+ * Thus, the directory for the store is {@code <state.dir>/<application.id>/<taskId>/<storeName>}.
+ * The task directory {@code <state.dir>/<application.id>/<taskId>} can be obtained via
+ * {@link ProcessorContext#stateDir() #stateDir()} using the {@link ProcessorContext} provided via
+ * {@link #init(ProcessorContext, StateStore) init(...)}.
  * <p>
  * This interface does not specify any query capabilities, which, of course,
  * would be query engine specific. Instead it just specifies the minimum
  * functionality required to reload a storage engine from its changelog as well
  * as basic lifecycle management.
- * </p>
  */
 public interface StateStore {
 
