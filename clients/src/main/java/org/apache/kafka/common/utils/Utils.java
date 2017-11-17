@@ -520,6 +520,42 @@ public class Utils {
     }
 
     /**
+     * returns the root cause of a given throwable
+     * @param t a throwable
+     * @return the root cause of the argument
+     */
+    public static Throwable rootCause(Throwable t) {
+        Throwable cause = t;
+        while (cause != null && cause.getCause() != null && cause.getCause() != cause) {
+            cause = cause.getCause();
+        }
+        return cause;
+    }
+
+    /**
+     * returns a short human-readable description of a throwable
+     * @param t a throwable
+     * @return a concise description of the throwable
+     */
+    public static String describe(Throwable t) {
+        if (t == null) {
+            return "null";
+        }
+        Throwable rootCause = rootCause(t);
+        String outerMsg = t.getMessage();
+        if (rootCause == t) {
+            return outerMsg;
+        }
+        String innerMsg = rootCause.getMessage();
+        if (innerMsg == null) {
+            return outerMsg;
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append(outerMsg).append(" (").append(innerMsg).append(")");
+        return sb.toString();
+    }
+
+    /**
      * Print an error message and shutdown the JVM
      * @param message The error message
      */
