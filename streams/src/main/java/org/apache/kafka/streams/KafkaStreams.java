@@ -133,6 +133,7 @@ public class KafkaStreams {
     private final Time time;
     private final Logger log;
     private final UUID processId;
+    private final String clientId;
     private final Metrics metrics;
     private final StreamsConfig config;
     private final StreamThread[] threads;
@@ -255,8 +256,7 @@ public class KafkaStreams {
                 // will be refused but we do not throw exception here, to allow idempotent close calls
                 return false;
             } else if (!state.isValidTransition(newState)) {
-                log.error("Unexpected state transition from {} to {}", oldState, newState);
-                throw new IllegalStateException("Unexpected state transition from " + oldState + " to " + newState);
+                throw new IllegalStateException("Stream-client " + clientId + ": Unexpected state transition from " + oldState + " to " + newState);
             } else {
                 log.info("State transition from {} to {}", oldState, newState);
             }
@@ -275,8 +275,7 @@ public class KafkaStreams {
     private boolean setRunningFromCreated() {
         synchronized (stateLock) {
             if (state != State.CREATED) {
-                log.error("Unexpected state transition from {} to {}", state, State.RUNNING);
-                throw new IllegalStateException("Unexpected state transition from " + state + " to " + State.RUNNING);
+                throw new IllegalStateException("Stream-client " + clientId + ": Unexpected state transition from " + state + " to " + State.RUNNING);
             }
             state = State.RUNNING;
             stateLock.notifyAll();
@@ -465,32 +464,40 @@ public class KafkaStreams {
     }
 
     final class DelegatingStateRestoreListener implements StateRestoreListener {
+        private void throwOnFatalException(final Exception fatalUserException,
+                                           final TopicPartition topicPartition,
+                                           final String storeName) {
+            throw new StreamsException(
+                    String.format("Fatal user code error in store restore listener for store %s, partition %s.",
+                            storeName,
+                            topicPartition),
+                    fatalUserException);
+        }
+
         @Override
-        public void onRestoreStart(final TopicPartition topicPartition, final String storeName, final long startingOffset, final long endingOffset) {
+        public void onRestoreStart(final TopicPartition topicPartition,
+                                   final String storeName,
+                                   final long startingOffset,
+                                   final long endingOffset) {
             if (globalStateRestoreListener != null) {
                 try {
                     globalStateRestoreListener.onRestoreStart(topicPartition, storeName, startingOffset, endingOffset);
                 } catch (final Exception fatalUserException) {
-                    throw new StreamsException(
-                            String.format("Fatal user code error in store restore listener for store %s, partition %s.",
-                                    storeName,
-                                    topicPartition),
-                            fatalUserException);
+                    throwOnFatalException(fatalUserException, topicPartition, storeName);
                 }
             }
         }
 
         @Override
-        public void onBatchRestored(final TopicPartition topicPartition, final String storeName, final long batchEndOffset, final long numRestored) {
+        public void onBatchRestored(final TopicPartition topicPartition,
+                                    final String storeName,
+                                    final long batchEndOffset,
+                                    final long numRestored) {
             if (globalStateRestoreListener != null) {
                 try {
                     globalStateRestoreListener.onBatchRestored(topicPartition, storeName, batchEndOffset, numRestored);
                 } catch (final Exception fatalUserException) {
-                    throw new StreamsException(
-                            String.format("Fatal user code error in store restore listener for store %s, partition %s.",
-                                    storeName,
-                                    topicPartition),
-                            fatalUserException);
+                    throwOnFatalException(fatalUserException, topicPartition, storeName);
                 }
             }
         }
@@ -501,11 +508,7 @@ public class KafkaStreams {
                 try {
                     globalStateRestoreListener.onRestoreEnd(topicPartition, storeName, totalRestored);
                 } catch (final Exception fatalUserException) {
-                    throw new StreamsException(
-                            String.format("Fatal user code error in store restore listener for store %s, partition %s.",
-                                    storeName,
-                                    topicPartition),
-                            fatalUserException);
+                    throwOnFatalException(fatalUserException, topicPartition, storeName);
                 }
             }
         }
@@ -585,12 +588,13 @@ public class KafkaStreams {
         this.time = Time.SYSTEM;
 
         // The application ID is a required config and hence should always have value
+        processId = UUID.randomUUID();
+        final String clientId = config.getString(StreamsConfig.CLIENT_ID_CONFIG);
         final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
-        this.processId = UUID.randomUUID();
-
-        String clientId = config.getString(StreamsConfig.CLIENT_ID_CONFIG);
         if (clientId.length() <= 0) {
-            clientId = applicationId + "-" + processId;
+            this.clientId = applicationId + "-" + processId;
+        } else {
+            this.clientId = clientId;
         }
 
         final LogContext logContext = new LogContext(String.format("stream-client [%s] ", clientId));
@@ -682,11 +686,10 @@ public class KafkaStreams {
         final GlobalStateStoreProvider globalStateStoreProvider = new GlobalStateStoreProvider(internalTopologyBuilder.globalStateStores());
         queryableStoreProvider = new QueryableStoreProvider(storeProviders, globalStateStoreProvider);
 
-        final String cleanupThreadName = clientId + "-CleanupThread";
         stateDirCleaner = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
             @Override
             public Thread newThread(final Runnable r) {
-                final Thread thread = new Thread(r, cleanupThreadName);
+                final Thread thread = new Thread(r, clientId + "-CleanupThread");
                 thread.setDaemon(true);
                 return thread;
             }
