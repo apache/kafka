@@ -601,7 +601,7 @@ public class StreamsConfig extends AbstractConfig {
      * Prefix a property with {@link #ADMIN_CLIENT_PREFIX}. This is used to isolate {@link AdminClientConfig admin configs}
      * from other client configs.
      *
-     * @param adminClientProp the producer property to be masked
+     * @param adminClientProp the admin client property to be masked
      * @return ADMIN_CLIENT_PREFIX + {@code adminClientProp}
      */
     public static String adminClientPrefix(final String adminClientProp) {
@@ -784,7 +784,7 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     /**
-     * Get the configs fro the {@link org.apache.kafka.clients.admin.AdminClient}.
+     * Get the configs for the {@link org.apache.kafka.clients.admin.AdminClient admin client}.
      * @param clientId clientId
      * @return Map of the admin client configuration.
      */

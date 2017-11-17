@@ -258,7 +258,7 @@ public class KafkaStreams {
                 // will be refused but we do not throw exception here, to allow idempotent close calls
                 return false;
             } else if (!state.isValidTransition(newState)) {
-                throw new IllegalStateException("stream-client " + clientId + " Unexpected state transition from " + oldState + " to " + newState);
+                throw new IllegalStateException("Stream-client " + clientId + ": Unexpected state transition from " + oldState + " to " + newState);
             } else {
                 log.info("State transition from {} to {}", oldState, newState);
             }
@@ -277,7 +277,7 @@ public class KafkaStreams {
     private boolean setRunningFromCreated() {
         synchronized (stateLock) {
             if (state != State.CREATED) {
-                throw new IllegalStateException("stream-client " + clientId + " Unexpected state transition from " + state + " to " + State.RUNNING);
+                throw new IllegalStateException("Stream-client " + clientId + ": Unexpected state transition from " + state + " to " + State.RUNNING);
             }
             state = State.RUNNING;
             stateLock.notifyAll();
@@ -466,7 +466,9 @@ public class KafkaStreams {
     }
 
     final class DelegatingStateRestoreListener implements StateRestoreListener {
-        private void throwOnFatalException(final Exception fatalUserException, final TopicPartition topicPartition, final String storeName) {
+        private void throwOnFatalException(final Exception fatalUserException,
+                                           final TopicPartition topicPartition,
+                                           final String storeName) {
             throw new StreamsException(
                     String.format("Fatal user code error in store restore listener for store %s, partition %s.",
                             storeName,
@@ -475,7 +477,10 @@ public class KafkaStreams {
         }
 
         @Override
-        public void onRestoreStart(final TopicPartition topicPartition, final String storeName, final long startingOffset, final long endingOffset) {
+        public void onRestoreStart(final TopicPartition topicPartition,
+                                   final String storeName,
+                                   final long startingOffset,
+                                   final long endingOffset) {
             if (globalStateRestoreListener != null) {
                 try {
                     globalStateRestoreListener.onRestoreStart(topicPartition, storeName, startingOffset, endingOffset);
@@ -486,7 +491,10 @@ public class KafkaStreams {
         }
 
         @Override
-        public void onBatchRestored(final TopicPartition topicPartition, final String storeName, final long batchEndOffset, final long numRestored) {
+        public void onBatchRestored(final TopicPartition topicPartition,
+                                    final String storeName,
+                                    final long batchEndOffset,
+                                    final long numRestored) {
             if (globalStateRestoreListener != null) {
                 try {
                     globalStateRestoreListener.onBatchRestored(topicPartition, storeName, batchEndOffset, numRestored);
@@ -581,7 +589,7 @@ public class KafkaStreams {
         this.config = config;
 
         // The application ID is a required config and hence should always have value
-        this.processId = UUID.randomUUID();
+        processId = UUID.randomUUID();
         final String clientId = config.getString(StreamsConfig.CLIENT_ID_CONFIG);
         final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         if (clientId.length() <= 0) {
@@ -674,11 +682,10 @@ public class KafkaStreams {
         final GlobalStateStoreProvider globalStateStoreProvider = new GlobalStateStoreProvider(internalTopologyBuilder.globalStateStores());
         queryableStoreProvider = new QueryableStoreProvider(storeProviders, globalStateStoreProvider);
 
-        final String cleanupThreadName = clientId + "-CleanupThread";
         stateDirCleaner = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
             @Override
             public Thread newThread(final Runnable r) {
-                final Thread thread = new Thread(r, cleanupThreadName);
+                final Thread thread = new Thread(r, clientId + "-CleanupThread");
                 thread.setDaemon(true);
                 return thread;
             }
