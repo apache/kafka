@@ -18,16 +18,12 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
 
@@ -59,12 +55,12 @@ class TaskManager {
     private final StreamsMetadataState streamsMetadataState;
 
     // TODO: this is going to be replaced by AdminClient
-    public final StreamsKafkaClient streamsKafkaClient;
+    final StreamsKafkaClient streamsKafkaClient;
 
     // following information is updated during rebalance phase by the partition assignor
     private Cluster cluster;
-    private Map<TaskId, Set<TopicPartition>> activeTasks;
-    private Map<TaskId, Set<TopicPartition>> standbyTasks;
+    private Map<TaskId, Set<TopicPartition>> assignedActiveTasks;
+    private Map<TaskId, Set<TopicPartition>> assignedStandbyTasks;
     private Map<HostInfo, Set<TopicPartition>> partitionsByHostState;
 
     private Consumer<byte[], byte[]> consumer;
@@ -76,6 +72,7 @@ class TaskManager {
                 final StreamsMetadataState streamsMetadataState,
                 final StreamThread.AbstractTaskCreator<StreamTask> taskCreator,
                 final StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator,
+                final StreamsKafkaClient streamsKafkaClient,
                 final AssignedStreamsTasks active,
                 final AssignedStandbyTasks standby) {
         this.changelogReader = changelogReader;
@@ -92,7 +89,7 @@ class TaskManager {
 
         this.log = logContext.logger(getClass());
 
-        this.streamsKafkaClient = StreamsKafkaClient.create(taskCreator.config.originals());
+        this.streamsKafkaClient = streamsKafkaClient;
     }
 
     /**
@@ -106,8 +103,8 @@ class TaskManager {
         changelogReader.reset();
         // do this first as we may have suspended standby tasks that
         // will become active or vice versa
-        standby.closeNonAssignedSuspendedTasks(standbyTasks);
-        active.closeNonAssignedSuspendedTasks(activeTasks);
+        standby.closeNonAssignedSuspendedTasks(assignedStandbyTasks);
+        active.closeNonAssignedSuspendedTasks(assignedActiveTasks);
         addStreamTasks(assignment);
         addStandbyTasks();
         final Set<TopicPartition> partitions = active.uninitializedPartitions();
@@ -119,13 +116,13 @@ class TaskManager {
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     private void addStreamTasks(final Collection<TopicPartition> assignment) {
-        if (activeTasks.isEmpty()) {
+        if (assignedActiveTasks.isEmpty()) {
             return;
         }
         final Map<TaskId, Set<TopicPartition>> newTasks = new HashMap<>();
         // collect newly assigned tasks and reopen re-assigned tasks
-        log.debug("Adding assigned tasks as active: {}", activeTasks);
-        for (final Map.Entry<TaskId, Set<TopicPartition>> entry : activeTasks.entrySet()) {
+        log.debug("Adding assigned tasks as active: {}", assignedActiveTasks);
+        for (final Map.Entry<TaskId, Set<TopicPartition>> entry : assignedActiveTasks.entrySet()) {
             final TaskId taskId = entry.getKey();
             final Set<TopicPartition> partitions = entry.getValue();
 
@@ -161,7 +158,7 @@ class TaskManager {
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     private void addStandbyTasks() {
-        final Map<TaskId, Set<TopicPartition>> assignedStandbyTasks = standbyTasks;
+        final Map<TaskId, Set<TopicPartition>> assignedStandbyTasks = this.assignedStandbyTasks;
         if (assignedStandbyTasks.isEmpty()) {
             return;
         }
@@ -279,6 +276,8 @@ class TaskManager {
         taskCreator.close();
         standbyTaskCreator.close();
 
+        streamsKafkaClient.close();
+
         final RuntimeException fatalException = firstException.get();
         if (fatalException != null) {
             throw fatalException;
@@ -370,55 +369,16 @@ class TaskManager {
 
     void setPartitionsByHostState(final Map<HostInfo, Set<TopicPartition>> partitionsByHostState) {
         this.partitionsByHostState = partitionsByHostState;
-    }
-
-    void refreshAssignmentMetadata(AssignmentInfo info, List<TopicPartition> partitions) {
-        this.standbyTasks = info.standbyTasks;
-        this.activeTasks = new HashMap<>();
-
-        // the number of assigned partitions should be the same as number of active tasks, which
-        // could be duplicated if one task has more than one assigned partitions
-        if (partitions.size() != info.activeTasks.size()) {
-            throw new TaskAssignmentException(
-                    String.format("%sNumber of assigned partitions %d is not equal to the number of active taskIds %d" +
-                            ", assignmentInfo=%s", logPrefix, partitions.size(), info.activeTasks.size(), info.toString())
-            );
-        }
-
-        for (int i = 0; i < partitions.size(); i++) {
-            TopicPartition partition = partitions.get(i);
-            TaskId id = info.activeTasks.get(i);
-
-            Set<TopicPartition> assignedPartitions = activeTasks.get(id);
-            if (assignedPartitions == null) {
-                assignedPartitions = new HashSet<>();
-                activeTasks.put(id, assignedPartitions);
-            }
-            assignedPartitions.add(partition);
-        }
-
-        this.partitionsByHostState = info.partitionsByHost;
-
-        final Collection<Set<TopicPartition>> values = partitionsByHostState.values();
-        final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
-        for (Set<TopicPartition> value : values) {
-            for (TopicPartition topicPartition : value) {
-                topicToPartitionInfo.put(topicPartition, new PartitionInfo(topicPartition.topic(),
-                        topicPartition.partition(),
-                        null,
-                        new Node[0],
-                        new Node[0]));
-            }
-        }
-
-        this.cluster = Cluster.empty().withPartitions(topicToPartitionInfo);
-
         this.streamsMetadataState.onChange(partitionsByHostState, cluster);
-
-        checkForNewTopicAssignments(partitions);
     }
 
-    private void checkForNewTopicAssignments(List<TopicPartition> partitions) {
+    void setAssignmentMetadata(final Map<TaskId, Set<TopicPartition>> activeTasks,
+                               final Map<TaskId, Set<TopicPartition>> standbyTasks) {
+        this.assignedActiveTasks = activeTasks;
+        this.assignedStandbyTasks = standbyTasks;
+    }
+
+    void checkForNewTopicAssignments(List<TopicPartition> partitions) {
         if (builder().sourceTopicPattern() != null) {
             final Set<String> assignedTopics = new HashSet<>();
             for (final TopicPartition topicPartition : partitions) {
@@ -498,11 +458,11 @@ class TaskManager {
         return cluster;
     }
 
-    Map<TaskId, Set<TopicPartition>> activeTasksWithAssignedPartitions() {
-        return activeTasks;
+    Map<TaskId, Set<TopicPartition>> assignedActiveTasks() {
+        return assignedActiveTasks;
     }
 
-    Map<TaskId, Set<TopicPartition>> standbyTasksWithAssignedPartitions() {
-        return standbyTasks;
+    Map<TaskId, Set<TopicPartition>> assignedStandbyTasks() {
+        return assignedStandbyTasks;
     }
 }

@@ -637,10 +637,6 @@ public class StreamsConfig extends AbstractConfig {
         eosEnabled = EXACTLY_ONCE.equals(getString(PROCESSING_GUARANTEE_CONFIG));
     }
 
-    public Object getObject(final String key) {
-        return get(key);
-    }
-
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
         final Map<String, Object> configUpdates =
@@ -724,6 +720,7 @@ public class StreamsConfig extends AbstractConfig {
         final Map<String, Object> consumerProps = getCommonConsumerConfigs();
 
         // add client id with stream client id prefix, and group id
+        consumerProps.put(APPLICATION_ID_CONFIG, groupId);
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         consumerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-consumer");
 

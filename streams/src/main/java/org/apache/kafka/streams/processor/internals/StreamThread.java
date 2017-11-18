@@ -613,6 +613,8 @@ public class StreamThread extends Thread {
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
 
+        final StreamsKafkaClient streamsKafkaClient = StreamsKafkaClient.create(config.originals());
+
         final AbstractTaskCreator<StreamTask> activeTaskCreator = new TaskCreator(builder,
                 config,
                 streamsMetrics,
@@ -640,6 +642,7 @@ public class StreamThread extends Thread {
                 streamsMetadataState,
                 activeTaskCreator,
                 standbyTaskCreator,
+                streamsKafkaClient,
                 new AssignedStreamsTasks(logContext),
                 new AssignedStandbyTasks(logContext));
 
@@ -695,7 +698,7 @@ public class StreamThread extends Thread {
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
 
         if (!builder.latestResetTopicsPattern().pattern().equals("") || !builder.earliestResetTopicsPattern().pattern().equals("")) {
-            originalReset = config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
+            originalReset = (String) config.originals().get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
         }
 
         updateThreadMetadata(null, null);

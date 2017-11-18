@@ -197,11 +197,11 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         final StreamsConfig streamsConfig = new StreamsConfig(configs);
 
         // Setting the logger with the passed in client thread name
-        this.logPrefix = String.format("stream-thread [%s] ", configs.get(CommonClientConfigs.CLIENT_ID_CONFIG));
+        this.logPrefix = String.format("stream-thread [%s] ", streamsConfig.getString(CommonClientConfigs.CLIENT_ID_CONFIG));
         final LogContext logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
 
-        Object o = streamsConfig.getObject(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR);
+        Object o = configs.get(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR);
         if (o == null) {
             KafkaException ex = new KafkaException("TaskManager is not specified");
             log.error(ex.getMessage(), ex);
@@ -220,7 +220,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
         this.partitionGrouper = streamsConfig.getConfiguredInstance(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
 
-        String userEndPoint = (String) configs.get(StreamsConfig.APPLICATION_SERVER_CONFIG);
+        String userEndPoint = streamsConfig.getString(StreamsConfig.APPLICATION_SERVER_CONFIG);
         if (userEndPoint != null && !userEndPoint.isEmpty()) {
             try {
                 String host = getHost(userEndPoint);
@@ -575,7 +575,45 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
         AssignmentInfo info = AssignmentInfo.decode(assignment.userData());
 
-        taskManager.refreshAssignmentMetadata(info, partitions);
+        Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+
+        // the number of assigned partitions should be the same as number of active tasks, which
+        // could be duplicated if one task has more than one assigned partitions
+        if (partitions.size() != info.activeTasks.size()) {
+            throw new TaskAssignmentException(
+                    String.format("%sNumber of assigned partitions %d is not equal to the number of active taskIds %d" +
+                            ", assignmentInfo=%s", logPrefix, partitions.size(), info.activeTasks.size(), info.toString())
+            );
+        }
+
+        for (int i = 0; i < partitions.size(); i++) {
+            TopicPartition partition = partitions.get(i);
+            TaskId id = info.activeTasks.get(i);
+
+            Set<TopicPartition> assignedPartitions = activeTasks.get(id);
+            if (assignedPartitions == null) {
+                assignedPartitions = new HashSet<>();
+                activeTasks.put(id, assignedPartitions);
+            }
+            assignedPartitions.add(partition);
+        }
+
+        final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
+        for (Set<TopicPartition> value : info.partitionsByHost.values()) {
+            for (TopicPartition topicPartition : value) {
+                topicToPartitionInfo.put(topicPartition, new PartitionInfo(topicPartition.topic(),
+                        topicPartition.partition(),
+                        null,
+                        new Node[0],
+                        new Node[0]));
+            }
+        }
+
+        taskManager.setPartitionsByHostState(info.partitionsByHost);
+        taskManager.setAssignmentMetadata(activeTasks, info.standbyTasks);
+        taskManager.setClusterMetadata(Cluster.empty().withPartitions(topicToPartitionInfo));
+
+        taskManager.checkForNewTopicAssignments(partitions);
     }
 
     /**
@@ -713,17 +751,17 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     }
 
     Map<TaskId, Set<TopicPartition>> activeTasks() {
-        if (taskManager.activeTasksWithAssignedPartitions() == null) {
+        if (taskManager.assignedActiveTasks() == null) {
             return Collections.emptyMap();
         }
-        return Collections.unmodifiableMap(taskManager.activeTasksWithAssignedPartitions());
+        return Collections.unmodifiableMap(taskManager.assignedActiveTasks());
     }
 
     Map<TaskId, Set<TopicPartition>> standbyTasks() {
-        if (taskManager.standbyTasksWithAssignedPartitions() == null) {
+        if (taskManager.assignedStandbyTasks() == null) {
             return Collections.emptyMap();
         }
-        return Collections.unmodifiableMap(taskManager.standbyTasksWithAssignedPartitions());
+        return Collections.unmodifiableMap(taskManager.assignedStandbyTasks());
     }
 
     void setInternalTopicManager(InternalTopicManager internalTopicManager) {

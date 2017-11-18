@@ -22,9 +22,9 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
-
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.state.HostInfo;
+
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
@@ -37,6 +37,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -75,6 +76,8 @@ public class TaskManagerTest {
     @Mock(type = MockType.NICE)
     private StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator;
     @Mock(type = MockType.NICE)
+    private StreamsKafkaClient streamsKafkaClient;
+    @Mock(type = MockType.NICE)
     private StreamTask streamTask;
     @Mock(type = MockType.NICE)
     private StandbyTask standbyTask;
@@ -103,8 +106,10 @@ public class TaskManagerTest {
                                       streamsMetadataState,
                                       activeTaskCreator,
                                       standbyTaskCreator,
+                                      streamsKafkaClient,
                                       active,
                                       standby);
+        taskManager.setConsumer(consumer);
     }
 
     private void replay() {
@@ -124,6 +129,7 @@ public class TaskManagerTest {
         expectLastCall();
         replay();
 
+        taskManager.setAssignmentMetadata(taskId0Assignment, Collections.<TaskId, Set<TopicPartition>>emptyMap());
         taskManager.createTasks(taskId0Partitions);
 
         verify(active);
@@ -136,6 +142,7 @@ public class TaskManagerTest {
         expectLastCall();
         replay();
 
+        taskManager.setAssignmentMetadata(taskId0Assignment, Collections.<TaskId, Set<TopicPartition>>emptyMap());
         taskManager.createTasks(taskId0Partitions);
 
         verify(active);
@@ -148,6 +155,7 @@ public class TaskManagerTest {
         EasyMock.expectLastCall();
         replay();
 
+        taskManager.setAssignmentMetadata(taskId0Assignment, Collections.<TaskId, Set<TopicPartition>>emptyMap());
         taskManager.createTasks(taskId0Partitions);
         verify(changeLogReader);
     }
@@ -159,6 +167,7 @@ public class TaskManagerTest {
         active.addNewTask(EasyMock.same(streamTask));
         replay();
 
+        taskManager.setAssignmentMetadata(taskId0Assignment, Collections.<TaskId, Set<TopicPartition>>emptyMap());
         taskManager.createTasks(taskId0Partitions);
 
         verify(activeTaskCreator, active);
@@ -170,6 +179,7 @@ public class TaskManagerTest {
         EasyMock.expect(active.maybeResumeSuspendedTask(taskId0, taskId0Partitions)).andReturn(true);
         replay();
 
+        taskManager.setAssignmentMetadata(taskId0Assignment, Collections.<TaskId, Set<TopicPartition>>emptyMap());
         taskManager.createTasks(taskId0Partitions);
 
         // should be no calls to activeTaskCreator and no calls to active.addNewTasks(..)
@@ -183,6 +193,7 @@ public class TaskManagerTest {
         standby.addNewTask(EasyMock.same(standbyTask));
         replay();
 
+        taskManager.setAssignmentMetadata(Collections.<TaskId, Set<TopicPartition>>emptyMap(), taskId0Assignment);
         taskManager.createTasks(taskId0Partitions);
 
         verify(standbyTaskCreator, active);
@@ -194,6 +205,7 @@ public class TaskManagerTest {
         EasyMock.expect(standby.maybeResumeSuspendedTask(taskId0, taskId0Partitions)).andReturn(true);
         replay();
 
+        taskManager.setAssignmentMetadata(Collections.<TaskId, Set<TopicPartition>>emptyMap(), taskId0Assignment);
         taskManager.createTasks(taskId0Partitions);
 
         // should be no calls to standbyTaskCreator and no calls to standby.addNewTasks(..)
@@ -209,6 +221,7 @@ public class TaskManagerTest {
         EasyMock.expectLastCall();
         replay();
 
+        taskManager.setAssignmentMetadata(taskId0Assignment, Collections.<TaskId, Set<TopicPartition>>emptyMap());
         taskManager.createTasks(taskId0Partitions);
         verify(consumer);
     }
@@ -468,42 +481,38 @@ public class TaskManagerTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldUpdateActiveTasksFromPartitionAssignment() {
-        final List<TaskId> activeTasks = new ArrayList<>();
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
-
-        final AssignmentInfo assignmentInfo = new AssignmentInfo(activeTasks,
-                Collections.<TaskId, Set<TopicPartition>>emptyMap(),
-                Collections.<HostInfo, Set<TopicPartition>>emptyMap());
 
         assertTrue(taskManager.activeTasks().isEmpty());
 
         // assign single partition
         assignedPartitions.add(t1p1);
-        activeTasks.add(task1);
+        activeTasks.put(task1, Collections.<TopicPartition>singleton(t1p1));
 
-        taskManager.refreshAssignmentMetadata(assignmentInfo, assignedPartitions);
+        taskManager.setAssignmentMetadata(activeTasks, Collections.<TaskId, Set<TopicPartition>>emptyMap());
         taskManager.createTasks(assignedPartitions);
 
         assertEquals(1, taskManager.activeTasks().size());
         assertEquals(Collections.singletonList(t1p1), taskManager.activeTasks().get(task1).partitions());
 
-        // assign another single partition
+        // assign single partition
         assignedPartitions.add(t1p2);
-        activeTasks.add(task2);
+        activeTasks.put(task2, Collections.singleton(t1p2));
 
-        taskManager.refreshAssignmentMetadata(assignmentInfo, assignedPartitions);
+        taskManager.setAssignmentMetadata(activeTasks, Collections.<TaskId, Set<TopicPartition>>emptyMap());
         taskManager.createTasks(assignedPartitions);
 
         assertEquals(2, taskManager.activeTasks().size());
         assertEquals(Collections.singletonList(t1p2), taskManager.activeTasks().get(task2).partitions());
 
-        // assign single partition from another topic
+        // assign some partitions from another topic
         assignedPartitions.add(t2p1);
         assignedPartitions.add(t2p2);
-        activeTasks.add(task1);
-        activeTasks.add(task2);
+        activeTasks.put(task1, new HashSet<>(Arrays.asList(t1p1, t2p1)));
+        activeTasks.put(task2, new HashSet<>(Arrays.asList(t1p1, t2p1)));
 
-        taskManager.refreshAssignmentMetadata(assignmentInfo, assignedPartitions);
+        taskManager.setAssignmentMetadata(activeTasks, Collections.<TaskId, Set<TopicPartition>>emptyMap());
         taskManager.createTasks(assignedPartitions);
 
         assertEquals(2, taskManager.activeTasks().size());

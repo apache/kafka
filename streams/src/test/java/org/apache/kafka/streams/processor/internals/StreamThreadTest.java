@@ -37,8 +37,6 @@ import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilderTest;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.ThreadMetadata;
-import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
-import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.MockTimestampExtractor;
@@ -344,19 +342,16 @@ public class StreamThreadTest {
         thread.setState(StreamThread.State.RUNNING);
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
 
-        final List<TaskId> activeTasks = new ArrayList<>();
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
-        final AssignmentInfo assignmentInfo = new AssignmentInfo(activeTasks,
-                Collections.<TaskId, Set<TopicPartition>>emptyMap(),
-                Collections.<HostInfo, Set<TopicPartition>>emptyMap());
 
         // assign single partition
         assignedPartitions.add(t1p1);
         assignedPartitions.add(t1p2);
-        activeTasks.add(task1);
-        activeTasks.add(task2);
+        activeTasks.put(task1, Collections.singleton(t1p1));
+        activeTasks.put(task2, Collections.singleton(t1p2));
 
-        thread.taskManager().refreshAssignmentMetadata(assignmentInfo, assignedPartitions);
+        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.<TaskId, Set<TopicPartition>>emptyMap());
         thread.taskManager().createTasks(assignedPartitions);
 
         thread.rebalanceListener.onPartitionsAssigned(new HashSet<>(assignedPartitions));
@@ -379,19 +374,16 @@ public class StreamThreadTest {
         thread.setState(StreamThread.State.RUNNING);
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
 
-        final List<TaskId> activeTasks = new ArrayList<>();
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
-        final AssignmentInfo assignmentInfo = new AssignmentInfo(activeTasks,
-                Collections.<TaskId, Set<TopicPartition>>emptyMap(),
-                Collections.<HostInfo, Set<TopicPartition>>emptyMap());
 
         // assign single partition
         assignedPartitions.add(t1p1);
         assignedPartitions.add(t1p2);
-        activeTasks.add(task1);
-        activeTasks.add(task2);
+        activeTasks.put(task1, Collections.singleton(t1p1));
+        activeTasks.put(task2, Collections.singleton(t1p2));
 
-        thread.taskManager().refreshAssignmentMetadata(assignmentInfo, assignedPartitions);
+        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.<TaskId, Set<TopicPartition>>emptyMap());
         thread.taskManager().createTasks(assignedPartitions);
 
         thread.rebalanceListener.onPartitionsAssigned(new HashSet<>(assignedPartitions));
@@ -416,24 +408,19 @@ public class StreamThreadTest {
         thread.setState(StreamThread.State.RUNNING);
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
 
-        final List<TaskId> activeTasks = new ArrayList<>();
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
-        final AssignmentInfo assignmentInfo = new AssignmentInfo(activeTasks,
-                Collections.<TaskId, Set<TopicPartition>>emptyMap(),
-                Collections.<HostInfo, Set<TopicPartition>>emptyMap());
 
         // assign single partition
         assignedPartitions.add(t1p1);
         assignedPartitions.add(t1p2);
-        activeTasks.add(task1);
-        activeTasks.add(task2);
+        activeTasks.put(task1, Collections.singleton(t1p1));
+        activeTasks.put(task2, Collections.singleton(t1p2));
 
-        thread.taskManager().refreshAssignmentMetadata(assignmentInfo, assignedPartitions);
+        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.<TaskId, Set<TopicPartition>>emptyMap());
         thread.taskManager().createTasks(assignedPartitions);
 
-        thread.rebalanceListener.onPartitionsAssigned(new HashSet<>(assignedPartitions));
-
-        thread.rebalanceListener.onPartitionsAssigned(Collections.singleton(new TopicPartition("someTopic", 0)));
+        thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
         thread.shutdown();
         thread.run();
@@ -481,15 +468,15 @@ public class StreamThreadTest {
         thread.setState(StreamThread.State.RUNNING);
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
 
-        final List<TopicPartition> assignedPartitions = Collections.<TopicPartition>emptyList();
-        final AssignmentInfo assignmentInfo = new AssignmentInfo(Collections.<TaskId>emptyList(),
-                Collections.singletonMap(task1, Utils.mkSet(t1p1, t1p2)),
-                Collections.<HostInfo, Set<TopicPartition>>emptyMap());
+        final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
 
-        thread.taskManager().refreshAssignmentMetadata(assignmentInfo, assignedPartitions);
-        thread.taskManager().createTasks(assignedPartitions);
+        // assign single partition
+        standbyTasks.put(task1, Collections.singleton(t1p1));
 
-        thread.rebalanceListener.onPartitionsAssigned(new HashSet<>(assignedPartitions));
+        thread.taskManager().setAssignmentMetadata(Collections.<TaskId, Set<TopicPartition>>emptyMap(), standbyTasks);
+        thread.taskManager().createTasks(Collections.<TopicPartition>emptyList());
+
+        thread.rebalanceListener.onPartitionsAssigned(Collections.<TopicPartition>emptyList());
     }
 
     @Test
@@ -505,20 +492,17 @@ public class StreamThreadTest {
         thread.setState(StreamThread.State.RUNNING);
         thread.rebalanceListener.onPartitionsRevoked(null);
 
-        final List<TaskId> activeTasks = new ArrayList<>();
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
-        final AssignmentInfo assignmentInfo = new AssignmentInfo(activeTasks,
-                Collections.<TaskId, Set<TopicPartition>>emptyMap(),
-                Collections.<HostInfo, Set<TopicPartition>>emptyMap());
 
         // assign single partition
         assignedPartitions.add(t1p1);
-        activeTasks.add(task1);
+        activeTasks.put(task1, Collections.singleton(t1p1));
 
-        thread.taskManager().refreshAssignmentMetadata(assignmentInfo, assignedPartitions);
+        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.<TaskId, Set<TopicPartition>>emptyMap());
         thread.taskManager().createTasks(assignedPartitions);
 
-        thread.rebalanceListener.onPartitionsAssigned(new HashSet<>(assignedPartitions));
+        thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
         thread.runOnce(-1);
         assertThat(thread.tasks().size(), equalTo(1));
@@ -574,20 +558,17 @@ public class StreamThreadTest {
         thread.setState(StreamThread.State.RUNNING);
         thread.rebalanceListener.onPartitionsRevoked(null);
 
-        final List<TaskId> activeTasks = new ArrayList<>();
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
-        final AssignmentInfo assignmentInfo = new AssignmentInfo(activeTasks,
-                Collections.<TaskId, Set<TopicPartition>>emptyMap(),
-                Collections.<HostInfo, Set<TopicPartition>>emptyMap());
 
         // assign single partition
         assignedPartitions.add(t1p1);
-        activeTasks.add(task1);
+        activeTasks.put(task1, Collections.singleton(t1p1));
 
-        thread.taskManager().refreshAssignmentMetadata(assignmentInfo, assignedPartitions);
+        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.<TaskId, Set<TopicPartition>>emptyMap());
         thread.taskManager().createTasks(assignedPartitions);
 
-        thread.rebalanceListener.onPartitionsAssigned(new HashSet<>(assignedPartitions));
+        thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
         thread.runOnce(-1);
 
@@ -637,20 +618,17 @@ public class StreamThreadTest {
 
         thread.rebalanceListener.onPartitionsRevoked(null);
 
-        final List<TaskId> activeTasks = new ArrayList<>();
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
-        final AssignmentInfo assignmentInfo = new AssignmentInfo(activeTasks,
-                Collections.<TaskId, Set<TopicPartition>>emptyMap(),
-                Collections.<HostInfo, Set<TopicPartition>>emptyMap());
 
         // assign single partition
         assignedPartitions.add(t1p1);
-        activeTasks.add(task1);
+        activeTasks.put(task1, Collections.singleton(t1p1));
 
-        thread.taskManager().refreshAssignmentMetadata(assignmentInfo, assignedPartitions);
+        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.<TaskId, Set<TopicPartition>>emptyMap());
         thread.taskManager().createTasks(assignedPartitions);
 
-        thread.rebalanceListener.onPartitionsAssigned(new HashSet<>(assignedPartitions));
+        thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
         thread.runOnce(-1);
 
@@ -682,17 +660,15 @@ public class StreamThreadTest {
 
         thread.rebalanceListener.onPartitionsRevoked(null);
 
-        final List<TopicPartition> assignedPartitions = new ArrayList<>();
-        final AssignmentInfo assignmentInfo = new AssignmentInfo(Collections.<TaskId>emptyList(),
-                Collections.singletonMap(task1, Utils.mkSet(t1p1)),
-                Collections.<HostInfo, Set<TopicPartition>>emptyMap());
+        final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
 
         // assign single partition
+        standbyTasks.put(task1, Collections.singleton(t1p1));
 
-        thread.taskManager().refreshAssignmentMetadata(assignmentInfo, assignedPartitions);
-        thread.taskManager().createTasks(assignedPartitions);
+        thread.taskManager().setAssignmentMetadata(Collections.<TaskId, Set<TopicPartition>>emptyMap(), standbyTasks);
+        thread.taskManager().createTasks(Collections.<TopicPartition>emptyList());
 
-        thread.rebalanceListener.onPartitionsAssigned(new HashSet<>(assignedPartitions));
+        thread.rebalanceListener.onPartitionsAssigned(Collections.<TopicPartition>emptyList());
 
         thread.runOnce(-1);
 
@@ -747,21 +723,18 @@ public class StreamThreadTest {
         thread.rebalanceListener.onPartitionsRevoked(assignedPartitions);
         assertThreadMetadataHasEmptyTasksWithState(thread.threadMetadata(), StreamThread.State.PARTITIONS_REVOKED);
 
-        final List<TaskId> activeTasks = new ArrayList<>();
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
-        final AssignmentInfo assignmentInfo = new AssignmentInfo(activeTasks,
-                standbyTasks,
-                Collections.<HostInfo, Set<TopicPartition>>emptyMap());
 
         // assign single partition
         assignedPartitions.add(t1p1);
-        activeTasks.add(task1);
+        activeTasks.put(task1, Collections.singleton(t1p1));
         standbyTasks.put(task2, Utils.mkSet(t1p2));
 
-        thread.taskManager().refreshAssignmentMetadata(assignmentInfo, assignedPartitions);
+        thread.taskManager().setAssignmentMetadata(activeTasks, standbyTasks);
         thread.taskManager().createTasks(assignedPartitions);
 
-        thread.rebalanceListener.onPartitionsAssigned(new HashSet<>(assignedPartitions));
+        thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
         clientSupplier.consumer.assign(Utils.mkSet(t1p2));
         thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
