@@ -456,4 +456,28 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
         Map("users" -> Seq("<default>", sanitizedPrincipal)) ++ defaultUserMap ++ userMap,
         Seq("<default>/clients/client-3", sanitizedPrincipal + "/clients/client-2"))
   }
+
+  @Test
+  def shouldDeleteAllConfigs(): Unit = {
+    val deleteOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
+      "--entity-name", "1",
+      "--entity-type", "brokers",
+      "--alter",
+      "--delete-all-configs"))
+
+    val configChange = new TestAdminUtils {
+      override def fetchEntityConfig(zkUtils: ZkUtils, entityType: String, entityName: String): Properties = {
+        val properties: Properties = new Properties
+        properties.put("a", "b")
+        properties.put("c", "d")
+        properties.put("e", "f")
+        properties
+      }
+
+      override def changeBrokerConfig(zkUtils: ZkUtils, brokerIds: Seq[Int], configChange: Properties): Unit = {
+        assertEquals(0, configChange.size())
+      }
+    }
+    ConfigCommand.alterConfig(null, deleteOpts, configChange)
+  }
 }

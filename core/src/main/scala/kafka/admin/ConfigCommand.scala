@@ -56,7 +56,7 @@ object ConfigCommand extends Config {
 
     val opts = new ConfigCommandOptions(args)
 
-    if(args.length == 0)
+    if (args.isEmpty)
       CommandLineUtils.printUsageAndDie(opts.parser, "Add/Remove entity config for a topic, client, user or broker")
 
     opts.checkArgs()
@@ -83,6 +83,7 @@ object ConfigCommand extends Config {
   private[admin] def alterConfig(zkUtils: ZkUtils, opts: ConfigCommandOptions, utils: AdminUtilities = AdminUtils) {
     val configsToBeAdded = parseConfigsToBeAdded(opts)
     val configsToBeDeleted = parseConfigsToBeDeleted(opts)
+    val deleteAllConfigs = opts.options.has(opts.deleteAllConfigs)
     val entity = parseEntity(opts)
     val entityType = entity.root.entityType
     val entityName = entity.fullSanitizedName
@@ -100,6 +101,9 @@ object ConfigCommand extends Config {
 
     configs ++= configsToBeAdded
     configsToBeDeleted.foreach(configs.remove(_))
+
+    if (deleteAllConfigs)
+      configs.clear()
 
     utils.changeConfigs(zkUtils, entityType, entityName, configs)
 
@@ -284,12 +288,12 @@ object ConfigCommand extends Config {
             .withRequiredArg
             .describedAs("urls")
             .ofType(classOf[String])
-    val alterOpt = parser.accepts("alter", "Alter the configuration for the entity.")
-    val describeOpt = parser.accepts("describe", "List configs for the given entity.")
-    val entityType = parser.accepts("entity-type", "Type of entity (topics/clients/users/brokers)")
+    val alterOpt = parser.accepts("alter", "Alter the configuration for the given entity.")
+    val describeOpt = parser.accepts("describe", "List configurations for the given entity.")
+    val entityType = parser.accepts("entity-type", "Type of entity (topics/clients/users/brokers).")
             .withRequiredArg
             .ofType(classOf[String])
-    val entityName = parser.accepts("entity-name", "Name of entity (topic name/client id/user principal name/broker id)")
+    val entityName = parser.accepts("entity-name", "Name of entity (topic name/client id/user principal name/broker id).")
             .withRequiredArg
             .ofType(classOf[String])
     val entityDefault = parser.accepts("entity-default", "Default entity name for clients/users (applies to corresponding entity type in command line)")
@@ -303,28 +307,29 @@ object ConfigCommand extends Config {
             s"Entity types '${ConfigType.User}' and '${ConfigType.Client}' may be specified together to update config for clients of a specific user.")
             .withRequiredArg
             .ofType(classOf[String])
-    val deleteConfig = parser.accepts("delete-config", "config keys to remove 'k1,k2'")
+    val deleteConfig = parser.accepts("delete-config", "Configuration keys to remove for the given entity: 'k1,k2'.")
             .withRequiredArg
             .ofType(classOf[String])
             .withValuesSeparatedBy(',')
+    val deleteAllConfigs = parser.accepts("delete-all-configs", "Delete all configurations for the given entity.")
     val helpOpt = parser.accepts("help", "Print usage information.")
-    val forceOpt = parser.accepts("force", "Suppress console prompts")
+    val forceOpt = parser.accepts("force", "Suppress console prompts.")
     val options = parser.parse(args : _*)
 
-    val allOpts: Set[OptionSpec[_]] = Set(alterOpt, describeOpt, entityType, entityName, addConfig, deleteConfig, helpOpt)
+    val allOpts: Set[OptionSpec[_]] = Set(alterOpt, describeOpt, entityType, entityName, addConfig, deleteConfig, helpOpt, deleteAllConfigs)
 
     def checkArgs() {
       // should have exactly one action
       val actions = Seq(alterOpt, describeOpt).count(options.has _)
-      if(actions != 1)
+      if (actions != 1)
         CommandLineUtils.printUsageAndDie(parser, "Command must include exactly one action: --describe, --alter")
 
       // check required args
       CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt, entityType)
       CommandLineUtils.checkInvalidArgs(parser, options, alterOpt, Set(describeOpt))
-      CommandLineUtils.checkInvalidArgs(parser, options, describeOpt, Set(alterOpt, addConfig, deleteConfig))
+      CommandLineUtils.checkInvalidArgs(parser, options, describeOpt, Set(alterOpt, addConfig, deleteConfig, deleteAllConfigs))
       val entityTypeVals = options.valuesOf(entityType).asScala
-      if(options.has(alterOpt)) {
+      if (options.has(alterOpt)) {
         if (entityTypeVals.contains(ConfigType.User) || entityTypeVals.contains(ConfigType.Client)) {
           if (!options.has(entityName) && !options.has(entityDefault))
             throw new IllegalArgumentException("--entity-name or --entity-default must be specified with --alter of users/clients")
@@ -333,8 +338,9 @@ object ConfigCommand extends Config {
 
         val isAddConfigPresent: Boolean = options.has(addConfig)
         val isDeleteConfigPresent: Boolean = options.has(deleteConfig)
-        if(! isAddConfigPresent && ! isDeleteConfigPresent)
-          throw new IllegalArgumentException("At least one of --add-config or --delete-config must be specified with --alter")
+        val isDeleteAllConfigsPresent: Boolean = options.has(deleteAllConfigs)
+        if (! isAddConfigPresent && ! isDeleteConfigPresent && ! isDeleteAllConfigsPresent)
+          throw new IllegalArgumentException("At least one of --add-config, --delete-config or --delete-all-configs must be specified with --alter")
       }
       entityTypeVals.foreach(entityTypeVal =>
         if (!ConfigType.all.contains(entityTypeVal))
