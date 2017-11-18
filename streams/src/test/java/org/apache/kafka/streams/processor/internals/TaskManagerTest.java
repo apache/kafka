@@ -484,6 +484,8 @@ public class TaskManagerTest {
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
 
+        taskManager.setAssignmentMetadata(activeTasks, Collections.<TaskId, Set<TopicPartition>>emptyMap());
+        taskManager.createTasks(assignedPartitions);
         assertTrue(taskManager.activeTasks().isEmpty());
 
         // assign single partition
@@ -541,9 +543,8 @@ public class TaskManagerTest {
 
     }
 
-    @SuppressWarnings("unchecked")
     private void mockSingleActiveTask() {
-        expect(activeTaskCreator.createTasks(EasyMock.anyObject(Consumer.class),
+        expect(activeTaskCreator.createTasks(EasyMock.<Consumer<byte[], byte[]>>anyObject(),
                                                   EasyMock.eq(taskId0Assignment)))
                 .andReturn(Collections.singletonList(streamTask));
 
