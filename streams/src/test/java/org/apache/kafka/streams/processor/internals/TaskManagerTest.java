@@ -22,8 +22,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
-import org.apache.kafka.streams.state.HostInfo;
 
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
@@ -33,13 +31,11 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -90,11 +86,14 @@ public class TaskManagerTest {
 
     private final TopicPartition t1p1 = new TopicPartition("topic1", 1);
     private final TopicPartition t1p2 = new TopicPartition("topic1", 2);
+    private final TopicPartition t1p3 = new TopicPartition("topic1", 3);
     private final TopicPartition t2p1 = new TopicPartition("topic2", 1);
     private final TopicPartition t2p2 = new TopicPartition("topic2", 2);
+    private final TopicPartition t2p3 = new TopicPartition("topic2", 3);
 
     private final TaskId task1 = new TaskId(0, 1);
     private final TaskId task2 = new TaskId(0, 2);
+    private final TaskId task3 = new TaskId(0, 3);
 
 
     @Before
@@ -480,46 +479,49 @@ public class TaskManagerTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldUpdateActiveTasksFromPartitionAssignment() {
+    public void shouldUpdateTasksFromPartitionAssignment() {
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
-        final List<TopicPartition> assignedPartitions = new ArrayList<>();
+        final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
 
-        taskManager.setAssignmentMetadata(activeTasks, Collections.<TaskId, Set<TopicPartition>>emptyMap());
-        taskManager.createTasks(assignedPartitions);
-        assertTrue(taskManager.activeTasks().isEmpty());
+        taskManager.setAssignmentMetadata(activeTasks, standbyTasks);
+        assertTrue(taskManager.assignedActiveTasks().isEmpty());
 
-        // assign single partition
-        assignedPartitions.add(t1p1);
+        // assign single partition task
         activeTasks.put(task1, Collections.<TopicPartition>singleton(t1p1));
 
-        taskManager.setAssignmentMetadata(activeTasks, Collections.<TaskId, Set<TopicPartition>>emptyMap());
-        taskManager.createTasks(assignedPartitions);
+        taskManager.setAssignmentMetadata(activeTasks, standbyTasks);
 
-        assertEquals(1, taskManager.activeTasks().size());
-        assertEquals(Collections.singletonList(t1p1), taskManager.activeTasks().get(task1).partitions());
+        assertEquals(1, taskManager.assignedActiveTasks().size());
+        assertEquals(Collections.singleton(t1p1), taskManager.assignedActiveTasks().get(task1));
 
-        // assign single partition
-        assignedPartitions.add(t1p2);
+        // assign another single partition task
         activeTasks.put(task2, Collections.singleton(t1p2));
 
-        taskManager.setAssignmentMetadata(activeTasks, Collections.<TaskId, Set<TopicPartition>>emptyMap());
-        taskManager.createTasks(assignedPartitions);
+        taskManager.setAssignmentMetadata(activeTasks, standbyTasks);
 
-        assertEquals(2, taskManager.activeTasks().size());
-        assertEquals(Collections.singletonList(t1p2), taskManager.activeTasks().get(task2).partitions());
+        assertEquals(2, taskManager.assignedActiveTasks().size());
+        assertEquals(Collections.singleton(t1p2), taskManager.assignedActiveTasks().get(task2));
 
-        // assign some partitions from another topic
-        assignedPartitions.add(t2p1);
-        assignedPartitions.add(t2p2);
+        // assign some partitions from another topic to the existing tasks
         activeTasks.put(task1, new HashSet<>(Arrays.asList(t1p1, t2p1)));
-        activeTasks.put(task2, new HashSet<>(Arrays.asList(t1p1, t2p1)));
+        activeTasks.put(task2, new HashSet<>(Arrays.asList(t1p2, t2p2)));
 
-        taskManager.setAssignmentMetadata(activeTasks, Collections.<TaskId, Set<TopicPartition>>emptyMap());
-        taskManager.createTasks(assignedPartitions);
+        taskManager.setAssignmentMetadata(activeTasks, standbyTasks);
 
-        assertEquals(2, taskManager.activeTasks().size());
-        assertEquals(new HashSet<>(Arrays.asList(t1p1, t2p1)), taskManager.activeTasks().get(task1).partitions());
-        assertEquals(new HashSet<>(Arrays.asList(t1p2, t2p2)), taskManager.activeTasks().get(task2).partitions());
+        assertEquals(2, taskManager.assignedActiveTasks().size());
+        assertEquals(new HashSet<>(Arrays.asList(t1p1, t2p1)), taskManager.assignedActiveTasks().get(task1));
+        assertEquals(new HashSet<>(Arrays.asList(t1p2, t2p2)), taskManager.assignedActiveTasks().get(task2));
+
+        // assign some standby tasks
+        standbyTasks.put(task3, new HashSet<>(Arrays.asList(t1p3, t2p3)));
+        taskManager.setAssignmentMetadata(activeTasks, standbyTasks);
+
+        assertEquals(2, taskManager.assignedActiveTasks().size());
+        assertEquals(new HashSet<>(Arrays.asList(t1p1, t2p1)), taskManager.assignedActiveTasks().get(task1));
+        assertEquals(new HashSet<>(Arrays.asList(t1p2, t2p2)), taskManager.assignedActiveTasks().get(task2));
+        assertEquals(1, taskManager.assignedStandbyTasks().size());
+        assertEquals(new HashSet<>(Arrays.asList(t1p3, t2p3)), taskManager.assignedStandbyTasks().get(task3));
+
     }
 
     private void mockAssignStandbyPartitions(final long offset) {
