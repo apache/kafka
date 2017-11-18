@@ -122,6 +122,7 @@ object TopicCommand extends Logging {
       throw new IllegalArgumentException("Topic %s does not exist on ZK path %s".format(opts.options.valueOf(opts.topicOpt),
           opts.options.valueOf(opts.zkConnectOpt)))
     }
+    CommandLineUtils.checkRequiredArgNotMissing(opts.parser, opts.options, opts.configOpt, opts.deleteConfigOpt, opts.partitionsOpt)
     topics.foreach { topic =>
       val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic)
       if(opts.options.has(opts.configOpt) || opts.options.has(opts.deleteConfigOpt)) {

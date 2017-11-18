@@ -35,6 +35,19 @@ object CommandLineUtils extends Logging {
     }
   }
 
+   /**
+     * Check that at least one option is present
+     */
+   def checkRequiredArgNotMissing(parser: OptionParser, options: OptionSet, required: OptionSpec[_]*) {
+     var areAllArgsMissing = true
+     for (arg <- required) {
+       if (options.has(arg))
+         areAllArgsMissing = false
+     }
+     if (areAllArgsMissing)
+       printUsageAndDie(parser, s"Must specify at least one parameter in ${required.mkString(",")}")
+   }
+
   /**
    * Check that none of the listed options are present
    */
