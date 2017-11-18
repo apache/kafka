@@ -116,7 +116,7 @@ class PartitionStateMachine(config: KafkaConfig,
         doHandleStateChanges(partitions, targetState, partitionLeaderElectionStrategyOpt)
         controllerBrokerRequestBatch.sendRequestsToBrokers(controllerContext.epoch)
       } catch {
-        case e: Throwable => error("Error while moving some partitions to %s state".format(targetState), e)
+        case e: Throwable => error(s"Error while moving some partitions to $targetState state", e)
       }
     }
   }
@@ -417,9 +417,8 @@ class PartitionStateMachine(config: KafkaConfig,
 
   private def logInvalidTransition(partition: TopicPartition, targetState: PartitionState): Unit = {
     val currState = partitionState(partition)
-    val e = new IllegalStateException("Partition %s should be in the %s states before moving to %s state"
-      .format(partition, targetState.validPreviousStates.mkString(","), targetState) + ". Instead it is in %s state"
-      .format(currState))
+    val e = new IllegalStateException(s"Partition $partition should be in the ${targetState.validPreviousStates.mkString(",")}" +
+      s"states before moving to $targetState state. Instead it is in $currState state")
     logFailedStateChange(partition, currState, targetState, e)
   }
 
@@ -429,8 +428,8 @@ class PartitionStateMachine(config: KafkaConfig,
 
   private def logFailedStateChange(partition: TopicPartition, currState: PartitionState, targetState: PartitionState, t: Throwable): Unit = {
     stateChangeLogger.withControllerEpoch(controllerContext.epoch)
-      .error("Controller %d epoch %d failed to change state for partition %s from %s to %s"
-      .format(controllerId, controllerContext.epoch, partition, currState, targetState), t)
+      .error(s"Controller $controllerId epoch ${controllerContext.epoch} failed to change state for partition $partition " +
+        s"from $currState to $targetState", t)
   }
 }
 
