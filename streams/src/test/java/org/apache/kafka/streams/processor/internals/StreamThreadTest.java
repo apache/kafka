@@ -87,7 +87,7 @@ public class StreamThreadTest {
     private InternalTopologyBuilder internalTopologyBuilder;
     private final StreamsConfig config = new StreamsConfig(configProps(false));
     private final String stateDir = TestUtils.tempDirectory().getPath();
-    private final StateDirectory stateDirectory  = new StateDirectory("applicationId", stateDir, mockTime);
+    private final StateDirectory stateDirectory  = new StateDirectory(config, mockTime);
     private StreamsMetadataState streamsMetadataState;
     private final ConsumedInternal<Object, Object> consumed = new ConsumedInternal<>();
 

@@ -115,11 +115,9 @@ public class KafkaStreamsTest {
 
     @Test
     public void testStateThreadClose() throws Exception {
-        final int numThreads = 2;
         final StreamsBuilder builder = new StreamsBuilder();
         // make sure we have the global state thread running too
         builder.globalTable("anyTopic");
-        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numThreads);
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
 
 
@@ -128,7 +126,7 @@ public class KafkaStreamsTest {
         threadsField.setAccessible(true);
         final StreamThread[] threads = (StreamThread[]) threadsField.get(streams);
 
-        assertEquals(numThreads, threads.length);
+        assertEquals(NUM_THREADS, threads.length);
         assertEquals(streams.state(), KafkaStreams.State.CREATED);
 
         streams.start();
@@ -139,7 +137,7 @@ public class KafkaStreamsTest {
             }
         }, 10 * 1000, "Streams never started.");
 
-        for (int i = 0; i < numThreads; i++) {
+        for (int i = 0; i < NUM_THREADS; i++) {
             final StreamThread tmpThread = threads[i];
             tmpThread.shutdown();
             TestUtils.waitForCondition(new TestCondition() {
@@ -172,11 +170,9 @@ public class KafkaStreamsTest {
 
     @Test
     public void testStateGlobalThreadClose() throws Exception {
-        final int numThreads = 2;
         final StreamsBuilder builder = new StreamsBuilder();
         // make sure we have the global state thread running too
         builder.globalTable("anyTopic");
-        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numThreads);
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
 
 
@@ -446,6 +442,7 @@ public class KafkaStreamsTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testToString() {
         streams.start();
@@ -461,7 +458,6 @@ public class KafkaStreamsTest {
     @Test
     public void shouldCleanupOldStateDirs() throws InterruptedException {
         props.setProperty(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG, "1");
-
 
         final String topic = "topic";
         CLUSTER.createTopic(topic);

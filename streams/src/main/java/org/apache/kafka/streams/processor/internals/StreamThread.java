@@ -403,7 +403,6 @@ public class StreamThread extends Thread implements ThreadDataProvider {
 
             return new StreamTask(
                     taskId,
-                    applicationId,
                     partitions,
                     builder.build(taskId.topicGroupId),
                     consumer,
@@ -470,7 +469,6 @@ public class StreamThread extends Thread implements ThreadDataProvider {
 
             if (!topology.stateStores().isEmpty()) {
                 return new StandbyTask(taskId,
-                                       applicationId,
                                        partitions,
                                        topology,
                                        consumer,
