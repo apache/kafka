@@ -73,7 +73,7 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
         
         final List<Segment> searchSpace = segments.allSegments();
         
-        return new TimestampSegmentIterator(searchSpace.iterator(),
+        return new TimeRangeSegmentIterator(searchSpace.iterator(),
                                             keySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE));
     }
     
@@ -81,7 +81,7 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     public KeyValueIterator<Bytes, byte[]> fetchAll(final long timeFrom, final long timeTo) {
         final List<Segment> searchSpace = segments.segments(timeFrom, timeTo);
         
-        return new TimestampSegmentIterator(searchSpace.iterator(),
+        return new TimeRangeSegmentIterator(searchSpace.iterator(),
                                            keySchema.hasNextCondition(null, null, timeFrom, timeTo));
     }
     
@@ -158,8 +158,8 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
         return open;
     }
     
-    private static class TimestampSegmentIterator extends SegmentIterator {
-        public TimestampSegmentIterator(final Iterator<Segment> segments,
+    private static class TimeRangeSegmentIterator extends SegmentIterator { 
+        public TimeRangeSegmentIterator(final Iterator<Segment> segments,
                                         final HasNextCondition hasNextCondition) {
             super(segments, hasNextCondition, null, null);
         }
@@ -172,8 +172,8 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
                 currentSegment = segments.next();
                 try {
                     currentIterator = currentSegment.all();
-                    hasNextCondition.hasNext(currentIterator);
                 } catch (InvalidStateStoreException exc) {
+                    //Just in case that the store was closed
                 }
             }
             return currentIterator != null && hasNext;
