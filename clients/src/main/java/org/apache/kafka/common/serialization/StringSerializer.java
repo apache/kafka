@@ -34,7 +34,7 @@ public class StringSerializer implements Serializer<String> {
         Object encodingValue = configs.get(propertyName);
         if (encodingValue == null)
             encodingValue = configs.get("serializer.encoding");
-        if (encodingValue != null && encodingValue instanceof String)
+        if (encodingValue instanceof String)
             encoding = (String) encodingValue;
     }
 
