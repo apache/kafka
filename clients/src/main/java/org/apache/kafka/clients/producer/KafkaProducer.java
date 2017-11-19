@@ -912,15 +912,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     private void ensureValidRecordSize(int size, V recordValue) {
         if (size > this.maxRequestSize) {
-            byte[] byteArr = (byte[]) recordValue;
-            int iSize = byteArr.length;
-            StringBuffer sb = new StringBuffer();
-            for (int i = 0; i < iSize && iSize < 1024; i++) {
-                sb.append((char) byteArr[i]);
-            }
+            String strMessage = (String) recordValue;
+            String strMessageByte = strMessage.length() > 1024 ? strMessage.substring(0, 1023)
+                    : strMessage.substring(0, strMessage.length());
             throw new RecordTooLargeException("The message is " + size
                     + " bytes when serialized which is larger than the maximum request size you have configured with the "
-                    + ProducerConfig.MAX_REQUEST_SIZE_CONFIG + " configuration. The message was : " + sb.toString()
+                    + ProducerConfig.MAX_REQUEST_SIZE_CONFIG + " configuration. The message was : " + strMessageByte
                     + "...");
         }
         if (size > this.totalMemorySize)
