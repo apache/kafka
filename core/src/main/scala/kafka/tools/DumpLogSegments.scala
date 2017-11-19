@@ -383,11 +383,11 @@ object DumpLogSegments {
             nonConsecutivePairsForLogFilesMap.put(file.getAbsolutePath, nonConsecutivePairsSeq)
           }
           lastOffset = record.offset
-
-          print("offset: " + record.offset + " position: " + validBytes +
+          print("offset: " + record.offset + " baseOffset: " + batch.baseOffset + " lastOffset: " + batch.lastOffset +" baseSequence: "+ batch.baseSequence 
+              +" lastSequence: "+ batch.lastSequence + " producerEpoch: "+ batch.producerEpoch + " partitionLeaderEpoch: " + batch.partitionLeaderEpoch +"position: " + validBytes +
             " " + batch.timestampType + ": " + record.timestamp + " isvalid: " + record.isValid +
-            " keysize: " + record.keySize + " valuesize: " + record.valueSize + " magic: " + batch.magic +
-            " compresscodec: " + batch.compressionType)
+            " keysize: " + record.keySize + " valuesize: " + record.valueSize +" size: "+ batch.sizeInBytes +" magic: " + batch.magic +
+            " compresscodec: " + batch.compressionType + " crc: " + record.checksumOrNull)
 
           if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
             print(" producerId: " + batch.producerId + " producerEpoch: " + batch.producerEpoch + " sequence: " + record.sequence +
