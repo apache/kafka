@@ -797,7 +797,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
             int serializedSize = AbstractRecords.estimateSizeInBytesUpperBound(apiVersions.maxUsableProduceMagic(),
                     compressionType, serializedKey, serializedValue, headers);
-            ensureValidRecordSize(serializedSize);
+            ensureValidRecordSize(serializedSize, record.value());
             long timestamp = record.timestamp() == null ? time.milliseconds() : record.timestamp();
             log.trace("Sending record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
             // producer callback will make sure to call both 'callback' and interceptor callback
@@ -910,17 +910,23 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     /**
      * Validate that the record size isn't too large
      */
-    private void ensureValidRecordSize(int size) {
-        if (size > this.maxRequestSize)
-            throw new RecordTooLargeException("The message is " + size +
-                    " bytes when serialized which is larger than the maximum request size you have configured with the " +
-                    ProducerConfig.MAX_REQUEST_SIZE_CONFIG +
-                    " configuration.");
+    private void ensureValidRecordSize(int size, V recordValue) {
+        if (size > this.maxRequestSize) {
+            byte[] byteArr = (byte[]) recordValue;
+            int iSize = byteArr.length;
+            StringBuffer sb = new StringBuffer();
+            for (int i = 0; i < iSize && iSize < 1024; i++) {
+                sb.append((char) byteArr[i]);
+            }
+            throw new RecordTooLargeException("The message is " + size
+                    + " bytes when serialized which is larger than the maximum request size you have configured with the "
+                    + ProducerConfig.MAX_REQUEST_SIZE_CONFIG + " configuration. The message was : " + sb.toString()
+                    + "...");
+        }
         if (size > this.totalMemorySize)
-            throw new RecordTooLargeException("The message is " + size +
-                    " bytes when serialized which is larger than the total memory buffer you have configured with the " +
-                    ProducerConfig.BUFFER_MEMORY_CONFIG +
-                    " configuration.");
+            throw new RecordTooLargeException("The message is " + size
+                    + " bytes when serialized which is larger than the total memory buffer you have configured with the "
+                    + ProducerConfig.BUFFER_MEMORY_CONFIG + " configuration.");
     }
 
     /**
