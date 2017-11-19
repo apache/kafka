@@ -17,13 +17,14 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
+import java.util.Iterator;
 import java.util.List;
 
 class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
@@ -70,61 +71,18 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     @Override
     public KeyValueIterator<Bytes, byte[]> all() {
         
-        final Segment minSegment = segments.minSegment();
-        final Segment maxSegment = segments.maxSegment();
-        final Bytes minKey = minSegment.first().key;
-        final Bytes maxKey = maxSegment.last().key;
+        final List<Segment> searchSpace = segments.allSegments();
         
-        final long minTimestamp = keySchema.segmentTimestamp(minKey);
-        final long maxTimestamp = keySchema.segmentTimestamp(maxKey);
-        final Bytes keyFrom = WindowStoreUtils.bytesKeyFromBinaryKey(minKey.get());
-        final Bytes keyTo = WindowStoreUtils.bytesKeyFromBinaryKey(maxKey.get());
-        
-        return fetch(keyFrom, keyTo, minTimestamp, maxTimestamp);
+        return new TimestampSegmentIterator(searchSpace.iterator(),
+                                            keySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE));
     }
     
     @Override
     public KeyValueIterator<Bytes, byte[]> fetchAll(final long timeFrom, final long timeTo) {
         final List<Segment> searchSpace = segments.segments(timeFrom, timeTo);
-        final Segment minSegment = searchSpace.get(0);
-        final Segment maxSegment = searchSpace.get(searchSpace.size() - 1);
         
-        long minTimestamp = Long.MAX_VALUE;
-        long maxTimestamp = 0;
-        Bytes keyFrom = new Bytes(new byte[0]);
-        Bytes keyTo = null;
-        
-        final KeyValueIterator<Bytes, byte[]> iteratorMin = minSegment.all();
-        while (iteratorMin.hasNext()) {
-            final KeyValue<Bytes, byte[]> bytes = iteratorMin.next();
-            final long timestamp = keySchema.segmentTimestamp(bytes.key);
-            
-            if (timestamp >= timeFrom && timestamp <= timeTo) {
-                final Bytes currentBytes = WindowStoreUtils.bytesKeyFromBinaryKey(bytes.key.get());
-                if (timestamp < minTimestamp) {
-                    minTimestamp = timestamp;
-                    keyFrom = currentBytes;
-                } else {
-                    keyFrom = keyFrom.compareTo(currentBytes) > 0 ? currentBytes : keyFrom;
-                }
-            }
-        }
-        final KeyValueIterator<Bytes, byte[]> iteratorMax = maxSegment.all();
-        while (iteratorMax.hasNext()) {
-            final KeyValue<Bytes, byte[]> bytes = iteratorMax.next();
-            final long timestamp = keySchema.segmentTimestamp(bytes.key);
-            
-            if (timestamp >= timeFrom && timestamp <= timeTo) {
-                final Bytes currentBytes = WindowStoreUtils.bytesKeyFromBinaryKey(bytes.key.get());
-                if (timestamp > maxTimestamp) {
-                    maxTimestamp = timestamp;
-                    keyTo = currentBytes;
-                } else {
-                    keyTo = keyTo.compareTo(currentBytes) < 0 ? currentBytes : keyTo;
-                }
-            }
-        }
-        return fetch(keyFrom, keyTo, minTimestamp, maxTimestamp);
+        return new TimestampSegmentIterator(searchSpace.iterator(),
+                                           keySchema.hasNextCondition(null, null, timeFrom, timeTo));
     }
     
     @Override
@@ -198,6 +156,28 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     @Override
     public boolean isOpen() {
         return open;
+    }
+    
+    private static class TimestampSegmentIterator extends SegmentIterator {
+        public TimestampSegmentIterator(final Iterator<Segment> segments,
+                                        final HasNextCondition hasNextCondition) {
+            super(segments, hasNextCondition, null, null);
+        }
+        
+        @Override
+        public boolean hasNext() {
+            boolean hasNext = false;
+            while ((currentIterator == null || !(hasNext = hasNextCondition.hasNext(currentIterator)) || !currentSegment.isOpen())
+                    && segments.hasNext()) {
+                currentSegment = segments.next();
+                try {
+                    currentIterator = currentSegment.all();
+                    hasNextCondition.hasNext(currentIterator);
+                } catch (InvalidStateStoreException exc) {
+                }
+            }
+            return currentIterator != null && hasNext;
+        }
     }
 
 }
