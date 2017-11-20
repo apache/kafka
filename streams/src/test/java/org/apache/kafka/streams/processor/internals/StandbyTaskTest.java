@@ -140,7 +140,7 @@ public class StandbyTaskTest {
     private final byte[] recordKey = intSerializer.serialize(null, 1);
 
     @Before
-    public void setup() {
+    public void setup() throws Exception {
         restoreStateConsumer.reset();
         restoreStateConsumer.updatePartitions(storeChangelogTopicName1, Utils.mkList(
                 new PartitionInfo(storeChangelogTopicName1, 0, Node.noNode(), new Node[0], new Node[0]),
@@ -154,7 +154,7 @@ public class StandbyTaskTest {
                 new PartitionInfo(storeChangelogTopicName2, 2, Node.noNode(), new Node[0], new Node[0])
         ));
         baseDir = TestUtils.tempDirectory();
-        stateDirectory = new StateDirectory(applicationId, baseDir.getPath(), new MockTime());
+        stateDirectory = new StateDirectory(createConfig(baseDir), new MockTime());
     }
 
     @After
@@ -165,7 +165,7 @@ public class StandbyTaskTest {
     @Test
     public void testStorePartitions() throws IOException {
         StreamsConfig config = createConfig(baseDir);
-        StandbyTask task = new StandbyTask(taskId, applicationId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
+        StandbyTask task = new StandbyTask(taskId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
         task.initialize();
         assertEquals(Utils.mkSet(partition2), new HashSet<>(task.checkpointedOffsets().keySet()));
 
@@ -175,7 +175,7 @@ public class StandbyTaskTest {
     @Test(expected = ProcessorStateException.class)
     public void testUpdateNonPersistentStore() throws IOException {
         StreamsConfig config = createConfig(baseDir);
-        StandbyTask task = new StandbyTask(taskId, applicationId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
+        StandbyTask task = new StandbyTask(taskId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
 
         restoreStateConsumer.assign(new ArrayList<>(task.checkpointedOffsets().keySet()));
 
@@ -188,7 +188,7 @@ public class StandbyTaskTest {
     @Test
     public void testUpdate() throws IOException {
         StreamsConfig config = createConfig(baseDir);
-        StandbyTask task = new StandbyTask(taskId, applicationId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
+        StandbyTask task = new StandbyTask(taskId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
         task.initialize();
         restoreStateConsumer.assign(new ArrayList<>(task.checkpointedOffsets().keySet()));
 
@@ -245,7 +245,7 @@ public class StandbyTaskTest {
         ));
 
         StreamsConfig config = createConfig(baseDir);
-        StandbyTask task = new StandbyTask(taskId, applicationId, ktablePartitions, ktableTopology, consumer, changelogReader, config, null, stateDirectory);
+        StandbyTask task = new StandbyTask(taskId, ktablePartitions, ktableTopology, consumer, changelogReader, config, null, stateDirectory);
         task.initialize();
         restoreStateConsumer.assign(new ArrayList<>(task.checkpointedOffsets().keySet()));
 
@@ -341,7 +341,7 @@ public class StandbyTaskTest {
         final InternalTopologyBuilder internalTopologyBuilder = InternalStreamsBuilderTest.internalTopologyBuilder(builder);
         final ProcessorTopology topology = internalTopologyBuilder.setApplicationId(applicationId).build(0);
 
-        new StandbyTask(taskId, applicationId, partitions, topology, consumer, changelogReader, config,
+        new StandbyTask(taskId, partitions, topology, consumer, changelogReader, config,
             new MockStreamsMetrics(new Metrics()), stateDirectory);
     }
 
@@ -359,7 +359,6 @@ public class StandbyTaskTest {
         final MockTime time = new MockTime();
         final StreamsConfig config = createConfig(baseDir);
         final StandbyTask task = new StandbyTask(taskId,
-                                                 applicationId,
                                                  ktablePartitions,
                                                  ktableTopology,
                                                  consumer,
@@ -402,7 +401,6 @@ public class StandbyTaskTest {
         final StreamsConfig config = createConfig(baseDir);
         final AtomicBoolean closedStateManager = new AtomicBoolean(false);
         final StandbyTask task = new StandbyTask(taskId,
-                                                 applicationId,
                                                  ktablePartitions,
                                                  ktableTopology,
                                                  consumer,

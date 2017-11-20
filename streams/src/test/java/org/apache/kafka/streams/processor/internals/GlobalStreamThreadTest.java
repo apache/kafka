@@ -60,11 +60,12 @@ public class GlobalStreamThreadTest {
         final HashMap<String, Object> properties = new HashMap<>();
         properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "blah");
         properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "blah");
+        properties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         config = new StreamsConfig(properties);
         globalStreamThread = new GlobalStreamThread(builder.buildGlobalStateTopology(),
                                                     config,
                                                     mockConsumer,
-                                                    new StateDirectory("appId", TestUtils.tempDirectory().getPath(), time),
+                                                    new StateDirectory(config, time),
                                                     0,
                                                     new Metrics(),
                                                     new MockTime(),
@@ -97,7 +98,7 @@ public class GlobalStreamThreadTest {
         globalStreamThread = new GlobalStreamThread(builder.buildGlobalStateTopology(),
                                                     config,
                                                     mockConsumer,
-                                                    new StateDirectory("appId", TestUtils.tempDirectory().getPath(), time),
+                                                    new StateDirectory(config, time),
                                                     0,
                                                     new Metrics(),
                                                     new MockTime(),

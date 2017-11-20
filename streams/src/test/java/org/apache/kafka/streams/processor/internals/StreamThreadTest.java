@@ -79,7 +79,7 @@ public class StreamThreadTest {
     private InternalTopologyBuilder internalTopologyBuilder;
     private final StreamsConfig config = new StreamsConfig(configProps(false));
     private final String stateDir = TestUtils.tempDirectory().getPath();
-    private final StateDirectory stateDirectory  = new StateDirectory("applicationId", stateDir, mockTime);
+    private final StateDirectory stateDirectory  = new StateDirectory(config, mockTime);
     private StreamsMetadataState streamsMetadataState;
     private final ConsumedInternal<Object, Object> consumed = new ConsumedInternal<>();
 
@@ -487,6 +487,7 @@ public class StreamThreadTest {
         final StreamThread thread = createStreamThread(clientId, new StreamsConfig(configProps(true)), true);
 
         final MockConsumer<byte[], byte[]> consumer = clientSupplier.consumer;
+
         consumer.updatePartitions(topic1, Collections.singletonList(new PartitionInfo(topic1, 1, null, null, null)));
 
         thread.setState(StreamThread.State.RUNNING);

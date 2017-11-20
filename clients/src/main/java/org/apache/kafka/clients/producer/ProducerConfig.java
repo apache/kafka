@@ -165,7 +165,7 @@ public class ProducerConfig extends AbstractConfig {
                                                                             + " message re-ordering due to retries (i.e., if retries are enabled).";
 
     /** <code>retries</code> */
-    public static final String RETRIES_CONFIG = "retries";
+    public static final String RETRIES_CONFIG = CommonClientConfigs.RETRIES_CONFIG;
     private static final String RETRIES_DOC = "Setting a value greater than zero will cause the client to resend any record whose send fails with a potentially transient error."
                                               + " Note that this retry is no different than if the client resent the record upon receiving the error."
                                               + " Allowing retries without setting <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to 1 will potentially change the"

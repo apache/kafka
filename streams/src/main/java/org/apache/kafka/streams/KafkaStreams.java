@@ -601,17 +601,14 @@ public class KafkaStreams {
         this.log = logContext.logger(getClass());
 
         try {
-            stateDirectory = new StateDirectory(
-                    applicationId,
-                    config.getString(StreamsConfig.STATE_DIR_CONFIG),
-                    time);
+            stateDirectory = new StateDirectory(config, time);
         } catch (final ProcessorStateException fatal) {
             throw new StreamsException(fatal);
         }
 
         final MetricConfig metricConfig = new MetricConfig().samples(config.getInt(StreamsConfig.METRICS_NUM_SAMPLES_CONFIG))
-                .recordLevel(Sensor.RecordingLevel.forName(config.getString(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG)))
-                .timeWindow(config.getLong(StreamsConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS);
+            .recordLevel(Sensor.RecordingLevel.forName(config.getString(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG)))
+            .timeWindow(config.getLong(StreamsConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS);
         final List<MetricsReporter> reporters = config.getConfiguredInstances(StreamsConfig.METRIC_REPORTER_CLASSES_CONFIG,
                 MetricsReporter.class);
         reporters.add(new JmxReporter(JMX_PREFIX));
