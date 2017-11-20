@@ -614,35 +614,35 @@ public class StreamThread extends Thread {
         final StreamsKafkaClient streamsKafkaClient = StreamsKafkaClient.create(config.originals());
 
         final AbstractTaskCreator<StreamTask> activeTaskCreator = new TaskCreator(builder,
-                config,
-                streamsMetrics,
-                stateDirectory,
-                streamsMetrics.taskCreatedSensor,
-                changelogReader,
-                cache,
-                time,
-                clientSupplier,
-                threadProducer,
-                threadClientId,
-                log);
+                                                                                  config,
+                                                                                  streamsMetrics,
+                                                                                  stateDirectory,
+                                                                                  streamsMetrics.taskCreatedSensor,
+                                                                                  changelogReader,
+                                                                                  cache,
+                                                                                  time,
+                                                                                  clientSupplier,
+                                                                                  threadProducer,
+                                                                                  threadClientId,
+                                                                                  log);
         final AbstractTaskCreator<StandbyTask> standbyTaskCreator = new StandbyTaskCreator(builder,
-                config,
-                streamsMetrics,
-                stateDirectory,
-                streamsMetrics.taskCreatedSensor,
-                changelogReader,
-                time,
-                log);
+                                                                                           config,
+                                                                                           streamsMetrics,
+                                                                                           stateDirectory,
+                                                                                           streamsMetrics.taskCreatedSensor,
+                                                                                           changelogReader,
+                                                                                           time,
+                                                                                           log);
         TaskManager taskManager = new TaskManager(changelogReader,
-                processId,
-                logPrefix,
-                restoreConsumer,
-                streamsMetadataState,
-                activeTaskCreator,
-                standbyTaskCreator,
-                streamsKafkaClient,
-                new AssignedStreamsTasks(logContext),
-                new AssignedStandbyTasks(logContext));
+                                                  processId,
+                                                  logPrefix,
+                                                  restoreConsumer,
+                                                  streamsMetadataState,
+                                                  activeTaskCreator,
+                                                  standbyTaskCreator,
+                                                  streamsKafkaClient,
+                                                  new AssignedStreamsTasks(logContext),
+                                                  new AssignedStandbyTasks(logContext));
 
         log.info("Creating consumer client");
         final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);

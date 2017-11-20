@@ -736,13 +736,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     }
 
     // following functions are for test only
-    Map<HostInfo, Set<TopicPartition>> getPartitionsByHostState() {
-        if (taskManager.partitionsByHostState() == null) {
-            return Collections.emptyMap();
-        }
-        return Collections.unmodifiableMap(taskManager.partitionsByHostState());
-    }
-
     Cluster clusterMetadata() {
         if (taskManager.clusterMetadata() == null) {
             return Cluster.empty();

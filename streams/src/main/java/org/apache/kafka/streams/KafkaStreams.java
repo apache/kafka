@@ -639,14 +639,14 @@ public class KafkaStreams {
         if (globalTaskTopology != null) {
             final String globalThreadId = clientId + "-GlobalStreamThread";
             globalStreamThread = new GlobalStreamThread(globalTaskTopology,
-                    config,
-                    clientSupplier.getRestoreConsumer(config.getRestoreConsumerConfigs(clientId + "-global")),
-                    stateDirectory,
-                    cacheSizePerThread,
-                    metrics,
-                    time,
-                    globalThreadId,
-                    delegatingStateRestoreListener);
+                                                        config,
+                                                        clientSupplier.getRestoreConsumer(config.getRestoreConsumerConfigs(clientId + "-global")),
+                                                        stateDirectory,
+                                                        cacheSizePerThread,
+                                                        metrics,
+                                                        time,
+                                                        globalThreadId,
+                                                        delegatingStateRestoreListener);
             globalThreadState = globalStreamThread.state();
         }
 
@@ -657,17 +657,17 @@ public class KafkaStreams {
         final ArrayList<StateStoreProvider> storeProviders = new ArrayList<>();
         for (int i = 0; i < threads.length; i++) {
             threads[i] = StreamThread.create(internalTopologyBuilder,
-                    config,
-                    clientSupplier,
-                    adminClient,
-                    processId,
-                    clientId,
-                    metrics,
-                    time,
-                    streamsMetadataState,
-                    cacheSizePerThread,
-                    stateDirectory,
-                    delegatingStateRestoreListener);
+                                             config,
+                                             clientSupplier,
+                                             adminClient,
+                                             processId,
+                                             clientId,
+                                             metrics,
+                                             time,
+                                             streamsMetadataState,
+                                             cacheSizePerThread,
+                                             stateDirectory,
+                                             delegatingStateRestoreListener);
             threadState.put(threads[i].getId(), threads[i].state());
             storeProviders.add(new StreamThreadStateStoreProvider(threads[i]));
         }
