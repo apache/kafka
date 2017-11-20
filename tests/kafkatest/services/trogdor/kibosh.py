@@ -84,6 +84,7 @@ class KiboshService(Service):
         cmd += " --target %s" % self.target
         cmd += " --pidfile %s" % self.pidfile_path
         cmd += " --log %s" % self.log_path
+        cmd += " --control-mode 666"
         cmd += " --verbose"
         cmd += " %s" % self.mirror
         cmd += " &> %s" % self.stdout_stderr_path
