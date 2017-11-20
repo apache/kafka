@@ -138,7 +138,7 @@ class JsonTest {
     val foo = "baz"
     val bar = 1
 
-    val result = Json.parseTo(s"""{"foo": "$foo", "bar": $bar}""", classOf[TestObject])
+    val result = Json.parseAs[TestObject](s"""{"foo": "$foo", "bar": $bar}""")
 
     assertTrue(result.isRight)
     assertEquals(TestObject(foo, bar), result.right.get)
@@ -146,7 +146,7 @@ class JsonTest {
 
   @Test
   def testParseTo_invalidJson() = {
-    val result = Json.parseTo("{invalid json}", classOf[TestObject])
+    val result = Json.parseAs[TestObject]("{invalid json}")
 
     assertTrue(result.isLeft)
     assertEquals(classOf[JsonParseException], result.left.get.getClass)

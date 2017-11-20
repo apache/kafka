@@ -144,7 +144,7 @@ object ZkUtils {
     DeleteTopicsPath + "/" + topic
 
   def parsePartitionReassignmentData(jsonData: String): Map[TopicAndPartition, Seq[Int]] = {
-    val parseResult = Json.parseTo(jsonData, classOf[PartitionAssignment])
+    val parseResult = Json.parseAs[PartitionAssignment](jsonData)
 
     val assignments = parseResult match {
       case Left(throwable) => throw new ConfigException(s"Invalid reassignment config: $throwable")

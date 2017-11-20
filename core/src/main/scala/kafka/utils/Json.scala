@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import kafka.utils.json.JsonValue
 
 import scala.collection._
+import scala.reflect.ClassTag
 
 /**
  * Provides methods for parsing JSON with Jackson and encoding to JSON with a simple and naive custom implementation.
@@ -99,8 +100,8 @@ object Json {
   /**
     * Parse a JSON string into either a generic type T, or a Throwable in the case of exception.
     */
-  def parseTo[T](input: String, klass: Class[T]): Either[Throwable, T] = {
-    try Right(mapper.readValue(input, klass))
+  def parseAs[T](input: String)(implicit tag: ClassTag[T]): Either[Throwable, T] = {
+    try Right(mapper.readValue(input, tag.runtimeClass).asInstanceOf[T])
     catch { case e: Throwable => Left(e)}
   }
 
