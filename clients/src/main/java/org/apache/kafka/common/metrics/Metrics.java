@@ -526,6 +526,15 @@ public class Metrics implements Closeable {
         this.reporters.add(reporter);
     }
 
+    /**
+     * Remove a MetricReporter
+     */
+    public synchronized void removeReporter(MetricsReporter reporter) {
+        if (this.reporters.remove(reporter)) {
+            reporter.close();
+        }
+    }
+
     synchronized void registerMetric(KafkaMetric metric) {
         MetricName metricName = metric.metricName();
         if (this.metrics.containsKey(metricName))

@@ -304,11 +304,22 @@ public final class Utils {
      * Look up the class by name and instantiate it.
      * @param klass class name
      * @param base super class of the class to be instantiated
-     * @param <T>
+     * @param <T> the type of the base class
      * @return the new instance
      */
     public static <T> T newInstance(String klass, Class<T> base) throws ClassNotFoundException {
-        return Utils.newInstance(Class.forName(klass, true, Utils.getContextOrKafkaClassLoader()).asSubclass(base));
+        return Utils.newInstance(loadClass(klass, base));
+    }
+
+    /**
+     * Look up a class by name.
+     * @param klass class name
+     * @param base super class of the class for verification
+     * @param <T> the type of the base class
+     * @return the new class
+     */
+    public static <T> Class<? extends T> loadClass(String klass, Class<T> base) throws ClassNotFoundException {
+        return Class.forName(klass, true, Utils.getContextOrKafkaClassLoader()).asSubclass(base);
     }
 
     /**
