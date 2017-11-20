@@ -20,7 +20,6 @@ package kafka.utils
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.CountDownLatch
 
-import com.fasterxml.jackson.annotation.JsonProperty
 import kafka.admin._
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, LeaderAndIsr}
 import kafka.cluster._
@@ -28,6 +27,7 @@ import kafka.common.{KafkaException, NoEpochForPartitionException, TopicAndParti
 import kafka.consumer.{ConsumerThreadId, TopicCount}
 import kafka.controller.{LeaderIsrAndControllerEpoch, ReassignedPartitionsContext}
 import kafka.zk.{BrokerIdZNode, ZkData}
+import kafka.zk.PartitionAssignment
 import org.I0Itec.zkclient.exception.{ZkBadVersionException, ZkException, ZkMarshallingError, ZkNoNodeException, ZkNodeExistsException}
 import org.I0Itec.zkclient.serialize.ZkSerializer
 import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener, ZkClient, ZkConnection}
@@ -1206,25 +1206,3 @@ class ZKCheckedEphemeral(path: String,
     }
   }
 }
-
-// Case classes for JSON deserialization
-
-/**
-  * Deserialized representation of a partition assignment.
-  *
-  * An assignment consists of a `version` and a list of `partitions`, which represent the assignment
-  * of topic-partitions to brokers.
-  */
-case class PartitionAssignment(@JsonProperty("version") version: Int,
-                               @JsonProperty("partitions") partitions: java.util.List[ReplicaAssignment])
-
-/**
-  * Deserialized representation of a replica assignment for a `TopicPartition`, i.e. the assignment
-  * of brokers for a given `TopicPartition`.
-  *
-  * A replica assignment consists of a `topic`, `partition` and a list of `replicas`, which
-  * represent the broker ids that the `TopicPartition` is assigned to.
-  */
-case class ReplicaAssignment(@JsonProperty("topic") topic: String,
-                             @JsonProperty("partition") partitions: Int,
-                             @JsonProperty("replicas") replicas: java.util.List[Int])
