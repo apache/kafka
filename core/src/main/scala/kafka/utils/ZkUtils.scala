@@ -146,12 +146,13 @@ object ZkUtils {
   def parsePartitionReassignmentData(jsonData: String): Map[TopicAndPartition, Seq[Int]] = {
     val parseResult = Json.parseTo(jsonData, classOf[PartitionAssignment])
 
-    if (parseResult.isLeft)
-      throw new ConfigException(s"Invalid reassignment config: ${parseResult.left}")
+    val assignments = parseResult match {
+      case Left(throwable) => throw new ConfigException(s"Invalid reassignment config: $throwable")
+      case Right(result) => result
+    }
 
-    val assignments = parseResult.right
     val seq = for {
-      assignment <- assignments.get.partitions.asScala
+      assignment <- assignments.partitions.asScala
     } yield {
       (TopicAndPartition(assignment.topic, assignment.partitions), assignment.replicas.asScala)
     }
