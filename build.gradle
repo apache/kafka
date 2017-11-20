@@ -807,6 +807,10 @@ project(':tools') {
 
     testCompile project(':clients')
     testCompile libs.junit
+    testCompile project(':clients').sourceSets.test.output
+    testCompile libs.easymock
+    testCompile libs.powermock
+    testCompile libs.powermockEasymock
   }
 
   javadoc {
