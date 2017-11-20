@@ -17,6 +17,7 @@
 package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
@@ -33,25 +34,55 @@ import java.net.InetSocketAddress;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.Map;
+import java.util.Set;
 
 public class SslChannelBuilder implements ChannelBuilder {
     private static final Logger log = LoggerFactory.getLogger(SslChannelBuilder.class);
+
+    private final ListenerName listenerName;
+    private final boolean interBrokerListener;
     private SslFactory sslFactory;
     private Mode mode;
     private Map<String, ?> configs;
 
-    public SslChannelBuilder(Mode mode) {
+    /**
+     * Constructs a SSL channel builder. ListenerName is provided only
+     * for server channel builder and will be null for client channel builder.
+     */
+    public SslChannelBuilder(Mode mode, ListenerName listenerName, boolean interBrokerListener) {
         this.mode = mode;
+        this.listenerName = listenerName;
+        this.interBrokerListener = interBrokerListener;
     }
 
     public void configure(Map<String, ?> configs) throws KafkaException {
         try {
             this.configs = configs;
-            this.sslFactory = new SslFactory(mode);
+            this.sslFactory = new SslFactory(mode, null, interBrokerListener);
             this.sslFactory.configure(this.configs);
         } catch (Exception e) {
             throw new KafkaException(e);
         }
+    }
+
+    @Override
+    public Set<String> reconfigurableConfigs() {
+        return SslConfigs.RECONFIGURABLE_CONFIGS;
+    }
+
+    @Override
+    public boolean validate(Map<String, ?> configs) {
+        return sslFactory.validate(configs);
+    }
+
+    @Override
+    public void reconfigure(Map<String, ?> configs) {
+        sslFactory.reconfigure(configs);
+    }
+
+    @Override
+    public ListenerName listenerName() {
+        return listenerName;
     }
 
     @Override

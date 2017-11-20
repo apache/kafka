@@ -16,22 +16,24 @@
  */
 package org.apache.kafka.common.network;
 
-import java.util.Map;
 import java.nio.channels.SelectionKey;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Reconfigurable;
 import org.apache.kafka.common.memory.MemoryPool;
 
 
 /**
  * A ChannelBuilder interface to build Channel based on configs
  */
-public interface ChannelBuilder extends AutoCloseable {
+public interface ChannelBuilder extends AutoCloseable, Reconfigurable {
 
     /**
-     * Configure this class with the given key-value pairs
+     * Returns the name of the listener associated with this builder
+     * if this is a server channel builder. Returns null if this
+     * is a client channel builder.
      */
-    void configure(Map<String, ?> configs) throws KafkaException;
+    ListenerName listenerName();
 
     /**
      * returns a Channel with TransportLayer and Authenticator configured.

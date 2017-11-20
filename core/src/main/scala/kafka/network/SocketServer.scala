@@ -437,20 +437,28 @@ private[kafka] class Processor(val id: Int,
   )
 
   private val selector = createSelector(
-      ChannelBuilders.serverChannelBuilder(listenerName, securityProtocol, config, credentialProvider.credentialCache, credentialProvider.tokenCache))
+      ChannelBuilders.serverChannelBuilder(listenerName,
+        listenerName == config.interBrokerListenerName,
+        securityProtocol,
+        config,
+        credentialProvider.credentialCache,
+        credentialProvider.tokenCache))
   // Visible to override for testing
-  protected[network] def createSelector(channelBuilder: ChannelBuilder): KSelector = new KSelector(
-    maxRequestSize,
-    connectionsMaxIdleMs,
-    metrics,
-    time,
-    "socket-server",
-    metricTags,
-    false,
-    true,
-    channelBuilder,
-    memoryPool,
-    logContext)
+  protected[network] def createSelector(channelBuilder: ChannelBuilder): KSelector = {
+    config.addReconfigurable(channelBuilder)
+    new KSelector(
+      maxRequestSize,
+      connectionsMaxIdleMs,
+      metrics,
+      time,
+      "socket-server",
+      metricTags,
+      false,
+      true,
+      channelBuilder,
+      memoryPool,
+      logContext)
+  }
 
   // Connection ids have the format `localAddr:localPort-remoteAddr:remotePort-index`. The index is a
   // non-negative incrementing value that ensures that even if remotePort is reused after a connection is

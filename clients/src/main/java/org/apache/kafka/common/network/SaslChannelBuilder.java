@@ -18,6 +18,7 @@ package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -39,8 +40,10 @@ import java.lang.reflect.Method;
 import java.net.Socket;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.security.auth.Subject;
 
@@ -49,6 +52,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
 
     private final SecurityProtocol securityProtocol;
     private final ListenerName listenerName;
+    private final boolean interBrokerListener;
     private final String clientSaslMechanism;
     private final Mode mode;
     private final JaasContext jaasContext;
@@ -65,6 +69,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
                               JaasContext jaasContext,
                               SecurityProtocol securityProtocol,
                               ListenerName listenerName,
+                              boolean interBrokerListener,
                               String clientSaslMechanism,
                               boolean handshakeRequestEnable,
                               CredentialCache credentialCache,
@@ -73,6 +78,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
         this.jaasContext = jaasContext;
         this.securityProtocol = securityProtocol;
         this.listenerName = listenerName;
+        this.interBrokerListener = interBrokerListener;
         this.handshakeRequestEnable = handshakeRequestEnable;
         this.clientSaslMechanism = clientSaslMechanism;
         this.credentialCache = credentialCache;
@@ -115,6 +121,30 @@ public class SaslChannelBuilder implements ChannelBuilder {
             close();
             throw new KafkaException(e);
         }
+    }
+
+    @Override
+    public Set<String> reconfigurableConfigs() {
+        return securityProtocol == SecurityProtocol.SASL_SSL ? SslConfigs.RECONFIGURABLE_CONFIGS : Collections.<String>emptySet();
+    }
+
+    @Override
+    public boolean validate(Map<String, ?> configs) {
+        if (this.securityProtocol == SecurityProtocol.SASL_SSL)
+            return sslFactory.validate(configs);
+        else
+            return true;
+    }
+
+    @Override
+    public void reconfigure(Map<String, ?> configs) {
+        if (this.securityProtocol == SecurityProtocol.SASL_SSL)
+            sslFactory.reconfigure(configs);
+    }
+
+    @Override
+    public ListenerName listenerName() {
+        return listenerName;
     }
 
     @Override

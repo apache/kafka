@@ -18,12 +18,14 @@
 package kafka.server
 
 import java.util.Properties
+
 import kafka.log.LogConfig
 import kafka.security.CredentialProvider
 import org.apache.kafka.common.config.ConfigDef
 import org.apache.kafka.common.config.ConfigDef.Importance._
 import org.apache.kafka.common.config.ConfigDef.Range._
 import org.apache.kafka.common.config.ConfigDef.Type._
+
 import scala.collection.JavaConverters._
 
 /**
@@ -57,10 +59,12 @@ object DynamicConfig {
       .define(LeaderReplicationThrottledRateProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, LeaderReplicationThrottledRateDoc)
       .define(FollowerReplicationThrottledRateProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, FollowerReplicationThrottledRateDoc)
       .define(ReplicaAlterLogDirsIoMaxBytesPerSecondProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, ReplicaAlterLogDirsIoMaxBytesPerSecondDoc)
+    DynamicBrokerConfig.addDynamicConfigs(brokerConfigDef)
+    val nonDynamicProps = KafkaConfig.configNames.toSet -- brokerConfigDef.names.asScala
 
     def names = brokerConfigDef.names
 
-    def validate(props: Properties) = DynamicConfig.validate(brokerConfigDef, props)
+    def validate(props: Properties) = DynamicConfig.validate(brokerConfigDef, props, true, nonDynamicProps)
   }
 
   object Client {
@@ -87,7 +91,7 @@ object DynamicConfig {
 
     def names = clientConfigs.names
 
-    def validate(props: Properties) = DynamicConfig.validate(clientConfigs, props)
+    def validate(props: Properties) = DynamicConfig.validate(clientConfigs, props, false, Set.empty)
   }
 
   object User {
@@ -100,15 +104,19 @@ object DynamicConfig {
 
     def names = userConfigs.names
 
-    def validate(props: Properties) = DynamicConfig.validate(userConfigs, props)
+    def validate(props: Properties) = DynamicConfig.validate(userConfigs, props, false, Set.empty)
   }
 
-  private def validate(configDef: ConfigDef, props: Properties) = {
+  private def validate(configDef: ConfigDef, props: Properties, customPropsAllowed: Boolean, nonDynamicProps: Set[String]) = {
     //Validate Names
     val names = configDef.names()
-    props.keys.asScala.foreach { name =>
-      require(names.contains(name), s"Unknown Dynamic Configuration '$name'.")
+    val propKeys = props.keySet.asScala.map(_.asInstanceOf[String])
+    if (!customPropsAllowed) {
+      val unknownKeys = propKeys.filter(!names.contains(_))
+      require(unknownKeys.isEmpty, s"Unknown Dynamic Configuration: $unknownKeys.")
     }
+    val invalidKeys = propKeys.intersect(nonDynamicProps)
+    require(invalidKeys.isEmpty, s"Config not dynamic: $invalidKeys.")
     //ValidateValues
     configDef.parse(props)
   }

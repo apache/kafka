@@ -27,6 +27,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,24 +55,53 @@ public class DescribeConfigsResponse extends AbstractResponse {
     private static final String IS_DEFAULT_KEY_NAME = "is_default";
     private static final String READ_ONLY_KEY_NAME = "read_only";
 
+    private static final String CONFIG_SYNONYMS_KEY_NAME = "config_synonyms";
+    private static final String CONFIG_SOURCE_KEY_NAME = "config_source";
+
+    private static final Schema DESCRIBE_CONFIGS_RESPONSE_ENTRY_V0 = new Schema(
+                    new Field(CONFIG_NAME_KEY_NAME, STRING),
+                    new Field(CONFIG_VALUE_KEY_NAME, NULLABLE_STRING),
+                    new Field(READ_ONLY_KEY_NAME, BOOLEAN),
+                    new Field(IS_DEFAULT_KEY_NAME, BOOLEAN),
+                    new Field(IS_SENSITIVE_KEY_NAME, BOOLEAN));
+
+    private static final Schema DESCRIBE_CONFIGS_RESPONSE_SYNONYM_V1 = new Schema(
+            new Field(CONFIG_NAME_KEY_NAME, STRING),
+            new Field(CONFIG_VALUE_KEY_NAME, NULLABLE_STRING),
+            new Field(CONFIG_SOURCE_KEY_NAME, INT8));
+
+    private static final Schema DESCRIBE_CONFIGS_RESPONSE_ENTRY_V1 = new Schema(
+            new Field(CONFIG_NAME_KEY_NAME, STRING),
+            new Field(CONFIG_VALUE_KEY_NAME, NULLABLE_STRING),
+            new Field(READ_ONLY_KEY_NAME, BOOLEAN),
+            new Field(IS_DEFAULT_KEY_NAME, BOOLEAN),
+            new Field(IS_SENSITIVE_KEY_NAME, BOOLEAN),
+            new Field(CONFIG_SYNONYMS_KEY_NAME, new ArrayOf(DESCRIBE_CONFIGS_RESPONSE_SYNONYM_V1)));
+
     private static final Schema DESCRIBE_CONFIGS_RESPONSE_ENTITY_V0 = new Schema(
             ERROR_CODE,
             ERROR_MESSAGE,
             new Field(RESOURCE_TYPE_KEY_NAME, INT8),
             new Field(RESOURCE_NAME_KEY_NAME, STRING),
-            new Field(CONFIG_ENTRIES_KEY_NAME, new ArrayOf(new Schema(
-                    new Field(CONFIG_NAME_KEY_NAME, STRING),
-                    new Field(CONFIG_VALUE_KEY_NAME, NULLABLE_STRING),
-                    new Field(READ_ONLY_KEY_NAME, BOOLEAN),
-                    new Field(IS_DEFAULT_KEY_NAME, BOOLEAN),
-                    new Field(IS_SENSITIVE_KEY_NAME, BOOLEAN)))));
+            new Field(CONFIG_ENTRIES_KEY_NAME, new ArrayOf(DESCRIBE_CONFIGS_RESPONSE_ENTRY_V0)));
+
+    private static final Schema DESCRIBE_CONFIGS_RESPONSE_ENTITY_V1 = new Schema(
+            ERROR_CODE,
+            ERROR_MESSAGE,
+            new Field(RESOURCE_TYPE_KEY_NAME, INT8),
+            new Field(RESOURCE_NAME_KEY_NAME, STRING),
+            new Field(CONFIG_ENTRIES_KEY_NAME, new ArrayOf(DESCRIBE_CONFIGS_RESPONSE_ENTRY_V1)));
 
     private static final Schema DESCRIBE_CONFIGS_RESPONSE_V0 = new Schema(
             THROTTLE_TIME_MS,
             new Field(RESOURCES_KEY_NAME, new ArrayOf(DESCRIBE_CONFIGS_RESPONSE_ENTITY_V0)));
 
+    private static final Schema DESCRIBE_CONFIGS_RESPONSE_V1 = new Schema(
+            THROTTLE_TIME_MS,
+            new Field(RESOURCES_KEY_NAME, new ArrayOf(DESCRIBE_CONFIGS_RESPONSE_ENTITY_V1)));
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{DESCRIBE_CONFIGS_RESPONSE_V0};
+        return new Schema[]{DESCRIBE_CONFIGS_RESPONSE_V0, DESCRIBE_CONFIGS_RESPONSE_V1};
     }
 
     public static class Config {
@@ -96,15 +126,19 @@ public class DescribeConfigsResponse extends AbstractResponse {
         private final String name;
         private final String value;
         private final boolean isSensitive;
-        private final boolean isDefault;
+        private final ConfigSource source;
         private final boolean readOnly;
+        private final Collection<ConfigSynonym> synonyms;
 
-        public ConfigEntry(String name, String value, boolean isSensitive, boolean isDefault, boolean readOnly) {
+        public ConfigEntry(String name, String value, ConfigSource source, boolean isSensitive, boolean readOnly,
+                           Collection<ConfigSynonym> synonyms) {
+
             this.name = name;
             this.value = value;
+            this.source = source;
             this.isSensitive = isSensitive;
-            this.isDefault = isDefault;
             this.readOnly = readOnly;
+            this.synonyms = synonyms;
         }
 
         public String name() {
@@ -119,14 +153,64 @@ public class DescribeConfigsResponse extends AbstractResponse {
             return isSensitive;
         }
 
-        public boolean isDefault() {
-            return isDefault;
+        public ConfigSource source() {
+            return source;
         }
 
         public boolean isReadOnly() {
             return readOnly;
         }
+
+        public Collection<ConfigSynonym> synonyms() {
+            return synonyms;
+        }
     }
+
+    public enum ConfigSource {
+        UNKNOWN_CONFIG((byte) 0),
+        TOPIC_CONFIG((byte) 1),
+        DYNAMIC_BROKER_CONFIG((byte) 2),
+        DYNAMIC_DEFAULT_BROKER_CONFIG((byte) 3),
+        STATIC_BROKER_CONFIG((byte) 4),
+        DEFAULT_CONFIG((byte) 5);
+
+        final byte id;
+
+        ConfigSource(byte id) {
+            this.id = id;
+        }
+
+        public static ConfigSource forId(byte id) {
+            for (ConfigSource source: values()) {
+                if (source.id == id)
+                    return source;
+            }
+            throw new IllegalArgumentException("Unknown config source received: " + id);
+        }
+    }
+
+    public static class ConfigSynonym {
+        private final String name;
+        private final String value;
+        private final ConfigSource source;
+
+        public ConfigSynonym(String name, String value, ConfigSource source) {
+            this.name = name;
+            this.value = value;
+            this.source = source;
+        }
+
+        public String name() {
+            return name;
+        }
+        public String value() {
+            return value;
+        }
+        public ConfigSource source() {
+            return source;
+        }
+    }
+
 
     private final int throttleTimeMs;
     private final Map<Resource, Config> configs;
@@ -155,9 +239,42 @@ public class DescribeConfigsResponse extends AbstractResponse {
                 String configName = configEntriesStruct.getString(CONFIG_NAME_KEY_NAME);
                 String configValue = configEntriesStruct.getString(CONFIG_VALUE_KEY_NAME);
                 boolean isSensitive = configEntriesStruct.getBoolean(IS_SENSITIVE_KEY_NAME);
-                boolean isDefault = configEntriesStruct.getBoolean(IS_DEFAULT_KEY_NAME);
+                ConfigSource configSource;
+                if (configEntriesStruct.hasField(CONFIG_SOURCE_KEY_NAME))
+                    configSource = ConfigSource.forId(configEntriesStruct.getByte(CONFIG_SOURCE_KEY_NAME));
+                else if (configEntriesStruct.hasField(IS_DEFAULT_KEY_NAME)) {
+                    if (configEntriesStruct.getBoolean(IS_DEFAULT_KEY_NAME))
+                        configSource = ConfigSource.DEFAULT_CONFIG;
+                    else {
+                        switch (resourceType) {
+                            case BROKER:
+                                configSource = ConfigSource.STATIC_BROKER_CONFIG;
+                                break;
+                            case TOPIC:
+                                configSource = ConfigSource.TOPIC_CONFIG;
+                                break;
+                            default:
+                                configSource = ConfigSource.UNKNOWN_CONFIG;
+                                break;
+                        }
+                    }
+                } else
+                    throw new IllegalStateException("Config entry should contain either is_default or config_source");
                 boolean readOnly = configEntriesStruct.getBoolean(READ_ONLY_KEY_NAME);
-                configEntries.add(new ConfigEntry(configName, configValue, isSensitive, isDefault, readOnly));
+                Collection<ConfigSynonym> synonyms;
+                if (configEntriesStruct.hasField(CONFIG_SYNONYMS_KEY_NAME)) {
+                    synonyms = new ArrayList<>();
+                    Object[] synonymsArray = configEntriesStruct.getArray(CONFIG_SYNONYMS_KEY_NAME);
+                    for (Object synonymObj: synonymsArray) {
+                        Struct synonymStruct = (Struct) synonymObj;
+                        String synonymConfigName = synonymStruct.getString(CONFIG_NAME_KEY_NAME);
+                        String synonymConfigValue = synonymStruct.getString(CONFIG_VALUE_KEY_NAME);
+                        ConfigSource source = ConfigSource.forId(synonymStruct.getByte(CONFIG_SOURCE_KEY_NAME));
+                        synonyms.add(new ConfigSynonym(synonymConfigName, synonymConfigValue, source));
+                    }
+                } else
+                    synonyms = Collections.emptyList();
+                configEntries.add(new ConfigEntry(configName, configValue, configSource, isSensitive, readOnly, synonyms));
             }
             Config config = new Config(error, configEntries);
             configs.put(resource, config);
@@ -205,9 +322,23 @@ public class DescribeConfigsResponse extends AbstractResponse {
                 configEntriesStruct.set(CONFIG_NAME_KEY_NAME, configEntry.name);
                 configEntriesStruct.set(CONFIG_VALUE_KEY_NAME, configEntry.value);
                 configEntriesStruct.set(IS_SENSITIVE_KEY_NAME, configEntry.isSensitive);
-                configEntriesStruct.set(IS_DEFAULT_KEY_NAME, configEntry.isDefault);
+                if (configEntriesStruct.hasField(CONFIG_SOURCE_KEY_NAME))
+                    configEntriesStruct.set(CONFIG_SOURCE_KEY_NAME, configEntry.source.id);
+                if (configEntriesStruct.hasField(IS_DEFAULT_KEY_NAME))
+                    configEntriesStruct.set(IS_DEFAULT_KEY_NAME, configEntry.source == ConfigSource.DEFAULT_CONFIG);
                 configEntriesStruct.set(READ_ONLY_KEY_NAME, configEntry.readOnly);
                 configEntryStructs.add(configEntriesStruct);
+                if (configEntriesStruct.hasField(CONFIG_SYNONYMS_KEY_NAME)) {
+                    List<Struct> configSynonymStructs = new ArrayList<>(configEntry.synonyms.size());
+                    for (ConfigSynonym synonym : configEntry.synonyms) {
+                        Struct configSynonymStruct = configEntriesStruct.instance(CONFIG_SYNONYMS_KEY_NAME);
+                        configSynonymStruct.set(CONFIG_NAME_KEY_NAME, synonym.name);
+                        configSynonymStruct.set(CONFIG_VALUE_KEY_NAME, synonym.value);
+                        configSynonymStruct.set(CONFIG_SOURCE_KEY_NAME, synonym.source.id);
+                        configSynonymStructs.add(configSynonymStruct);
+                    }
+                    configEntriesStruct.set(CONFIG_SYNONYMS_KEY_NAME, configSynonymStructs.toArray(new Struct[0]));
+                }
             }
             resourceStruct.set(CONFIG_ENTRIES_KEY_NAME, configEntryStructs.toArray(new Struct[0]));
             

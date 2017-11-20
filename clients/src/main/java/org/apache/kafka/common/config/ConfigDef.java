@@ -105,6 +105,15 @@ public class ConfigDef {
         return Collections.unmodifiableSet(configKeys.keySet());
     }
 
+    public Map<String, Object> defaultValues() {
+        Map<String, Object> defaultValues = new HashMap<>();
+        for (ConfigKey key : configKeys.values()) {
+            if (key.defaultValue != NO_DEFAULT_VALUE)
+                defaultValues.put(key.name, key.defaultValue);
+        }
+        return defaultValues;
+    }
+
     public ConfigDef define(ConfigKey key) {
         if (configKeys.containsKey(key.name)) {
             throw new ConfigException("Configuration " + key.name + " is defined twice.");
