@@ -167,8 +167,7 @@ public class StandbyTaskTest {
         StreamsConfig config = createConfig(baseDir);
         StandbyTask task = new StandbyTask(taskId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
         task.initialize();
-        assertEquals(Utils.mkSet(partition2), new HashSet<>(task.checkpointedOffsets().keySet()));
-
+        assertEquals(Utils.mkSet(partition2, partition1), new HashSet<>(task.checkpointedOffsets().keySet()));
     }
 
     @SuppressWarnings("unchecked")
@@ -190,7 +189,8 @@ public class StandbyTaskTest {
         StreamsConfig config = createConfig(baseDir);
         StandbyTask task = new StandbyTask(taskId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
         task.initialize();
-        restoreStateConsumer.assign(new ArrayList<>(task.checkpointedOffsets().keySet()));
+        final Set<TopicPartition> partition = Collections.singleton(partition2);
+        restoreStateConsumer.assign(partition);
 
         for (ConsumerRecord<Integer, Integer> record : Arrays.asList(
                 new ConsumerRecord<>(partition2.topic(), partition2.partition(), 10, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, 1, 100),
@@ -199,16 +199,7 @@ public class StandbyTaskTest {
             restoreStateConsumer.bufferRecord(record);
         }
 
-        for (Map.Entry<TopicPartition, Long> entry : task.checkpointedOffsets().entrySet()) {
-            TopicPartition partition = entry.getKey();
-            long offset = entry.getValue();
-            if (offset >= 0) {
-                restoreStateConsumer.seek(partition, offset);
-            } else {
-                restoreStateConsumer.seekToBeginning(singleton(partition));
-            }
-        }
-
+        restoreStateConsumer.seekToBeginning(partition);
         task.update(partition2, restoreStateConsumer.poll(100).records(partition2));
 
         StandbyContextImpl context = (StandbyContextImpl) task.context();
@@ -228,7 +219,6 @@ public class StandbyTaskTest {
 
         assertEquals(1, offsets.size());
         assertEquals(new Long(30L + 1L), offsets.get(partition2));
-
     }
 
     @Test
