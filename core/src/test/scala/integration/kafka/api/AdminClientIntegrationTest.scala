@@ -38,7 +38,7 @@ import org.apache.kafka.common.{KafkaFuture, TopicPartition, TopicPartitionRepli
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
-import org.junit.{After, Before, Ignore, Rule, Test}
+import org.junit.{After, Before, Rule, Test}
 import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{Resource, ResourceType}
 import org.junit.rules.Timeout
@@ -733,7 +733,6 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   }
 
   @Test
-  @Ignore // Disabled temporarily until flakiness is resolved
   def testLogStartOffsetCheckpoint(): Unit = {
     TestUtils.createTopic(zkUtils, topic, 2, serverCount, servers)
 
@@ -759,15 +758,17 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       // Need to retry if leader is not available for the partition
       result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(0L)).asJava)
 
+      lowWatermark = Long.MinValue
       val future = result.lowWatermarks().get(topicPartition)
       try {
-        lowWatermark = future.get(1000L, TimeUnit.MILLISECONDS).lowWatermark()
+        lowWatermark = future.get().lowWatermark()
         lowWatermark == 5L
       } catch {
-        case e: LeaderNotAvailableException => false
-      }
-
-    }, "Expected low watermark of the partition to be 5L")
+        case e: ExecutionException if e.getCause.isInstanceOf[LeaderNotAvailableException] ||
+          e.getCause.isInstanceOf[NotLeaderForPartitionException] => false
+        }
+    }, "Expected low watermark of the partition to be 5 but got ".concat(
+      if (lowWatermark == Long.MinValue) "no response within the timeout" else lowWatermark.toString))
 
     client.close()
   }
