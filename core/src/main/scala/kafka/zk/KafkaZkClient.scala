@@ -114,15 +114,6 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
   }
 
   /**
-   * Creates the delete topic znode.
-   * @param topicName topic name
-   * @throws KeeperException if there is an error while setting or creating the znode
-   */
-  def createDeleteTopicPath(topicName: String): Unit = {
-    createRecursive(DeleteTopicsTopicZNode.path(topicName))
-  }
-
-  /**
    * Try to update the partition states of multiple partitions in zookeeper.
    * @param leaderAndIsrs The partition states to update.
    * @param controllerEpoch The current controller epoch.
@@ -244,6 +235,20 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
   }
 
   /**
+   * Creates config change notification
+   * @param sanitizedEntityPath  sanitizedEntityPath path to write
+   * @throws KeeperException if there is an error while setting or creating the znode
+   */
+  def createConfigChangeNotification(sanitizedEntityPath: String): Unit = {
+    val path = ConfigEntityChangeNotificationSequenceZNode.createPath
+    val createRequest = CreateRequest(path, ConfigEntityChangeNotificationSequenceZNode.encode(sanitizedEntityPath), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
+    val createResponse = retryRequestUntilConnected(createRequest)
+    if (createResponse.resultCode != Code.OK) {
+      createResponse.resultException.foreach(e => throw e)
+    }
+  }
+
+  /**
    * Gets all brokers in the cluster.
    * @return sequence of brokers in the cluster.
    */
@@ -311,7 +316,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    */
   def setTopicAssignment(topic: String, assignment: Map[TopicPartition, Seq[Int]]) = {
     val setDataResponse = setTopicAssignmentRaw(topic, assignment)
-    if (setDataResponse.resultCode != Code.OK){
+    if (setDataResponse.resultCode != Code.OK) {
       setDataResponse.resultException.foreach(e => throw e)
     }
   }
@@ -398,7 +403,6 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
       }
     }.toMap
   }
-
 
   /**
    * Gets partition the assignments for the given topics.
@@ -553,6 +557,25 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
   }
 
   /**
+   * Creates the delete topic znode.
+   * @param topicName topic name
+   * @throws KeeperException if there is an error while setting or creating the znode
+   */
+  def createDeleteTopicPath(topicName: String): Unit = {
+    createRecursive(DeleteTopicsTopicZNode.path(topicName))
+  }
+
+
+  /**
+   * Checks if topic is marked for deletion
+   * @param topic
+   * @return true if topic is marked for deletion, else false
+   */
+  def isTopicMarkedForDeletion(topic: String): Boolean = {
+    pathExists(DeleteTopicsTopicZNode.path(topic))
+  }
+
+  /**
    * Get all topics marked for deletion.
    * @return sequence of topics marked for deletion.
    */
@@ -655,15 +678,6 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    */
   def getPartitionsBeingReassigned(): Map[TopicPartition, ReassignedPartitionsContext] = {
     getPartitionReassignment.mapValues(replicas => ReassignedPartitionsContext(replicas))
-  }
-
-  /**
-   * Checks if topic is marked for deletion
-   * @param topic
-   * @return true if topic is marked for deletion, else false
-   */
-  def isTopicMarkedForDeletion(topic: String): Boolean = {
-    pathExists(DeleteTopicsTopicZNode.path(topic))
   }
 
   /**
@@ -997,20 +1011,6 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
       case Code.OK | Code.NONODE => true
       case Code.BADVERSION => false
       case _ => throw deleteResponse.resultException.get
-    }
-  }
-
-  /**
-   * Creates config change notification
-   * @param sanitizedEntityPath  sanitizedEntityPath path to write
-   * @throws KeeperException if there is an error while setting or creating the znode
-   */
-  def createConfigChangeNotification(sanitizedEntityPath: String): Unit = {
-    val path = ConfigEntityChangeNotificationSequenceZNode.createPath
-    val createRequest = CreateRequest(path, ConfigEntityChangeNotificationSequenceZNode.encode(sanitizedEntityPath), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
-    val createResponse = retryRequestUntilConnected(createRequest)
-    if (createResponse.resultCode != Code.OK) {
-      createResponse.resultException.foreach(e => throw e)
     }
   }
 

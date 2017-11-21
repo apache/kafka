@@ -207,7 +207,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
           s"$numPartitions would not be an increase.")
 
     replicaAssignment.foreach { proposedReplicaAssignment =>
-      validateReplicaAssignment(proposedReplicaAssignment, existingAssignmentPartition0,
+      validateReplicaAssignment(proposedReplicaAssignment, existingAssignmentPartition0.size,
         allBrokers.map(_.id).toSet)
     }
 
@@ -228,7 +228,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
   }
 
   private def validateReplicaAssignment(replicaAssignment: Map[Int, Seq[Int]],
-                                        existingAssignmentPartition0: Seq[Int],
+                                        expectedReplicationFactor: Int,
                                         availableBrokerIds: Set[Int]): Unit = {
 
     replicaAssignment.foreach { case (partitionId, replicas) =>
@@ -247,14 +247,14 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
       partitionId -> replicas.size
     }
     val badRepFactors = replicaAssignment.collect {
-      case (partition, replicas) if replicas.size != existingAssignmentPartition0.size => partition -> replicas.size
+      case (partition, replicas) if replicas.size != expectedReplicationFactor => partition -> replicas.size
     }
     if (badRepFactors.nonEmpty) {
       val sortedBadRepFactors = badRepFactors.toSeq.sortBy { case (partitionId, _) => partitionId }
       val partitions = sortedBadRepFactors.map { case (partitionId, _) => partitionId }
       val repFactors = sortedBadRepFactors.map { case (_, rf) => rf }
       throw new InvalidReplicaAssignmentException(s"Inconsistent replication factor between partitions, " +
-        s"partition 0 has ${existingAssignmentPartition0.size} while partitions [${partitions.mkString(", ")}] have " +
+        s"partition 0 has ${expectedReplicationFactor} while partitions [${partitions.mkString(", ")}] have " +
         s"replication factors [${repFactors.mkString(", ")}], respectively.")
     }
   }
