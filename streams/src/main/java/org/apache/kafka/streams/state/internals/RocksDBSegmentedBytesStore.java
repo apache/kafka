@@ -17,14 +17,12 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
-import java.util.Iterator;
 import java.util.List;
 
 class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
@@ -156,28 +154,6 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     @Override
     public boolean isOpen() {
         return open;
-    }
-    
-    private static class TimeRangeSegmentIterator extends SegmentIterator { 
-        public TimeRangeSegmentIterator(final Iterator<Segment> segments,
-                                        final HasNextCondition hasNextCondition) {
-            super(segments, hasNextCondition, null, null);
-        }
-        
-        @Override
-        public boolean hasNext() {
-            boolean hasNext = false;
-            while ((currentIterator == null || !(hasNext = hasNextCondition.hasNext(currentIterator)) || !currentSegment.isOpen())
-                    && segments.hasNext()) {
-                currentSegment = segments.next();
-                try {
-                    currentIterator = currentSegment.all();
-                } catch (InvalidStateStoreException exc) {
-                    //Just in case that the store was closed
-                }
-            }
-            return currentIterator != null && hasNext;
-        }
     }
 
 }

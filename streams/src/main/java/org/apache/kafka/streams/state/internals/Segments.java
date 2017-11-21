@@ -61,14 +61,6 @@ class Segments {
         this.formatter = new SimpleDateFormat("yyyyMMddHHmm");
         this.formatter.setTimeZone(new SimpleTimeZone(0, "UTC"));
     }
-    
-    Segment minSegment() {
-        return getSegment(minSegmentId);
-    }
-    
-    Segment maxSegment() {
-        return getSegment(maxSegmentId);
-    }
 
     long segmentId(final long timestamp) {
         return timestamp / segmentInterval;
@@ -95,9 +87,9 @@ class Segments {
             Segment previousSegment = segments.putIfAbsent(key, newSegment);
             if (previousSegment == null) {
                 newSegment.openDB(context);
+                maxSegmentId = segmentId > maxSegmentId ? segmentId : maxSegmentId;
+                minSegmentId = segmentId < minSegmentId ? segmentId : minSegmentId;
             }
-            maxSegmentId = segmentId > maxSegmentId ? segmentId : maxSegmentId;
-            minSegmentId = segmentId < minSegmentId ? segmentId : minSegmentId;
             return previousSegment == null ? newSegment : previousSegment;
         } else {
             return null;

@@ -30,8 +30,8 @@ import java.util.NoSuchElementException;
  */
 class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
 
-    protected final Bytes from;
-    protected final Bytes to;
+    private final Bytes from;
+    private final Bytes to;
     protected final Iterator<Segment> segments;
     protected final HasNextCondition hasNextCondition;
 

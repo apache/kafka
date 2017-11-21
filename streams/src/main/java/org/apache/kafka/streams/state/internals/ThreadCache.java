@@ -204,18 +204,6 @@ public class ThreadCache {
         return cache.keySet();
     }
     
-    public Bytes firstKey(final String namespace) {
-        final NamedCache cache = getCache(namespace);
-        if (cache == null) return Bytes.wrap(new byte[0]);
-        return cache.keySet().first();
-    }
-    
-    public Bytes lastKey(final String namespace) {
-        final NamedCache cache = getCache(namespace);
-        if (cache == null) return Bytes.wrap(new byte[0]);
-        return cache.keySet().last();
-    }
-    
     public long size() {
         long size = 0;
         for (NamedCache cache : caches.values()) {
