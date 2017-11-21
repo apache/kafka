@@ -28,9 +28,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.NavigableSet;
 import java.util.NoSuchElementException;
-import java.util.TreeSet;
 
 /**
  * An in-memory LRU cache store similar to {@link MemoryLRUCache} but byte-based, not
@@ -196,12 +194,6 @@ public class ThreadCache {
             return new MemoryLRUCacheBytesIterator(Collections.<Bytes>emptyIterator(), new NamedCache(namespace, this.metrics));
         }
         return new MemoryLRUCacheBytesIterator(cache.allKeys(), cache);
-    }
-
-    public NavigableSet<Bytes> keySet(final String namespace) {
-        final NamedCache cache = getCache(namespace);
-        if (cache == null) return new TreeSet<Bytes>();
-        return cache.keySet();
     }
     
     public long size() {

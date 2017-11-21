@@ -31,7 +31,6 @@ import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
-import java.util.NavigableSet;
 import java.util.List;
 
 class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore implements WindowStore<Bytes, byte[]>, CachedStateStore<Windowed<K>, V> {
@@ -241,13 +240,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator = underlying.fetchAll(timeFrom, timeTo);
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(name);
         
-        final NavigableSet<Bytes> allBytes = cache.keySet(name);
-        
-        Bytes keyFrom = new Bytes(new byte[0]);
-        final Bytes floor = allBytes.floor(WindowStoreUtils.toBinaryKey(new byte[0], timeTo + 1, 0));
-        final Bytes keyTo = WindowStoreUtils.bytesKeyFromBinaryKey(SegmentedCacheFunction.bytesFromCacheKey(floor));
-        
-        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(keyFrom, keyTo, timeFrom, timeTo);
+        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(null, null, timeFrom, timeTo);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(cacheIterator,
                                                                                                               hasNextCondition,
                                                                                                               cacheFunction);
