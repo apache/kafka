@@ -67,6 +67,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 
+import java.io.UnsupportedEncodingException;
 import java.net.InetSocketAddress;
 import java.util.Collections;
 import java.util.List;
@@ -797,7 +798,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
             int serializedSize = AbstractRecords.estimateSizeInBytesUpperBound(apiVersions.maxUsableProduceMagic(),
                     compressionType, serializedKey, serializedValue, headers);
-            ensureValidRecordSize(serializedSize, record.value());
+            ensureValidRecordSize(serializedSize, serializedValue);
             long timestamp = record.timestamp() == null ? time.milliseconds() : record.timestamp();
             log.trace("Sending record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
             // producer callback will make sure to call both 'callback' and interceptor callback
@@ -910,11 +911,18 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     /**
      * Validate that the record size isn't too large
      */
-    private void ensureValidRecordSize(int size, V recordValue) {
+    private void ensureValidRecordSize(int size, byte[] recordValue) {
         if (size > this.maxRequestSize) {
-            String strMessage = (String) recordValue;
-            String strMessageByte = strMessage.length() > 1024 ? strMessage.substring(0, 1023)
-                    : strMessage.substring(0, strMessage.length());
+            String strMessage = null;
+            String strMessageByte = null;
+            try {
+                strMessage = new String(recordValue, "UTF-8");
+                strMessageByte = strMessage.length() > 1024 ? strMessage.substring(0, 1023)
+                        : strMessage.substring(0, strMessage.length());
+            } catch (UnsupportedEncodingException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
             throw new RecordTooLargeException("The message is " + size
                     + " bytes when serialized which is larger than the maximum request size you have configured with the "
                     + ProducerConfig.MAX_REQUEST_SIZE_CONFIG + " configuration. The message was : " + strMessageByte
