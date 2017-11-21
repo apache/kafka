@@ -18,7 +18,7 @@
 package kafka.log
 
 import java.io._
-import java.nio.file.Files
+import java.nio.file.{Files, StandardCopyOption}
 import java.util.concurrent._
 
 import com.yammer.metrics.core.Gauge
@@ -151,21 +151,31 @@ class LogManager(logDirs: Seq[File],
         if (initialOfflineDirs.contains(dir))
           throw new IOException(s"Failed to load ${dir.getAbsolutePath} during broker startup")
 
-        if (!dir.exists) {
+        val deleteDir = new File(dir, Log.DeleteDirParent)
+        if (!deleteDir.exists) {
+          if (!dir.exists) {
+            info(s"Log directory ${dir.getAbsolutePath} not found, creating it.")
+            val created = dir.mkdirs()
+            if (!created)
+              throw new IOException(s"Failed to create data directory ${dir.getAbsolutePath}")
+          }
+
           info(s"Log directory ${dir.getAbsolutePath} not found, creating it.")
-          val created = dir.mkdirs()
+          val created = deleteDir.mkdirs()
           if (!created)
-            throw new IOException(s"Failed to create data directory ${dir.getAbsolutePath}")
+            throw new IOException(s"Failed to create deleted logs directory ${deleteDir.getAbsolutePath}")
         }
+
         if (!dir.isDirectory || !dir.canRead)
           throw new IOException(s"${dir.getAbsolutePath} is not a readable log directory.")
+        if (!deleteDir.isDirectory || !deleteDir.canRead)
+          throw new IOException(s"${deleteDir.getAbsolutePath} is not a readable log directory.")
 
         // getCanonicalPath() throws IOException if a file system query fails or if the path is invalid (e.g. contains
         // the Nul character). Since there's no easy way to distinguish between the two cases, we treat them the same
         // and mark the log directory as offline.
         if (!canonicalPaths.add(dir.getCanonicalPath))
           throw new KafkaException(s"Duplicate log directory found: ${dirs.mkString(", ")}")
-
 
         liveLogDirs.add(dir)
       } catch {
@@ -274,9 +284,9 @@ class LogManager(logDirs: Seq[File],
       brokerTopicStats = brokerTopicStats,
       logDirFailureChannel = logDirFailureChannel)
 
-    if (logDir.getName.endsWith(Log.DeleteDirSuffix)) {
+    if (logDir.getName.endsWith(Log.DeleteDirSuffix) || logDir.getParent.equals(Log.DeleteDirParent))
       addLogToBeDeleted(log)
-    } else {
+    else {
       val previous = {
         if (log.isFuture)
           this.futureLogs.put(topicPartition, log)
@@ -336,9 +346,16 @@ class LogManager(logDirs: Seq[File],
             warn("Error occurred while reading log-start-offset-checkpoint file of directory " + dir, e)
         }
 
+        val deleteDir = new File(dir, Log.DeleteDirParent)
         val jobsForDir = for {
-          dirContent <- Option(dir.listFiles).toList
-          logDir <- dirContent if logDir.isDirectory
+          dirContent <-
+            Option(dir.listFiles(
+              new FilenameFilter {
+                override def accept(dir: File, name: String): Boolean =
+                  new File(dir, name).isDirectory && !name.equals(Log.DeleteDirParent)
+                })).toList ++
+              Option(deleteDir.listFiles).toList
+          logDir <- dirContent
         } yield {
           CoreUtils.runnable {
             try {
@@ -789,7 +806,7 @@ class LogManager(logDirs: Seq[File],
       }
 
       try {
-        sourceLog.renameDir(Log.logDeleteDirName(topicPartition))
+        sourceLog.markForDeletion()
         // Now that replica in source log directory has been successfully renamed for deletion.
         // Close the log, update checkpoint files, and enqueue this log to be deleted.
         sourceLog.close()
@@ -830,7 +847,8 @@ class LogManager(logDirs: Seq[File],
         cleaner.abortCleaning(topicPartition)
         cleaner.updateCheckpoints(removedLog.dir.getParentFile)
       }
-      removedLog.renameDir(Log.logDeleteDirName(topicPartition))
+
+      removedLog.markForDeletion()
       checkpointLogRecoveryOffsetsInDir(removedLog.dir.getParentFile)
       checkpointLogStartOffsetsInDir(removedLog.dir.getParentFile)
       addLogToBeDeleted(removedLog)

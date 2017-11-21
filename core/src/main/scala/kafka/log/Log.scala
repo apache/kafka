@@ -17,7 +17,7 @@
 
 package kafka.log
 
-import java.io.{File, IOException}
+import java.io.{File, FileFilter, IOException}
 import java.lang.{Long => JLong}
 import java.nio.file.{Files, NoSuchFileException}
 import java.text.NumberFormat
@@ -508,7 +508,8 @@ class Log(@volatile var dir: File,
         initFileSize = this.initFileSize,
         preallocate = config.preallocate))
       0
-    } else if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
+    } else if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)&&
+               !dir.getName.equals(Log.DeleteDirParent)) {
       val nextOffset = retryOnOffsetOverflow {
         recoverLog()
       }
@@ -678,14 +679,34 @@ class Log(@volatile var dir: File,
   }
 
   /**
-   * Rename the directory of the log
+   * Mark the topic partition log folder for async deletion by moving it under the
+   * 'delete' folder
+   */
+  def markForDeletion(): Unit = {
+    // create an empty file with the name of the corresponding topic partition
+    val tpFile = new File(dir, topicPartition.toString)
+    if (!tpFile.exists())
+      tpFile.createNewFile()
+    // create a 'delete' folder (if it does not exist already) to place all topic partitions
+    // marked for deletion
+    val deleteDir = new File(dir.getParentFile, DeleteDirParent)
+    if (!deleteDir.exists || !deleteDir.isDirectory)
+      deleteDir.mkdirs()
+    // rename and move the topic partition folder to under the 'delete' folder
+    renameDir(Log.logDeleteDirName(), deleteDir)
+  }
+
+  /**
+   * Rename and, if necessary, move the directory of the log
    *
    * @throws KafkaStorageException if rename fails
    */
-  def renameDir(name: String) {
+  def renameDir(name: String, newParent: File = dir.getParentFile) {
     lock synchronized {
-      maybeHandleIOException(s"Error while renaming dir for $topicPartition in log dir ${dir.getParent}") {
-        val renamedDir = new File(dir.getParent, name)
+      maybeHandleIOException(s"Error while renaming dir for $topicPartition " +
+                             s"${if (newParent == dir.getParentFile) "in" else "and moving it to"}" +
+                             s" log dir ${newParent.getName}") {
+        val renamedDir = new File(newParent, name)
         Utils.atomicMoveWithFallback(dir.toPath, renamedDir.toPath)
         if (renamedDir != dir) {
           dir = renamedDir
@@ -1955,8 +1976,12 @@ object Log {
    */
   val CleanShutdownFile = ".kafka_cleanshutdown"
 
-  /** a directory that is scheduled to be deleted */
+  /** a directory that is scheduled to be deleted (the old topic deletion marker) */
   val DeleteDirSuffix = "-delete"
+
+  /** parent folder of topic partition folders scheduled to be deleted
+    * (the new topic deletion marker) */
+  val DeleteDirParent = "delete"
 
   /** a directory that is used for future partition */
   val FutureDirSuffix = "-future"
@@ -2008,11 +2033,23 @@ object Log {
     new File(dir, filenamePrefixFromOffset(offset) + LogFileSuffix + suffix)
 
   /**
-   * Return a directory name to rename the log directory to for async deletion. The name will be in the following
-   * format: topic-partition.uniqueId-delete where topic, partition and uniqueId are variables.
+   * Return a directory name to rename the log directory to for async deletion according to
+   * the old method of marking topics for deletion. The name will be in the following format:
+   * topic-partition.uniqueId-delete where topic, partition and uniqueId are variables.
    */
-  def logDeleteDirName(topicPartition: TopicPartition): String = {
-    logDirNameWithSuffix(topicPartition, DeleteDirSuffix)
+  def logDeleteDirName(logName: String): String = {
+    val uniqueId = java.util.UUID.randomUUID.toString.replaceAll("-", "")
+    s"$logName.$uniqueId$DeleteDirSuffix"
+  }
+
+  /**
+   * Return a directory name to rename the log directory to for async deletion according to
+   * the new method of marking topics for deletion. The name will be a uuid. The corresponding
+   * topic partition will be used to name an empty file inside this folder to indicate the
+   * partition being deleted.
+   */
+  def logDeleteDirName(): String = {
+    java.util.UUID.randomUUID.toString.replaceAll("-", "")
   }
 
   /**
@@ -2104,32 +2141,53 @@ object Log {
 
     def exception(dir: File): KafkaException = {
       new KafkaException(s"Found directory ${dir.getCanonicalPath}, '${dir.getName}' is not in the form of " +
-        "topic-partition or topic-partition.uniqueId-delete (if marked for deletion).\n" +
+        "topic-partition or topic-partition.uniqueId-delete (if marked for deletion using the old method)," +
+        "or does not contain the tag file to indicate the corresponding topic partition (if marked for deletion" +
+        "using the new method).\n" +
         "Kafka's log directories (and children) should only contain Kafka topic data.")
     }
 
     val dirName = dir.getName
-    if (dirName == null || dirName.isEmpty || !dirName.contains('-'))
+    if (dirName == null || dirName.isEmpty || (!dirName.equals(DeleteDirParent) && !dirName.contains('-')))
       throw exception(dir)
     if (dirName.endsWith(DeleteDirSuffix) && !DeleteDirPattern.matcher(dirName).matches ||
         dirName.endsWith(FutureDirSuffix) && !FutureDirPattern.matcher(dirName).matches)
       throw exception(dir)
 
-    val name: String =
-      if (dirName.endsWith(DeleteDirSuffix) || dirName.endsWith(FutureDirSuffix)) dirName.substring(0, dirName.lastIndexOf('.'))
-      else dirName
+    if (dir.getParent.equals(DeleteDirParent)) {
+      // the inspected file is inside the 'delete' folder
+      val files = dir.listFiles(new FileFilter {
+        override def accept(file: File): Boolean =
+          file.isFile && file.length == 0 && file.getName.contains("-") && {
+            val splits = file.getName.split("-")
+            splits.size == 2 && splits(0).size > 0 && splits(1).matches("\\d{1,}")
+          }
+      })
 
-    val index = name.lastIndexOf('-')
-    val topic = name.substring(0, index)
-    val partitionString = name.substring(index + 1)
-    if (topic.isEmpty || partitionString.isEmpty)
-      throw exception(dir)
+      if (files.isEmpty)
+        throw exception(dir)
 
-    val partition =
-      try partitionString.toInt
-      catch { case _: NumberFormatException => throw exception(dir) }
+      val splits = files(0).getName.split("-")
+      new TopicPartition(splits(0), splits(1).toInt)
+    } else {
+      val name: String =
+        if (dirName.endsWith(DeleteDirSuffix) || dirName.endsWith(FutureDirSuffix)) dirName.substring(0, dirName.lastIndexOf('.'))
+        else dirName
 
-    new TopicPartition(topic, partition)
+      val index = name.lastIndexOf('-')
+      val topic = name.substring(0, index)
+      val partitionString = name.substring(index + 1)
+      if (topic.isEmpty || partitionString.isEmpty)
+        throw exception(dir)
+
+      val partition =
+        try partitionString.toInt
+        catch {
+          case _: NumberFormatException => throw exception(dir)
+        }
+
+      new TopicPartition(topic, partition)
+    }
   }
 
   private def isIndexFile(file: File): Boolean = {
