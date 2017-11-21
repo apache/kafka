@@ -679,6 +679,38 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
     }
 
+    /**
+     * Used to capture subscribed topic via Patterns discovered during the
+     * partition assignment process.
+     *
+     * // TODO: this is a duplicate of the InternalTopologyBuilder#SubscriptionUpdates
+     *          and is maintained only for compatibility of the deprecated TopologyBuilder API
+     */
+    public static class SubscriptionUpdates {
+
+        private final Set<String> updatedTopicSubscriptions = new HashSet<>();
+
+        public void updateTopics(Collection<String> topicNames) {
+            updatedTopicSubscriptions.clear();
+            updatedTopicSubscriptions.addAll(topicNames);
+        }
+
+        public Collection<String> getUpdates() {
+            return Collections.unmodifiableSet(updatedTopicSubscriptions);
+        }
+
+        public boolean hasUpdates() {
+            return !updatedTopicSubscriptions.isEmpty();
+        }
+
+        @Override
+        public String toString() {
+            return "SubscriptionUpdates{" +
+                    "updatedTopicSubscriptions=" + updatedTopicSubscriptions +
+                    '}';
+        }
+    }
+
     static class CopartitionedTopicsValidator {
         private final String logPrefix;
 

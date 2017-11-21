@@ -443,14 +443,6 @@ class TaskManager {
     }
 
     // the following functions are for testing only
-    Map<HostInfo, Set<TopicPartition>> partitionsByHostState() {
-        return partitionsByHostState;
-    }
-
-    Cluster clusterMetadata() {
-        return cluster;
-    }
-
     Map<TaskId, Set<TopicPartition>> assignedActiveTasks() {
         return assignedActiveTasks;
     }

@@ -486,42 +486,16 @@ public class TaskManagerTest {
         taskManager.setAssignmentMetadata(activeTasks, standbyTasks);
         assertTrue(taskManager.assignedActiveTasks().isEmpty());
 
-        // assign single partition task
-        activeTasks.put(task1, Collections.<TopicPartition>singleton(t1p1));
-
-        taskManager.setAssignmentMetadata(activeTasks, standbyTasks);
-
-        assertEquals(1, taskManager.assignedActiveTasks().size());
-        assertEquals(Collections.singleton(t1p1), taskManager.assignedActiveTasks().get(task1));
-
-        // assign another single partition task
-        activeTasks.put(task2, Collections.singleton(t1p2));
-
-        taskManager.setAssignmentMetadata(activeTasks, standbyTasks);
-
-        assertEquals(2, taskManager.assignedActiveTasks().size());
-        assertEquals(Collections.singleton(t1p2), taskManager.assignedActiveTasks().get(task2));
-
-        // assign some partitions from another topic to the existing tasks
+        // assign two active tasks with two partitions each
         activeTasks.put(task1, new HashSet<>(Arrays.asList(t1p1, t2p1)));
         activeTasks.put(task2, new HashSet<>(Arrays.asList(t1p2, t2p2)));
 
-        taskManager.setAssignmentMetadata(activeTasks, standbyTasks);
-
-        assertEquals(2, taskManager.assignedActiveTasks().size());
-        assertEquals(new HashSet<>(Arrays.asList(t1p1, t2p1)), taskManager.assignedActiveTasks().get(task1));
-        assertEquals(new HashSet<>(Arrays.asList(t1p2, t2p2)), taskManager.assignedActiveTasks().get(task2));
-
-        // assign some standby tasks
+        // assign one standby task with two partitions
         standbyTasks.put(task3, new HashSet<>(Arrays.asList(t1p3, t2p3)));
         taskManager.setAssignmentMetadata(activeTasks, standbyTasks);
 
-        assertEquals(2, taskManager.assignedActiveTasks().size());
-        assertEquals(new HashSet<>(Arrays.asList(t1p1, t2p1)), taskManager.assignedActiveTasks().get(task1));
-        assertEquals(new HashSet<>(Arrays.asList(t1p2, t2p2)), taskManager.assignedActiveTasks().get(task2));
-        assertEquals(1, taskManager.assignedStandbyTasks().size());
-        assertEquals(new HashSet<>(Arrays.asList(t1p3, t2p3)), taskManager.assignedStandbyTasks().get(task3));
-
+        assertThat(taskManager.assignedActiveTasks(), equalTo(activeTasks));
+        assertThat(taskManager.assignedStandbyTasks(), equalTo(standbyTasks));
     }
 
     private void mockAssignStandbyPartitions(final long offset) {

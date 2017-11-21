@@ -617,7 +617,7 @@ public class KafkaStreams {
         internalTopologyBuilder.setApplicationId(applicationId);
 
         // sanity check to fail-fast in case we cannot build a ProcessorTopology due to an exception
-        internalTopologyBuilder.build(null);
+        internalTopologyBuilder.build();
 
         this.streamsMetadataState = new StreamsMetadataState(
                 internalTopologyBuilder,
