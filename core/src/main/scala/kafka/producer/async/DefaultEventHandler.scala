@@ -32,6 +32,7 @@ import java.util.concurrent.atomic._
 
 import kafka.api.{ProducerRequest, TopicMetadata}
 import org.apache.kafka.common.utils.{Time, Utils}
+import org.slf4j.event.Level
 
 @deprecated("This class has been deprecated and will be removed in a future release.", "0.10.0.0")
 class DefaultEventHandler[K,V](config: ProducerConfig,
@@ -72,7 +73,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
       topicMetadataToRefresh ++= outstandingProduceRequests.map(_.topic)
       if (topicMetadataRefreshInterval >= 0 &&
           Time.SYSTEM.milliseconds - lastTopicMetadataRefreshTime > topicMetadataRefreshInterval) {
-        CoreUtils.swallowError(brokerPartitionInfo.updateInfo(topicMetadataToRefresh.toSet, correlationId.getAndIncrement))
+        CoreUtils.swallow(brokerPartitionInfo.updateInfo(topicMetadataToRefresh.toSet, correlationId.getAndIncrement), logger, Level.ERROR)
         sendPartitionPerTopicCache.clear()
         topicMetadataToRefresh.clear
         lastTopicMetadataRefreshTime = Time.SYSTEM.milliseconds
@@ -83,7 +84,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
         // back off and update the topic metadata cache before attempting another send operation
         Thread.sleep(config.retryBackoffMs)
         // get topics of the outstanding produce requests and refresh metadata for those
-        CoreUtils.swallowError(brokerPartitionInfo.updateInfo(outstandingProduceRequests.map(_.topic).toSet, correlationId.getAndIncrement))
+        CoreUtils.swallow(brokerPartitionInfo.updateInfo(outstandingProduceRequests.map(_.topic).toSet, correlationId.getAndIncrement), logger, Level.ERROR)
         sendPartitionPerTopicCache.clear()
         remainingRetries -= 1
         producerStats.resendRate.mark()

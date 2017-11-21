@@ -50,8 +50,6 @@ trait Logging extends LazyLogging {
 
   def trace(msg: => String, e: => Throwable): Unit = logger.trace(msgWithLogIdent(msg),e)
 
-  def swallowTrace(action: => Unit): Unit = CoreUtils.swallow(logger.underlying.trace, action)
-
   def isDebugEnabled: Boolean = logger.underlying.isDebugEnabled
 
   def isTraceEnabled: Boolean = logger.underlying.isTraceEnabled
@@ -60,27 +58,17 @@ trait Logging extends LazyLogging {
 
   def debug(msg: => String, e: => Throwable): Unit = logger.debug(msgWithLogIdent(msg),e)
 
-  def swallowDebug(action: => Unit): Unit = CoreUtils.swallow(logger.underlying.debug, action)
-
   def info(msg: => String): Unit = logger.info(msgWithLogIdent(msg))
 
   def info(msg: => String,e: => Throwable): Unit = logger.info(msgWithLogIdent(msg),e)
-
-  def swallowInfo(action: => Unit): Unit = CoreUtils.swallow(logger.underlying.info, action)
 
   def warn(msg: => String): Unit = logger.warn(msgWithLogIdent(msg))
 
   def warn(msg: => String, e: => Throwable): Unit = logger.warn(msgWithLogIdent(msg),e)
 
-  def swallowWarn(action: => Unit): Unit = CoreUtils.swallow(logger.underlying.warn, action)
-
-  def swallow(action: => Unit): Unit = swallowWarn(action)
-
   def error(msg: => String): Unit = logger.error(msgWithLogIdent(msg))
 
   def error(msg: => String, e: => Throwable): Unit = logger.error(msgWithLogIdent(msg),e)
-
-  def swallowError(action: => Unit): Unit = CoreUtils.swallow(logger.underlying.error, action)
 
   def fatal(msg: => String): Unit =
     logger.error(FatalMarker, msgWithLogIdent(msg))

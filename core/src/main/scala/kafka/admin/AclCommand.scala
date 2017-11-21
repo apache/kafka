@@ -17,6 +17,7 @@
 
 package kafka.admin
 
+import com.typesafe.scalalogging.LazyLogging
 import joptsimple._
 import kafka.security.auth._
 import kafka.server.KafkaConfig
@@ -27,7 +28,7 @@ import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConverters._
 
-object AclCommand {
+object AclCommand extends LazyLogging {
 
   val Newline = scala.util.Properties.lineSeparator
   val ResourceTypeToValidOperations = Map[ResourceType, Set[Operation]] (
@@ -77,7 +78,7 @@ object AclCommand {
       authZ.configure(authorizerProperties.asJava)
       f(authZ)
     }
-    finally CoreUtils.swallow(authZ.close())
+    finally CoreUtils.swallow(authZ.close(), logger)
   }
 
   private def addAcl(opts: AclCommandOptions) {

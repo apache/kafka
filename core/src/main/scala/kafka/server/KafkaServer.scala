@@ -517,64 +517,64 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
       // last in the `if` block. If the order is reversed, we could shutdown twice or leave `isShuttingDown` set to
       // `true` at the end of this method.
       if (shutdownLatch.getCount > 0 && isShuttingDown.compareAndSet(false, true)) {
-        CoreUtils.swallow(controlledShutdown())
+        CoreUtils.swallow(controlledShutdown(), logger)
         brokerState.newState(BrokerShuttingDown)
 
         if (kafkaHealthcheck != null)
-          CoreUtils.swallow(kafkaHealthcheck.shutdown())
+          CoreUtils.swallow(kafkaHealthcheck.shutdown(), logger)
 
         if (dynamicConfigManager != null)
-          CoreUtils.swallow(dynamicConfigManager.shutdown())
+          CoreUtils.swallow(dynamicConfigManager.shutdown(), logger)
 
         // Stop socket server to stop accepting any more connections and requests.
         // Socket server will be shutdown towards the end of the sequence.
         if (socketServer != null)
-          CoreUtils.swallow(socketServer.stopProcessingRequests())
+          CoreUtils.swallow(socketServer.stopProcessingRequests(), logger)
         if (requestHandlerPool != null)
-          CoreUtils.swallow(requestHandlerPool.shutdown())
+          CoreUtils.swallow(requestHandlerPool.shutdown(), logger)
 
-        CoreUtils.swallow(kafkaScheduler.shutdown())
+        CoreUtils.swallow(kafkaScheduler.shutdown(), logger)
 
         if (apis != null)
-          CoreUtils.swallow(apis.close())
-        CoreUtils.swallow(authorizer.foreach(_.close()))
+          CoreUtils.swallow(apis.close(), logger)
+        CoreUtils.swallow(authorizer.foreach(_.close()), logger)
         if (adminManager != null)
-          CoreUtils.swallow(adminManager.shutdown())
+          CoreUtils.swallow(adminManager.shutdown(), logger)
 
         if (transactionCoordinator != null)
-          CoreUtils.swallow(transactionCoordinator.shutdown())
+          CoreUtils.swallow(transactionCoordinator.shutdown(), logger)
         if (groupCoordinator != null)
-          CoreUtils.swallow(groupCoordinator.shutdown())
+          CoreUtils.swallow(groupCoordinator.shutdown(), logger)
 
         if (replicaManager != null)
-          CoreUtils.swallow(replicaManager.shutdown())
+          CoreUtils.swallow(replicaManager.shutdown(), logger)
         if (logManager != null)
-          CoreUtils.swallow(logManager.shutdown())
+          CoreUtils.swallow(logManager.shutdown(), logger)
 
         if (kafkaController != null)
-          CoreUtils.swallow(kafkaController.shutdown())
+          CoreUtils.swallow(kafkaController.shutdown(), logger)
         if (zkUtils != null)
-          CoreUtils.swallow(zkUtils.close())
+          CoreUtils.swallow(zkUtils.close(), logger)
         if (zkClient != null)
-          CoreUtils.swallow(zkClient.close())
+          CoreUtils.swallow(zkClient.close(), logger)
 
         if (quotaManagers != null)
-          CoreUtils.swallow(quotaManagers.shutdown())
+          CoreUtils.swallow(quotaManagers.shutdown(), logger)
         // Even though socket server is stopped much earlier, controller can generate
         // response for controlled shutdown request. Shutdown server at the end to
         // avoid any failures (e.g. when metrics are recorded)
         if (socketServer != null)
-          CoreUtils.swallow(socketServer.shutdown())
+          CoreUtils.swallow(socketServer.shutdown(), logger)
         if (metrics != null)
-          CoreUtils.swallow(metrics.close())
+          CoreUtils.swallow(metrics.close(), logger)
         if (brokerTopicStats != null)
-          CoreUtils.swallow(brokerTopicStats.close())
+          CoreUtils.swallow(brokerTopicStats.close(), logger)
 
         brokerState.newState(NotRunning)
 
         startupComplete.set(false)
         isShuttingDown.set(false)
-        CoreUtils.swallow(AppInfoParser.unregisterAppInfo(jmxPrefix, config.brokerId.toString, metrics))
+        CoreUtils.swallow(AppInfoParser.unregisterAppInfo(jmxPrefix, config.brokerId.toString, metrics), logger)
         shutdownLatch.countDown()
         info("shut down completed")
       }

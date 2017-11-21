@@ -75,7 +75,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
         idx.position(roundDownToExactMultiple(idx.limit(), entrySize))
       idx
     } finally {
-      CoreUtils.swallow(raf.close())
+      CoreUtils.swallow(raf.close(), logger)
     }
   }
 
@@ -130,7 +130,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
           mmap.position(position)
           true
         } finally {
-          CoreUtils.swallow(raf.close())
+          CoreUtils.swallow(raf.close(), logger)
         }
       }
     }

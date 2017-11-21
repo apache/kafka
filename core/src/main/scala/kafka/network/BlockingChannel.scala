@@ -21,7 +21,7 @@ import java.net.InetSocketAddress
 import java.nio.channels._
 
 import kafka.api.RequestOrResponse
-import kafka.utils.{Logging, nonthreadsafe}
+import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
 import org.apache.kafka.common.network.NetworkReceive
 
 
@@ -91,15 +91,15 @@ class BlockingChannel( val host: String,
   
   def disconnect() = lock synchronized {
     if(channel != null) {
-      swallow(channel.close())
-      swallow(channel.socket.close())
+      CoreUtils.swallow(channel.close(), logger)
+      CoreUtils.swallow(channel.socket.close(), logger)
       channel = null
       writeChannel = null
     }
     // closing the main socket channel *should* close the read channel
     // but let's do it to be sure.
     if(readChannel != null) {
-      swallow(readChannel.close())
+      CoreUtils.swallow(readChannel.close(), logger)
       readChannel = null
     }
     connected = false

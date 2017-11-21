@@ -24,6 +24,7 @@ import java.util.concurrent.locks.ReentrantLock
 import java.nio.ByteBuffer
 import java.util.regex.Pattern
 
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.log4j.Logger
 import org.scalatest.junit.JUnitSuite
 import org.junit.Assert._
@@ -31,19 +32,19 @@ import kafka.common.KafkaException
 import kafka.utils.CoreUtils.inLock
 import org.junit.Test
 import org.apache.kafka.common.utils.{Base64, Utils}
+import org.slf4j.event.Level
 
 import scala.collection.JavaConverters._
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
 
-class CoreUtilsTest extends JUnitSuite {
+class CoreUtilsTest extends JUnitSuite with LazyLogging {
 
-  private val logger = Logger.getLogger(classOf[CoreUtilsTest])
   val clusterIdPattern = Pattern.compile("[a-zA-Z0-9_\\-]+")
 
   @Test
   def testSwallow() {
-    CoreUtils.swallow(logger.info, throw new KafkaException("test"))
+    CoreUtils.swallow(throw new KafkaException("test"), logger, Level.INFO)
   }
 
   @Test
