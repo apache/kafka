@@ -1149,7 +1149,6 @@ public class StreamThread extends Thread {
      * This is useful in debugging scenarios.
      * @return A string representation of the StreamThread instance.
      */
-    @SuppressWarnings("ThrowableNotThrown")
     public String toString(final String indent) {
         final StringBuilder sb = new StringBuilder()
                 .append(indent).append("\tStreamsThread threadId: ").append(getName()).append("\n");
