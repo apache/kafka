@@ -397,7 +397,6 @@ class TaskManager {
         if (builder().sourceTopicPattern() != null) {
             final Collection<String> existingTopics = builder().subscriptionUpdates().getUpdates();
             if (!existingTopics.equals(topics)) {
-                topics.addAll(existingTopics);
                 builder().updateSubscribedTopics(topics, logPrefix);
             }
         }
