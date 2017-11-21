@@ -88,8 +88,9 @@ public class InternalTopicConfigTest {
         assertTrue(new InternalTopicConfig("name",
                                            Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
                                            Collections.<String, String>emptyMap()).isCompacted());
-        assertTrue(new InternalTopicConfig("name", Utils.mkSet(InternalTopicConfig.CleanupPolicy.compact,
-                                                               InternalTopicConfig.CleanupPolicy.delete),
+        assertTrue(new InternalTopicConfig("name",
+                                           Utils.mkSet(InternalTopicConfig.CleanupPolicy.compact,
+                                                       InternalTopicConfig.CleanupPolicy.delete),
                                            Collections.<String, String>emptyMap()).isCompacted());
     }
 

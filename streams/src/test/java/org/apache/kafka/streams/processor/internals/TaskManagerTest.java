@@ -28,7 +28,6 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
-
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
@@ -88,7 +87,7 @@ public class TaskManagerTest {
     @Mock(type = MockType.NICE)
     private StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator;
     @Mock(type = MockType.NICE)
-    private StreamsKafkaClient streamsKafkaClient;
+    private AdminClient adminClient;
     @Mock(type = MockType.NICE)
     private AdminClient adminClient;
     @Mock(type = MockType.NICE)
@@ -128,7 +127,6 @@ public class TaskManagerTest {
                                       streamsMetadataState,
                                       activeTaskCreator,
                                       standbyTaskCreator,
-                                      streamsKafkaClient,
                                       adminClient,
                                       active,
                                       standby);
