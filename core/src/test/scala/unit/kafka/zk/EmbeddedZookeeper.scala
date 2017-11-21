@@ -17,13 +17,15 @@
 
 package kafka.zk
 
-import org.apache.zookeeper.server.ZooKeeperServer
-import org.apache.zookeeper.server.NIOServerCnxnFactory
-import kafka.utils.TestUtils
+import java.lang.reflect.{Constructor, Field}
 import java.net.InetSocketAddress
+import java.util.concurrent.CountDownLatch
 
-import kafka.utils.CoreUtils
+import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.common.utils.Utils
+import org.apache.zookeeper.server.{NIOServerCnxnFactory, ZooKeeperServer}
+
+import scala.util.Try
 
 /**
  * ZooKeeperServer wrapper that starts the server with temporary directories during construction and deletes
@@ -41,6 +43,9 @@ class EmbeddedZookeeper() {
   val logDir = TestUtils.tempDir()
   val tickTime = 500
   val zookeeper = new ZooKeeperServer(snapshotDir, logDir, tickTime)
+
+  disableZKShutdownHandlerIsNotRegisteredError(zookeeper)
+
   val factory = new NIOServerCnxnFactory()
   private val addr = new InetSocketAddress("127.0.0.1", TestUtils.RandomPort)
   factory.configure(addr, 0)
@@ -62,6 +67,38 @@ class EmbeddedZookeeper() {
 
     Utils.delete(logDir)
     Utils.delete(snapshotDir)
+  }
+
+  /**
+    * There are some useless log appeared when running a lot of tests:
+    *
+    *   ERROR ZKShutdownHandler is not registered, so ZooKeeper server won't take any action on ERROR or SHUTDOWN server state changes (org.apache.zookeeper.server.ZooKeeperServer:472)
+    *   ERROR ZKShutdownHandler is not registered, so ZooKeeper server won't take any action on ERROR or SHUTDOWN server state changes (org.apache.zookeeper.server.ZooKeeperServer:472)
+    *
+    * To disable such logs this method is used.
+    *
+    * If the API of ZooKeeperServer will be changed the method will not cause tests to fail because
+    * the method is wrapped with [[Try]]
+    *
+    * @param zooKeeperServer instance of [[ZooKeeperServer]] used for testing
+    * @return attempt to disable
+    */
+  def disableZKShutdownHandlerIsNotRegisteredError(zooKeeperServer: ZooKeeperServer): Try[Unit] = {
+    Try {
+      val zkShutdownHandlerField: Field = zooKeeperServer.getClass.getDeclaredField("zkShutdownHandler")
+      val clazz: Class[_] = Class.forName("org.apache.zookeeper.server.ZooKeeperServerShutdownHandler")
+      val constructor: Constructor[_] = clazz.getDeclaredConstructor(classOf[CountDownLatch])
+
+      // make filed and constructor constructor accessible
+      constructor.setAccessible(true)
+      zkShutdownHandlerField.setAccessible(true)
+
+      // new ZooKeeperServerShutdownHandler(new CountDownLatch(1))
+      val zkShutdownHandler = constructor.newInstance(new CountDownLatch(1))
+
+      // ZKServer.zkShutdownHandler = new ZooKeeperServerShutdownHandler(new CountDownLatch(1))
+      zkShutdownHandlerField.set(zooKeeperServer, zkShutdownHandler)
+    }
   }
   
 }
