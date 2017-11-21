@@ -648,7 +648,9 @@ public class StreamThread extends Thread {
         final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         final Map<String, Object> consumerConfigs = config.getConsumerConfigs(applicationId, threadClientId);
         consumerConfigs.put(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR, taskManager);
+        String originalReset = null;
         if (!builder.latestResetTopicsPattern().pattern().equals("") || !builder.earliestResetTopicsPattern().pattern().equals("")) {
+            originalReset = (String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
             consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
         }
         final Consumer<byte[], byte[]> consumer = clientSupplier.getConsumer(consumerConfigs);
@@ -658,6 +660,7 @@ public class StreamThread extends Thread {
                 config,
                 restoreConsumer,
                 consumer,
+                originalReset,
                 adminClient,
                 taskManager,
                 streamsMetrics,
@@ -670,6 +673,7 @@ public class StreamThread extends Thread {
                         final StreamsConfig config,
                         final Consumer<byte[], byte[]> restoreConsumer,
                         final Consumer<byte[], byte[]> consumer,
+                        final String originalReset,
                         final AdminClient adminClient,
                         final TaskManager taskManager,
                         final StreamsMetricsThreadImpl streamsMetrics,
@@ -690,14 +694,11 @@ public class StreamThread extends Thread {
         this.taskManager = taskManager;
         this.restoreConsumer = restoreConsumer;
         this.consumer = consumer;
+        this.originalReset = originalReset;
         this.adminClient = adminClient;
 
         this.pollTimeMs = config.getLong(StreamsConfig.POLL_MS_CONFIG);
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
-
-        if (!builder.latestResetTopicsPattern().pattern().equals("") || !builder.earliestResetTopicsPattern().pattern().equals("")) {
-            originalReset = (String) config.originals().get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
-        }
 
         updateThreadMetadata(null, null);
     }
