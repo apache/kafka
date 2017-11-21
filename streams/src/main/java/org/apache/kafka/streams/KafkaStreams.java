@@ -589,12 +589,12 @@ public class KafkaStreams {
 
         // The application ID is a required config and hence should always have value
         processId = UUID.randomUUID();
-        final String clientId = config.getString(StreamsConfig.CLIENT_ID_CONFIG);
+        final String userClientId = config.getString(StreamsConfig.CLIENT_ID_CONFIG);
         final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
-        if (clientId.length() <= 0) {
+        if (userClientId.length() <= 0) {
             this.clientId = applicationId + "-" + processId;
         } else {
-            this.clientId = clientId;
+            this.clientId = userClientId;
         }
 
         final LogContext logContext = new LogContext(String.format("stream-client [%s] ", clientId));

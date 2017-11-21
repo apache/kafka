@@ -212,6 +212,8 @@ public class QueryableStateIntegrationTest {
         // Create a Windowed State Store that contains the word count for every 1 minute
         groupedByWord.count(TimeWindows.of(WINDOW_SIZE), "windowed-word-count-store-" + inputTopic);
 
+        System.out.println(builder.build().describe());
+
         return new KafkaStreams(builder.build(), streamsConfiguration);
     }
 
@@ -262,12 +264,18 @@ public class QueryableStateIntegrationTest {
                 public boolean conditionMet() {
                     try {
                         final StreamsMetadata metadata = streams.metadataForKey(storeName, key, new StringSerializer());
+
+                        System.out.println(metadata);
+
                         if (metadata == null || metadata.equals(StreamsMetadata.NOT_AVAILABLE)) {
                             return false;
                         }
                         final int index = metadata.hostInfo().port();
                         final KafkaStreams streamsWithKey = streamRunnables[index].getStream();
                         final ReadOnlyKeyValueStore<String, Long> store = streamsWithKey.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+
+                        System.out.println("store " + store + ": " + (store != null ? store.get(key) != null : null));
+
                         return store != null && store.get(key) != null;
                     } catch (final IllegalStateException e) {
                         // Kafka Streams instance may have closed but rebalance hasn't happened

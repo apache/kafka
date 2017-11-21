@@ -609,9 +609,9 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             }
         }
 
+        taskManager.setClusterMetadata(Cluster.empty().withPartitions(topicToPartitionInfo));
         taskManager.setPartitionsByHostState(info.partitionsByHost);
         taskManager.setAssignmentMetadata(activeTasks, info.standbyTasks);
-        taskManager.setClusterMetadata(Cluster.empty().withPartitions(topicToPartitionInfo));
 
         taskManager.checkForNewTopicAssignments(partitions);
     }
@@ -736,27 +736,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     }
 
     // following functions are for test only
-    Cluster clusterMetadata() {
-        if (taskManager.clusterMetadata() == null) {
-            return Cluster.empty();
-        }
-        return taskManager.clusterMetadata();
-    }
-
-    Map<TaskId, Set<TopicPartition>> activeTasks() {
-        if (taskManager.assignedActiveTasks() == null) {
-            return Collections.emptyMap();
-        }
-        return Collections.unmodifiableMap(taskManager.assignedActiveTasks());
-    }
-
-    Map<TaskId, Set<TopicPartition>> standbyTasks() {
-        if (taskManager.assignedStandbyTasks() == null) {
-            return Collections.emptyMap();
-        }
-        return Collections.unmodifiableMap(taskManager.assignedStandbyTasks());
-    }
-
     void setInternalTopicManager(InternalTopicManager internalTopicManager) {
         this.internalTopicManager = internalTopicManager;
     }

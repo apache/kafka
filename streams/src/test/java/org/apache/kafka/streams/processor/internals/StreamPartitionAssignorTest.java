@@ -43,7 +43,6 @@ import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockInternalTopicManager;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockStateStoreSupplier;
-import org.apache.kafka.test.MockTimestampExtractor;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.junit.Assert;
@@ -56,7 +55,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 
@@ -64,7 +62,6 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.not;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThat;
 
 public class StreamPartitionAssignorTest {
@@ -114,22 +111,17 @@ public class StreamPartitionAssignorTest {
 
     private final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
 
-    private Properties configProps() {
-        return new Properties() {
-            {
-                setProperty(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
-                setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, userEndPoint);
-                //setProperty(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3");
-                setProperty(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName());
-            }
-        };
+    private Map<String, Object> configProps() {
+        Map<String, Object> configurationMap = new HashMap<>();
+        configurationMap.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+        configurationMap.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, userEndPoint);
+        configurationMap.put(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR, taskManager);
+        return configurationMap;
     }
 
     private void configurePartitionAssignor(final Map<String, Object> props) {
-        Map<String, Object> configurationMap = new HashMap<>(props);
-        configurationMap.put(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR, taskManager);
-        configurationMap.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, userEndPoint);
-        configurationMap.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+        Map<String, Object> configurationMap = configProps();
+        configurationMap.putAll(props);
         partitionAssignor.configure(configurationMap);
     }
 
@@ -472,8 +464,8 @@ public class StreamPartitionAssignorTest {
 
     @Test
     public void testAssignWithStandbyReplicas() throws Exception {
-        Properties props = configProps();
-        props.setProperty(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, "1");
+        Map<String, Object> props = configProps();
+        props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, "1");
         StreamsConfig config = new StreamsConfig(props);
 
         builder.addSource(null, "source1", null, null, null, "topic1");
@@ -544,10 +536,7 @@ public class StreamPartitionAssignorTest {
 
     @Test
     public void testOnAssignment() throws Exception {
-
-        mockTaskManager(Collections.<TaskId>emptySet(), Collections.<TaskId>emptySet(), UUID.randomUUID(), builder);
         configurePartitionAssignor(Collections.<String, Object>emptyMap());
-
 
         final List<TaskId> activeTaskList = Utils.mkList(task0, task3);
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
@@ -557,14 +546,11 @@ public class StreamPartitionAssignorTest {
                 Utils.mkSet(t3p0, t3p3));
         activeTasks.put(task0, Utils.mkSet(t3p0));
         activeTasks.put(task3, Utils.mkSet(t3p3));
-        standbyTasks.put(task1, Utils.mkSet(t3p0));
-        standbyTasks.put(task2, Utils.mkSet(t3p0));
+        standbyTasks.put(task1, Utils.mkSet(t3p1));
+        standbyTasks.put(task2, Utils.mkSet(t3p2));
 
-        AssignmentInfo info = new AssignmentInfo(activeTaskList, standbyTasks, hostState);
-        PartitionAssignor.Assignment assignment = new PartitionAssignor.Assignment(Utils.mkList(t3p0, t3p3), info.encode());
-        partitionAssignor.onAssignment(assignment);
-
-        configurePartitionAssignor(Collections.<String, Object>emptyMap());
+        final AssignmentInfo info = new AssignmentInfo(activeTaskList, standbyTasks, hostState);
+        final PartitionAssignor.Assignment assignment = new PartitionAssignor.Assignment(Utils.mkList(t3p0, t3p3), info.encode());
 
         Capture<Map<TaskId, Set<TopicPartition>>> capturedActiveTasks = EasyMock.newCapture();
         Capture<Map<TaskId, Set<TopicPartition>>> capturedStandbyTasks = EasyMock.newCapture();
@@ -578,14 +564,15 @@ public class StreamPartitionAssignorTest {
         EasyMock.expectLastCall();
         EasyMock.replay(taskManager);
 
-        partitionAssignor.onAssignment(createAssignment(hostState));
+        partitionAssignor.onAssignment(assignment);
 
         EasyMock.verify(taskManager);
 
         assertEquals(capturedHostState.getValue(), hostState);
         assertEquals(activeTasks, capturedActiveTasks.getValue());
         assertEquals(standbyTasks, capturedStandbyTasks.getValue());
-        assertEquals(capturedCluster.getValue());
+        assertEquals(Collections.singleton(t3p0.topic()), capturedCluster.getValue().topics());
+        assertEquals(2, capturedCluster.getValue().partitionsForTopic(t3p0.topic()).size());
     }
 
     @Test
