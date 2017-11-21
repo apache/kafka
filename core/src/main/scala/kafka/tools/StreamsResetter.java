@@ -35,6 +35,7 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 
+import javax.xml.datatype.DatatypeConfigurationException;
 import javax.xml.datatype.DatatypeFactory;
 import javax.xml.datatype.Duration;
 import java.io.IOException;
@@ -359,91 +360,19 @@ public class StreamsResetter {
         if (inputTopicPartitions.size() > 0) {
             System.out.println("Following input topics offsets will be reset to (for consumer group " + groupId + ")");
             if (options.has(toOffsetOption)) {
-                final Long offset = options.valueOf(toOffsetOption);
-                final Map<TopicPartition, Long> endOffsets = client.endOffsets(inputTopicPartitions);
-                final Map<TopicPartition, Long> beginningOffsets = client.beginningOffsets(inputTopicPartitions);
-
-                final Map<TopicPartition, Long> topicPartitionsAndOffset = new HashMap<>(inputTopicPartitions.size());
-                for (final TopicPartition topicPartition : inputTopicPartitions) {
-                    topicPartitionsAndOffset.put(topicPartition, offset);
-                }
-
-                final Map<TopicPartition, Long> validatedTopicPartitionsAndOffset =
-                    checkOffsetRange(topicPartitionsAndOffset, beginningOffsets, endOffsets);
-
-                for (final TopicPartition topicPartition : inputTopicPartitions) {
-                    client.seek(topicPartition, validatedTopicPartitionsAndOffset.get(topicPartition));
-                }
+                resetOffsetsTo(client, inputTopicPartitions);
             } else if (options.has(toEarliestOption)) {
                 client.seekToBeginning(inputTopicPartitions);
             } else if (options.has(toLatestOption)) {
                 client.seekToEnd(inputTopicPartitions);
             } else if (options.has(shiftByOption)) {
-                final Long shiftBy = options.valueOf(shiftByOption);
-                final Map<TopicPartition, Long> endOffsets = client.endOffsets(inputTopicPartitions);
-                final Map<TopicPartition, Long> beginningOffsets = client.beginningOffsets(inputTopicPartitions);
-
-                final Map<TopicPartition, Long> topicPartitionsAndOffset = new HashMap<>(inputTopicPartitions.size());
-                for (final TopicPartition topicPartition : inputTopicPartitions) {
-                    final Long position = client.position(topicPartition);
-                    final Long offset = position + shiftBy;
-                    topicPartitionsAndOffset.put(topicPartition, offset);
-                }
-
-                final Map<TopicPartition, Long> validatedTopicPartitionsAndOffset =
-                    checkOffsetRange(topicPartitionsAndOffset, beginningOffsets, endOffsets);
-
-                for (final TopicPartition topicPartition : inputTopicPartitions) {
-                    client.seek(topicPartition, validatedTopicPartitionsAndOffset.get(topicPartition));
-                }
+                shiftOffsetsBy(client, inputTopicPartitions);
             } else if (options.has(toDatetimeOption)) {
-                final String ts = options.valueOf(toDatetimeOption);
-                final Long timestamp = getDateTime(ts);
-
-                final Map<TopicPartition, Long> topicPartitionsAndTimes = new HashMap<>(inputTopicPartitions.size());
-                for (final TopicPartition topicPartition : inputTopicPartitions) {
-                    topicPartitionsAndTimes.put(topicPartition, timestamp);
-                }
-
-                final Map<TopicPartition, OffsetAndTimestamp> topicPartitionsAndOffset = client.offsetsForTimes(topicPartitionsAndTimes);
-
-                for (final TopicPartition topicPartition : inputTopicPartitions) {
-                    final Long offset = topicPartitionsAndOffset.get(topicPartition).offset();
-                    client.seek(topicPartition, offset);
-                }
+                resetToDatetime(client, inputTopicPartitions);
             } else if (options.has(byDurationOption)) {
-                final String duration = options.valueOf(byDurationOption);
-                final Date now = new Date();
-                final Duration durationParsed = DatatypeFactory.newInstance().newDuration(duration);
-                durationParsed.negate().addTo(now);
-                final Long timestamp = now.getTime();
-
-                final Map<TopicPartition, Long> topicPartitionsAndTimes = new HashMap<>(inputTopicPartitions.size());
-                for (final TopicPartition topicPartition : inputTopicPartitions) {
-                    topicPartitionsAndTimes.put(topicPartition, timestamp);
-                }
-
-                final Map<TopicPartition, OffsetAndTimestamp> topicPartitionsAndOffset = client.offsetsForTimes(topicPartitionsAndTimes);
-
-                for (final TopicPartition topicPartition : inputTopicPartitions) {
-                    final Long offset = topicPartitionsAndOffset.get(topicPartition).offset();
-                    client.seek(topicPartition, offset);
-                }
+                resetByDuration(client, inputTopicPartitions);
             } else if (options.has(fromFileOption)) {
-                final Map<TopicPartition, Long> endOffsets = client.endOffsets(inputTopicPartitions);
-                final Map<TopicPartition, Long> beginningOffsets = client.beginningOffsets(inputTopicPartitions);
-
-                final String resetPlanPath = options.valueOf(fromFileOption);
-                final String resetPlanCsv = Utils.readFileAsString(resetPlanPath);
-                final Map<TopicPartition, Long> topicPartitionsAndOffset = parseResetPlan(resetPlanCsv);
-
-                final Map<TopicPartition, Long> validatedTopicPartitionsAndOffset =
-                    checkOffsetRange(topicPartitionsAndOffset, beginningOffsets, endOffsets);
-
-                for (final TopicPartition topicPartition : inputTopicPartitions) {
-                    final Long offset = validatedTopicPartitionsAndOffset.get(topicPartition);
-                    client.seek(topicPartition, offset);
-                }
+                resetOffsetsFromFile(client, inputTopicPartitions);
             } else {
                 client.seekToBeginning(inputTopicPartitions);
             }
@@ -452,6 +381,98 @@ public class StreamsResetter {
                 final Long position = client.position(p);
                 System.out.println("Topic: " + p.topic() + " Partition: " + p.partition() + " Offset: " + position);
             }
+        }
+    }
+
+    private void resetOffsetsFromFile(KafkaConsumer<byte[], byte[]> client, Set<TopicPartition> inputTopicPartitions) throws IOException, ParseException {
+        final Map<TopicPartition, Long> endOffsets = client.endOffsets(inputTopicPartitions);
+        final Map<TopicPartition, Long> beginningOffsets = client.beginningOffsets(inputTopicPartitions);
+
+        final String resetPlanPath = options.valueOf(fromFileOption);
+        final String resetPlanCsv = Utils.readFileAsString(resetPlanPath);
+        final Map<TopicPartition, Long> topicPartitionsAndOffset = parseResetPlan(resetPlanCsv);
+
+        final Map<TopicPartition, Long> validatedTopicPartitionsAndOffset =
+            checkOffsetRange(topicPartitionsAndOffset, beginningOffsets, endOffsets);
+
+        for (final TopicPartition topicPartition : inputTopicPartitions) {
+            final Long offset = validatedTopicPartitionsAndOffset.get(topicPartition);
+            client.seek(topicPartition, offset);
+        }
+    }
+
+    private void resetByDuration(KafkaConsumer<byte[], byte[]> client, Set<TopicPartition> inputTopicPartitions) throws DatatypeConfigurationException {
+        final String duration = options.valueOf(byDurationOption);
+        final Date now = new Date();
+        final Duration durationParsed = DatatypeFactory.newInstance().newDuration(duration);
+        durationParsed.negate().addTo(now);
+        final Long timestamp = now.getTime();
+
+        final Map<TopicPartition, Long> topicPartitionsAndTimes = new HashMap<>(inputTopicPartitions.size());
+        for (final TopicPartition topicPartition : inputTopicPartitions) {
+            topicPartitionsAndTimes.put(topicPartition, timestamp);
+        }
+
+        final Map<TopicPartition, OffsetAndTimestamp> topicPartitionsAndOffset = client.offsetsForTimes(topicPartitionsAndTimes);
+
+        for (final TopicPartition topicPartition : inputTopicPartitions) {
+            final Long offset = topicPartitionsAndOffset.get(topicPartition).offset();
+            client.seek(topicPartition, offset);
+        }
+    }
+
+    private void resetToDatetime(KafkaConsumer<byte[], byte[]> client, Set<TopicPartition> inputTopicPartitions) throws ParseException {
+        final String ts = options.valueOf(toDatetimeOption);
+        final Long timestamp = getDateTime(ts);
+
+        final Map<TopicPartition, Long> topicPartitionsAndTimes = new HashMap<>(inputTopicPartitions.size());
+        for (final TopicPartition topicPartition : inputTopicPartitions) {
+            topicPartitionsAndTimes.put(topicPartition, timestamp);
+        }
+
+        final Map<TopicPartition, OffsetAndTimestamp> topicPartitionsAndOffset = client.offsetsForTimes(topicPartitionsAndTimes);
+
+        for (final TopicPartition topicPartition : inputTopicPartitions) {
+            final Long offset = topicPartitionsAndOffset.get(topicPartition).offset();
+            client.seek(topicPartition, offset);
+        }
+    }
+
+    private void shiftOffsetsBy(KafkaConsumer<byte[], byte[]> client, Set<TopicPartition> inputTopicPartitions) {
+        final Long shiftBy = options.valueOf(shiftByOption);
+        final Map<TopicPartition, Long> endOffsets = client.endOffsets(inputTopicPartitions);
+        final Map<TopicPartition, Long> beginningOffsets = client.beginningOffsets(inputTopicPartitions);
+
+        final Map<TopicPartition, Long> topicPartitionsAndOffset = new HashMap<>(inputTopicPartitions.size());
+        for (final TopicPartition topicPartition : inputTopicPartitions) {
+            final Long position = client.position(topicPartition);
+            final Long offset = position + shiftBy;
+            topicPartitionsAndOffset.put(topicPartition, offset);
+        }
+
+        final Map<TopicPartition, Long> validatedTopicPartitionsAndOffset =
+            checkOffsetRange(topicPartitionsAndOffset, beginningOffsets, endOffsets);
+
+        for (final TopicPartition topicPartition : inputTopicPartitions) {
+            client.seek(topicPartition, validatedTopicPartitionsAndOffset.get(topicPartition));
+        }
+    }
+
+    private void resetOffsetsTo(KafkaConsumer<byte[], byte[]> client, Set<TopicPartition> inputTopicPartitions) {
+        final Long offset = options.valueOf(toOffsetOption);
+        final Map<TopicPartition, Long> endOffsets = client.endOffsets(inputTopicPartitions);
+        final Map<TopicPartition, Long> beginningOffsets = client.beginningOffsets(inputTopicPartitions);
+
+        final Map<TopicPartition, Long> topicPartitionsAndOffset = new HashMap<>(inputTopicPartitions.size());
+        for (final TopicPartition topicPartition : inputTopicPartitions) {
+            topicPartitionsAndOffset.put(topicPartition, offset);
+        }
+
+        final Map<TopicPartition, Long> validatedTopicPartitionsAndOffset =
+            checkOffsetRange(topicPartitionsAndOffset, beginningOffsets, endOffsets);
+
+        for (final TopicPartition topicPartition : inputTopicPartitions) {
+            client.seek(topicPartition, validatedTopicPartitionsAndOffset.get(topicPartition));
         }
     }
 
