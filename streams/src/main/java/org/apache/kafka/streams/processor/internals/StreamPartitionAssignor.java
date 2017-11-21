@@ -613,7 +613,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         taskManager.setPartitionsByHostState(info.partitionsByHost);
         taskManager.setAssignmentMetadata(activeTasks, info.standbyTasks);
 
-        taskManager.checkForNewTopicAssignments(partitions);
+        taskManager.updateSubscriptionsFromAssignment(partitions);
     }
 
     /**

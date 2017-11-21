@@ -378,31 +378,25 @@ class TaskManager {
         this.assignedStandbyTasks = standbyTasks;
     }
 
-    void checkForNewTopicAssignments(List<TopicPartition> partitions) {
+    void updateSubscriptionsFromAssignment(List<TopicPartition> partitions) {
         if (builder().sourceTopicPattern() != null) {
             final Set<String> assignedTopics = new HashSet<>();
             for (final TopicPartition topicPartition : partitions) {
                 assignedTopics.add(topicPartition.topic());
             }
 
-            updateSubscriptionsFromAssignment(assignedTopics);
-        }
-    }
-
-    private void updateSubscriptionsFromAssignment(Set<String> topics) {
-        if (!builder().subscriptionUpdates().getUpdates().containsAll(topics)) {
             final Collection<String> existingTopics = builder().subscriptionUpdates().getUpdates();
-            if (existingTopics.equals(topics)) {
-                topics.addAll(existingTopics);
-                builder().updateSubscribedTopics(topics, logPrefix);
+            if (!existingTopics.containsAll(assignedTopics)) {
+                assignedTopics.addAll(existingTopics);
+                builder().updateSubscribedTopics(assignedTopics, logPrefix);
             }
         }
     }
 
     void updateSubscriptionsFromMetadata(Set<String> topics) {
-        if (builder().sourceTopicPattern() != null && !builder().subscriptionUpdates().getUpdates().equals(topics)) {
+        if (builder().sourceTopicPattern() != null) {
             final Collection<String> existingTopics = builder().subscriptionUpdates().getUpdates();
-            if (existingTopics.equals(topics)) {
+            if (!existingTopics.equals(topics)) {
                 topics.addAll(existingTopics);
                 builder().updateSubscribedTopics(topics, logPrefix);
             }
