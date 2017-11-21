@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
@@ -74,6 +75,8 @@ public class TaskManagerTest {
     @Mock(type = MockType.NICE)
     private StreamsKafkaClient streamsKafkaClient;
     @Mock(type = MockType.NICE)
+    private AdminClient adminClient;
+    @Mock(type = MockType.NICE)
     private StreamTask streamTask;
     @Mock(type = MockType.NICE)
     private StandbyTask standbyTask;
@@ -106,6 +109,7 @@ public class TaskManagerTest {
                                       activeTaskCreator,
                                       standbyTaskCreator,
                                       streamsKafkaClient,
+                                      adminClient,
                                       active,
                                       standby);
         taskManager.setConsumer(consumer);

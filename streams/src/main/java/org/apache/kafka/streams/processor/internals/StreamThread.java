@@ -641,6 +641,7 @@ public class StreamThread extends Thread {
                                                   activeTaskCreator,
                                                   standbyTaskCreator,
                                                   streamsKafkaClient,
+                                                  adminClient,
                                                   new AssignedStreamsTasks(logContext),
                                                   new AssignedStandbyTasks(logContext));
 

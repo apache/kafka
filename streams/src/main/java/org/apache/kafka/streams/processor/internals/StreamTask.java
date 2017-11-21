@@ -90,7 +90,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     /**
      * Create {@link StreamTask} with its assigned partitions
      * @param id                    the ID of this task
-     * @param applicationId         the ID of the stream processing application
      * @param partitions            the collection of assigned {@link TopicPartition}
      * @param topology              the instance of {@link ProcessorTopology}
      * @param consumer              the instance of {@link Consumer}
@@ -122,7 +121,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         // to corresponding source nodes in the processor topology
         final Map<TopicPartition, RecordQueue> partitionQueues = new HashMap<>();
 
-        // initialize the consumed offset cache
+        // initialize the consumed and committed offset cache
         consumedOffsets = new HashMap<>();
 
         this.producer = producer;
@@ -364,6 +363,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
     }
 
+    public Map<TopicPartition, Long> consumedOffset() {
+        return consumedOffsets;
+    }
+
     private void initTopology() {
         // initialize the task by initializing all its processor nodes in the topology
         log.trace("Initializing processor nodes of the topology");
@@ -554,8 +557,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     /**
      * Schedules a punctuation for the processor
      *
-     * @param interval  the interval in milliseconds
-     * @param type
+     * @param interval the interval in milliseconds
+     * @param type the punctuation type
      * @throws IllegalStateException if the current node is not null
      */
     public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator punctuator) {
@@ -588,7 +591,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * Note, this is only called in the presence of new records
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    public boolean maybePunctuateStreamTime() {
+    boolean maybePunctuateStreamTime() {
         final long timestamp = partitionGroup.timestamp();
 
         // if the timestamp is not known yet, meaning there is not enough data accumulated
@@ -606,7 +609,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * Note, this is called irrespective of the presence of new records
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    public boolean maybePunctuateSystemTime() {
+    boolean maybePunctuateSystemTime() {
         final long timestamp = time.milliseconds();
 
         return systemTimePunctuationQueue.mayPunctuate(timestamp, PunctuationType.WALL_CLOCK_TIME, this);
@@ -622,7 +625,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     /**
      * Whether or not a request has been made to commit the current state
      */
-    public boolean commitNeeded() {
+    boolean commitNeeded() {
         return commitRequested;
     }
 

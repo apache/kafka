@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
@@ -23,6 +24,7 @@ import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -66,6 +68,21 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         committed = 0;
         applyToRunningTasks(maybeCommitAction);
         return committed;
+    }
+
+    /**
+     * Returns a map of offsets up to which the records can be deleted; this function should only be called
+     * after the commit call to make sure all consumed offsets are actually committed as well
+     */
+    Map<TopicPartition, RecordsToDelete> recordsToDelete() {
+        final Map<TopicPartition, RecordsToDelete> recordsToDelete = new HashMap<>();
+        for (StreamTask task : running.values()) {
+            for (Map.Entry<TopicPartition, Long> entry : task.consumedOffset().entrySet()) {
+                recordsToDelete.put(entry.getKey(), RecordsToDelete.beforeOffset(entry.getValue()));
+            }
+        }
+
+        return recordsToDelete;
     }
 
     /**

@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.DeleteRecordsResult;
+import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
@@ -57,11 +60,14 @@ class TaskManager {
     // TODO: this is going to be replaced by AdminClient
     final StreamsKafkaClient streamsKafkaClient;
 
+    final AdminClient adminClient;
+
     // following information is updated during rebalance phase by the partition assignor
     private Cluster cluster;
     private Map<TaskId, Set<TopicPartition>> assignedActiveTasks;
     private Map<TaskId, Set<TopicPartition>> assignedStandbyTasks;
     private Map<HostInfo, Set<TopicPartition>> partitionsByHostState;
+    private final Map<TopicPartition, RecordsToDelete> committedOffsets;
 
     private Consumer<byte[], byte[]> consumer;
 
@@ -73,6 +79,7 @@ class TaskManager {
                 final StreamThread.AbstractTaskCreator<StreamTask> taskCreator,
                 final StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator,
                 final StreamsKafkaClient streamsKafkaClient,
+                final AdminClient adminClient,
                 final AssignedStreamsTasks active,
                 final AssignedStandbyTasks standby) {
         this.changelogReader = changelogReader;
@@ -90,6 +97,9 @@ class TaskManager {
         this.log = logContext.logger(getClass());
 
         this.streamsKafkaClient = streamsKafkaClient;
+        this.adminClient = adminClient;
+
+        this.committedOffsets = new HashMap<>();
     }
 
     /**
@@ -431,6 +441,13 @@ class TaskManager {
      */
     int maybeCommitActiveTasks() {
         return active.maybeCommit();
+    }
+
+    void maybeDeleteCommitedRecords() {
+        Map<TopicPartition, RecordsToDelete> recordsToDelete = active.recordsToDelete();
+
+        DeleteRecordsResult deleteResults = adminClient.deleteRecords(recordsToDelete);
+
     }
 
     public String toString(final String indent) {
