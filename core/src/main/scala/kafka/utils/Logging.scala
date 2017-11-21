@@ -34,6 +34,10 @@ object Log4jControllerRegistration {
   }
 }
 
+private object Logging {
+  private val FatalMarker: Marker = MarkerFactory.getMarker("FATAL")
+}
+
 trait Logging extends LazyLogging {
   def loggerName: String = logger.underlying.getName
 
@@ -43,8 +47,6 @@ trait Logging extends LazyLogging {
 
   protected def msgWithLogIdent(msg: String): String =
     if (logIdent == null) msg else logIdent + msg
-
-  val FatalMarker: Marker = MarkerFactory.getMarker("FATAL")
 
   def trace(msg: => String): Unit = logger.trace(msgWithLogIdent(msg))
 
@@ -71,8 +73,8 @@ trait Logging extends LazyLogging {
   def error(msg: => String, e: => Throwable): Unit = logger.error(msgWithLogIdent(msg),e)
 
   def fatal(msg: => String): Unit =
-    logger.error(FatalMarker, msgWithLogIdent(msg))
+    logger.error(Logging.FatalMarker, msgWithLogIdent(msg))
 
   def fatal(msg: => String, e: => Throwable): Unit =
-    logger.error(FatalMarker, msgWithLogIdent(msg), e)
+    logger.error(Logging.FatalMarker, msgWithLogIdent(msg), e)
 }
