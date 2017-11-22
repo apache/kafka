@@ -109,7 +109,7 @@ class ReplicaFetcherThreadFatalErrorTest extends ZooKeeperTestHarness {
     val server = new KafkaServer(config, time) {
 
       override def createReplicaManager(isShuttingDown: AtomicBoolean): ReplicaManager = {
-        new ReplicaManager(config, metrics, time, zkUtils, kafkaScheduler, logManager, isShuttingDown,
+        new ReplicaManager(config, metrics, time, zkClient, kafkaScheduler, logManager, isShuttingDown,
           quotaManagers, new BrokerTopicStats, metadataCache, logDirFailureChannel) {
 
           override protected def createReplicaFetcherManager(metrics: Metrics, time: Time, threadNamePrefix: Option[String],

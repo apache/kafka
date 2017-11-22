@@ -26,6 +26,7 @@ import org.junit._
 import org.junit.Assert._
 import kafka.cluster.Replica
 import kafka.utils.{KafkaScheduler, MockTime, TestUtils, ZkUtils}
+import kafka.zk.KafkaZkClient
 import java.util.concurrent.atomic.AtomicBoolean
 
 import org.apache.kafka.common.TopicPartition
@@ -35,6 +36,7 @@ class HighwatermarkPersistenceTest {
   val configs = TestUtils.createBrokerConfigs(2, TestUtils.MockZkConnect).map(KafkaConfig.fromProps)
   val topic = "foo"
   val zkUtils = EasyMock.createMock(classOf[ZkUtils])
+  val zkClient = EasyMock.createMock(classOf[KafkaZkClient])
   val logManagers = configs map { config =>
     TestUtils.createLogManager(
       logDirs = config.logDirs.map(new File(_)),
@@ -62,7 +64,7 @@ class HighwatermarkPersistenceTest {
     val metrics = new Metrics
     val time = new MockTime
     // create replica manager
-    val replicaManager = new ReplicaManager(configs.head, metrics, time, zkUtils, scheduler,
+    val replicaManager = new ReplicaManager(configs.head, metrics, time, zkClient, scheduler,
       logManagers.head, new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time, ""),
       new BrokerTopicStats, new MetadataCache(configs.head.brokerId), logDirFailureChannels.head)
     replicaManager.startup()
@@ -107,7 +109,7 @@ class HighwatermarkPersistenceTest {
     val metrics = new Metrics
     val time = new MockTime
     // create replica manager
-    val replicaManager = new ReplicaManager(configs.head, metrics, time, zkUtils,
+    val replicaManager = new ReplicaManager(configs.head, metrics, time, zkClient,
       scheduler, logManagers.head, new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time, ""),
       new BrokerTopicStats, new MetadataCache(configs.head.brokerId), logDirFailureChannels.head)
     replicaManager.startup()

@@ -52,6 +52,9 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
   def createSequentialPersistentPath(path: String, data: String = ""): String = {
     val createRequest = CreateRequest(path, data.getBytes("UTF-8"), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
     val createResponse = retryRequestUntilConnected(createRequest)
+    if (createResponse.resultCode != Code.OK) {
+      createResponse.resultException.foreach(e => throw e)
+    }
     createResponse.path
   }
 
