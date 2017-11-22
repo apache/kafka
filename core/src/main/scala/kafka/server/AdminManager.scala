@@ -387,7 +387,7 @@ class AdminManager(val config: KafkaConfig,
 
   def shutdown() {
     topicPurgatory.shutdown()
-    CoreUtils.swallow(createTopicPolicy.foreach(_.close()))
-    CoreUtils.swallow(alterConfigPolicy.foreach(_.close()))
+    CoreUtils.swallow(createTopicPolicy.foreach(_.close()), this)
+    CoreUtils.swallow(alterConfigPolicy.foreach(_.close()), this)
   }
 }

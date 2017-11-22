@@ -19,6 +19,7 @@ package kafka.security.auth
 import java.util
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
+import com.typesafe.scalalogging.Logger
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.network.RequestChannel.Session
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
@@ -29,7 +30,6 @@ import kafka.zk.{AclChangeNotificationSequenceZNode, AclChangeNotificationZNode,
 import kafka.zookeeper.ZooKeeperClient
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.SecurityUtils
-import org.apache.log4j.Logger
 
 import scala.collection.JavaConverters._
 import scala.util.Random
@@ -51,7 +51,7 @@ object SimpleAclAuthorizer {
 }
 
 class SimpleAclAuthorizer extends Authorizer with Logging {
-  private val authorizerLogger = Logger.getLogger("kafka.authorizer.logger")
+  private val authorizerLogger = Logger("kafka.authorizer.logger")
   private var superUsers = Set.empty[KafkaPrincipal]
   private var shouldAllowEveryoneIfNoAclIsFound = false
   private var zkClient: KafkaZkClient = null

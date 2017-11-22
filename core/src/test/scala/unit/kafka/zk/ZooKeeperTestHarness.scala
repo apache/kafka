@@ -63,11 +63,11 @@ abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
   @After
   def tearDown() {
     if (zkUtils != null)
-     CoreUtils.swallow(zkUtils.close())
+     CoreUtils.swallow(zkUtils.close(), this)
     if (zkClient != null)
      zkClient.close()
     if (zookeeper != null)
-      CoreUtils.swallow(zookeeper.shutdown())
+      CoreUtils.swallow(zookeeper.shutdown(), this)
     Configuration.setConfiguration(null)
   }
 }
