@@ -205,7 +205,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
           builder.append(line).append("\n")
         addEntriesToDirectoryService(StrSubstitutor.replace(builder, map.asJava))
       }
-      finally CoreUtils.swallow(reader.close())
+      finally CoreUtils.swallow(reader.close(), this)
     }
 
     val bindAddress = config.getProperty(MiniKdc.KdcBindAddress)
@@ -254,7 +254,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
       while ({line = reader.readLine(); line != null}) {
         stringBuilder.append(line).append("{3}")
       }
-    } finally CoreUtils.swallow(reader.close())
+    } finally CoreUtils.swallow(reader.close(), this)
     val output = MessageFormat.format(stringBuilder.toString, realm, host, port.toString, System.lineSeparator())
     Files.write(krb5conf.toPath, output.getBytes(StandardCharsets.UTF_8))
   }
@@ -337,7 +337,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     try {
       for (ldifEntry <- reader.asScala)
         ds.getAdminSession.add(new DefaultEntry(ds.getSchemaManager, ldifEntry.getEntry))
-    } finally CoreUtils.swallow(reader.close())
+    } finally CoreUtils.swallow(reader.close(), this)
   }
 
 }

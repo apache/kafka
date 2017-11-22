@@ -135,7 +135,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
 
   @Test
   def testCleanShutdownAfterFailedStartupDueToCorruptLogs() {
-    var server = new KafkaServer(config)
+    val server = new KafkaServer(config)
     server.startup()
     createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 1, servers = Seq(server))
     server.shutdown()
