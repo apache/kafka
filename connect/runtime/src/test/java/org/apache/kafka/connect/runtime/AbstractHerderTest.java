@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
@@ -171,6 +172,21 @@ public class AbstractHerderTest extends EasyMockSupport {
         // "required" config from connector should generate an error
         assertEquals("required", result.values().get(6).configValue().name());
         assertEquals(1, result.values().get(6).configValue().errors().size());
+
+        verifyAll();
+    }
+
+    @Test(expected = ConfigException.class)
+    public void testConfigValidationInvalidTopics() {
+        AbstractHerder herder = createConfigValidationHerder(TestSinkConnector.class);
+        replayAll();
+
+        Map<String, String> config = new HashMap();
+        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, TestSinkConnector.class.getName());
+        config.put(SinkConnectorConfig.TOPICS_CONFIG, "topic1,topic2");
+        config.put(SinkConnectorConfig.TOPICS_REGEX_CONFIG, "topic.*");
+
+        herder.validateConnectorConfig(config);
 
         verifyAll();
     }
