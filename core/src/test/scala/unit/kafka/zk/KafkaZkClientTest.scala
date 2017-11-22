@@ -16,9 +16,11 @@
 */
 package kafka.zk
 
-import java.util.UUID
+import java.util.{Properties, UUID}
 
+import kafka.log.LogConfig
 import kafka.security.auth._
+import kafka.server.ConfigType
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
@@ -70,30 +72,57 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
     zkClient.createRecursive("/create/some/random/long/path")
     assertTrue(zkClient.pathExists("/create/some/random/long/path"))
-    zkClient.createRecursive("/create/some/random/long/path") // no errors if path already exists
+    zkClient.createRecursive("/create/some/random/long/path", throwIfPathExists = false) // no errors if path already exists
 
     intercept[IllegalArgumentException](zkClient.createRecursive("create-invalid-path"))
   }
 
   @Test
-  def testGetTopicPartitionCount() {
-    val topic = "mytest"
+  def testTopicAssignmentMethods() {
+    val topic1 = "topic1"
+    val topic2 = "topic2"
 
     // test with non-existing topic
-    assertTrue(zkClient.getTopicPartitionCount(topic).isEmpty)
-
-    // create a topic path
-    zkClient.createRecursive(TopicZNode.path(topic))
+    assertTrue(zkClient.getTopicPartitionCount(topic1).isEmpty)
+    assertTrue(zkClient.getPartitionAssignmentForTopics(Set(topic1)).isEmpty)
+    assertTrue(zkClient.getPartitionsForTopics(Set(topic1)).isEmpty)
+    assertTrue(zkClient.getReplicasForPartition(new TopicPartition(topic1, 2)).isEmpty)
 
     val assignment = Map(
-      new TopicPartition(topic, 0) -> Seq(0, 1),
-      new TopicPartition(topic, 1) -> Seq(0, 1)
+      new TopicPartition(topic1, 0) -> Seq(0, 1),
+      new TopicPartition(topic1, 1) -> Seq(0, 1),
+      new TopicPartition(topic1, 2) -> Seq(1, 2, 3)
     )
-    zkClient.setTopicAssignmentRaw(topic, assignment)
 
-    assertEquals(2, zkClient.getTopicPartitionCount(topic).get)
+    // create a topic assignment
+    zkClient.createTopicAssignment(topic1, assignment)
+
+    val expectedAssignment = assignment map { topicAssignment =>
+      val partition = topicAssignment._1.partition
+      val assignment = topicAssignment._2
+      partition -> assignment
+    }
+
+    assertEquals(assignment.size, zkClient.getTopicPartitionCount(topic1).get)
+    assertEquals(expectedAssignment, zkClient.getPartitionAssignmentForTopics(Set(topic1)).get(topic1).get)
+    assertEquals(Set(0, 1, 2), zkClient.getPartitionsForTopics(Set(topic1)).get(topic1).get.toSet)
+    assertEquals(Set(1, 2, 3), zkClient.getReplicasForPartition(new TopicPartition(topic1, 2)).toSet)
+
+    val updatedAssignment = assignment - new TopicPartition(topic1, 2)
+
+    zkClient.setTopicAssignment(topic1, updatedAssignment)
+    assertEquals(updatedAssignment.size, zkClient.getTopicPartitionCount(topic1).get)
+
+    // add second topic
+    val secondAssignment = Map(
+      new TopicPartition(topic2, 0) -> Seq(0, 1),
+      new TopicPartition(topic2, 1) -> Seq(0, 1)
+    )
+
+    zkClient.createTopicAssignment(topic2, secondAssignment)
+
+    assertEquals(Set(topic1, topic2), zkClient.getAllTopicsInCluster.toSet)
   }
-
 
   @Test
   def testGetDataAndVersion() {
@@ -163,6 +192,9 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
     zkClient.deletePartitionReassignment()
     assertEquals(Map.empty, zkClient.getPartitionReassignment)
+
+    zkClient.createPartitionReassignment(reassignment)
+    assertEquals(reassignment, zkClient.getPartitionReassignment)
   }
 
   @Test
@@ -276,6 +308,49 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
     zkClient.deleteAclChangeNotifications()
     assertTrue(zkClient.getChildren(AclChangeNotificationZNode.path).isEmpty)
+  }
 
+  @Test
+  def testDeleteTopicPathMethods() {
+    val topic1 = "topic1"
+    val topic2 = "topic2"
+
+    assertFalse(zkClient.isTopicMarkedForDeletion(topic1))
+    assertTrue(zkClient.getTopicDeletions.isEmpty)
+
+    zkClient.createDeleteTopicPath(topic1)
+    zkClient.createDeleteTopicPath(topic2)
+
+    assertTrue(zkClient.isTopicMarkedForDeletion(topic1))
+    assertEquals(Set(topic1, topic2), zkClient.getTopicDeletions.toSet)
+
+    zkClient.deleteTopicDeletions(Seq(topic1, topic2))
+    assertTrue(zkClient.getTopicDeletions.isEmpty)
+  }
+
+  @Test
+  def testEntityConfigManagementMethods() {
+    val topic1 = "topic1"
+    val topic2 = "topic2"
+
+    assertTrue(zkClient.getEntityConfigs(ConfigType.Topic, topic1).isEmpty)
+
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, "1024")
+    logProps.put(LogConfig.SegmentIndexBytesProp, "1024")
+    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
+
+    zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic1, logProps)
+    assertEquals(logProps, zkClient.getEntityConfigs(ConfigType.Topic, topic1))
+
+    logProps.remove(LogConfig.CleanupPolicyProp)
+    zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic1, logProps)
+    assertEquals(logProps, zkClient.getEntityConfigs(ConfigType.Topic, topic1))
+
+    zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic2, logProps)
+    assertEquals(Set(topic1, topic2), zkClient.getAllEntitiesWithConfig(ConfigType.Topic).toSet)
+
+    zkClient.deleteTopicConfigs(Seq(topic1, topic2))
+    assertTrue(zkClient.getEntityConfigs(ConfigType.Topic, topic1).isEmpty)
   }
 }

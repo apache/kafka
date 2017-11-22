@@ -28,8 +28,6 @@ import kafka.utils.Json
 import org.apache.kafka.common.TopicPartition
 import org.apache.zookeeper.data.Stat
 
-import scala.collection.Seq
-
 // This file contains objects for encoding/decoding data stored in ZooKeeper nodes (znodes).
 
 object ControllerZNode {
@@ -140,14 +138,27 @@ object ConfigEntityZNode {
     import scala.collection.JavaConverters._
     Json.encodeAsBytes(Map("version" -> 1, "config" -> config.asScala))
   }
-  def decode(bytes: Array[Byte]): Option[Properties] = {
-    Json.parseBytes(bytes).map { js =>
-      val configOpt = js.asJsonObjectOption.flatMap(_.get("config").flatMap(_.asJsonObjectOption))
-      val props = new Properties()
-      configOpt.foreach(config => config.iterator.foreach { case (k, v) => props.setProperty(k, v.to[String]) })
-      props
+  def decode(bytes: Array[Byte]): Properties = {
+    val props = new Properties()
+    if (bytes != null) {
+      Json.parseBytes(bytes).map { js =>
+        val configOpt = js.asJsonObjectOption.flatMap(_.get("config").flatMap(_.asJsonObjectOption))
+        configOpt.foreach(config => config.iterator.foreach { case (k, v) => props.setProperty(k, v.to[String]) })
+      }
     }
+    props
   }
+}
+
+object ConfigEntityChangeNotificationZNode {
+  def path = s"${ConfigZNode.path}/changes"
+}
+
+object ConfigEntityChangeNotificationSequenceZNode {
+  val SequenceNumberPrefix = "config_change_"
+  def createPath = s"${ConfigEntityChangeNotificationZNode.path}/$SequenceNumberPrefix"
+  def encode(sanitizedEntityPath : String): Array[Byte] = Json.encodeAsBytes(Map("version" -> 2, "entity_path" -> sanitizedEntityPath))
+  def decode(bytes: Array[Byte]): String = new String(bytes, UTF_8)
 }
 
 object IsrChangeNotificationZNode {
