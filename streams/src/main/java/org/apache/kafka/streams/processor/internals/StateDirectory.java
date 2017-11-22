@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -222,6 +223,29 @@ public class StateDirectory {
         }
     }
 
+    public synchronized void clean() {
+        StreamsException firstException = null;
+
+        try {
+            cleanRemovedTasks(0, false);
+        } catch (IOException e) {
+            // this is already logged within cleanRemovedTasks
+            firstException = new StreamsException(e);
+        }
+        try {
+            Utils.delete(globalStateDir().getAbsoluteFile());
+        } catch (IOException e) {
+            log.error("{} Failed to delete global state directory due to an unexpected exception", logPrefix(), e);
+            if (firstException == null) {
+                firstException = new StreamsException(e);
+            }
+        }
+
+        if (firstException != null) {
+            throw firstException;
+        }
+    }
+
     /**
      * Remove the directories for any {@link TaskId}s that are no-longer
      * owned by this {@link StreamThread} and aren't locked by either
@@ -230,10 +254,19 @@ public class StateDirectory {
      *                       this amount of time (milliseconds)
      */
     public synchronized void cleanRemovedTasks(final long cleanupDelayMs) {
+        try {
+            cleanRemovedTasks(cleanupDelayMs, true);
+        } catch (final IOException cannotHappen) { /* swallowException is set to true */ }
+    }
+
+    private synchronized void cleanRemovedTasks(final long cleanupDelayMs,
+                                                final boolean swallowException) throws IOException {
         final File[] taskDirs = listTaskDirectories();
         if (taskDirs == null || taskDirs.length == 0) {
             return; // nothing to do
         }
+
+        IOException firstException = null;
         for (File taskDir : taskDirs) {
             final String dirName = taskDir.getName();
             TaskId id = TaskId.parse(dirName);
@@ -250,7 +283,10 @@ public class StateDirectory {
                 } catch (OverlappingFileLockException e) {
                     // locked by another thread
                 } catch (IOException e) {
-                    log.error("{} Failed to lock the state directory due to an unexpected exception", logPrefix(), e);
+                    if (firstException == null) {
+                        firstException = e;
+                    }
+                    log.error("{} Failed to delete the state directory due to an unexpected exception", logPrefix(), e);
                 } finally {
                     try {
                         unlock(id);
@@ -261,6 +297,9 @@ public class StateDirectory {
             }
         }
 
+        if (!swallowException && firstException != null) {
+            throw firstException;
+        }
     }
 
     /**
