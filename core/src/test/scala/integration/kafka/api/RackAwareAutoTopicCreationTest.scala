@@ -18,7 +18,7 @@ package kafka.api
 
 import java.util.Properties
 
-import kafka.admin.{RackAwareMode, AdminUtils, RackAwareTest}
+import kafka.admin.{RackAwareMode, RackAwareTest}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
@@ -55,7 +55,7 @@ class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwa
       val assignment = zkUtils.getReplicaAssignmentForTopics(Seq(topic)).map { case (topicPartition, replicas) =>
         topicPartition.partition -> replicas
       }
-      val brokerMetadatas = AdminUtils.getBrokerMetadatas(zkUtils, RackAwareMode.Enforced)
+      val brokerMetadatas = adminZkClient.getBrokerMetadatas(RackAwareMode.Enforced)
       val expectedMap = Map(0 -> "0", 1 -> "0", 2 -> "1", 3 -> "1")
       assertEquals(expectedMap, brokerMetadatas.map(b => b.id -> b.rack.get).toMap)
       checkReplicaDistribution(assignment, expectedMap, numServers, numPartitions, replicationFactor)

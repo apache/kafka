@@ -45,7 +45,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
       "--config", cleanupKey + "=" + cleanupVal,
       "--topic", topic))
     TopicCommand.createTopic(zkClient, createOpts)
-    val props = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic)
+    val props = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
     assertTrue("Properties after creation don't contain " + cleanupKey, props.containsKey(cleanupKey))
     assertTrue("Properties after creation have incorrect value", props.getProperty(cleanupKey).equals(cleanupVal))
 
@@ -56,7 +56,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     val numPartitionsModified = 3
     val alterOpts = new TopicCommandOptions(Array("--partitions", numPartitionsModified.toString, "--topic", topic))
     TopicCommand.alterTopic(zkClient, alterOpts)
-    val newProps = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic)
+    val newProps = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
     assertTrue("Updated properties do not contain " + cleanupKey, newProps.containsKey(cleanupKey))
     assertTrue("Updated properties have incorrect value", newProps.getProperty(cleanupKey).equals(cleanupVal))
   }
