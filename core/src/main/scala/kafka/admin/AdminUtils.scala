@@ -21,6 +21,7 @@ import kafka.log.LogConfig
 import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig}
 import kafka.utils._
 import kafka.utils.ZkUtils._
+import kafka.zk.KafkaZkClient
 import java.util.Random
 import java.util.Properties
 
@@ -58,7 +59,8 @@ trait AdminUtilities {
     }
   }
 
-  def fetchEntityConfig(zkUtils: ZkUtils,entityType: String, entityName: String): Properties
+  def fetchEntityConfig(zkUtils: ZkUtils, entityType: String, entityName: String): Properties
+  def fetchEntityConfigZkClient(zkClient: KafkaZkClient, entityType: String, entityName: String): Properties
 }
 
 object AdminUtils extends Logging with AdminUtilities {
@@ -653,6 +655,30 @@ object AdminUtils extends Logging with AdminUtilities {
     val entityConfigPath = getEntityConfigPath(rootEntityType, sanitizedEntityName)
     // readDataMaybeNull returns Some(null) if the path exists, but there is no data
     val str = zkUtils.readDataMaybeNull(entityConfigPath)._1.orNull
+    val props = new Properties()
+    if (str != null) {
+      Json.parseFull(str).foreach { jsValue =>
+        val jsObject = jsValue.asJsonObjectOption.getOrElse {
+          throw new IllegalArgumentException(s"Unexpected value in config: $str, entity_config_path: $entityConfigPath")
+        }
+        require(jsObject("version").to[Int] == 1)
+        val config = jsObject.get("config").flatMap(_.asJsonObjectOption).getOrElse {
+          throw new IllegalArgumentException(s"Invalid $entityConfigPath config: $str")
+        }
+        config.iterator.foreach { case (k, v) => props.setProperty(k, v.to[String]) }
+      }
+    }
+    props
+  }
+
+  /**
+   * Read the entity (topic, broker, client, user or <user, client>) config (if any) from zk
+   * sanitizedEntityName is <topic>, <broker>, <client-id>, <user> or <user>/clients/<client-id>.
+   */
+  def fetchEntityConfigZkClient(zkClient: KafkaZkClient, rootEntityType: String, sanitizedEntityName: String): Properties = {
+    val entityConfigPath = getEntityConfigPath(rootEntityType, sanitizedEntityName)
+    // readDataMaybeNull returns Some(null) if the path exists, but there is no data
+    val str = zkClient.readDataMaybeNull(entityConfigPath)._1.orNull
     val props = new Properties()
     if (str != null) {
       Json.parseFull(str).foreach { jsValue =>
