@@ -335,6 +335,14 @@ public class StreamThread extends Thread {
             this.log = log;
         }
 
+        public InternalTopologyBuilder builder() {
+            return builder;
+        }
+
+        public StateDirectory stateDirectory() {
+            return stateDirectory;
+        }
+
         /**
          * @throws TaskMigratedException if the task producer got fenced (EOS only)
          */

@@ -210,7 +210,7 @@ class TaskManager {
 
         final HashSet<TaskId> tasks = new HashSet<>();
 
-        final File[] stateDirs = taskCreator.stateDirectory.listTaskDirectories();
+        final File[] stateDirs = taskCreator.stateDirectory().listTaskDirectories();
         if (stateDirs != null) {
             for (final File dir : stateDirs) {
                 try {
@@ -234,7 +234,7 @@ class TaskManager {
     }
 
     InternalTopologyBuilder builder() {
-        return taskCreator.builder;
+        return taskCreator.builder();
     }
 
     /**
