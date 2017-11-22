@@ -2076,7 +2076,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       case Some(response) =>
         val responseSend = request.context.buildResponse(response)
         val responseString =
-          if (RequestChannel.isRequestLoggingEnabled) Some(response.toString(request.context.header.apiVersion))
+          if (RequestChannel.isRequestLoggingEnabled) Some(response.toString(request.context.apiVersion()))
           else None
         requestChannel.sendResponse(new RequestChannel.Response(request, Some(responseSend), SendAction, responseString))
       case None =>
