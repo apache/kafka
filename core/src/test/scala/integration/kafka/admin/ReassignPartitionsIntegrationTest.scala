@@ -32,7 +32,7 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness with RackAw
       "--replication-factor", replicationFactor.toString,
       "--disable-rack-aware",
       "--topic", "foo"))
-    kafka.admin.TopicCommand.createTopic(zkUtils, createOpts)
+    kafka.admin.TopicCommand.createTopic(zkClient, createOpts)
 
     val topicJson = """{"topics": [{"topic": "foo"}], "version":1}"""
     val (proposedAssignment, currentAssignment) = ReassignPartitionsCommand.generateAssignment(zkUtils,
