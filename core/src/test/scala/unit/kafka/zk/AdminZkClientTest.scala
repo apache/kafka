@@ -106,10 +106,10 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
     adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, expectedReplicaAssignment)
     // create leaders for all partitions
     TestUtils.makeLeaderForPartition(zkUtils, topic, leaderForPartitionMap, 1)
-    val actualReplicaList = leaderForPartitionMap.keys.toArray.map(p => p -> zkClient.getReplicasForPartition(new TopicPartition(topic, p))).toMap
-    assertEquals(expectedReplicaAssignment.size, actualReplicaList.size)
-    for(i <- 0 until actualReplicaList.size)
-      assertEquals(expectedReplicaAssignment.get(i).get, actualReplicaList(i))
+    val actualReplicaMap = leaderForPartitionMap.keys.map(p => p -> zkClient.getReplicasForPartition(new TopicPartition(topic, p))).toMap
+    assertEquals(expectedReplicaAssignment.size, actualReplicaMap.size)
+    for(i <- 0 until actualReplicaMap.size)
+      assertEquals(expectedReplicaAssignment.get(i).get, actualReplicaMap(i))
 
     intercept[TopicExistsException] {
       // shouldn't be able to create a topic that already exists

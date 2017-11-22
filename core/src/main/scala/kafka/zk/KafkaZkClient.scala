@@ -168,7 +168,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
       configResponse.resultCode match {
         case Code.OK =>
           val overrides = ConfigEntityZNode.decode(configResponse.data)
-          val logConfig = LogConfig.fromProps(config, overrides.getOrElse(new Properties))
+          val logConfig = LogConfig.fromProps(config, overrides)
           logConfigs.put(topic, logConfig)
         case Code.NONODE =>
           val logConfig = LogConfig.fromProps(config, new Properties)
@@ -191,7 +191,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
 
     getDataResponse.resultCode match {
       case Code.OK =>
-        ConfigEntityZNode.decode(getDataResponse.data).getOrElse(new Properties())
+        ConfigEntityZNode.decode(getDataResponse.data)
       case Code.NONODE => new Properties()
       case _ => throw getDataResponse.resultException.get
     }

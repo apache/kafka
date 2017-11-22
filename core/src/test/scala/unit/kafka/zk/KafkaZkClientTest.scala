@@ -105,16 +105,23 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
     assertEquals(assignment.size, zkClient.getTopicPartitionCount(topic1).get)
     assertEquals(expectedAssignment, zkClient.getPartitionAssignmentForTopics(Set(topic1)).get(topic1).get)
-    assertEquals(Seq(0, 1, 2), zkClient.getPartitionsForTopics(Set(topic1)).get(topic1).get)
-    assertEquals(Seq(1, 2, 3), zkClient.getReplicasForPartition(new TopicPartition(topic1, 2)))
+    assertEquals(Set(0, 1, 2), zkClient.getPartitionsForTopics(Set(topic1)).get(topic1).get.toSet)
+    assertEquals(Set(1, 2, 3), zkClient.getReplicasForPartition(new TopicPartition(topic1, 2)).toSet)
 
     val updatedAssignment = assignment - new TopicPartition(topic1, 2)
 
     zkClient.setTopicAssignment(topic1, updatedAssignment)
     assertEquals(updatedAssignment.size, zkClient.getTopicPartitionCount(topic1).get)
 
-    zkClient.createTopicAssignment(topic2, updatedAssignment)
-    assertEquals(Seq(topic1, topic2), zkClient.getAllTopicsInCluster)
+    // add second topic
+    val secondAssignment = Map(
+      new TopicPartition(topic2, 0) -> Seq(0, 1),
+      new TopicPartition(topic2, 1) -> Seq(0, 1)
+    )
+
+    zkClient.createTopicAssignment(topic2, secondAssignment)
+
+    assertEquals(Set(topic1, topic2), zkClient.getAllTopicsInCluster.toSet)
   }
 
   @Test
@@ -315,7 +322,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     zkClient.createDeleteTopicPath(topic2)
 
     assertTrue(zkClient.isTopicMarkedForDeletion(topic1))
-    assertEquals(Seq(topic1, topic2), zkClient.getTopicDeletions)
+    assertEquals(Set(topic1, topic2), zkClient.getTopicDeletions.toSet)
 
     zkClient.deleteTopicDeletions(Seq(topic1, topic2))
     assertTrue(zkClient.getTopicDeletions.isEmpty)
@@ -341,7 +348,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertEquals(logProps, zkClient.getEntityConfigs(ConfigType.Topic, topic1))
 
     zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic2, logProps)
-    assertEquals(Seq(topic1, topic2), zkClient.getAllEntitiesWithConfig(ConfigType.Topic))
+    assertEquals(Set(topic1, topic2), zkClient.getAllEntitiesWithConfig(ConfigType.Topic).toSet)
 
     zkClient.deleteTopicConfigs(Seq(topic1, topic2))
     assertTrue(zkClient.getEntityConfigs(ConfigType.Topic, topic1).isEmpty)

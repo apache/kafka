@@ -83,6 +83,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 time: Time) extends Logging {
 
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
+  val adminZkClient = new AdminZkClient(zkClient)
 
   def close() {
     info("Shutdown complete.")
@@ -828,7 +829,6 @@ class KafkaApis(val requestChannel: RequestChannel,
                           replicationFactor: Int,
                           properties: Properties = new Properties()): MetadataResponse.TopicMetadata = {
     try {
-      val adminZkClient = new AdminZkClient(zkClient)
       adminZkClient.createTopic(topic, numPartitions, replicationFactor, properties, RackAwareMode.Safe)
       info("Auto creation of topic %s with %d partitions and replication factor %d is successful"
         .format(topic, numPartitions, replicationFactor))
