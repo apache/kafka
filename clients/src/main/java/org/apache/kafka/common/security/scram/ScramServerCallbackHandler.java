@@ -24,6 +24,7 @@ import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.NameCallback;
 import javax.security.auth.callback.UnsupportedCallbackException;
 
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.security.authenticator.AuthCallbackHandler;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
@@ -42,9 +43,12 @@ public class ScramServerCallbackHandler implements AuthCallbackHandler {
         for (Callback callback : callbacks) {
             if (callback instanceof NameCallback)
                 username = ((NameCallback) callback).getDefaultName();
-            else if (callback instanceof ScramCredentialCallback)
-                ((ScramCredentialCallback) callback).scramCredential(credentialCache.get(username));
-            else
+            else if (callback instanceof ScramCredentialCallback) {
+                if (username == null)
+                    throw new AuthenticationException("Username cannot be null");
+                else
+                    ((ScramCredentialCallback) callback).scramCredential(credentialCache.get(username));
+            } else
                 throw new UnsupportedCallbackException(callback);
         }
     }
