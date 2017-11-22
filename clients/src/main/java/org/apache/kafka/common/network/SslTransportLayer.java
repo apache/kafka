@@ -89,7 +89,7 @@ public class SslTransportLayer implements TransportLayer {
         this.netReadBuffer = ByteBuffer.allocate(netReadBufferSize());
         this.netWriteBuffer = ByteBuffer.allocate(netWriteBufferSize());
         this.appReadBuffer = ByteBuffer.allocate(applicationBufferSize());
-        
+
         //clear & set netRead & netWrite buffers
         netWriteBuffer.position(0);
         netWriteBuffer.limit(0);
@@ -500,8 +500,9 @@ public class SslTransportLayer implements TransportLayer {
             read = readFromAppBuffer(dst);
         }
 
-        int netread = 0;
-        if (dst.remaining() > 0) {
+        boolean isClosed = false;
+        while (dst.remaining() > 0) {
+            int netread = 0;
             netReadBuffer = Utils.ensureCapacity(netReadBuffer, netReadBufferSize());
             if (netReadBuffer.remaining() > 0)
                 netread = readFromSocketChannel();
@@ -547,15 +548,19 @@ public class SslTransportLayer implements TransportLayer {
                     // If data has been read and unwrapped, return the data. Close will be handled on the next poll.
                     if (appReadBuffer.position() == 0 && read == 0)
                         throw new EOFException();
-                    else
+                    else {
+                        isClosed = true;
                         break;
+                    }
                 }
             }
+            if (read == 0 && netread < 0)
+                throw new EOFException("EOF during read");
+            if (netread <= 0 || isClosed)
+                break;
         }
         // If data has been read and unwrapped, return the data even if end-of-stream, channel will be closed
         // on a subsequent poll.
-        if (read == 0 && netread < 0)
-            throw new EOFException("EOF during read");
         return read;
     }
 
@@ -771,7 +776,7 @@ public class SslTransportLayer implements TransportLayer {
     protected int netReadBufferSize() {
         return sslEngine.getSession().getPacketBufferSize();
     }
-    
+
     protected int netWriteBufferSize() {
         return sslEngine.getSession().getPacketBufferSize();
     }
@@ -779,7 +784,7 @@ public class SslTransportLayer implements TransportLayer {
     protected int applicationBufferSize() {
         return sslEngine.getSession().getApplicationBufferSize();
     }
-    
+
     protected ByteBuffer netReadBuffer() {
         return netReadBuffer;
     }

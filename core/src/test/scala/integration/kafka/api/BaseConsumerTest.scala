@@ -13,6 +13,7 @@
 package kafka.api
 
 import java.util
+import java.util.{Collections, Properties}
 
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
@@ -69,6 +70,49 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
 
     // create the test topic with all the brokers as replicas
     TestUtils.createTopic(this.zkUtils, topic, 2, serverCount, this.servers)
+  }
+
+  @Test
+  def testPollWithRemainingDataInConsumerBuffer() {
+    val producer = producers.head
+
+    val props = new Properties(consumerConfig)
+    props.setProperty(ConsumerConfig.RECEIVE_BUFFER_CONFIG, "102400") // 100 KB socket read buffer size
+    props.setProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "2")
+    val consumer = TestUtils.createNewConsumer(brokerList,
+      securityProtocol = this.securityProtocol,
+      trustStoreFile = this.trustStoreFile,
+      saslProperties = this.clientSaslProperties,
+      props = Some(props))
+
+    consumer.subscribe(Collections.singletonList(topic))
+    TestUtils.waitUntilTrue(() => {
+      consumer.poll(0)
+      !consumer.assignment.isEmpty
+    }, "Expected non-empty assignment")
+
+    // Make sure partitions leaders are different
+    assertEquals(2, producer.partitionsFor(topic).asScala.map(_.leader().id()).toSet.size)
+    // The large message has 80KB data, which is 5X as large as size of SSLTransportLayer's netReadBuffer but smaller than socket read buffer size.
+    val smallRecord = new ProducerRecord(topic, 0, "key".getBytes(), "a".getBytes)
+    val largerRecord = new ProducerRecord(topic, 1, "key".getBytes(), ("a" * 80 * 1024).getBytes)
+
+    producer.send(smallRecord).get()
+    producer.send(smallRecord).get()
+    producer.send(smallRecord).get()
+    producer.send(smallRecord).get()
+
+    try {
+      // First poll should return one record from partition 0
+      assertEquals(1, consumer.poll(100).asScala.size)
+      producer.send(largerRecord).get()
+      // The large message with 80 KB data should be fetched within two poll() because the message size is smaller than socket buffer size.
+      val records1 = consumer.poll(100).asScala
+      val records2 = consumer.poll(100).asScala
+      assertTrue((records1 ++ records2).map(_.partition()).toSeq.contains(1))
+    } finally {
+      consumer.close()
+    }
   }
 
   @Test
