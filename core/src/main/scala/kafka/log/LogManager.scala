@@ -206,7 +206,7 @@ class LogManager(logDirs: Seq[File],
 
       info(s"Logs for partitions ${offlineCurrentTopicPartitions.mkString(",")} are offline and " +
            s"logs for future partitions ${offlineFutureTopicPartitions.mkString(",")} are offline due to failure on log directory $dir")
-      dirLocks.filter(_.file.getParent == dir).foreach(dir => CoreUtils.swallow(dir.destroy()))
+      dirLocks.filter(_.file.getParent == dir).foreach(dir => CoreUtils.swallow(dir.destroy(), logger))
     }
   }
 
@@ -412,7 +412,7 @@ class LogManager(logDirs: Seq[File],
 
     // stop the cleaner first
     if (cleaner != null) {
-      CoreUtils.swallow(cleaner.shutdown())
+      CoreUtils.swallow(cleaner.shutdown(), logger)
     }
 
     // close logs in each dir
@@ -448,7 +448,7 @@ class LogManager(logDirs: Seq[File],
 
         // mark that the shutdown was clean by creating marker file
         debug("Writing clean shutdown marker at " + dir)
-        CoreUtils.swallow(Files.createFile(new File(dir, Log.CleanShutdownFile).toPath))
+        CoreUtils.swallow(Files.createFile(new File(dir, Log.CleanShutdownFile).toPath), logger)
       }
     } catch {
       case e: ExecutionException =>

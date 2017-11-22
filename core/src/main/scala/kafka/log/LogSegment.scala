@@ -287,12 +287,12 @@ class LogSegment(val log: FileRecords,
       }
     } catch {
       case e: CorruptRecordException =>
-        logger.warn("Found invalid messages in log segment %s at byte offset %d: %s."
+        warn("Found invalid messages in log segment %s at byte offset %d: %s."
           .format(log.file.getAbsolutePath, validBytes, e.getMessage))
     }
     val truncated = log.sizeInBytes - validBytes
     if (truncated > 0)
-      logger.debug(s"Truncated $truncated invalid bytes at the end of segment ${log.file.getAbsoluteFile} during recovery")
+      debug(s"Truncated $truncated invalid bytes at the end of segment ${log.file.getAbsoluteFile} during recovery")
 
     log.truncateTo(validBytes)
     index.trimToValidSize()
@@ -467,21 +467,21 @@ class LogSegment(val log: FileRecords,
    * Close this log segment
    */
   def close() {
-    CoreUtils.swallow(timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp, skipFullCheck = true))
-    CoreUtils.swallow(index.close())
-    CoreUtils.swallow(timeIndex.close())
-    CoreUtils.swallow(log.close())
-    CoreUtils.swallow(txnIndex.close())
+    CoreUtils.swallow(timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp, skipFullCheck = true), logger)
+    CoreUtils.swallow(index.close(), logger)
+    CoreUtils.swallow(timeIndex.close(), logger)
+    CoreUtils.swallow(log.close(), logger)
+    CoreUtils.swallow(txnIndex.close(), logger)
   }
 
   /**
     * Close file handlers used by the log segment but don't write to disk. This is used when the disk may have failed
     */
   def closeHandlers() {
-    CoreUtils.swallow(index.closeHandler())
-    CoreUtils.swallow(timeIndex.closeHandler())
-    CoreUtils.swallow(log.closeHandlers())
-    CoreUtils.swallow(txnIndex.close())
+    CoreUtils.swallow(index.closeHandler(), logger)
+    CoreUtils.swallow(timeIndex.closeHandler(), logger)
+    CoreUtils.swallow(log.closeHandlers(), logger)
+    CoreUtils.swallow(txnIndex.close(), logger)
   }
 
   /**

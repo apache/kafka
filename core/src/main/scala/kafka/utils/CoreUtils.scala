@@ -25,12 +25,15 @@ import java.lang.management._
 import java.util.{Properties, UUID}
 import javax.management._
 
+import com.typesafe.scalalogging.Logger
+
 import scala.collection._
 import scala.collection.mutable
 import kafka.cluster.EndPoint
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{Base64, KafkaThread, Utils}
+import org.slf4j.event.Level
 
 /**
  * General helper functions!
@@ -73,15 +76,22 @@ object CoreUtils extends Logging {
     new KafkaThread(name, runnable(fun), daemon)
 
   /**
-   * Do the given action and log any exceptions thrown without rethrowing them
-   * @param log The log method to use for logging. E.g. logger.warn
-   * @param action The action to execute
-   */
-  def swallow(log: (Object, Throwable) => Unit, action: => Unit) {
+    * Do the given action and log any exceptions thrown without rethrowing them
+    * @param action The action to execute.
+    * @param logger The logger instance to use for logging the thrown exception.
+    * @param logLevel The log level to use for logging.
+    */
+  def swallow(action: => Unit, logger: Logger, logLevel: Level = Level.WARN) {
     try {
       action
     } catch {
-      case e: Throwable => log(e.getMessage(), e)
+      case e: Throwable => logLevel match {
+        case Level.ERROR => logger.error(e.getMessage, e)
+        case Level.WARN => logger.warn(e.getMessage, e)
+        case Level.INFO => logger.info(e.getMessage, e)
+        case Level.DEBUG => logger.debug(e.getMessage, e)
+        case Level.TRACE => logger.trace(e.getMessage, e)
+      }
     }
   }
 
