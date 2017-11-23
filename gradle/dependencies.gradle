@@ -121,5 +121,5 @@ libs += [
   zookeeper: "org.apache.zookeeper:zookeeper:$versions.zookeeper",
   jfreechart: "jfreechart:jfreechart:$versions.jfreechart",
   mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",
-  jacksonScalaModule: "com.fasterxml.jackson.module:jackson-module-scala_2.11:$versions.jacksonmodulescala"
+  jacksonScalaModule: "com.fasterxml.jackson.module:jackson-module-scala_$versions.baseScala:$versions.jacksonmodulescala"
 ]
