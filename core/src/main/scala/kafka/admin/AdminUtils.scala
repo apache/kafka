@@ -21,7 +21,6 @@ import kafka.log.LogConfig
 import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig}
 import kafka.utils._
 import kafka.utils.ZkUtils._
-import kafka.zk.KafkaZkClient
 import java.util.Random
 import java.util.Properties
 

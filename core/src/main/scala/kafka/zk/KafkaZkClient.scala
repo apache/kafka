@@ -953,14 +953,10 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     createResponse.resultException.foreach(e => throw e)
   }
 
-  private def logDirFailureEventZkData(brokerId: Int): String = {
-    val LogDirFailureEvent = 1
-    Json.encode(Map("version" -> LogDirEventNotificationHandler.Version, "broker" -> brokerId, "event" -> LogDirFailureEvent))
-  }
-
   def propagateLogDirEvent(brokerId: Int) {
     val logDirEventNotificationPath: String = createSequentialPersistentPath(
-      ZkUtils.LogDirEventNotificationPath + "/log_dir_event_", logDirFailureEventZkData(brokerId))
+      LogDirEventNotificationZNode.path + LogDirEventNotificationSequenceZNode.SequenceNumberPrefix,
+      new String(LogDirEventNotificationSequenceZNode.encode(brokerId), UTF_8))
     debug(s"Added $logDirEventNotificationPath for broker $brokerId")
   }
 
