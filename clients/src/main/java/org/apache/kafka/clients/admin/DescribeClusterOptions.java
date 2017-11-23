@@ -27,4 +27,25 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 @InterfaceStability.Evolving
 public class DescribeClusterOptions extends AbstractOptions<DescribeClusterOptions> {
 
+    /**
+     * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
+     * AdminClient should be used.
+     *
+     * This method is retained to keep binary compatibility with 0.11
+     */
+    public DescribeClusterOptions timeoutMs(Integer timeoutMs) {
+        this.timeoutMs = timeoutMs;
+        return this;
+    }
+
+    /**
+     * The request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
+     * AdminClient should be used.
+     *
+     * This method is retained to keep binary compatibility with 0.11
+     */
+    public Integer timeoutMs() {
+        return timeoutMs;
+    }
+
 }

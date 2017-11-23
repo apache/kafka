@@ -32,6 +32,27 @@ public class CreateTopicsOptions extends AbstractOptions<CreateTopicsOptions> {
     private boolean validateOnly = false;
 
     /**
+     * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
+     * AdminClient should be used.
+     *
+     * This method is retained to keep binary compatibility with 0.11
+     */
+    public CreateTopicsOptions timeoutMs(Integer timeoutMs) {
+        this.timeoutMs = timeoutMs;
+        return this;
+    }
+
+    /**
+     * The request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
+     * AdminClient should be used.
+     *
+     * This method is retained to keep binary compatibility with 0.11
+     */
+    public Integer timeoutMs() {
+        return timeoutMs;
+    }
+
+    /**
      * Set to true if the request should be validated without creating the topic.
      */
     public CreateTopicsOptions validateOnly(boolean validateOnly) {
