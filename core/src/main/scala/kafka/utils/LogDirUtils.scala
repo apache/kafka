@@ -36,26 +36,4 @@ object LogDirUtils extends Logging {
     Json.encode(Map("version" -> LogDirEventNotificationHandler.Version, "broker" -> brokerId, "event" -> LogDirFailureEvent))
   }
 
-  def deleteLogDirEvents(zkUtils: ZkUtils) {
-    val sequenceNumbers = zkUtils.getChildrenParentMayNotExist(ZkUtils.LogDirEventNotificationPath).toSet
-    sequenceNumbers.map(x => zkUtils.deletePath(ZkUtils.LogDirEventNotificationPath + "/" + x))
-  }
-
-  def getBrokerIdFromLogDirEvent(zkUtils: ZkUtils, child: String): Option[Int] = {
-    val changeZnode = ZkUtils.LogDirEventNotificationPath + "/" + child
-    val (jsonOpt, _) = zkUtils.readDataMaybeNull(changeZnode)
-    jsonOpt.flatMap { json =>
-      val result = Json.parseFull(json).map(_.asJsonObject).map { jsObject =>
-        val brokerId = jsObject("broker").to[Int]
-        val eventType = jsObject("event").to[Int]
-        if (eventType != LogDirFailureEvent)
-          throw new IllegalArgumentException(s"The event type $eventType in znode $changeZnode is not recognized")
-        brokerId
-      }
-      if (result.isEmpty)
-        error(s"Invalid LogDirEvent in ZK node '$changeZnode', JSON: $json")
-      result
-    }
-  }
-
 }

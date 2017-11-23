@@ -49,9 +49,7 @@ object ReplicationUtils extends Logging {
 
   private def checkLeaderAndIsrZkData(zkClient: KafkaZkClient, path: String, expectedLeaderAndIsrInfo: String): (Boolean, Int) = {
     try {
-      val writtenLeaderAndIsrInfo = zkClient.readDataMaybeNull(path)
-      val writtenLeaderOpt = writtenLeaderAndIsrInfo._1
-      val writtenStat = writtenLeaderAndIsrInfo._2
+      val (writtenLeaderOpt, writtenStat) = zkClient.readDataMaybeNull(path)
       val expectedLeader = parseLeaderAndIsr(expectedLeaderAndIsrInfo, path, writtenStat)
       writtenLeaderOpt.foreach { writtenData =>
         val writtenLeader = parseLeaderAndIsr(writtenData, path, writtenStat)
