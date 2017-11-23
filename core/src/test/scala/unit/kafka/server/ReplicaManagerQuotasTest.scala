@@ -149,7 +149,6 @@ class ReplicaManagerQuotasTest {
   }
 
   def setUpMocks(fetchInfo: Seq[(TopicPartition, PartitionData)], record: SimpleRecord = this.record, bothReplicasInSync: Boolean = false) {
-    val zkUtils = createNiceMock(classOf[ZkUtils])
     val zkClient = EasyMock.createMock(classOf[KafkaZkClient])
     val scheduler = createNiceMock(classOf[KafkaScheduler])
 

@@ -21,10 +21,11 @@ import java.util.Properties
 
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
-import kafka.controller.{LeaderIsrAndControllerEpoch, ReassignedPartitionsContext}
+import kafka.controller.{LeaderIsrAndControllerEpoch, LogDirEventNotificationHandler, ReassignedPartitionsContext}
 import kafka.log.LogConfig
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
 import kafka.security.auth.{Acl, Resource, ResourceType}
+
 import kafka.server.ConfigType
 import kafka.utils._
 import kafka.zookeeper._
@@ -950,6 +951,17 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     val createRequest = CreateRequest(path, AclChangeNotificationSequenceZNode.encode(resourceName), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
     val createResponse = retryRequestUntilConnected(createRequest)
     createResponse.resultException.foreach(e => throw e)
+  }
+
+  private def logDirFailureEventZkData(brokerId: Int): String = {
+    val LogDirFailureEvent = 1
+    Json.encode(Map("version" -> LogDirEventNotificationHandler.Version, "broker" -> brokerId, "event" -> LogDirFailureEvent))
+  }
+
+  def propagateLogDirEvent(brokerId: Int) {
+    val logDirEventNotificationPath: String = createSequentialPersistentPath(
+      ZkUtils.LogDirEventNotificationPath + "/log_dir_event_", logDirFailureEventZkData(brokerId))
+    debug(s"Added $logDirEventNotificationPath for broker $brokerId")
   }
 
   /**

@@ -22,7 +22,7 @@ import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.log.LogConfig
-import kafka.utils.{MockScheduler, MockTime, TestUtils, ZkUtils}
+import kafka.utils.{MockScheduler, MockTime, TestUtils}
 import TestUtils.createBroker
 import kafka.utils.timer.MockTimer
 import kafka.zk.KafkaZkClient
@@ -49,7 +49,6 @@ class ReplicaManagerTest {
   val time = new MockTime
   val metrics = new Metrics
   var zkClient: ZkClient = _
-  var zkUtils: ZkUtils = _
   var kafkaZkClient: KafkaZkClient = _
 
   @Before
@@ -60,7 +59,6 @@ class ReplicaManagerTest {
     EasyMock.replay(kafkaZkClient)
     EasyMock.expect(zkClient.readData(EasyMock.anyString(), EasyMock.anyObject[Stat])).andReturn(null).anyTimes()
     EasyMock.replay(zkClient)
-    zkUtils = ZkUtils(zkClient, isZkSecurityEnabled = false)
   }
 
   @After

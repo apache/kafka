@@ -70,9 +70,8 @@ class SimpleFetchTest {
   @Before
   def setUp() {
     // create nice mock since we don't particularly care about zkclient calls
-    val zkUtils = EasyMock.createNiceMock(classOf[ZkUtils])
     val kafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
-    EasyMock.replay(zkUtils)
+    EasyMock.replay(kafkaZkClient)
 
     // create nice mock since we don't particularly care about scheduler calls
     val scheduler = EasyMock.createNiceMock(classOf[KafkaScheduler])

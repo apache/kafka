@@ -56,7 +56,7 @@ class Partition(val topic: String,
   // Do not use replicaManager if this partition is ReplicaManager.OfflinePartition
   private val localBrokerId = if (!isOffline) replicaManager.config.brokerId else -1
   private val logManager = if (!isOffline) replicaManager.logManager else null
-  private val zkUtils = if (!isOffline) replicaManager.zkClient else null
+  private val zkClient = if (!isOffline) replicaManager.zkClient else null
   // allReplicasMap includes both assigned replicas and the future replica if there is ongoing replica movement
   private val allReplicasMap = new Pool[Int, Replica]
   // The read lock is only required when multiple reads are executed and needs to be in a consistent manner
@@ -172,7 +172,7 @@ class Partition(val topic: String,
   def getOrCreateReplica(replicaId: Int = localBrokerId, isNew: Boolean = false): Replica = {
     allReplicasMap.getAndMaybePut(replicaId, {
       if (isReplicaLocal(replicaId)) {
-        val adminZkClient = new AdminZkClient(zkUtils)
+        val adminZkClient = new AdminZkClient(zkClient)
         val prop = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
         val config = LogConfig.fromProps(logManager.defaultConfig.originals,
                                          prop)
@@ -664,7 +664,7 @@ class Partition(val topic: String,
 
   private def updateIsr(newIsr: Set[Replica]) {
     val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, newIsr.map(_.brokerId).toList, zkVersion)
-    val (updateSucceeded,newVersion) = ReplicationUtils.updateLeaderAndIsr(zkUtils, topic, partitionId,
+    val (updateSucceeded,newVersion) = ReplicationUtils.updateLeaderAndIsr(zkClient, topic, partitionId,
       newLeaderAndIsr, controllerEpoch, zkVersion)
 
     if(updateSucceeded) {

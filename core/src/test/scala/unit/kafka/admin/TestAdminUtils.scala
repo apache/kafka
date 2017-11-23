@@ -18,7 +18,6 @@ package kafka.admin
 
 import java.util.Properties
 import kafka.utils.ZkUtils
-import kafka.zk.KafkaZkClient
 
 class TestAdminUtils extends AdminUtilities {
   override def changeBrokerConfig(zkUtils: ZkUtils, brokerIds: Seq[Int], configs: Properties): Unit = {}
