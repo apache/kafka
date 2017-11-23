@@ -18,10 +18,12 @@ package kafka.admin
 
 import java.util.Properties
 import kafka.utils.ZkUtils
+import kafka.zk.KafkaZkClient
 
 class TestAdminUtils extends AdminUtilities {
   override def changeBrokerConfig(zkUtils: ZkUtils, brokerIds: Seq[Int], configs: Properties): Unit = {}
   override def fetchEntityConfig(zkUtils: ZkUtils, entityType: String, entityName: String): Properties = {new Properties}
+  override def fetchEntityConfigZkClient(zkClient: KafkaZkClient, entityType: String, entityName: String): Properties = {new Properties}
   override def changeClientIdConfig(zkUtils: ZkUtils, clientId: String, configs: Properties): Unit = {}
   override def changeUserOrUserClientIdConfig(zkUtils: ZkUtils, sanitizedEntityName: String, configs: Properties): Unit = {}
   override def changeTopicConfig(zkUtils: ZkUtils, topic: String, configs: Properties): Unit = {}
