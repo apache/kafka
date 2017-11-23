@@ -56,6 +56,8 @@ class ReplicaManagerTest {
   def setUp() {
     zkClient = EasyMock.createMock(classOf[ZkClient])
     kafkaZkClient = EasyMock.createMock(classOf[KafkaZkClient])
+    EasyMock.expect(kafkaZkClient.getEntityConfigs(EasyMock.anyString(), EasyMock.anyString())).andReturn(new Properties()).anyTimes()
+    EasyMock.replay(kafkaZkClient)
     EasyMock.expect(zkClient.readData(EasyMock.anyString(), EasyMock.anyObject[Stat])).andReturn(null).anyTimes()
     EasyMock.replay(zkClient)
     zkUtils = ZkUtils(zkClient, isZkSecurityEnabled = false)
