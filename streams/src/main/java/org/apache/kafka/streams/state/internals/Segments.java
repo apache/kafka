@@ -141,7 +141,6 @@ class Segments {
                 }
             }
         }
-        Collections.sort(segments);
         return segments;
     }
 
@@ -156,6 +155,7 @@ class Segments {
                 }
             }
         }
+        Collections.sort(segments);
         return segments;
     }
     
