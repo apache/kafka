@@ -37,9 +37,7 @@ class Segment extends RocksDBStore<Bytes, byte[]> implements Comparable<Segment>
 
     @Override
     public int compareTo(Segment segment) {
-        if (id - segment.id > 0) return 1;
-        if (id == segment.id) return 0;
-        return -1;
+        return Long.compare(id, segment.id);
     }
 
     @Override
