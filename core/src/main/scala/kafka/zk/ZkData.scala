@@ -30,6 +30,13 @@ import org.apache.zookeeper.data.Stat
 
 // This file contains objects for encoding/decoding data stored in ZooKeeper nodes (znodes).
 
+object LeaderAndIsrZNode {
+  def encode(leaderAndIsr: LeaderAndIsr, controllerEpoch: Int): String = {
+    Json.encode(Map("version" -> 1, "leader" -> leaderAndIsr.leader, "leader_epoch" -> leaderAndIsr.leaderEpoch,
+                "controller_epoch" -> controllerEpoch, "isr" -> leaderAndIsr.isr))
+  }
+}
+
 object ControllerZNode {
   def path = "/controller"
   def encode(brokerId: Int, timestamp: Long): Array[Byte] =

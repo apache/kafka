@@ -20,7 +20,7 @@ package kafka.utils
 import kafka.api.LeaderAndIsr
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch}
 import kafka.utils.ZkUtils._
-import kafka.zk.KafkaZkClient
+import kafka.zk._
 import org.apache.kafka.common.TopicPartition
 import org.apache.zookeeper.data.Stat
 
@@ -34,7 +34,7 @@ object ReplicationUtils extends Logging {
     zkVersion: Int): (Boolean,Int) = {
     debug(s"Updated ISR for $topic-$partitionId to ${newLeaderAndIsr.isr.mkString(",")}")
     val path = getTopicPartitionLeaderAndIsrPath(topic, partitionId)
-    val newLeaderData = zkClient.leaderAndIsrZkData(newLeaderAndIsr, controllerEpoch)
+    val newLeaderData = LeaderAndIsrZNode.encode(newLeaderAndIsr, controllerEpoch)
     // use the epoch of the controller that made the leadership decision, instead of the current controller epoch
     val updatePersistentPath: (Boolean, Int) = zkClient.conditionalUpdatePath(path, newLeaderData, zkVersion, Some(checkLeaderAndIsrZkData))
     updatePersistentPath
