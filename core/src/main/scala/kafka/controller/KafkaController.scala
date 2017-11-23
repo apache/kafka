@@ -43,6 +43,15 @@ import scala.util.Try
 object KafkaController extends Logging {
   val InitialControllerEpoch = 1
   val InitialControllerEpochZkVersion = 1
+
+  /**
+   * ControllerEventThread will shutdown once it sees this event
+   */
+  private[controller] case object ShutdownEventThread extends ControllerEvent {
+    def state = ControllerState.ControllerChange
+    override def process(): Unit = ()
+  }
+
 }
 
 class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Time, metrics: Metrics, threadNamePrefix: Option[String] = None) extends Logging with KafkaMetricsGroup {
