@@ -51,6 +51,8 @@ public class FetcherMetricsRegistry {
     public MetricNameTemplate partitionRecordsLagMax;
     public MetricNameTemplate partitionRecordsLagAvg;
     public MetricNameTemplate partitionRecordsLead;
+    public MetricNameTemplate partitionRecordsLeadMin;
+    public MetricNameTemplate partitionRecordsLeadAvg;
 
     public FetcherMetricsRegistry() {
         this(new HashSet<String>(), "");
@@ -131,8 +133,13 @@ public class FetcherMetricsRegistry {
                 "The max lag of the partition", tags);
         this.partitionRecordsLagAvg = new MetricNameTemplate("{topic}-{partition}.records-lag-avg", groupName, 
                 "The average lag of the partition", tags);
-        this.partitionRecordsLead = new MetricNameTemplate("{topic}-{partition}.records-lead", groupName,
+        this.partitionRecordsLead = new MetricNameTemplate("records-lead", groupName,
                 "The latest lead of the partition", partitionTags);
+        this.partitionRecordsLeadMin = new MetricNameTemplate("records-lead-min", groupName,
+                "The min lead of the partition", partitionTags);
+        this.partitionRecordsLeadAvg = new MetricNameTemplate("records-lead-avg", groupName,
+                "The average lead of the partition", partitionTags);
+
     }
     
     public List<MetricNameTemplate> getAllTemplates() {
@@ -162,7 +169,9 @@ public class FetcherMetricsRegistry {
             partitionRecordsLag,
             partitionRecordsLagAvg,
             partitionRecordsLagMax,
-            partitionRecordsLead
+            partitionRecordsLead,
+            partitionRecordsLeadMin,
+            partitionRecordsLeadAvg
         );
     }
 

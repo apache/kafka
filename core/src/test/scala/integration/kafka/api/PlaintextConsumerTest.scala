@@ -1407,7 +1407,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       val partitionTags = new util.HashMap[String, String](tags)
       partitionTags.put("topic", tp.topic())
       partitionTags.put("partition", tp.partition().toString)
-      val fetchLead0 = consumer.metrics.get(new MetricName(tp + ".records-lead", "consumer-fetch-manager-metrics", "", partitionTags))
+      val fetchLead0 = consumer.metrics.get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", partitionTags))
       assertNotNull(fetchLead0)
       assertEquals(s"The lead should be $records.count", records.count, fetchLead0.value, epsilon)
 
@@ -1420,8 +1420,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       // Verify the metric has gone
       assertNull(consumer.metrics.get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags)))
       assertNull(consumer.metrics.get(new MetricName(tp2 + ".records-lag", "consumer-fetch-manager-metrics", "", tags)))
-      assertNull(consumer.metrics.get(new MetricName(tp + ".records-lead", "consumer-fetch-manager-metrics", "", partitionTags)))
-      assertNull(consumer.metrics.get(new MetricName(tp2 + ".records-lead", "consumer-fetch-manager-metrics", "", partitionTags)))
+      partitionTags.put("partition", tp.partition().toString)
+      assertNull(consumer.metrics.get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", partitionTags)))
+      partitionTags.put("partition", tp2.partition().toString)
+      assertNull(consumer.metrics.get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", partitionTags)))
     } finally {
       consumer.close()
     }
@@ -1451,7 +1453,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       partitionTags.put("partition", tp.partition().toString)
 
       val fetchLag = consumer.metrics.get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags))
-      val fetchLead = consumer.metrics.get(new MetricName(tp + ".records-lead", "consumer-fetch-manager-metrics", "", partitionTags))
+      val fetchLead = consumer.metrics.get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", partitionTags))
       assertNotNull(fetchLag)
       assertNotNull(fetchLead)
       val expectedLag = numMessages - records.count
@@ -1461,7 +1463,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       consumer.assign(List(tp2).asJava)
       TestUtils.waitUntilTrue(() => !consumer.poll(100).isEmpty, "Consumer did not consume any message before timeout.")
       assertNull(consumer.metrics.get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags)))
-      assertNull(consumer.metrics.get(new MetricName(tp + ".records-lead", "consumer-fetch-manager-metrics", "", partitionTags)))
+      assertNull(consumer.metrics.get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", partitionTags)))
     } finally {
       consumer.close()
     }
@@ -1489,7 +1491,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       partitionTags.put("partition", tp.partition().toString)
 
       val lag = consumer.metrics.get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags))
-      val lead = consumer.metrics.get(new MetricName(tp + ".records-lead", "consumer-fetch-manager-metrics", "", partitionTags))
+      val lead = consumer.metrics.get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", partitionTags))
       assertEquals(s"The lag should be ${numMessages - records.count}", numMessages - records.count, lag.value, epsilon)
       assertEquals(s"The lead should be ${records.count}", records.count, lead.value, epsilon)
     } finally {

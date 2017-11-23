@@ -1209,7 +1209,7 @@ public class FetcherTest {
         Map<String, String> tags = new HashMap<>(2);
         tags.put("topic", tp0.topic());
         tags.put("partition", String.valueOf(tp0.partition()));
-        MetricName partitionLeadMetric = metrics.metricName(tp0 + ".records-lead", metricGroup, "", tags);
+        MetricName partitionLeadMetric = metrics.metricName("records-lead", metricGroup, "", tags);
 
         Map<MetricName, KafkaMetric> allMetrics = metrics.metrics();
         KafkaMetric recordsFetchLeadMin = allMetrics.get(minLeadMetric);

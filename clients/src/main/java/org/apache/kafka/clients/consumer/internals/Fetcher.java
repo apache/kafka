@@ -1264,6 +1264,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         private final Sensor recordsFetchLead;
 
         private Set<TopicPartition> assignedPartitions;
+        // partitions whose lead metrics have been already added into the sensor
+        private final Set<TopicPartition> leadMetricAddedPartitions = new HashSet<>();
 
         private FetchManagerMetrics(Metrics metrics, FetcherMetricsRegistry metricsRegistry) {
             this.metrics = metrics;
@@ -1331,27 +1333,27 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 for (TopicPartition tp : this.assignedPartitions) {
                     if (!assignedPartitions.contains(tp)) {
                         metrics.removeSensor(partitionLagMetricName(tp));
-                        metrics.removeSensor(partitionLeadMetricName(tp));
                     }
                 }
+                metrics.removeSensor(partitionLeadSensorName());
             }
+            this.leadMetricAddedPartitions.clear();
             this.assignedPartitions = assignedPartitions;
         }
 
         private void recordPartitionLead(TopicPartition tp, long lead) {
             this.recordsFetchLead.record(lead);
 
-            String name = partitionLeadMetricName(tp);
-            Sensor recordsLead = this.metrics.getSensor(name);
-            if (recordsLead == null) {
+            Sensor recordsLead = this.metrics.sensor(partitionLeadSensorName());
+            if (!this.leadMetricAddedPartitions.contains(tp)) {
+                this.leadMetricAddedPartitions.add(tp);
                 Map<String, String> tags = new HashMap<>(2);
                 tags.put("topic", tp.topic().replace('.', '_'));
                 tags.put("partition", String.valueOf(tp.partition()));
 
-                recordsLead = this.metrics.sensor(name);
-                recordsLead.add(this.metrics.metricName(name,
-                        metricsRegistry.partitionRecordsLead.group(),
-                        metricsRegistry.partitionRecordsLead.description(), tags), new Value());
+                recordsLead.add(this.metrics.metricInstance(metricsRegistry.partitionRecordsLead, tags), new Value());
+                recordsLead.add(this.metrics.metricInstance(metricsRegistry.partitionRecordsLeadMin, tags), new Min());
+                recordsLead.add(this.metrics.metricInstance(metricsRegistry.partitionRecordsLeadAvg, tags), new Avg());
             }
             recordsLead.record(lead);
         }
@@ -1380,9 +1382,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             return tp + ".records-lag";
         }
 
-        private static String partitionLeadMetricName(TopicPartition tp) {
-            return tp + ".records-lead";
+        private static String partitionLeadSensorName() {
+            return "records-lead-per-partition";
         }
+
     }
 
     @Override
