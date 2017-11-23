@@ -550,6 +550,7 @@ project(':core') {
     compile libs.metrics
     compile libs.scala
     compile libs.slf4jlog4j
+    compile libs.scalaLogging
     compile libs.zkclient
     compile libs.zookeeper
     compile libs.jacksonScalaModule

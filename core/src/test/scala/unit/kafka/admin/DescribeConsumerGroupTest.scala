@@ -56,7 +56,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
   @Before
   override def setUp() {
     super.setUp()
-    AdminUtils.createTopic(zkUtils, topic, 1, 1)
+    adminZkClient.createTopic(topic, 1, 1)
   }
 
   @After
@@ -234,7 +234,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
   def testDescribeWithMultiPartitionTopicAndMultipleConsumersWithNewConsumer() {
     TestUtils.createOffsetsTopic(zkUtils, servers)
     val topic2 = "foo2"
-    AdminUtils.createTopic(zkUtils, topic2, 2, 1)
+    adminZkClient.createTopic(topic2, 2, 1)
 
     // run two consumers in the group consuming from a two-partition topic
     consumerGroupExecutor = new ConsumerGroupExecutor(brokerList, 2, group, topic2)

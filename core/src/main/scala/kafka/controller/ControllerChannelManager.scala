@@ -36,6 +36,7 @@ import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{Node, TopicPartition}
+import org.slf4j.event.Level
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
@@ -210,7 +211,7 @@ class RequestSendThread(val controllerId: Int,
 
   override def doWork(): Unit = {
 
-    def backoff(): Unit = CoreUtils.swallowTrace(Thread.sleep(100))
+    def backoff(): Unit = CoreUtils.swallow(Thread.sleep(100), this, Level.TRACE)
 
     val QueueItem(apiKey, requestBuilder, callback) = queue.take()
     var clientResponse: ClientResponse = null

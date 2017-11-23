@@ -38,6 +38,7 @@ import org.apache.kafka.common.network.{ChannelBuilder, ChannelBuilders, KafkaCh
 import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{KafkaThread, LogContext, Time}
+import org.slf4j.event.Level
 
 import scala.collection._
 import JavaConverters._
@@ -252,8 +253,8 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
     if (channel != null) {
       debug("Closing connection from " + channel.socket.getRemoteSocketAddress())
       connectionQuotas.dec(channel.socket.getInetAddress)
-      swallowError(channel.socket().close())
-      swallowError(channel.close())
+      CoreUtils.swallow(channel.socket().close(), this, Level.ERROR)
+      CoreUtils.swallow(channel.close(), this, Level.ERROR)
     }
   }
 }
@@ -319,8 +320,8 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
       }
     } finally {
       debug("Closing server socket and selector.")
-      swallowError(serverChannel.close())
-      swallowError(nioSelector.close())
+      CoreUtils.swallow(serverChannel.close(), this, Level.ERROR)
+      CoreUtils.swallow(nioSelector.close(), this, Level.ERROR)
       shutdownComplete()
     }
   }
@@ -481,7 +482,7 @@ private[kafka] class Processor(val id: Int,
       }
     } finally {
       debug("Closing selector - processor " + id)
-      swallowError(closeAll())
+      CoreUtils.swallow(closeAll(), this, Level.ERROR)
       shutdownComplete()
     }
   }

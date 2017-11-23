@@ -31,7 +31,7 @@ import java.math.BigInteger
 import java.nio.charset.StandardCharsets
 
 import org.apache.kafka.common.utils.Utils
-import org.apache.log4j.Logger
+import org.slf4j.LoggerFactory
 
 /**
  * Load test for the producer
@@ -40,7 +40,6 @@ import org.apache.log4j.Logger
 object ProducerPerformance extends Logging {
 
   def main(args: Array[String]) {
-    val logger = Logger.getLogger(getClass)
     val config = new ProducerPerfConfig(args)
     if (!config.isFixedSize)
       logger.info("WARN: Throughput will be slower due to changing message size per request")
