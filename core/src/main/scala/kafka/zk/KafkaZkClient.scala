@@ -19,8 +19,8 @@ package kafka.zk
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.Properties
 
-import kafka.api.{ApiVersion, LeaderAndIsr}
-import kafka.cluster.{Broker, EndPoint}
+import kafka.api.LeaderAndIsr
+import kafka.cluster.Broker
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.log.LogConfig
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
@@ -33,7 +33,7 @@ import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException}
 
-import scala.collection.{Seq, mutable}
+import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 /**
@@ -47,7 +47,6 @@ import scala.collection.mutable.ArrayBuffer
  * in place. We should also consider whether a monolithic [[kafka.zk.ZkData]] is the way to go.
  */
 class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends Logging {
-
   import KafkaZkClient._
 
   /**
@@ -61,25 +60,6 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     }
     retryRequestsUntilConnected(getDataRequests)
   }
-
-  /**
-    * This is to be called for re-registering the broker back into zookeeper after reconnect
-    * based on default values
-    *
-    * TODO: implement - after review
-    */
-  def registerBrokerInZK() = ???
-
-  private def registerBrokerInZK(brokerIdPath: String, brokerINfo: String) = ???
-
-  def registerBrokerInZk(id: Int,
-                         host: String,
-                         port: Int,
-                         advertisedEndpoints: Seq[EndPoint],
-                         jmxPort: Int,
-                         rack: Option[String],
-                         apiVersion: ApiVersion) = ???
-
 
   /**
    * Sets topic partition states for the given partitions.
