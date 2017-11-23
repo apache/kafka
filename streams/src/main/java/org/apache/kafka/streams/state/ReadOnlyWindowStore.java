@@ -77,4 +77,23 @@ public interface ReadOnlyWindowStore<K, V> {
      * @throws NullPointerException If null is used for any key.
      */
     KeyValueIterator<Windowed<K>, V> fetch(K from, K to, long timeFrom, long timeTo);
+    
+    /**
+    * Gets all the key-value pairs in the existing windows.
+    *
+    * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
+    * @throws InvalidStateStoreException if the store is not initialized
+    */
+    KeyValueIterator<Windowed<K>, V> all();
+    
+    /**
+     * Gets all the key-value pairs that belong to the windows within in the given time range.
+     *
+     * @param timeFrom the beginning of the time slot from which to search
+     * @param timeTo   the end of the time slot from which to search
+     * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
+     * @throws InvalidStateStoreException if the store is not initialized
+     * @throws NullPointerException if null is used for any key
+     */
+    KeyValueIterator<Windowed<K>, V> fetchAll(long timeFrom, long timeTo);
 }

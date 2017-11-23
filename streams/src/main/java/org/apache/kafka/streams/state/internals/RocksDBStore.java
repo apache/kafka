@@ -387,6 +387,28 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         return rocksDbIterator;
     }
 
+    public synchronized KeyValue<K, V> first() {
+        validateStoreOpen();
+        
+        RocksIterator innerIter = db.newIterator();
+        innerIter.seekToFirst();
+        KeyValue<K, V> pair = new KeyValue<>(serdes.keyFrom(innerIter.key()), serdes.valueFrom(innerIter.value()));
+        innerIter.close();
+
+        return pair;
+    }
+
+    public synchronized KeyValue<K, V> last() {
+        validateStoreOpen();
+        
+        RocksIterator innerIter = db.newIterator();
+        innerIter.seekToLast();
+        KeyValue<K, V> pair = new KeyValue<>(serdes.keyFrom(innerIter.key()), serdes.valueFrom(innerIter.value()));
+        innerIter.close();
+
+        return pair;
+    }
+
     /**
      * Return an approximate count of key-value mappings in this store.
      *
