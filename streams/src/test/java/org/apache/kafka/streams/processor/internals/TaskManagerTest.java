@@ -61,17 +61,19 @@ public class TaskManagerTest {
     @Mock(type = MockType.NICE)
     private Consumer<byte[], byte[]> consumer;
     @Mock(type = MockType.NICE)
-    private StreamThread.AbstractTaskCreator activeTaskCreator;
+    private StreamThread.AbstractTaskCreator<StreamTask> activeTaskCreator;
     @Mock(type = MockType.NICE)
-    private StreamThread.AbstractTaskCreator standbyTaskCreator;
+    private StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator;
     @Mock(type = MockType.NICE)
     private ThreadMetadataProvider threadMetadataProvider;
     @Mock(type = MockType.NICE)
-    private Task firstTask;
+    private StreamTask streamTask;
     @Mock(type = MockType.NICE)
-    private AssignedTasks active;
+    private StandbyTask standbyTask;
     @Mock(type = MockType.NICE)
-    private AssignedTasks standby;
+    private AssignedStreamsTasks active;
+    @Mock(type = MockType.NICE)
+    private AssignedStandbyTasks standby;
 
     private TaskManager taskManager;
 
@@ -139,7 +141,7 @@ public class TaskManagerTest {
     public void shouldAddNonResumedActiveTasks() {
         mockSingleActiveTask();
         EasyMock.expect(active.maybeResumeSuspendedTask(taskId0, taskId0Partitions)).andReturn(false);
-        active.addNewTask(EasyMock.same(firstTask));
+        active.addNewTask(EasyMock.same(streamTask));
         replay();
 
         taskManager.createTasks(taskId0Partitions);
@@ -164,7 +166,7 @@ public class TaskManagerTest {
     public void shouldAddNonResumedStandbyTasks() {
         mockStandbyTaskExpectations();
         EasyMock.expect(standby.maybeResumeSuspendedTask(taskId0, taskId0Partitions)).andReturn(false);
-        standby.addNewTask(EasyMock.same(firstTask));
+        standby.addNewTask(EasyMock.same(standbyTask));
         replay();
 
         taskManager.createTasks(taskId0Partitions);
@@ -470,7 +472,7 @@ public class TaskManagerTest {
     }
 
     private void mockAssignStandbyPartitions(final long offset) {
-        final Task task = EasyMock.createNiceMock(Task.class);
+        final StandbyTask task = EasyMock.createNiceMock(StandbyTask.class);
         EasyMock.expect(active.initializeNewTasks()).andReturn(new HashSet<TopicPartition>());
         EasyMock.expect(active.allTasksRunning()).andReturn(true);
         EasyMock.expect(active.updateRestored(EasyMock.<Collection<TopicPartition>>anyObject())).
@@ -487,7 +489,7 @@ public class TaskManagerTest {
         mockThreadMetadataProvider(taskId0Assignment, Collections.<TaskId, Set<TopicPartition>>emptyMap());
         expect(standbyTaskCreator.createTasks(EasyMock.<Consumer<byte[], byte[]>>anyObject(),
                                                    EasyMock.eq(taskId0Assignment)))
-                .andReturn(Collections.singletonList(firstTask));
+                .andReturn(Collections.singletonList(standbyTask));
 
     }
 
@@ -497,7 +499,7 @@ public class TaskManagerTest {
 
         expect(activeTaskCreator.createTasks(EasyMock.anyObject(Consumer.class),
                                                   EasyMock.eq(taskId0Assignment)))
-                .andReturn(Collections.singletonList(firstTask));
+                .andReturn(Collections.singletonList(streamTask));
 
     }
 

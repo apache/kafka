@@ -18,6 +18,7 @@ package kafka.coordinator.transaction
 
 import kafka.common.KafkaException
 import kafka.utils.{Json, Logging, ZkUtils}
+import kafka.zk.KafkaZkClient
 
 /**
  * ProducerIdManager is the part of the transaction coordinator that provides ProducerIds in a unique way
@@ -65,7 +66,7 @@ case class ProducerIdBlock(brokerId: Int, blockStartId: Long, blockEndId: Long) 
   }
 }
 
-class ProducerIdManager(val brokerId: Int, val zkUtils: ZkUtils) extends Logging {
+class ProducerIdManager(val brokerId: Int, val zkClient: KafkaZkClient) extends Logging {
 
   this.logIdent = "[ProducerId Manager " + brokerId + "]: "
 
@@ -82,7 +83,7 @@ class ProducerIdManager(val brokerId: Int, val zkUtils: ZkUtils) extends Logging
     var zkWriteComplete = false
     while (!zkWriteComplete) {
       // refresh current producerId block from zookeeper again
-      val (dataOpt, zkVersion) = zkUtils.readDataAndVersionMaybeNull(ZkUtils.ProducerIdBlockPath)
+      val (dataOpt, zkVersion) = zkClient.getDataAndVersion(ZkUtils.ProducerIdBlockPath)
 
       // generate the new producerId block
       currentProducerIdBlock = dataOpt match {
@@ -105,7 +106,7 @@ class ProducerIdManager(val brokerId: Int, val zkUtils: ZkUtils) extends Logging
       val newProducerIdBlockData = ProducerIdManager.generateProducerIdBlockJson(currentProducerIdBlock)
 
       // try to write the new producerId block into zookeeper
-      val (succeeded, version) = zkUtils.conditionalUpdatePersistentPath(ZkUtils.ProducerIdBlockPath,
+      val (succeeded, version) = zkClient.conditionalUpdatePath(ZkUtils.ProducerIdBlockPath,
         newProducerIdBlockData, zkVersion, Some(checkProducerIdBlockZkData))
       zkWriteComplete = succeeded
 
@@ -114,10 +115,10 @@ class ProducerIdManager(val brokerId: Int, val zkUtils: ZkUtils) extends Logging
     }
   }
 
-  private def checkProducerIdBlockZkData(zkUtils: ZkUtils, path: String, expectedData: String): (Boolean, Int) = {
+  private def checkProducerIdBlockZkData(zkClient: KafkaZkClient, path: String, expectedData: String): (Boolean, Int) = {
     try {
       val expectedPidBlock = ProducerIdManager.parseProducerIdBlockData(expectedData)
-      val (dataOpt, zkVersion) = zkUtils.readDataAndVersionMaybeNull(ZkUtils.ProducerIdBlockPath)
+      val (dataOpt, zkVersion) = zkClient.getDataAndVersion(ZkUtils.ProducerIdBlockPath)
       dataOpt match {
         case Some(data) =>
           val currProducerIdBLock = ProducerIdManager.parseProducerIdBlockData(data)

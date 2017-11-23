@@ -42,7 +42,6 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import static java.lang.String.format;
@@ -103,7 +102,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     public StreamTask(final TaskId id,
-                      final String applicationId,
                       final Collection<TopicPartition> partitions,
                       final ProcessorTopology topology,
                       final Consumer<byte[], byte[]> consumer,
@@ -114,7 +112,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                       final ThreadCache cache,
                       final Time time,
                       final Producer<byte[], byte[]> producer) {
-        super(id, applicationId, partitions, topology, consumer, changelogReader, false, stateDirectory, config);
+        super(id, partitions, topology, consumer, changelogReader, false, stateDirectory, config);
         streamTimePunctuationQueue = new PunctuationQueue();
         systemTimePunctuationQueue = new PunctuationQueue();
         maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
@@ -469,7 +467,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                         transactionInFlight = false;
                     } catch (final ProducerFencedException ignore) {
                         /* TODO
-                         * this should actually never happen atm as we we guard the call to #abortTransaction
+                         * this should actually never happen atm as we guard the call to #abortTransaction
                          * -> the reason for the guard is a "bug" in the Producer -- it throws IllegalStateException
                          * instead of ProducerFencedException atm. We can remove the isZombie flag after KAFKA-5604 got
                          * fixed and fall-back to this catch-and-swallow code
@@ -491,11 +489,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         if (firstException != null) {
             throw firstException;
         }
-    }
-
-    @Override
-    public Map<TopicPartition, Long> checkpointedOffsets() {
-        throw new UnsupportedOperationException("checkpointedOffsets is not supported by StreamTasks");
     }
 
     /**
@@ -617,11 +610,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         final long timestamp = time.milliseconds();
 
         return systemTimePunctuationQueue.mayPunctuate(timestamp, PunctuationType.WALL_CLOCK_TIME, this);
-    }
-
-    @Override
-    public List<ConsumerRecord<byte[], byte[]>> update(final TopicPartition partition, final List<ConsumerRecord<byte[], byte[]>> remaining) {
-        throw new UnsupportedOperationException("update is not implemented");
     }
 
     /**

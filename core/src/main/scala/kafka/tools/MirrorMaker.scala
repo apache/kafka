@@ -444,18 +444,18 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
           exitingOnSendFailure = true
           fatal("Mirror maker thread failure due to ", t)
       } finally {
-        CoreUtils.swallow {
+        CoreUtils.swallow ({
           info("Flushing producer.")
           producer.flush()
 
           // note that this commit is skipped if flush() fails which ensures that we don't lose messages
           info("Committing consumer offsets.")
           commitOffsets(mirrorMakerConsumer)
-        }
+        }, this)
 
         info("Shutting down consumer connectors.")
-        CoreUtils.swallow(mirrorMakerConsumer.stop())
-        CoreUtils.swallow(mirrorMakerConsumer.cleanup())
+        CoreUtils.swallow(mirrorMakerConsumer.stop(), this)
+        CoreUtils.swallow(mirrorMakerConsumer.cleanup(), this)
         shutdownLatch.countDown()
         info("Mirror maker thread stopped")
         // if it exits accidentally, stop the entire mirror maker

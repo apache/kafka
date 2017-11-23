@@ -136,7 +136,6 @@ class SocketServerTest extends JUnitSuite {
   def shutdownServerAndMetrics(server: SocketServer): Unit = {
     server.shutdown()
     server.metrics.close()
-    server.requestChannel.metrics.close()
   }
 
   @After
@@ -328,7 +327,7 @@ class SocketServerTest extends JUnitSuite {
       TestUtils.waitUntilTrue(() => openChannel.isEmpty, "Idle channel not closed")
       TestUtils.waitUntilTrue(() => openOrClosingChannel.isDefined, "Channel removed without processing staged receives")
 
-      // Create new connection with same id when when `channel1` is in Selector.closingChannels
+      // Create new connection with same id when `channel1` is in Selector.closingChannels
       // Check that new connection is closed and openOrClosingChannel still contains `channel1`
       connectAndWaitForConnectionRegister()
       TestUtils.waitUntilTrue(() => connectionCount == 1, "Failed to close channel")
@@ -576,8 +575,8 @@ class SocketServerTest extends JUnitSuite {
   }
 
   @Test
-  def testRequestMetricsAfterShutdown(): Unit = {
-    server.shutdown()
+  def testRequestMetricsAfterStop(): Unit = {
+    server.stopProcessingRequests()
 
     server.requestChannel.metrics(ApiKeys.PRODUCE.name).requestRate.mark()
     server.requestChannel.updateErrorMetrics(ApiKeys.PRODUCE, Map(Errors.NONE -> 1))
@@ -591,7 +590,7 @@ class SocketServerTest extends JUnitSuite {
       .collect { case (k, metric: Meter) => (k.toString, metric.count) }
 
     assertEquals(nonZeroMeters, requestMetricMeters.filter { case (_, value) => value != 0 })
-    server.requestChannel.metrics.close()
+    server.shutdown()
     assertEquals(Map.empty, requestMetricMeters)
   }
 

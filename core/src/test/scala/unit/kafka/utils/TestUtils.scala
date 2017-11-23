@@ -1382,13 +1382,21 @@ object TestUtils extends Logging {
     records
   }
 
-  def consumeRemainingRecords[K, V](consumer: KafkaConsumer[K, V], timeout: Long): Seq[ConsumerRecord[K, V]] = {
+  /**
+    * Will consume all the records for the given consumer for the specified duration. If you want to drain all the
+    * remaining messages in the partitions the consumer is subscribed to, the duration should be set high enough so
+    * that the consumer has enough time to poll everything. This would be based on the number of expected messages left
+    * in the topic, and should not be too large (ie. more than a second) in our tests.
+    *
+    * @return All the records consumed by the consumer within the specified duration.
+    */
+  def consumeRecordsFor[K, V](consumer: KafkaConsumer[K, V], duration: Long): Seq[ConsumerRecord[K, V]] = {
     val startTime = System.currentTimeMillis()
     val records = new ArrayBuffer[ConsumerRecord[K, V]]()
     waitUntilTrue(() => {
       records ++= consumer.poll(50).asScala
-      System.currentTimeMillis() - startTime > timeout
-    }, s"The timeout $timeout was greater than the maximum wait time.")
+      System.currentTimeMillis() - startTime > duration
+    }, s"The timeout $duration was greater than the maximum wait time.")
     records
   }
 
@@ -1423,7 +1431,7 @@ object TestUtils extends Logging {
 
   private def asBytes(string: String) = string.getBytes(StandardCharsets.UTF_8)
 
-  // Verifies that the record was intended to be committed by checking the the headers for an expected transaction status
+  // Verifies that the record was intended to be committed by checking the headers for an expected transaction status
   // If true, this will return the value as a string. It is expected that the record in question should have been created
   // by the `producerRecordWithExpectedTransactionStatus` method.
   def assertCommittedAndGetValue(record: ConsumerRecord[Array[Byte], Array[Byte]]) : String = {

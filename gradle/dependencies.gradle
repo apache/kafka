@@ -29,7 +29,7 @@ ext {
 }
 
 // Add Scala version
-def defaultScala211Version = '2.11.11'
+def defaultScala211Version = '2.11.12'
 def defaultScala212Version = '2.12.4'
 if (hasProperty('scalaVersion')) {
   if (scalaVersion == '2.11') {
@@ -57,6 +57,7 @@ versions += [
   jersey: "2.25.1",
   jmh: "1.19",
   log4j: "1.2.17",
+  scalaLogging: "3.7.2",
   jopt: "5.0.4",
   junit: "4.12",
   lz4: "1.4",
@@ -99,6 +100,7 @@ libs += [
   jmhCoreBenchmarks: "org.openjdk.jmh:jmh-core-benchmarks:$versions.jmh",
   junit: "junit:junit:$versions.junit",
   log4j: "log4j:log4j:$versions.log4j",
+  scalaLogging: "com.typesafe.scala-logging:scala-logging_$versions.baseScala:$versions.scalaLogging",
   joptSimple: "net.sf.jopt-simple:jopt-simple:$versions.jopt",
   lz4: "org.lz4:lz4-java:$versions.lz4",
   metrics: "com.yammer.metrics:metrics-core:$versions.metrics",

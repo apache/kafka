@@ -211,7 +211,7 @@ class LogManagerTest {
       log.appendAsLeader(set, leaderEpoch = 0)
     }
     time.sleep(logManager.InitialTaskDelayMs)
-    assertTrue("Time based flush should have been triggered triggered", lastFlush != log.lastFlushTime)
+    assertTrue("Time based flush should have been triggered", lastFlush != log.lastFlushTime)
   }
 
   /**

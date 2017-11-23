@@ -27,7 +27,7 @@ set BASE_DIR=%CD%
 popd
 
 IF ["%SCALA_VERSION%"] EQU [""] (
-  set SCALA_VERSION=2.11.11
+  set SCALA_VERSION=2.11.12
 )
 
 IF ["%SCALA_BINARY_VERSION%"] EQU [""] (

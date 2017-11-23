@@ -37,23 +37,23 @@ class TaskManager {
     // activeTasks needs to be concurrent as it can be accessed
     // by QueryableState
     private final Logger log;
-    private final AssignedTasks active;
-    private final AssignedTasks standby;
+    private final AssignedStreamsTasks active;
+    private final AssignedStandbyTasks standby;
     private final ChangelogReader changelogReader;
     private final String logPrefix;
     private final Consumer<byte[], byte[]> restoreConsumer;
-    private final StreamThread.AbstractTaskCreator taskCreator;
-    private final StreamThread.AbstractTaskCreator standbyTaskCreator;
+    private final StreamThread.AbstractTaskCreator<StreamTask> taskCreator;
+    private final StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator;
     private ThreadMetadataProvider threadMetadataProvider;
     private Consumer<byte[], byte[]> consumer;
 
     TaskManager(final ChangelogReader changelogReader,
                 final String logPrefix,
                 final Consumer<byte[], byte[]> restoreConsumer,
-                final StreamThread.AbstractTaskCreator taskCreator,
-                final StreamThread.AbstractTaskCreator standbyTaskCreator,
-                final AssignedTasks active,
-                final AssignedTasks standby) {
+                final StreamThread.AbstractTaskCreator<StreamTask> taskCreator,
+                final StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator,
+                final AssignedStreamsTasks active,
+                final AssignedStandbyTasks standby) {
         this.changelogReader = changelogReader;
         this.logPrefix = logPrefix;
         this.restoreConsumer = restoreConsumer;
@@ -133,7 +133,7 @@ class TaskManager {
         // -> other thread will call removeSuspendedTasks(); eventually
         log.trace("New active tasks to be created: {}", newTasks);
 
-        for (final Task task : taskCreator.createTasks(consumer, newTasks)) {
+        for (final StreamTask task : taskCreator.createTasks(consumer, newTasks)) {
             active.addNewTask(task);
         }
     }
@@ -166,7 +166,7 @@ class TaskManager {
         // -> other thread will call removeSuspendedStandbyTasks(); eventually
         log.trace("New standby tasks to be created: {}", newStandbyTasks);
 
-        for (final Task task : standbyTaskCreator.createTasks(consumer, newStandbyTasks)) {
+        for (final StandbyTask task : standbyTaskCreator.createTasks(consumer, newStandbyTasks)) {
             standby.addNewTask(task);
         }
     }
@@ -240,20 +240,20 @@ class TaskManager {
         return standby.previousTaskIds();
     }
 
-    Task activeTask(final TopicPartition partition) {
+    StreamTask activeTask(final TopicPartition partition) {
         return active.runningTaskFor(partition);
     }
 
 
-    Task standbyTask(final TopicPartition partition) {
+    StandbyTask standbyTask(final TopicPartition partition) {
         return standby.runningTaskFor(partition);
     }
 
-    Map<TaskId, Task> activeTasks() {
+    Map<TaskId, StreamTask> activeTasks() {
         return active.runningTaskMap();
     }
 
-    Map<TaskId, Task> standbyTasks() {
+    Map<TaskId, StandbyTask> standbyTasks() {
         return standby.runningTaskMap();
     }
 
@@ -293,9 +293,9 @@ class TaskManager {
     }
 
     private void assignStandbyPartitions() {
-        final Collection<Task> running = standby.running();
+        final Collection<StandbyTask> running = standby.running();
         final Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
-        for (final Task standbyTask : running) {
+        for (final StandbyTask standbyTask : running) {
             checkpointedOffsets.putAll(standbyTask.checkpointedOffsets());
         }
 

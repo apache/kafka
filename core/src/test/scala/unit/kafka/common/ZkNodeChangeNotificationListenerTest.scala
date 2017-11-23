@@ -16,14 +16,11 @@
  */
 package kafka.common
 
-import kafka.integration.KafkaServerTestHarness
-import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
+import kafka.zk.{AclChangeNotificationSequenceZNode, AclChangeNotificationZNode, ZooKeeperTestHarness}
 import org.junit.Test
 
-class ZkNodeChangeNotificationListenerTest extends KafkaServerTestHarness {
-
-  override def generateConfigs = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
+class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
 
   @Test
   def testProcessNotification() {
@@ -36,18 +33,16 @@ class ZkNodeChangeNotificationListenerTest extends KafkaServerTestHarness {
       }
     }
 
-    val seqNodeRoot = "/root"
-    val seqNodePrefix = "prefix"
-    val seqNodePath = seqNodeRoot + "/" + seqNodePrefix
+    zkClient.createAclPaths()
     val notificationMessage1 = "message1"
     val notificationMessage2 = "message2"
     val changeExpirationMs = 1000
 
-    val notificationListener = new ZkNodeChangeNotificationListener(zkUtils, seqNodeRoot, seqNodePrefix, notificationHandler, changeExpirationMs)
+    val notificationListener = new ZkNodeChangeNotificationListener(zkClient,  AclChangeNotificationZNode.path,
+      AclChangeNotificationSequenceZNode.SequenceNumberPrefix, notificationHandler, changeExpirationMs)
     notificationListener.init()
 
-    zkUtils.createSequentialPersistentPath(seqNodePath, notificationMessage1)
-
+    zkClient.createAclChangeNotification(notificationMessage1)
     TestUtils.waitUntilTrue(() => invocationCount == 1 && notification == notificationMessage1,
       "Failed to send/process notification message in the timeout period.")
 
@@ -59,11 +54,11 @@ class ZkNodeChangeNotificationListenerTest extends KafkaServerTestHarness {
      * can fail as the second node can be deleted depending on how threads get scheduled.
      */
 
-    zkUtils.createSequentialPersistentPath(seqNodePath, notificationMessage2)
+    zkClient.createAclChangeNotification(notificationMessage2)
     TestUtils.waitUntilTrue(() => invocationCount == 2 && notification == notificationMessage2,
       "Failed to send/process notification message in the timeout period.")
 
-    (3 to 10).foreach(i => zkUtils.createSequentialPersistentPath(seqNodePath, "message" + i))
+    (3 to 10).foreach(i => zkClient.createAclChangeNotification("message" + i))
 
     TestUtils.waitUntilTrue(() => invocationCount == 10 ,
       s"Expected 10 invocations of processNotifications, but there were $invocationCount")

@@ -21,6 +21,7 @@ import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util.concurrent._
 
+import com.typesafe.scalalogging.Logger
 import com.yammer.metrics.core.{Gauge, Meter}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.network.RequestChannel.{BaseRequest, SendAction, ShutdownRequest, NoOpAction, CloseConnectionAction}
@@ -31,15 +32,14 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Sanitizer, Time}
-import org.apache.log4j.Logger
 
 import scala.collection.mutable
 import scala.reflect.ClassTag
 
 object RequestChannel extends Logging {
-  private val requestLogger = Logger.getLogger("kafka.request.logger")
+  private val requestLogger = Logger("kafka.request.logger")
 
-  def isRequestLoggingEnabled: Boolean = requestLogger.isDebugEnabled
+  def isRequestLoggingEnabled: Boolean = requestLogger.underlying.isDebugEnabled
 
   sealed trait BaseRequest
   case object ShutdownRequest extends BaseRequest
@@ -176,7 +176,7 @@ object RequestChannel extends Logging {
       recordNetworkThreadTimeCallback.foreach(record => record(networkThreadTimeNanos))
 
       if (isRequestLoggingEnabled) {
-        val detailsEnabled = requestLogger.isTraceEnabled
+        val detailsEnabled = requestLogger.underlying.isTraceEnabled
         val responseString = response.responseAsString.getOrElse(
           throw new IllegalStateException("responseAsString should always be defined if request logging is enabled"))
 
@@ -315,11 +315,17 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
     }
   }
 
-  def shutdown() {
+  def clear() {
     requestQueue.clear()
   }
 
+  def shutdown() {
+    clear()
+    metrics.close()
+  }
+
   def sendShutdownRequest(): Unit = requestQueue.put(ShutdownRequest)
+
 }
 
 object RequestMetrics {

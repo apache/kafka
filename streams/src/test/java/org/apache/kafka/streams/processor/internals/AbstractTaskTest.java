@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -40,7 +39,6 @@ import org.junit.Test;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 
 import static org.junit.Assert.fail;
@@ -80,7 +78,7 @@ public class AbstractTaskTest {
     public void shouldThrowLockExceptionIfFailedToLockStateDirectoryWhenTopologyHasStores() throws IOException {
         final Consumer consumer = EasyMock.createNiceMock(Consumer.class);
         final StateStore store = EasyMock.createNiceMock(StateStore.class);
-        EasyMock.expect(stateDirectory.lock(id, 5)).andReturn(false);
+        EasyMock.expect(stateDirectory.lock(id)).andReturn(false);
         EasyMock.replay(stateDirectory);
 
         final AbstractTask task = createTask(consumer, Collections.singletonList(store));
@@ -109,11 +107,10 @@ public class AbstractTaskTest {
 
     private AbstractTask createTask(final Consumer consumer, final List<StateStore> stateStores) {
         final Properties properties = new Properties();
-        properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-id");
+        properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "app");
         properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummyhost:9092");
         final StreamsConfig config = new StreamsConfig(properties);
         return new AbstractTask(id,
-                                "app",
                                 Collections.singletonList(new TopicPartition("t", 0)),
                                 new ProcessorTopology(Collections.<ProcessorNode>emptyList(),
                                                       Collections.<String, SourceNode>emptyMap(),
@@ -140,41 +137,6 @@ public class AbstractTaskTest {
 
             @Override
             public void closeSuspended(final boolean clean, final boolean isZombie, final RuntimeException e) {}
-
-            @Override
-            public Map<TopicPartition, Long> checkpointedOffsets() {
-                return null;
-            }
-
-            @Override
-            public boolean process() {
-                return false;
-            }
-
-            @Override
-            public boolean commitNeeded() {
-                return false;
-            }
-
-            @Override
-            public boolean maybePunctuateStreamTime() {
-                return false;
-            }
-
-            @Override
-            public boolean maybePunctuateSystemTime() {
-                return false;
-            }
-
-            @Override
-            public List<ConsumerRecord<byte[], byte[]>> update(final TopicPartition partition, final List<ConsumerRecord<byte[], byte[]>> remaining) {
-                return null;
-            }
-
-            @Override
-            public int addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
-                return 0;
-            }
 
             @Override
             public boolean initialize() {

@@ -60,7 +60,6 @@ public abstract class AbstractTask implements Task {
      * @throws ProcessorStateException if the state manager cannot be created
      */
     AbstractTask(final TaskId id,
-                 final String applicationId,
                  final Collection<TopicPartition> partitions,
                  final ProcessorTopology topology,
                  final Consumer<byte[], byte[]> consumer,
@@ -69,7 +68,7 @@ public abstract class AbstractTask implements Task {
                  final StateDirectory stateDirectory,
                  final StreamsConfig config) {
         this.id = id;
-        this.applicationId = applicationId;
+        this.applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         this.partitions = new HashSet<>(partitions);
         this.topology = topology;
         this.consumer = consumer;
@@ -102,22 +101,22 @@ public abstract class AbstractTask implements Task {
     }
 
     @Override
-    public final String applicationId() {
+    public String applicationId() {
         return applicationId;
     }
 
     @Override
-    public final Set<TopicPartition> partitions() {
+    public Set<TopicPartition> partitions() {
         return partitions;
     }
 
     @Override
-    public final ProcessorTopology topology() {
+    public ProcessorTopology topology() {
         return topology;
     }
 
     @Override
-    public final ProcessorContext context() {
+    public ProcessorContext context() {
         return processorContext;
     }
 
@@ -206,7 +205,7 @@ public abstract class AbstractTask implements Task {
         }
 
         try {
-            if (!stateDirectory.lock(id, 5)) {
+            if (!stateDirectory.lock(id)) {
                 throw new LockException(String.format("%sFailed to lock the state directory for task %s",
                                                       logPrefix, id));
             }

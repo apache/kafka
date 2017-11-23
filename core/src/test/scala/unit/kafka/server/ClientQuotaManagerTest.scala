@@ -39,7 +39,7 @@ class ClientQuotaManagerTest {
   }
 
   private def testQuotaParsing(config: ClientQuotaManagerConfig, client1: UserClient, client2: UserClient, randomClient: UserClient, defaultConfigClient: UserClient) {
-    val clientMetrics = new ClientQuotaManager(config, newMetrics, QuotaType.Produce, time)
+    val clientMetrics = new ClientQuotaManager(config, newMetrics, QuotaType.Produce, time, "")
 
     try {
       // Case 1: Update the quota. Assert that the new quota value is returned
@@ -149,7 +149,8 @@ class ClientQuotaManagerTest {
 
   @Test
   def testQuotaConfigPrecedence() {
-    val quotaManager = new ClientQuotaManager(ClientQuotaManagerConfig(quotaBytesPerSecondDefault=Long.MaxValue), newMetrics, QuotaType.Produce, time)
+    val quotaManager = new ClientQuotaManager(ClientQuotaManagerConfig(quotaBytesPerSecondDefault=Long.MaxValue),
+        newMetrics, QuotaType.Produce, time, "")
 
     def checkQuota(user: String, clientId: String, expectedBound: Int, value: Int, expectThrottle: Boolean) {
       assertEquals(new Quota(expectedBound, true), quotaManager.quota(user, clientId))
@@ -222,7 +223,7 @@ class ClientQuotaManagerTest {
   @Test
   def testQuotaViolation() {
     val metrics = newMetrics
-    val clientMetrics = new ClientQuotaManager(config, metrics, QuotaType.Produce, time)
+    val clientMetrics = new ClientQuotaManager(config, metrics, QuotaType.Produce, time, "")
     val queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", "Produce", ""))
     try {
       /* We have 10 second windows. Make sure that there is no quota violation
@@ -270,7 +271,7 @@ class ClientQuotaManagerTest {
   @Test
   def testRequestPercentageQuotaViolation() {
     val metrics = newMetrics
-    val quotaManager = new ClientRequestQuotaManager(config, metrics, time)
+    val quotaManager = new ClientRequestQuotaManager(config, metrics, time, "")
     quotaManager.updateQuota(Some("ANONYMOUS"), Some("test-client"), Some("test-client"), Some(Quota.upperBound(1)))
     val queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", "Request", ""))
     def millisToPercent(millis: Double) = millis * 1000 * 1000 * ClientQuotaManagerConfig.NanosToPercentagePerSecond
@@ -332,7 +333,7 @@ class ClientQuotaManagerTest {
   @Test
   def testExpireThrottleTimeSensor() {
     val metrics = newMetrics
-    val clientMetrics = new ClientQuotaManager(config, metrics, QuotaType.Produce, time)
+    val clientMetrics = new ClientQuotaManager(config, metrics, QuotaType.Produce, time, "")
     try {
       clientMetrics.maybeRecordAndThrottle("ANONYMOUS", "client1", 100, callback)
       // remove the throttle time sensor
@@ -351,7 +352,7 @@ class ClientQuotaManagerTest {
   @Test
   def testExpireQuotaSensors() {
     val metrics = newMetrics
-    val clientMetrics = new ClientQuotaManager(config, metrics, QuotaType.Produce, time)
+    val clientMetrics = new ClientQuotaManager(config, metrics, QuotaType.Produce, time, "")
     try {
       clientMetrics.maybeRecordAndThrottle("ANONYMOUS", "client1", 100, callback)
       // remove all the sensors
@@ -375,7 +376,7 @@ class ClientQuotaManagerTest {
   @Test
   def testClientIdNotSanitized() {
     val metrics = newMetrics
-    val clientMetrics = new ClientQuotaManager(config, metrics, QuotaType.Produce, time)
+    val clientMetrics = new ClientQuotaManager(config, metrics, QuotaType.Produce, time, "")
     val clientId = "client@#$%"
     try {
       clientMetrics.maybeRecordAndThrottle("ANONYMOUS", clientId, 100, callback)

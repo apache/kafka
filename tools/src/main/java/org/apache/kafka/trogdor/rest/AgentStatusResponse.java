@@ -19,41 +19,30 @@ package org.apache.kafka.trogdor.rest;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.kafka.trogdor.common.JsonUtil;
 
-import java.util.Objects;
+import java.util.TreeMap;
 
 /**
- * The status of the Trogdor agent.
+ * A response from the Trogdor agent about the worker states and specifications.
  */
-public class AgentStatusResponse {
-    private final long startTimeMs;
+public class AgentStatusResponse extends Message {
+    private final long serverStartMs;
+    private final TreeMap<String, WorkerState> workers;
 
     @JsonCreator
-    public AgentStatusResponse(@JsonProperty("startTimeMs") long startTimeMs) {
-        this.startTimeMs = startTimeMs;
+    public AgentStatusResponse(@JsonProperty("serverStartMs") long serverStartMs,
+            @JsonProperty("workers") TreeMap<String, WorkerState> workers) {
+        this.serverStartMs = serverStartMs;
+        this.workers = workers;
     }
 
     @JsonProperty
-    public long startTimeMs() {
-        return startTimeMs;
+    public long serverStartMs() {
+        return serverStartMs;
     }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        AgentStatusResponse that = (AgentStatusResponse) o;
-        return Objects.equals(startTimeMs, that.startTimeMs);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(startTimeMs);
-    }
-
-    @Override
-    public String toString() {
-        return JsonUtil.toJsonString(this);
+    @JsonProperty
+    public TreeMap<String, WorkerState> workers() {
+        return workers;
     }
 }

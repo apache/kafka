@@ -95,9 +95,10 @@
 
     <p>The <code>connector.class</code> config supports several formats: the full name or alias of the class for this connector. If the connector is org.apache.kafka.connect.file.FileStreamSinkConnector, you can either specify this full name or use FileStreamSink or FileStreamSinkConnector to make the configuration a bit shorter.</p>
 
-    <p>Sink connectors also have one additional option to control their input:</p>
+    <p>Sink connectors also have a few additional options to control their input. Each sink connector must set one of the following:</p>
     <ul>
-        <li><code>topics</code> - A list of topics to use as input for this connector</li>
+        <li><code>topics</code> - A comma-separated list of topics to use as input for this connector</li>
+        <li><code>topics.regex</code> - A Java regular expression of topics to use as input for this connector</li>
     </ul>
 
     <p>For any other options, you should consult the documentation for the connector.</p>
@@ -329,7 +330,7 @@
         }
     </pre>
 
-    <p>These are slightly simplified versions, but show that that these methods should be relatively simple and the only work they should perform is allocating or freeing resources. There are two points to note about this implementation. First, the <code>start()</code> method does not yet handle resuming from a previous offset, which will be addressed in a later section. Second, the <code>stop()</code> method is synchronized. This will be necessary because <code>SourceTasks</code> are given a dedicated thread which they can block indefinitely, so they need to be stopped with a call from a different thread in the Worker.</p>
+    <p>These are slightly simplified versions, but show that these methods should be relatively simple and the only work they should perform is allocating or freeing resources. There are two points to note about this implementation. First, the <code>start()</code> method does not yet handle resuming from a previous offset, which will be addressed in a later section. Second, the <code>stop()</code> method is synchronized. This will be necessary because <code>SourceTasks</code> are given a dedicated thread which they can block indefinitely, so they need to be stopped with a call from a different thread in the Worker.</p>
 
     <p>Next, we implement the main functionality of the task, the <code>poll()</code> method which gets events from the input system and returns a <code>List&lt;SourceRecord&gt;</code>:</p>
 

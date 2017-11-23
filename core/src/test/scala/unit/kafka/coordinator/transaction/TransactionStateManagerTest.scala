@@ -21,8 +21,9 @@ import java.util.concurrent.locks.ReentrantLock
 
 import kafka.log.Log
 import kafka.server.{FetchDataInfo, LogOffsetMetadata, ReplicaManager}
-import kafka.utils.{MockScheduler, Pool, ZkUtils}
+import kafka.utils.{MockScheduler, Pool}
 import kafka.utils.TestUtils.fail
+import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
 import org.apache.kafka.common.protocol.Errors
@@ -51,17 +52,17 @@ class TransactionStateManagerTest {
 
   val time = new MockTime()
   val scheduler = new MockScheduler(time)
-  val zkUtils: ZkUtils = EasyMock.createNiceMock(classOf[ZkUtils])
+  val zkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
   val replicaManager: ReplicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
 
-  EasyMock.expect(zkUtils.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME))
+  EasyMock.expect(zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME))
     .andReturn(Some(numPartitions))
     .anyTimes()
 
-  EasyMock.replay(zkUtils)
+  EasyMock.replay(zkClient)
 
   val txnConfig = TransactionConfig()
-  val transactionManager: TransactionStateManager = new TransactionStateManager(0, zkUtils, scheduler, replicaManager, txnConfig, time)
+  val transactionManager: TransactionStateManager = new TransactionStateManager(0, zkClient, scheduler, replicaManager, txnConfig, time)
 
   val transactionalId1: String = "one"
   val transactionalId2: String = "two"
@@ -82,7 +83,7 @@ class TransactionStateManagerTest {
 
   @After
   def tearDown() {
-    EasyMock.reset(zkUtils, replicaManager)
+    EasyMock.reset(zkClient, replicaManager)
     transactionManager.shutdown()
   }
 

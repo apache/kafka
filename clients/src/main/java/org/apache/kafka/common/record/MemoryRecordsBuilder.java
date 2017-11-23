@@ -384,7 +384,7 @@ public class MemoryRecordsBuilder {
     }
 
     /**
-     * Append a record and return its checksum for message format v0 and v1, or null for for v2 and above.
+     * Append a record and return its checksum for message format v0 and v1, or null for v2 and above.
      */
     private Long appendWithOffset(long offset, boolean isControlRecord, long timestamp, ByteBuffer key,
                                   ByteBuffer value, Header[] headers) {

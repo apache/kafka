@@ -79,7 +79,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
       val kafkaConfig = KafkaConfig.fromProps(props)
       val logDir = new File(kafkaConfig.logDirs.head)
       // Make log directory of the partition on the leader broker inaccessible by replacing it with a file
-      CoreUtils.swallow(Utils.delete(logDir))
+      CoreUtils.swallow(Utils.delete(logDir), this)
       logDir.createNewFile()
       assertTrue(logDir.isFile)
 
@@ -144,7 +144,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
     // Make log directory of the partition on the leader broker inaccessible by replacing it with a file
     val replica = leaderServer.replicaManager.getReplicaOrException(partition)
     val logDir = replica.log.get.dir.getParentFile
-    CoreUtils.swallow(Utils.delete(logDir))
+    CoreUtils.swallow(Utils.delete(logDir), this)
     logDir.createNewFile()
     assertTrue(logDir.isFile)
 
@@ -195,7 +195,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
     // The controller should have marked the replica on the original leader as offline
     val controllerServer = servers.find(_.kafkaController.isActive).get
     val offlineReplicas = controllerServer.kafkaController.replicaStateMachine.replicasInState(topic, OfflineReplica)
-    assertTrue(offlineReplicas.contains(PartitionAndReplica(topic, 0, leaderServerId)))
+    assertTrue(offlineReplicas.contains(PartitionAndReplica(new TopicPartition(topic, 0), leaderServerId)))
   }
 
   private def subscribeAndWaitForAssignment(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]) {

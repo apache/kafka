@@ -17,23 +17,28 @@
 
 package org.apache.kafka.trogdor.coordinator;
 
+import org.apache.kafka.common.utils.MockScheduler;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Scheduler;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.trogdor.agent.AgentClient;
 import org.apache.kafka.trogdor.common.CapturingCommandRunner;
-import org.apache.kafka.trogdor.common.ExpectedFaults;
+import org.apache.kafka.trogdor.common.ExpectedTasks;
+import org.apache.kafka.trogdor.common.ExpectedTasks.ExpectedTaskBuilder;
 import org.apache.kafka.trogdor.common.MiniTrogdorCluster;
 
-import org.apache.kafka.trogdor.fault.DoneState;
 import org.apache.kafka.trogdor.fault.NetworkPartitionFaultSpec;
-import org.apache.kafka.trogdor.fault.NoOpFaultSpec;
-import org.apache.kafka.trogdor.fault.PendingState;
-import org.apache.kafka.trogdor.fault.RunningState;
 import org.apache.kafka.trogdor.rest.CoordinatorStatusResponse;
-import org.apache.kafka.trogdor.rest.CreateCoordinatorFaultRequest;
+import org.apache.kafka.trogdor.rest.CreateTaskRequest;
+import org.apache.kafka.trogdor.rest.StopTaskRequest;
+import org.apache.kafka.trogdor.rest.TaskDone;
+import org.apache.kafka.trogdor.rest.TaskPending;
+import org.apache.kafka.trogdor.rest.TaskRunning;
+import org.apache.kafka.trogdor.rest.WorkerDone;
+import org.apache.kafka.trogdor.rest.WorkerRunning;
+import org.apache.kafka.trogdor.task.NoOpTaskSpec;
 import org.junit.Rule;
 import org.junit.rules.Timeout;
 import org.slf4j.Logger;
@@ -57,62 +62,143 @@ public class CoordinatorTest {
         try (MiniTrogdorCluster cluster = new MiniTrogdorCluster.Builder().
                 addCoordinator("node01").
                 build()) {
-            CoordinatorStatusResponse status = cluster.coordinatorClient().getStatus();
-            assertEquals(cluster.coordinator().startTimeMs(), status.startTimeMs());
+            CoordinatorStatusResponse status = cluster.coordinatorClient().status();
+            assertEquals(cluster.coordinator().status(), status);
         }
     }
 
     @Test
-    public void testCreateFault() throws Exception {
-        Time time = new MockTime(0, 0, 0);
+    public void testCreateTask() throws Exception {
+        MockTime time = new MockTime(0, 0, 0);
+        Scheduler scheduler = new MockScheduler(time);
         try (MiniTrogdorCluster cluster = new MiniTrogdorCluster.Builder().
                 addCoordinator("node01").
-                time(time).
+                addAgent("node02").
+                scheduler(scheduler).
                 build()) {
-            new ExpectedFaults().waitFor(cluster.coordinatorClient());
+            new ExpectedTasks().waitFor(cluster.coordinatorClient());
 
-            NoOpFaultSpec noOpFaultSpec = new NoOpFaultSpec(1, 2);
-            cluster.coordinatorClient().putFault(
-                new CreateCoordinatorFaultRequest("fault1", noOpFaultSpec));
-            new ExpectedFaults().
-                addFault("fault1", noOpFaultSpec, new PendingState()).
+            NoOpTaskSpec fooSpec = new NoOpTaskSpec(1, 2);
+            cluster.coordinatorClient().createTask(
+                new CreateTaskRequest("foo", fooSpec));
+            new ExpectedTasks().
+                addTask(new ExpectedTaskBuilder("foo").
+                    taskState(new TaskPending(fooSpec)).
+                    build()).
                 waitFor(cluster.coordinatorClient());
 
             time.sleep(2);
-            new ExpectedFaults().
-                addFault("fault1", noOpFaultSpec, new DoneState(2, "")).
+            new ExpectedTasks().
+                addTask(new ExpectedTaskBuilder("foo").
+                    taskState(new TaskRunning(fooSpec, 2)).
+                    workerState(new WorkerRunning(fooSpec, 2, "")).
+                    build()).
+                waitFor(cluster.coordinatorClient()).
+                waitFor(cluster.agentClient("node02"));
+
+            time.sleep(3);
+            new ExpectedTasks().
+                addTask(new ExpectedTaskBuilder("foo").
+                    taskState(new TaskDone(fooSpec, 2, 5, "", false)).
+                    build()).
                 waitFor(cluster.coordinatorClient());
         }
     }
 
     @Test
-    public void testFaultDistribution() throws Exception {
-        Time time = new MockTime(0, 0, 0);
+    public void testTaskDistribution() throws Exception {
+        MockTime time = new MockTime(0, 0, 0);
+        Scheduler scheduler = new MockScheduler(time);
         try (MiniTrogdorCluster cluster = new MiniTrogdorCluster.Builder().
                 addCoordinator("node01").
                 addAgent("node01").
                 addAgent("node02").
-                time(time).
+                scheduler(scheduler).
                 build()) {
             CoordinatorClient coordinatorClient = cluster.coordinatorClient();
             AgentClient agentClient1 = cluster.agentClient("node01");
             AgentClient agentClient2 = cluster.agentClient("node02");
 
-            NoOpFaultSpec noOpFaultSpec = new NoOpFaultSpec(10, 2);
-            coordinatorClient.putFault(new CreateCoordinatorFaultRequest("fault1", noOpFaultSpec));
-            new ExpectedFaults().
-                addFault("fault1", noOpFaultSpec, new PendingState()).
-                waitFor(coordinatorClient);
-            new ExpectedFaults().
+            new ExpectedTasks().
+                waitFor(coordinatorClient).
                 waitFor(agentClient1).
                 waitFor(agentClient2);
 
-            time.sleep(10);
-            new ExpectedFaults().
-                addFault("fault1", noOpFaultSpec, new DoneState(10, "")).
-                waitFor(coordinatorClient);
-            new ExpectedFaults().
-                addFault("fault1", noOpFaultSpec, new RunningState(10)).
+            NoOpTaskSpec fooSpec = new NoOpTaskSpec(5, 2);
+            coordinatorClient.createTask(new CreateTaskRequest("foo", fooSpec));
+            new ExpectedTasks().
+                addTask(new ExpectedTaskBuilder("foo").taskState(new TaskPending(fooSpec)).build()).
+                waitFor(coordinatorClient).
+                waitFor(agentClient1).
+                waitFor(agentClient2);
+
+            time.sleep(11);
+            new ExpectedTasks().
+                addTask(new ExpectedTaskBuilder("foo").
+                    taskState(new TaskRunning(fooSpec, 11)).
+                    workerState(new WorkerRunning(fooSpec, 11, "")).
+                    build()).
+                waitFor(coordinatorClient).
+                waitFor(agentClient1).
+                waitFor(agentClient2);
+
+            time.sleep(2);
+            new ExpectedTasks().
+                addTask(new ExpectedTaskBuilder("foo").
+                    taskState(new TaskDone(fooSpec, 11, 13, "", false)).
+                    workerState(new WorkerDone(fooSpec, 11, 13, "", "")).
+                    build()).
+                waitFor(coordinatorClient).
+                waitFor(agentClient1).
+                waitFor(agentClient2);
+        }
+    }
+
+    @Test
+    public void testTaskCancellation() throws Exception {
+        MockTime time = new MockTime(0, 0, 0);
+        Scheduler scheduler = new MockScheduler(time);
+        try (MiniTrogdorCluster cluster = new MiniTrogdorCluster.Builder().
+            addCoordinator("node01").
+            addAgent("node01").
+            addAgent("node02").
+            scheduler(scheduler).
+            build()) {
+            CoordinatorClient coordinatorClient = cluster.coordinatorClient();
+            AgentClient agentClient1 = cluster.agentClient("node01");
+            AgentClient agentClient2 = cluster.agentClient("node02");
+
+            new ExpectedTasks().
+                waitFor(coordinatorClient).
+                waitFor(agentClient1).
+                waitFor(agentClient2);
+
+            NoOpTaskSpec fooSpec = new NoOpTaskSpec(5, 2);
+            coordinatorClient.createTask(new CreateTaskRequest("foo", fooSpec));
+            new ExpectedTasks().
+                addTask(new ExpectedTaskBuilder("foo").taskState(new TaskPending(fooSpec)).build()).
+                waitFor(coordinatorClient).
+                waitFor(agentClient1).
+                waitFor(agentClient2);
+
+            time.sleep(11);
+            new ExpectedTasks().
+                addTask(new ExpectedTaskBuilder("foo").
+                    taskState(new TaskRunning(fooSpec, 11)).
+                    workerState(new WorkerRunning(fooSpec, 11, "")).
+                    build()).
+                waitFor(coordinatorClient).
+                waitFor(agentClient1).
+                waitFor(agentClient2);
+
+            time.sleep(1);
+            coordinatorClient.stopTask(new StopTaskRequest("foo"));
+            new ExpectedTasks().
+                addTask(new ExpectedTaskBuilder("foo").
+                    taskState(new TaskDone(fooSpec, 11, 12, "", true)).
+                    workerState(new WorkerDone(fooSpec, 11, 12, "", "")).
+                    build()).
+                waitFor(coordinatorClient).
                 waitFor(agentClient1).
                 waitFor(agentClient2);
         }
@@ -191,24 +277,29 @@ public class CoordinatorTest {
                     new String[] {"node01", "node02"},
                     new String[] {"node03"},
                 }));
-            coordinatorClient.putFault(new CreateCoordinatorFaultRequest("netpart", spec));
-            new ExpectedFaults().
-                addFault("netpart", spec).
+            coordinatorClient.createTask(new CreateTaskRequest("netpart", spec));
+            new ExpectedTasks().
+                addTask(new ExpectedTaskBuilder("netpart").taskSpec(spec).build()).
                 waitFor(coordinatorClient);
-            new ExpectedLines().
-                addLine("sudo iptables -A INPUT -p tcp -s 127.0.0.1 -j DROP " +
-                        "-m comment --comment node03").
-                waitFor("node01", runner);
-            new ExpectedLines().
-                addLine("sudo iptables -A INPUT -p tcp -s 127.0.0.1 -j DROP " +
-                        "-m comment --comment node03").
-                waitFor("node02", runner);
-            new ExpectedLines().
-                addLine("sudo iptables -A INPUT -p tcp -s 127.0.0.1 -j DROP " +
-                        "-m comment --comment node01").
-                addLine("sudo iptables -A INPUT -p tcp -s 127.0.0.1 -j DROP " +
-                        "-m comment --comment node02").
-                waitFor("node03", runner);
+            checkLines("-A", runner);
         }
+        checkLines("-D", runner);
+    }
+
+    private void checkLines(String prefix, CapturingCommandRunner runner) throws InterruptedException {
+        new ExpectedLines().
+            addLine("sudo iptables " + prefix + " INPUT -p tcp -s 127.0.0.1 -j DROP " +
+                "-m comment --comment node03").
+            waitFor("node01", runner);
+        new ExpectedLines().
+            addLine("sudo iptables " + prefix + " INPUT -p tcp -s 127.0.0.1 -j DROP " +
+                "-m comment --comment node03").
+            waitFor("node02", runner);
+        new ExpectedLines().
+            addLine("sudo iptables " + prefix + " INPUT -p tcp -s 127.0.0.1 -j DROP " +
+                "-m comment --comment node01").
+            addLine("sudo iptables " + prefix + " INPUT -p tcp -s 127.0.0.1 -j DROP " +
+                "-m comment --comment node02").
+            waitFor("node03", runner);
     }
 };

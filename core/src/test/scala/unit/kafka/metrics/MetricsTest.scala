@@ -18,6 +18,7 @@
 package kafka.metrics
 
 import java.util.Properties
+import javax.management.ObjectName
 
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.{Meter, MetricPredicate}
@@ -27,7 +28,6 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.server._
 import kafka.serializer._
 import kafka.utils._
-import kafka.admin.AdminUtils
 import kafka.utils.TestUtils._
 
 import scala.collection._
@@ -72,8 +72,8 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   @Test
   def testMetricsReporterAfterDeletingTopic() {
     val topic = "test-topic-metric"
-    AdminUtils.createTopic(zkUtils, topic, 1, 1)
-    AdminUtils.deleteTopic(zkUtils, topic)
+    adminZkClient.createTopic(topic, 1, 1)
+    adminZkClient.deleteTopic(topic)
     TestUtils.verifyTopicDeletion(zkUtils, topic, 1, servers)
     assertEquals("Topic metrics exists after deleteTopic", Set.empty, topicMetricGroups(topic))
   }
@@ -81,13 +81,13 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   @Test
   def testBrokerTopicMetricsUnregisteredAfterDeletingTopic() {
     val topic = "test-broker-topic-metric"
-    AdminUtils.createTopic(zkUtils, topic, 2, 1)
+    adminZkClient.createTopic(topic, 2, 1)
     // Produce a few messages to create the metrics
     // Don't consume messages as it may cause metrics to be re-created causing the test to fail, see KAFKA-5238
     TestUtils.produceMessages(servers, topic, nMessages)
     assertTrue("Topic metrics don't exist", topicMetricGroups(topic).nonEmpty)
     servers.foreach(s => assertNotNull(s.brokerTopicStats.topicStats(topic)))
-    AdminUtils.deleteTopic(zkUtils, topic)
+    adminZkClient.deleteTopic(topic)
     TestUtils.verifyTopicDeletion(zkUtils, topic, 1, servers)
     assertEquals("Topic metrics exists after deleteTopic", Set.empty, topicMetricGroups(topic))
   }
@@ -97,6 +97,15 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     // Check if clusterId metric exists.
     val metrics = Metrics.defaultRegistry.allMetrics
     assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.server:type=KafkaServer,name=ClusterId"), 1)
+  }
+
+  @Test
+  def testWindowsStyleTagNames(): Unit = {
+    val path = "C:\\windows-path\\kafka-logs"
+    val tags = Map("dir" -> path)
+    val expectedMBeanName = Set(tags.keySet.head, ObjectName.quote(path)).mkString("=")
+    val metric = KafkaMetricsGroup.metricName("test-metric", tags)
+    assert(metric.getMBeanName.endsWith(expectedMBeanName))
   }
 
   @deprecated("This test has been deprecated and it will be removed in a future release", "0.10.0.0")

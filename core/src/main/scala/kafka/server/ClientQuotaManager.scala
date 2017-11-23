@@ -106,7 +106,8 @@ case class QuotaEntity(quotaId: QuotaId, sanitizedUser: String, clientId: String
 class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
                          private val metrics: Metrics,
                          private val quotaType: QuotaType,
-                         private val time: Time) extends Logging {
+                         private val time: Time,
+                         threadNamePrefix: String) extends Logging {
   private val overriddenQuota = new ConcurrentHashMap[QuotaId, Quota]()
   private val staticConfigClientIdQuota = Quota.upperBound(config.quotaBytesPerSecondDefault)
   @volatile private var quotaTypesEnabled =
@@ -115,7 +116,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   private val lock = new ReentrantReadWriteLock()
   private val delayQueue = new DelayQueue[ThrottledResponse]()
   private val sensorAccessor = new SensorAccess(lock, metrics)
-  val throttledRequestReaper = new ThrottledRequestReaper(delayQueue)
+  private[server] val throttledRequestReaper = new ThrottledRequestReaper(delayQueue, threadNamePrefix)
 
   private val delayQueueSensor = metrics.sensor(quotaType + "-delayQueue")
   delayQueueSensor.add(metrics.metricName("queue-size",
@@ -130,8 +131,8 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * Reaper thread that triggers callbacks on all throttled requests
    * @param delayQueue DelayQueue to dequeue from
    */
-  class ThrottledRequestReaper(delayQueue: DelayQueue[ThrottledResponse]) extends ShutdownableThread(
-    "ThrottledRequestReaper-%s".format(quotaType), false) {
+  class ThrottledRequestReaper(delayQueue: DelayQueue[ThrottledResponse], prefix: String) extends ShutdownableThread(
+    s"${prefix}ThrottledRequestReaper-${quotaType}", false) {
 
     override def doWork(): Unit = {
       val response: ThrottledResponse = delayQueue.poll(1, TimeUnit.SECONDS)
@@ -193,7 +194,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
         // If delayed, add the element to the delayQueue
         delayQueue.add(new ThrottledResponse(time, throttleTimeMs, callback))
         delayQueueSensor.record()
-        logger.debug("Quota violated for sensor (%s). Delay time: (%d)".format(clientSensors.quotaSensor.name(), throttleTimeMs))
+        debug("Quota violated for sensor (%s). Delay time: (%d)".format(clientSensors.quotaSensor.name(), throttleTimeMs))
     }
     throttleTimeMs
   }
@@ -433,7 +434,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       }
       quota match {
         case Some(newQuota) =>
-          logger.info(s"Changing ${quotaType} quota for ${userInfo}${clientIdInfo} to $newQuota.bound}")
+          info(s"Changing ${quotaType} quota for ${userInfo}${clientIdInfo} to $newQuota.bound}")
           overriddenQuota.put(quotaId, newQuota)
           (sanitizedUser, clientId) match {
             case (Some(_), Some(_)) => quotaTypesEnabled |= QuotaTypes.UserClientIdQuotaEnabled
@@ -442,7 +443,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
             case (None, None) =>
           }
         case None =>
-          logger.info(s"Removing ${quotaType} quota for ${userInfo}${clientIdInfo}")
+          info(s"Removing ${quotaType} quota for ${userInfo}${clientIdInfo}")
           overriddenQuota.remove(quotaId)
       }
 
@@ -462,7 +463,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
           if (metric != null) {
             val metricConfigEntity = quotaEntity(sanitizedUser.getOrElse(""), clientId.getOrElse(""), sanitizedClientId.getOrElse(""))
             val newQuota = metricConfigEntity.quota
-            logger.info(s"Sensor for ${userInfo}${clientIdInfo} already exists. Changing quota to ${newQuota.bound()} in MetricConfig")
+            info(s"Sensor for ${userInfo}${clientIdInfo} already exists. Changing quota to ${newQuota.bound()} in MetricConfig")
             metric.config(getQuotaMetricConfig(newQuota))
           }
       } else {
@@ -473,7 +474,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
               val metricConfigEntity = quotaEntity(userTag, clientIdTag, Sanitizer.sanitize(clientIdTag))
               if (metricConfigEntity.quota != metric.config.quota) {
                 val newQuota = metricConfigEntity.quota
-                logger.info(s"Sensor for quota-id ${metricConfigEntity.quotaId} already exists. Setting quota to ${newQuota.bound} in MetricConfig")
+                info(s"Sensor for quota-id ${metricConfigEntity.quotaId} already exists. Setting quota to ${newQuota.bound} in MetricConfig")
                 metric.config(getQuotaMetricConfig(newQuota))
               }
           }

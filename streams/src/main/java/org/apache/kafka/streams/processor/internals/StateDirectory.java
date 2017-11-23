@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
@@ -68,14 +69,16 @@ public class StateDirectory {
      * @throws ProcessorStateException if the base state directory or application state directory does not exist
      *                                 and could not be created
      */
-    public StateDirectory(final String applicationId, final String stateDirConfig, final Time time) {
+    public StateDirectory(final StreamsConfig config,
+                          final Time time) {
         this.time = time;
-        final File baseDir = new File(stateDirConfig);
+        final String stateDirName = config.getString(StreamsConfig.STATE_DIR_CONFIG);
+        final File baseDir = new File(stateDirName);
         if (!baseDir.exists() && !baseDir.mkdirs()) {
             throw new ProcessorStateException(
-                String.format("base state directory [%s] doesn't exist and couldn't be created", stateDirConfig));
+                String.format("base state directory [%s] doesn't exist and couldn't be created", stateDirName));
         }
-        stateDir = new File(baseDir, applicationId);
+        stateDir = new File(baseDir, config.getString(StreamsConfig.APPLICATION_ID_CONFIG));
         if (!stateDir.exists() && !stateDir.mkdir()) {
             throw new ProcessorStateException(
                 String.format("state directory [%s] doesn't exist and couldn't be created", stateDir.getPath()));
@@ -117,11 +120,10 @@ public class StateDirectory {
     /**
      * Get the lock for the {@link TaskId}s directory if it is available
      * @param taskId
-     * @param retry
      * @return true if successful
      * @throws IOException
      */
-    synchronized boolean lock(final TaskId taskId, int retry) throws IOException {
+    synchronized boolean lock(final TaskId taskId) throws IOException {
 
         final File lockFile;
         // we already have the lock so bail out here
@@ -153,7 +155,7 @@ public class StateDirectory {
             return false;
         }
 
-        final FileLock lock = tryLock(retry, channel);
+        final FileLock lock = tryLock(channel);
         if (lock != null) {
             locks.put(taskId, new LockAndOwner(Thread.currentThread().getName(), lock));
 
@@ -162,7 +164,7 @@ public class StateDirectory {
         return lock != null;
     }
 
-    synchronized boolean lockGlobalState(final int retry) throws IOException {
+    synchronized boolean lockGlobalState() throws IOException {
         if (globalStateLock != null) {
             log.trace("{} Found cached state dir lock for the global task", logPrefix());
             return true;
@@ -178,7 +180,7 @@ public class StateDirectory {
             // file, in this case we will return immediately indicating locking failed.
             return false;
         }
-        final FileLock fileLock = tryLock(retry, channel);
+        final FileLock fileLock = tryLock(channel);
         if (fileLock == null) {
             channel.close();
             return false;
@@ -237,7 +239,7 @@ public class StateDirectory {
             TaskId id = TaskId.parse(dirName);
             if (!locks.containsKey(id)) {
                 try {
-                    if (lock(id, 0)) {
+                    if (lock(id)) {
                         long now = time.milliseconds();
                         long lastModifiedMs = taskDir.lastModified();
                         if (now > lastModifiedMs + cleanupDelayMs) {
@@ -275,28 +277,15 @@ public class StateDirectory {
         });
     }
 
-    private FileLock tryLock(int retry, final FileChannel channel) throws IOException {
-        FileLock lock = tryAcquireLock(channel);
-        while (lock == null && retry > 0) {
-            try {
-                Thread.sleep(200);
-            } catch (Exception ex) {
-                // do nothing
-            }
-            retry--;
-            lock = tryAcquireLock(channel);
-        }
-        return lock;
-    }
-
-    private FileChannel getOrCreateFileChannel(final TaskId taskId, final Path lockPath) throws IOException {
+    private FileChannel getOrCreateFileChannel(final TaskId taskId,
+                                               final Path lockPath) throws IOException {
         if (!channels.containsKey(taskId)) {
             channels.put(taskId, FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE));
         }
         return channels.get(taskId);
     }
 
-    private FileLock tryAcquireLock(final FileChannel channel) throws IOException {
+    private FileLock tryLock(final FileChannel channel) throws IOException {
         try {
             return channel.tryLock();
         } catch (OverlappingFileLockException e) {

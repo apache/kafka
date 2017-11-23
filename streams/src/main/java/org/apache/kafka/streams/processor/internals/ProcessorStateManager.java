@@ -140,11 +140,8 @@ public class ProcessorStateManager implements StateManager {
         final TopicPartition storePartition = new TopicPartition(topic, getPartition(topic));
 
         if (isStandby) {
-            if (store.persistent()) {
-                log.trace("Preparing standby replica of persistent state store {} with changelog topic {}", store.name(), topic);
-
-                restoreCallbacks.put(topic, stateRestoreCallback);
-            }
+            log.trace("Preparing standby replica of  state store {} with changelog topic {}", store.name(), topic);
+            restoreCallbacks.put(topic, stateRestoreCallback);
         } else {
             log.trace("Restoring state store {} from changelog topic {}", store.name(), topic);
             final StateRestorer restorer = new StateRestorer(storePartition,
