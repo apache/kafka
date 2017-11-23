@@ -20,6 +20,9 @@ package kafka.tools
 import java.io._
 import java.nio.ByteBuffer
 
+import com.fasterxml.jackson.databind.{JsonNode, ObjectMapper}
+import com.fasterxml.jackson.databind.node.{IntNode, JsonNodeFactory, ObjectNode, TextNode}
+import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import joptsimple.OptionParser
 import kafka.coordinator.group.{GroupMetadataKey, GroupMetadataManager, OffsetKey}
 import kafka.coordinator.transaction.TransactionLog
@@ -31,7 +34,7 @@ import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 
-import scala.collection.mutable
+import scala.collection.{Map, mutable}
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.JavaConverters._
 
@@ -334,12 +337,16 @@ object DumpLogSegments {
         }
       }.mkString("{", ",", "}")
 
-      val keyString = Json.encode(Map("metadata" -> groupId))
-      val valueString = Json.encode(Map(
-          "protocolType" -> protocolType,
-          "protocol" -> group.protocol,
-          "generationId" -> group.generationId,
-          "assignment" -> assignment))
+      val objectMapper = new ObjectMapper()
+      objectMapper.registerModule(DefaultScalaModule)
+
+      val keyString = objectMapper.writeValueAsString(Map("metadata" -> groupId))
+
+      val valueString = objectMapper.writeValueAsString(Map(
+        "protocolType" -> protocolType,
+        "protocol" -> group.protocol,
+        "generationId" -> group.generationId,
+        "assignment" -> assignment))
 
       (Some(keyString), Some(valueString))
     }

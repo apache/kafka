@@ -23,6 +23,9 @@ import java.util.concurrent._
 import java.util.concurrent.atomic._
 import java.util.concurrent.locks.ReentrantLock
 
+import com.fasterxml.jackson.databind.{JsonNode, ObjectMapper}
+import com.fasterxml.jackson.databind.node._
+import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.yammer.metrics.core.Gauge
 import kafka.api._
 import kafka.client.ClientUtils
@@ -44,6 +47,7 @@ import org.apache.zookeeper.Watcher.Event.KeeperState
 
 import scala.collection._
 import scala.collection.JavaConverters._
+
 
 /**
  * This class handles the consumers interaction with zookeeper
@@ -272,8 +276,12 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   private def registerConsumerInZK(dirs: ZKGroupDirs, consumerIdString: String, topicCount: TopicCount) {
     info("begin registering consumer " + consumerIdString + " in ZK")
     val timestamp = Time.SYSTEM.milliseconds.toString
-    val consumerRegistrationInfo = Json.encode(Map("version" -> 1, "subscription" -> topicCount.getTopicCountMap, "pattern" -> topicCount.pattern,
-                                                  "timestamp" -> timestamp))
+    val objectMapper = new ObjectMapper()
+    objectMapper.registerModule(DefaultScalaModule)
+
+    val consumerRegistrationInfo = objectMapper.writeValueAsString(Map("version" -> 1, "subscription" -> topicCount.getTopicCountMap, "pattern" -> topicCount.pattern,
+      "timestamp" -> timestamp));
+
     val zkWatchedEphemeral = new ZKCheckedEphemeral(dirs.
                                                     consumerRegistryDir + "/" + consumerIdString,
                                                     consumerRegistrationInfo,

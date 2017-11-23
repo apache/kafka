@@ -18,6 +18,8 @@ package kafka.server
 
 import java.util.Properties
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import kafka.log.LogConfig._
 import kafka.server.Constants._
 import org.junit.Assert._
@@ -177,6 +179,9 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val props = new Properties()
     props.put("a.b", "10")
 
+    val objectMapper = new ObjectMapper()
+    objectMapper.registerModule(DefaultScalaModule)
+
     // Create a mock ConfigHandler to record config changes it is asked to process
     val entityArgument = EasyMock.newCapture[String]
     val propertiesArgument = EasyMock.newCapture[Properties]
@@ -194,7 +199,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     // Incorrect Map. No version
     try {
       val jsonMap = Map("v" -> 1, "x" -> 2)
-      configManager.ConfigChangedNotificationHandler.processNotification(Json.encode(jsonMap))
+      configManager.ConfigChangedNotificationHandler.processNotification(objectMapper.writeValueAsString(jsonMap))
       fail("Should have thrown an Exception while parsing incorrect notification " + jsonMap)
     }
     catch {
@@ -203,7 +208,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     // Version is provided. EntityType is incorrect
     try {
       val jsonMap = Map("version" -> 1, "entity_type" -> "garbage", "entity_name" -> "x")
-      configManager.ConfigChangedNotificationHandler.processNotification(Json.encode(jsonMap))
+      configManager.ConfigChangedNotificationHandler.processNotification(objectMapper.writeValueAsString(jsonMap))
       fail("Should have thrown an Exception while parsing incorrect notification " + jsonMap)
     }
     catch {
@@ -213,7 +218,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     // EntityName isn't provided
     try {
       val jsonMap = Map("version" -> 1, "entity_type" -> ConfigType.Topic)
-      configManager.ConfigChangedNotificationHandler.processNotification(Json.encode(jsonMap))
+      configManager.ConfigChangedNotificationHandler.processNotification(objectMapper.writeValueAsString(jsonMap))
       fail("Should have thrown an Exception while parsing incorrect notification " + jsonMap)
     }
     catch {
@@ -222,7 +227,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
 
     // Everything is provided
     val jsonMap = Map("version" -> 1, "entity_type" -> ConfigType.Topic, "entity_name" -> "x")
-    configManager.ConfigChangedNotificationHandler.processNotification(Json.encode(jsonMap))
+    configManager.ConfigChangedNotificationHandler.processNotification(objectMapper.writeValueAsString(jsonMap))
 
     // Verify that processConfigChanges was only called once
     EasyMock.verify(handler)

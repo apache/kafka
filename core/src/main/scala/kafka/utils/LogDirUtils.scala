@@ -17,13 +17,18 @@
 
 package kafka.utils
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import kafka.controller.LogDirEventNotificationHandler
+
 import scala.collection.Map
 
 object LogDirUtils extends Logging {
 
   private val LogDirEventNotificationPrefix = "log_dir_event_"
   val LogDirFailureEvent = 1
+  val objectMapper = new ObjectMapper()
+  objectMapper.registerModule(DefaultScalaModule)
 
   def propagateLogDirEvent(zkUtils: ZkUtils, brokerId: Int) {
     val logDirEventNotificationPath: String = zkUtils.createSequentialPersistentPath(
@@ -32,7 +37,7 @@ object LogDirUtils extends Logging {
   }
 
   private def logDirFailureEventZkData(brokerId: Int): String = {
-    Json.encode(Map("version" -> LogDirEventNotificationHandler.Version, "broker" -> brokerId, "event" -> LogDirFailureEvent))
+    objectMapper.writeValueAsString(Map("version" -> LogDirEventNotificationHandler.Version, "broker" -> brokerId, "event" -> LogDirFailureEvent))
   }
 
   def deleteLogDirEvents(zkUtils: ZkUtils) {

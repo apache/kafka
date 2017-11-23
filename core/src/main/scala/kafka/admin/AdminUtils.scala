@@ -24,6 +24,8 @@ import kafka.utils.ZkUtils._
 import java.util.Random
 import java.util.Properties
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import kafka.common.TopicAlreadyMarkedForDeletionException
 import org.apache.kafka.common.errors.{BrokerNotAvailableException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidReplicationFactorException, InvalidTopicException, TopicExistsException, UnknownTopicOrPartitionException}
 
@@ -64,6 +66,8 @@ object AdminUtils extends Logging with AdminUtilities {
   val rand = new Random
   val AdminClientId = "__admin_client"
   val EntityConfigChangeZnodePrefix = "config_change_"
+  val objectMapper = new ObjectMapper()
+  objectMapper.registerModule(DefaultScalaModule)
 
   /**
    * There are 3 goals of replica assignment:
@@ -617,7 +621,7 @@ object AdminUtils extends Logging with AdminUtilities {
 
     // create the change notification
     val seqNode = ZkUtils.ConfigChangesPath + "/" + EntityConfigChangeZnodePrefix
-    val content = Json.encode(getConfigChangeZnodeData(sanitizedEntityPath))
+    val content = objectMapper.writeValueAsString(getConfigChangeZnodeData(sanitizedEntityPath))
     zkUtils.createSequentialPersistentPath(seqNode, content)
   }
 
@@ -630,7 +634,7 @@ object AdminUtils extends Logging with AdminUtilities {
    */
   private def writeEntityConfig(zkUtils: ZkUtils, entityPath: String, config: Properties) {
     val map = Map("version" -> 1, "config" -> config.asScala)
-    zkUtils.updatePersistentPath(entityPath, Json.encode(map))
+    zkUtils.updatePersistentPath(entityPath, objectMapper.writeValueAsString(map))
   }
 
   /**

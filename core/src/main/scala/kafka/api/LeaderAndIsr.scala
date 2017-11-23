@@ -17,7 +17,8 @@
 
 package kafka.api
 
-import kafka.utils._
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.scala.DefaultScalaModule
 
 object LeaderAndIsr {
   val initialLeaderEpoch: Int = 0
@@ -43,6 +44,8 @@ case class LeaderAndIsr(leader: Int,
   def newEpochAndZkVersion = newLeaderAndIsr(leader, isr)
 
   override def toString: String = {
-    Json.encode(Map("leader" -> leader, "leader_epoch" -> leaderEpoch, "isr" -> isr))
+    val objectMapper = new ObjectMapper()
+    objectMapper.registerModule(DefaultScalaModule)
+    objectMapper.writeValueAsString(Map("leader" -> leader, "leader_epoch" -> leaderEpoch, "isr" -> isr))
   }
 }
