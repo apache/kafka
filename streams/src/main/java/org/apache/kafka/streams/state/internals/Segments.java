@@ -28,6 +28,7 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -153,6 +154,7 @@ class Segments {
                 }
             }
         }
+        Collections.sort(segments);
         return segments;
     }
     
