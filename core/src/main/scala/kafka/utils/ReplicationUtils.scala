@@ -18,15 +18,11 @@
 package kafka.utils
 
 import kafka.api.LeaderAndIsr
-import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch}
+import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.zk._
 import org.apache.kafka.common.TopicPartition
 
-import scala.collection._
-
 object ReplicationUtils extends Logging {
-
-  private val IsrChangeNotificationPrefix = "isr_change_"
 
   def updateLeaderAndIsr(zkClient: KafkaZkClient, partition: TopicPartition, newLeaderAndIsr: LeaderAndIsr,
                          controllerEpoch: Int): (Boolean, Int) = {
@@ -37,13 +33,6 @@ object ReplicationUtils extends Logging {
     val updatePersistentPath: (Boolean, Int) = zkClient.conditionalUpdatePath(path, newLeaderData,
       newLeaderAndIsr.zkVersion, Some(checkLeaderAndIsrZkData))
     updatePersistentPath
-  }
-
-  def propagateIsrChanges(zkClient: KafkaZkClient, isrChangeSet: Set[TopicPartition]): Unit = {
-    val isrChangeNotificationPath: String = zkClient.createSequentialPersistentPath(
-      ZkUtils.IsrChangeNotificationPath + "/" + IsrChangeNotificationPrefix,
-      generateIsrChangeJson(isrChangeSet))
-    debug(s"Added $isrChangeNotificationPath for $isrChangeSet")
   }
 
   private def checkLeaderAndIsrZkData(zkClient: KafkaZkClient, path: String, expectedLeaderAndIsrInfo: Array[Byte]): (Boolean, Int) = {
@@ -62,11 +51,6 @@ object ReplicationUtils extends Logging {
     } catch {
       case _: Exception => (false, -1)
     }
-  }
-
-  private def generateIsrChangeJson(isrChanges: Set[TopicPartition]): String = {
-    val partitions = isrChanges.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition)).toArray
-    Json.encode(Map("version" -> IsrChangeNotificationHandler.Version, "partitions" -> partitions))
   }
 
 }

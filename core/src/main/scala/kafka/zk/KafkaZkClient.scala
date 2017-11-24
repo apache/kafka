@@ -16,7 +16,6 @@
 */
 package kafka.zk
 
-import java.nio.charset.StandardCharsets.UTF_8
 import java.util.Properties
 
 import kafka.api.LeaderAndIsr
@@ -49,8 +48,16 @@ import scala.collection.{Seq, mutable}
 class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends Logging {
   import KafkaZkClient._
 
-  def createSequentialPersistentPath(path: String, data: String = ""): String = {
-    val createRequest = CreateRequest(path, data.getBytes("UTF-8"), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
+  /**
+   * Create a sequential persistent path. That is, the znode will not be automatically deleted upon client's disconnect
+   * and a monotonically increasing number will be appended to its name.
+   *
+   * @param path the path to create (with the monotonically increasing number appended)
+   * @param data the znode data
+   * @return the created path (including the appended monotonically increasing number)
+   */
+  def createSequentialPersistentPath(path: String, data: Array[Byte]): String = {
+    val createRequest = CreateRequest(path, data, acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
     val createResponse = retryRequestUntilConnected(createRequest)
     createResponse.maybeThrow
     createResponse.name
@@ -923,8 +930,14 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
   def propagateLogDirEvent(brokerId: Int) {
     val logDirEventNotificationPath: String = createSequentialPersistentPath(
       LogDirEventNotificationZNode.path + "/" + LogDirEventNotificationSequenceZNode.SequenceNumberPrefix,
-      new String(LogDirEventNotificationSequenceZNode.encode(brokerId), UTF_8))
+      LogDirEventNotificationSequenceZNode.encode(brokerId))
     debug(s"Added $logDirEventNotificationPath for broker $brokerId")
+  }
+
+  def propagateIsrChanges(isrChangeSet: collection.Set[TopicPartition]): Unit = {
+    val isrChangeNotificationPath: String = createSequentialPersistentPath(IsrChangeNotificationSequenceZNode.path(),
+      IsrChangeNotificationSequenceZNode.encode(isrChangeSet))
+    debug(s"Added $isrChangeNotificationPath for $isrChangeSet")
   }
 
   /**

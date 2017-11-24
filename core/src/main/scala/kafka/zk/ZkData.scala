@@ -167,8 +167,8 @@ object IsrChangeNotificationZNode {
 
 object IsrChangeNotificationSequenceZNode {
   val SequenceNumberPrefix = "isr_change_"
-  def path(sequenceNumber: String) = s"${IsrChangeNotificationZNode.path}/$SequenceNumberPrefix$sequenceNumber"
-  def encode(partitions: Set[TopicPartition]): Array[Byte] = {
+  def path(sequenceNumber: String = "") = s"${IsrChangeNotificationZNode.path}/$SequenceNumberPrefix$sequenceNumber"
+  def encode(partitions: collection.Set[TopicPartition]): Array[Byte] = {
     val partitionsJson = partitions.map(partition => Map("topic" -> partition.topic, "partition" -> partition.partition))
     Json.encodeAsBytes(Map("version" -> IsrChangeNotificationHandler.Version, "partitions" -> partitionsJson))
   }
