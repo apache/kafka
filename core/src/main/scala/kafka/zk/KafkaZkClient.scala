@@ -25,7 +25,6 @@ import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.log.LogConfig
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
 import kafka.security.auth.{Acl, Resource, ResourceType}
-
 import kafka.server.ConfigType
 import kafka.utils._
 import kafka.zookeeper._
@@ -122,7 +121,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
   }
 
   /**
-   * Try to update the partition states of multiple partitions in zookeeper.
+   * Update the partition states of multiple partitions in zookeeper.
    * @param leaderAndIsrs The partition states to update.
    * @param controllerEpoch The current controller epoch.
    * @return UpdateLeaderAndIsrResult instance containing per partition results.
@@ -131,7 +130,9 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     val successfulUpdates = mutable.Map.empty[TopicPartition, LeaderAndIsr]
     val updatesToRetry = mutable.Buffer.empty[TopicPartition]
     val failed = mutable.Map.empty[TopicPartition, Exception]
-    val leaderIsrAndControllerEpochs = leaderAndIsrs.map { case (partition, leaderAndIsr) => partition -> LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch) }
+    val leaderIsrAndControllerEpochs = leaderAndIsrs.map { case (partition, leaderAndIsr) =>
+      partition -> LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
+    }
     val setDataResponses = try {
       setTopicPartitionStatesRaw(leaderIsrAndControllerEpochs)
     } catch {
@@ -562,7 +563,6 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
   def createDeleteTopicPath(topicName: String): Unit = {
     createRecursive(DeleteTopicsTopicZNode.path(topicName))
   }
-
 
   /**
    * Checks if topic is marked for deletion
