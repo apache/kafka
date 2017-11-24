@@ -75,17 +75,18 @@ public class RequestContext {
 
     public Send buildResponse(AbstractResponse body) {
         ResponseHeader responseHeader = header.toResponseHeader();
-        short version = header.apiVersion();
-
-        // Use v0 when serializing an unhandled ApiVersion response
-        if (isUnsupportedApiVersionsRequest())
-            version = 0;
-
-        return body.toSend(connectionId, responseHeader, version);
+        return body.toSend(connectionId, responseHeader, apiVersion());
     }
 
     private boolean isUnsupportedApiVersionsRequest() {
         return header.apiKey() == API_VERSIONS && !API_VERSIONS.isVersionSupported(header.apiVersion());
+    }
+
+    public short apiVersion() {
+        // Use v0 when serializing an unhandled ApiVersion response
+        if (isUnsupportedApiVersionsRequest())
+            return 0;
+        return header.apiVersion();
     }
 
 }
