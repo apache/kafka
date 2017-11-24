@@ -173,6 +173,20 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   }
 
   @Test
+  def testCreateSequentialPersistentPath(): Unit = {
+    val path = "/testpath"
+    zkClient.createRecursive(path)
+
+    var result = zkClient.createSequentialPersistentPath(path + "/sequence_")
+    assertEquals(s"$path/sequence_0000000000", result)
+    assertTrue(zkClient.pathExists(s"$path/sequence_0000000000"))
+
+    result = zkClient.createSequentialPersistentPath(path + "/sequence_")
+    assertEquals(s"$path/sequence_0000000001", result)
+    assertTrue(zkClient.pathExists(s"$path/sequence_0000000001"))
+  }
+
+  @Test
   def testSetGetAndDeletePartitionReassignment() {
     zkClient.createRecursive(AdminZNode.path)
 
