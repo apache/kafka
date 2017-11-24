@@ -17,6 +17,8 @@
 
 package kafka.server
 
+import java.nio.charset.StandardCharsets
+
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.utils.Json
 import kafka.utils.Logging
@@ -91,33 +93,34 @@ class DynamicConfigManager(private val zkClient: KafkaZkClient,
   val adminZkClient = new AdminZkClient(zkClient)
 
   object ConfigChangedNotificationHandler extends NotificationHandler {
-    override def processNotification(json: String) = {
+    override def processNotification(jsonBytes: Array[Byte]) = {
       // Ignore non-json notifications because they can be from the deprecated TopicConfigManager
-      Json.parseFull(json).foreach { js =>
+      Json.parseBytes(jsonBytes).foreach { js =>
         val jsObject = js.asJsonObjectOption.getOrElse {
           throw new IllegalArgumentException("Config change notification has an unexpected value. The format is:" +
             """{"version" : 1, "entity_type":"topics/clients", "entity_name" : "topic_name/client_id"} or """ +
             """{"version" : 2, "entity_path":"entity_type/entity_name"}. """ +
-            s"Received: $json")
+            s"Received: ${new String(jsonBytes, StandardCharsets.UTF_8)}")
         }
         jsObject("version").to[Int] match {
-          case 1 => processEntityConfigChangeVersion1(json, jsObject)
-          case 2 => processEntityConfigChangeVersion2(json, jsObject)
+          case 1 => processEntityConfigChangeVersion1(jsonBytes, jsObject)
+          case 2 => processEntityConfigChangeVersion2(jsonBytes, jsObject)
           case version => throw new IllegalArgumentException("Config change notification has unsupported version " +
             s"'$version', supported versions are 1 and 2.")
         }
       }
     }
 
-    private def processEntityConfigChangeVersion1(json: String, js: JsonObject) {
+    private def processEntityConfigChangeVersion1(jsonBytes: Array[Byte], js: JsonObject) {
       val validConfigTypes = Set(ConfigType.Topic, ConfigType.Client)
       val entityType = js.get("entity_type").flatMap(_.to[Option[String]]).filter(validConfigTypes).getOrElse {
         throw new IllegalArgumentException("Version 1 config change notification must have 'entity_type' set to " +
-          s"'clients' or 'topics'. Received: $json")
+          s"'clients' or 'topics'. Received: ${new String(jsonBytes, StandardCharsets.UTF_8)}")
       }
 
       val entity = js.get("entity_name").flatMap(_.to[Option[String]]).getOrElse {
-        throw new IllegalArgumentException("Version 1 config change notification does not specify 'entity_name'. Received: " + json)
+        throw new IllegalArgumentException("Version 1 config change notification does not specify 'entity_name'. " +
+          s"Received: ${new String(jsonBytes, StandardCharsets.UTF_8)}")
       }
 
       val entityConfig = adminZkClient.fetchEntityConfig(entityType, entity)
@@ -126,10 +129,11 @@ class DynamicConfigManager(private val zkClient: KafkaZkClient,
 
     }
 
-    private def processEntityConfigChangeVersion2(json: String, js: JsonObject) {
+    private def processEntityConfigChangeVersion2(jsonBytes: Array[Byte], js: JsonObject) {
 
       val entityPath = js.get("entity_path").flatMap(_.to[Option[String]]).getOrElse {
-        throw new IllegalArgumentException(s"Version 2 config change notification must specify 'entity_path'. Received: $json")
+        throw new IllegalArgumentException(s"Version 2 config change notification must specify 'entity_path'. " +
+          s"Received: ${new String(jsonBytes, StandardCharsets.UTF_8)}")
       }
 
       val index = entityPath.indexOf('/')
@@ -137,7 +141,7 @@ class DynamicConfigManager(private val zkClient: KafkaZkClient,
       if (index < 0 || !configHandlers.contains(rootEntityType)) {
         val entityTypes = configHandlers.keys.map(entityType => s"'$entityType'/").mkString(", ")
         throw new IllegalArgumentException("Version 2 config change notification must have 'entity_path' starting with " +
-          s"one of $entityTypes. Received: $json")
+          s"one of $entityTypes. Received: ${new String(jsonBytes, StandardCharsets.UTF_8)}")
       }
       val fullSanitizedEntityName = entityPath.substring(index + 1)
 

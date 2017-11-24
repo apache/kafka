@@ -17,6 +17,7 @@
 package kafka.zk
 
 import java.util.{Properties, UUID}
+import java.nio.charset.StandardCharsets.UTF_8
 
 import kafka.log.LogConfig
 import kafka.security.auth._
@@ -129,23 +130,23 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     val path = "/testpath"
 
     // test with non-existing path
-    var dataAndVersion = zkClient.getDataAndVersion(path)
-    assertTrue(dataAndVersion._1.isEmpty)
-    assertEquals(-1, dataAndVersion._2)
+    val (data0, version0) = zkClient.getDataAndVersion(path)
+    assertTrue(data0.isEmpty)
+    assertEquals(-1, version0)
 
     // create a test path
     zkClient.createRecursive(path)
-    zkClient.conditionalUpdatePath(path, "version1", 0)
+    zkClient.conditionalUpdatePath(path, "version1".getBytes(UTF_8), 0)
 
     // test with existing path
-    dataAndVersion = zkClient.getDataAndVersion(path)
-    assertEquals("version1", dataAndVersion._1.get)
-    assertEquals(1, dataAndVersion._2)
+    val (data1, version1) = zkClient.getDataAndVersion(path)
+    assertEquals("version1", new String(data1.get, UTF_8))
+    assertEquals(1, version1)
 
-    zkClient.conditionalUpdatePath(path, "version2", 1)
-    dataAndVersion = zkClient.getDataAndVersion(path)
-    assertEquals("version2", dataAndVersion._1.get)
-    assertEquals(2, dataAndVersion._2)
+    zkClient.conditionalUpdatePath(path, "version2".getBytes(UTF_8), 1)
+    val (data2, version2) = zkClient.getDataAndVersion(path)
+    assertEquals("version2", new String(data2.get, UTF_8))
+    assertEquals(2, version2)
   }
 
   @Test
@@ -153,7 +154,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     val path = "/testconditionalpath"
 
     // test with non-existing path
-    var statusAndVersion = zkClient.conditionalUpdatePath(path, "version0", 0)
+    var statusAndVersion = zkClient.conditionalUpdatePath(path, "version0".getBytes(UTF_8), 0)
     assertFalse(statusAndVersion._1)
     assertEquals(-1, statusAndVersion._2)
 
@@ -161,12 +162,12 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     zkClient.createRecursive(path)
 
     // test with valid expected version
-    statusAndVersion = zkClient.conditionalUpdatePath(path, "version1", 0)
+    statusAndVersion = zkClient.conditionalUpdatePath(path, "version1".getBytes(UTF_8), 0)
     assertTrue(statusAndVersion._1)
     assertEquals(1, statusAndVersion._2)
 
     // test with invalid expected version
-    statusAndVersion = zkClient.conditionalUpdatePath(path, "version2", 2)
+    statusAndVersion = zkClient.conditionalUpdatePath(path, "version2".getBytes(UTF_8), 2)
     assertFalse(statusAndVersion._1)
     assertEquals(-1, statusAndVersion._2)
   }
@@ -202,23 +203,23 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     val path = "/testpath"
 
     // test with non-existing path
-    var dataAndVersion = zkClient.getDataAndStat(path)
-    assertTrue(dataAndVersion._1.isEmpty)
-    assertEquals(0, dataAndVersion._2.getVersion)
+    val (data0, version0) = zkClient.getDataAndStat(path)
+    assertTrue(data0.isEmpty)
+    assertEquals(0, version0.getVersion)
 
     // create a test path
     zkClient.createRecursive(path)
-    zkClient.conditionalUpdatePath(path, "version1", 0)
+    zkClient.conditionalUpdatePath(path, "version1".getBytes(UTF_8), 0)
 
     // test with existing path
-    dataAndVersion = zkClient.getDataAndStat(path)
-    assertEquals("version1", dataAndVersion._1.get)
-    assertEquals(1, dataAndVersion._2.getVersion)
+    val (data1, version1) = zkClient.getDataAndStat(path)
+    assertEquals("version1", new String(data1.get, UTF_8))
+    assertEquals(1, version1.getVersion)
 
-    zkClient.conditionalUpdatePath(path, "version2", 1)
-    dataAndVersion = zkClient.getDataAndStat(path)
-    assertEquals("version2", dataAndVersion._1.get)
-    assertEquals(2, dataAndVersion._2.getVersion)
+    zkClient.conditionalUpdatePath(path, "version2".getBytes(UTF_8), 1)
+    val (data2, version2) = zkClient.getDataAndStat(path)
+    assertEquals("version2", new String(data2.get, UTF_8))
+    assertEquals(2, version2.getVersion)
   }
 
   @Test

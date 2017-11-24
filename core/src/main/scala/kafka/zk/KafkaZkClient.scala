@@ -468,11 +468,11 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
   /**
    * Gets the data and version at the given zk path
    * @param path zk node path
-   * @return A tuple of 2 elements, where first element is zk node data as string
+   * @return A tuple of 2 elements, where first element is zk node data as an array of bytes
    *         and second element is zk node version.
    *         returns (None, ZkVersion.NoVersion) if node doesn't exists and throws exception for any error
    */
-  def getDataAndVersion(path: String): (Option[String], Int) = {
+  def getDataAndVersion(path: String): (Option[Array[Byte]], Int) = {
     val (data, stat) = getDataAndStat(path)
     stat match {
       case ZkStat.NoStat => (data, ZkVersion.NoVersion)
@@ -483,22 +483,16 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
   /**
    * Gets the data and Stat at the given zk path
    * @param path zk node path
-   * @return A tuple of 2 elements, where first element is zk node data as string
+   * @return A tuple of 2 elements, where first element is zk node data as an array of bytes
    *         and second element is zk node stats.
    *         returns (None, ZkStat.NoStat) if node doesn't exists and throws exception for any error
    */
-  def getDataAndStat(path: String): (Option[String], Stat) = {
+  def getDataAndStat(path: String): (Option[Array[Byte]], Stat) = {
     val getDataRequest = GetDataRequest(path)
     val getDataResponse = retryRequestUntilConnected(getDataRequest)
 
     getDataResponse.resultCode match {
-      case Code.OK =>
-        if (getDataResponse.data == null)
-          (None, getDataResponse.stat)
-        else {
-          val data = Option(getDataResponse.data).map(new String(_, UTF_8))
-          (data, getDataResponse.stat)
-        }
+      case Code.OK => (Option(getDataResponse.data), getDataResponse.stat)
       case Code.NONODE => (None, ZkStat.NoStat)
       case _ => throw getDataResponse.resultException.get
     }
@@ -526,10 +520,10 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    * since the previous update may have succeeded (but the stored zkVersion no longer matches the expected one).
    * In this case, we will run the optionalChecker to further check if the previous write did indeed succeeded.
    */
-  def conditionalUpdatePath(path: String, data: String, expectVersion: Int,
-                            optionalChecker:Option[(KafkaZkClient, String, String) => (Boolean,Int)] = None): (Boolean, Int) = {
+  def conditionalUpdatePath(path: String, data: Array[Byte], expectVersion: Int,
+                            optionalChecker: Option[(KafkaZkClient, String, Array[Byte]) => (Boolean,Int)] = None): (Boolean, Int) = {
 
-    val setDataRequest = SetDataRequest(path, data.getBytes(UTF_8), expectVersion)
+    val setDataRequest = SetDataRequest(path, data, expectVersion)
     val setDataResponse = retryRequestUntilConnected(setDataRequest)
 
     setDataResponse.resultCode match {
