@@ -23,6 +23,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kafka.cluster.Replica
 import kafka.log.Log
 import kafka.utils._
+import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
@@ -148,7 +149,7 @@ class ReplicaManagerQuotasTest {
   }
 
   def setUpMocks(fetchInfo: Seq[(TopicPartition, PartitionData)], record: SimpleRecord = this.record, bothReplicasInSync: Boolean = false) {
-    val zkUtils = createNiceMock(classOf[ZkUtils])
+    val zkClient = EasyMock.createMock(classOf[KafkaZkClient])
     val scheduler = createNiceMock(classOf[KafkaScheduler])
 
     //Create log which handles both a regular read and a 0 bytes read
@@ -182,7 +183,7 @@ class ReplicaManagerQuotasTest {
     expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
     replay(logManager)
 
-    replicaManager = new ReplicaManager(configs.head, metrics, time, zkUtils, scheduler, logManager,
+    replicaManager = new ReplicaManager(configs.head, metrics, time, zkClient, scheduler, logManager,
       new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time, ""),
       new BrokerTopicStats, new MetadataCache(configs.head.brokerId), new LogDirFailureChannel(configs.head.logDirs.size))
 
