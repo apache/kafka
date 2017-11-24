@@ -21,10 +21,11 @@ import java.util.Properties
 
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
-import kafka.controller.{LeaderIsrAndControllerEpoch, ReassignedPartitionsContext}
+import kafka.controller.{LeaderIsrAndControllerEpoch, LogDirEventNotificationHandler, ReassignedPartitionsContext}
 import kafka.log.LogConfig
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
 import kafka.security.auth.{Acl, Resource, ResourceType}
+
 import kafka.server.ConfigType
 import kafka.utils._
 import kafka.zookeeper._
@@ -48,6 +49,13 @@ import scala.collection.{Seq, mutable}
  */
 class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends Logging {
   import KafkaZkClient._
+
+  def createSequentialPersistentPath(path: String, data: String = ""): String = {
+    val createRequest = CreateRequest(path, data.getBytes("UTF-8"), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
+    val createResponse = retryRequestUntilConnected(createRequest)
+    createResponse.resultException.foreach(e => throw e)
+    createResponse.path
+  }
 
   /**
    * Gets topic partition states for the given partitions.
@@ -933,6 +941,13 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     createResponse.resultException.foreach(e => throw e)
   }
 
+  def propagateLogDirEvent(brokerId: Int) {
+    val logDirEventNotificationPath: String = createSequentialPersistentPath(
+      LogDirEventNotificationZNode.path + "/" + LogDirEventNotificationSequenceZNode.SequenceNumberPrefix,
+      new String(LogDirEventNotificationSequenceZNode.encode(brokerId), UTF_8))
+    debug(s"Added $logDirEventNotificationPath for broker $brokerId")
+  }
+
   /**
    * Deletes all Acl change notifications.
    * @throws KeeperException if there is an error while deleting Acl change notifications
@@ -1159,7 +1174,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     }
   }
 
-  private[zk] def pathExists(path: String): Boolean = {
+  def pathExists(path: String): Boolean = {
     val existsRequest = ExistsRequest(path)
     val existsResponse = retryRequestUntilConnected(existsRequest)
     existsResponse.resultCode match {

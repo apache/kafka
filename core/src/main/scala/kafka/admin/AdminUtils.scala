@@ -58,7 +58,7 @@ trait AdminUtilities {
     }
   }
 
-  def fetchEntityConfig(zkUtils: ZkUtils,entityType: String, entityName: String): Properties
+  def fetchEntityConfig(zkUtils: ZkUtils, entityType: String, entityName: String): Properties
 }
 
 object AdminUtils extends Logging with AdminUtilities {
