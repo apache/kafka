@@ -56,7 +56,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    * @param data the znode data
    * @return the created path (including the appended monotonically increasing number)
    */
-  def createSequentialPersistentPath(path: String, data: Array[Byte]): String = {
+  private[zk] def createSequentialPersistentPath(path: String, data: Array[Byte]): String = {
     val createRequest = CreateRequest(path, data, acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
     val createResponse = retryRequestUntilConnected(createRequest)
     createResponse.maybeThrow
