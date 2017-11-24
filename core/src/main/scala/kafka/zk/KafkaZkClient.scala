@@ -57,18 +57,6 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     createResponse.path
   }
 
-  def readDataMaybeNull(path: String): (Option[String], Stat) = {
-    val getDataRequest = GetDataRequest(path)
-    val getDataResponse = retryRequestUntilConnected(getDataRequest)
-
-    if (getDataResponse.resultCode == Code.NONODE) {
-      (None, getDataResponse.stat)
-    } else {
-      val data = new String(getDataResponse.data, UTF_8)
-      (Some(data), getDataResponse.stat)
-    }
-  }
-
   /**
    * Gets topic partition states for the given partitions.
    * @param partitions the partitions for which we want ot get states.
