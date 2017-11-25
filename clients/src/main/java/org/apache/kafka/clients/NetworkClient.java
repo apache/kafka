@@ -808,7 +808,7 @@ public class NetworkClient implements KafkaClient {
         /* the current cluster metadata */
         private final Metadata metadata;
 
-        /* true iff there is a metadata request that has been sent and for which we have not yet received a response */
+        /* true if there is a metadata request that has been sent and for which we have not yet received a response */
         private boolean metadataFetchInProgress;
 
         DefaultMetadataUpdater(Metadata metadata) {
