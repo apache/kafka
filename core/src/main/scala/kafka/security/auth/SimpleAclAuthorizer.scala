@@ -29,7 +29,7 @@ import kafka.utils._
 import kafka.zk.{AclChangeNotificationSequenceZNode, AclChangeNotificationZNode, KafkaZkClient}
 import kafka.zookeeper.ZooKeeperClient
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.utils.SecurityUtils
+import org.apache.kafka.common.utils.{SecurityUtils, Time}
 
 import scala.collection.JavaConverters._
 import scala.util.Random
@@ -92,7 +92,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
     val zooKeeperClient = new ZooKeeperClient(zkUrl, zkSessionTimeOutMs, zkConnectionTimeoutMs, zkMaxInFlightRequests)
 
-    zkClient = new KafkaZkClient(zooKeeperClient, kafkaConfig.zkEnableSecureAcls)
+    zkClient = new KafkaZkClient(zooKeeperClient, kafkaConfig.zkEnableSecureAcls, Time.SYSTEM)
     zkClient.createAclPaths()
 
     loadCache()
