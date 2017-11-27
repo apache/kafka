@@ -49,7 +49,11 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriBuilder;
 import java.net.URI;
-import java.util.*;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -180,7 +184,8 @@ public class ConnectorsResource {
         FutureCallback<List<TaskInfo>> cb = new FutureCallback<>();
         herder.taskConfigs(connector, cb);
         List<TaskInfo> taskInfoList = completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks", "GET", null,
-                new TypeReference<List<TaskInfo>>() {}, forward);
+                new TypeReference<List<TaskInfo>>() {
+                }, forward);
         List<TaskInfo> maskedTaskInfoList = new ArrayList<>();
         for (TaskInfo taskInfo : taskInfoList) {
             maskedTaskInfoList.add(new TaskInfo(taskInfo.id(), maskCredentials(taskInfo.config())));
