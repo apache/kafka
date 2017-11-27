@@ -20,7 +20,6 @@ package kafka.server.epoch
 import java.io.{File, RandomAccessFile}
 import java.util.Properties
 
-import kafka.admin.AdminUtils
 import kafka.api.KAFKA_0_11_0_IV1
 import kafka.log.Log
 import kafka.server.KafkaConfig._
@@ -78,7 +77,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     brokers = (100 to 101).map(createBroker(_))
 
     //A single partition topic with 2 replicas
-    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, Map(0 -> Seq(100, 101)))
+    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, Map(0 -> Seq(100, 101)))
     producer = createProducer()
     val tp = new TopicPartition(topic, 0)
 
@@ -139,7 +138,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     brokers = (100 to 101).map { id => createServer(fromProps(createBrokerConfig(id, zkConnect))) }
 
     //A single partition topic with 2 replicas
-    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, Map(
+    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, Map(
       0 -> Seq(100, 101)
     ))
     producer = createProducer()
@@ -189,7 +188,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     brokers = (100 to 101).map(createBroker(_))
 
     //A single partition topic with 2 replicas
-    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, Map(
+    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, Map(
       0 -> Seq(100, 101)
     ))
     producer = bufferingProducer()
@@ -266,7 +265,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     brokers = (100 to 101).map(createBroker(_))
 
     //A single partition topic with 2 replicas
-    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, Map(0 -> Seq(100, 101)))
+    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, Map(0 -> Seq(100, 101)))
     producer = createProducer()
 
     //Kick off with a single record

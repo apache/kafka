@@ -38,7 +38,7 @@ import org.apache.kafka.common.{KafkaFuture, TopicPartition, TopicPartitionRepli
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
-import org.junit.{After, Before, Rule, Test}
+import org.junit.{After, Before, Ignore, Rule, Test}
 import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{Resource, ResourceType}
 import org.junit.rules.Timeout
@@ -47,6 +47,7 @@ import org.junit.Assert._
 import scala.util.Random
 import scala.collection.JavaConverters._
 import java.lang.{Long => JLong}
+
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 
@@ -732,6 +733,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   }
 
   @Test
+  @Ignore // Disabled temporarily until flakiness is resolved
   def testLogStartOffsetCheckpoint(): Unit = {
     TestUtils.createTopic(zkUtils, topic, 2, serverCount, servers)
 

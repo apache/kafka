@@ -31,7 +31,6 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.GatheringByteChannel;
 import java.util.Iterator;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -237,8 +236,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
 
     @Override
     public ConvertedRecords<? extends Records> downConvert(byte toMagic, long firstOffset, Time time) {
-        List<? extends RecordBatch> batches = Utils.toList(batches().iterator());
-        if (batches.isEmpty()) {
+        ConvertedRecords<MemoryRecords> convertedRecords = downConvert(batches, toMagic, firstOffset, time);
+        if (convertedRecords.recordsProcessingStats().numRecordsConverted() == 0) {
             // This indicates that the message is too large, which means that the buffer is not large
             // enough to hold a full record batch. We just return all the bytes in this instance.
             // Even though the record batch does not have the right format version, we expect old clients
@@ -248,7 +247,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
             // one full record batch, even if it requires exceeding the max fetch size requested by the client.
             return new ConvertedRecords<>(this, RecordsProcessingStats.EMPTY);
         } else {
-            return downConvert(batches, toMagic, firstOffset, time);
+            return convertedRecords;
         }
     }
 

@@ -24,8 +24,10 @@ import kafka.common.Config
 import kafka.common.InvalidConfigException
 import kafka.log.LogConfig
 import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig}
-import kafka.utils.{CommandLineUtils, ZkUtils}
+import kafka.utils.CommandLineUtils
 import kafka.utils.Implicits._
+import kafka.zk.{AdminZkClient, KafkaZkClient}
+import kafka.zookeeper.ZooKeeperClient
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.scram._
 import org.apache.kafka.common.utils.{Sanitizer, Utils}
@@ -61,26 +63,25 @@ object ConfigCommand extends Config {
 
     opts.checkArgs()
 
-    val zkUtils = ZkUtils(opts.options.valueOf(opts.zkConnectOpt),
-                          30000,
-                          30000,
-                          JaasUtils.isZkSecurityEnabled())
+    val zooKeeperClient = new ZooKeeperClient(opts.options.valueOf(opts.zkConnectOpt), 30000, 30000, Int.MaxValue)
+    val zkClient = new KafkaZkClient(zooKeeperClient, JaasUtils.isZkSecurityEnabled())
+    val adminZkClient = new AdminZkClient(zkClient)
 
     try {
       if (opts.options.has(opts.alterOpt))
-        alterConfig(zkUtils, opts)
+        alterConfig(zkClient, opts, adminZkClient)
       else if (opts.options.has(opts.describeOpt))
-        describeConfig(zkUtils, opts)
+        describeConfig(zkClient, opts, adminZkClient)
     } catch {
       case e: Throwable =>
         println("Error while executing config command " + e.getMessage)
         println(Utils.stackTrace(e))
     } finally {
-      zkUtils.close()
+      zkClient.close()
     }
   }
 
-  private[admin] def alterConfig(zkUtils: ZkUtils, opts: ConfigCommandOptions, utils: AdminUtilities = AdminUtils) {
+  private[admin] def alterConfig(zkClient: KafkaZkClient, opts: ConfigCommandOptions, adminZkClient: AdminZkClient) {
     val configsToBeAdded = parseConfigsToBeAdded(opts)
     val configsToBeDeleted = parseConfigsToBeDeleted(opts)
     val entity = parseEntity(opts)
@@ -91,7 +92,7 @@ object ConfigCommand extends Config {
       preProcessScramCredentials(configsToBeAdded)
 
     // compile the final set of configs
-    val configs = utils.fetchEntityConfig(zkUtils, entityType, entityName)
+    val configs = adminZkClient.fetchEntityConfig(entityType, entityName)
 
     // fail the command if any of the configs to be deleted does not exist
     val invalidConfigs = configsToBeDeleted.filterNot(configs.containsKey(_))
@@ -101,7 +102,7 @@ object ConfigCommand extends Config {
     configs ++= configsToBeAdded
     configsToBeDeleted.foreach(configs.remove(_))
 
-    utils.changeConfigs(zkUtils, entityType, entityName, configs)
+    adminZkClient.changeConfigs(entityType, entityName, configs)
 
     println(s"Completed Updating config for entity: $entity.")
   }
@@ -127,12 +128,12 @@ object ConfigCommand extends Config {
     }
   }
 
-  private def describeConfig(zkUtils: ZkUtils, opts: ConfigCommandOptions) {
+  private def describeConfig(zkClient: KafkaZkClient, opts: ConfigCommandOptions, adminZkClient: AdminZkClient) {
     val configEntity = parseEntity(opts)
     val describeAllUsers = configEntity.root.entityType == ConfigType.User && !configEntity.root.sanitizedName.isDefined && !configEntity.child.isDefined
-    val entities = configEntity.getAllEntities(zkUtils)
+    val entities = configEntity.getAllEntities(zkClient)
     for (entity <- entities) {
-      val configs = AdminUtils.fetchEntityConfig(zkUtils, entity.root.entityType, entity.fullSanitizedName)
+      val configs = adminZkClient.fetchEntityConfig(entity.root.entityType, entity.fullSanitizedName)
       // When describing all users, don't include empty user nodes with only <user, client> quota overrides.
       if (!configs.isEmpty || !describeAllUsers) {
         println("Configs for %s are %s"
@@ -196,7 +197,7 @@ object ConfigCommand extends Config {
   case class ConfigEntity(root: Entity, child: Option[Entity]) {
     val fullSanitizedName = root.sanitizedName.getOrElse("") + child.map(s => "/" + s.entityPath).getOrElse("")
 
-    def getAllEntities(zkUtils: ZkUtils) : Seq[ConfigEntity] = {
+    def getAllEntities(zkClient: KafkaZkClient) : Seq[ConfigEntity] = {
       // Describe option examples:
       //   Describe entity with specified name:
       //     --entity-type topics --entity-name topic1 (topic1)
@@ -211,19 +212,19 @@ object ConfigCommand extends Config {
       //     --entity-type users --entity-default --entity-type clients --entity-default (Default <user, client>)
       (root.sanitizedName, child) match {
         case (None, _) =>
-          val rootEntities = zkUtils.getAllEntitiesWithConfig(root.entityType)
+          val rootEntities = zkClient.getAllEntitiesWithConfig(root.entityType)
                                    .map(name => ConfigEntity(Entity(root.entityType, Some(name)), child))
           child match {
             case Some(s) =>
                 rootEntities.flatMap(rootEntity =>
-                  ConfigEntity(rootEntity.root, Some(Entity(s.entityType, None))).getAllEntities(zkUtils))
+                  ConfigEntity(rootEntity.root, Some(Entity(s.entityType, None))).getAllEntities(zkClient))
             case None => rootEntities
           }
         case (_, Some(childEntity)) =>
           childEntity.sanitizedName match {
             case Some(_) => Seq(this)
             case None =>
-                zkUtils.getAllEntitiesWithConfig(root.entityPath + "/" + childEntity.entityType)
+                zkClient.getAllEntitiesWithConfig(root.entityPath + "/" + childEntity.entityType)
                        .map(name => ConfigEntity(root, Some(Entity(childEntity.entityType, Some(name)))))
 
           }

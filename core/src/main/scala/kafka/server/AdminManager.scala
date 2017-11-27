@@ -23,6 +23,7 @@ import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
+import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.NewPartitions
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource}
 import org.apache.kafka.common.errors.{ApiException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, PolicyViolationException, ReassignmentInProgressException, UnknownTopicOrPartitionException}
@@ -41,11 +42,12 @@ import scala.collection.JavaConverters._
 class AdminManager(val config: KafkaConfig,
                    val metrics: Metrics,
                    val metadataCache: MetadataCache,
-                   val zkUtils: ZkUtils) extends Logging with KafkaMetricsGroup {
+                   val zkClient: KafkaZkClient) extends Logging with KafkaMetricsGroup {
 
   this.logIdent = "[Admin Manager on Broker " + config.brokerId + "]: "
 
   private val topicPurgatory = DelayedOperationPurgatory[DelayedOperation]("topic", config.brokerId)
+  private val adminZkClient = new AdminZkClient(zkClient)
 
   private val createTopicPolicy =
     Option(config.getConfiguredInstance(KafkaConfig.CreateTopicPolicyClassNameProp, classOf[CreateTopicPolicy]))
@@ -101,7 +103,7 @@ class AdminManager(val config: KafkaConfig,
 
         createTopicPolicy match {
           case Some(policy) =>
-            AdminUtils.validateCreateOrUpdateTopic(zkUtils, topic, assignments, configs, update = false)
+            adminZkClient.validateCreateOrUpdateTopic(topic, assignments, configs, update = false)
 
             // Use `null` for unset fields in the public API
             val numPartitions: java.lang.Integer =
@@ -114,13 +116,13 @@ class AdminManager(val config: KafkaConfig,
               arguments.configs))
 
             if (!validateOnly)
-              AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, assignments, configs, update = false)
+              adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, assignments, configs, update = false)
 
           case None =>
             if (validateOnly)
-              AdminUtils.validateCreateOrUpdateTopic(zkUtils, topic, assignments, configs, update = false)
+              adminZkClient.validateCreateOrUpdateTopic(topic, assignments, configs, update = false)
             else
-              AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, assignments, configs, update = false)
+              adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, assignments, configs, update = false)
         }
         CreatePartitionsMetadata(topic, assignments, ApiError.NONE)
       } catch {
@@ -165,7 +167,7 @@ class AdminManager(val config: KafkaConfig,
     // 1. map over topics calling the asynchronous delete
     val metadata = topics.map { topic =>
         try {
-          AdminUtils.deleteTopic(zkUtils, topic)
+          adminZkClient.deleteTopic(topic)
           DeleteTopicMetadata(topic, Errors.NONE)
         } catch {
           case _: TopicAlreadyMarkedForDeletionException =>
@@ -203,8 +205,8 @@ class AdminManager(val config: KafkaConfig,
                        listenerName: ListenerName,
                        callback: Map[String, ApiError] => Unit): Unit = {
 
-    val reassignPartitionsInProgress = zkUtils.pathExists(ZkUtils.ReassignPartitionsPath)
-    val allBrokers = AdminUtils.getBrokerMetadatas(zkUtils)
+    val reassignPartitionsInProgress = zkClient.reassignPartitionsInProgress
+    val allBrokers = adminZkClient.getBrokerMetadatas()
     val allBrokerIds = allBrokers.map(_.id)
 
     // 1. map over topics creating assignment and calling AdminUtils
@@ -215,7 +217,7 @@ class AdminManager(val config: KafkaConfig,
         if (reassignPartitionsInProgress)
           throw new ReassignmentInProgressException("A partition reassignment is in progress.")
 
-        val existingAssignment = zkUtils.getReplicaAssignmentForTopics(List(topic)).map {
+        val existingAssignment = zkClient.getReplicaAssignmentForTopics(immutable.Set(topic)).map {
           case (topicPartition, replicas) => topicPartition.partition -> replicas
         }
         if (existingAssignment.isEmpty)
@@ -247,7 +249,7 @@ class AdminManager(val config: KafkaConfig,
           }.toMap
         }
 
-        val updatedReplicaAssignment = AdminUtils.addPartitions(zkUtils, topic, existingAssignment, allBrokers,
+        val updatedReplicaAssignment = adminZkClient.addPartitions(topic, existingAssignment, allBrokers,
           newPartition.totalCount, reassignment, validateOnly = validateOnly)
         CreatePartitionsMetadata(topic, updatedReplicaAssignment, ApiError.NONE)
       } catch {
@@ -306,7 +308,7 @@ class AdminManager(val config: KafkaConfig,
             val topic = resource.name
             Topic.validate(topic)
             // Consider optimizing this by caching the configs or retrieving them from the `Log` when possible
-            val topicProps = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic)
+            val topicProps = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
             val logConfig = LogConfig.fromProps(KafkaServer.copyKafkaConfigToLog(config), topicProps)
             createResponseConfig(logConfig, isReadOnly = false, name => !topicProps.containsKey(name))
 
@@ -350,19 +352,19 @@ class AdminManager(val config: KafkaConfig,
 
             alterConfigPolicy match {
               case Some(policy) =>
-                AdminUtils.validateTopicConfig(zkUtils, topic, properties)
+                adminZkClient.validateTopicConfig(topic, properties)
 
                 val configEntriesMap = config.entries.asScala.map(entry => (entry.name, entry.value)).toMap
                 policy.validate(new AlterConfigPolicy.RequestMetadata(
                   new ConfigResource(ConfigResource.Type.TOPIC, resource.name), configEntriesMap.asJava))
 
                 if (!validateOnly)
-                  AdminUtils.changeTopicConfig(zkUtils, topic, properties)
+                  adminZkClient.changeTopicConfig(topic, properties)
               case None =>
                 if (validateOnly)
-                  AdminUtils.validateTopicConfig(zkUtils, topic, properties)
+                  adminZkClient.validateTopicConfig(topic, properties)
                 else
-                  AdminUtils.changeTopicConfig(zkUtils, topic, properties)
+                  adminZkClient.changeTopicConfig(topic, properties)
             }
             resource -> ApiError.NONE
           case resourceType =>

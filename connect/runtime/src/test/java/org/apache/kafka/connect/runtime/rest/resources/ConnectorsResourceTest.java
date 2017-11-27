@@ -365,6 +365,14 @@ public class ConnectorsResourceTest {
         connectorsResource.putConnectorConfig(CONNECTOR_NAME, FORWARD, connConfig);
     }
 
+    @Test(expected = BadRequestException.class)
+    public void testCreateConnectorConfigNameMismatch() throws Throwable {
+        Map<String, String> connConfig = new HashMap<>();
+        connConfig.put(ConnectorConfig.NAME_CONFIG, "mismatched-name");
+        CreateConnectorRequest request = new CreateConnectorRequest(CONNECTOR_NAME, connConfig);
+        connectorsResource.createConnector(FORWARD, request);
+    }
+
     @Test
     public void testGetConnectorTaskConfigs() throws Throwable {
         final Capture<Callback<List<TaskInfo>>> cb = Capture.newInstance();

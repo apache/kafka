@@ -125,7 +125,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
     props.put("request.required.acks", "0")
 
     val producer = new SyncProducer(new SyncProducerConfig(props))
-    AdminUtils.createTopic(zkUtils, "test", 1, 1)
+    adminZkClient.createTopic("test", 1, 1)
     TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, "test", 0)
 
     // This message will be dropped silently since message size too large.
@@ -167,9 +167,9 @@ class SyncProducerTest extends KafkaServerTestHarness {
     }
 
     // #2 - test that we get correct offsets when partition is owned by broker
-    AdminUtils.createTopic(zkUtils, "topic1", 1, 1)
+    adminZkClient.createTopic("topic1", 1, 1)
     TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, "topic1", 0)
-    AdminUtils.createTopic(zkUtils, "topic3", 1, 1)
+    adminZkClient.createTopic("topic3", 1, 1)
     TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, "topic3", 0)
 
     val response2 = producer.send(request)
@@ -243,7 +243,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
     val producer = new SyncProducer(new SyncProducerConfig(props))
     val topicProps = new Properties()
     topicProps.put("min.insync.replicas","2")
-    AdminUtils.createTopic(zkUtils, topicName, 1, 1,topicProps)
+    adminZkClient.createTopic(topicName, 1, 1,topicProps)
     TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topicName, 0)
 
     val response = producer.send(produceRequest(topicName, 0,

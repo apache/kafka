@@ -46,6 +46,8 @@ abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
   var zkUtils: ZkUtils = null
   var zooKeeperClient: ZooKeeperClient = null
   var zkClient: KafkaZkClient = null
+  var adminZkClient: AdminZkClient = null
+
   var zookeeper: EmbeddedZookeeper = null
 
   def zkPort: Int = zookeeper.port
@@ -58,6 +60,7 @@ abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
 
     zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests)
     zkClient = new KafkaZkClient(zooKeeperClient, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled()))
+    adminZkClient = new AdminZkClient(zkClient)
   }
 
   @After
