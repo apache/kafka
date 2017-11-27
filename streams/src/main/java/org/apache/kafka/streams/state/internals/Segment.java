@@ -23,7 +23,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import java.io.IOException;
 
 // Use the Bytes wrapper for underlying rocksDB keys since they are used for hashing data structures
-class Segment extends RocksDBStore<Bytes, byte[]> {
+class Segment extends RocksDBStore<Bytes, byte[]> implements Comparable<Segment> {
     public final long id;
 
     Segment(String segmentName, String windowName, long id) {
@@ -33,6 +33,13 @@ class Segment extends RocksDBStore<Bytes, byte[]> {
 
     void destroy() throws IOException {
         Utils.delete(dbDir);
+    }
+
+    @Override
+    public int compareTo(Segment segment) {
+        if (id - segment.id > 0) return 1;
+        if (id == segment.id) return 0;
+        return -1;
     }
 
     @Override

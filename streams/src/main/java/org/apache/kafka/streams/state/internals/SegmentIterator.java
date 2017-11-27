@@ -32,11 +32,11 @@ class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
 
     private final Bytes from;
     private final Bytes to;
-    private final Iterator<Segment> segments;
-    private final HasNextCondition hasNextCondition;
+    protected final Iterator<Segment> segments;
+    protected final HasNextCondition hasNextCondition;
 
-    private KeyValueStore<Bytes, byte[]> currentSegment;
-    private KeyValueIterator<Bytes, byte[]> currentIterator;
+    protected KeyValueStore<Bytes, byte[]> currentSegment;
+    protected KeyValueIterator<Bytes, byte[]> currentIterator;
 
     SegmentIterator(final Iterator<Segment> segments,
                     final HasNextCondition hasNextCondition,

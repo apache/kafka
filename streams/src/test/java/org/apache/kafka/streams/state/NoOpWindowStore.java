@@ -61,4 +61,14 @@ public class NoOpWindowStore implements ReadOnlyWindowStore, StateStore {
     public WindowStoreIterator<KeyValue> fetch(Object from, Object to, long timeFrom, long timeTo) {
         return null;
     }
+    
+    @Override
+    public WindowStoreIterator<KeyValue> all() {
+        return null;
+    }
+    
+    @Override
+    public WindowStoreIterator<KeyValue> fetchAll(long timeFrom, long timeTo) {
+        return null;
+    }
 }
