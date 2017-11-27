@@ -443,7 +443,10 @@ public class WorkerTest extends ThreadedTest {
         } catch (ConnectException e) {
             // expected
         }
-        List<Map<String, String>> taskConfigs = worker.connectorTaskConfigs(CONNECTOR_ID, 2, Arrays.asList("foo", "bar"));
+        Map<String, String> connProps = new HashMap<>(props);
+        connProps.put(ConnectorConfig.TASKS_MAX_CONFIG, "2");
+        ConnectorConfig connConfig = new SinkConnectorConfig(plugins, connProps);
+        List<Map<String, String>> taskConfigs = worker.connectorTaskConfigs(CONNECTOR_ID, connConfig);
         Map<String, String> expectedTaskProps = new HashMap<>();
         expectedTaskProps.put("foo", "bar");
         expectedTaskProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());

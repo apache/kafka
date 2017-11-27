@@ -585,16 +585,16 @@ public class KafkaStreams {
                          final StreamsConfig config,
                          final KafkaClientSupplier clientSupplier) throws StreamsException {
         this.config = config;
-        this.time = Time.SYSTEM;
+        time = Time.SYSTEM;
 
         // The application ID is a required config and hence should always have value
         processId = UUID.randomUUID();
         final String userClientId = config.getString(StreamsConfig.CLIENT_ID_CONFIG);
         final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         if (userClientId.length() <= 0) {
-            this.clientId = applicationId + "-" + processId;
+            clientId = applicationId + "-" + processId;
         } else {
-            this.clientId = userClientId;
+            clientId = userClientId;
         }
 
         final LogContext logContext = new LogContext(String.format("stream-client [%s] ", clientId));
@@ -617,9 +617,9 @@ public class KafkaStreams {
         internalTopologyBuilder.setApplicationId(applicationId);
 
         // sanity check to fail-fast in case we cannot build a ProcessorTopology due to an exception
-        internalTopologyBuilder.build(null);
+        internalTopologyBuilder.build();
 
-        this.streamsMetadataState = new StreamsMetadataState(
+        streamsMetadataState = new StreamsMetadataState(
                 internalTopologyBuilder,
                 parseHostInfo(config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)));
 

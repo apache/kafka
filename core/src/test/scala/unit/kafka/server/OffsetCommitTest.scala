@@ -30,8 +30,6 @@ import org.junit.Assert._
 import java.util.Properties
 import java.io.File
 
-import kafka.admin.AdminUtils
-
 import scala.util.Random
 import scala.collection._
 
@@ -319,7 +317,7 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
     assertEquals(Errors.NONE, commitResponse.commitStatus.get(topicPartition).get)
 
     // start topic deletion
-    AdminUtils.deleteTopic(zkUtils, topic)
+    adminZkClient.deleteTopic(topic)
     TestUtils.verifyTopicDeletion(zkUtils, topic, 1, Seq(server))
     Thread.sleep(retentionCheckInterval * 2)
 

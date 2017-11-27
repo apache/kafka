@@ -201,7 +201,7 @@ public class StreamThread extends Thread {
             if (newState == State.RUNNING) {
                 updateThreadMetadata(taskManager.activeTasks(), taskManager.standbyTasks());
             } else {
-                updateThreadMetadata(null, null);
+                updateThreadMetadata(Collections.<TaskId, StreamTask>emptyMap(), Collections.<TaskId, StandbyTask>emptyMap());
             }
         }
 
@@ -333,6 +333,14 @@ public class StreamThread extends Thread {
             this.storeChangelogReader = storeChangelogReader;
             this.time = time;
             this.log = log;
+        }
+
+        public InternalTopologyBuilder builder() {
+            return builder;
+        }
+
+        public StateDirectory stateDirectory() {
+            return stateDirectory;
         }
 
         /**
@@ -604,7 +612,8 @@ public class StreamThread extends Thread {
             threadProducer = clientSupplier.getProducer(producerConfigs);
         }
 
-        StreamsMetricsThreadImpl streamsMetrics = new StreamsMetricsThreadImpl(metrics,
+        StreamsMetricsThreadImpl streamsMetrics = new StreamsMetricsThreadImpl(
+                metrics,
                 "stream-metrics",
                 "thread." + threadClientId,
                 Collections.singletonMap("client-id", threadClientId));
@@ -701,7 +710,7 @@ public class StreamThread extends Thread {
         this.pollTimeMs = config.getLong(StreamsConfig.POLL_MS_CONFIG);
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
 
-        updateThreadMetadata(null, null);
+        updateThreadMetadata(Collections.<TaskId, StreamTask>emptyMap(), Collections.<TaskId, StandbyTask>emptyMap());
     }
 
     /**
@@ -1120,17 +1129,14 @@ public class StreamThread extends Thread {
 
     private void updateThreadMetadata(final Map<TaskId, StreamTask> activeTasks, final Map<TaskId, StandbyTask> standbyTasks) {
         final Set<TaskMetadata> activeTasksMetadata = new HashSet<>();
-        if (activeTasks != null) {
-            for (Map.Entry<TaskId, StreamTask> task : activeTasks.entrySet()) {
-                activeTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().partitions()));
-            }
+        for (Map.Entry<TaskId, StreamTask> task : activeTasks.entrySet()) {
+            activeTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().partitions()));
         }
         final Set<TaskMetadata> standbyTasksMetadata = new HashSet<>();
-        if (standbyTasks != null) {
-            for (Map.Entry<TaskId, StandbyTask> task : standbyTasks.entrySet()) {
-                standbyTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().partitions()));
-            }
+        for (Map.Entry<TaskId, StandbyTask> task : standbyTasks.entrySet()) {
+            standbyTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().partitions()));
         }
+
         threadMetadata = new ThreadMetadata(this.getName(), this.state().name(), activeTasksMetadata, standbyTasksMetadata);
     }
 
@@ -1153,7 +1159,6 @@ public class StreamThread extends Thread {
      * This is useful in debugging scenarios.
      * @return A string representation of the StreamThread instance.
      */
-    @SuppressWarnings("ThrowableNotThrown")
     public String toString(final String indent) {
         final StringBuilder sb = new StringBuilder()
                 .append(indent).append("\tStreamsThread threadId: ").append(getName()).append("\n");

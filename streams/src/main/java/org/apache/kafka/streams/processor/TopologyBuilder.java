@@ -29,10 +29,12 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
+import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor.SubscriptionUpdates;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -930,8 +932,10 @@ public class TopologyBuilder {
      * NOTE this function would not needed by developers working with the processor APIs, but only used
      * for the high-level DSL parsing functionalities.
      */
-    public InternalTopologyBuilder.SubscriptionUpdates subscriptionUpdates() {
-        return internalTopologyBuilder.subscriptionUpdates();
+    public SubscriptionUpdates subscriptionUpdates() {
+        SubscriptionUpdates clonedSubscriptionUpdates = new SubscriptionUpdates();
+        clonedSubscriptionUpdates.updateTopics(internalTopologyBuilder.subscriptionUpdates().getUpdates());
+        return clonedSubscriptionUpdates;
     }
 
     /**
@@ -946,9 +950,9 @@ public class TopologyBuilder {
      * NOTE this function would not needed by developers working with the processor APIs, but only used
      * for the high-level DSL parsing functionalities.
      */
-    public synchronized void updateSubscriptions(final InternalTopologyBuilder.SubscriptionUpdates subscriptionUpdates,
+    public synchronized void updateSubscriptions(final SubscriptionUpdates subscriptionUpdates,
                                                  final String threadId) {
-        internalTopologyBuilder.updateSubscriptions(subscriptionUpdates, "stream-thread [" + threadId + "] ");
+        internalTopologyBuilder.updateSubscribedTopics(new HashSet<>(subscriptionUpdates.getUpdates()), "stream-thread [" + threadId + "] ");
     }
 
 }

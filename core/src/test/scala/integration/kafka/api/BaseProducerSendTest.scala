@@ -22,7 +22,6 @@ import java.util.Properties
 import java.util.concurrent.TimeUnit
 
 import collection.JavaConverters._
-import kafka.admin.AdminUtils
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
 import kafka.server.KafkaConfig
@@ -375,7 +374,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     val existingAssignment = zkUtils.getReplicaAssignmentForTopics(List(topic)).map {
       case (topicPartition, replicas) => topicPartition.partition -> replicas
     }
-    AdminUtils.addPartitions(zkUtils, topic, existingAssignment, AdminUtils.getBrokerMetadatas(zkUtils), 2)
+    adminZkClient.addPartitions(topic, existingAssignment, adminZkClient.getBrokerMetadatas(), 2)
     // read metadata from a broker and verify the new topic partitions exist
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0)
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 1)

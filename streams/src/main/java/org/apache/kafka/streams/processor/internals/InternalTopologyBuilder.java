@@ -841,6 +841,10 @@ public class InternalTopologyBuilder {
         return nodeGroups;
     }
 
+    public synchronized ProcessorTopology build() {
+        return build((Integer) null);
+    }
+
     public synchronized ProcessorTopology build(final Integer topicGroupId) {
         final Set<String> nodeGroup;
         if (topicGroupId != null) {
@@ -1818,13 +1822,13 @@ public class InternalTopologyBuilder {
 
         private final Set<String> updatedTopicSubscriptions = new HashSet<>();
 
-        private  void updateTopics(Collection<String> topicNames) {
+        private void updateTopics(final Collection<String> topicNames) {
             updatedTopicSubscriptions.clear();
             updatedTopicSubscriptions.addAll(topicNames);
         }
 
         public Collection<String> getUpdates() {
-            return Collections.unmodifiableSet(new HashSet<>(updatedTopicSubscriptions));
+            return Collections.unmodifiableSet(updatedTopicSubscriptions);
         }
 
         boolean hasUpdates() {
@@ -1833,14 +1837,12 @@ public class InternalTopologyBuilder {
 
         @Override
         public String toString() {
-            return "SubscriptionUpdates{" +
-                    "updatedTopicSubscriptions=" + updatedTopicSubscriptions +
-                    '}';
+            return String.format("SubscriptionUpdates{updatedTopicSubscriptions=%s}", updatedTopicSubscriptions);
         }
     }
 
-    void updateSubscribedTopics(Set<String> topics, String logPrefix) {
-        SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
+    public void updateSubscribedTopics(final Set<String> topics, final String logPrefix) {
+        final SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
         log.debug("{}found {} topics possibly matching regex", topics, logPrefix);
         // update the topic groups with the returned subscription set for regex pattern subscriptions
         subscriptionUpdates.updateTopics(topics);

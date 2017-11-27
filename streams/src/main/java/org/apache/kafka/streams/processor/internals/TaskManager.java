@@ -220,7 +220,7 @@ class TaskManager {
 
         final HashSet<TaskId> tasks = new HashSet<>();
 
-        final File[] stateDirs = taskCreator.stateDirectory.listTaskDirectories();
+        final File[] stateDirs = taskCreator.stateDirectory().listTaskDirectories();
         if (stateDirs != null) {
             for (final File dir : stateDirs) {
                 try {
@@ -244,7 +244,7 @@ class TaskManager {
     }
 
     InternalTopologyBuilder builder() {
-        return taskCreator.builder;
+        return taskCreator.builder();
     }
 
     /**
@@ -460,14 +460,6 @@ class TaskManager {
     }
 
     // the following functions are for testing only
-    Map<HostInfo, Set<TopicPartition>> partitionsByHostState() {
-        return partitionsByHostState;
-    }
-
-    Cluster clusterMetadata() {
-        return cluster;
-    }
-
     Map<TaskId, Set<TopicPartition>> assignedActiveTasks() {
         return assignedActiveTasks;
     }
