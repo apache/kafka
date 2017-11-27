@@ -1822,7 +1822,7 @@ public class InternalTopologyBuilder {
 
         private final Set<String> updatedTopicSubscriptions = new HashSet<>();
 
-        private void updateTopics(Collection<String> topicNames) {
+        private void updateTopics(final Collection<String> topicNames) {
             updatedTopicSubscriptions.clear();
             updatedTopicSubscriptions.addAll(topicNames);
         }
@@ -1837,14 +1837,12 @@ public class InternalTopologyBuilder {
 
         @Override
         public String toString() {
-            return "SubscriptionUpdates{" +
-                    "updatedTopicSubscriptions=" + updatedTopicSubscriptions +
-                    '}';
+            return String.format("SubscriptionUpdates{updatedTopicSubscriptions=%s}", updatedTopicSubscriptions);
         }
     }
 
-    public void updateSubscribedTopics(Set<String> topics, String logPrefix) {
-        SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
+    public void updateSubscribedTopics(final Set<String> topics, final String logPrefix) {
+        final SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
         log.debug("{}found {} topics possibly matching regex", topics, logPrefix);
         // update the topic groups with the returned subscription set for regex pattern subscriptions
         subscriptionUpdates.updateTopics(topics);

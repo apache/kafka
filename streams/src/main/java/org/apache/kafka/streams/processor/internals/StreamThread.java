@@ -612,7 +612,8 @@ public class StreamThread extends Thread {
             threadProducer = clientSupplier.getProducer(producerConfigs);
         }
 
-        StreamsMetricsThreadImpl streamsMetrics = new StreamsMetricsThreadImpl(metrics,
+        StreamsMetricsThreadImpl streamsMetrics = new StreamsMetricsThreadImpl(
+                metrics,
                 "stream-metrics",
                 "thread." + threadClientId,
                 Collections.singletonMap("client-id", threadClientId));
