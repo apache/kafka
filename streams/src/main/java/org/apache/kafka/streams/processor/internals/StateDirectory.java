@@ -256,7 +256,10 @@ public class StateDirectory {
     public synchronized void cleanRemovedTasks(final long cleanupDelayMs) {
         try {
             cleanRemovedTasks(cleanupDelayMs, true);
-        } catch (final IOException cannotHappen) { /* swallowException is set to true */ }
+        } catch (final IOException cannotHappen) {
+            // dummy log to make findbugs happy
+            log.error("{} Failed to delete the state directory due to an unexpected exception.", logPrefix(), cannotHappen);
+        }
     }
 
     private synchronized void cleanRemovedTasks(final long cleanupDelayMs,
@@ -276,7 +279,7 @@ public class StateDirectory {
                         long now = time.milliseconds();
                         long lastModifiedMs = taskDir.lastModified();
                         if (now > lastModifiedMs + cleanupDelayMs) {
-                            log.info("{} Deleting obsolete state directory {} for task {} as {}ms has elapsed (cleanup delay is {}ms)", logPrefix(), dirName, id, now - lastModifiedMs, cleanupDelayMs);
+                            log.info("{} Deleting obsolete state directory {} for task {} as {}ms has elapsed (cleanup delay is {}ms).", logPrefix(), dirName, id, now - lastModifiedMs, cleanupDelayMs);
                             Utils.delete(taskDir);
                         }
                     }
@@ -286,12 +289,12 @@ public class StateDirectory {
                     if (firstException == null) {
                         firstException = e;
                     }
-                    log.error("{} Failed to delete the state directory due to an unexpected exception", logPrefix(), e);
+                    log.error("{} Failed to delete the state directory due to an unexpected exception.", logPrefix(), e);
                 } finally {
                     try {
                         unlock(id);
                     } catch (IOException e) {
-                        log.error("{} Failed to release the state directory lock", logPrefix());
+                        log.error("{} Failed to release the state directory lock.", logPrefix());
                     }
                 }
             }
