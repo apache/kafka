@@ -224,25 +224,17 @@ public class StateDirectory {
     }
 
     public synchronized void clean() {
-        StreamsException firstException = null;
-
         try {
-            cleanRemovedTasks(0, false);
-        } catch (IOException e) {
+            cleanRemovedTasks(0, true);
+        } catch (final Exception e) {
             // this is already logged within cleanRemovedTasks
-            firstException = new StreamsException(e);
+           throw new StreamsException(e);
         }
         try {
             Utils.delete(globalStateDir().getAbsoluteFile());
-        } catch (IOException e) {
+        } catch (final IOException e) {
             log.error("{} Failed to delete global state directory due to an unexpected exception", logPrefix(), e);
-            if (firstException == null) {
-                firstException = new StreamsException(e);
-            }
-        }
-
-        if (firstException != null) {
-            throw firstException;
+            throw new StreamsException(e);
         }
     }
 
@@ -255,53 +247,62 @@ public class StateDirectory {
      */
     public synchronized void cleanRemovedTasks(final long cleanupDelayMs) {
         try {
-            cleanRemovedTasks(cleanupDelayMs, true);
-        } catch (final IOException cannotHappen) {
-            // dummy log to make findbugs happy
-            log.error("{} Failed to delete the state directory due to an unexpected exception.", logPrefix(), cannotHappen);
+            cleanRemovedTasks(cleanupDelayMs, false);
+        } catch (final Exception cannotHappen) {
+            throw new IllegalStateException("Should have swallowed exception.", cannotHappen);
         }
     }
 
     private synchronized void cleanRemovedTasks(final long cleanupDelayMs,
-                                                final boolean swallowException) throws IOException {
+                                                final boolean manualUserCall) throws Exception {
         final File[] taskDirs = listTaskDirectories();
         if (taskDirs == null || taskDirs.length == 0) {
             return; // nothing to do
         }
 
-        IOException firstException = null;
-        for (File taskDir : taskDirs) {
+        for (final File taskDir : taskDirs) {
             final String dirName = taskDir.getName();
-            TaskId id = TaskId.parse(dirName);
+            final TaskId id = TaskId.parse(dirName);
             if (!locks.containsKey(id)) {
                 try {
                     if (lock(id)) {
-                        long now = time.milliseconds();
-                        long lastModifiedMs = taskDir.lastModified();
-                        if (now > lastModifiedMs + cleanupDelayMs) {
-                            log.info("{} Deleting obsolete state directory {} for task {} as {}ms has elapsed (cleanup delay is {}ms).", logPrefix(), dirName, id, now - lastModifiedMs, cleanupDelayMs);
+                        final long now = time.milliseconds();
+                        final long lastModifiedMs = taskDir.lastModified();
+                        if (now > lastModifiedMs + cleanupDelayMs || manualUserCall) {
+                            if (!manualUserCall) {
+                                log.info(
+                                    "{} Deleting obsolete state directory {} for task {} as {}ms has elapsed (cleanup delay is {}ms).",
+                                    logPrefix(),
+                                    dirName,
+                                    id,
+                                    now - lastModifiedMs,
+                                    cleanupDelayMs);
+                            }
                             Utils.delete(taskDir);
                         }
                     }
-                } catch (OverlappingFileLockException e) {
+                } catch (final OverlappingFileLockException e) {
                     // locked by another thread
-                } catch (IOException e) {
-                    if (firstException == null) {
-                        firstException = e;
+                    if (manualUserCall) {
+                        log.error("{} Failed to get the state directory lock.", logPrefix(), e);
+                        throw e;
                     }
-                    log.error("{} Failed to delete the state directory due to an unexpected exception.", logPrefix(), e);
+                } catch (final IOException e) {
+                    log.error("{} Failed to delete the state directory.", logPrefix(), e);
+                    if (manualUserCall) {
+                        throw e;
+                    }
                 } finally {
                     try {
                         unlock(id);
-                    } catch (IOException e) {
+                    } catch (final IOException e) {
                         log.error("{} Failed to release the state directory lock.", logPrefix());
+                        if (manualUserCall) {
+                            throw e;
+                        }
                     }
                 }
             }
-        }
-
-        if (!swallowException && firstException != null) {
-            throw firstException;
         }
     }
 
