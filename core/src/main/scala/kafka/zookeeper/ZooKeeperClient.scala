@@ -396,6 +396,13 @@ sealed trait AsyncResponse {
   /** Return None if the result code is OK and KeeperException otherwise. */
   def resultException: Option[KeeperException] =
     if (resultCode == Code.OK) None else Some(KeeperException.create(resultCode, path))
+
+  /**
+   * Throw the exception if there is one
+   */
+  def maybeThrow(): Unit = {
+    resultException.foreach(e => throw e)
+  }
 }
 case class CreateResponse(resultCode: Code, path: String, ctx: Option[Any], name: String) extends AsyncResponse
 case class DeleteResponse(resultCode: Code, path: String, ctx: Option[Any]) extends AsyncResponse

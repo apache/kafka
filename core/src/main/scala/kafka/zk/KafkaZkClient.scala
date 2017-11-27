@@ -53,7 +53,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
   def createSequentialPersistentPath(path: String, data: String = ""): String = {
     val createRequest = CreateRequest(path, data.getBytes("UTF-8"), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
     val createResponse = retryRequestUntilConnected(createRequest)
-    createResponse.resultException.foreach(e => throw e)
+    createResponse.maybeThrow
     createResponse.path
   }
 
@@ -229,7 +229,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     val setDataResponse = set(configData)
     setDataResponse.resultCode match {
       case Code.NONODE => create(configData)
-      case _ => setDataResponse.resultException.foreach(e => throw e)
+      case _ => setDataResponse.maybeThrow
     }
   }
 
@@ -251,9 +251,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     val path = ConfigEntityChangeNotificationSequenceZNode.createPath
     val createRequest = CreateRequest(path, ConfigEntityChangeNotificationSequenceZNode.encode(sanitizedEntityPath), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
     val createResponse = retryRequestUntilConnected(createRequest)
-    if (createResponse.resultCode != Code.OK) {
-      createResponse.resultException.foreach(e => throw e)
-    }
+    createResponse.maybeThrow
   }
 
   /**
@@ -324,9 +322,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    */
   def setTopicAssignment(topic: String, assignment: Map[TopicPartition, Seq[Int]]) = {
     val setDataResponse = setTopicAssignmentRaw(topic, assignment)
-    if (setDataResponse.resultCode != Code.OK) {
-      setDataResponse.resultException.foreach(e => throw e)
-    }
+    setDataResponse.maybeThrow
   }
 
   /**
@@ -379,7 +375,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     if (getChildrenResponse.resultCode == Code.OK) {
       deleteLogDirEventNotifications(getChildrenResponse.children)
     } else if (getChildrenResponse.resultCode != Code.NONODE) {
-      getChildrenResponse.resultException.foreach(e => throw e)
+      getChildrenResponse.maybeThrow
     }
   }
 
@@ -644,8 +640,8 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     setDataResponse.resultCode match {
       case Code.NONODE =>
         val createDataResponse = create(reassignmentData)
-        createDataResponse.resultException.foreach(e => throw e)
-      case _ => setDataResponse.resultException.foreach(e => throw e)
+        createDataResponse.maybeThrow
+      case _ => setDataResponse.maybeThrow
     }
   }
 
@@ -658,10 +654,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     val createRequest = CreateRequest(ReassignPartitionsZNode.path, ReassignPartitionsZNode.encode(reassignment),
       acls(ReassignPartitionsZNode.path), CreateMode.PERSISTENT)
     val createResponse = retryRequestUntilConnected(createRequest)
-
-    if (createResponse.resultCode != Code.OK) {
-      throw createResponse.resultException.get
-    }
+    createResponse.maybeThrow
   }
 
   /**
@@ -766,7 +759,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     if (getChildrenResponse.resultCode == Code.OK) {
       deleteIsrChangeNotifications(getChildrenResponse.children.map(IsrChangeNotificationSequenceZNode.sequenceNumber))
     } else if (getChildrenResponse.resultCode != Code.NONODE) {
-      getChildrenResponse.resultException.foreach(e => throw e)
+      getChildrenResponse.maybeThrow
     }
   }
 
@@ -930,7 +923,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     val path = AclChangeNotificationSequenceZNode.createPath
     val createRequest = CreateRequest(path, AclChangeNotificationSequenceZNode.encode(resourceName), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
     val createResponse = retryRequestUntilConnected(createRequest)
-    createResponse.resultException.foreach(e => throw e)
+    createResponse.maybeThrow
   }
 
   def propagateLogDirEvent(brokerId: Int) {
@@ -949,7 +942,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     if (getChildrenResponse.resultCode == Code.OK) {
       deleteAclChangeNotifications(getChildrenResponse.children)
     } else if (getChildrenResponse.resultCode != Code.NONODE) {
-      getChildrenResponse.resultException.foreach(e => throw e)
+      getChildrenResponse.maybeThrow
     }
   }
 
@@ -965,7 +958,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     val deleteResponses = retryRequestsUntilConnected(deleteRequests)
     deleteResponses.foreach { deleteResponse =>
       if (deleteResponse.resultCode != Code.OK && deleteResponse.resultCode != Code.NONODE) {
-        deleteResponse.resultException.foreach(e => throw e)
+        deleteResponse.maybeThrow
       }
     }
   }
@@ -1130,7 +1123,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     if (setDataResponse.resultCode == Code.NONODE) {
       createConsumerOffset(group, topicPartition, offset)
     } else {
-      setDataResponse.resultException.foreach(e => throw e)
+      setDataResponse.maybeThrow
     }
   }
 
@@ -1202,13 +1195,13 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     var createResponse = retryRequestUntilConnected(createRequest)
 
     if (throwIfPathExists && createResponse.resultCode == Code.NODEEXISTS) {
-      createResponse.resultException.foreach(e => throw e)
+      createResponse.maybeThrow
     } else if (createResponse.resultCode == Code.NONODE) {
       createRecursive0(parentPath(path))
       createResponse = retryRequestUntilConnected(createRequest)
-      createResponse.resultException.foreach(e => throw e)
+      createResponse.maybeThrow
     } else if (createResponse.resultCode != Code.NODEEXISTS)
-      createResponse.resultException.foreach(e => throw e)
+      createResponse.maybeThrow
 
   }
 
