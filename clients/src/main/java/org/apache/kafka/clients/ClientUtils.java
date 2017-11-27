@@ -19,7 +19,6 @@ package org.apache.kafka.clients;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.ChannelBuilders;
 import org.apache.kafka.common.security.JaasContext;
@@ -71,8 +70,6 @@ public class ClientUtils {
             try {
                 c.close();
             } catch (Throwable t) {
-                if (t instanceof InterruptException)
-                    Thread.currentThread().interrupt();
                 firstException.compareAndSet(null, t);
                 log.error("Failed to close " + name, t);
             }
