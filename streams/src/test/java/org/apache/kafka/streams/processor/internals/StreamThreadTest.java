@@ -392,10 +392,6 @@ public class StreamThreadTest {
         thread.runOnce(-1);
 
         assertEquals(thread.tasks().size(), clientSupplier.producers.size());
-        final Iterator it = clientSupplier.producers.iterator();
-        for (final Task task : thread.tasks().values()) {
-            assertSame(it.next(), ((RecordCollectorImpl) ((StreamTask) task).recordCollector()).producer());
-        }
         assertSame(clientSupplier.consumer, thread.consumer);
         assertSame(clientSupplier.restoreConsumer, thread.restoreConsumer);
     }
