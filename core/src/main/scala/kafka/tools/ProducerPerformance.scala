@@ -31,7 +31,6 @@ import java.math.BigInteger
 import java.nio.charset.StandardCharsets
 
 import org.apache.kafka.common.utils.Utils
-import org.slf4j.LoggerFactory
 
 /**
  * Load test for the producer

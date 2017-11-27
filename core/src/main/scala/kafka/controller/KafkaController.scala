@@ -498,16 +498,8 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     }
   }
 
-  private def watchIsrChangesForReassignedPartition(partition: TopicPartition,
-                                                    reassignedPartitionContext: ReassignedPartitionsContext) {
-    val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(this, eventManager, partition)
-    reassignedPartitionContext.reassignIsrChangeHandler = Some(reassignIsrChangeHandler)
-    // register listener on the leader and isr path to wait until they catch up with the current leader
-    zkClient.registerZNodeChangeHandler(reassignIsrChangeHandler)
-  }
-
   private def initiateReassignReplicasForTopicPartition(topicPartition: TopicPartition,
-                                                reassignedPartitionContext: ReassignedPartitionsContext) {
+                                                        reassignedPartitionContext: ReassignedPartitionsContext) {
     val newReplicas = reassignedPartitionContext.newReplicas
     val topic = topicPartition.topic
     try {
@@ -520,7 +512,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
           } else {
             info(s"Handling reassignment of partition $topicPartition to new replicas ${newReplicas.mkString(",")}")
             // first register ISR change listener
-            watchIsrChangesForReassignedPartition(topicPartition, reassignedPartitionContext)
+            reassignedPartitionContext.registerReassignIsrChangeHandler(zkClient)
             controllerContext.partitionsBeingReassigned.put(topicPartition, reassignedPartitionContext)
             // mark topic ineligible for deletion for the partitions being reassigned
             topicDeletionManager.markTopicIneligibleForDeletion(Set(topic))
@@ -641,7 +633,10 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     }.keys
     reassignedPartitions.foreach(removePartitionFromReassignedPartitions)
     val partitionsToReassign = partitionsBeingReassigned -- reassignedPartitions
-    controllerContext.partitionsBeingReassigned ++= partitionsToReassign.mapValues(new ReassignedPartitionsContext(_))
+    controllerContext.partitionsBeingReassigned ++= partitionsToReassign.map { case (tp, newReplicas) =>
+      val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(this, eventManager, tp)
+      tp -> new ReassignedPartitionsContext(newReplicas, reassignIsrChangeHandler)
+    }
     info(s"Partitions being reassigned: $partitionsBeingReassigned")
     info(s"Partitions already reassigned: $reassignedPartitions")
     info(s"Resuming reassignment of partitions: $partitionsToReassign")
@@ -782,15 +777,12 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
   private[controller] def unregisterPartitionModificationsHandlers(topics: Seq[String]) = {
     topics.foreach { topic =>
-      partitionModificationsHandlers.remove(topic)
-        .foreach(handler => zkClient.unregisterZNodeChangeHandler(handler.path))
+      partitionModificationsHandlers.remove(topic).foreach(handler => zkClient.unregisterZNodeChangeHandler(handler.path))
     }
   }
 
   private def unregisterPartitionReassignmentIsrChangeHandlers() {
-    controllerContext.partitionsBeingReassigned.values.foreach { reassignContext =>
-      reassignContext.reassignIsrChangeHandler.map(_.path).foreach(zkClient.unregisterZNodeChangeHandler)
-    }
+    controllerContext.partitionsBeingReassigned.values.foreach(_.unregisterReassignIsrChangeHandler(zkClient))
   }
 
   private def readControllerEpochFromZooKeeper() {
@@ -805,8 +797,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
   private def removePartitionFromReassignedPartitions(topicPartition: TopicPartition) {
     controllerContext.partitionsBeingReassigned.get(topicPartition).foreach { reassignContext =>
-      // stop watching the ISR changes for this partition
-      reassignContext.reassignIsrChangeHandler.map(_.path).foreach(zkClient.unregisterZNodeChangeHandler)
+      reassignContext.unregisterReassignIsrChangeHandler(zkClient)
     }
 
     val updatedPartitionsBeingReassigned = controllerContext.partitionsBeingReassigned - topicPartition
@@ -1291,12 +1282,14 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       if (zkClient.registerZNodeChangeHandlerAndCheckExistence(partitionReassignmentHandler)) {
         val partitionReassignment = zkClient.getPartitionReassignment
         val partitionsToBeReassigned = partitionReassignment -- controllerContext.partitionsBeingReassigned.keys
-        partitionsToBeReassigned.foreach { case (tp, context) =>
+        partitionsToBeReassigned.foreach { case (tp, newReplicas) =>
           if (topicDeletionManager.isTopicQueuedUpForDeletion(tp.topic)) {
             error(s"Skipping reassignment of $tp since the topic is currently being deleted")
             removePartitionFromReassignedPartitions(tp)
           } else {
-            initiateReassignReplicasForTopicPartition(tp, ReassignedPartitionsContext(context))
+            val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(KafkaController.this, eventManager,
+              tp)
+            initiateReassignReplicasForTopicPartition(tp, ReassignedPartitionsContext(newReplicas, reassignIsrChangeHandler))
           }
         }
       }
@@ -1497,7 +1490,15 @@ class ControllerChangeHandler(controller: KafkaController, eventManager: Control
 }
 
 case class ReassignedPartitionsContext(var newReplicas: Seq[Int] = Seq.empty,
-                                       var reassignIsrChangeHandler: Option[PartitionReassignmentIsrChangeHandler] = None)
+                                       val reassignIsrChangeHandler: PartitionReassignmentIsrChangeHandler) {
+
+  def registerReassignIsrChangeHandler(zkClient: KafkaZkClient): Unit =
+    zkClient.registerZNodeChangeHandler(reassignIsrChangeHandler)
+
+  def unregisterReassignIsrChangeHandler(zkClient: KafkaZkClient): Unit =
+    zkClient.unregisterZNodeChangeHandler(reassignIsrChangeHandler.path)
+
+}
 
 case class PartitionAndReplica(topicPartition: TopicPartition, replica: Int) {
   def topic: String = topicPartition.topic

@@ -21,7 +21,7 @@ import java.util.Properties
 
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
-import kafka.controller.{LeaderIsrAndControllerEpoch, ReassignedPartitionsContext}
+import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.log.LogConfig
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
 import kafka.security.auth.{Acl, Resource, ResourceType}
@@ -678,14 +678,6 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    */
   def reassignPartitionsInProgress(): Boolean = {
     pathExists(ReassignPartitionsZNode.path)
-  }
-
-  /**
-   * Gets the partitions being reassigned for given topics
-   * @return ReassignedPartitionsContexts for each topic which are being reassigned.
-   */
-  def getPartitionsBeingReassigned(): Map[TopicPartition, ReassignedPartitionsContext] = {
-    getPartitionReassignment.mapValues(replicas => ReassignedPartitionsContext(replicas))
   }
 
   /**
