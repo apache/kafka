@@ -17,6 +17,8 @@
 package org.apache.kafka.connect.runtime.rest.resources;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.distributed.RebalanceNeededException;
@@ -47,9 +49,7 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriBuilder;
 import java.net.URI;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -109,7 +109,8 @@ public class ConnectorsResource {
                                       final @QueryParam("forward") Boolean forward) throws Throwable {
         FutureCallback<ConnectorInfo> cb = new FutureCallback<>();
         herder.connectorInfo(connector, cb);
-        return completeOrForwardRequest(cb, "/connectors/" + connector, "GET", null, forward);
+        ConnectorInfo connectorInfo = completeOrForwardRequest(cb, "/connectors/" + connector, "GET", null, forward);
+        return new ConnectorInfo(connectorInfo.name(), maskCredentials(connectorInfo.config()), connectorInfo.tasks(), connectorInfo.type());
     }
 
     @GET
@@ -118,7 +119,8 @@ public class ConnectorsResource {
                                                   final @QueryParam("forward") Boolean forward) throws Throwable {
         FutureCallback<Map<String, String>> cb = new FutureCallback<>();
         herder.connectorConfig(connector, cb);
-        return completeOrForwardRequest(cb, "/connectors/" + connector + "/config", "GET", null, forward);
+        Map<String, String> config = completeOrForwardRequest(cb, "/connectors/" + connector + "/config", "GET", null, forward);
+        return maskCredentials(config);
     }
 
     @GET
@@ -177,8 +179,13 @@ public class ConnectorsResource {
                                          final @QueryParam("forward") Boolean forward) throws Throwable {
         FutureCallback<List<TaskInfo>> cb = new FutureCallback<>();
         herder.taskConfigs(connector, cb);
-        return completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks", "GET", null, new TypeReference<List<TaskInfo>>() {
-        }, forward);
+        List<TaskInfo> taskInfoList = completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks", "GET", null,
+                new TypeReference<List<TaskInfo>>() {}, forward);
+        List<TaskInfo> maskedTaskInfoList = new ArrayList<>();
+        for (TaskInfo taskInfo : taskInfoList) {
+            maskedTaskInfoList.add(new TaskInfo(taskInfo.id(), maskCredentials(taskInfo.config())));
+        }
+        return maskedTaskInfoList;
     }
 
     @POST
@@ -287,6 +294,32 @@ public class ConnectorsResource {
     private <T> T completeOrForwardRequest(FutureCallback<T> cb, String path, String method,
                                            Object body, Boolean forward) throws Throwable {
         return completeOrForwardRequest(cb, path, method, body, null, new IdentityTranslator<T>(), forward);
+    }
+
+    private <T> T loadConnectorClass(final String className, final Class<T> type) {
+        try {
+            return type.cast(Class.forName(className).newInstance());
+        } catch (InstantiationException | IllegalAccessException | ClassNotFoundException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    // go through config parameters and replace password field value with "*"
+    // this return a new map, instead of making change to the original object
+    private Map<String, String> maskCredentials(Map<String, String> config) {
+        Connector connectorClass = loadConnectorClass(config.get("connector.class"), Connector.class);
+        Map<String, ConfigDef.ConfigKey> definedConfigKeys = connectorClass.config().configKeys();
+        Map<String, String> newConfig = new HashMap<>();
+
+        for (String key : config.keySet()) {
+            if (definedConfigKeys.containsKey(key) && definedConfigKeys.get(key).type.equals(ConfigDef.Type.PASSWORD)) {
+                newConfig.put(key, "*********");
+            } else {
+                newConfig.put(key, config.get(key));
+            }
+        }
+
+        return newConfig;
     }
 
     private interface Translator<T, U> {
