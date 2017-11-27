@@ -57,9 +57,11 @@ public class Histogram {
         if (value >= counts.length) {
             value = counts.length - 1;
         }
-        int curCount = counts[value];
-        if (curCount < Integer.MAX_VALUE) {
-            counts[value] = counts[value] + 1;
+        synchronized (this) {
+            int curCount = counts[value];
+            if (curCount < Integer.MAX_VALUE) {
+                counts[value] = counts[value] + 1;
+            }
         }
     }
 
@@ -134,6 +136,10 @@ public class Histogram {
     }
 
     public Summary summarize(float[] percentiles) {
+        int[] countsCopy = new int[counts.length];
+        synchronized (this) {
+            System.arraycopy(counts, 0, countsCopy, 0, counts.length);
+        }
         // Verify that the percentiles array is sorted and positive.
         float prev = 0f;
         for (int i = 0; i < percentiles.length; i++) {
@@ -149,18 +155,20 @@ public class Histogram {
         // Find out how many total samples we have, and what the average is.
         long numSamples = 0;
         float total = 0f;
-        for (int i = 0; i < counts.length; i++) {
-            long count = counts[i];
+        for (int i = 0; i < countsCopy.length; i++) {
+            long count = countsCopy[i];
             numSamples = numSamples + count;
             total = total + (i * count);
         }
         float average = total / numSamples;
 
-        List<PercentileSummary> percentileSummaries = summarizePercentiles(percentiles, numSamples);
+        List<PercentileSummary> percentileSummaries =
+            summarizePercentiles(countsCopy, percentiles, numSamples);
         return new Summary(numSamples, average, percentileSummaries);
     }
 
-    private List<PercentileSummary> summarizePercentiles(float[] percentiles, long numSamples) {
+    private List<PercentileSummary> summarizePercentiles(int[] countsCopy, float[] percentiles,
+                                                         long numSamples) {
         if (percentiles.length == 0) {
             return Collections.emptyList();
         }
@@ -168,13 +176,13 @@ public class Histogram {
         int i = 0, j = 0;
         long seen = 0, next = (long) (numSamples * percentiles[0]);
         while (true) {
-            if (i == counts.length - 1) {
+            if (i == countsCopy.length - 1) {
                 for (; j < percentiles.length; j++) {
                     summaries.add(new PercentileSummary(percentiles[j], i));
                 }
                 return summaries;
             }
-            seen += counts[i];
+            seen += countsCopy[i];
             while (seen >= next) {
                 summaries.add(new PercentileSummary(percentiles[j], i));
                 j++;

@@ -28,6 +28,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
@@ -57,6 +58,8 @@ public class ProduceBenchWorker implements TaskWorker {
 
     private static final short REPLICATION_FACTOR = 3;
 
+    private static final int MESSAGE_SIZE = 512;
+
     private final String id;
 
     private final ProduceBenchSpec spec;
@@ -78,7 +81,7 @@ public class ProduceBenchWorker implements TaskWorker {
     public void start(Platform platform, AtomicReference<String> status,
                       KafkaFutureImpl<String> doneFuture) throws Exception {
         if (!running.compareAndSet(false, true)) {
-            throw new IllegalStateException();
+            throw new IllegalStateException("ProducerBenchWorker is already running.");
         }
         log.info("{}: Activating ProduceBenchWorker.", id);
         this.executor = Executors.newScheduledThreadPool(1,
@@ -103,10 +106,10 @@ public class ProduceBenchWorker implements TaskWorker {
         public Void call() throws Exception {
             try {
                 if (spec.activeTopics() == 0) {
-                    throw new InvalidPartitionsException("Can't have activeTopics == 0.");
+                    throw new ConfigException("Can't have activeTopics == 0.");
                 }
                 if (spec.totalTopics() < spec.activeTopics()) {
-                    throw new InvalidPartitionsException(String.format(
+                    throw new ConfigException(String.format(
                         "activeTopics was %d, but totalTopics was only %d.  activeTopics must " +
                             "be less than or equal to totalTopics.", spec.activeTopics(), spec.totalTopics()));
                 }
@@ -127,7 +130,7 @@ public class ProduceBenchWorker implements TaskWorker {
                 Properties props = new Properties();
                 props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, spec.bootstrapServers());
                 try (AdminClient adminClient = AdminClient.create(props)) {
-                    TreeSet<String> topicsToCreate = new TreeSet<>();
+                    List<String> topicsToCreate = new ArrayList<>();
                     for (int i = 0; i < spec.totalTopics(); i++) {
                         topicsToCreate.add(topicIndexToName(i));
                     }
@@ -135,9 +138,8 @@ public class ProduceBenchWorker implements TaskWorker {
                     List<Future<Void>> futures = new ArrayList<>();
                     while (!topicsToCreate.isEmpty()) {
                         List<NewTopic> newTopics = new ArrayList<>();
-                        for (int i = 0; i < MAX_BATCH_SIZE; i++) {
-                            String topic = topicsToCreate.pollFirst();
-                            topicsToCreate.remove(topic);
+                        for (int i = 0; (i < MAX_BATCH_SIZE) && !topicsToCreate.isEmpty(); i++) {
+                            String topic = topicsToCreate.remove(0);
                             newTopics.add(new NewTopic(topic, 1, REPLICATION_FACTOR));
                         }
                         futures.add(adminClient.createTopics(newTopics).all());
@@ -169,6 +171,9 @@ public class ProduceBenchWorker implements TaskWorker {
             long now = Time.SYSTEM.milliseconds();
             long durationMs = now - startMs;
             sendRecords.recordDuration(durationMs);
+            if (exception != null) {
+                log.error("SendRecordsCallback: error", exception);
+            }
         }
     }
 
@@ -192,17 +197,11 @@ public class ProduceBenchWorker implements TaskWorker {
             try {
                 Properties props = new Properties();
                 props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, spec.bootstrapServers());
-//                props.put(ProducerConfig.BATCH_SIZE_CONFIG, 16384);
-//                props.put(ProducerConfig.ACKS_CONFIG, 1);
-//                props.put(ProducerConfig.LINGER_MS_CONFIG, 0);
-//                props.put(ProducerConfig.SEND_BUFFER_CONFIG, 128 * 1024);
-//                props.put(ProducerConfig.RECONNECT_BACKOFF_MS_CONFIG, 50);
-//                props.put(ProducerConfig.BUFFER_MEMORY_CONFIG, 32 * 1024 * 1024L);
                 for (Map.Entry<String, String> entry : spec.producerConf().entrySet()) {
                     props.setProperty(entry.getKey(), entry.getValue());
                 }
-                byte[] key = new byte[512];
-                byte[] value = new byte[512];
+                byte[] key = new byte[MESSAGE_SIZE];
+                byte[] value = new byte[MESSAGE_SIZE];
                 KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(
                             props, new ByteArraySerializer(), new ByteArraySerializer());
                 Future<RecordMetadata> future = null;
@@ -224,23 +223,17 @@ public class ProduceBenchWorker implements TaskWorker {
                 abort("SendRecords", e);
             } finally {
                 statusUpdaterFuture.cancel(false);
-                long numSamples = 0;
-                synchronized (histogram) {
-                    numSamples = histogram.summarize().numSamples();
-                }
-                long curTimeMs = Time.SYSTEM.milliseconds();
                 new StatusUpdater(histogram).run();
+                long curTimeMs = Time.SYSTEM.milliseconds();
                 log.info("Sent {} total record(s) in {} ms.  status: {}",
-                    numSamples, curTimeMs - startTimeMs, status.get());
+                    histogram.summarize().numSamples(), curTimeMs - startTimeMs, status.get());
             }
             doneFuture.complete("");
             return null;
         }
 
         void recordDuration(long durationMs) {
-            synchronized (histogram) {
-                histogram.add(durationMs);
-            }
+            histogram.add(durationMs);
         }
     }
 
@@ -259,10 +252,7 @@ public class ProduceBenchWorker implements TaskWorker {
         @Override
         public void run() {
             try {
-                Histogram.Summary summary;
-                synchronized (histogram) {
-                    summary = histogram.summarize(percentiles);
-                }
+                Histogram.Summary summary = histogram.summarize(percentiles);
                 StatusData statusData = new StatusData(summary.numSamples(), summary.average(),
                     summary.percentiles().get(0).value(),
                     summary.percentiles().get(1).value(),
@@ -324,7 +314,7 @@ public class ProduceBenchWorker implements TaskWorker {
     @Override
     public void stop(Platform platform) throws Exception {
         if (!running.compareAndSet(true, false)) {
-            throw new IllegalStateException();
+            throw new IllegalStateException("ProduceBenchWorker is not running.");
         }
         log.info("{}: Deactivating ProduceBenchWorker.", id);
         doneFuture.complete("");
