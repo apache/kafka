@@ -146,12 +146,8 @@ class Segments {
 
     List<Segment> allSegments() {
         final List<Segment> segments = new ArrayList<>();
-        boolean notSorted = false;
-        long previousId = -1;
         for (Segment segment : this.segments.values()) {
             if (segment.isOpen()) {
-                if (previousId > segment.id) notSorted = true;
-                previousId = segment.id;
                 try {
                     segments.add(segment);
                 } catch (InvalidStateStoreException ise) {
@@ -159,7 +155,7 @@ class Segments {
                 }
             }
         }
-        if (notSorted) Collections.sort(segments);
+        Collections.sort(segments);
         return segments;
     }
     
