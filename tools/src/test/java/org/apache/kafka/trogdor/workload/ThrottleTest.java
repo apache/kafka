@@ -31,7 +31,7 @@ public class ThrottleTest {
         final MockTime time;
 
         ThrottleMock(MockTime time, int maxPerSec) {
-            super(maxPerSec);
+            super(maxPerSec, 100);
             this.time = time;
         }
 
@@ -57,14 +57,14 @@ public class ThrottleTest {
         Assert.assertFalse(throttle.increment());
         Assert.assertEquals(0, time.milliseconds());
         Assert.assertTrue(throttle.increment());
-        Assert.assertEquals(1000, time.milliseconds());
-        time.sleep(500);
+        Assert.assertEquals(100, time.milliseconds());
+        time.sleep(50);
         Assert.assertFalse(throttle.increment());
-        Assert.assertEquals(1500, time.milliseconds());
+        Assert.assertEquals(150, time.milliseconds());
         Assert.assertFalse(throttle.increment());
-        Assert.assertEquals(1500, time.milliseconds());
+        Assert.assertEquals(150, time.milliseconds());
         Assert.assertTrue(throttle.increment());
-        Assert.assertEquals(2000, time.milliseconds());
+        Assert.assertEquals(200, time.milliseconds());
     }
 };
 

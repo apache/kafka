@@ -37,18 +37,11 @@ public class Histogram {
         this.counts = new int[maxValue + 1];
     }
 
-    public void add(long value) {
-        if (value > Integer.MAX_VALUE) {
-            add(Integer.MAX_VALUE);
-        } else if (value < Integer.MIN_VALUE) {
-            add(Integer.MIN_VALUE);
-        } else {
-            add((int) value);
-        }
-    }
-
     /**
      * Add a new value to the histogram.
+     *
+     * Note that the value will be clipped to the maximum value available in the Histogram instance.
+     * So if the histogram has 100 buckets, inserting 101 will increment the last bucket.
      */
     public void add(int value) {
         if (value < 0) {
@@ -62,6 +55,23 @@ public class Histogram {
             if (curCount < Integer.MAX_VALUE) {
                 counts[value] = counts[value] + 1;
             }
+        }
+    }
+
+    /**
+     * Add a new value to the histogram.
+     *
+     * Note that the value will be clipped to the maximum value available in the Histogram instance.
+     * This method is provided for convenience, but handles the same numeric range as the method which
+     * takes an int.
+     */
+    public void add(long value) {
+        if (value > Integer.MAX_VALUE) {
+            add(Integer.MAX_VALUE);
+        } else if (value < Integer.MIN_VALUE) {
+            add(Integer.MIN_VALUE);
+        } else {
+            add((int) value);
         }
     }
 
@@ -160,7 +170,7 @@ public class Histogram {
             numSamples = numSamples + count;
             total = total + (i * count);
         }
-        float average = total / numSamples;
+        float average = (numSamples == 0) ? 0.0f : (total / numSamples);
 
         List<PercentileSummary> percentileSummaries =
             summarizePercentiles(countsCopy, percentiles, numSamples);

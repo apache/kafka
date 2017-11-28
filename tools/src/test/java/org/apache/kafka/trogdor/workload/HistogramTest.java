@@ -31,6 +31,9 @@ public class HistogramTest {
 
     @Test
     public void testHistogramAverage() {
+        Histogram empty = createHistogram(1);
+        Assert.assertEquals(0, (int) empty.summarize(new float[0]).average());
+
         Histogram histogram = createHistogram(70, 1, 2, 3, 4, 5, 6, 1);
 
         Assert.assertEquals(3, (int) histogram.summarize(new float[0]).average());

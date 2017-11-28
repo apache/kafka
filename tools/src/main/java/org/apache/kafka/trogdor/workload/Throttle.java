@@ -19,31 +19,34 @@ package org.apache.kafka.trogdor.workload;
 
 import org.apache.kafka.common.utils.Time;
 
-import java.util.concurrent.TimeUnit;
-
 public class Throttle {
-    private final int maxPerSec;
+    private final int maxPerPeriod;
+    private final int periodMs;
     private int count;
-    private long second;
+    private long prevPeriod;
 
-    Throttle(int maxPerSec) {
-        this.maxPerSec = maxPerSec;
+    Throttle(int maxPerPeriod, int periodMs) {
+        this.maxPerPeriod = maxPerPeriod;
+        this.periodMs = periodMs;
+        this.count = maxPerPeriod;
+        this.prevPeriod = -1;
     }
 
     synchronized public boolean increment() throws InterruptedException {
         boolean throttled = false;
         while (true) {
-            if (count < maxPerSec) {
+            if (count < maxPerPeriod) {
                 count++;
                 return throttled;
             }
             long now = time().milliseconds();
-            long nextSecondMs = TimeUnit.MILLISECONDS.convert(second + 1, TimeUnit.SECONDS);
-            if (now < nextSecondMs) {
-                delay(nextSecondMs - now);
+            long curPeriod = now / periodMs;
+            if (curPeriod <= prevPeriod) {
+                long nextPeriodMs = (curPeriod + 1) * periodMs;
+                delay(nextPeriodMs - now);
                 throttled = true;
-            }  else {
-                second = TimeUnit.SECONDS.convert(now, TimeUnit.MILLISECONDS);
+            } else {
+                prevPeriod = curPeriod;
                 count = 0;
             }
         }

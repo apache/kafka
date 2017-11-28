@@ -58,6 +58,8 @@ public class ProduceBenchWorker implements TaskWorker {
 
     private static final int MESSAGE_SIZE = 512;
 
+    private static final int THROTTLE_PERIOD_MS = 100;
+
     private final String id;
 
     private final ProduceBenchSpec spec;
@@ -175,33 +177,61 @@ public class ProduceBenchWorker implements TaskWorker {
         }
     }
 
+    private int perSecToPerPeriod(float perSec, long periodMs) {
+        float period = ((float) periodMs) / 1000.0f;
+        float perPeriod = perSec * period;
+        perPeriod = Math.max(1.0f, perPeriod);
+        return (int) perPeriod;
+    }
+
+    /**
+     * A subclass of Throttle which flushes the Producer right before the throttle injects a delay.
+     * This avoids including throttling latency in latency measurements.
+     */
+    private static class SendRecordsThrottle extends Throttle {
+        private final KafkaProducer<?, ?> producer;
+
+        SendRecordsThrottle(int maxPerPeriod, KafkaProducer<?, ?> producer) {
+            super(maxPerPeriod, THROTTLE_PERIOD_MS);
+            this.producer = producer;
+        }
+
+        @Override
+        protected synchronized void delay(long amount) throws InterruptedException {
+            producer.flush();
+            super.delay(amount);
+        }
+    }
+
     public class SendRecords implements Callable<Void> {
         private final Histogram histogram;
 
-        private final Throttle throttle;
-
         private final Future<?> statusUpdaterFuture;
+
+        private final KafkaProducer<byte[], byte[]> producer;
+
+        private final Throttle throttle;
 
         SendRecords() {
             this.histogram = new Histogram(5000);
-            this.throttle = new Throttle(spec.targetMessagesPerSec());
+            int perPeriod = perSecToPerPeriod(spec.targetMessagesPerSec(), THROTTLE_PERIOD_MS);
             this.statusUpdaterFuture = executor.scheduleWithFixedDelay(
                 new StatusUpdater(histogram), 1, 1, TimeUnit.MINUTES);
+            Properties props = new Properties();
+            props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, spec.bootstrapServers());
+            for (Map.Entry<String, String> entry : spec.producerConf().entrySet()) {
+                props.setProperty(entry.getKey(), entry.getValue());
+            }
+            this.producer = new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer());
+            this.throttle = new SendRecordsThrottle(perPeriod, producer);
         }
 
         @Override
         public Void call() throws Exception {
             long startTimeMs = Time.SYSTEM.milliseconds();
             try {
-                Properties props = new Properties();
-                props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, spec.bootstrapServers());
-                for (Map.Entry<String, String> entry : spec.producerConf().entrySet()) {
-                    props.setProperty(entry.getKey(), entry.getValue());
-                }
                 byte[] key = new byte[MESSAGE_SIZE];
                 byte[] value = new byte[MESSAGE_SIZE];
-                KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(
-                            props, new ByteArraySerializer(), new ByteArraySerializer());
                 Future<RecordMetadata> future = null;
                 try {
                     for (int m = 0; m < spec.maxMessages(); m++) {
