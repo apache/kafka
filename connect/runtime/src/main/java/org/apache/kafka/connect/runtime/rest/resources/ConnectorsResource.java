@@ -312,7 +312,12 @@ public class ConnectorsResource {
     // go through config parameters and replace password field value with "*"
     // this return a new map, instead of making change to the original object
     private Map<String, String> maskCredentials(Map<String, String> config) {
-        Connector connectorClass = loadConnectorClass(config.get("connector.class"), Connector.class);
+        final String connectorClassStr = "connector.class";
+        if (!config.containsKey(connectorClassStr)) {
+            return config;
+        }
+
+        Connector connectorClass = loadConnectorClass(config.get(connectorClassStr), Connector.class);
         Map<String, ConfigDef.ConfigKey> definedConfigKeys = connectorClass.config().configKeys();
         Map<String, String> newConfig = new HashMap<>();
 
