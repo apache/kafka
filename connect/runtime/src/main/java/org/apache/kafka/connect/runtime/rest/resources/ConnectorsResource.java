@@ -321,11 +321,12 @@ public class ConnectorsResource {
         Map<String, ConfigDef.ConfigKey> definedConfigKeys = connectorClass.config().configKeys();
         Map<String, String> newConfig = new HashMap<>();
 
-        for (String key : config.keySet()) {
+        for (Map.Entry<String, String> entry : config.entrySet()) {
+            final String key = entry.getKey();
             if (definedConfigKeys.containsKey(key) && definedConfigKeys.get(key).type.equals(ConfigDef.Type.PASSWORD)) {
                 newConfig.put(key, "*********");
             } else {
-                newConfig.put(key, config.get(key));
+                newConfig.put(key, entry.getValue());
             }
         }
 
