@@ -25,6 +25,7 @@ import kafka.controller.{LeaderIsrAndControllerEpoch, ReassignedPartitionsContex
 import kafka.log.LogConfig
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
 import kafka.security.auth.{Acl, Resource, ResourceType}
+
 import kafka.server.ConfigType
 import kafka.utils._
 import kafka.zookeeper._
@@ -48,6 +49,13 @@ import scala.collection.{Seq, mutable}
  */
 class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends Logging {
   import KafkaZkClient._
+
+  def createSequentialPersistentPath(path: String, data: String = ""): String = {
+    val createRequest = CreateRequest(path, data.getBytes("UTF-8"), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
+    val createResponse = retryRequestUntilConnected(createRequest)
+    createResponse.resultException.foreach(e => throw e)
+    createResponse.path
+  }
 
   /**
    * Gets topic partition states for the given partitions.
@@ -931,6 +939,13 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     val createRequest = CreateRequest(path, AclChangeNotificationSequenceZNode.encode(resourceName), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
     val createResponse = retryRequestUntilConnected(createRequest)
     createResponse.resultException.foreach(e => throw e)
+  }
+
+  def propagateLogDirEvent(brokerId: Int) {
+    val logDirEventNotificationPath: String = createSequentialPersistentPath(
+      LogDirEventNotificationZNode.path + "/" + LogDirEventNotificationSequenceZNode.SequenceNumberPrefix,
+      new String(LogDirEventNotificationSequenceZNode.encode(brokerId), UTF_8))
+    debug(s"Added $logDirEventNotificationPath for broker $brokerId")
   }
 
   /**

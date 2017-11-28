@@ -92,8 +92,7 @@ public class ConnectorsResource {
             throw new BadRequestException("connector name should not contain '/'");
         }
         Map<String, String> configs = createRequest.config();
-        if (!configs.containsKey(ConnectorConfig.NAME_CONFIG))
-            configs.put(ConnectorConfig.NAME_CONFIG, name);
+        checkAndPutConnectorConfigName(name, configs);
 
         FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
         herder.putConnectorConfig(name, configs, false, cb);
@@ -134,13 +133,7 @@ public class ConnectorsResource {
                                        final @QueryParam("forward") Boolean forward,
                                        final Map<String, String> connectorConfig) throws Throwable {
         FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
-        String includedName = connectorConfig.get(ConnectorConfig.NAME_CONFIG);
-        if (includedName != null) {
-            if (!includedName.equals(connector))
-                throw new BadRequestException("Connector name configuration (" + includedName + ") doesn't match connector name in the URL (" + connector + ")");
-        } else {
-            connectorConfig.put(ConnectorConfig.NAME_CONFIG, connector);
-        }
+        checkAndPutConnectorConfigName(connector, connectorConfig);
 
         herder.putConnectorConfig(connector, connectorConfig, true, cb);
         Herder.Created<ConnectorInfo> createdInfo = completeOrForwardRequest(cb, "/connectors/" + connector + "/config",
@@ -223,6 +216,18 @@ public class ConnectorsResource {
         FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
         herder.deleteConnectorConfig(connector, cb);
         completeOrForwardRequest(cb, "/connectors/" + connector, "DELETE", null, forward);
+    }
+
+    // Check whether the connector name from the url matches the one (if there is one) provided in the connectorconfig
+    // object. Throw BadRequestException on mismatch, otherwise put connectorname in config
+    private void checkAndPutConnectorConfigName(String connectorName, Map<String, String> connectorConfig) {
+        String includedName = connectorConfig.get(ConnectorConfig.NAME_CONFIG);
+        if (includedName != null) {
+            if (!includedName.equals(connectorName))
+                throw new BadRequestException("Connector name configuration (" + includedName + ") doesn't match connector name in the URL (" + connectorName + ")");
+        } else {
+            connectorConfig.put(ConnectorConfig.NAME_CONFIG, connectorName);
+        }
     }
 
     // Wait for a FutureCallback to complete. If it succeeds, return the parsed response. If it fails, try to forward the
