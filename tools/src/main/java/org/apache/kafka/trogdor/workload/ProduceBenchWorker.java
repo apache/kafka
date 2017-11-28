@@ -198,8 +198,11 @@ public class ProduceBenchWorker implements TaskWorker {
 
         @Override
         protected synchronized void delay(long amount) throws InterruptedException {
+            long startMs = time().milliseconds();
             producer.flush();
-            super.delay(amount);
+            long endMs = time().milliseconds();
+            long delta = endMs - startMs;
+            super.delay(amount - delta);
         }
     }
 

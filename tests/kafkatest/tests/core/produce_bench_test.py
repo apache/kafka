@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
 from ducktape.tests.test import Test
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.trogdor.produce_bench_workload import ProduceBenchWorkloadService, ProduceBenchWorkloadSpec
@@ -52,3 +53,5 @@ class ProduceBenchTest(Test):
                                         active_topics=2)
         workload1 = self.trogdor.create_task("workload1", spec)
         workload1.wait_for_done(timeout_sec=360)
+        tasks = self.trogdor.tasks()
+        self.logger.info("TASKS: %s\n" % json.dumps(tasks, sort_keys=True, indent=2))

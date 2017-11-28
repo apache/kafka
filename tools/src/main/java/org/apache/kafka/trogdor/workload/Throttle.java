@@ -57,6 +57,8 @@ public class Throttle {
     }
 
     protected synchronized void delay(long amount) throws InterruptedException {
-        wait(amount);
+        if (amount > 0) {
+            wait(amount);
+        }
     }
 }
