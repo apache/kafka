@@ -433,21 +433,16 @@ object ConsumerGroupCommand extends Logging {
           case Some(consumers) =>
             var assignedTopicPartitions = Array[TopicPartition]()
             val offsets = adminClient.listGroupOffsets(group)
-            val rowsWithConsumer =
-              if (offsets.isEmpty)
-                List[PartitionAssignmentState]()
-              else {
-                consumers.sortWith(_.assignment.size > _.assignment.size).flatMap { consumerSummary =>
-                  val topicPartitions = consumerSummary.assignment.map(tp => TopicAndPartition(tp.topic, tp.partition))
-                  assignedTopicPartitions = assignedTopicPartitions ++ consumerSummary.assignment
-                  val partitionOffsets: Map[TopicAndPartition, Option[Long]] = consumerSummary.assignment.map { topicPartition =>
-                    new TopicAndPartition(topicPartition) -> offsets.get(topicPartition)
-                  }.toMap
-                  collectConsumerAssignment(group, Some(consumerGroupSummary.coordinator), topicPartitions,
-                    partitionOffsets, Some(s"${consumerSummary.consumerId}"), Some(s"${consumerSummary.host}"),
-                    Some(s"${consumerSummary.clientId}"))
-                }
-              }
+            val rowsWithConsumer = consumers.sortWith(_.assignment.size > _.assignment.size).flatMap { consumerSummary =>
+              val topicPartitions = consumerSummary.assignment.map(tp => TopicAndPartition(tp.topic, tp.partition))
+              assignedTopicPartitions = assignedTopicPartitions ++ consumerSummary.assignment
+              val partitionOffsets: Map[TopicAndPartition, Option[Long]] = consumerSummary.assignment.map { topicPartition =>
+                new TopicAndPartition(topicPartition) -> offsets.get(topicPartition)
+              }.toMap
+              collectConsumerAssignment(group, Some(consumerGroupSummary.coordinator), topicPartitions,
+                partitionOffsets, Some(s"${consumerSummary.consumerId}"), Some(s"${consumerSummary.host}"),
+                Some(s"${consumerSummary.clientId}"))
+            }
 
             val rowsWithoutConsumer = offsets.filterNot {
               case (topicPartition, offset) => assignedTopicPartitions.contains(topicPartition)
