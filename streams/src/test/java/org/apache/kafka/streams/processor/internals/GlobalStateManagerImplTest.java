@@ -86,17 +86,15 @@ public class GlobalStateManagerImplTest {
     @Before
     public void before() throws IOException {
         final Map<String, String> storeToTopic = new HashMap<>();
-        storeToTopic.put("t1-store", "t1");
-        storeToTopic.put("t2-store", "t2");
-
+        final Map<String, StateStore> storeMap = new HashMap<>();
         store1 = new NoOpReadOnlyStore<>("t1-store");
         store2 = new NoOpReadOnlyStore("t2-store");
-        topology = new ProcessorTopology(Collections.<ProcessorNode>emptyList(),
-                                         Collections.<String, SourceNode>emptyMap(),
-                                         Collections.<String, SinkNode>emptyMap(),
-                                         Collections.<StateStore>emptyList(),
-                                         storeToTopic,
-                                         Arrays.<StateStore>asList(store1, store2));
+        storeToTopic.put("t1-store", "t1");
+        storeToTopic.put("t2-store", "t2");
+        storeMap.put("t1-store", store1);
+        storeMap.put("t2-store", store2);
+
+        topology = ProcessorTopology.with(storeMap, storeToTopic);
 
         context = new NoOpProcessorContext();
         config = new StreamsConfig(new Properties() {

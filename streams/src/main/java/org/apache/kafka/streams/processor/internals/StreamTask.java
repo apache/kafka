@@ -55,7 +55,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     private static final ConsumerRecord<Object, Object> DUMMY_RECORD = new ConsumerRecord<>(ProcessorContextImpl.NONEXIST_TOPIC, -1, -1L, null, null);
 
     private final PartitionGroup partitionGroup;
-    private final PartitionGroup.RecordInfo recordInfo = new PartitionGroup.RecordInfo();
+    private final PartitionGroup.RecordInfo recordInfo;
     private final PunctuationQueue streamTimePunctuationQueue;
     private final PunctuationQueue systemTimePunctuationQueue;
 
@@ -112,20 +112,22 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                       final Time time,
                       final Producer<byte[], byte[]> producer) {
         super(id, partitions, topology, consumer, changelogReader, false, stateDirectory, config);
+
+        this.time = time;
+        this.producer = producer;
+        this.metrics = new TaskMetrics(metrics);
+
+        recordCollector = createRecordCollector(logContext);
         streamTimePunctuationQueue = new PunctuationQueue();
         systemTimePunctuationQueue = new PunctuationQueue();
         maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
-        this.metrics = new TaskMetrics(metrics);
-
-        // create queues for each assigned partition and associate them
-        // to corresponding source nodes in the processor topology
-        final Map<TopicPartition, RecordQueue> partitionQueues = new HashMap<>();
 
         // initialize the consumed and committed offset cache
         consumedOffsets = new HashMap<>();
 
-        this.producer = producer;
-        recordCollector = createRecordCollector(logContext);
+        // create queues for each assigned partition and associate them
+        // to corresponding source nodes in the processor topology
+        final Map<TopicPartition, RecordQueue> partitionQueues = new HashMap<>();
 
         // initialize the topology with its own context
         processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, metrics, cache);
@@ -139,8 +141,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             partitionQueues.put(partition, queue);
         }
 
+        recordInfo = new PartitionGroup.RecordInfo();
         partitionGroup = new PartitionGroup(partitionQueues);
-        this.time = time;
 
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
         if (eosEnabled) {

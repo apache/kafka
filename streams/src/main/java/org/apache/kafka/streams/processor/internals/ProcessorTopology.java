@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.processor.StateStore;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -27,48 +28,81 @@ import java.util.Set;
 public class ProcessorTopology {
 
     private final List<ProcessorNode> processorNodes;
+    private final Map<String, SourceNode> sourcesByTopic;
+    private final Map<String, SinkNode> sinksByTopic;
     private final List<StateStore> stateStores;
     private final List<StateStore> globalStateStores;
-    private final Map<String, SourceNode> sourceByTopics;
-    private final Map<String, SinkNode> sinkByTopics;
     private final Map<String, String> storeToChangelogTopic;
 
-    public ProcessorTopology(final List<ProcessorNode> processorNodes,
-                             final Map<String, SourceNode> sourceByTopics,
-                             final Map<String, SinkNode> sinkByTopics,
-                             final List<StateStore> stateStores,
-                             final Map<String, String> storeToChangelogTopic,
-                             final List<StateStore> globalStateStores) {
-        this.processorNodes = Collections.unmodifiableList(processorNodes);
-        this.sourceByTopics = Collections.unmodifiableMap(sourceByTopics);
-        this.sinkByTopics   = Collections.unmodifiableMap(sinkByTopics);
-        this.stateStores    = Collections.unmodifiableList(stateStores);
-        this.storeToChangelogTopic = Collections.unmodifiableMap(storeToChangelogTopic);
-        this.globalStateStores = Collections.unmodifiableList(globalStateStores);
+    public static ProcessorTopology with(final Map<String, ProcessorNode> processorsByName,
+                                         final Map<String, SourceNode> sourcesByTopic,
+                                         final Map<String, StateStore> stateStoresByName,
+                                         final Map<String, String> storeToChangelogTopic) {
+        return new ProcessorTopology(processorsByName,
+                sourcesByTopic,
+                Collections.<String, SinkNode>emptyMap(),
+                stateStoresByName,
+                Collections.<String, StateStore>emptyMap(),
+                storeToChangelogTopic);
+    }
+
+    public static ProcessorTopology with(final Map<String, ProcessorNode> processorsByName,
+                                         final Map<String, SourceNode> sourcesByTopic,
+                                         final Map<String, SinkNode> sinksByTopic) {
+        return new ProcessorTopology(processorsByName,
+                sourcesByTopic,
+                sinksByTopic,
+                Collections.<String, StateStore>emptyMap(),
+                Collections.<String, StateStore>emptyMap(),
+                Collections.<String, String>emptyMap());
+    }
+
+    public static ProcessorTopology with(final Map<String, StateStore> stateStoresByName,
+                                         final Map<String, String> storeToChangelogTopic) {
+        return new ProcessorTopology(Collections.<String, ProcessorNode>emptyMap(),
+                Collections.<String, SourceNode>emptyMap(),
+                Collections.<String, SinkNode>emptyMap(),
+                stateStoresByName,
+                Collections.<String, StateStore>emptyMap(),
+                storeToChangelogTopic);
+    }
+
+    public ProcessorTopology(final Map<String, ProcessorNode> processorsByName,
+                             final Map<String, SourceNode> sourcesByTopic,
+                             final Map<String, SinkNode> sinksByTopic,
+                             final Map<String, StateStore> stateStoresByName,
+                             final Map<String, StateStore> globalStateStoresByName,
+                             final Map<String, String> stateStoreToChangelogTopic) {
+        this.processorNodes = Collections.unmodifiableList(new ArrayList<>(processorsByName.values()));
+        this.sourcesByTopic = Collections.unmodifiableMap(sourcesByTopic);
+        this.sinksByTopic = Collections.unmodifiableMap(sinksByTopic);
+        this.stateStores = Collections.unmodifiableList(new ArrayList<>(stateStoresByName.values()));
+        this.globalStateStores = Collections.unmodifiableList(new ArrayList<>(globalStateStoresByName.values()));
+        this.storeToChangelogTopic = Collections.unmodifiableMap(stateStoreToChangelogTopic);
     }
 
     public Set<String> sourceTopics() {
-        return sourceByTopics.keySet();
+        return sourcesByTopic.keySet();
     }
 
     public SourceNode source(String topic) {
-        return sourceByTopics.get(topic);
+        return sourcesByTopic.get(topic);
     }
 
     public Set<SourceNode> sources() {
-        return new HashSet<>(sourceByTopics.values());
+        return new HashSet<>(sourcesByTopic.values());
     }
 
     public Set<String> sinkTopics() {
-        return sinkByTopics.keySet();
+        return sinksByTopic.keySet();
     }
 
     public SinkNode sink(String topic) {
-        return sinkByTopics.get(topic);
+        return sinksByTopic.get(topic);
     }
 
     public Set<SinkNode> sinks() {
-        return new HashSet<>(sinkByTopics.values());
+        return new HashSet<>(sinksByTopic.values());
     }
 
     public List<ProcessorNode> processors() {
@@ -79,12 +113,12 @@ public class ProcessorTopology {
         return stateStores;
     }
 
-    public Map<String, String> storeToChangelogTopic() {
-        return storeToChangelogTopic;
-    }
-
     public List<StateStore> globalStateStores() {
         return globalStateStores;
+    }
+
+    public Map<String, String> storeToChangelogTopic() {
+        return storeToChangelogTopic;
     }
 
     private String childrenToString(String indent, List<ProcessorNode<?, ?>> children) {
@@ -126,7 +160,7 @@ public class ProcessorTopology {
         final StringBuilder sb = new StringBuilder(indent + "ProcessorTopology:\n");
 
         // start from sources
-        for (SourceNode<?, ?> source : sourceByTopics.values()) {
+        for (SourceNode<?, ?> source : sourcesByTopic.values()) {
             sb.append(source.toString(indent + "\t")).append(childrenToString(indent + "\t", source.children()));
         }
         return sb.toString();

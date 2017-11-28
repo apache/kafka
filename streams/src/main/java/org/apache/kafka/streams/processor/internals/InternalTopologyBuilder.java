@@ -858,8 +858,6 @@ public class InternalTopologyBuilder {
                 nodeGroup.addAll(value);
             }
             nodeGroup.removeAll(globalNodeGroups);
-
-
         }
         return build(nodeGroup);
     }
@@ -890,17 +888,15 @@ public class InternalTopologyBuilder {
     }
 
     private ProcessorTopology build(final Set<String> nodeGroup) {
-        final List<ProcessorNode> processorNodes = new ArrayList<>(nodeFactories.size());
         final Map<String, ProcessorNode> processorMap = new HashMap<>();
         final Map<String, SourceNode> topicSourceMap = new HashMap<>();
         final Map<String, SinkNode> topicSinkMap = new HashMap<>();
-        final Map<String, StateStore> stateStoreMap = new LinkedHashMap<>();
+        final Map<String, StateStore> stateStoreMap = new HashMap<>();
 
         // create processor nodes in a topological order ("nodeFactories" is already topologically sorted)
         for (final NodeFactory factory : nodeFactories.values()) {
             if (nodeGroup == null || nodeGroup.contains(factory.name)) {
                 final ProcessorNode node = factory.build();
-                processorNodes.add(node);
                 processorMap.put(node.name(), node);
 
                 if (factory instanceof ProcessorNodeFactory) {
@@ -925,7 +921,12 @@ public class InternalTopologyBuilder {
             }
         }
 
-        return new ProcessorTopology(processorNodes, topicSourceMap, topicSinkMap, new ArrayList<>(stateStoreMap.values()), storeToChangelogTopic, new ArrayList<>(globalStateStores.values()));
+        return new ProcessorTopology(processorMap,
+                                     topicSourceMap,
+                                     topicSinkMap,
+                                     stateStoreMap,
+                                     globalStateStores,
+                                     storeToChangelogTopic);
     }
 
     @SuppressWarnings("unchecked")
@@ -1248,7 +1249,8 @@ public class InternalTopologyBuilder {
         return topicPattern;
     }
 
-    public synchronized void updateSubscriptions(final SubscriptionUpdates subscriptionUpdates,
+    // package-private for testing only
+    synchronized void updateSubscriptions(final SubscriptionUpdates subscriptionUpdates,
                                                  final String logPrefix) {
         log.debug("{}updating builder with {} topic(s) with possible matching regex subscription(s)",
                 logPrefix, subscriptionUpdates);

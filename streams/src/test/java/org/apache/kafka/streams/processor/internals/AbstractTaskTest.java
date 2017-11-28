@@ -38,7 +38,7 @@ import org.junit.Test;
 
 import java.io.IOException;
 import java.util.Collections;
-import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 import static org.junit.Assert.fail;
@@ -56,21 +56,21 @@ public class AbstractTaskTest {
     @Test(expected = ProcessorStateException.class)
     public void shouldThrowProcessorStateExceptionOnInitializeOffsetsWhenAuthorizationException() {
         final Consumer consumer = mockConsumer(new AuthorizationException("blah"));
-        final AbstractTask task = createTask(consumer, Collections.<StateStore>emptyList());
+        final AbstractTask task = createTask(consumer, Collections.<String, StateStore>emptyMap());
         task.updateOffsetLimits();
     }
 
     @Test(expected = ProcessorStateException.class)
     public void shouldThrowProcessorStateExceptionOnInitializeOffsetsWhenKafkaException() {
         final Consumer consumer = mockConsumer(new KafkaException("blah"));
-        final AbstractTask task = createTask(consumer, Collections.<StateStore>emptyList());
+        final AbstractTask task = createTask(consumer, Collections.<String, StateStore>emptyMap());
         task.updateOffsetLimits();
     }
 
     @Test(expected = WakeupException.class)
     public void shouldThrowWakeupExceptionOnInitializeOffsetsWhenWakeupException() {
         final Consumer consumer = mockConsumer(new WakeupException());
-        final AbstractTask task = createTask(consumer, Collections.<StateStore>emptyList());
+        final AbstractTask task = createTask(consumer, Collections.<String, StateStore>emptyMap());
         task.updateOffsetLimits();
     }
 
@@ -81,7 +81,7 @@ public class AbstractTaskTest {
         EasyMock.expect(stateDirectory.lock(id)).andReturn(false);
         EasyMock.replay(stateDirectory);
 
-        final AbstractTask task = createTask(consumer, Collections.singletonList(store));
+        final AbstractTask task = createTask(consumer, Collections.singletonMap(store.name(), store));
 
         try {
             task.initializeStateStores();
@@ -97,7 +97,7 @@ public class AbstractTaskTest {
         final Consumer consumer = EasyMock.createNiceMock(Consumer.class);
         EasyMock.replay(stateDirectory);
 
-        final AbstractTask task = createTask(consumer, Collections.<StateStore>emptyList());
+        final AbstractTask task = createTask(consumer, Collections.<String, StateStore>emptyMap());
 
         task.initializeStateStores();
 
@@ -105,21 +105,17 @@ public class AbstractTaskTest {
         EasyMock.verify(stateDirectory);
     }
 
-    private AbstractTask createTask(final Consumer consumer, final List<StateStore> stateStores) {
+    @SuppressWarnings("unchecked")
+    private AbstractTask createTask(final Consumer consumer, final Map<String, StateStore> stateStores) {
         final Properties properties = new Properties();
         properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "app");
         properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummyhost:9092");
         final StreamsConfig config = new StreamsConfig(properties);
         return new AbstractTask(id,
                                 Collections.singletonList(new TopicPartition("t", 0)),
-                                new ProcessorTopology(Collections.<ProcessorNode>emptyList(),
-                                                      Collections.<String, SourceNode>emptyMap(),
-                                                      Collections.<String, SinkNode>emptyMap(),
-                                                      stateStores,
-                                                      Collections.<String, String>emptyMap(),
-                                                      Collections.<StateStore>emptyList()),
-                                consumer,
-                                new StoreChangelogReader(consumer, new MockStateRestoreListener(), new LogContext("stream-task-test ")),
+                                ProcessorTopology.with(stateStores, Collections.<String, String>emptyMap()),
+                                (Consumer<byte[], byte[]>) consumer,
+                                new StoreChangelogReader((Consumer<byte[], byte[]>) consumer, new MockStateRestoreListener(), new LogContext("stream-task-test ")),
                                 false,
                                 stateDirectory,
                                 config) {

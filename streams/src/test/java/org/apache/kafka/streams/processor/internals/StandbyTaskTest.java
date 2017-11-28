@@ -86,37 +86,33 @@ public class StandbyTaskTest {
     private final MockStateRestoreListener stateRestoreListener = new MockStateRestoreListener();
 
     private final Set<TopicPartition> topicPartitions = Collections.emptySet();
-    private final ProcessorTopology topology = new ProcessorTopology(
-            Collections.<ProcessorNode>emptyList(),
-            Collections.<String, SourceNode>emptyMap(),
-            Collections.<String, SinkNode>emptyMap(),
-            Utils.mkList(
-                    new MockStateStoreSupplier(storeName1, false).get(),
-                    new MockStateStoreSupplier(storeName2, true).get()
-            ),
+    private final ProcessorTopology topology = ProcessorTopology.with(
+            new HashMap<String, StateStore>() {
+                {
+                    put(storeName1, new MockStateStoreSupplier(storeName1, false).get());
+                    put(storeName2, new MockStateStoreSupplier(storeName2, true).get());
+                }
+            },
             new HashMap<String, String>() {
                 {
                     put(storeName1, storeChangelogTopicName1);
                     put(storeName2, storeChangelogTopicName2);
                 }
-            },
-            Collections.<StateStore>emptyList());
-
+            });
     private final TopicPartition ktable = new TopicPartition("ktable1", 0);
     private final Set<TopicPartition> ktablePartitions = Utils.mkSet(ktable);
-    private final ProcessorTopology ktableTopology = new ProcessorTopology(
-            Collections.<ProcessorNode>emptyList(),
-            Collections.<String, SourceNode>emptyMap(),
-            Collections.<String, SinkNode>emptyMap(),
-            Utils.mkList(
-                    new MockStateStoreSupplier(ktable.topic(), true, false).get()
-            ),
-            new HashMap<String, String>() {
+    private final ProcessorTopology ktableTopology = ProcessorTopology.with(
+            new HashMap<String, StateStore>() {
                 {
-                    put("ktable1", ktable.topic());
+                    put(storeName1, new MockStateStoreSupplier(ktable.topic(), true, false).get());
                 }
             },
-            Collections.<StateStore>emptyList());
+            new HashMap<String, String>() {
+                {
+                    put(storeName1, ktable.topic());
+                }
+            });
+
     private File baseDir;
     private StateDirectory stateDirectory;
 
