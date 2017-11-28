@@ -67,7 +67,6 @@ class TaskManager {
     private Cluster cluster;
     private Map<TaskId, Set<TopicPartition>> assignedActiveTasks;
     private Map<TaskId, Set<TopicPartition>> assignedStandbyTasks;
-    private Map<HostInfo, Set<TopicPartition>> partitionsByHostState;
 
     private Consumer<byte[], byte[]> consumer;
 
@@ -376,7 +375,6 @@ class TaskManager {
     }
 
     void setPartitionsByHostState(final Map<HostInfo, Set<TopicPartition>> partitionsByHostState) {
-        this.partitionsByHostState = partitionsByHostState;
         this.streamsMetadataState.onChange(partitionsByHostState, cluster);
     }
 
