@@ -119,7 +119,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     val executor = createConsumerGroupExecutor(brokerList, 1, group, topic1)
 
     TestUtils.waitUntilTrue(() => {
-      val (_, assignmentsOption) = consumerGroupCommand.describeGroup()
+      val (_, assignmentsOption) = consumerGroupCommand.collectGroupOffsets()
       assignmentsOption match {
         case Some(assignments) =>
           val sumOffset = assignments.filter(_.topic.exists(_ == topic1))
@@ -164,7 +164,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     val executor = createConsumerGroupExecutor(brokerList, 1, group, topic1)
 
     TestUtils.waitUntilTrue(() => {
-      val (_, assignmentsOption) = consumerGroupCommand.describeGroup()
+      val (_, assignmentsOption) = consumerGroupCommand.collectGroupOffsets()
       assignmentsOption match {
         case Some(assignments) =>
           val sumOffset = (assignments.filter(_.topic.exists(_ == topic1))
@@ -330,7 +330,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     val executor = createConsumerGroupExecutor(brokerList, numConsumers, group, topic)
 
     TestUtils.waitUntilTrue(() => {
-      val (_, assignmentsOption) = consumerGroupCommand.describeGroup()
+      val (_, assignmentsOption) = consumerGroupCommand.collectGroupOffsets()
       assignmentsOption match {
         case Some(assignments) =>
           val sumOffset = assignments.filter(_.topic.exists(_ == topic))
