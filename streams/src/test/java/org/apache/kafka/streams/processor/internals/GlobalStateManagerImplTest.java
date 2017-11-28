@@ -45,7 +45,6 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -94,7 +93,7 @@ public class GlobalStateManagerImplTest {
         storeMap.put("t1-store", store1);
         storeMap.put("t2-store", store2);
 
-        topology = ProcessorTopology.with(storeMap, storeToTopic);
+        topology = ProcessorTopology.withGlobalStores(storeMap, storeToTopic);
 
         context = new NoOpProcessorContext();
         config = new StreamsConfig(new Properties() {

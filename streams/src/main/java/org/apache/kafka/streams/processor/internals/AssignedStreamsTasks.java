@@ -77,7 +77,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     Map<TopicPartition, RecordsToDelete> recordsToDelete() {
         final Map<TopicPartition, RecordsToDelete> recordsToDelete = new HashMap<>();
         for (StreamTask task : running.values()) {
-            for (Map.Entry<TopicPartition, Long> entry : task.consumedOffset().entrySet()) {
+            for (Map.Entry<TopicPartition, Long> entry : task.purgableOffsets().entrySet()) {
                 recordsToDelete.put(entry.getKey(), RecordsToDelete.beforeOffset(entry.getValue()));
             }
         }

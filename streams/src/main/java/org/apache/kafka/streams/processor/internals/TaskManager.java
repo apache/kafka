@@ -60,14 +60,14 @@ class TaskManager {
     // TODO: this is going to be replaced by AdminClient
     final StreamsKafkaClient streamsKafkaClient;
 
-    final AdminClient adminClient;
+    private final AdminClient adminClient;
+    private DeleteRecordsResult deleteRecordsResult;
 
     // following information is updated during rebalance phase by the partition assignor
     private Cluster cluster;
     private Map<TaskId, Set<TopicPartition>> assignedActiveTasks;
     private Map<TaskId, Set<TopicPartition>> assignedStandbyTasks;
     private Map<HostInfo, Set<TopicPartition>> partitionsByHostState;
-    private final Map<TopicPartition, RecordsToDelete> committedOffsets;
 
     private Consumer<byte[], byte[]> consumer;
 
@@ -98,8 +98,6 @@ class TaskManager {
 
         this.streamsKafkaClient = streamsKafkaClient;
         this.adminClient = adminClient;
-
-        this.committedOffsets = new HashMap<>();
     }
 
     /**
@@ -443,11 +441,14 @@ class TaskManager {
         return active.maybeCommit();
     }
 
-    void maybeDeleteCommitedRecords() {
-        Map<TopicPartition, RecordsToDelete> recordsToDelete = active.recordsToDelete();
-
-        DeleteRecordsResult deleteResults = adminClient.deleteRecords(recordsToDelete);
-
+    void maybePurgeCommitedRecords() {
+        // we do not check any possible exceptions since none of them are fatal
+        // that should cause the application to fail, and we will try delete with
+        // newer offsets anyways.
+        if (deleteRecordsResult == null || deleteRecordsResult.all().isDone()) {
+            Map<TopicPartition, RecordsToDelete> recordsToDelete = active.recordsToDelete();
+            deleteRecordsResult = adminClient.deleteRecords(recordsToDelete);
+        }
     }
 
     public String toString(final String indent) {

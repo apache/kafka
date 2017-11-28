@@ -99,7 +99,7 @@ public class StreamTaskTest {
     private final MockProcessorNode<Integer, Integer> processorStreamTime = new MockProcessorNode<>(10L);
     private final MockProcessorNode<Integer, Integer> processorSystemTime = new MockProcessorNode<>(10L, PunctuationType.WALL_CLOCK_TIME);
 
-    private final ProcessorTopology topology = ProcessorTopology.with(
+    private final ProcessorTopology topology = ProcessorTopology.withSources(
             new HashMap<String, ProcessorNode>() {
                 {
                     put(source1.name(), source1);
@@ -113,8 +113,7 @@ public class StreamTaskTest {
                     put(topic1[0], source1);
                     put(topic2[0], source2);
                 }
-            },
-            Collections.<String, SinkNode>emptyMap()
+            }
     );
 
     private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
@@ -124,7 +123,6 @@ public class StreamTaskTest {
     private final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreStateConsumer, stateRestoreListener, new LogContext("stream-task-test "));
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
-    private final String applicationId = "applicationId";
     private final Metrics metrics = new Metrics();
     private final StreamsMetrics streamsMetrics = new MockStreamsMetrics(metrics);
     private final TaskId taskId00 = new TaskId(0, 0);
@@ -452,10 +450,10 @@ public class StreamTaskTest {
             }
         };
 
-        final ProcessorTopology topology = ProcessorTopology.with(
+        final ProcessorTopology topology = ProcessorTopology.withSources(
                 Collections.singletonMap(processorNode.name(), (ProcessorNode) processorNode),
-                sourceNodes,
-                Collections.<String, SinkNode>emptyMap());
+                sourceNodes
+        );
 
         task.close(true, false);
 
@@ -584,13 +582,8 @@ public class StreamTaskTest {
                 return true;
             }
         };
-        Map<String, SourceNode> sourceByTopics =  new HashMap() { {
-                put(partition1.topic(), source1);
-                put(partition2.topic(), source2);
-            }
-        };
 
-        final ProcessorTopology topology = ProcessorTopology.with(
+        final ProcessorTopology topology = ProcessorTopology.withLocalStores(
                 Collections.singletonMap(storeName, (StateStore) inMemoryStore),
                 Collections.singletonMap(storeName, changelogTopic));
 
@@ -649,14 +642,8 @@ public class StreamTaskTest {
                 return true;
             }
         };
-        Map<String, SourceNode> sourceByTopics =  new HashMap() {
-            {
-                put(partition1.topic(), source1);
-                put(partition2.topic(), source2);
-            }
-        };
 
-        final ProcessorTopology topology = ProcessorTopology.with(
+        final ProcessorTopology topology = ProcessorTopology.withLocalStores(
                 Collections.singletonMap(storeName, (StateStore) inMemoryStore),
                 Collections.singletonMap(storeName, changelogTopic));
 
@@ -962,10 +949,10 @@ public class StreamTaskTest {
             }
         };
 
-        final ProcessorTopology topology = ProcessorTopology.with(
+        final ProcessorTopology topology = ProcessorTopology.withSources(
                 Collections.<String, ProcessorNode>singletonMap(source1.name(), sourceNode),
-                Collections.<String, SourceNode>singletonMap(topic1[0], sourceNode),
-                Collections.<String, SinkNode>emptyMap());
+                Collections.<String, SourceNode>singletonMap(topic1[0], sourceNode)
+        );
         final StreamTask task = new StreamTask(taskId00, Utils.mkSet(partition1), topology, consumer,
                                                changelogReader, eosConfig, streamsMetrics, stateDirectory, null, time, producer);
 
@@ -1021,7 +1008,7 @@ public class StreamTaskTest {
         final ProcessorTopology topology = ProcessorTopology.with(
                 Collections.<String, ProcessorNode>singletonMap(source1.name(), source1),
                 Collections.<String, SourceNode>singletonMap(topic1[0], source1),
-                Collections.singletonMap("store", (StateStore) new MockStateStoreSupplier.MockStateStore("store",false)),
+                Collections.singletonMap("store", (StateStore) new MockStateStoreSupplier.MockStateStore("store", false)),
                 Collections.<String, String>emptyMap());
 
         final StreamTask task = new StreamTask(taskId00,
@@ -1044,7 +1031,7 @@ public class StreamTaskTest {
         final ProcessorTopology topology = ProcessorTopology.with(
                 Collections.<String, ProcessorNode>singletonMap(source1.name(), source1),
                 Collections.<String, SourceNode>singletonMap(topic1[0], source1),
-                Collections.singletonMap("store", (StateStore) new MockStateStoreSupplier.MockStateStore("store",false)),
+                Collections.singletonMap("store", (StateStore) new MockStateStoreSupplier.MockStateStore("store", false)),
                 Collections.singletonMap("store", "changelog"));
 
         final StreamTask task = new StreamTask(taskId00,
@@ -1084,7 +1071,7 @@ public class StreamTaskTest {
                 put(topic2[0], processorNode);
             }
         };
-        final ProcessorTopology topology = ProcessorTopology.with(processorNodes, sourceNodes, Collections.<String, SinkNode>emptyMap());
+        final ProcessorTopology topology = ProcessorTopology.withSources(processorNodes, sourceNodes);
 
         return new StreamTask(taskId00, partitions, topology, consumer, changelogReader, config,
             streamsMetrics, stateDirectory, null, time, producer);

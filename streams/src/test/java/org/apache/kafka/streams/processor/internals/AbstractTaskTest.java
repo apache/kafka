@@ -113,7 +113,7 @@ public class AbstractTaskTest {
         final StreamsConfig config = new StreamsConfig(properties);
         return new AbstractTask(id,
                                 Collections.singletonList(new TopicPartition("t", 0)),
-                                ProcessorTopology.with(stateStores, Collections.<String, String>emptyMap()),
+                                ProcessorTopology.withLocalStores(stateStores, Collections.<String, String>emptyMap()),
                                 (Consumer<byte[], byte[]>) consumer,
                                 new StoreChangelogReader((Consumer<byte[], byte[]>) consumer, new MockStateRestoreListener(), new LogContext("stream-task-test ")),
                                 false,

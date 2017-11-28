@@ -1002,6 +1002,9 @@ public class StreamThread extends Thread {
             int committed = taskManager.commitAll();
             if (committed > 0) {
                 streamsMetrics.commitTimeSensor.record(computeLatency() / (double) committed, timerStartedMs);
+
+                // try to purge the committed records for repartition topics if possible
+                taskManager.maybePurgeCommitedRecords();
             }
             if (log.isDebugEnabled()) {
                 log.debug("Committed all active tasks {} and standby tasks {} in {}ms",

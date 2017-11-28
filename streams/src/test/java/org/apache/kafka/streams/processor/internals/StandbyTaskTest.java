@@ -86,7 +86,7 @@ public class StandbyTaskTest {
     private final MockStateRestoreListener stateRestoreListener = new MockStateRestoreListener();
 
     private final Set<TopicPartition> topicPartitions = Collections.emptySet();
-    private final ProcessorTopology topology = ProcessorTopology.with(
+    private final ProcessorTopology topology = ProcessorTopology.withLocalStores(
             new HashMap<String, StateStore>() {
                 {
                     put(storeName1, new MockStateStoreSupplier(storeName1, false).get());
@@ -101,7 +101,7 @@ public class StandbyTaskTest {
             });
     private final TopicPartition ktable = new TopicPartition("ktable1", 0);
     private final Set<TopicPartition> ktablePartitions = Utils.mkSet(ktable);
-    private final ProcessorTopology ktableTopology = ProcessorTopology.with(
+    private final ProcessorTopology ktableTopology = ProcessorTopology.withLocalStores(
             new HashMap<String, StateStore>() {
                 {
                     put(storeName1, new MockStateStoreSupplier(ktable.topic(), true, false).get());
