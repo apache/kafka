@@ -583,10 +583,21 @@ public class StreamTaskTest {
             }
         };
 
-        final ProcessorTopology topology = ProcessorTopology.withLocalStores(
+        final ProcessorTopology topology = ProcessorTopology.with(
+                new HashMap<String, ProcessorNode>() {
+                    {
+                        put(source1.name(), source1);
+                        put(source2.name(), source2);
+                    }
+                },
+                new HashMap<String, SourceNode>() {
+                    {
+                        put(partition1.topic(), source1);
+                        put(partition2.topic(), source2);
+                    }
+                },
                 Collections.singletonMap(storeName, (StateStore) inMemoryStore),
                 Collections.singletonMap(storeName, changelogTopic));
-
 
         final TopicPartition partition = new TopicPartition(changelogTopic, 0);
 
@@ -643,7 +654,19 @@ public class StreamTaskTest {
             }
         };
 
-        final ProcessorTopology topology = ProcessorTopology.withLocalStores(
+        final ProcessorTopology topology = ProcessorTopology.with(
+                new HashMap<String, ProcessorNode>() {
+                    {
+                        put(source1.name(), source1);
+                        put(source2.name(), source2);
+                    }
+                },
+                new HashMap<String, SourceNode>() {
+                    {
+                        put(partition1.topic(), source1);
+                        put(partition2.topic(), source2);
+                    }
+                },
                 Collections.singletonMap(storeName, (StateStore) inMemoryStore),
                 Collections.singletonMap(storeName, changelogTopic));
 
