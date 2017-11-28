@@ -306,8 +306,7 @@ public class ConnectorsResourceTest {
 
         final Capture<Callback<Herder.Created<ConnectorInfo>>> cb = Capture.newInstance();
         herder.putConnectorConfig(EasyMock.eq(CONNECTOR_NAME_SPECIAL_CHARS), EasyMock.eq(body.config()), EasyMock.eq(false), EasyMock.capture(cb));
-        expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(CONNECTOR_NAME_SPECIAL_CHARS, CONNECTOR_CONFIG,
-                CONNECTOR_TASK_NAMES, ConnectorType.SOURCE)));
+        expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(CONNECTOR_NAME_SPECIAL_CHARS, CONNECTOR_CONFIG, CONNECTOR_TASK_NAMES)));
 
         PowerMock.replayAll();
 
@@ -323,8 +322,7 @@ public class ConnectorsResourceTest {
         final Capture<Callback<Herder.Created<ConnectorInfo>>> cb = Capture.newInstance();
 
         herder.putConnectorConfig(EasyMock.eq(CONNECTOR_NAME_SPECIAL_CHARS), EasyMock.eq(CONNECTOR_CONFIG_SPECIAL_CHARS), EasyMock.eq(true), EasyMock.capture(cb));
-        expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(CONNECTOR_NAME_SPECIAL_CHARS, CONNECTOR_CONFIG_SPECIAL_CHARS, CONNECTOR_TASK_NAMES,
-                ConnectorType.SINK)));
+        expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(CONNECTOR_NAME_SPECIAL_CHARS, CONNECTOR_CONFIG_SPECIAL_CHARS, CONNECTOR_TASK_NAMES)));
 
         PowerMock.replayAll();
 
