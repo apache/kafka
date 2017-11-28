@@ -88,12 +88,7 @@ public class StandbyTaskTest {
 
     private final Set<TopicPartition> topicPartitions = Collections.emptySet();
     private final ProcessorTopology topology = ProcessorTopology.withLocalStores(
-            new HashMap<String, StateStore>() {
-                {
-                    put(storeName1, new MockStateStoreSupplier(storeName1, false).get());
-                    put(storeName2, new MockStateStoreSupplier(storeName2, true).get());
-                }
-            },
+            Utils.mkList(new MockStateStoreSupplier(storeName1, false).get(), new MockStateStoreSupplier(storeName2, true).get()),
             new HashMap<String, String>() {
                 {
                     put(storeName1, storeChangelogTopicName1);
@@ -103,11 +98,7 @@ public class StandbyTaskTest {
     private final TopicPartition globalTopicPartition = new TopicPartition(globalStoreName, 0);
     private final Set<TopicPartition> ktablePartitions = Utils.mkSet(globalTopicPartition);
     private final ProcessorTopology ktableTopology = ProcessorTopology.withLocalStores(
-            new HashMap<String, StateStore>() {
-                {
-                    put(storeName1, new MockStateStoreSupplier(globalTopicPartition.topic(), true, false).get());
-                }
-            },
+            Collections.<StateStore>singletonList(new MockStateStoreSupplier(globalTopicPartition.topic(), true, false).get()),
             new HashMap<String, String>() {
                 {
                     put(globalStoreName, globalTopicPartition.topic());

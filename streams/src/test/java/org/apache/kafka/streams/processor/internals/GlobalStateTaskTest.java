@@ -88,7 +88,7 @@ public class GlobalStateTaskTest {
         storeToTopic.put("t2-store", topic2);
         topology = ProcessorTopology.with(processorNodeMap,
                                          sourceByTopics,
-                                         Collections.<String, StateStore>emptyMap(),
+                                         Collections.<StateStore>emptyList(),
                                          storeToTopic);
 
         offsets.put(t1, 50L);

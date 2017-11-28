@@ -38,6 +38,7 @@ import org.junit.Test;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -56,21 +57,21 @@ public class AbstractTaskTest {
     @Test(expected = ProcessorStateException.class)
     public void shouldThrowProcessorStateExceptionOnInitializeOffsetsWhenAuthorizationException() {
         final Consumer consumer = mockConsumer(new AuthorizationException("blah"));
-        final AbstractTask task = createTask(consumer, Collections.<String, StateStore>emptyMap());
+        final AbstractTask task = createTask(consumer, Collections.<StateStore>emptyList());
         task.updateOffsetLimits();
     }
 
     @Test(expected = ProcessorStateException.class)
     public void shouldThrowProcessorStateExceptionOnInitializeOffsetsWhenKafkaException() {
         final Consumer consumer = mockConsumer(new KafkaException("blah"));
-        final AbstractTask task = createTask(consumer, Collections.<String, StateStore>emptyMap());
+        final AbstractTask task = createTask(consumer, Collections.<StateStore>emptyList());
         task.updateOffsetLimits();
     }
 
     @Test(expected = WakeupException.class)
     public void shouldThrowWakeupExceptionOnInitializeOffsetsWhenWakeupException() {
         final Consumer consumer = mockConsumer(new WakeupException());
-        final AbstractTask task = createTask(consumer, Collections.<String, StateStore>emptyMap());
+        final AbstractTask task = createTask(consumer, Collections.<StateStore>emptyList());
         task.updateOffsetLimits();
     }
 
@@ -81,7 +82,7 @@ public class AbstractTaskTest {
         EasyMock.expect(stateDirectory.lock(id)).andReturn(false);
         EasyMock.replay(stateDirectory);
 
-        final AbstractTask task = createTask(consumer, Collections.singletonMap(store.name(), store));
+        final AbstractTask task = createTask(consumer, Collections.singletonList(store));
 
         try {
             task.initializeStateStores();
@@ -97,7 +98,7 @@ public class AbstractTaskTest {
         final Consumer consumer = EasyMock.createNiceMock(Consumer.class);
         EasyMock.replay(stateDirectory);
 
-        final AbstractTask task = createTask(consumer, Collections.<String, StateStore>emptyMap());
+        final AbstractTask task = createTask(consumer, Collections.<StateStore>emptyList());
 
         task.initializeStateStores();
 
@@ -106,7 +107,7 @@ public class AbstractTaskTest {
     }
 
     @SuppressWarnings("unchecked")
-    private AbstractTask createTask(final Consumer consumer, final Map<String, StateStore> stateStores) {
+    private AbstractTask createTask(final Consumer consumer, final List<StateStore> stateStores) {
         final Properties properties = new Properties();
         properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "app");
         properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummyhost:9092");

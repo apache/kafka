@@ -596,7 +596,7 @@ public class StreamTaskTest {
                         put(partition2.topic(), source2);
                     }
                 },
-                Collections.singletonMap(storeName, (StateStore) inMemoryStore),
+                Collections.<StateStore>singletonList(inMemoryStore),
                 Collections.singletonMap(storeName, changelogTopic));
 
         final TopicPartition partition = new TopicPartition(changelogTopic, 0);
@@ -667,7 +667,7 @@ public class StreamTaskTest {
                         put(partition2.topic(), source2);
                     }
                 },
-                Collections.singletonMap(storeName, (StateStore) inMemoryStore),
+                Collections.<StateStore>singletonList(inMemoryStore),
                 Collections.singletonMap(storeName, changelogTopic));
 
         final TopicPartition partition = new TopicPartition(changelogTopic, 0);
@@ -1031,7 +1031,7 @@ public class StreamTaskTest {
         final ProcessorTopology topology = ProcessorTopology.with(
                 Collections.<String, ProcessorNode>singletonMap(source1.name(), source1),
                 Collections.<String, SourceNode>singletonMap(topic1[0], source1),
-                Collections.singletonMap("store", (StateStore) new MockStateStoreSupplier.MockStateStore("store", false)),
+                Collections.<StateStore>singletonList(new MockStateStoreSupplier.MockStateStore("store", false)),
                 Collections.<String, String>emptyMap());
 
         final StreamTask task = new StreamTask(taskId00,
@@ -1054,7 +1054,7 @@ public class StreamTaskTest {
         final ProcessorTopology topology = ProcessorTopology.with(
                 Collections.<String, ProcessorNode>singletonMap(source1.name(), source1),
                 Collections.<String, SourceNode>singletonMap(topic1[0], source1),
-                Collections.singletonMap("store", (StateStore) new MockStateStoreSupplier.MockStateStore("store", false)),
+                Collections.<StateStore>singletonList(new MockStateStoreSupplier.MockStateStore("store", false)),
                 Collections.singletonMap("store", "changelog"));
 
         final StreamTask task = new StreamTask(taskId00,

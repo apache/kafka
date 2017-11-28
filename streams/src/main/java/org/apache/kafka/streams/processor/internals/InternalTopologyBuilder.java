@@ -891,7 +891,8 @@ public class InternalTopologyBuilder {
         final Map<String, ProcessorNode> processorMap = new HashMap<>();
         final Map<String, SourceNode> topicSourceMap = new HashMap<>();
         final Map<String, SinkNode> topicSinkMap = new HashMap<>();
-        final Map<String, StateStore> stateStoreMap = new HashMap<>();
+        // we need to make the state store map values following the insertion ordering
+        final Map<String, StateStore> stateStoreMap = new LinkedHashMap<>();
         final Set<String> repartitionTopics = new HashSet<>();
 
         // create processor nodes in a topological order ("nodeFactories" is already topologically sorted)
@@ -927,8 +928,8 @@ public class InternalTopologyBuilder {
         return new ProcessorTopology(processorMap,
                                      topicSourceMap,
                                      topicSinkMap,
-                                     stateStoreMap,
-                                     globalStateStores,
+                                     new ArrayList<>(stateStoreMap.values()),
+                                     new ArrayList<>(globalStateStores.values()),
                                      storeToChangelogTopic,
                                      repartitionTopics);
     }

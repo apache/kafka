@@ -85,15 +85,12 @@ public class GlobalStateManagerImplTest {
     @Before
     public void before() throws IOException {
         final Map<String, String> storeToTopic = new HashMap<>();
-        final Map<String, StateStore> storeMap = new HashMap<>();
         store1 = new NoOpReadOnlyStore<>("t1-store");
         store2 = new NoOpReadOnlyStore("t2-store");
         storeToTopic.put("t1-store", "t1");
         storeToTopic.put("t2-store", "t2");
-        storeMap.put("t1-store", store1);
-        storeMap.put("t2-store", store2);
 
-        topology = ProcessorTopology.withGlobalStores(storeMap, storeToTopic);
+        topology = ProcessorTopology.withGlobalStores(Utils.<StateStore>mkList(store1, store2), storeToTopic);
 
         context = new NoOpProcessorContext();
         config = new StreamsConfig(new Properties() {
