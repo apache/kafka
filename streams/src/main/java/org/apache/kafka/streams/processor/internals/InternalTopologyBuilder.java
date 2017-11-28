@@ -1261,7 +1261,7 @@ public class InternalTopologyBuilder {
 
     // package-private for testing only
     synchronized void updateSubscriptions(final SubscriptionUpdates subscriptionUpdates,
-                                                 final String logPrefix) {
+                                          final String logPrefix) {
         log.debug("{}updating builder with {} topic(s) with possible matching regex subscription(s)",
                 logPrefix, subscriptionUpdates);
         this.subscriptionUpdates = subscriptionUpdates;
