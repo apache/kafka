@@ -1409,21 +1409,21 @@ public class KafkaConsumerTest {
 
             if (waitMs > 0)
                 time.sleep(waitMs);
-            if (interrupt)
+            if (interrupt) {
                 assertTrue("Close terminated prematurely", future.cancel(true));
 
-            // Make sure that close task completes and another task can be run on the single threaded executor
-            executor.submit(new Runnable() {
-                @Override
-                public void run() {
-                }
-            }).get(500, TimeUnit.MILLISECONDS);
+                // synchronization barrier to avoid race condition: make sure the task did complete and set the exception
+                executor.submit(new Runnable() {
+                    @Override
+                    public void run() {
+                    }
+                }).get(500, TimeUnit.MILLISECONDS);
 
-            if (!interrupt) {
+                assertTrue("Expected exception not thrown " + closeException, closeException.get() instanceof InterruptException);
+            } else {
                 future.get(500, TimeUnit.MILLISECONDS); // Should succeed without TimeoutException or ExecutionException
                 assertNull("Unexpected exception during close", closeException.get());
-            } else
-                assertTrue("Expected exception not thrown " + closeException, closeException.get() instanceof InterruptException);
+            }
         } finally {
             executor.shutdownNow();
         }

@@ -1061,7 +1061,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     try {
                         this.ioThread.join(timeUnit.toMillis(timeout));
                     } catch (InterruptedException t) {
-                        Thread.currentThread().interrupt();
                         firstException.compareAndSet(null, new InterruptException(t));
                         log.error("Interrupted while joining ioThread", t);
                     }
@@ -1078,7 +1077,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 try {
                     this.ioThread.join();
                 } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
                     firstException.compareAndSet(null, new InterruptException(e));
                 }
             }

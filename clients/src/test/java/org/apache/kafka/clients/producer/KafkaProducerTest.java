@@ -220,7 +220,7 @@ public class KafkaProducerTest {
 
             assertTrue("Close terminated prematurely", future.cancel(true));
 
-            // Make sure that close task completes and another task can be run on the single threaded executor
+            // synchronization barrier to avoid race condition: make sure the task did complete and set the exception
             executor.submit(new Runnable() {
                 @Override
                 public void run() {

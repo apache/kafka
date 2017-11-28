@@ -1738,8 +1738,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (coordinator != null)
                 coordinator.close(Math.min(timeoutMs, requestTimeoutMs));
         } catch (Throwable t) {
-            if (t instanceof InterruptException)
-                Thread.currentThread().interrupt();
             firstException.compareAndSet(null, t);
             log.error("Failed to close coordinator", t);
         }
