@@ -76,20 +76,15 @@ public class GlobalStateTaskTest {
     public void before() {
         final Set<String> storeNames = Utils.mkSet("t1-store", "t2-store");
         final Map<String, SourceNode> sourceByTopics = new HashMap<>();
-        final Map<String, ProcessorNode> processorNodeMap = new HashMap<>();
         sourceByTopics.put(topic1, sourceOne);
         sourceByTopics.put(topic2, sourceTwo);
-        processorNodeMap.put(sourceOne.name(), sourceOne);
-        processorNodeMap.put(sourceTwo.name(), sourceTwo);
-        processorNodeMap.put(processorOne.name(), processorOne);
-        processorNodeMap.put(processorTwo.name(), processorTwo);
         final Map<String, String> storeToTopic = new HashMap<>();
         storeToTopic.put("t1-store", topic1);
         storeToTopic.put("t2-store", topic2);
-        topology = ProcessorTopology.with(processorNodeMap,
-                                         sourceByTopics,
-                                         Collections.<StateStore>emptyList(),
-                                         storeToTopic);
+        topology = ProcessorTopology.with(Utils.mkList(sourceOne, sourceTwo, processorOne, processorTwo),
+                                          sourceByTopics,
+                                          Collections.<StateStore>emptyList(),
+                                          storeToTopic);
 
         offsets.put(t1, 50L);
         offsets.put(t2, 100L);

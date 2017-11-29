@@ -41,6 +41,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockRestoreConsumer;
 import org.apache.kafka.test.MockStateRestoreListener;
+import org.apache.kafka.test.MockStateStore;
 import org.apache.kafka.test.MockStateStoreSupplier;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
@@ -191,10 +192,8 @@ public class StandbyTaskTest {
         task.update(partition2, restoreStateConsumer.poll(100).records(partition2));
 
         StandbyContextImpl context = (StandbyContextImpl) task.context();
-        MockStateStoreSupplier.MockStateStore store1 =
-                (MockStateStoreSupplier.MockStateStore) context.getStateMgr().getStore(storeName1);
-        MockStateStoreSupplier.MockStateStore store2 =
-                (MockStateStoreSupplier.MockStateStore) context.getStateMgr().getStore(storeName2);
+        MockStateStore store1 = (MockStateStore) context.getStateMgr().getStore(storeName1);
+        MockStateStore store2 = (MockStateStore) context.getStateMgr().getStore(storeName2);
 
         assertEquals(Collections.emptyList(), store1.keys);
         assertEquals(Utils.mkList(1, 2, 3), store2.keys);

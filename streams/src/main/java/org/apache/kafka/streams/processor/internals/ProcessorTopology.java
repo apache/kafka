@@ -35,11 +35,11 @@ public class ProcessorTopology {
     private final Map<String, String> storeToChangelogTopic;
     private final Set<String> repartitionTopics;
 
-    public static ProcessorTopology with(final Map<String, ProcessorNode> processorsByName,
+    public static ProcessorTopology with(final List<ProcessorNode> processorNodes,
                                          final Map<String, SourceNode> sourcesByTopic,
                                          final List<StateStore> stateStoresByName,
                                          final Map<String, String> storeToChangelogTopic) {
-        return new ProcessorTopology(processorsByName,
+        return new ProcessorTopology(processorNodes,
                 sourcesByTopic,
                 Collections.<String, SinkNode>emptyMap(),
                 stateStoresByName,
@@ -48,9 +48,9 @@ public class ProcessorTopology {
                 Collections.<String>emptySet());
     }
 
-    public static ProcessorTopology withSources(final Map<String, ProcessorNode> processorsByName,
+    public static ProcessorTopology withSources(final List<ProcessorNode> processorNodes,
                                                 final Map<String, SourceNode> sourcesByTopic) {
-        return new ProcessorTopology(processorsByName,
+        return new ProcessorTopology(processorNodes,
                 sourcesByTopic,
                 Collections.<String, SinkNode>emptyMap(),
                 Collections.<StateStore>emptyList(),
@@ -61,7 +61,7 @@ public class ProcessorTopology {
 
     public static ProcessorTopology withLocalStores(final List<StateStore> stateStores,
                                                     final Map<String, String> storeToChangelogTopic) {
-        return new ProcessorTopology(Collections.<String, ProcessorNode>emptyMap(),
+        return new ProcessorTopology(Collections.<ProcessorNode>emptyList(),
                 Collections.<String, SourceNode>emptyMap(),
                 Collections.<String, SinkNode>emptyMap(),
                 stateStores,
@@ -72,7 +72,7 @@ public class ProcessorTopology {
 
     public static ProcessorTopology withGlobalStores(final List<StateStore> stateStores,
                                                      final Map<String, String> storeToChangelogTopic) {
-        return new ProcessorTopology(Collections.<String, ProcessorNode>emptyMap(),
+        return new ProcessorTopology(Collections.<ProcessorNode>emptyList(),
                 Collections.<String, SourceNode>emptyMap(),
                 Collections.<String, SinkNode>emptyMap(),
                 Collections.<StateStore>emptyList(),
@@ -81,14 +81,14 @@ public class ProcessorTopology {
                 Collections.<String>emptySet());
     }
 
-    public ProcessorTopology(final Map<String, ProcessorNode> processorsByName,
+    public ProcessorTopology(final List<ProcessorNode> processorNodes,
                              final Map<String, SourceNode> sourcesByTopic,
                              final Map<String, SinkNode> sinksByTopic,
                              final List<StateStore> stateStores,
                              final List<StateStore> globalStateStores,
                              final Map<String, String> stateStoreToChangelogTopic,
                              final Set<String> repartitionTopics) {
-        this.processorNodes = Collections.unmodifiableList(new ArrayList<>(processorsByName.values()));
+        this.processorNodes = Collections.unmodifiableList(processorNodes);
         this.sourcesByTopic = Collections.unmodifiableMap(sourcesByTopic);
         this.sinksByTopic = Collections.unmodifiableMap(sinksByTopic);
         this.stateStores = Collections.unmodifiableList(stateStores);
