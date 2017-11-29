@@ -20,9 +20,6 @@ package kafka.tools
 import java.io._
 import java.nio.ByteBuffer
 
-import com.fasterxml.jackson.databind.{JsonNode, ObjectMapper}
-import com.fasterxml.jackson.databind.node.{IntNode, JsonNodeFactory, ObjectNode, TextNode}
-import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import joptsimple.OptionParser
 import kafka.coordinator.group.{GroupMetadataKey, GroupMetadataManager, OffsetKey}
 import kafka.coordinator.transaction.TransactionLog
@@ -337,12 +334,9 @@ object DumpLogSegments {
         }
       }.mkString("{", ",", "}")
 
-      val objectMapper = new ObjectMapper()
-      objectMapper.registerModule(DefaultScalaModule)
+      val keyString = Json.encodeToJsonString(Map("metadata" -> groupId))
 
-      val keyString = objectMapper.writeValueAsString(Map("metadata" -> groupId))
-
-      val valueString = objectMapper.writeValueAsString(Map(
+      val valueString = Json.encodeToJsonString(Map(
         "protocolType" -> protocolType,
         "protocol" -> group.protocol,
         "generationId" -> group.generationId,

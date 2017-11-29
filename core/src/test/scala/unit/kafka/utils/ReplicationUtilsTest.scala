@@ -17,8 +17,6 @@
 
 package kafka.utils
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.server.{KafkaConfig, ReplicaFetcherManager}
 import kafka.api.LeaderAndIsr
@@ -27,7 +25,7 @@ import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
 import org.junit.{Before, Test}
 import org.easymock.EasyMock
-
+import scala.collection.JavaConverters._
 
 class ReplicationUtilsTest extends ZooKeeperTestHarness {
   val topic = "my-topic-test"
@@ -37,14 +35,12 @@ class ReplicationUtilsTest extends ZooKeeperTestHarness {
   val controllerEpoch = 1
   val zkVersion = 1
   val topicPath = "/brokers/topics/my-topic-test/partitions/0/state"
-  val objectMapper = new ObjectMapper()
-  objectMapper.registerModule(DefaultScalaModule)
-  val topicData = objectMapper.writeValueAsString(Map("controller_epoch" -> 1, "leader" -> 1,
-    "versions" -> 1, "leader_epoch" -> 1,"isr" -> List(1,2)))
-  val topicDataVersionMismatch = objectMapper.writeValueAsString(Map("controller_epoch" -> 1, "leader" -> 1,
-    "versions" -> 2, "leader_epoch" -> 1,"isr" -> List(1,2)))
-  val topicDataMismatch = objectMapper.writeValueAsString(Map("controller_epoch" -> 1, "leader" -> 1,
-    "versions" -> 2, "leader_epoch" -> 2,"isr" -> List(1,2)))
+  val topicData = Json.encodeToJsonString(Map("controller_epoch" -> 1, "leader" -> 1,
+    "versions" -> 1, "leader_epoch" -> 1,"isr" -> List(1,2).asJava))
+  val topicDataVersionMismatch = Json.encodeToJsonString(Map("controller_epoch" -> 1, "leader" -> 1,
+    "versions" -> 2, "leader_epoch" -> 1,"isr" -> List(1,2).asJava))
+  val topicDataMismatch = Json.encodeToJsonString(Map("controller_epoch" -> 1, "leader" -> 1,
+    "versions" -> 2, "leader_epoch" -> 2,"isr" -> List(1,2).asJava))
 
   val topicDataLeaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(1,leaderEpoch,List(1,2),0), controllerEpoch)
 

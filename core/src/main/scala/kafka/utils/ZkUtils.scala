@@ -19,8 +19,6 @@ package kafka.utils
 
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import kafka.admin._
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, LeaderAndIsr}
 import kafka.cluster._
@@ -88,8 +86,6 @@ object ZkUtils {
   // Important: it is necessary to add any new top level Zookeeper path that contains
   //            sensitive information that should not be world readable to the Seq
   val SensitiveZkRootPaths = Seq(ConfigUsersPath)
-  val objectMapper = new ObjectMapper()
-  objectMapper.registerModule(DefaultScalaModule)
 
   def withMetrics(zkUrl: String, sessionTimeout: Int, connectionTimeout: Int, isZkSecurityEnabled: Boolean,
                   time: Time): ZkUtils = {
@@ -203,23 +199,23 @@ object ZkUtils {
   }
 
   def controllerZkData(brokerId: Int, timestamp: Long): String = {
-    objectMapper.writeValueAsString(Map("version" -> 1, "brokerid" -> brokerId, "timestamp" -> timestamp.toString))
+    Json.encodeToJsonString(Map("version" -> 1, "brokerid" -> brokerId, "timestamp" -> timestamp.toString))
   }
 
   def preferredReplicaLeaderElectionZkData(partitions: scala.collection.Set[TopicAndPartition]): String = {
-    objectMapper.writeValueAsString(Map("version" -> 1, "partitions" -> partitions.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition))))
+    Json.encodeToJsonString(Map("version" -> 1, "partitions" -> partitions.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition).asJava).asJava))
   }
 
   def formatAsReassignmentJson(partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]]): String = {
-    objectMapper.writeValueAsString(Map(
+    Json.encodeToJsonString(Map(
       "version" -> 1,
       "partitions" -> partitionsToBeReassigned.map { case (TopicAndPartition(topic, partition), replicas) =>
         Map(
           "topic" -> topic,
           "partition" -> partition,
-          "replicas" -> replicas
-        )
-      }
+          "replicas" -> replicas.asJava
+        ).asJava
+      }.asJava
     ))
   }
 
@@ -287,9 +283,6 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
   @deprecated("This is deprecated, use defaultAcls(path) which doesn't make sensitive data world readable", since = "0.10.2.1")
   val DefaultAcls: java.util.List[ACL] = ZkUtils.defaultAcls(isSecure, "")
 
-  val objectMapper = new ObjectMapper()
-  objectMapper.registerModule(DefaultScalaModule)
-
   def defaultAcls(path: String): java.util.List[ACL] = ZkUtils.defaultAcls(isSecure, path)
 
   def zkClient: ZkClient = zkClientWrap.zkClient
@@ -323,7 +316,7 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
   object ClusterId {
 
     def toJson(id: String) = {
-      objectMapper.writeValueAsString(Map("version" -> "1", "id" -> id))
+      Json.encodeToJsonString(Map("version" -> "1", "id" -> id))
     }
 
     def fromJson(clusterIdJson: String): String = {
@@ -478,15 +471,15 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
   }
 
   def leaderAndIsrZkData(leaderAndIsr: LeaderAndIsr, controllerEpoch: Int): String = {
-    objectMapper.writeValueAsString(Map("version" -> 1, "leader" -> leaderAndIsr.leader, "leader_epoch" -> leaderAndIsr.leaderEpoch,
-                    "controller_epoch" -> controllerEpoch, "isr" -> leaderAndIsr.isr))
+    Json.encodeToJsonString(Map("version" -> 1, "leader" -> leaderAndIsr.leader, "leader_epoch" -> leaderAndIsr.leaderEpoch,
+                    "controller_epoch" -> controllerEpoch, "isr" -> leaderAndIsr.isr.asJava))
   }
 
   /**
    * Get JSON partition to replica map from zookeeper.
    */
-  def replicaAssignmentZkData(map: Map[String, Seq[Int]]): String = {
-    objectMapper.writeValueAsString(Map("version" -> 1, "partitions" -> map))
+  def replicaAssignmentZkData(partitionMap: Map[Int, Seq[Int]]): String = {
+    Json.encodeToJsonString(Map("version" -> 1, "partitions" -> (partitionMap.map(e => e._1.toString -> e._2.asJava).asJava)))
   }
 
   /**

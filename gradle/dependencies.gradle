@@ -73,8 +73,7 @@ versions += [
   zkclient: "0.10",
   zookeeper: "3.4.10",
   jfreechart: "1.0.0",
-  mavenArtifact: "3.5.0",
-  jacksonmodulescala: "2.9.1",
+  mavenArtifact: "3.5.0"
 ]
 
 libs += [
@@ -120,6 +119,5 @@ libs += [
   zkclient: "com.101tec:zkclient:$versions.zkclient",
   zookeeper: "org.apache.zookeeper:zookeeper:$versions.zookeeper",
   jfreechart: "jfreechart:jfreechart:$versions.jfreechart",
-  mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",
-  jacksonScalaModule: "com.fasterxml.jackson.module:jackson-module-scala_$versions.baseScala:$versions.jacksonmodulescala"
+  mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact"
 ]

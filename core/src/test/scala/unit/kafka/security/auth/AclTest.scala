@@ -18,12 +18,11 @@ package kafka.security.auth
 
 import java.nio.charset.StandardCharsets.UTF_8
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import kafka.utils.Json
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.{Assert, Test}
 import org.scalatest.junit.JUnitSuite
+import scala.collection.JavaConverters._
 
 class AclTest extends JUnitSuite {
 
@@ -38,9 +37,7 @@ class AclTest extends JUnitSuite {
     val acl3 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), Deny, "host1", Read)
 
     val acls = Set[Acl](acl1, acl2, acl3)
-    val objectMapper = new ObjectMapper()
-    objectMapper.registerModule(DefaultScalaModule)
-    val jsonAcls = objectMapper.writeValueAsString(Acl.toJsonCompatibleMap(acls))
+    val jsonAcls = Json.encodeToJsonString(Acl.toJsonCompatibleMap(acls))
 
     Assert.assertEquals(acls, Acl.fromBytes(jsonAcls.getBytes(UTF_8)))
     Assert.assertEquals(acls, Acl.fromBytes(AclJson.getBytes(UTF_8)))

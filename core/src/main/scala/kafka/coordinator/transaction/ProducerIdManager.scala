@@ -16,12 +16,10 @@
  */
 package kafka.coordinator.transaction
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.databind.node.JsonNodeFactory
-import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import kafka.common.KafkaException
 import kafka.utils.{Json, Logging, ZkUtils}
 import kafka.zk.KafkaZkClient
+import scala.collection.JavaConverters._
 
 /**
  * ProducerIdManager is the part of the transaction coordinator that provides ProducerIds in a unique way
@@ -33,11 +31,9 @@ import kafka.zk.KafkaZkClient
 object ProducerIdManager extends Logging {
   val CurrentVersion: Long = 1L
   val PidBlockSize: Long = 1000L
-  val objectMapper = new ObjectMapper()
-  objectMapper.registerModule(DefaultScalaModule)
 
   def generateProducerIdBlockJson(producerIdBlock: ProducerIdBlock): String = {
-    objectMapper.writeValueAsString(Map("version" -> CurrentVersion,
+    Json.encodeToJsonString(Map("version" -> CurrentVersion,
       "broker" -> producerIdBlock.brokerId,
       "block_start" -> producerIdBlock.blockStartId.toString,
       "block_end" -> producerIdBlock.blockEndId.toString)

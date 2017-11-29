@@ -24,10 +24,8 @@ import kafka.utils.ZkUtils._
 import java.util.Random
 import java.util.Properties
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import kafka.common.TopicAlreadyMarkedForDeletionException
-import org.apache.kafka.common.errors.{BrokerNotAvailableException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidReplicationFactorException, InvalidTopicException, TopicExistsException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.errors._
 
 import collection.{Map, Set, mutable, _}
 import scala.collection.JavaConverters._
@@ -67,8 +65,6 @@ object AdminUtils extends Logging with AdminUtilities {
   val rand = new Random
   val AdminClientId = "__admin_client"
   val EntityConfigChangeZnodePrefix = "config_change_"
-  val objectMapper = new ObjectMapper()
-  objectMapper.registerModule(DefaultScalaModule)
 
   /**
    * There are 3 goals of replica assignment:
@@ -532,7 +528,7 @@ object AdminUtils extends Logging with AdminUtilities {
   private def writeTopicPartitionAssignment(zkUtils: ZkUtils, topic: String, replicaAssignment: Map[Int, Seq[Int]], update: Boolean) {
     try {
       val zkPath = getTopicPath(topic)
-      val jsonPartitionData = zkUtils.replicaAssignmentZkData(replicaAssignment.map(e => e._1.toString -> e._2))
+      val jsonPartitionData = zkUtils.replicaAssignmentZkData(replicaAssignment)
 
       if (!update) {
         info("Topic creation " + jsonPartitionData.toString)
@@ -632,7 +628,7 @@ object AdminUtils extends Logging with AdminUtilities {
 
     // create the change notification
     val seqNode = ZkUtils.ConfigChangesPath + "/" + EntityConfigChangeZnodePrefix
-    val content = objectMapper.writeValueAsString(getConfigChangeZnodeData(sanitizedEntityPath))
+    val content = Json.encodeToJsonString(getConfigChangeZnodeData(sanitizedEntityPath))
     zkUtils.createSequentialPersistentPath(seqNode, content)
   }
 
@@ -644,8 +640,9 @@ object AdminUtils extends Logging with AdminUtilities {
    * Write out the entity config to zk, if there is any
    */
   private def writeEntityConfig(zkUtils: ZkUtils, entityPath: String, config: Properties) {
-    val map = Map("version" -> 1, "config" -> config.asScala)
-    zkUtils.updatePersistentPath(entityPath, objectMapper.writeValueAsString(map))
+    val map = Map("version" -> 1, "config" -> config)
+
+    zkUtils.updatePersistentPath(entityPath, Json.encodeToJsonString(map))
   }
 
   /**

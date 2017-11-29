@@ -20,8 +20,6 @@ package kafka.admin
 import java.io.PrintStream
 import java.util.Properties
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.kafka.clients.admin.{AdminClientConfig, DescribeLogDirsResult, AdminClient => JAdminClient}
 import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo
 
@@ -58,9 +56,7 @@ object LogDirsCommand {
     }
 
     private def formatAsJson(logDirInfosByBroker: Map[Integer, Map[String, LogDirInfo]], topicSet: Set[String]): String = {
-        val objectMapper = new ObjectMapper()
-        objectMapper.registerModule(DefaultScalaModule)
-        objectMapper.writeValueAsString(Map(
+        Json.encodeToJsonString(Map(
             "version" -> 1,
             "brokers" -> logDirInfosByBroker.map { case (broker, logDirInfos) =>
                 Map(
@@ -77,12 +73,12 @@ object LogDirsCommand {
                                     "size" -> replicaInfo.size,
                                     "offsetLag" -> replicaInfo.offsetLag,
                                     "isFuture" -> replicaInfo.isFuture
-                                )
-                            }
-                        )
-                    }
-                )
-            }
+                                ).asJava
+                            }.asJava
+                        ).asJava
+                    }.asJava
+                ).asJava
+            }.asJava
         ))
     }
 

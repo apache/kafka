@@ -17,8 +17,6 @@
 
 package kafka.utils
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import kafka.api.LeaderAndIsr
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch}
 import kafka.utils.ZkUtils._
@@ -27,12 +25,11 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.zookeeper.data.Stat
 
 import scala.collection._
+import scala.collection.JavaConverters._
 
 object ReplicationUtils extends Logging {
 
   private val IsrChangeNotificationPrefix = "isr_change_"
-  private val objectMapper = new ObjectMapper()
-  objectMapper.registerModule(DefaultScalaModule)
 
   def updateLeaderAndIsr(zkClient: KafkaZkClient, topic: String, partitionId: Int, newLeaderAndIsr: LeaderAndIsr, controllerEpoch: Int,
     zkVersion: Int): (Boolean,Int) = {
@@ -90,8 +87,8 @@ object ReplicationUtils extends Logging {
   }
 
   private def generateIsrChangeJson(isrChanges: Set[TopicPartition]): String = {
-    val partitions = isrChanges.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition)).toArray
-    objectMapper.writeValueAsString(Map("version" -> IsrChangeNotificationHandler.Version, "partitions" -> partitions))
+    val partitions = isrChanges.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition).asJava).toList.asJava
+    Json.encodeToJsonString(Map("version" -> IsrChangeNotificationHandler.Version, "partitions" -> partitions))
   }
 
 }

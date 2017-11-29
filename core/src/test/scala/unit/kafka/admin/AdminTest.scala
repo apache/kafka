@@ -35,8 +35,6 @@ import java.io.File
 import java.util
 import java.util.concurrent.LinkedBlockingQueue
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import kafka.utils.TestUtils._
 import kafka.admin.AdminUtils._
 
@@ -534,10 +532,8 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
     // Write config without notification to ZK.
     val configMap = Map[String, String] ("producer_byte_rate" -> "1000", "consumer_byte_rate" -> "2000")
-    val map = Map("version" -> 1, "config" -> configMap)
-    val objectMapper = new ObjectMapper()
-    objectMapper.registerModule(DefaultScalaModule)
-    zkUtils.updatePersistentPath(ZkUtils.getEntityConfigPath(ConfigType.Client, clientId), objectMapper.writeValueAsString(map))
+    val map = Map("version" -> 1, "config" -> configMap.asJava)
+    zkUtils.updatePersistentPath(ZkUtils.getEntityConfigPath(ConfigType.Client, clientId), Json.encodeToJsonString(map))
 
     val configInZk: Map[String, Properties] = AdminUtils.fetchAllEntityConfigs(zkUtils, ConfigType.Client)
     assertEquals("Must have 1 overriden client config", 1, configInZk.size)

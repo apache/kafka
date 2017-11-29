@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import kafka.utils.json.JsonValue
 
 import scala.collection._
+import scala.collection.JavaConverters._
 
 /**
  * Provides methods for parsing JSON with Jackson and encoding to JSON with a simple and naive custom implementation.
@@ -78,4 +79,11 @@ object Json {
    */
   def encodeAsBytes(obj: Any): Array[Byte] = encode(obj).getBytes(StandardCharsets.UTF_8)
 
+  def encodeToJsonString(obj: Map[String,Any]): String = {
+     mapper.writeValueAsString(obj.asJava)
+  }
+
+  def encodeToJsonBytes(obj: Map[String,Any]): Array[Byte] = {
+      mapper.writeValueAsString(obj.asJava).getBytes(StandardCharsets.UTF_8)
+  }
 }

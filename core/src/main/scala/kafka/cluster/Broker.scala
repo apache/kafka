@@ -17,8 +17,6 @@
 
 package kafka.cluster
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import kafka.common.{BrokerEndPointNotAvailableException, BrokerNotAvailableException, KafkaException}
 import kafka.utils.Json
 import org.apache.kafka.common.Node
@@ -27,6 +25,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.Map
+import scala.collection.JavaConverters._
 
 /**
  * A Kafka broker.
@@ -136,7 +135,7 @@ object Broker {
     val jsonMap = collection.mutable.Map(VersionKey -> version,
       HostKey -> host,
       PortKey -> port,
-      EndpointsKey -> advertisedEndpoints.map(_.connectionString).toArray,
+      EndpointsKey -> advertisedEndpoints.map(_.connectionString).toList.asJava,
       JmxPortKey -> jmxPort,
       TimestampKey -> Time.SYSTEM.milliseconds().toString
     )
@@ -145,12 +144,9 @@ object Broker {
     if (version >= 4) {
       jsonMap += (ListenerSecurityProtocolMapKey -> advertisedEndpoints.map { endPoint =>
         endPoint.listenerName.value -> endPoint.securityProtocol.name
-      }.toMap)
+      }.toMap.asJava)
     }
-
-    val objectMapper = new ObjectMapper()
-    objectMapper.registerModule(DefaultScalaModule)
-    objectMapper.writeValueAsString(jsonMap)
+    Json.encodeToJsonString(jsonMap)
   }
 }
 

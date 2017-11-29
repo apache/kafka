@@ -553,7 +553,6 @@ project(':core') {
     compile libs.scalaLogging
     compile libs.zkclient
     compile libs.zookeeper
-    compile libs.jacksonScalaModule
 
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.bcpkix
