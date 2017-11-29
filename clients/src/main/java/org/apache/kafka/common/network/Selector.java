@@ -424,11 +424,9 @@ public class Selector implements Selectable, AutoCloseable {
      */
     // package-private for testing
     void pollSelectionKeys(Set<SelectionKey> selectionKeys,
-                                   boolean isImmediatelyConnected,
-                                   long currentTimeNanos) {
-        Iterator<SelectionKey> iterator = determineHandlingOrder(selectionKeys).iterator();
-        while (iterator.hasNext()) {
-            SelectionKey key = iterator.next();
+                           boolean isImmediatelyConnected,
+                           long currentTimeNanos) {
+        for (SelectionKey key : determineHandlingOrder(selectionKeys)) {
             KafkaChannel channel = channel(key);
             long channelStartTimeNanos = recordTimePerConnection ? time.nanoseconds() : 0;
 
@@ -507,16 +505,13 @@ public class Selector implements Selectable, AutoCloseable {
     private Collection<SelectionKey> determineHandlingOrder(Set<SelectionKey> selectionKeys) {
         //it is possible that the iteration order over selectionKeys is the same every invocation.
         //this may cause starvation of reads when memory is low. to address this we shuffle the keys if memory is low.
-        Collection<SelectionKey> inHandlingOrder;
-
         if (!outOfMemory && memoryPool.availableMemory() < lowMemThreshold) {
-            List<SelectionKey> temp = new ArrayList<>(selectionKeys);
-            Collections.shuffle(temp);
-            inHandlingOrder = temp;
+            List<SelectionKey> shuffledKeys = new ArrayList<>(selectionKeys);
+            Collections.shuffle(shuffledKeys);
+            return shuffledKeys;
         } else {
-            inHandlingOrder = selectionKeys;
+            return selectionKeys;
         }
-        return inHandlingOrder;
     }
 
     private void attemptRead(SelectionKey key, KafkaChannel channel) throws IOException {
@@ -642,19 +637,17 @@ public class Selector implements Selectable, AutoCloseable {
     /**
      * Check for data, waiting up to the given timeout.
      *
-     * @param ms Length of time to wait, in milliseconds, which must be non-negative
+     * @param timeoutMs Length of time to wait, in milliseconds, which must be non-negative
      * @return The number of keys ready
-     * @throws IllegalArgumentException
-     * @throws IOException
      */
-    private int select(long ms) throws IOException {
-        if (ms < 0L)
+    private int select(long timeoutMs) throws IOException {
+        if (timeoutMs < 0L)
             throw new IllegalArgumentException("timeout should be >= 0");
 
-        if (ms == 0L)
+        if (timeoutMs == 0L)
             return this.nioSelector.selectNow();
         else
-            return this.nioSelector.select(ms);
+            return this.nioSelector.select(timeoutMs);
     }
 
     /**
@@ -714,6 +707,8 @@ public class Selector implements Selectable, AutoCloseable {
 
     private void doClose(KafkaChannel channel, boolean notifyDisconnect) {
         try {
+            immediatelyConnectedKeys.remove(channel.selectionKey());
+            keysWithBufferedRead.remove(channel.selectionKey());
             channel.close();
         } catch (IOException e) {
             log.error("Exception closing connection to node {}:", channel.id(), e);

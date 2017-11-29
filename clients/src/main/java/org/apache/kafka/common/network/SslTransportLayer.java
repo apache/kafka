@@ -131,6 +131,11 @@ public class SslTransportLayer implements TransportLayer {
     }
 
     @Override
+    public SelectionKey selectionKey() {
+        return key;
+    }
+
+    @Override
     public boolean isOpen() {
         return socketChannel.isOpen();
     }

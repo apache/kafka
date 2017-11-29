@@ -64,6 +64,11 @@ public class PlaintextTransportLayer implements TransportLayer {
     }
 
     @Override
+    public SelectionKey selectionKey() {
+        return key;
+    }
+
+    @Override
     public boolean isOpen() {
         return socketChannel.isOpen();
     }
@@ -191,7 +196,6 @@ public class PlaintextTransportLayer implements TransportLayer {
 
     /**
      * Adds the interestOps to selectionKey.
-     * @param ops
      */
     @Override
     public void addInterestOps(int ops) {
@@ -201,7 +205,6 @@ public class PlaintextTransportLayer implements TransportLayer {
 
     /**
      * Removes the interestOps from selectionKey.
-     * @param ops
      */
     @Override
     public void removeInterestOps(int ops) {
