@@ -97,7 +97,9 @@ public class ConnectorsResource {
         herder.putConnectorConfig(name, configs, false, cb);
         Herder.Created<ConnectorInfo> info = completeOrForwardRequest(cb, "/connectors", "POST", createRequest,
                 new TypeReference<ConnectorInfo>() { }, new CreatedConnectorInfoTranslator(), forward);
-        return Response.created(URI.create("/connectors/" + name)).entity(info.result()).build();
+
+        URI location = UriBuilder.fromUri("/connectors").path(name).build();
+        return Response.created(location).entity(info.result()).build();
     }
 
     @GET
@@ -142,10 +144,12 @@ public class ConnectorsResource {
         Herder.Created<ConnectorInfo> createdInfo = completeOrForwardRequest(cb, "/connectors/" + connector + "/config",
                 "PUT", connectorConfig, new TypeReference<ConnectorInfo>() { }, new CreatedConnectorInfoTranslator(), forward);
         Response.ResponseBuilder response;
-        if (createdInfo.created())
-            response = Response.created(URI.create("/connectors/" + connector));
-        else
+        if (createdInfo.created()) {
+            URI location = UriBuilder.fromUri("/connectors").path(connector).build();
+            response = Response.created(location);
+        } else {
             response = Response.ok();
+        }
         return response.entity(createdInfo.result()).build();
     }
 
