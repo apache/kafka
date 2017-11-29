@@ -304,7 +304,7 @@ object ReassignPartitionsCommand extends Logging {
 
   private def checkIfPartitionReassignmentSucceeded(zkUtils: ZkUtils, partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]])
   :Map[TopicAndPartition, ReassignmentStatus] = {
-    val partitionsBeingReassigned = zkUtils.getPartitionsBeingReassigned()
+    val partitionsBeingReassigned = zkUtils.getPartitionsBeingReassigned().mapValues(_.newReplicas)
     partitionsToBeReassigned.keys.map { topicAndPartition =>
       (topicAndPartition, checkIfPartitionReassignmentSucceeded(zkUtils, topicAndPartition, partitionsToBeReassigned,
         partitionsBeingReassigned))

@@ -24,7 +24,7 @@ import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, LeaderAndIsr}
 import kafka.cluster._
 import kafka.common.{KafkaException, NoEpochForPartitionException, TopicAndPartition}
 import kafka.consumer.{ConsumerThreadId, TopicCount}
-import kafka.controller.LeaderIsrAndControllerEpoch
+import kafka.controller.{LeaderIsrAndControllerEpoch, ReassignedPartitionsContext}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.ConfigType
 import kafka.utils.ZkUtils._
@@ -815,12 +815,16 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
       None
   }
 
-  def getPartitionsBeingReassigned(): Map[TopicAndPartition, Seq[Int]] = {
+  def getPartitionsBeingReassigned(): Map[TopicAndPartition, ReassignedPartitionsContext] = {
     // read the partitions and their new replica list
     val jsonPartitionMapOpt = readDataMaybeNull(ReassignPartitionsPath)._1
     jsonPartitionMapOpt match {
-      case Some(jsonPartitionMap) => parsePartitionReassignmentData(jsonPartitionMap)
-      case None => Map.empty
+      case Some(jsonPartitionMap) =>
+        val reassignedPartitions = parsePartitionReassignmentData(jsonPartitionMap)
+        reassignedPartitions.map { case (tp, newReplicas) =>
+          tp -> new ReassignedPartitionsContext(newReplicas, null)
+        }
+      case None => Map.empty[TopicAndPartition, ReassignedPartitionsContext]
     }
   }
 
