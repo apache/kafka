@@ -48,7 +48,7 @@ object KafkaController extends Logging {
    * ControllerEventThread will shutdown once it sees this event
    */
   private[controller] case object ShutdownEventThread extends ControllerEvent {
-    def state = ControllerState.ControllerChange
+    def state = ControllerState.ControllerShutdown
     override def process(): Unit = ()
   }
 
