@@ -195,9 +195,13 @@ public class StateDirectoryTest {
             directory.lock(task1);
             directory.directoryForTask(new TaskId(2, 0));
 
+            List<File> files = Arrays.asList(appDir.listFiles());
+            assertEquals(3, files.size());
+
             time.sleep(1000);
             directory.cleanRemovedTasks(0);
-            final List<File> files = Arrays.asList(appDir.listFiles());
+
+            files = Arrays.asList(appDir.listFiles());
             assertEquals(2, files.size());
             assertTrue(files.contains(new File(appDir, task0.toString())));
             assertTrue(files.contains(new File(appDir, task1.toString())));
@@ -341,4 +345,17 @@ public class StateDirectoryTest {
         assertTrue(directory.lock(taskId));
     }
 
+    @Test
+    public void shouldCleanupAllTaskDirectoriesIncludingGlobalOne() {
+        directory.directoryForTask(new TaskId(1, 0));
+        directory.globalStateDir();
+
+        List<File> files = Arrays.asList(appDir.listFiles());
+        assertEquals(2, files.size());
+
+        directory.clean();
+
+        files = Arrays.asList(appDir.listFiles());
+        assertEquals(0, files.size());
+    }
 }

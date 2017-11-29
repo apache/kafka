@@ -892,12 +892,13 @@ public class KafkaStreams {
      * Calling this method triggers a restore of local {@link StateStore}s on the next {@link #start() application start}.
      *
      * @throws IllegalStateException if this {@code KafkaStreams} instance is currently {@link State#RUNNING running}
+     * @throws StreamsException if cleanup failed
      */
     public void cleanUp() {
         if (isRunning()) {
             throw new IllegalStateException("Cannot clean up while running.");
         }
-        stateDirectory.cleanRemovedTasks(0);
+        stateDirectory.clean();
     }
 
     /**
