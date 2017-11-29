@@ -252,11 +252,6 @@ public class SelectorTest {
         sendAndReceive(node, requestPrefix, 0, reqs);
     }
 
-
-
-    /**
-     * Test sending an empty string
-     */
     @Test
     public void testEmptyRequest() throws Exception {
         String node = "0";
@@ -590,7 +585,7 @@ public class SelectorTest {
         }
     }
 
-    private void verifySelectorEmpty() throws Exception {
+    protected void verifySelectorEmpty() throws Exception {
         for (KafkaChannel channel : selector.channels())
             selector.close(channel.id());
         selector.poll(0);

@@ -22,7 +22,9 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestSslUtils;
+import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -42,6 +44,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /**
  * A set of tests for the selector. These use a test harness that runs a simple socket server that echos back responses.
@@ -75,6 +78,30 @@ public class SslSelectorTest extends SelectorTest {
     @Override
     public SecurityProtocol securityProtocol() {
         return SecurityProtocol.PLAINTEXT;
+    }
+
+    @Test
+    public void testDisconnectWithIntermediateBufferedBytes() throws Exception {
+        int requestSize = 100 * 1024;
+        final String node = "0";
+        connect(node, new InetSocketAddress("localhost", server.port));
+        String request = TestUtils.randomString(requestSize);
+        selector.send(createSend(node, request));
+
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                try {
+                    selector.poll(0L);
+                    return selector.channel(node).hasBytesBuffered();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }, 2000L, "Failed to reach socket state with bytes buffered");
+
+        selector.close(node);
+        verifySelectorEmpty();
     }
 
     /**
@@ -197,4 +224,5 @@ public class SslSelectorTest extends SelectorTest {
     private SslSender createSender(InetSocketAddress serverAddress, byte[] payload) {
         return new SslSender(serverAddress, payload);
     }
+
 }
