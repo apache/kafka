@@ -68,6 +68,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.MockConsumerInterceptor;
 import org.apache.kafka.test.MockMetricsReporter;
+import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Assert;
 import org.junit.Rule;
@@ -1412,12 +1413,12 @@ public class KafkaConsumerTest {
             if (interrupt) {
                 assertTrue("Close terminated prematurely", future.cancel(true));
 
-                // synchronization barrier to avoid race condition: make sure the task did complete and set the exception
-                executor.submit(new Runnable() {
+                TestUtils.waitForCondition(new TestCondition() {
                     @Override
-                    public void run() {
+                    public boolean conditionMet() {
+                        return closeException.get() != null;
                     }
-                }).get(500, TimeUnit.MILLISECONDS);
+                }, "InterruptException did not occur with timeout.");
 
                 assertTrue("Expected exception not thrown " + closeException, closeException.get() instanceof InterruptException);
             } else {

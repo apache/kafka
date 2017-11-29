@@ -41,6 +41,7 @@ import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.MockPartitioner;
 import org.apache.kafka.test.MockProducerInterceptor;
 import org.apache.kafka.test.MockSerializer;
+import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
 import org.junit.Assert;
@@ -194,7 +195,7 @@ public class KafkaProducerTest {
             new StringSerializer(), new StringSerializer(), metadata, client);
 
         ExecutorService executor = Executors.newSingleThreadExecutor();
-        final AtomicReference<Exception> closeException = new AtomicReference<Exception>();
+        final AtomicReference<Exception> closeException = new AtomicReference<>();
         try {
             Future<?> future = executor.submit(new Runnable() {
                 @Override
@@ -220,12 +221,12 @@ public class KafkaProducerTest {
 
             assertTrue("Close terminated prematurely", future.cancel(true));
 
-            // synchronization barrier to avoid race condition: make sure the task did complete and set the exception
-            executor.submit(new Runnable() {
+            TestUtils.waitForCondition(new TestCondition() {
                 @Override
-                public void run() {
+                public boolean conditionMet() {
+                    return closeException.get() != null;
                 }
-            }).get(500, TimeUnit.MILLISECONDS);
+            }, "InterruptException did not occur with timeout.");
 
             assertTrue("Expected exception not thrown " + closeException, closeException.get() instanceof InterruptException);
         } finally {
