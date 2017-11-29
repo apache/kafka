@@ -81,6 +81,18 @@ public class ProcessorTopology {
                 Collections.<String>emptySet());
     }
 
+    public static ProcessorTopology withRepartitionTopics(final List<ProcessorNode> processorNodes,
+                                                          final Map<String, SourceNode> sourcesByTopic,
+                                                          final Set<String> repartitionTopics) {
+        return new ProcessorTopology(processorNodes,
+                sourcesByTopic,
+                Collections.<String, SinkNode>emptyMap(),
+                Collections.<StateStore>emptyList(),
+                Collections.<StateStore>emptyList(),
+                Collections.<String, String>emptyMap(),
+                repartitionTopics);
+    }
+
     public ProcessorTopology(final List<ProcessorNode> processorNodes,
                              final Map<String, SourceNode> sourcesByTopic,
                              final Map<String, SinkNode> sinksByTopic,

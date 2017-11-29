@@ -838,7 +838,36 @@ public class StreamTaskTest {
 
     @Test
     public void shouldReturnOffsetsForRepartitionTopicsForPurging() {
+        final TopicPartition repartition = new TopicPartition("repartition", 1);
+        final ProcessorTopology topology = ProcessorTopology.withRepartitionTopics(
+                Utils.<ProcessorNode>mkList(source1, source2),
+                new HashMap<String, SourceNode>() {
+                    {
+                        put(topic1, source1);
+                        put(repartition.topic(), source2);
+                    }
+                },
+                Collections.singleton(repartition.topic())
+        );
+        consumer.assign(Arrays.asList(partition1, repartition));
 
+        task = new StreamTask(taskId00, Utils.mkSet(partition1, repartition), topology, consumer, changelogReader, config,
+                streamsMetrics, stateDirectory, null, time, producer);
+        task.initialize();
+
+        task.addRecords(partition1, Collections.singletonList(
+                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 5L, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
+        task.addRecords(repartition, Collections.singletonList(
+                new ConsumerRecord<>(repartition.topic(), repartition.partition(), 10L, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
+
+        assertTrue(task.process());
+        assertTrue(task.process());
+
+        task.commit();
+
+        Map<TopicPartition, Long> map = task.purgableOffsets();
+
+        assertThat(map, equalTo(Collections.singletonMap(repartition, 11L)));
     }
 
     private StreamTask createStatefulTask(boolean eosEnabled, boolean logged) {
@@ -914,10 +943,10 @@ public class StreamTaskTest {
             streamsMetrics, stateDirectory, null, time, producer) {
 
             @Override
-            void flushState() {
+            protected void flushState() {
                 throw new RuntimeException("KABOOM!");
             }
-        }
+        };
     }
 
     private Iterable<ConsumerRecord<byte[], byte[]>> records(final ConsumerRecord<byte[], byte[]>... recs) {

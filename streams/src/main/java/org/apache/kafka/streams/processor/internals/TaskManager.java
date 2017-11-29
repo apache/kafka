@@ -115,7 +115,7 @@ class TaskManager {
         addStreamTasks(assignment);
         addStandbyTasks();
         final Set<TopicPartition> partitions = active.uninitializedPartitions();
-        log.trace("pausing partitions: {}", partitions);
+        log.trace("Pausing partitions: {}", partitions);
         consumer.pause(partitions);
     }
 
@@ -333,7 +333,7 @@ class TaskManager {
         resumed.addAll(active.updateRestored(restored));
 
         if (!resumed.isEmpty()) {
-            log.trace("resuming partitions {}", resumed);
+            log.trace("Resuming partitions {}", resumed);
             consumer.resume(resumed);
         }
         if (active.allTasksRunning()) {
@@ -444,8 +444,15 @@ class TaskManager {
         // that should cause the application to fail, and we will try delete with
         // newer offsets anyways.
         if (deleteRecordsResult == null || deleteRecordsResult.all().isDone()) {
+
+            if (deleteRecordsResult != null && deleteRecordsResult.all().isCompletedExceptionally()) {
+                log.info("Previous delete-records request has failed: {}. Try sending the new request now", deleteRecordsResult.lowWatermarks());
+            }
+
             Map<TopicPartition, RecordsToDelete> recordsToDelete = active.recordsToDelete();
             deleteRecordsResult = adminClient.deleteRecords(recordsToDelete);
+
+            log.debug("Sent delete-records request: {}", recordsToDelete);
         }
     }
 
