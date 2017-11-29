@@ -226,7 +226,7 @@ public class KafkaProducerTest {
                 public boolean conditionMet() {
                     return closeException.get() != null;
                 }
-            }, "InterruptException did not occur with timeout.");
+            }, "InterruptException did not occur within timeout.");
 
             assertTrue("Expected exception not thrown " + closeException, closeException.get() instanceof InterruptException);
         } finally {
