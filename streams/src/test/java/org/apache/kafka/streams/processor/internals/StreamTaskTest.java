@@ -456,7 +456,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldWrapKafkaExceptionsWithStreamsExceptionAndAddContext() {
-        task = createTaskThatThrowsExceptionOnProcessAndClose();
+        task = createTaskThatThrowsException();
         task.initialize();
         task.addRecords(partition2, Collections.singletonList(
                 new ConsumerRecord<>(partition2.topic(), partition2.partition(), 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
@@ -619,7 +619,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldThrowExceptionIfAnyExceptionsRaisedDuringCloseButStillCloseAllProcessorNodesTopology() {
-        task = createTaskThatThrowsExceptionOnProcessAndClose();
+        task = createTaskThatThrowsException();
         task.initialize();
         try {
             task.close(true, false);
@@ -771,8 +771,8 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldNotViolateAtLeastOnceWhenExceptionOccursDuringFlushStateWhenCommitting() {
-        task = createTaskThatThrowsExceptionOnProcessAndClose();
+    public void shouldNotViolateAtLeastOnceWhenExceptionOccursDuringFlushing() {
+        task = createTaskThatThrowsException();
         task.initialize();
 
         try {
@@ -785,7 +785,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldNotViolateAtLeastOnceWhenExceptionOccursDuringTaskSuspension() {
-        final StreamTask task = createTaskThatThrowsExceptionOnProcessAndClose();
+        final StreamTask task = createTaskThatThrowsException();
 
         task.initialize();
         try {
@@ -814,7 +814,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldNotCloseTopologyProcessorNodesIfNotInitialized() {
-        final StreamTask task = createTaskThatThrowsExceptionOnProcessAndClose();
+        final StreamTask task = createTaskThatThrowsException();
         try {
             task.close(true, false);
         } catch (Exception e) {
@@ -893,7 +893,8 @@ public class StreamTaskTest {
                 streamsMetrics, stateDirectory, null, time, producer);
     }
 
-    private StreamTask createTaskThatThrowsExceptionOnProcessAndClose() {
+    // this task will throw exception when processing (on partition2), flushing, suspending and closing
+    private StreamTask createTaskThatThrowsException() {
         final ProcessorTopology topology = ProcessorTopology.withSources(
                 Utils.<ProcessorNode>mkList(source1, source3, processorStreamTime, processorSystemTime),
                 new HashMap<String, SourceNode>() {
@@ -910,7 +911,13 @@ public class StreamTaskTest {
         source3.addChild(processorSystemTime);
 
         return new StreamTask(taskId00, partitions, topology, consumer, changelogReader, config,
-            streamsMetrics, stateDirectory, null, time, producer);
+            streamsMetrics, stateDirectory, null, time, producer) {
+
+            @Override
+            void flushState() {
+                throw new RuntimeException("KABOOM!");
+            }
+        }
     }
 
     private Iterable<ConsumerRecord<byte[], byte[]>> records(final ConsumerRecord<byte[], byte[]>... recs) {
