@@ -52,7 +52,7 @@ class SegmentedCacheFunction implements CacheFunction {
         System.arraycopy(cacheKey.get(), SEGMENT_ID_BYTES, binaryKey, 0, binaryKey.length);
         return binaryKey;
     }
-
+    
     public long segmentId(Bytes key) {
         return keySchema.segmentTimestamp(key) / segmentInterval;
     }

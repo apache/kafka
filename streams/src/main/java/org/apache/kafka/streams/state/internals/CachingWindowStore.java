@@ -216,5 +216,40 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
             }
         }
     }
+    
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
+        validateStoreOpen();
 
+        final KeyValueIterator<Windowed<Bytes>, byte[]>  underlyingIterator = underlying.all();
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(name);
+
+        return new MergedSortedCacheWindowStoreKeyValueIterator(
+            cacheIterator,
+            underlyingIterator,
+            bytesSerdes,
+            windowSize,
+            cacheFunction
+        );
+    }
+    
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo) {
+        validateStoreOpen();
+        
+        final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator = underlying.fetchAll(timeFrom, timeTo);
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(name);
+        
+        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(null, null, timeFrom, timeTo);
+        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(cacheIterator,
+                                                                                                              hasNextCondition,
+                                                                                                              cacheFunction);
+        return new MergedSortedCacheWindowStoreKeyValueIterator(
+                filteredCacheIterator,
+                underlyingIterator,
+                bytesSerdes,
+                windowSize,
+                cacheFunction
+        );
+    }
 }

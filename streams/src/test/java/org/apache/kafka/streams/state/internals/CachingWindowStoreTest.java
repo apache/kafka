@@ -129,7 +129,55 @@ public class CachingWindowStoreTest {
         assertFalse(iterator.hasNext());
         assertEquals(2, cache.size());
     }
+    
+    @Test
+    public void shouldGetAllFromCache() {
+        cachingStore.put(bytesKey("a"), bytesValue("a"));
+        cachingStore.put(bytesKey("b"), bytesValue("b"));
+        cachingStore.put(bytesKey("c"), bytesValue("c"));
+        cachingStore.put(bytesKey("d"), bytesValue("d"));
+        cachingStore.put(bytesKey("e"), bytesValue("e"));
+        cachingStore.put(bytesKey("f"), bytesValue("f"));
+        cachingStore.put(bytesKey("g"), bytesValue("g"));
+        cachingStore.put(bytesKey("h"), bytesValue("h"));
 
+        final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.all();
+        String[] array = {"a", "b", "c", "d", "e", "f", "g", "h"};
+        for (String s : array) {
+            verifyWindowedKeyValue(iterator.next(), new Windowed<>(bytesKey(s), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)), s);
+        }
+        assertFalse(iterator.hasNext());
+    }
+    
+    @Test
+    public void shouldFetchAllWithinTimestampRange() {
+        String[] array = {"a", "b", "c", "d", "e", "f", "g", "h"};
+        for (int i = 0; i < array.length; i++) {
+            context.setTime(i);
+            cachingStore.put(bytesKey(array[i]), bytesValue(array[i]));
+        }
+        
+        final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.fetchAll(0, 7);
+        for (int i = 0; i < array.length; i++) {
+            String str = array[i];
+            verifyWindowedKeyValue(iterator.next(), new Windowed<>(bytesKey(str), new TimeWindow(i, i + WINDOW_SIZE)), str);
+        }
+        assertFalse(iterator.hasNext());
+        
+        final KeyValueIterator<Windowed<Bytes>, byte[]> iterator1 = cachingStore.fetchAll(2, 4);
+        for (int i = 2; i <= 4; i++) {
+            String str = array[i];
+            verifyWindowedKeyValue(iterator1.next(), new Windowed<>(bytesKey(str), new TimeWindow(i, i + WINDOW_SIZE)), str);
+        }
+        assertFalse(iterator1.hasNext());
+        
+        final KeyValueIterator<Windowed<Bytes>, byte[]> iterator2 = cachingStore.fetchAll(5, 7);
+        for (int i = 5; i <= 7; i++) {
+            String str = array[i];
+            verifyWindowedKeyValue(iterator2.next(), new Windowed<>(bytesKey(str), new TimeWindow(i, i + WINDOW_SIZE)), str);
+        }
+        assertFalse(iterator2.hasNext());
+    }
 
     @Test
     public void shouldFlushEvictedItemsIntoUnderlyingStore() throws IOException {
