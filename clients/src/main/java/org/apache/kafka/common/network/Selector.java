@@ -52,6 +52,7 @@ import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 /**
@@ -255,16 +256,16 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     private KafkaChannel buildChannel(SocketChannel socketChannel, String id, SelectionKey key) throws IOException {
-        KafkaChannel channel;
+        KafkaChannel channel = null;
         try {
             channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool);
         } catch (Exception e) {
-            try {
-                socketChannel.close();
-            } finally {
+            throw new IOException("Channel could not be created for socket " + socketChannel, e);
+        } finally {
+            if (channel == null) {
+                Utils.closeQuietly(socketChannel, "socketChannel");
                 key.cancel();
             }
-            throw new IOException("Channel could not be created for socket " + socketChannel, e);
         }
         key.attach(channel);
         this.channels.put(id, channel);
