@@ -36,7 +36,6 @@ import org.apache.kafka.streams.processor.DefaultPartitionGrouper;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor;
-import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -582,7 +581,7 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     public static class InternalConfig {
-        public static final String STREAM_THREAD_INSTANCE = "__stream.thread.instance__";
+        public static final String TASK_MANAGER_FOR_PARTITION_ASSIGNOR = "__task.manager.instance__";
     }
 
     /**
@@ -722,22 +721,20 @@ public class StreamsConfig extends AbstractConfig {
      * except in the case of {@link ConsumerConfig#BOOTSTRAP_SERVERS_CONFIG} where we always use the non-prefixed
      * version as we only support reading/writing from/to the same Kafka Cluster.
      *
-     * @param streamThread the {@link StreamThread} creating a consumer
      * @param groupId      consumer groupId
      * @param clientId     clientId
      * @return Map of the consumer configuration.
      */
-    public Map<String, Object> getConsumerConfigs(final StreamThread streamThread,
-                                                  final String groupId,
+    public Map<String, Object> getConsumerConfigs(final String groupId,
                                                   final String clientId) {
         final Map<String, Object> consumerProps = getCommonConsumerConfigs();
 
         // add client id with stream client id prefix, and group id
+        consumerProps.put(APPLICATION_ID_CONFIG, groupId);
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         consumerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-consumer");
 
         // add configs required for stream partition assignor
-        consumerProps.put(InternalConfig.STREAM_THREAD_INSTANCE, streamThread);
         consumerProps.put(REPLICATION_FACTOR_CONFIG, getInt(REPLICATION_FACTOR_CONFIG));
         consumerProps.put(NUM_STANDBY_REPLICAS_CONFIG, getInt(NUM_STANDBY_REPLICAS_CONFIG));
         consumerProps.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, StreamPartitionAssignor.class.getName());
