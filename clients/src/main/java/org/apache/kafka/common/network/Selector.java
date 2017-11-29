@@ -386,20 +386,22 @@ public class Selector implements Selectable, AutoCloseable {
 
         if (numReadyKeys > 0 || !immediatelyConnectedKeys.isEmpty() || dataInBuffers) {
             Set<SelectionKey> readyKeys = this.nioSelector.selectedKeys();
-            keysWithBufferedRead.removeAll(readyKeys); //so no channel gets polled twice
 
-            //poll from channels that have buffered data (but nothing more from the underlying socket)
-            if (!keysWithBufferedRead.isEmpty()) {
+            // Poll from channels that have buffered data (but nothing more from the underlying socket)
+            if (dataInBuffers) {
+                keysWithBufferedRead.removeAll(readyKeys); //so no channel gets polled twice
                 Set<SelectionKey> toPoll = keysWithBufferedRead;
                 keysWithBufferedRead = new HashSet<>(); //poll() calls will repopulate if needed
                 pollSelectionKeys(toPoll, false, endSelect);
             }
-            //poll from channels where the underlying socket has more data
-            pollSelectionKeys(readyKeys, false, endSelect);
-            pollSelectionKeys(immediatelyConnectedKeys, true, endSelect);
 
+            // Poll from channels where the underlying socket has more data
+            pollSelectionKeys(readyKeys, false, endSelect);
             // Clear all selected keys so that they are included in the ready count for the next select
             readyKeys.clear();
+
+            pollSelectionKeys(immediatelyConnectedKeys, true, endSelect);
+            immediatelyConnectedKeys.clear();
         } else {
             madeReadProgressLastPoll = true; //no work is also "progress"
         }
