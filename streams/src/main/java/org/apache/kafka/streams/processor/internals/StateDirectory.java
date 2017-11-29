@@ -228,7 +228,7 @@ public class StateDirectory {
             cleanRemovedTasks(0, true);
         } catch (final Exception e) {
             // this is already logged within cleanRemovedTasks
-           throw new StreamsException(e);
+            throw new StreamsException(e);
         }
         try {
             Utils.delete(globalStateDir().getAbsoluteFile());
