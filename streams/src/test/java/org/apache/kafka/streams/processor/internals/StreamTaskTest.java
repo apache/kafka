@@ -882,7 +882,7 @@ public class StreamTaskTest {
                 Collections.singletonList(stateStore),
                 logged ? Collections.singletonMap(storeName, storeName + "-changelog") : Collections.<String, String>emptyMap());
 
-        return new StreamTask(taskId00, partitions, topology, consumer, changelogReader, eosEnabled ? eosConfig: config,
+        return new StreamTask(taskId00, partitions, topology, consumer, changelogReader, eosEnabled ? eosConfig : config,
                 streamsMetrics, stateDirectory, null, time, producer);
     }
 
@@ -898,7 +898,7 @@ public class StreamTaskTest {
                 Collections.singletonList(stateStore),
                 logged ? Collections.singletonMap(storeName, changelogPartition.topic()) : Collections.<String, String>emptyMap());
 
-        return new StreamTask(taskId00, partitions, topology, consumer, changelogReader, eosEnabled ? eosConfig: config,
+        return new StreamTask(taskId00, partitions, topology, consumer, changelogReader, eosEnabled ? eosConfig : config,
                 streamsMetrics, stateDirectory, null, time, producer);
     }
 
@@ -918,7 +918,7 @@ public class StreamTaskTest {
         source1.addChild(processorSystemTime);
         source2.addChild(processorSystemTime);
 
-        return new StreamTask(taskId00, partitions, topology, consumer, changelogReader, eosEnabled ? eosConfig: config,
+        return new StreamTask(taskId00, partitions, topology, consumer, changelogReader, eosEnabled ? eosConfig : config,
                 streamsMetrics, stateDirectory, null, time, producer);
     }
 

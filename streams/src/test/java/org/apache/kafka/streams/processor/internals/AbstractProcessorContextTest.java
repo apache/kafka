@@ -27,7 +27,6 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockStateStore;
-import org.apache.kafka.test.MockStateStoreSupplier;
 import org.junit.Before;
 import org.junit.Test;
 
