@@ -55,7 +55,7 @@ object ConsumerGroupCommand extends Logging {
       CommandLineUtils.printUsageAndDie(opts.parser, "List all consumer groups, describe a consumer group, delete consumer group info, or reset consumer group offsets.")
 
     // should have exactly one action
-    val actions = Seq(opts.listOpt, opts.describeOpt, opts.deleteOpt, opts.resetOffsetsOpt).count(opts.options.has _)
+    val actions = Seq(opts.listOpt, opts.describeOpt, opts.deleteOpt, opts.resetOffsetsOpt).count(opts.options.has)
     if (actions != 1)
       CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --list, --describe, --delete, --reset-offset")
 
@@ -214,7 +214,7 @@ object ConsumerGroupCommand extends Logging {
           print("%s".format("ASSIGNMENT"))
         println()
 
-        assignments.get.foreach { case assignment =>
+        assignments.get.foreach { assignment =>
           print(s"%${-maxConsumerIdLen}s %${-maxHostLen}s %${-maxClientIdLen}s %-15s ".format(
             assignment.consumerId.getOrElse(MISSING_COLUMN_VALUE), assignment.host.getOrElse(MISSING_COLUMN_VALUE),
             assignment.clientId.getOrElse(MISSING_COLUMN_VALUE), assignment.numPartitions.getOrElse(MISSING_COLUMN_VALUE)))
@@ -511,7 +511,7 @@ object ConsumerGroupCommand extends Logging {
     private val adminClient = createAdminClient()
 
     // `consumer` is only needed for `describe`, so we instantiate it lazily
-    private var consumer: KafkaConsumer[String, String] = null
+    private var consumer: KafkaConsumer[String, String] = _
 
     def listGroups(): List[String] = {
       adminClient.listAllConsumerGroupsFlattened().map(_.groupId)
@@ -531,7 +531,7 @@ object ConsumerGroupCommand extends Logging {
               if (offsets.isEmpty)
                 List[PartitionAssignmentState]()
               else {
-                consumers.filter(_.assignment.size > 0).sortWith(_.assignment.size > _.assignment.size).flatMap { consumerSummary =>
+                consumers.filter(_.assignment.nonEmpty).sortWith(_.assignment.size > _.assignment.size).flatMap { consumerSummary =>
                   val topicPartitions = consumerSummary.assignment.map(tp => TopicAndPartition(tp.topic, tp.partition))
                   assignedTopicPartitions = assignedTopicPartitions ++ consumerSummary.assignment
                   val partitionOffsets: Map[TopicAndPartition, Option[Long]] = consumerSummary.assignment.map { topicPartition =>
@@ -543,15 +543,13 @@ object ConsumerGroupCommand extends Logging {
                 }
               }
 
-            val rowsWithoutConsumer = offsets.filterNot {
-              case (topicPartition, offset) => assignedTopicPartitions.contains(topicPartition)
-              }.flatMap {
-                case (topicPartition, offset) =>
-                  val topicAndPartition = new TopicAndPartition(topicPartition)
-                  collectConsumerAssignment(group, Some(consumerGroupSummary.coordinator), Seq(topicAndPartition),
-                      Map(topicAndPartition -> Some(offset)), Some(MISSING_COLUMN_VALUE),
-                      Some(MISSING_COLUMN_VALUE), Some(MISSING_COLUMN_VALUE))
-                }
+            val rowsWithoutConsumer = offsets.filterKeys(!assignedTopicPartitions.contains(_)).flatMap {
+              case (topicPartition, offset) =>
+                val topicAndPartition = new TopicAndPartition(topicPartition)
+                collectConsumerAssignment(group, Some(consumerGroupSummary.coordinator), Seq(topicAndPartition),
+                    Map(topicAndPartition -> Some(offset)), Some(MISSING_COLUMN_VALUE),
+                    Some(MISSING_COLUMN_VALUE), Some(MISSING_COLUMN_VALUE))
+            }
 
             Some(rowsWithConsumer ++ rowsWithoutConsumer)
       }
@@ -570,7 +568,7 @@ object ConsumerGroupCommand extends Logging {
               MemberAssignmentState(group, Some(consumer.consumerId), Some(consumer.host), Some(consumer.clientId),
                                     Some(consumer.assignment.length),
                                     if (verbose) Some(consumer.assignment) else None)
-            }.toList)
+            })
       })
     }
 
@@ -581,21 +579,19 @@ object ConsumerGroupCommand extends Logging {
     }
 
     protected def getLogEndOffset(topicPartition: TopicPartition): LogOffsetResult = {
-      val consumer = getConsumer()
-      val offsets = consumer.endOffsets(List(topicPartition).asJava)
+      val offsets = getConsumer.endOffsets(List(topicPartition).asJava)
       val logStartOffset = offsets.get(topicPartition)
       LogOffsetResult.LogOffset(logStartOffset)
     }
 
     protected def getLogStartOffset(topicPartition: TopicPartition): LogOffsetResult = {
-      val consumer = getConsumer()
-      val offsets = consumer.beginningOffsets(List(topicPartition).asJava)
+      val offsets = getConsumer.beginningOffsets(List(topicPartition).asJava)
       val logStartOffset = offsets.get(topicPartition)
       LogOffsetResult.LogOffset(logStartOffset)
     }
 
     protected def getLogTimestampOffset(topicPartition: TopicPartition, timestamp: java.lang.Long): LogOffsetResult = {
-      val consumer = getConsumer()
+      val consumer = getConsumer
       consumer.assign(List(topicPartition).asJava)
       val offsetsForTimes = consumer.offsetsForTimes(Map(topicPartition -> timestamp).asJava)
       if (offsetsForTimes != null && !offsetsForTimes.isEmpty && offsetsForTimes.get(topicPartition) != null)
@@ -616,7 +612,7 @@ object ConsumerGroupCommand extends Logging {
       AdminClient.create(props)
     }
 
-    private def getConsumer() = {
+    private def getConsumer = {
       if (consumer == null)
         consumer = createNewConsumer()
       consumer
@@ -647,7 +643,7 @@ object ConsumerGroupCommand extends Logging {
           val preparedOffsets = prepareOffsetsToReset(groupId, partitionsToReset)
           val dryRun = opts.options.has(opts.dryRunOpt)
           if (!dryRun)
-            getConsumer().commitSync(preparedOffsets.asJava)
+            getConsumer.commitSync(preparedOffsets.asJava)
           preparedOffsets
         case currentState =>
           printError(s"Assignments can only be reset if the group '$groupId' is inactive, but the current state is $currentState.")
@@ -660,7 +656,7 @@ object ConsumerGroupCommand extends Logging {
         val topicAndPartitions = topicArg.split(":")
         val topic = topicAndPartitions(0)
         topicAndPartitions(1).split(",").map(partition => new TopicPartition(topic, partition.toInt))
-      case topic => getConsumer().partitionsFor(topic).asScala
+      case topic => getConsumer.partitionsFor(topic).asScala
         .map(partitionInfo => new TopicPartition(topic, partitionInfo.partition))
     }
 
@@ -793,7 +789,7 @@ object ConsumerGroupCommand extends Logging {
         try {
           new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX").parse(datetime)
         } catch {
-          case e: ParseException => new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX").parse(datetime)
+          case _: ParseException => new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX").parse(datetime)
         }
       }
       date.getTime
