@@ -41,6 +41,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -186,8 +187,8 @@ public class SelectorTest {
         for (int i = 0; i < conns; i++)
             connect(Integer.toString(i), addr);
         // send echo requests and receive responses
-        Map<String, Integer> requests = new HashMap<String, Integer>();
-        Map<String, Integer> responses = new HashMap<String, Integer>();
+        Map<String, Integer> requests = new HashMap<>();
+        Map<String, Integer> responses = new HashMap<>();
         int responseCount = 0;
         for (int i = 0; i < conns; i++) {
             String node = Integer.toString(i);
@@ -345,6 +346,23 @@ public class SelectorTest {
     }
 
     @Test
+    public void testImmediatelyConnectedCleanedAfterClose() throws Exception {
+        testImmediatelyConnectedCleanedAfterClose(true);
+        testImmediatelyConnectedCleanedAfterClose(false);
+    }
+
+    private void testImmediatelyConnectedCleanedAfterClose(boolean closeAfterFirstPoll) throws Exception {
+        String id = "0";
+        selector.blockingConnect(id, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
+        if (closeAfterFirstPoll) {
+            selector.poll(0);
+            verifyNoImmediatelyConnectedKeys();
+        }
+        selector.close(id);
+        verifySelectorEmpty();
+    }
+
+    @Test
     public void testCloseOldestConnectionWithOneStagedReceive() throws Exception {
         verifyCloseOldestConnectionWithStagedReceives(1);
     }
@@ -404,8 +422,6 @@ public class SelectorTest {
         assertTrue("Disconnect not notified", selector.disconnected().containsKey(id));
         assertTrue("Unexpected receive", selector.completedReceives().isEmpty());
     }
-
-
 
     @Test
     public void testMuteOnOOM() throws Exception {
@@ -585,21 +601,28 @@ public class SelectorTest {
         }
     }
 
+    private void verifyNoImmediatelyConnectedKeys() throws Exception {
+        Field field = selector.getClass().getDeclaredField("immediatelyConnectedKeys");
+        ensureEmptySelectorField(field);
+    }
+
     protected void verifySelectorEmpty() throws Exception {
         for (KafkaChannel channel : selector.channels())
             selector.close(channel.id());
         selector.poll(0);
         selector.poll(0); // Poll a second time to clear everything
         for (Field field : selector.getClass().getDeclaredFields()) {
-            field.setAccessible(true);
-            Object obj = field.get(selector);
-            if (obj instanceof Set)
-                assertTrue("Field not empty: " + field + " " + obj, ((Set<?>) obj).isEmpty());
-            else if (obj instanceof Map)
-                assertTrue("Field not empty: " + field + " " + obj, ((Map<?, ?>) obj).isEmpty());
-            else if (obj instanceof List)
-                assertTrue("Field not empty: " + field + " " + obj, ((List<?>) obj).isEmpty());
+            ensureEmptySelectorField(field);
         }
+    }
+
+    private void ensureEmptySelectorField(Field field) throws Exception {
+        field.setAccessible(true);
+        Object obj = field.get(selector);
+        if (obj instanceof Collection)
+            assertTrue("Field not empty: " + field + " " + obj, ((Collection<?>) obj).isEmpty());
+        else if (obj instanceof Map)
+            assertTrue("Field not empty: " + field + " " + obj, ((Map<?, ?>) obj).isEmpty());
     }
 
 }

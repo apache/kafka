@@ -19,6 +19,7 @@ package org.apache.kafka.common.network;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.SocketException;
 import java.nio.channels.CancelledKeyException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
@@ -195,39 +196,55 @@ public class Selector implements Selectable, AutoCloseable {
      */
     @Override
     public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException {
-        if (this.channels.containsKey(id))
-            throw new IllegalStateException("There is already a connection for id " + id);
-        if (this.closingChannels.containsKey(id))
-            throw new IllegalStateException("There is already a connection for id " + id + " that is still being closed");
+        connect(id, false, address, sendBufferSize, receiveBufferSize);
+    }
 
+    // Visible for testing only. Connecting in blocking mode allows us to verify the behavior when the connection
+    // is established by SocketChannel.connect
+    void blockingConnect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException {
+        connect(id, true, address, sendBufferSize, receiveBufferSize);
+    }
+
+    private void connect(String id, boolean shouldBlock, InetSocketAddress address,
+                         int sendBufferSize, int receiveBufferSize) throws IOException {
+        ensureNotRegistered(id);
         SocketChannel socketChannel = SocketChannel.open();
-        socketChannel.configureBlocking(false);
-        Socket socket = socketChannel.socket();
+
+        try {
+            socketChannel.configureBlocking(shouldBlock);
+            configureSocket(socketChannel.socket(), sendBufferSize, receiveBufferSize);
+            boolean connected = doConnect(socketChannel, address);
+
+            socketChannel.configureBlocking(false);
+            SelectionKey key = registerChannel(id, socketChannel, SelectionKey.OP_CONNECT);
+
+            if (connected) {
+                // OP_CONNECT won't trigger for immediately connected channels
+                log.debug("Immediately connected to node {}", id);
+                immediatelyConnectedKeys.add(key);
+                key.interestOps(0);
+            }
+        } catch (IOException e) {
+            socketChannel.close();
+            throw e;
+        }
+    }
+
+    private boolean doConnect(SocketChannel channel, InetSocketAddress address) throws IOException {
+        try {
+            return channel.connect(address);
+        } catch (UnresolvedAddressException e) {
+            throw new IOException("Can't resolve address: " + address, e);
+        }
+    }
+
+    private void configureSocket(Socket socket, int sendBufferSize, int receiveBufferSize) throws SocketException {
         socket.setKeepAlive(true);
         if (sendBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
             socket.setSendBufferSize(sendBufferSize);
         if (receiveBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
             socket.setReceiveBufferSize(receiveBufferSize);
         socket.setTcpNoDelay(true);
-        boolean connected;
-        try {
-            connected = socketChannel.connect(address);
-        } catch (UnresolvedAddressException e) {
-            socketChannel.close();
-            throw new IOException("Can't resolve address: " + address, e);
-        } catch (IOException e) {
-            socketChannel.close();
-            throw e;
-        }
-        SelectionKey key = socketChannel.register(nioSelector, SelectionKey.OP_CONNECT);
-        KafkaChannel channel = buildChannel(socketChannel, id, key);
-
-        if (connected) {
-            // OP_CONNECT won't trigger for immediately connected channels
-            log.debug("Immediately connected to node {}", channel.id());
-            immediatelyConnectedKeys.add(key);
-            key.interestOps(0);
-        }
     }
 
     /**
@@ -245,19 +262,29 @@ public class Selector implements Selectable, AutoCloseable {
      * </p>
      */
     public void register(String id, SocketChannel socketChannel) throws IOException {
+        ensureNotRegistered(id);
+        registerChannel(id, socketChannel, SelectionKey.OP_READ);
+    }
+
+    private void ensureNotRegistered(String id) {
         if (this.channels.containsKey(id))
             throw new IllegalStateException("There is already a connection for id " + id);
         if (this.closingChannels.containsKey(id))
             throw new IllegalStateException("There is already a connection for id " + id + " that is still being closed");
-
-        SelectionKey key = socketChannel.register(nioSelector, SelectionKey.OP_READ);
-        buildChannel(socketChannel, id, key);
     }
 
-    private KafkaChannel buildChannel(SocketChannel socketChannel, String id, SelectionKey key) throws IOException {
-        KafkaChannel channel;
+    private SelectionKey registerChannel(String id, SocketChannel socketChannel, int interestedOps) throws IOException {
+        SelectionKey key = socketChannel.register(nioSelector, interestedOps);
+        KafkaChannel channel = buildAndAttachKafkaChannel(socketChannel, id, key);
+        this.channels.put(id, channel);
+        return key;
+    }
+
+    private KafkaChannel buildAndAttachKafkaChannel(SocketChannel socketChannel, String id, SelectionKey key) throws IOException {
         try {
-            channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool);
+            KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool);
+            key.attach(channel);
+            return channel;
         } catch (Exception e) {
             try {
                 socketChannel.close();
@@ -266,9 +293,6 @@ public class Selector implements Selectable, AutoCloseable {
             }
             throw new IOException("Channel could not be created for socket " + socketChannel, e);
         }
-        key.attach(channel);
-        this.channels.put(id, channel);
-        return channel;
     }
 
     /**
