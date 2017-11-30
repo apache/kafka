@@ -224,7 +224,7 @@ public class Selector implements Selectable, AutoCloseable {
                 immediatelyConnectedKeys.add(key);
                 key.interestOps(0);
             }
-        } catch (IOException e) {
+        } catch (IOException | RuntimeException e) {
             socketChannel.close();
             throw e;
         }
