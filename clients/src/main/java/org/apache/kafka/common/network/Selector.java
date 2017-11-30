@@ -16,10 +16,26 @@
  */
 package org.apache.kafka.common.network;
 
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.metrics.Measurable;
+import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.Count;
+import org.apache.kafka.common.metrics.stats.Max;
+import org.apache.kafka.common.metrics.stats.Meter;
+import org.apache.kafka.common.metrics.stats.SampledStat;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
+import org.slf4j.Logger;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
-import java.net.SocketException;
 import java.nio.channels.CancelledKeyException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
@@ -37,23 +53,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.memory.MemoryPool;
-import org.apache.kafka.common.metrics.Measurable;
-import org.apache.kafka.common.metrics.MetricConfig;
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.errors.AuthenticationException;
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.metrics.stats.Meter;
-import org.apache.kafka.common.metrics.stats.SampledStat;
-import org.apache.kafka.common.metrics.stats.Count;
-import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
-import org.slf4j.Logger;
 
 /**
  * A nioSelector interface for doing non-blocking multi-connection network I/O.
@@ -196,26 +195,11 @@ public class Selector implements Selectable, AutoCloseable {
      */
     @Override
     public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException {
-        connect(id, false, address, sendBufferSize, receiveBufferSize);
-    }
-
-    // Visible for testing only. Connecting in blocking mode allows us to verify the behavior when the connection
-    // is established by SocketChannel.connect
-    void blockingConnect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException {
-        connect(id, true, address, sendBufferSize, receiveBufferSize);
-    }
-
-    private void connect(String id, boolean shouldBlock, InetSocketAddress address,
-                         int sendBufferSize, int receiveBufferSize) throws IOException {
         ensureNotRegistered(id);
         SocketChannel socketChannel = SocketChannel.open();
-
         try {
-            socketChannel.configureBlocking(shouldBlock);
-            configureSocket(socketChannel.socket(), sendBufferSize, receiveBufferSize);
+            configureSocketChannel(socketChannel, sendBufferSize, receiveBufferSize);
             boolean connected = doConnect(socketChannel, address);
-
-            socketChannel.configureBlocking(false);
             SelectionKey key = registerChannel(id, socketChannel, SelectionKey.OP_CONNECT);
 
             if (connected) {
@@ -230,7 +214,7 @@ public class Selector implements Selectable, AutoCloseable {
         }
     }
 
-    private boolean doConnect(SocketChannel channel, InetSocketAddress address) throws IOException {
+    protected boolean doConnect(SocketChannel channel, InetSocketAddress address) throws IOException {
         try {
             return channel.connect(address);
         } catch (UnresolvedAddressException e) {
@@ -238,7 +222,10 @@ public class Selector implements Selectable, AutoCloseable {
         }
     }
 
-    private void configureSocket(Socket socket, int sendBufferSize, int receiveBufferSize) throws SocketException {
+    private void configureSocketChannel(SocketChannel socketChannel, int sendBufferSize, int receiveBufferSize)
+            throws IOException {
+        socketChannel.configureBlocking(false);
+        Socket socket = socketChannel.socket();
         socket.setKeepAlive(true);
         if (sendBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
             socket.setSendBufferSize(sendBufferSize);
@@ -732,12 +719,16 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     private void doClose(KafkaChannel channel, boolean notifyDisconnect) {
+        SelectionKey key = channel.selectionKey();
         try {
-            immediatelyConnectedKeys.remove(channel.selectionKey());
-            keysWithBufferedRead.remove(channel.selectionKey());
+            immediatelyConnectedKeys.remove(key);
+            keysWithBufferedRead.remove(key);
             channel.close();
         } catch (IOException e) {
             log.error("Exception closing connection to node {}:", channel.id(), e);
+        } finally {
+            key.cancel();
+            key.attach(null);
         }
         this.sensors.connectionClosed.record();
         this.stagedReceives.remove(channel);

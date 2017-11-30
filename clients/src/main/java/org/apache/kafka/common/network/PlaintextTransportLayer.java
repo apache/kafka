@@ -78,20 +78,10 @@ public class PlaintextTransportLayer implements TransportLayer {
         return socketChannel.isConnected();
     }
 
-    /**
-     * Closes this channel
-     *
-     * @throws IOException If I/O error occurs
-     */
     @Override
     public void close() throws IOException {
-        try {
-            socketChannel.socket().close();
-            socketChannel.close();
-        } finally {
-            key.attach(null);
-            key.cancel();
-        }
+        socketChannel.socket().close();
+        socketChannel.close();
     }
 
     /**
