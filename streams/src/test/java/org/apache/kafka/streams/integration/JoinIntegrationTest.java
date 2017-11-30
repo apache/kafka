@@ -34,15 +34,22 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.test.IntegrationTest;
+import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TemporaryFolder;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -55,9 +62,21 @@ import static org.hamcrest.core.Is.is;
  * Tests all available joins of Kafka Streams DSL.
  */
 @Category({IntegrationTest.class})
+@RunWith(value = Parameterized.class)
 public class JoinIntegrationTest {
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
+
+    @Rule
+    public final TemporaryFolder testFolder = new TemporaryFolder(TestUtils.tempDirectory());
+
+    @Parameterized.Parameters
+    public static Collection<Object[]> data() {
+        List<Object[]> values = new ArrayList<>();
+        for (boolean cacheEnabled : Arrays.asList(true, false))
+            values.add(new Object[] {cacheEnabled});
+        return values;
+    }
 
     private static final String APP_ID = "join-integration-test";
     private static final String INPUT_TOPIC_1 = "inputTopicLeft";
@@ -73,6 +92,8 @@ public class JoinIntegrationTest {
     private KStream<Long, String> rightStream;
     private KTable<Long, String> leftTable;
     private KTable<Long, String> rightTable;
+
+    private final boolean cacheEnabled;
 
     private final List<Input<String>> input = Arrays.asList(
         new Input<>(INPUT_TOPIC_1, (String) null),
@@ -99,6 +120,10 @@ public class JoinIntegrationTest {
         }
     };
 
+    public JoinIntegrationTest(boolean cacheEnabled) {
+        this.cacheEnabled = cacheEnabled;
+    }
+
     @BeforeClass
     public static void setupConfigsAndUtils() {
         PRODUCER_CONFIG.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -113,19 +138,21 @@ public class JoinIntegrationTest {
         RESULT_CONSUMER_CONFIG.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
         RESULT_CONSUMER_CONFIG.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
 
-        STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         STREAMS_CONFIG.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        STREAMS_CONFIG.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+        STREAMS_CONFIG.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
+        STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        STREAMS_CONFIG.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-        STREAMS_CONFIG.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
         STREAMS_CONFIG.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
     }
 
     @Before
     public void prepareTopology() throws InterruptedException {
         CLUSTER.createTopics(INPUT_TOPIC_1, INPUT_TOPIC_2, OUTPUT_TOPIC);
+        if (!cacheEnabled)
+            STREAMS_CONFIG.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+
+        STREAMS_CONFIG.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getRoot().getPath());
 
         builder = new StreamsBuilder();
         leftTable = builder.table(INPUT_TOPIC_1);
@@ -198,6 +225,64 @@ public class JoinIntegrationTest {
     }
 
     @Test
+    public void testMultiInnerKStreamKStream() throws Exception {
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-multi-inner-KStream-KStream");
+
+        final List<List<String>> expectedResult = Arrays.asList(
+                null,
+                null,
+                null,
+                Collections.singletonList("A-a-a"),
+                Collections.singletonList("B-a-a"),
+                Arrays.asList("A-b-a", "B-b-a", "A-a-b", "B-a-b", "A-b-b", "B-b-b"),
+                null,
+                null,
+                Arrays.asList("C-a-a", "C-b-b"),
+                Arrays.asList("A-c-c", "B-c-c", "C-c-c"),
+                null,
+                null,
+                null,
+                Arrays.asList("A-d-d", "B-d-d", "C-d-d"),
+                Arrays.asList("D-a-a", "D-b-b", "D-c-c", "D-d-d")
+        );
+
+        leftStream.join(rightStream, valueJoiner, JoinWindows.of(10000))
+                  .join(rightStream, valueJoiner, JoinWindows.of(10000)).to(OUTPUT_TOPIC);
+
+        runTest(expectedResult);
+    }
+
+    @Test
+    public void testInnerRepartitionedKStreamKStream() throws Exception {
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-repartitioned-KStream-KStream");
+
+        final List<List<String>> expectedResult = Arrays.asList(
+                null,
+                null,
+                null,
+                Collections.singletonList("A-a"),
+                Collections.singletonList("B-a"),
+                Arrays.asList("A-b", "B-b"),
+                null,
+                null,
+                Arrays.asList("C-a", "C-b"),
+                Arrays.asList("A-c", "B-c", "C-c"),
+                null,
+                null,
+                null,
+                Arrays.asList("A-d", "B-d", "C-d"),
+                Arrays.asList("D-a", "D-b", "D-c", "D-d")
+        );
+
+        leftStream.map(MockKeyValueMapper.<Long, String>NoOpKeyValueMapper())
+                .join(rightStream.flatMap(MockKeyValueMapper.<Long, String>NoOpFlatKeyValueMapper())
+                                 .selectKey(MockKeyValueMapper.<Long, String>SelectKeyKeyValueMapper()),
+                       valueJoiner, JoinWindows.of(10000)).to(OUTPUT_TOPIC);
+
+        runTest(expectedResult);
+    }
+
+    @Test
     public void testLeftKStreamKStream() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left-KStream-KStream");
 
@@ -225,6 +310,36 @@ public class JoinIntegrationTest {
     }
 
     @Test
+    public void testLeftRepartitionedKStreamKStream() throws Exception {
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left-repartitioned-KStream-KStream");
+
+        final List<List<String>> expectedResult = Arrays.asList(
+                null,
+                null,
+                Collections.singletonList("A-null"),
+                Collections.singletonList("A-a"),
+                Collections.singletonList("B-a"),
+                Arrays.asList("A-b", "B-b"),
+                null,
+                null,
+                Arrays.asList("C-a", "C-b"),
+                Arrays.asList("A-c", "B-c", "C-c"),
+                null,
+                null,
+                null,
+                Arrays.asList("A-d", "B-d", "C-d"),
+                Arrays.asList("D-a", "D-b", "D-c", "D-d")
+        );
+
+        leftStream.map(MockKeyValueMapper.<Long, String>NoOpKeyValueMapper())
+                .leftJoin(rightStream.flatMap(MockKeyValueMapper.<Long, String>NoOpFlatKeyValueMapper())
+                                     .selectKey(MockKeyValueMapper.<Long, String>SelectKeyKeyValueMapper()),
+                        valueJoiner, JoinWindows.of(10000)).to(OUTPUT_TOPIC);
+
+        runTest(expectedResult);
+    }
+
+    @Test
     public void testOuterKStreamKStream() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer-KStream-KStream");
 
@@ -247,6 +362,36 @@ public class JoinIntegrationTest {
         );
 
         leftStream.outerJoin(rightStream, valueJoiner, JoinWindows.of(10000)).to(OUTPUT_TOPIC);
+
+        runTest(expectedResult);
+    }
+
+    @Test
+    public void testOuterRepartitionedKStreamKStream() throws Exception {
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer-repartitioned-KStream-KStream");
+
+        final List<List<String>> expectedResult = Arrays.asList(
+                null,
+                null,
+                Collections.singletonList("A-null"),
+                Collections.singletonList("A-a"),
+                Collections.singletonList("B-a"),
+                Arrays.asList("A-b", "B-b"),
+                null,
+                null,
+                Arrays.asList("C-a", "C-b"),
+                Arrays.asList("A-c", "B-c", "C-c"),
+                null,
+                null,
+                null,
+                Arrays.asList("A-d", "B-d", "C-d"),
+                Arrays.asList("D-a", "D-b", "D-c", "D-d")
+        );
+
+        leftStream.map(MockKeyValueMapper.<Long, String>NoOpKeyValueMapper())
+                .outerJoin(rightStream.flatMap(MockKeyValueMapper.<Long, String>NoOpFlatKeyValueMapper())
+                                .selectKey(MockKeyValueMapper.<Long, String>SelectKeyKeyValueMapper()),
+                        valueJoiner, JoinWindows.of(10000)).to(OUTPUT_TOPIC);
 
         runTest(expectedResult);
     }

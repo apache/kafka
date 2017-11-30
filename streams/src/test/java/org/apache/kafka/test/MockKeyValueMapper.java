@@ -19,6 +19,8 @@ package org.apache.kafka.test;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 
+import java.util.Collections;
+
 public class MockKeyValueMapper {
 
 
@@ -27,6 +29,13 @@ public class MockKeyValueMapper {
         @Override
         public KeyValue<K, V> apply(K key, V value) {
             return KeyValue.pair(key, value);
+        }
+    }
+
+    private static class NoOpFlatKeyValueMapper<K, V> implements KeyValueMapper<K, V, Iterable<KeyValue<K, V>>> {
+        @Override
+        public Iterable<KeyValue<K, V>> apply(K key, V value) {
+            return Collections.singletonList(KeyValue.pair(key, value));
         }
     }
 
@@ -55,6 +64,10 @@ public class MockKeyValueMapper {
         return new SelectKeyMapper<>();
     }
 
+
+    public static <K, V> KeyValueMapper<K, V, Iterable<KeyValue<K, V>>> NoOpFlatKeyValueMapper() {
+        return new NoOpFlatKeyValueMapper<>();
+    }
 
     public static <K, V> KeyValueMapper<K, V, KeyValue<K, V>> NoOpKeyValueMapper() {
         return new NoOpKeyValueMapper<>();
