@@ -450,13 +450,13 @@ public class KafkaAdminClientTest {
 
             Map<TopicPartition, DeleteRecordsResponse.PartitionResponse> m = new HashMap<>();
             m.put(myTopicPartition0,
-                    new DeleteRecordsResponse.PartitionResponse(3, Errors.NONE));
+                    new DeleteRecordsResponse.PartitionResponse(3, new ApiError(Errors.NONE, null)));
             m.put(myTopicPartition1,
-                    new DeleteRecordsResponse.PartitionResponse(DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.OFFSET_OUT_OF_RANGE));
+                    new DeleteRecordsResponse.PartitionResponse(DeleteRecordsResponse.INVALID_LOW_WATERMARK, new ApiError(Errors.OFFSET_OUT_OF_RANGE, null)));
             m.put(myTopicPartition3,
-                    new DeleteRecordsResponse.PartitionResponse(DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.NOT_LEADER_FOR_PARTITION));
+                    new DeleteRecordsResponse.PartitionResponse(DeleteRecordsResponse.INVALID_LOW_WATERMARK, new ApiError(Errors.NOT_LEADER_FOR_PARTITION, null)));
             m.put(myTopicPartition4,
-                    new DeleteRecordsResponse.PartitionResponse(DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.UNKNOWN_TOPIC_OR_PARTITION));
+                    new DeleteRecordsResponse.PartitionResponse(DeleteRecordsResponse.INVALID_LOW_WATERMARK, new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, null)));
 
             List<MetadataResponse.TopicMetadata> t = new ArrayList<>();
             List<MetadataResponse.PartitionMetadata> p = new ArrayList<>();

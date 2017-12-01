@@ -84,6 +84,10 @@ public class DeleteRecordsRequest extends AbstractRequest {
         private final Map<TopicPartition, Long> partitionOffsets;
         private final boolean validateOnly;
 
+        public Builder(int timeout, Map<TopicPartition, Long> partitionOffsets) {
+            this(timeout, partitionOffsets, false);
+        }
+
         public Builder(int timeout, Map<TopicPartition, Long> partitionOffsets, boolean validateOnly) {
             super(ApiKeys.DELETE_RECORDS);
             this.timeout = timeout;

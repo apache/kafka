@@ -23,8 +23,9 @@ import kafka.utils._
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ApiError, DeleteRecordsRequest, DeleteRecordsResponse}
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.junit.Assert.{assertEquals, _}
 import org.junit.{After, Before, Test}

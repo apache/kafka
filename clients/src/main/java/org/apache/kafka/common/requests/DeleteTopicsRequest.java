@@ -68,6 +68,10 @@ public class DeleteTopicsRequest extends AbstractRequest {
         private final Integer timeout;
         private final boolean validateOnly;
 
+        public Builder(Set<String> topics, Integer timeout) {
+            this(topics, timeout, false);
+        }
+
         public Builder(Set<String> topics, Integer timeout, boolean validateOnly) {
             super(ApiKeys.DELETE_TOPICS);
             this.topics = topics;

@@ -48,10 +48,10 @@ class DelayedDeleteRecords(delayMs: Long,
 
   // first update the acks pending variable according to the error code
   deleteRecordsStatus.foreach { case (topicPartition, status) =>
-    if (status.responseStatus.error.error == Errors.NONE) {
+    if (status.responseStatus.error == ApiError.NONE) {
       // Timeout error state will be cleared when required acks are received
       status.acksPending = true
-      status.responseStatus.error = ApiError.fromThrowable(Errors.REQUEST_TIMED_OUT.exception());
+      status.responseStatus.error = new ApiError(Errors.REQUEST_TIMED_OUT, null);
     } else {
       status.acksPending = false
     }

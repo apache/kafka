@@ -116,8 +116,6 @@ class AdminManager(val config: KafkaConfig,
             val topicConfig = configs
             val topicReplicationFactor = replicationFactor
             val topicNumPartitions = numPartitions
-            //policy.validateCreateTopic(new RequestMetadata(topic, numPartitions, replicationFactor, replicaAssignments,
-            //  arguments.configs))
             policy.validateCreateTopic(new TopicManagementPolicy.CreateTopicRequest {
               /**
                 * The requested state of the topic to be created.
@@ -448,8 +446,6 @@ class AdminManager(val config: KafkaConfig,
                 adminZkClient.validateTopicConfig(topic, properties)
 
                 val configEntriesMap = config.entries.asScala.map(entry => (entry.name, entry.value)).toMap
-                //policy.validateAlterTopic(new AlterConfigPolicy.RequestMetadata(
-                //  new ConfigResource(ConfigResource.Type.TOPIC, resource.name), configEntriesMap.asJava))
                 val topicName = topic
                 policy.validateAlterTopic(new TopicManagementPolicy.AlterTopicRequest {
                   /**

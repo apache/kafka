@@ -171,7 +171,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
    */
   def deleteTopic(topic: String, validateOnly: Boolean = false) {
     if (zkClient.topicExists(topic)) {
-      if (validateOnly) {
+      if (!validateOnly) {
         try {
           zkClient.createDeleteTopicPath(topic)
         } catch {

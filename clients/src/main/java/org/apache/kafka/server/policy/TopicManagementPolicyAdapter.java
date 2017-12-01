@@ -26,7 +26,7 @@ import java.util.Map;
  * Adapter for the deprecated
  * {@link CreateTopicPolicy} and {@link AlterConfigPolicy} so they can be used as
  * a {@link TopicManagementPolicy}.
- * @deprecated
+ * @deprecated because {@link CreateTopicPolicy} and {@link AlterConfigPolicy} are deprecated
  */
 @Deprecated
 public class TopicManagementPolicyAdapter implements TopicManagementPolicy {

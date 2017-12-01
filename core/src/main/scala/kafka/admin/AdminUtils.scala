@@ -361,18 +361,15 @@ object AdminUtils extends Logging with AdminUtilities {
     }
   }
 
-
   @deprecated("This method is deprecated and will be replaced by kafka.zk.AdminZkClient.", "1.1.0")
-  def deleteTopic(zkUtils: ZkUtils, topic: String, validateOnly: Boolean = false): Unit = {
+  def deleteTopic(zkUtils: ZkUtils, topic: String) {
       if (topicExists(zkUtils, topic)) {
-        if (!validateOnly) {
-          try {
-            zkUtils.createPersistentPath(getDeleteTopicPath(topic))
-          } catch {
-            case _: ZkNodeExistsException => throw new TopicAlreadyMarkedForDeletionException(
-              s"Topic '$topic' is already marked for deletion.")
-            case e2: Throwable => throw new AdminOperationException(e2)
-          }
+        try {
+          zkUtils.createPersistentPath(getDeleteTopicPath(topic))
+        } catch {
+          case _: ZkNodeExistsException => throw new TopicAlreadyMarkedForDeletionException(
+            "topic %s is already marked for deletion".format(topic))
+          case e2: Throwable => throw new AdminOperationException(e2)
         }
       } else {
         throw new UnknownTopicOrPartitionException(s"Topic `$topic` to delete does not exist")
