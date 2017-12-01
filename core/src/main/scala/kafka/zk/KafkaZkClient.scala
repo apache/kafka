@@ -58,6 +58,9 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     createResponse.path
   }
 
+  private var brokerInfo: Array[Byte] = null;
+  private var brokerId: Int = -1;
+
   def registerBrokerInZk(id: Int,
                          host: String,
                          port: Int,
@@ -69,9 +72,20 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     // see method documentation for reason why we do this
     val version = if (apiVersion >= KAFKA_0_10_0_IV1) 4 else 2
     val json = Broker.toJson(version, id, host, port, advertisedEndpoints, jmxPort, rack)
-    checkedEphemeralCreate(brokerIdPath, json.getBytes())
+    brokerInfo = json.getBytes()
+    brokerId = id
+    checkedEphemeralCreate(brokerIdPath, brokerInfo)
 
     info("Registered broker %d at path %s with addresses: %s".format(id, brokerIdPath, advertisedEndpoints.mkString(",")))
+  }
+
+
+  def reRegisterBrokerInZk(): Unit ={
+    if (brokerInfo == null || brokerId == -1){
+      throw new RuntimeException("Broker information isn't set yet, to re-register the broker")
+    }
+    val brokerIdPath = BrokerIdsPath + "/" + brokerId
+    checkedEphemeralCreate(brokerIdPath, brokerInfo)
   }
 
 
