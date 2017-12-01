@@ -361,7 +361,7 @@ public class SelectorTest {
     }
 
     @Test
-    public void testImmediatelyConnectedCleanedAfterClose() throws Exception {
+    public void testImmediatelyConnectedCleaned() throws Exception {
         Metrics metrics = new Metrics(); // new metrics object to avoid metric registration conflicts
         Selector selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext()) {
             @Override
@@ -375,15 +375,15 @@ public class SelectorTest {
         };
 
         try {
-            testImmediatelyConnectedCleanedAfterClose(selector, true);
-            testImmediatelyConnectedCleanedAfterClose(selector, false);
+            testImmediatelyConnectedCleaned(selector, true);
+            testImmediatelyConnectedCleaned(selector, false);
         } finally {
             selector.close();
             metrics.close();
         }
     }
 
-    private void testImmediatelyConnectedCleanedAfterClose(Selector selector, boolean closeAfterFirstPoll) throws Exception {
+    private void testImmediatelyConnectedCleaned(Selector selector, boolean closeAfterFirstPoll) throws Exception {
         String id = "0";
         selector.connect(id, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
         verifyNonEmptyImmediatelyConnectedKeys(selector);

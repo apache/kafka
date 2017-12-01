@@ -214,6 +214,8 @@ public class Selector implements Selectable, AutoCloseable {
         }
     }
 
+    // Visible to allow test cases to override. In particular, we use this to implement a blocking connect
+    // in order to simulate "immediately connected" sockets.
     protected boolean doConnect(SocketChannel channel, InetSocketAddress address) throws IOException {
         try {
             return channel.connect(address);
