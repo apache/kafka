@@ -19,16 +19,17 @@ package kafka.zk
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.Properties
 
-import kafka.api.LeaderAndIsr
-import kafka.cluster.Broker
+import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, LeaderAndIsr}
+import kafka.cluster.{Broker, EndPoint}
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.log.LogConfig
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
 import kafka.security.auth.{Acl, Resource, ResourceType}
-
 import kafka.server.ConfigType
+import kafka.utils.ZkUtils.BrokerIdsPath
 import kafka.utils._
 import kafka.zookeeper._
+import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import org.apache.kafka.common.TopicPartition
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.{ACL, Stat}
@@ -56,6 +57,23 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     createResponse.resultException.foreach(e => throw e)
     createResponse.path
   }
+
+  def registerBrokerInZk(id: Int,
+                         host: String,
+                         port: Int,
+                         advertisedEndpoints: Seq[EndPoint],
+                         jmxPort: Int,
+                         rack: Option[String],
+                         apiVersion: ApiVersion) {
+    val brokerIdPath = BrokerIdsPath + "/" + id
+    // see method documentation for reason why we do this
+    val version = if (apiVersion >= KAFKA_0_10_0_IV1) 4 else 2
+    val json = Broker.toJson(version, id, host, port, advertisedEndpoints, jmxPort, rack)
+    checkedEphemeralCreate(brokerIdPath, json.getBytes())
+
+    info("Registered broker %d at path %s with addresses: %s".format(id, brokerIdPath, advertisedEndpoints.mkString(",")))
+  }
+
 
   /**
    * Gets topic partition states for the given partitions.

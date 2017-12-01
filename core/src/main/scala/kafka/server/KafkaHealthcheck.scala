@@ -26,6 +26,7 @@ import kafka.cluster.EndPoint
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
 import com.yammer.metrics.core.Gauge
+import kafka.zk.KafkaZkClient
 import org.I0Itec.zkclient.IZkStateListener
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.zookeeper.Watcher.Event.KeeperState
@@ -44,7 +45,7 @@ import scala.collection.mutable.Set
  */
 class KafkaHealthcheck(brokerId: Int,
                        advertisedEndpoints: Seq[EndPoint],
-                       zkUtils: ZkUtils,
+                       zkClient: KafkaZkClient,
                        rack: Option[String],
                        interBrokerProtocolVersion: ApiVersion,
                        stateChangeCallback: (ZKState.Value, Throwable)=> Unit) extends Logging {
@@ -52,7 +53,7 @@ class KafkaHealthcheck(brokerId: Int,
   private[server] val sessionExpireListener = new SessionExpireListener
 
   def startup() {
-    zkUtils.subscribeStateChanges(sessionExpireListener)
+    //zkUtils.subscribeStateChanges(sessionExpireListener)
     register()
   }
 
@@ -73,7 +74,8 @@ class KafkaHealthcheck(brokerId: Int,
     // or we register an empty endpoint, which means that older clients will not be able to connect
     val plaintextEndpoint = updatedEndpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).getOrElse(
       new EndPoint(null, -1, null, null))
-    zkUtils.registerBrokerInZk(brokerId, plaintextEndpoint.host, plaintextEndpoint.port, updatedEndpoints, jmxPort, rack,
+
+    zkClient.registerBrokerInZk(brokerId, plaintextEndpoint.host, plaintextEndpoint.port, updatedEndpoints, jmxPort, rack,
       interBrokerProtocolVersion)
   }
 
@@ -109,8 +111,8 @@ class KafkaHealthcheck(brokerId: Int,
 
     private[server] val sessionStateGauge =
       newGauge("SessionState", new Gauge[String] {
-        override def value: String =
-          Option(zkUtils.zkConnection.getZookeeperState.toString).getOrElse("DISCONNECTED")
+        override def value: String = "NOT_IMPLEMENTED_YET"
+          //Option(zkUtils.zkConnection.getZookeeperState.toString).getOrElse("DISCONNECTED")
       })
 
     metricNames += "SessionState"

@@ -291,7 +291,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           else
             endpoint
         }
-        kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, listeners, zkUtils, config.rack,
+        kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, listeners, zkClient, config.rack,
           config.interBrokerProtocolVersion, this.handleZKStateChanges)
         kafkaHealthcheck.startup()
 

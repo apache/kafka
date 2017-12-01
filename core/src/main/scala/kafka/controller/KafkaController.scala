@@ -1398,6 +1398,21 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     }
   }
 
+  case object RegisterBrokerAndReelect extends ControllerEvent {
+    override def state: ControllerState = ControllerState.ControllerChange
+
+    override def process(): Unit = {
+
+      val wasActiveBeforeChange = isActive
+      zkClient.registerZNodeChangeHandlerAndCheckExistence(controllerChangeHandler)
+      activeControllerId = zkClient.getControllerId.getOrElse(-1)
+      if (wasActiveBeforeChange && !isActive) {
+        onControllerResignation()
+      }
+      elect()
+    }
+  }
+
   // We can't make this a case object due to the countDownLatch field
   class Expire extends ControllerEvent {
     private val countDownLatch = new CountDownLatch(1)
