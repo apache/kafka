@@ -24,9 +24,9 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricsReporter;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -87,15 +87,15 @@ public class PushHttpMetricsReporter implements MetricsReporter {
                     "The URL to report metrics to")
             .define(METRICS_PERIOD_CONFIG, ConfigDef.Type.INT, ConfigDef.Importance.HIGH,
                     "The frequency at which metrics should be reported, in second")
-            .define(METRICS_HOST_CONFIG, ConfigDef.Type.STRING, null, ConfigDef.Importance.LOW,
-                    "The hostname to report with each metric; if null, defaults to the FQDN that can be automatically" +
+            .define(METRICS_HOST_CONFIG, ConfigDef.Type.STRING, "", ConfigDef.Importance.LOW,
+                    "The hostname to report with each metric; if empty, defaults to the FQDN that can be automatically" +
                             "determined")
             .define(CLIENT_ID_CONFIG, ConfigDef.Type.STRING, "", ConfigDef.Importance.LOW,
                     "Client ID to identify the application, generally inherited from the " +
                             "producer/consumer/streams/connect instance");
 
     public PushHttpMetricsReporter() {
-        time = Time.SYSTEM;
+        time = new SystemTime();
         executor = Executors.newSingleThreadScheduledExecutor();
     }
 
@@ -106,17 +106,17 @@ public class PushHttpMetricsReporter implements MetricsReporter {
 
     @Override
     public void configure(Map<String, ?> configs) {
-        AbstractConfig config = new AbstractConfig(CONFIG_DEF, configs, true) { };
+        PushHttpMetricsReporterConfig config = new PushHttpMetricsReporterConfig(CONFIG_DEF, configs);
         try {
             url = new URL(config.getString(METRICS_URL_CONFIG));
         } catch (MalformedURLException e) {
             throw new ConfigException("Malformed metrics.url", e);
         }
-        int period = config.getInt(METRICS_PERIOD_CONFIG);
+        int period = config.getInteger(METRICS_PERIOD_CONFIG);
         clientId = config.getString(CLIENT_ID_CONFIG);
 
         host = config.getString(METRICS_HOST_CONFIG);
-        if (host == null) {
+        if (host == null || host.isEmpty()) {
             try {
                 host = InetAddress.getLocalHost().getCanonicalHostName();
             } catch (UnknownHostException e) {
@@ -161,7 +161,7 @@ public class PushHttpMetricsReporter implements MetricsReporter {
         try {
             executor.awaitTermination(30, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
-            throw new InterruptException("Interrupted when shutting down PushHttpMetricsReporter", e);
+            throw new KafkaException("Interrupted when shutting down PushHttpMetricsReporter", e);
         }
     }
 
@@ -315,5 +315,18 @@ public class PushHttpMetricsReporter implements MetricsReporter {
         public Object value() {
             return value;
         }
+    }
+
+    // The signature for getInt changed from returning int to Integer so to remain compatible with 0.8.2.2 jars
+    // for system tests we replace it with a custom version that works for all versions.
+    private static class PushHttpMetricsReporterConfig extends AbstractConfig {
+        public PushHttpMetricsReporterConfig(ConfigDef definition, Map<?, ?> originals) {
+            super(definition, originals);
+        }
+
+        public Integer getInteger(String key) {
+            return (Integer) get(key);
+        }
+
     }
 }

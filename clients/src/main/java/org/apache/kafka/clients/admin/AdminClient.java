@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
@@ -508,4 +509,30 @@ public abstract class AdminClient implements AutoCloseable {
     public abstract CreatePartitionsResult createPartitions(Map<String, NewPartitions> newPartitions,
                                                             CreatePartitionsOptions options);
 
+    /**
+     * Delete records whose offset is smaller than the given offset of the corresponding partition.
+     *
+     * This is a convenience method for {@link #deleteRecords(Map, DeleteRecordsOptions)} with default options.
+     * See the overload for more details.
+     *
+     * This operation is supported by brokers with version 0.11.0.0 or higher.
+     *
+     * @param recordsToDelete       The topic partitions and related offsets from which records deletion starts.
+     * @return                      The DeleteRecordsResult.
+     */
+    public DeleteRecordsResult deleteRecords(Map<TopicPartition, RecordsToDelete> recordsToDelete) {
+        return deleteRecords(recordsToDelete, new DeleteRecordsOptions());
+    }
+
+    /**
+     * Delete records whose offset is smaller than the given offset of the corresponding partition.
+     *
+     * This operation is supported by brokers with version 0.11.0.0 or higher.
+     *
+     * @param recordsToDelete       The topic partitions and related offsets from which records deletion starts.
+     * @param options               The options to use when deleting records.
+     * @return                      The DeleteRecordsResult.
+     */
+    public abstract DeleteRecordsResult deleteRecords(Map<TopicPartition, RecordsToDelete> recordsToDelete,
+                                                      DeleteRecordsOptions options);
 }

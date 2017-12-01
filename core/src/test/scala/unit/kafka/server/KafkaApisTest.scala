@@ -90,7 +90,6 @@ class KafkaApisTest {
       groupCoordinator,
       txnCoordinator,
       controller,
-      zkUtils,
       zkClient,
       brokerId,
       new KafkaConfig(properties),

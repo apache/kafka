@@ -841,7 +841,9 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
     jsonPartitionMapOpt match {
       case Some(jsonPartitionMap) =>
         val reassignedPartitions = parsePartitionReassignmentData(jsonPartitionMap)
-        reassignedPartitions.map(p => p._1 -> new ReassignedPartitionsContext(p._2))
+        reassignedPartitions.map { case (tp, newReplicas) =>
+          tp -> new ReassignedPartitionsContext(newReplicas, null)
+        }
       case None => Map.empty[TopicAndPartition, ReassignedPartitionsContext]
     }
   }

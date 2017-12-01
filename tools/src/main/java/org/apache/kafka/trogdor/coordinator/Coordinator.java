@@ -64,7 +64,7 @@ public final class Coordinator {
      * Create a new Coordinator.
      *
      * @param platform      The platform object to use.
-     * @param time          The timekeeper to use for this Coordinator.
+     * @param scheduler     The scheduler to use for this Coordinator.
      * @param restServer    The REST server to use.
      * @param resource      The AgentRestResoure to use.
      */

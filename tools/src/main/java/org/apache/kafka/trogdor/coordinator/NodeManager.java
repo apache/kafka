@@ -221,11 +221,14 @@ public final class NodeManager {
                         }
                     } else if (state instanceof WorkerDone) {
                         if (!(worker.state instanceof WorkerDone)) {
-                            String error = ((WorkerDone) state).error();
+                            WorkerDone workerDoneState =  (WorkerDone) state;
+                            String error = workerDoneState.error();
                             if (error.isEmpty()) {
-                                log.warn("{}: Worker {} finished with no error.", node.name(), id);
+                                log.info("{}: Worker {} finished with status '{}'",
+                                    node.name(), id, workerDoneState.status());
                             } else {
-                                log.warn("{}: Worker {} finished with error '{}'", node.name(), id, error);
+                                log.warn("{}: Worker {} finished with error '{}' and status '{}'",
+                                    node.name(), id, error, workerDoneState.status());
                             }
                             taskManager.handleWorkerCompletion(node.name(), worker.id, error);
                         }

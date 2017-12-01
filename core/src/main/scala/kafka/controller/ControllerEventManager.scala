@@ -41,7 +41,10 @@ class ControllerEventManager(rateAndTimeMetrics: Map[ControllerState, KafkaTimer
 
   def start(): Unit = thread.start()
 
-  def close(): Unit = thread.shutdown()
+  def close(): Unit = {
+    clearAndPut(KafkaController.ShutdownEventThread)
+    thread.awaitShutdown()
+  }
 
   def put(event: ControllerEvent): Unit = inLock(putLock) {
     queue.put(event)
@@ -52,25 +55,28 @@ class ControllerEventManager(rateAndTimeMetrics: Map[ControllerState, KafkaTimer
     queue.put(event)
   }
 
-  class ControllerEventThread(name: String) extends ShutdownableThread(name = name) {
+  class ControllerEventThread(name: String) extends ShutdownableThread(name = name, isInterruptible = false) {
     override def doWork(): Unit = {
-      val controllerEvent = queue.take()
-      _state = controllerEvent.state
+      queue.take() match {
+        case KafkaController.ShutdownEventThread => initiateShutdown()
+        case controllerEvent =>
+          _state = controllerEvent.state
 
-      try {
-        rateAndTimeMetrics(state).time {
-          controllerEvent.process()
-        }
-      } catch {
-        case e: Throwable => error(s"Error processing event $controllerEvent", e)
+          try {
+            rateAndTimeMetrics(state).time {
+              controllerEvent.process()
+            }
+          } catch {
+            case e: Throwable => error(s"Error processing event $controllerEvent", e)
+          }
+
+          try eventProcessedListener(controllerEvent)
+          catch {
+            case e: Throwable => error(s"Error while invoking listener for processed event $controllerEvent", e)
+          }
+
+          _state = ControllerState.Idle
       }
-
-      try eventProcessedListener(controllerEvent)
-      catch {
-        case e: Throwable => error(s"Error while invoking listener for processed event $controllerEvent", e)
-      }
-
-      _state = ControllerState.Idle
     }
   }
 

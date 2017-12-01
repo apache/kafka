@@ -14,23 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.processor.PartitionGrouper;
-import org.apache.kafka.streams.processor.TaskId;
+package org.apache.kafka.trogdor.fault;
+
+import org.apache.kafka.trogdor.common.Topology;
+import org.apache.kafka.trogdor.task.TaskController;
 
 import java.util.Set;
-import java.util.UUID;
 
-// interface to get info about the StreamThread
-interface ThreadDataProvider {
-    InternalTopologyBuilder builder();
-    String name();
-    Set<TaskId> prevActiveTasks();
-    Set<TaskId> cachedTasks();
-    UUID processId();
-    StreamsConfig config();
-    PartitionGrouper partitionGrouper();
-    void setThreadMetadataProvider(final ThreadMetadataProvider provider);
+public class KiboshFaultController implements TaskController {
+    private final Set<String> nodeNames;
+
+    public KiboshFaultController(Set<String> nodeNames) {
+        this.nodeNames = nodeNames;
+    }
+
+    @Override
+    public Set<String> targetNodes(Topology topology) {
+        return nodeNames;
+    }
 }

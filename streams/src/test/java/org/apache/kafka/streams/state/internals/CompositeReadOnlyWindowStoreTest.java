@@ -179,6 +179,32 @@ public class CompositeReadOnlyWindowStoreTest {
                 KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
                 KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"))));
     }
+    
+    @Test
+    public void shouldGetAllAcrossStores() {
+        final ReadOnlyWindowStoreStub<String, String> secondUnderlying = new
+                ReadOnlyWindowStoreStub<>(WINDOW_SIZE);
+        stubProviderTwo.addStore(storeName, secondUnderlying);
+        underlyingWindowStore.put("a", "a", 0L);
+        secondUnderlying.put("b", "b", 10L);
+        List<KeyValue<Windowed<String>, String>> results = StreamsTestUtils.toList(windowStore.all());
+        assertThat(results, equalTo(Arrays.asList(
+                KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
+                KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"))));
+    }
+    
+    @Test
+    public void shouldFetchAllAcrossStores() {
+        final ReadOnlyWindowStoreStub<String, String> secondUnderlying = new
+                ReadOnlyWindowStoreStub<>(WINDOW_SIZE);
+        stubProviderTwo.addStore(storeName, secondUnderlying);
+        underlyingWindowStore.put("a", "a", 0L);
+        secondUnderlying.put("b", "b", 10L);
+        List<KeyValue<Windowed<String>, String>> results = StreamsTestUtils.toList(windowStore.fetchAll(0, 10));
+        assertThat(results, equalTo(Arrays.asList(
+                KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
+                KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"))));
+    }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNPEIfKeyIsNull() {

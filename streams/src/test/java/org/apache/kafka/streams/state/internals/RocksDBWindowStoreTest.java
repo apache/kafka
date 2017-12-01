@@ -190,6 +190,56 @@ public class RocksDBWindowStoreTest {
         assertEquals(Utils.mkSet("five@5"), entriesByKey.get(5));
         assertNull(entriesByKey.get(6));
     }
+    
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldGetAll() throws IOException {
+        windowStore = createWindowStore(context, false, true);
+        long startTime = segmentSize - 4L;
+        
+        putFirstBatch(windowStore, startTime, context);
+        
+        final KeyValue<Windowed<Integer>, String> zero = windowedPair(0, "zero", startTime + 0);
+        final KeyValue<Windowed<Integer>, String> one = windowedPair(1, "one", startTime + 1);
+        final KeyValue<Windowed<Integer>, String> two = windowedPair(2, "two", startTime + 2);
+        final KeyValue<Windowed<Integer>, String> four = windowedPair(4, "four", startTime + 4);
+        final KeyValue<Windowed<Integer>, String> five = windowedPair(5, "five", startTime + 5);
+        
+        assertEquals(
+                Utils.mkList(zero, one, two, four, five),
+                StreamsTestUtils.toList(windowStore.all())
+        );
+    }
+    
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldFetchAllInTimeRange() throws IOException {
+        windowStore = createWindowStore(context, false, true);
+        long startTime = segmentSize - 4L;
+        
+        putFirstBatch(windowStore, startTime, context);
+        
+        final KeyValue<Windowed<Integer>, String> zero = windowedPair(0, "zero", startTime + 0);
+        final KeyValue<Windowed<Integer>, String> one = windowedPair(1, "one", startTime + 1);
+        final KeyValue<Windowed<Integer>, String> two = windowedPair(2, "two", startTime + 2);
+        final KeyValue<Windowed<Integer>, String> four = windowedPair(4, "four", startTime + 4);
+        final KeyValue<Windowed<Integer>, String> five = windowedPair(5, "five", startTime + 5);
+        
+        assertEquals(
+                Utils.mkList(one, two, four),
+                StreamsTestUtils.toList(windowStore.fetchAll(startTime + 1, startTime + 4))
+        );
+        
+        assertEquals(
+                Utils.mkList(zero, one, two),
+                StreamsTestUtils.toList(windowStore.fetchAll(startTime + 0, startTime + 3))
+        );
+        
+        assertEquals(
+                Utils.mkList(one, two, four, five),
+                StreamsTestUtils.toList(windowStore.fetchAll(startTime + 1, startTime + 5))
+        );
+    }
 
     @SuppressWarnings("unchecked")
     @Test

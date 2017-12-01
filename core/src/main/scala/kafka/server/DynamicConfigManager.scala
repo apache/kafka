@@ -26,7 +26,7 @@ import scala.collection._
 import scala.collection.JavaConverters._
 import kafka.admin.AdminUtils
 import kafka.utils.json.JsonObject
-import kafka.zk.KafkaZkClient
+import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.security.scram.ScramMechanism
 import org.apache.kafka.common.utils.Time
@@ -84,11 +84,11 @@ object ConfigEntityName {
  * on startup where a change might be missed between the initial config load and registering for change notifications.
  *
  */
-class DynamicConfigManager(private val oldZkUtils: ZkUtils,
-                           private val zkClient: KafkaZkClient,
+class DynamicConfigManager(private val zkClient: KafkaZkClient,
                            private val configHandlers: Map[String, ConfigHandler],
                            private val changeExpirationMs: Long = 15*60*1000,
                            private val time: Time = Time.SYSTEM) extends Logging {
+  val adminZkClient = new AdminZkClient(zkClient)
 
   object ConfigChangedNotificationHandler extends NotificationHandler {
     override def processNotification(json: String) = {
@@ -120,8 +120,8 @@ class DynamicConfigManager(private val oldZkUtils: ZkUtils,
         throw new IllegalArgumentException("Version 1 config change notification does not specify 'entity_name'. Received: " + json)
       }
 
-      val entityConfig = AdminUtils.fetchEntityConfig(oldZkUtils, entityType, entity)
-      logger.info(s"Processing override for entityType: $entityType, entity: $entity with config: $entityConfig")
+      val entityConfig = adminZkClient.fetchEntityConfig(entityType, entity)
+      info(s"Processing override for entityType: $entityType, entity: $entity with config: $entityConfig")
       configHandlers(entityType).processConfigChanges(entity, entityConfig)
 
     }
@@ -141,11 +141,11 @@ class DynamicConfigManager(private val oldZkUtils: ZkUtils,
       }
       val fullSanitizedEntityName = entityPath.substring(index + 1)
 
-      val entityConfig = AdminUtils.fetchEntityConfig(oldZkUtils, rootEntityType, fullSanitizedEntityName)
+      val entityConfig = adminZkClient.fetchEntityConfig(rootEntityType, fullSanitizedEntityName)
       val loggableConfig = entityConfig.asScala.map {
         case (k, v) => (k, if (ScramMechanism.isScram(k)) Password.HIDDEN else v)
       }
-      logger.info(s"Processing override for entityPath: $entityPath with config: $loggableConfig")
+      info(s"Processing override for entityPath: $entityPath with config: $loggableConfig")
       configHandlers(rootEntityType).processConfigChanges(fullSanitizedEntityName, entityConfig)
 
     }
@@ -163,14 +163,14 @@ class DynamicConfigManager(private val oldZkUtils: ZkUtils,
     // Apply all existing client/user configs to the ClientIdConfigHandler/UserConfigHandler to bootstrap the overrides
     configHandlers.foreach {
       case (ConfigType.User, handler) =>
-        AdminUtils.fetchAllEntityConfigs(oldZkUtils, ConfigType.User).foreach {
+        adminZkClient.fetchAllEntityConfigs(ConfigType.User).foreach {
           case (sanitizedUser, properties) => handler.processConfigChanges(sanitizedUser, properties)
         }
-        AdminUtils.fetchAllChildEntityConfigs(oldZkUtils, ConfigType.User, ConfigType.Client).foreach {
+        adminZkClient.fetchAllChildEntityConfigs(ConfigType.User, ConfigType.Client).foreach {
           case (sanitizedUserClientId, properties) => handler.processConfigChanges(sanitizedUserClientId, properties)
         }
       case (configType, handler) =>
-        AdminUtils.fetchAllEntityConfigs(oldZkUtils, configType).foreach {
+        adminZkClient.fetchAllEntityConfigs(configType).foreach {
           case (entityName, properties) => handler.processConfigChanges(entityName, properties)
         }
     }
