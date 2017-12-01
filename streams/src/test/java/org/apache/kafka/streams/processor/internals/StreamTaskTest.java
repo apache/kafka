@@ -816,7 +816,7 @@ public class StreamTaskTest {
     public void shouldNotCloseTopologyProcessorNodesIfNotInitialized() {
         final StreamTask task = createTaskThatThrowsException();
         try {
-            task.close(true, false);
+            task.close(false, false);
         } catch (Exception e) {
             fail("should have not closed unitialized topology");
         }
