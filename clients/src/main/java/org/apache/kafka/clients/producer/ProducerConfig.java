@@ -217,8 +217,8 @@ public class ProducerConfig extends AbstractConfig {
     public static final String TRANSACTIONAL_ID_CONFIG = "transactional.id";
     public static final String TRANSACTIONAL_ID_DOC = "The TransactionalId to use for transactional delivery. This enables reliability semantics which span multiple producer sessions since it allows the client to guarantee that transactions using the same TransactionalId have been completed prior to starting any new transactions. If no TransactionalId is provided, then the producer is limited to idempotent delivery. " +
             "Note that enable.idempotence must be enabled if a TransactionalId is configured. " +
-            "The default is empty, which means transactions cannot be used. " +
-            "Note that transactions requires a cluster of at least three brokers by default; you can change this, by adjusting broker setting `transaction.state.log.replication.factor`.";
+            "The default is <code>null</code>, which means transactions cannot be used. " +
+            "Note that transactions requires a cluster of at least three brokers by default what is the recommended setting for production; for development you can change this, by adjusting broker setting `transaction.state.log.replication.factor`.";
 
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, Importance.HIGH, CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
