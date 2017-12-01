@@ -38,6 +38,9 @@ allprojects {
 
   repositories {
     mavenCentral()
+    maven {
+      url "http://packages.confluent.io/maven/"
+    }
   }
   
   apply plugin: 'idea'
@@ -553,6 +556,8 @@ project(':core') {
     compile libs.scalaLogging
     compile libs.zkclient
     compile libs.zookeeper
+    compile libs.avroSerializer
+    compile libs.schemaRegistryClient
 
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.bcpkix
