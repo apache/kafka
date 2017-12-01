@@ -41,6 +41,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER;
+
     static {
         final Properties props = new Properties();
         // we double the value passed to `time.sleep` in each iteration in one of the map functions, so we disable
@@ -104,40 +105,5 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
     @Test
     public void testReprocessingByDurationAfterResetWithoutIntermediateUserTopic() throws Exception {
         super.testReprocessingByDurationAfterResetWithoutIntermediateUserTopic();
-    }
-
-    @Test
-    public void shouldAcceptValidDateFormats() throws ParseException {
-        //check valid formats
-        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS"));
-        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ"));
-        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX"));
-        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXX"));
-        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX"));
-    }
-
-    @Test
-    public void shouldThrowOnInvalidDateFormat() throws ParseException {
-        //check some invalid formats
-        try {
-            invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss"));
-            fail("Call to getDateTime should fail");
-        } catch (final Exception e) {
-            e.printStackTrace();
-        }
-
-        try {
-            invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.X"));
-            fail("Call to getDateTime should fail");
-        } catch (final Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void invokeGetDateTimeMethod(final SimpleDateFormat format) throws ParseException {
-        final Date checkpoint = new Date();
-        final StreamsResetter streamsResetter = new StreamsResetter();
-        final String formattedCheckpoint = format.format(checkpoint);
-        streamsResetter.getDateTime(formattedCheckpoint);
     }
 }

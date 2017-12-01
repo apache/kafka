@@ -51,6 +51,7 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER;
+
     static {
         final Properties props = new Properties();
         // we double the value passed to `time.sleep` in each iteration in one of the map functions, so we disable
@@ -90,4 +91,43 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
         super.testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic();
     }
 
+    @Test
+    public void testReprocessingFromScratchAfterResetWithIntermediateUserTopic() throws Exception {
+        super.testReprocessingFromScratchAfterResetWithIntermediateUserTopic();
+    }
+
+    @Test
+    public void testReprocessingFromLatestEarliestAfterResetWithoutIntermediateUserTopic() throws Exception {
+        super.testReprocessingFromLatestAfterResetWithoutIntermediateUserTopic();
+    }
+
+    @Test
+    public void testReprocessingFromOffsetAfterResetWithoutIntermediateUserTopic() throws Exception {
+        super.testReprocessingFromOffsetAfterResetWithoutIntermediateUserTopic();
+    }
+
+    @Test
+    public void testReprocessingByShiftPositiveAfterResetWithoutIntermediateUserTopic() throws Exception {
+        super.testReprocessingByShiftPositiveAfterResetWithoutIntermediateUserTopic();
+    }
+
+    @Test
+    public void testReprocessingByShiftNegativeAfterResetWithoutIntermediateUserTopic() throws Exception {
+        super.testReprocessingByShiftNegativeAfterResetWithoutIntermediateUserTopic();
+    }
+
+    @Test
+    public void testReprocessingFromFileAfterResetWithoutIntermediateUserTopic() throws Exception {
+        super.testReprocessingFromFileAfterResetWithoutIntermediateUserTopic();
+    }
+
+    @Test
+    public void testReprocessingFromDateTimeAfterResetWithoutIntermediateUserTopic() throws Exception {
+        super.testReprocessingFromDateTimeAfterResetWithoutIntermediateUserTopic();
+    }
+
+    @Test
+    public void testReprocessingByDurationAfterResetWithoutIntermediateUserTopic() throws Exception {
+        super.testReprocessingByDurationAfterResetWithoutIntermediateUserTopic();
+    }
 }

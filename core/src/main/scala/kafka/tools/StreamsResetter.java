@@ -25,6 +25,7 @@ import kafka.utils.CommandLineUtils;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.KafkaAdminClient;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
@@ -94,7 +95,6 @@ public class StreamsResetter {
 
     private OptionSet options = null;
     private final List<String> allTopics = new LinkedList<>();
-    private boolean dryRun = false;
 
 
     public int run(final String[] args) {
@@ -109,7 +109,7 @@ public class StreamsResetter {
 
         try {
             parseArguments(args);
-            dryRun = options.has(dryRunOption);
+            final boolean dryRun = options.has(dryRunOption);
 
             final String groupId = options.valueOf(applicationIdOption);
             final Properties properties = new Properties();
@@ -130,8 +130,8 @@ public class StreamsResetter {
 
             final HashMap<Object, Object> consumerConfig = new HashMap<>(config);
             consumerConfig.putAll(properties);
-            maybeResetInputAndSeekToEndIntermediateTopicOffsets(consumerConfig);
-            maybeDeleteInternalTopics(kafkaAdminClient);
+            maybeResetInputAndSeekToEndIntermediateTopicOffsets(consumerConfig, dryRun);
+            maybeDeleteInternalTopics(kafkaAdminClient, dryRun);
 
         } catch (final Throwable e) {
             exitCode = EXIT_CODE_ERROR;
@@ -237,15 +237,14 @@ public class StreamsResetter {
         CommandLineUtils.checkInvalidArgs(optionParser, options, shiftByOption, allScenarioOptions.$minus(shiftByOption));
     }
 
-    private void maybeResetInputAndSeekToEndIntermediateTopicOffsets(final Map consumerConfig) throws Exception {
+    private void maybeResetInputAndSeekToEndIntermediateTopicOffsets(final Map consumerConfig, final boolean dryRun) throws Exception {
         final List<String> inputTopics = options.valuesOf(inputTopicsOption);
         final List<String> intermediateTopics = options.valuesOf(intermediateTopicsOption);
-
 
         final List<String> notFoundInputTopics = new ArrayList<>();
         final List<String> notFoundIntermediateTopics = new ArrayList<>();
 
-        String groupId = options.valueOf(applicationIdOption);
+        final String groupId = options.valueOf(applicationIdOption);
 
         if (inputTopics.size() == 0 && intermediateTopics.size() == 0) {
             System.out.println("No input or intermediate topics specified. Skipping seek.");
@@ -266,6 +265,7 @@ public class StreamsResetter {
                 notFoundInputTopics.add(topic);
             } else {
                 topicsToSubscribe.add(topic);
+
             }
         }
         for (final String topic : intermediateTopics) {
@@ -300,9 +300,9 @@ public class StreamsResetter {
                 }
             }
 
-            maybeReset(client, inputTopicPartitions);
+            maybeReset(groupId, client, inputTopicPartitions);
 
-            maybeSeekToEnd(client, intermediateTopicPartitions);
+            maybeSeekToEnd(groupId, client, intermediateTopicPartitions);
 
             if (!dryRun) {
                 for (final TopicPartition p : partitions) {
@@ -332,47 +332,49 @@ public class StreamsResetter {
         System.out.println("Done.");
     }
 
-    private void maybeSeekToEnd(final KafkaConsumer<byte[], byte[]> client,
+    // visible for testing
+    public void maybeSeekToEnd(final String groupId,
+                                final Consumer<byte[], byte[]> client,
                                 final Set<TopicPartition> intermediateTopicPartitions) {
-
-        final String groupId = options.valueOf(applicationIdOption);
-        final List<String> intermediateTopics = options.valuesOf(intermediateTopicsOption);
-
         if (intermediateTopicPartitions.size() > 0) {
             System.out.println("Following intermediate topics offsets will be reset to end (for consumer group " + groupId + ")");
-            for (final String topic : intermediateTopics) {
-                if (allTopics.contains(topic)) {
-                    System.out.println("Topic: " + topic);
+            for (final TopicPartition topicPartition : intermediateTopicPartitions) {
+                if (allTopics.contains(topicPartition.topic())) {
+                    System.out.println("Topic: " + topicPartition.topic());
                 }
             }
-            if (!dryRun) {
-                client.seekToEnd(intermediateTopicPartitions);
-            }
+
+            client.seekToEnd(intermediateTopicPartitions);
         }
     }
 
-    private void maybeReset(final KafkaConsumer<byte[], byte[]> client,
+    private void maybeReset(final String groupId,
+                            final Consumer<byte[], byte[]> client,
                             final Set<TopicPartition> inputTopicPartitions)
         throws Exception {
-
-        final String groupId = options.valueOf(applicationIdOption);
 
         if (inputTopicPartitions.size() > 0) {
             System.out.println("Following input topics offsets will be reset to (for consumer group " + groupId + ")");
             if (options.has(toOffsetOption)) {
-                resetOffsetsTo(client, inputTopicPartitions);
+                resetOffsetsTo(client, inputTopicPartitions, options.valueOf(toOffsetOption));
             } else if (options.has(toEarliestOption)) {
                 client.seekToBeginning(inputTopicPartitions);
             } else if (options.has(toLatestOption)) {
                 client.seekToEnd(inputTopicPartitions);
             } else if (options.has(shiftByOption)) {
-                shiftOffsetsBy(client, inputTopicPartitions);
+                shiftOffsetsBy(client, inputTopicPartitions, options.valueOf(shiftByOption));
             } else if (options.has(toDatetimeOption)) {
-                resetToDatetime(client, inputTopicPartitions);
+                final String ts = options.valueOf(toDatetimeOption);
+                final Long timestamp = getDateTime(ts);
+                resetToDatetime(client, inputTopicPartitions, timestamp);
             } else if (options.has(byDurationOption)) {
-                resetByDuration(client, inputTopicPartitions);
+                final String duration = options.valueOf(byDurationOption);
+                final Duration durationParsed = DatatypeFactory.newInstance().newDuration(duration);
+                resetByDuration(client, inputTopicPartitions, durationParsed);
             } else if (options.has(fromFileOption)) {
-                resetOffsetsFromFile(client, inputTopicPartitions);
+                final String resetPlanPath = options.valueOf(fromFileOption);
+                final Map<TopicPartition, Long> topicPartitionsAndOffset = getTopicPartitionOffsetFromResetPlan(resetPlanPath);
+                resetOffsetsFromResetPlan(client, inputTopicPartitions, topicPartitionsAndOffset);
             } else {
                 client.seekToBeginning(inputTopicPartitions);
             }
@@ -384,13 +386,10 @@ public class StreamsResetter {
         }
     }
 
-    private void resetOffsetsFromFile(KafkaConsumer<byte[], byte[]> client, Set<TopicPartition> inputTopicPartitions) throws IOException, ParseException {
+    // visible for testing
+    public void resetOffsetsFromResetPlan(Consumer<byte[], byte[]> client, Set<TopicPartition> inputTopicPartitions, Map<TopicPartition, Long> topicPartitionsAndOffset) {
         final Map<TopicPartition, Long> endOffsets = client.endOffsets(inputTopicPartitions);
         final Map<TopicPartition, Long> beginningOffsets = client.beginningOffsets(inputTopicPartitions);
-
-        final String resetPlanPath = options.valueOf(fromFileOption);
-        final String resetPlanCsv = Utils.readFileAsString(resetPlanPath);
-        final Map<TopicPartition, Long> topicPartitionsAndOffset = parseResetPlan(resetPlanCsv);
 
         final Map<TopicPartition, Long> validatedTopicPartitionsAndOffset =
             checkOffsetRange(topicPartitionsAndOffset, beginningOffsets, endOffsets);
@@ -401,11 +400,14 @@ public class StreamsResetter {
         }
     }
 
-    private void resetByDuration(KafkaConsumer<byte[], byte[]> client, Set<TopicPartition> inputTopicPartitions) throws DatatypeConfigurationException {
-        final String duration = options.valueOf(byDurationOption);
+    private Map<TopicPartition, Long> getTopicPartitionOffsetFromResetPlan(String resetPlanPath) throws IOException, ParseException {
+        final String resetPlanCsv = Utils.readFileAsString(resetPlanPath);
+        return parseResetPlan(resetPlanCsv);
+    }
+
+    private void resetByDuration(Consumer<byte[], byte[]> client, Set<TopicPartition> inputTopicPartitions, Duration duration) throws DatatypeConfigurationException {
         final Date now = new Date();
-        final Duration durationParsed = DatatypeFactory.newInstance().newDuration(duration);
-        durationParsed.negate().addTo(now);
+        duration.negate().addTo(now);
         final Long timestamp = now.getTime();
 
         final Map<TopicPartition, Long> topicPartitionsAndTimes = new HashMap<>(inputTopicPartitions.size());
@@ -421,10 +423,7 @@ public class StreamsResetter {
         }
     }
 
-    private void resetToDatetime(KafkaConsumer<byte[], byte[]> client, Set<TopicPartition> inputTopicPartitions) throws ParseException {
-        final String ts = options.valueOf(toDatetimeOption);
-        final Long timestamp = getDateTime(ts);
-
+    private void resetToDatetime(Consumer<byte[], byte[]> client, Set<TopicPartition> inputTopicPartitions, Long timestamp) {
         final Map<TopicPartition, Long> topicPartitionsAndTimes = new HashMap<>(inputTopicPartitions.size());
         for (final TopicPartition topicPartition : inputTopicPartitions) {
             topicPartitionsAndTimes.put(topicPartition, timestamp);
@@ -438,8 +437,8 @@ public class StreamsResetter {
         }
     }
 
-    private void shiftOffsetsBy(KafkaConsumer<byte[], byte[]> client, Set<TopicPartition> inputTopicPartitions) {
-        final Long shiftBy = options.valueOf(shiftByOption);
+    // visible for testing
+    public void shiftOffsetsBy(Consumer<byte[], byte[]> client, Set<TopicPartition> inputTopicPartitions, Long shiftBy) {
         final Map<TopicPartition, Long> endOffsets = client.endOffsets(inputTopicPartitions);
         final Map<TopicPartition, Long> beginningOffsets = client.beginningOffsets(inputTopicPartitions);
 
@@ -458,8 +457,8 @@ public class StreamsResetter {
         }
     }
 
-    private void resetOffsetsTo(KafkaConsumer<byte[], byte[]> client, Set<TopicPartition> inputTopicPartitions) {
-        final Long offset = options.valueOf(toOffsetOption);
+    // visible for testing
+    public void resetOffsetsTo(Consumer<byte[], byte[]> client, Set<TopicPartition> inputTopicPartitions, Long offset) {
         final Map<TopicPartition, Long> endOffsets = client.endOffsets(inputTopicPartitions);
         final Map<TopicPartition, Long> beginningOffsets = client.beginningOffsets(inputTopicPartitions);
 
@@ -555,7 +554,7 @@ public class StreamsResetter {
         return options.valuesOf(intermediateTopicsOption).contains(topic);
     }
 
-    private void maybeDeleteInternalTopics(final KafkaAdminClient adminClient) {
+    private void maybeDeleteInternalTopics(final KafkaAdminClient adminClient, final boolean dryRun) {
 
         System.out.println("Deleting all internal/auto-created topics for application " + options.valueOf(applicationIdOption));
         List<String> topicsToDelete = new ArrayList<>();
@@ -574,8 +573,9 @@ public class StreamsResetter {
         System.out.println("Done.");
     }
 
-    private void doDelete(final List<String> topicsToDelete,
-                          final KafkaAdminClient adminClient) {
+    // visible for testing
+    public void doDelete(final List<String> topicsToDelete,
+                          final AdminClient adminClient) {
         boolean hasDeleteErrors = false;
         final DeleteTopicsResult deleteTopicsResult = adminClient.deleteTopics(topicsToDelete);
         final Map<String, KafkaFuture<Void>> results = deleteTopicsResult.values();
