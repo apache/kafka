@@ -31,6 +31,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.DelayedReceive;
 import org.apache.kafka.test.MockSelector;
+import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
@@ -159,7 +160,7 @@ public class NetworkClientTest {
                 request.correlationId(), handler.response.requestHeader().correlationId());
     }
 
-    private void maybeSetExpectedApiVersionsResponse() {
+    private void setExpectedApiVersionsResponse() {
         ApiVersionsResponse response = ApiVersionsResponse.defaultApiVersionsResponse();
         short apiVersionsResponseVersion = response.apiVersion(ApiKeys.API_VERSIONS.id).maxVersion;
         ByteBuffer buffer = response.serialize(apiVersionsResponseVersion, new ResponseHeader(0));
@@ -168,7 +169,7 @@ public class NetworkClientTest {
 
     private void awaitReady(NetworkClient client, Node node) {
         if (client.discoverBrokerVersions()) {
-            maybeSetExpectedApiVersionsResponse();
+            setExpectedApiVersionsResponse();
         }
         while (!client.ready(node, time.milliseconds()))
             client.poll(1, time.milliseconds());
@@ -185,11 +186,15 @@ public class NetworkClientTest {
         ClientRequest request = client.newClientRequest(
                 node.idString(), builder, now, true, handler);
         client.send(request, now);
+
         // sleeping to make sure that the time since last send is greater than requestTimeOut
         time.sleep(3000);
-        client.poll(3000, time.milliseconds());
-        assertEquals(1, selector.disconnected().size());
-        assertTrue("Node not found in disconnected map", selector.disconnected().containsKey(node.idString()));
+        List<ClientResponse> responses = client.poll(3000, time.milliseconds());
+
+        assertEquals(1, responses.size());
+        ClientResponse clientResponse = responses.get(0);
+        assertEquals(node.idString(), clientResponse.destination());
+        assertTrue(clientResponse.wasDisconnected());
     }
 
     @Test
@@ -207,7 +212,7 @@ public class NetworkClientTest {
         time.sleep(reconnectBackoffMsTest);
         
         // CLOSE node 
-        selector.close(node.idString());
+        selector.serverDisconnect(node.idString());
         
         client.poll(1, time.milliseconds());
         assertFalse("After we forced the disconnection the client is no longer ready.", client.ready(node, time.milliseconds()));
@@ -238,7 +243,7 @@ public class NetworkClientTest {
     public void testConnectionDelayDisconnectedWithNoExponentialBackoff() {
         awaitReady(clientWithNoExponentialBackoff, node);
 
-        selector.close(node.idString());
+        selector.serverDisconnect(node.idString());
         clientWithNoExponentialBackoff.poll(requestTimeoutMs, time.milliseconds());
         long delay = clientWithNoExponentialBackoff.connectionDelay(node, time.milliseconds());
 
@@ -250,7 +255,7 @@ public class NetworkClientTest {
 
         // Start connecting and disconnect before the connection is established
         client.ready(node, time.milliseconds());
-        selector.close(node.idString());
+        selector.serverDisconnect(node.idString());
         client.poll(requestTimeoutMs, time.milliseconds());
 
         // Second attempt should have the same behaviour as exponential backoff is disabled
@@ -280,7 +285,7 @@ public class NetworkClientTest {
         awaitReady(client, node);
 
         // First disconnection
-        selector.close(node.idString());
+        selector.serverDisconnect(node.idString());
         client.poll(requestTimeoutMs, time.milliseconds());
         long delay = client.connectionDelay(node, time.milliseconds());
         long expectedDelay = reconnectBackoffMsTest;
@@ -293,7 +298,7 @@ public class NetworkClientTest {
 
         // Start connecting and disconnect before the connection is established
         client.ready(node, time.milliseconds());
-        selector.close(node.idString());
+        selector.serverDisconnect(node.idString());
         client.poll(requestTimeoutMs, time.milliseconds());
 
         // Second attempt should take twice as long with twice the jitter
@@ -325,6 +330,28 @@ public class NetworkClientTest {
     }
 
     @Test
+    public void testServerDisconnectAfterInternalApiVersionRequest() throws Exception {
+        awaitInFlightApiVersionRequest();
+        selector.serverDisconnect(node.idString());
+
+        // The failed ApiVersion request should not be forwarded to upper layers
+        List<ClientResponse> responses = client.poll(0, time.milliseconds());
+        assertFalse(client.hasInFlightRequests(node.idString()));
+        assertTrue(responses.isEmpty());
+    }
+
+    @Test
+    public void testClientDisconnectAfterInternalApiVersionRequest() throws Exception {
+        awaitInFlightApiVersionRequest();
+        client.disconnect(node.idString());
+        assertFalse(client.hasInFlightRequests(node.idString()));
+
+        // The failed ApiVersion request should not be forwarded to upper layers
+        List<ClientResponse> responses = client.poll(0, time.milliseconds());
+        assertTrue(responses.isEmpty());
+    }
+
+    @Test
     public void testCallDisconnect() throws Exception {
         awaitReady(client, node);
         assertTrue("Expected NetworkClient to be ready to send to node " + node.idString(),
@@ -343,6 +370,18 @@ public class NetworkClientTest {
         assertTrue(client.canConnect(node, time.milliseconds()));
         client.disconnect(node.idString());
         assertTrue(client.canConnect(node, time.milliseconds()));
+    }
+
+    private void awaitInFlightApiVersionRequest() throws Exception {
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                client.ready(node, time.milliseconds());
+                client.poll(0, time.milliseconds());
+                return client.hasInFlightRequests(node.idString());
+            }
+        }, 1000, "");
+        assertFalse(client.isReady(node, time.milliseconds()));
     }
 
     private static class TestCallbackHandler implements RequestCompletionHandler {
