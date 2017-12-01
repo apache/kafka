@@ -284,7 +284,7 @@ public class NetworkClientTest {
         client.poll(requestTimeoutMs, time.milliseconds());
         long delay = client.connectionDelay(node, time.milliseconds());
         long expectedDelay = reconnectBackoffMsTest;
-        double jitter = 0.2;
+        double jitter = 0.3;
         assertEquals(expectedDelay, delay, expectedDelay * jitter);
 
         // Sleep until there is no connection delay
@@ -299,7 +299,7 @@ public class NetworkClientTest {
         // Second attempt should take twice as long with twice the jitter
         expectedDelay = Math.round(delay * 2);
         delay = client.connectionDelay(node, time.milliseconds());
-        jitter = 0.4;
+        jitter = 0.6;
         assertEquals(expectedDelay, delay, expectedDelay * jitter);
     }
 
