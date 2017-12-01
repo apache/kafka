@@ -64,6 +64,8 @@ public class MockSelector implements Selectable {
 
     @Override
     public void close(String id) {
+        // Note that there are no notifications for client-side disconnects
+
         removeSendsForNode(id, completedSends);
         removeSendsForNode(id, initiatedSends);
 
@@ -75,6 +77,10 @@ public class MockSelector implements Selectable {
         }
     }
 
+    /**
+     * Simulate a server disconnect. This id will be present in {@link #disconnected()} on
+     * the next {@link #poll(long)}.
+     */
     public void serverDisconnect(String id) {
         this.disconnected.put(id, ChannelState.LOCAL_CLOSE);
         close(id);
