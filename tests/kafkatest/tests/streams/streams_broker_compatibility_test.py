@@ -21,7 +21,7 @@ from kafkatest.services.kafka import KafkaService
 from kafkatest.services.streams import StreamsBrokerCompatibilityService
 from kafkatest.services.verifiable_consumer import VerifiableConsumer
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.version import LATEST_0_11_0, LATEST_0_10_2, LATEST_0_10_1, LATEST_0_10_0, LATEST_0_9, LATEST_0_8_2, KafkaVersion
+from kafkatest.version import DEV_BRANCH, LATEST_0_11_0, LATEST_0_10_2, LATEST_0_10_1, LATEST_0_10_0, LATEST_0_9, LATEST_0_8_2, KafkaVersion
 
 
 class StreamsBrokerCompatibility(Test):
@@ -120,8 +120,8 @@ class StreamsBrokerCompatibility(Test):
 
         processor.node.account.ssh(processor.start_cmd(processor.node))
         with processor.node.account.monitor_log(processor.STDERR_FILE) as monitor:
-            monitor.wait_until('Could not read message within 45 seconds, maybe could not a find broker',
-                               timeout_sec=80,
-                               err_msg="Never saw 'Could not read message within 45 seconds, maybe did not a find broker' error message " + str(processor.node.account))
+            monitor.wait_until('Exception in thread "main" org.apache.kafka.streams.errors.BrokerNotFoundException: Could not find any available broker.',
+                               timeout_sec=60,
+                               err_msg="Never saw 'no available brokers' error message " + str(processor.node.account))
 
         self.kafka.stop()
