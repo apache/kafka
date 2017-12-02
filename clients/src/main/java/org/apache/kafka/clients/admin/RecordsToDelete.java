@@ -62,6 +62,11 @@ public class RecordsToDelete {
     }
 
     @Override
+    public int hashCode() {
+        return (int) offset;
+    }
+
+    @Override
     public String toString() {
         return "(beforeOffset = " + offset + ")";
     }
