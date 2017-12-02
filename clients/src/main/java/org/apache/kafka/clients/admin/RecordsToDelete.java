@@ -52,6 +52,16 @@ public class RecordsToDelete {
     }
 
     @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        RecordsToDelete that = (RecordsToDelete) o;
+
+        return this.offset == that.offset;
+    }
+
+    @Override
     public String toString() {
         return "(beforeOffset = " + offset + ")";
     }

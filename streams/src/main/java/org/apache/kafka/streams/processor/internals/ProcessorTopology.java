@@ -47,8 +47,8 @@ public class ProcessorTopology {
                 Collections.<String>emptySet());
     }
 
-    public static ProcessorTopology withSources(final List<ProcessorNode> processorNodes,
-                                                final Map<String, SourceNode> sourcesByTopic) {
+    static ProcessorTopology withSources(final List<ProcessorNode> processorNodes,
+                                         final Map<String, SourceNode> sourcesByTopic) {
         return new ProcessorTopology(processorNodes,
                 sourcesByTopic,
                 Collections.<String, SinkNode>emptyMap(),
@@ -58,8 +58,8 @@ public class ProcessorTopology {
                 Collections.<String>emptySet());
     }
 
-    public static ProcessorTopology withLocalStores(final List<StateStore> stateStores,
-                                                    final Map<String, String> storeToChangelogTopic) {
+    static ProcessorTopology withLocalStores(final List<StateStore> stateStores,
+                                             final Map<String, String> storeToChangelogTopic) {
         return new ProcessorTopology(Collections.<ProcessorNode>emptyList(),
                 Collections.<String, SourceNode>emptyMap(),
                 Collections.<String, SinkNode>emptyMap(),
@@ -69,8 +69,8 @@ public class ProcessorTopology {
                 Collections.<String>emptySet());
     }
 
-    public static ProcessorTopology withGlobalStores(final List<StateStore> stateStores,
-                                                     final Map<String, String> storeToChangelogTopic) {
+    static ProcessorTopology withGlobalStores(final List<StateStore> stateStores,
+                                              final Map<String, String> storeToChangelogTopic) {
         return new ProcessorTopology(Collections.<ProcessorNode>emptyList(),
                 Collections.<String, SourceNode>emptyMap(),
                 Collections.<String, SinkNode>emptyMap(),
@@ -80,9 +80,9 @@ public class ProcessorTopology {
                 Collections.<String>emptySet());
     }
 
-    public static ProcessorTopology withRepartitionTopics(final List<ProcessorNode> processorNodes,
-                                                          final Map<String, SourceNode> sourcesByTopic,
-                                                          final Set<String> repartitionTopics) {
+    static ProcessorTopology withRepartitionTopics(final List<ProcessorNode> processorNodes,
+                                                   final Map<String, SourceNode> sourcesByTopic,
+                                                   final Set<String> repartitionTopics) {
         return new ProcessorTopology(processorNodes,
                 sourcesByTopic,
                 Collections.<String, SinkNode>emptyMap(),
@@ -148,7 +148,7 @@ public class ProcessorTopology {
         return storeToChangelogTopic;
     }
 
-    public boolean isTopicInternalTransient(String topic) {
+    boolean isRepartitionTopic(String topic) {
         return repartitionTopics.contains(topic);
     }
 

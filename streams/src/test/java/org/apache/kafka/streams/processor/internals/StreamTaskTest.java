@@ -870,7 +870,7 @@ public class StreamTaskTest {
         assertThat(map, equalTo(Collections.singletonMap(repartition, 11L)));
     }
 
-    private StreamTask createStatefulTask(boolean eosEnabled, boolean logged) {
+    private StreamTask createStatefulTask(final boolean eosEnabled, final boolean logged) {
         final ProcessorTopology topology = ProcessorTopology.with(
                 Utils.<ProcessorNode>mkList(source1, source2),
                 new HashMap<String, SourceNode>() {
@@ -886,7 +886,7 @@ public class StreamTaskTest {
                 streamsMetrics, stateDirectory, null, time, producer);
     }
 
-    private StreamTask createStatefulTaskThatThrowsExceptionOnClose(boolean eosEnabled, boolean logged) {
+    private StreamTask createStatefulTaskThatThrowsExceptionOnClose(final boolean eosEnabled, final boolean logged) {
         final ProcessorTopology topology = ProcessorTopology.with(
                 Utils.<ProcessorNode>mkList(source1, source3),
                 new HashMap<String, SourceNode>() {
@@ -902,7 +902,7 @@ public class StreamTaskTest {
                 streamsMetrics, stateDirectory, null, time, producer);
     }
 
-    private StreamTask createStatelessTask(boolean eosEnabled) {
+    private StreamTask createStatelessTask(final boolean eosEnabled) {
         final ProcessorTopology topology = ProcessorTopology.withSources(
                 Utils.<ProcessorNode>mkList(source1, source2, processorStreamTime, processorSystemTime),
                 new HashMap<String, SourceNode>() {

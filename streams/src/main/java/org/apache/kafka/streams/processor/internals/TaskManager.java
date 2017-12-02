@@ -446,13 +446,16 @@ class TaskManager {
         if (deleteRecordsResult == null || deleteRecordsResult.all().isDone()) {
 
             if (deleteRecordsResult != null && deleteRecordsResult.all().isCompletedExceptionally()) {
-                log.info("Previous delete-records request has failed: {}. Try sending the new request now", deleteRecordsResult.lowWatermarks());
+                log.debug("Previous delete-records request has failed: {}. Try sending the new request now", deleteRecordsResult.lowWatermarks());
             }
 
-            Map<TopicPartition, RecordsToDelete> recordsToDelete = active.recordsToDelete();
+            final Map<TopicPartition, RecordsToDelete> recordsToDelete = new HashMap<>();
+            for (final Map.Entry<TopicPartition, Long> entry : active.recordsToDelete().entrySet()) {
+                recordsToDelete.put(entry.getKey(), RecordsToDelete.beforeOffset(entry.getValue()));
+            }
             deleteRecordsResult = adminClient.deleteRecords(recordsToDelete);
 
-            log.debug("Sent delete-records request: {}", recordsToDelete);
+            log.trace("Sent delete-records request: {}", recordsToDelete);
         }
     }
 
