@@ -21,12 +21,7 @@ import java.util.Properties
 import kafka.utils.TestUtils
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.config.SaslConfigs
-<<<<<<< HEAD
-import org.apache.kafka.common.errors.GroupAuthorizationException
-=======
-import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.errors.{GroupAuthorizationException, TopicAuthorizationException}
->>>>>>> 2d8918b... KAFKA-6118: Fix transient failure testTwoConsumersWithDifferentSaslCredentials
 import org.junit.{Before, Test}
 import org.junit.Assert.{assertEquals, assertTrue}
 
