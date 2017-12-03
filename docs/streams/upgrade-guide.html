@@ -44,6 +44,20 @@
         See <a href="#streams_api_changes_0101">below</a> a complete list of 0.10.1 API changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
     </p>
 
+    <h3><a id="full_upgrade_workflow" href="#full_upgrade_workflow">Full Upgrade Workflow</a></h3>
+
+    A typical workflow for upgrading Kafka Streams applications involves the following steps:
+
+    <ol>
+       <li> <em>Upgrade your application:</em> See section above for relevant version.</li>
+       <li> <em>Stop the old application:</em> Stop the old version of your application, i.e. stop all the application instances
+   that are still running the old version of the application.</li>
+       <li> <em>Optional, upgrade your Kafka cluster</em> Note, if you want to use exactly-once processing semantics, upgrading your cluster to 0.11.0 or 1.0.0 is mandatory.</li>
+       <li> <em>Start the upgraded application:</em> Start the upgraded version of your application, with as many instances as needed.
+   By default, the upgraded application will resume processing its input data from the point when the old version was stopped (see previous step).</li>
+   </ol>
+
+
     <h3><a id="streams_api_changes_100" href="#streams_api_changes_100">Streams API changes in 1.0.0</a></h3>
 
     <p>
