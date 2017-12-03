@@ -73,7 +73,9 @@ class EchoServer extends Thread {
         try {
             while (true) {
                 final Socket socket = serverSocket.accept();
-                sockets.add(socket);
+                synchronized (sockets) {
+                    sockets.add(socket);
+                }
                 Thread thread = new Thread() {
                     @Override
                     public void run() {
@@ -112,8 +114,10 @@ class EchoServer extends Thread {
     }
 
     public void closeConnections() throws IOException {
-        for (Socket socket : sockets)
-            socket.close();
+        synchronized (sockets) {
+            for (Socket socket : sockets)
+                socket.close();
+        }
     }
 
     public void close() throws IOException, InterruptedException {
