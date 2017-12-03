@@ -27,13 +27,12 @@ import org.junit.{After, Before, Test}
 import kafka.admin.ReplicationQuotaUtils._
 import org.apache.kafka.clients.admin.AdminClientConfig
 import org.apache.kafka.clients.admin.{AdminClient => JAdminClient}
-import org.apache.kafka.common.TopicPartitionReplica
+import org.apache.kafka.common.{TopicPartition, TopicPartitionReplica}
 
 import scala.collection.JavaConverters._
 import scala.collection.Map
 import scala.collection.Seq
 import scala.util.Random
-
 import java.io.File
 
 class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
@@ -132,7 +131,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     val newAssignment = generateAssignment(zkUtils, brokers, json(topicName), true)._1
     // Find a partition in the new assignment on broker 102 and a random log directory on broker 102,
     // which currently does not have any partition for this topic
-    val partition1 = newAssignment.find { case (replica, brokerIds) => brokerIds.contains(102)}.get._1.partition
+    val partition1 = newAssignment.find { case (_, brokerIds) => brokerIds.contains(102)}.get._1.partition
     val replica1 = new TopicPartitionReplica(topicName, partition1, 102)
     val expectedLogDir1 = getRandomLogDirAssignment(102)
     // Find a partition in the new assignment on broker 100 and a random log directory on broker 100,
@@ -434,8 +433,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   def shouldPerformThrottledReassignmentOverVariousTopics() {
     val throttle = Throttle(1000L)
 
-    //Given four brokers
-    servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(conf => TestUtils.createServer(KafkaConfig.fromProps(conf)))
+    startBrokers(Seq(0, 1, 2, 3))
 
     //With up several small topics
     createTopic(zkUtils, "orders", Map(0 -> List(0, 1, 2), 1 -> List(0, 1, 2)), servers)
@@ -478,7 +476,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
    */
   @Test
   def shouldPerformMultipleReassignmentOperationsOverVariousTopics() {
-    servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(conf => TestUtils.createServer(KafkaConfig.fromProps(conf)))
+    startBrokers(Seq(0, 1, 2, 3))
 
     createTopic(zkUtils, "orders", Map(0 -> List(0, 1, 2), 1 -> List(0, 1, 2)), servers)
     createTopic(zkUtils, "payments", Map(0 -> List(0, 1), 1 -> List(0, 1)), servers)
@@ -493,7 +491,8 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     )
 
     new ReassignPartitionsCommand(zkUtils, None, firstMove).reassignPartitions()
-    waitForReassignmentToComplete()
+    // Low pause to detect deletion of the reassign_partitions znode before the reassignment is complete
+    waitForReassignmentToComplete(pause = 1L)
 
     // Check moved replicas did move
     assertEquals(Seq(0, 2, 3), zkUtils.getReplicasForPartition("orders", 0))
@@ -517,7 +516,8 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     )
 
     new ReassignPartitionsCommand(zkUtils, None, secondMove).reassignPartitions()
-    waitForReassignmentToComplete()
+    // Low pause to detect deletion of the reassign_partitions znode before the reassignment is complete
+    waitForReassignmentToComplete(pause = 1L)
 
     // Check moved replicas did move
     assertEquals(Seq(0, 2, 3), zkUtils.getReplicasForPartition("orders", 0))
@@ -550,7 +550,8 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       }
     }.exists(identity)
 
-    waitForReassignmentToComplete()
+    // Low pause to detect deletion of the reassign_partitions znode before the reassignment is complete
+    waitForReassignmentToComplete(pause = 1L)
 
     // Check moved replicas for thirdMove and fourthMove
     assertEquals(Seq(1, 2, 3), zkUtils.getReplicasForPartition("orders", 0))
@@ -566,8 +567,36 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     assertEquals(Seq(3), zkUtils.getReplicasForPartition("customers", 3))
   }
 
-  def waitForReassignmentToComplete() {
-    waitUntilTrue(() => !zkUtils.pathExists(ReassignPartitionsPath), s"Znode ${ZkUtils.ReassignPartitionsPath} wasn't deleted")
+  /**
+   * Set the `reassign_partitions` znode while the brokers are down and verify that the reassignment is triggered by
+   * the Controller during start-up.
+   */
+  @Test
+  def shouldTriggerReassignmentOnControllerStartup(): Unit = {
+    startBrokers(Seq(0, 1, 2))
+    createTopic(zkUtils, "orders", Map(0 -> List(0, 1), 1 -> List(1, 2)), servers)
+    servers.foreach(_.shutdown())
+
+    val firstMove = Map(
+      new TopicPartition("orders", 0) -> Seq(2, 1), // moves
+      new TopicPartition("orders", 1) -> Seq(1, 2), // stays
+      new TopicPartition("customers", 0) -> Seq(1, 2) // non-existent topic, triggers topic deleted path
+    )
+
+    // Set znode directly to avoid non-existent topic validation
+    zkClient.setOrCreatePartitionReassignment(firstMove)
+
+    servers.foreach(_.startup())
+    waitForReassignmentToComplete()
+
+    assertEquals(Seq(2, 1), zkUtils.getReplicasForPartition("orders", 0))
+    assertEquals(Seq(1, 2), zkUtils.getReplicasForPartition("orders", 1))
+    assertEquals(Seq.empty, zkUtils.getReplicasForPartition("customers", 0))
+  }
+
+  def waitForReassignmentToComplete(pause: Long = 100L) {
+    waitUntilTrue(() => !zkUtils.pathExists(ReassignPartitionsPath),
+      s"Znode ${ZkUtils.ReassignPartitionsPath} wasn't deleted", pause = pause)
   }
 
   def json(topic: String*): String = {
