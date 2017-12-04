@@ -236,6 +236,32 @@ public class StructTest {
         assertNotEquals(struct1, struct3);
     }
 
+    @Test
+    public void testEqualsWithByteArrayValue() {
+        Struct struct1 = new Struct(FLAT_STRUCT_SCHEMA)
+                .put("int8", (byte) 12)
+                .put("int16", (short) 12)
+                .put("int32", 12)
+                .put("int64", (long) 12)
+                .put("float32", 12.f)
+                .put("float64", 12.)
+                .put("boolean", true)
+                .put("string", "foobar")
+                .put("bytes", "foobar".getBytes());
+        Struct struct2 = new Struct(FLAT_STRUCT_SCHEMA)
+                .put("int8", (byte) 12)
+                .put("int16", (short) 12)
+                .put("int32", 12)
+                .put("int64", (long) 12)
+                .put("float32", 12.f)
+                .put("float64", 12.)
+                .put("boolean", true)
+                .put("string", "foobar")
+                .put("bytes", "foobar".getBytes());
+
+        assertEquals(struct1, struct2);
+    }
+
     @Rule
     public ExpectedException thrown = ExpectedException.none();
 

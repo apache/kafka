@@ -238,7 +238,7 @@ public class Struct {
         if (o == null || getClass() != o.getClass()) return false;
         Struct struct = (Struct) o;
         return Objects.equals(schema, struct.schema) &&
-                Arrays.equals(values, struct.values);
+                Arrays.deepEquals(values, struct.values);
     }
 
     @Override
