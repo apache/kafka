@@ -26,6 +26,7 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.slf4j.Logger;
@@ -56,7 +57,6 @@ public class InternalTopicManager {
     private final AdminClient adminClient;
 
     private final int retries;
-    private final long retryBackoffMs;
 
     public InternalTopicManager(final AdminClient adminClient,
                                 final Map<String, ?> config) {
@@ -66,14 +66,20 @@ public class InternalTopicManager {
             (Long) config.get(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG)
             : WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT;
 
-        final AdminClientConfig adminClientConfig = new AdminClientConfig(config);
-        retries = adminClientConfig.getInt(AdminClientConfig.RETRIES_CONFIG);
-        retryBackoffMs = adminClientConfig.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG);
-
         LogContext logContext = new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName()));
         this.log = logContext.logger(getClass());
 
-        for (final Map.Entry<String, Object> entry : adminClientConfig.originalsWithPrefix(StreamsConfig.TOPIC_PREFIX).entrySet()) {
+        final StreamsConfig streamsConfig = new StreamsConfig(config);
+        retries = new AdminClientConfig(streamsConfig.getAdminConfigs("dummy")).getInt(AdminClientConfig.RETRIES_CONFIG);
+        log.debug("Configs:" + Utils.NL,
+            "\t{} = {}" + Utils.NL,
+            "\t{} = {}" + Utils.NL,
+            "\t{} = {}",
+            AdminClientConfig.RETRIES_CONFIG, retries,
+            StreamsConfig.REPLICATION_FACTOR_CONFIG, replicationFactor,
+            StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, windowChangeLogAdditionalRetention);
+
+        for (final Map.Entry<String, Object> entry : streamsConfig.originalsWithPrefix(StreamsConfig.TOPIC_PREFIX).entrySet()) {
             if (entry.getValue() != null) {
                 defaultTopicConfigs.put(entry.getKey(), entry.getValue().toString());
             }
@@ -107,9 +113,9 @@ public class InternalTopicManager {
                     .configs(topicConfig));
             }
 
-            int remainingAttempts = 1 + retries;
+            int remainingRetries = retries;
             boolean retry;
-            while (remainingAttempts > 0) {
+            do {
                 retry = false;
 
                 final CreateTopicsResult createTopicsResult = adminClient.createTopics(newTopics);
@@ -126,13 +132,9 @@ public class InternalTopicManager {
                         if (cause instanceof TimeoutException) {
                             retry = true;
                             log.debug("Could not get number of partitions for topic {} due to timeout. " +
-                                "Will try again (remaining retries {}).", topicName, remainingAttempts - 1);
-                            try {
-                                Thread.sleep(retryBackoffMs);
-                            } catch (final InterruptedException ignore) {
-                                Thread.currentThread().interrupt();
-                            }
+                                "Will try again (remaining retries {}).", topicName, remainingRetries - 1);
                         } else if (cause instanceof TopicExistsException) {
+                            createTopicNames.add(createTopicResult.getKey());
                             log.info(String.format("Topic %s exist already: %s",
                                 topicName,
                                 couldNotCreateTopic.getMessage()));
@@ -148,8 +150,6 @@ public class InternalTopicManager {
                 }
 
                 if (retry) {
-                    --remainingAttempts;
-
                     final Iterator<NewTopic> it = newTopics.iterator();
                     while (it.hasNext()) {
                         if (createTopicNames.contains(it.next().name())) {
@@ -161,7 +161,7 @@ public class InternalTopicManager {
                 }
 
                 return;
-            }
+            } while (remainingRetries-- > 0);
 
             final String timeoutAndRetryError = "Could not create topics. " +
                 "This can happen if the Kafka cluster is temporary not available. " +
@@ -180,9 +180,9 @@ public class InternalTopicManager {
 
     private Map<String, Integer> getNumPartitions(final Set<String> topics,
                                                   final boolean bestEffort) {
-        int remainingAttempts = 1 + retries;
+        int remainingRetries = retries;
         boolean retry;
-        while (remainingAttempts > 0) {
+        do {
             retry = false;
 
             final DescribeTopicsResult describeTopicsResult = adminClient.describeTopics(topics);
@@ -204,12 +204,7 @@ public class InternalTopicManager {
                     if (cause instanceof TimeoutException) {
                         retry = true;
                         log.debug("Could not get number of partitions for topic {} due to timeout. " +
-                            "Will try again (remaining retries {}).", topicFuture.getKey(), remainingAttempts - 1);
-                        try {
-                            Thread.sleep(retryBackoffMs);
-                        } catch (final InterruptedException ignore) {
-                            Thread.currentThread().interrupt();
-                        }
+                            "Will try again (remaining retries {}).", topicFuture.getKey(), remainingRetries - 1);
                     } else {
                         final String error = "Could not get number of partitions for topic {}.";
                         if (bestEffort) {
@@ -223,13 +218,12 @@ public class InternalTopicManager {
             }
 
             if (retry) {
-                --remainingAttempts;
                 topics.removeAll(existingNumberOfPartitionsPerTopic.keySet());
                 continue;
             }
 
             return existingNumberOfPartitionsPerTopic;
-        }
+        } while (remainingRetries-- > 0);
 
         if (bestEffort) {
             return Collections.emptyMap();

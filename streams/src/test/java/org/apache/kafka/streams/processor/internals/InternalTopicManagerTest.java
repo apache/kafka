@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.Node;
@@ -60,10 +59,10 @@ public class InternalTopicManagerTest {
 
     private final Map<String, Object> config = new HashMap<String, Object>() {
         {
+            put(StreamsConfig.APPLICATION_ID_CONFIG, "app-id");
             put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, broker1.host() + ":" + broker1.port());
             put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 1);
-            put(AdminClientConfig.RETRIES_CONFIG, 1);
-            put(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, 1);
+            put(StreamsConfig.adminClientPrefix(StreamsConfig.RETRIES_CONFIG), 1);
         }
     };
 
