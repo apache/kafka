@@ -201,8 +201,11 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
     val groups = client.listAllGroupsFlattened
     assertFalse(groups.isEmpty)
     val group = groups.head
-    assertEquals(groupId, group.groupId)
-    assertEquals("consumer", group.protocolType)
+    assertEquals(groupId, group._1.groupId)
+    assertEquals("consumer", group._1.protocolType)
+    // make sure there is a valid group coordinator
+    assertTrue(group._2 != null)
+    assertTrue(servers.map(_.config.brokerId).toList.contains(group._2.id))
   }
 
   @Test

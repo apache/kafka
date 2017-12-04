@@ -71,7 +71,7 @@ object ConsumerGroupCommand extends Logging {
 
     try {
       if (opts.options.has(opts.listOpt))
-        consumerGroupService.listGroups().foreach(println(_))
+        printGroups(consumerGroupService.listGroups, !opts.useOldConsumer)
       else if (opts.options.has(opts.describeOpt)) {
         val (state, assignments) = consumerGroupService.describeGroup()
         val groupId = opts.options.valuesOf(opts.groupOpt).asScala.head
@@ -146,6 +146,24 @@ object ConsumerGroupCommand extends Logging {
     }
   }
 
+  def printGroups(groups: List[(String, Option[Int])], useNewConsumer: Boolean): Unit = {
+    if (groups.isEmpty)
+      println("No consumer group was found.")
+    else {
+      print("\n%-30s".format("GROUP"))
+      if (useNewConsumer)
+        print("%s".format("COORDINATOR-ID"))
+      println()
+
+      groups.foreach { group =>
+        print("%-30s".format(group._1))
+        if (useNewConsumer)
+          print("%s".format(group._2.get))
+        println()
+      }
+    }
+  }
+
   def printOffsetsToReset(groupAssignmentsToReset: Map[TopicPartition, OffsetAndMetadata]): Unit = {
     print("\n%-30s %-10s %-15s".format("TOPIC", "PARTITION", "NEW-OFFSET"))
     println()
@@ -167,7 +185,7 @@ object ConsumerGroupCommand extends Logging {
 
   sealed trait ConsumerGroupService {
 
-    def listGroups(): List[String]
+    def listGroups(): List[(String, Option[Int])]
 
     def describeGroup(): (Option[String], Option[Seq[PartitionAssignmentState]]) = {
       collectGroupAssignment(opts.options.valueOf(opts.groupOpt))
@@ -245,8 +263,9 @@ object ConsumerGroupCommand extends Logging {
       zkUtils.close()
     }
 
-    def listGroups(): List[String] = {
-      zkUtils.getConsumerGroups().toList
+    def listGroups(): List[(String, Option[Int])] = {
+      // there is no coordinator for zookeeper based groups, so return None for coordinator id
+      zkUtils.getConsumerGroups().map((_, None)).toList
     }
 
     def deleteGroups() {
@@ -420,8 +439,9 @@ object ConsumerGroupCommand extends Logging {
     // `consumer` is only needed for `describe`, so we instantiate it lazily
     private var consumer: KafkaConsumer[String, String] = null
 
-    def listGroups(): List[String] = {
-      adminClient.listAllConsumerGroupsFlattened().map(_.groupId)
+    def listGroups(): List[(String, Option[Int])] = {
+      // return group id along with corresponding coordinator id
+      adminClient.listAllConsumerGroupsFlattened.map(x => (x._1.groupId, Some(x._2.id)))
     }
 
     protected def collectGroupAssignment(group: String): (Option[String], Option[Seq[PartitionAssignmentState]]) = {

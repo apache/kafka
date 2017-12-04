@@ -186,12 +186,12 @@ class AdminClient(val time: Time,
     }
   }
 
-  def listAllGroupsFlattened(): List[GroupOverview] = {
-    listAllGroups.values.flatten.toList
+  def listAllGroupsFlattened(): List[(GroupOverview, Node)] = {
+    listAllGroups.flatMap(nodeGroups => nodeGroups._2.map(group => (group, nodeGroups._1))).toList
   }
 
-  def listAllConsumerGroupsFlattened(): List[GroupOverview] = {
-    listAllGroupsFlattened.filter(_.protocolType == ConsumerProtocol.PROTOCOL_TYPE)
+  def listAllConsumerGroupsFlattened(): List[(GroupOverview, Node)] = {
+    listAllGroupsFlattened.filter(_._1.protocolType == ConsumerProtocol.PROTOCOL_TYPE)
   }
 
   def listGroupOffsets(groupId: String): Map[TopicPartition, Long] = {
