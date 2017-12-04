@@ -858,8 +858,6 @@ public class InternalTopologyBuilder {
                 nodeGroup.addAll(value);
             }
             nodeGroup.removeAll(globalNodeGroups);
-
-
         }
         return build(nodeGroup);
     }
@@ -890,17 +888,17 @@ public class InternalTopologyBuilder {
     }
 
     private ProcessorTopology build(final Set<String> nodeGroup) {
-        final List<ProcessorNode> processorNodes = new ArrayList<>(nodeFactories.size());
-        final Map<String, ProcessorNode> processorMap = new HashMap<>();
+        final Map<String, ProcessorNode> processorMap = new LinkedHashMap<>();
         final Map<String, SourceNode> topicSourceMap = new HashMap<>();
         final Map<String, SinkNode> topicSinkMap = new HashMap<>();
         final Map<String, StateStore> stateStoreMap = new LinkedHashMap<>();
+        final Set<String> repartitionTopics = new HashSet<>();
 
         // create processor nodes in a topological order ("nodeFactories" is already topologically sorted)
+        // also make sure the state store map values following the insertion ordering
         for (final NodeFactory factory : nodeFactories.values()) {
             if (nodeGroup == null || nodeGroup.contains(factory.name)) {
                 final ProcessorNode node = factory.build();
-                processorNodes.add(node);
                 processorMap.put(node.name(), node);
 
                 if (factory instanceof ProcessorNodeFactory) {
@@ -911,41 +909,53 @@ public class InternalTopologyBuilder {
 
                 } else if (factory instanceof SourceNodeFactory) {
                     buildSourceNode(topicSourceMap,
+                                    repartitionTopics,
                                     (SourceNodeFactory) factory,
                                     (SourceNode) node);
 
                 } else if (factory instanceof SinkNodeFactory) {
                     buildSinkNode(processorMap,
                                   topicSinkMap,
+                                  repartitionTopics,
                                   (SinkNodeFactory) factory,
-                                  node);
+                                  (SinkNode) node);
                 } else {
                     throw new TopologyException("Unknown definition class: " + factory.getClass().getName());
                 }
             }
         }
 
-        return new ProcessorTopology(processorNodes, topicSourceMap, topicSinkMap, new ArrayList<>(stateStoreMap.values()), storeToChangelogTopic, new ArrayList<>(globalStateStores.values()));
+        return new ProcessorTopology(new ArrayList<>(processorMap.values()),
+                                     topicSourceMap,
+                                     topicSinkMap,
+                                     new ArrayList<>(stateStoreMap.values()),
+                                     new ArrayList<>(globalStateStores.values()),
+                                     storeToChangelogTopic,
+                                     repartitionTopics);
     }
 
     @SuppressWarnings("unchecked")
     private void buildSinkNode(final Map<String, ProcessorNode> processorMap,
                                final Map<String, SinkNode> topicSinkMap,
+                               final Set<String> repartitionTopics,
                                final SinkNodeFactory sinkNodeFactory,
-                               final ProcessorNode node) {
+                               final SinkNode node) {
 
         for (final String predecessor : sinkNodeFactory.predecessors) {
             processorMap.get(predecessor).addChild(node);
             if (internalTopicNames.contains(sinkNodeFactory.topic)) {
                 // prefix the internal topic name with the application id
-                topicSinkMap.put(decorateTopic(sinkNodeFactory.topic), (SinkNode) node);
+                final String decoratedTopic = decorateTopic(sinkNodeFactory.topic);
+                topicSinkMap.put(decoratedTopic, node);
+                repartitionTopics.add(decoratedTopic);
             } else {
-                topicSinkMap.put(sinkNodeFactory.topic, (SinkNode) node);
+                topicSinkMap.put(sinkNodeFactory.topic, node);
             }
         }
     }
 
     private void buildSourceNode(final Map<String, SourceNode> topicSourceMap,
+                                 final Set<String> repartitionTopics,
                                  final SourceNodeFactory sourceNodeFactory,
                                  final SourceNode node) {
 
@@ -956,7 +966,9 @@ public class InternalTopologyBuilder {
         for (final String topic : topics) {
             if (internalTopicNames.contains(topic)) {
                 // prefix the internal topic name with the application id
-                topicSourceMap.put(decorateTopic(topic), node);
+                final String decoratedTopic = decorateTopic(topic);
+                topicSourceMap.put(decoratedTopic, node);
+                repartitionTopics.add(decoratedTopic);
             } else {
                 topicSourceMap.put(topic, node);
             }
@@ -1055,7 +1067,7 @@ public class InternalTopologyBuilder {
                 for (final StateStoreFactory stateFactory : stateFactories.values()) {
                     if (stateFactory.loggingEnabled() && stateFactory.users().contains(node)) {
                         final String name = ProcessorStateManager.storeChangelogTopic(applicationId, stateFactory.name());
-                        final InternalTopicConfig internalTopicConfig = createInternalTopicConfig(stateFactory, name);
+                        final InternalTopicConfig internalTopicConfig = createChangelogTopicConfig(stateFactory, name);
                         stateChangelogTopics.put(name, internalTopicConfig);
                     }
                 }
@@ -1105,20 +1117,20 @@ public class InternalTopologyBuilder {
         }
     }
 
-    private InternalTopicConfig createInternalTopicConfig(final StateStoreFactory factory,
-                                                          final String name) {
+    private InternalTopicConfig createChangelogTopicConfig(final StateStoreFactory factory,
+                                                           final String name) {
         if (!factory.isWindowStore()) {
             return new InternalTopicConfig(name,
                                            Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
                                            factory.logConfig());
+        } else {
+            final InternalTopicConfig config = new InternalTopicConfig(name,
+                    Utils.mkSet(InternalTopicConfig.CleanupPolicy.compact,
+                                InternalTopicConfig.CleanupPolicy.delete),
+                    factory.logConfig());
+            config.setRetentionMs(factory.retentionPeriod());
+            return config;
         }
-
-        final InternalTopicConfig config = new InternalTopicConfig(name,
-                                                                   Utils.mkSet(InternalTopicConfig.CleanupPolicy.compact,
-                                                                           InternalTopicConfig.CleanupPolicy.delete),
-                                                                   factory.logConfig());
-        config.setRetentionMs(factory.retentionPeriod());
-        return config;
     }
 
     public synchronized Pattern earliestResetTopicsPattern() {
@@ -1248,8 +1260,9 @@ public class InternalTopologyBuilder {
         return topicPattern;
     }
 
-    public synchronized void updateSubscriptions(final SubscriptionUpdates subscriptionUpdates,
-                                                 final String logPrefix) {
+    // package-private for testing only
+    synchronized void updateSubscriptions(final SubscriptionUpdates subscriptionUpdates,
+                                          final String logPrefix) {
         log.debug("{}updating builder with {} topic(s) with possible matching regex subscription(s)",
                 logPrefix, subscriptionUpdates);
         this.subscriptionUpdates = subscriptionUpdates;
@@ -1667,9 +1680,9 @@ public class InternalTopologyBuilder {
         public Map<String, InternalTopicConfig> repartitionSourceTopics;
 
         TopicsInfo(final Set<String> sinkTopics,
-                          final Set<String> sourceTopics,
-                          final Map<String, InternalTopicConfig> repartitionSourceTopics,
-                          final Map<String, InternalTopicConfig> stateChangelogTopics) {
+                   final Set<String> sourceTopics,
+                   final Map<String, InternalTopicConfig> repartitionSourceTopics,
+                   final Map<String, InternalTopicConfig> stateChangelogTopics) {
             this.sinkTopics = sinkTopics;
             this.sourceTopics = sourceTopics;
             this.stateChangelogTopics = stateChangelogTopics;

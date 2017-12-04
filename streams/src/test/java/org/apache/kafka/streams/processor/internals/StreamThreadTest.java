@@ -328,7 +328,7 @@ public class StreamThreadTest {
 
     @SuppressWarnings({"ThrowableNotThrown", "unchecked"})
     private TaskManager mockTaskManagerCommit(final Consumer<byte[], byte[]> consumer, final int numberOfCommits, final int commits) {
-        final TaskManager taskManager = EasyMock.createMock(TaskManager.class);
+        final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
         EasyMock.expect(taskManager.commitAll()).andReturn(commits).times(numberOfCommits);
         EasyMock.replay(taskManager, consumer);
         return taskManager;
