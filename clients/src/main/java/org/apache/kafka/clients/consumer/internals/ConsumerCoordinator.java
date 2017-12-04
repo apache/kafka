@@ -717,8 +717,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // if the generation is null, we are not part of an active group (and we expect to be).
         // the only thing we can do is fail the commit and let the user rejoin the group in poll()
-        if (generation == null)
+        if (generation == null) {
+            resetGeneration();
             return RequestFuture.failure(new CommitFailedException());
+        }
 
         OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(this.groupId, offsetData).
                 setGenerationId(generation.generationId).
