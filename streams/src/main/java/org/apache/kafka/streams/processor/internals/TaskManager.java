@@ -58,8 +58,6 @@ class TaskManager {
     private final StreamsMetadataState streamsMetadataState;
 
     final AdminClient adminClient;
-
-    private final AdminClient adminClient;
     private DeleteRecordsResult deleteRecordsResult;
 
     // following information is updated during rebalance phase by the partition assignor

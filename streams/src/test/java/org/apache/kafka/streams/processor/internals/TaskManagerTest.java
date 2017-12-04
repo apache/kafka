@@ -89,8 +89,6 @@ public class TaskManagerTest {
     @Mock(type = MockType.NICE)
     private AdminClient adminClient;
     @Mock(type = MockType.NICE)
-    private AdminClient adminClient;
-    @Mock(type = MockType.NICE)
     private StreamTask streamTask;
     @Mock(type = MockType.NICE)
     private StandbyTask standbyTask;
