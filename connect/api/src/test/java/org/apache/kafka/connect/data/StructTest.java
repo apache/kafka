@@ -27,9 +27,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNull;
+import static org.junit.Assert.*;
 
 public class StructTest {
 
@@ -237,7 +235,7 @@ public class StructTest {
     }
 
     @Test
-    public void testEqualsWithByteArrayValue() {
+    public void testEqualsAndHashCodeWithByteArrayValue() {
         Struct struct1 = new Struct(FLAT_STRUCT_SCHEMA)
                 .put("int8", (byte) 12)
                 .put("int16", (short) 12)
@@ -259,7 +257,10 @@ public class StructTest {
                 .put("string", "foobar")
                 .put("bytes", "foobar".getBytes());
 
-        assertEquals(struct1, struct2);
+        // Testing hashCode against a hardcoded value here would produce a needlessly fragile test. However, based on
+        // the general contract for hashCode, if two objects are equal, their hashCodes must be equal.
+        assertTrue(struct1.equals(struct2) && struct2.equals(struct1));
+        assertTrue(struct1.hashCode() == struct2.hashCode());
     }
 
     @Rule
