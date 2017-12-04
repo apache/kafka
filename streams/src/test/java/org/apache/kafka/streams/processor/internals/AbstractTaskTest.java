@@ -105,6 +105,7 @@ public class AbstractTaskTest {
         EasyMock.verify(stateDirectory);
     }
 
+    @SuppressWarnings("unchecked")
     private AbstractTask createTask(final Consumer consumer, final List<StateStore> stateStores) {
         final Properties properties = new Properties();
         properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "app");
@@ -112,14 +113,9 @@ public class AbstractTaskTest {
         final StreamsConfig config = new StreamsConfig(properties);
         return new AbstractTask(id,
                                 Collections.singletonList(new TopicPartition("t", 0)),
-                                new ProcessorTopology(Collections.<ProcessorNode>emptyList(),
-                                                      Collections.<String, SourceNode>emptyMap(),
-                                                      Collections.<String, SinkNode>emptyMap(),
-                                                      stateStores,
-                                                      Collections.<String, String>emptyMap(),
-                                                      Collections.<StateStore>emptyList()),
-                                consumer,
-                                new StoreChangelogReader(consumer, new MockStateRestoreListener(), new LogContext("stream-task-test ")),
+                                ProcessorTopology.withLocalStores(stateStores, Collections.<String, String>emptyMap()),
+                                (Consumer<byte[], byte[]>) consumer,
+                                new StoreChangelogReader((Consumer<byte[], byte[]>) consumer, new MockStateRestoreListener(), new LogContext("stream-task-test ")),
                                 false,
                                 stateDirectory,
                                 config) {
