@@ -41,16 +41,6 @@ public class ListTopicsOptions extends AbstractOptions<ListTopicsOptions> {
     }
 
     /**
-     * The request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
-     * AdminClient should be used.
-     *
-     * This method is retained to keep binary compatibility with 0.11
-     */
-    public Integer timeoutMs() {
-        return timeoutMs;
-    }
-
-    /**
      * Set whether we should list internal topics.
      *
      * @param listInternal  Whether we should list internal topics.  null means to use
