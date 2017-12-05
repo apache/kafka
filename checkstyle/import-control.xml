@@ -229,6 +229,10 @@
       <allow pkg="kafka.admin" />
     </subpackage>
 
+    <subpackage name="tools">
+      <allow pkg="kafka.tools" />
+    </subpackage>
+
     <subpackage name="state">
       <allow pkg="org.rocksdb" />
     </subpackage>

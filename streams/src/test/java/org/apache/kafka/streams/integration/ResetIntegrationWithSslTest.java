@@ -90,24 +90,4 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
     public void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic() throws Exception {
         super.testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic();
     }
-
-    @Test
-    public void testReprocessingFromScratchAfterResetWithIntermediateUserTopic() throws Exception {
-        super.testReprocessingFromScratchAfterResetWithIntermediateUserTopic();
-    }
-
-    @Test
-    public void testReprocessingFromFileAfterResetWithoutIntermediateUserTopic() throws Exception {
-        super.testReprocessingFromFileAfterResetWithoutIntermediateUserTopic();
-    }
-
-    @Test
-    public void testReprocessingFromDateTimeAfterResetWithoutIntermediateUserTopic() throws Exception {
-        super.testReprocessingFromDateTimeAfterResetWithoutIntermediateUserTopic();
-    }
-
-    @Test
-    public void testReprocessingByDurationAfterResetWithoutIntermediateUserTopic() throws Exception {
-        super.testReprocessingByDurationAfterResetWithoutIntermediateUserTopic();
-    }
 }

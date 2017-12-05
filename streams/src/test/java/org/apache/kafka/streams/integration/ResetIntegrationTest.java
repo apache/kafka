@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.integration;
 
 import kafka.server.KafkaConfig$;
-import kafka.tools.StreamsResetter;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.AfterClass;
@@ -26,12 +25,7 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.Properties;
-
-import static org.junit.Assert.fail;
 
 /**
  * Tests local state store and global application cleanup.
@@ -62,8 +56,29 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         beforePrepareTest();
     }
 
+
     @Test
     public void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic() throws Exception {
         super.testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic();
+    }
+
+    @Test
+    public void testReprocessingFromScratchAfterResetWithIntermediateUserTopic() throws Exception {
+        super.testReprocessingFromScratchAfterResetWithIntermediateUserTopic();
+    }
+
+    @Test
+    public void testReprocessingFromFileAfterResetWithoutIntermediateUserTopic() throws Exception {
+        super.testReprocessingFromFileAfterResetWithoutIntermediateUserTopic();
+    }
+
+    @Test
+    public void testReprocessingFromDateTimeAfterResetWithoutIntermediateUserTopic() throws Exception {
+        super.testReprocessingFromDateTimeAfterResetWithoutIntermediateUserTopic();
+    }
+
+    @Test
+    public void testReprocessingByDurationAfterResetWithoutIntermediateUserTopic() throws Exception {
+        super.testReprocessingByDurationAfterResetWithoutIntermediateUserTopic();
     }
 }
