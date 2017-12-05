@@ -90,9 +90,9 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     val zkSessionTimeOutMs = configs.get(SimpleAclAuthorizer.ZkSessionTimeOutProp).map(_.toString.toInt).getOrElse(kafkaConfig.zkSessionTimeoutMs)
     val zkMaxInFlightRequests = configs.get(SimpleAclAuthorizer.ZkMaxInFlightRequests).map(_.toString.toInt).getOrElse(kafkaConfig.zkMaxInFlightRequests)
 
-    val zooKeeperClient = new ZooKeeperClient(zkUrl, zkSessionTimeOutMs, zkConnectionTimeoutMs, zkMaxInFlightRequests)
-
-    zkClient = new KafkaZkClient(zooKeeperClient, kafkaConfig.zkEnableSecureAcls, Time.SYSTEM)
+    val time = Time.SYSTEM
+    val zooKeeperClient = new ZooKeeperClient(zkUrl, zkSessionTimeOutMs, zkConnectionTimeoutMs, zkMaxInFlightRequests, time)
+    zkClient = new KafkaZkClient(zooKeeperClient, kafkaConfig.zkEnableSecureAcls, time)
     zkClient.createAclPaths()
 
     loadCache()

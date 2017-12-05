@@ -18,7 +18,6 @@ package kafka.zk
 
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.Properties
-import java.util.concurrent.TimeUnit
 
 import com.yammer.metrics.core.MetricName
 import kafka.api.LeaderAndIsr
@@ -1249,34 +1248,33 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
   }
 
   private def retryRequestsUntilConnected[Req <: AsyncRequest](requests: Seq[Req]): Seq[Req#Response] = {
-    val startNs = time.nanoseconds
-    try {
-      val remainingRequests = ArrayBuffer(requests: _*)
-      val responses = new ArrayBuffer[Req#Response]
-      while (remainingRequests.nonEmpty) {
-        val batchResponses = zooKeeperClient.handleRequests(remainingRequests)
+    val remainingRequests = ArrayBuffer(requests: _*)
+    val responses = new ArrayBuffer[Req#Response]
+    while (remainingRequests.nonEmpty) {
+      val batchResponses = zooKeeperClient.handleRequests(remainingRequests)
 
-        // Only execute slow path if we find a response with CONNECTIONLOSS
-        if (batchResponses.exists(_.resultCode == Code.CONNECTIONLOSS)) {
-          val requestResponsePairs = remainingRequests.zip(batchResponses)
+      batchResponses.foreach(response => latencyMetric.update(response.metadata.responseTimeMs))
 
-          remainingRequests.clear()
-          requestResponsePairs.foreach { case (request, response) =>
-            if (response.resultCode == Code.CONNECTIONLOSS)
-              remainingRequests += request
-            else
-              responses += response
-          }
+      // Only execute slow path if we find a response with CONNECTIONLOSS
+      if (batchResponses.exists(_.resultCode == Code.CONNECTIONLOSS)) {
+        val requestResponsePairs = remainingRequests.zip(batchResponses)
 
-          if (remainingRequests.nonEmpty)
-            zooKeeperClient.waitUntilConnected()
-        } else {
-          remainingRequests.clear()
-          responses ++= batchResponses
+        remainingRequests.clear()
+        requestResponsePairs.foreach { case (request, response) =>
+          if (response.resultCode == Code.CONNECTIONLOSS)
+            remainingRequests += request
+          else
+            responses += response
         }
+
+        if (remainingRequests.nonEmpty)
+          zooKeeperClient.waitUntilConnected()
+      } else {
+        remainingRequests.clear()
+        responses ++= batchResponses
       }
-      responses
-    } finally latencyMetric.update(TimeUnit.NANOSECONDS.toMillis(time.nanoseconds - startNs))
+    }
+    responses
   }
 
   def checkedEphemeralCreate(path: String, data: Array[Byte]): Unit = {

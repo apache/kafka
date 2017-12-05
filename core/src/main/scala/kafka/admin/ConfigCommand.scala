@@ -63,8 +63,9 @@ object ConfigCommand extends Config {
 
     opts.checkArgs()
 
-    val zooKeeperClient = new ZooKeeperClient(opts.options.valueOf(opts.zkConnectOpt), 30000, 30000, Int.MaxValue)
-    val zkClient = new KafkaZkClient(zooKeeperClient, JaasUtils.isZkSecurityEnabled, Time.SYSTEM)
+    val time = Time.SYSTEM
+    val zooKeeperClient = new ZooKeeperClient(opts.options.valueOf(opts.zkConnectOpt), 30000, 30000, Int.MaxValue, time)
+    val zkClient = new KafkaZkClient(zooKeeperClient, JaasUtils.isZkSecurityEnabled, time)
     val adminZkClient = new AdminZkClient(zkClient)
 
     try {
