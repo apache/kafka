@@ -31,8 +31,8 @@ public class DescribeClusterOptions extends AbstractOptions<DescribeClusterOptio
      * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
      * AdminClient should be used.
      *
-     * This method is retained to keep binary compatibility with 0.11
      */
+    // This method is retained to keep binary compatibility with 0.11
     public DescribeClusterOptions timeoutMs(Integer timeoutMs) {
         this.timeoutMs = timeoutMs;
         return this;
