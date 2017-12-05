@@ -1503,7 +1503,7 @@ object TestUtils extends Logging {
   def grabConsoleOutput(f: => Unit) : String = {
     val out = new ByteArrayOutputStream
     try scala.Console.withOut(out)(f)
-    finally scala.Console.out.flush
+    finally scala.Console.out.flush()
     out.toString
   }
 
@@ -1513,7 +1513,7 @@ object TestUtils extends Logging {
   def grabConsoleError(f: => Unit) : String = {
     val err = new ByteArrayOutputStream
     try scala.Console.withErr(err)(f)
-    finally scala.Console.err.flush
+    finally scala.Console.err.flush()
     err.toString
   }
 
@@ -1523,16 +1523,10 @@ object TestUtils extends Logging {
   def grabConsoleOutputAndError(f: => Unit) : (String, String) = {
     val out = new ByteArrayOutputStream
     val err = new ByteArrayOutputStream
-    try {
-      scala.Console.withOut(out) {
-        scala.Console.withErr(err) {
-          f
-        }
-      }
-    }
+    try scala.Console.withOut(out)(scala.Console.withErr(err)(f))
     finally {
-      scala.Console.out.flush
-      scala.Console.err.flush
+      scala.Console.out.flush()
+      scala.Console.err.flush()
     }
     (out.toString, err.toString)
   }

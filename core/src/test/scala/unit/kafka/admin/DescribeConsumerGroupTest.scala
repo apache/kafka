@@ -79,8 +79,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
   def testDescribeNonExistingGroupWithOldConsumer() {
     TestUtils.createOffsetsTopic(zkUtils, servers)
     createOldConsumer()
-    val opts = new ConsumerGroupCommandOptions(Array("--zookeeper", zkConnect, "--describe", "--group", "missing.group"))
-    val service = addConsumerGroupService(new ZkConsumerGroupService(opts))
+    val service = getConsumerGroupService(Array("--zookeeper", zkConnect, "--describe", "--group", "missing.group"))
     TestUtils.waitUntilTrue(() => service.collectGroupOffsets()._2.isEmpty, "Expected no rows in describe group results.")
   }
 
@@ -89,8 +88,8 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
   def testDescribeExistingGroupWithOldConsumer() {
     TestUtils.createOffsetsTopic(zkUtils, servers)
     createOldConsumer()
-    val opts = new ConsumerGroupCommandOptions(Array("--zookeeper", zkConnect, "--describe", "--group", group))
-    val service = addConsumerGroupService(new ZkConsumerGroupService(opts))
+    val service = getConsumerGroupService(Array("--zookeeper", zkConnect, "--describe", "--group", group))
+
     TestUtils.waitUntilTrue(() => {
       val (_, assignments) = service.collectGroupOffsets()
       assignments.isDefined &&
@@ -104,8 +103,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
   def testDescribeExistingGroupWithNoMembersWithOldConsumer() {
     TestUtils.createOffsetsTopic(zkUtils, servers)
     createOldConsumer()
-    val opts = new ConsumerGroupCommandOptions(Array("--zookeeper", zkConnect, "--describe", "--group", group))
-    val service = addConsumerGroupService(new ZkConsumerGroupService(opts))
+    val service = getConsumerGroupService(Array("--zookeeper", zkConnect, "--describe", "--group", group))
 
     TestUtils.waitUntilTrue(() => {
       val (_, assignments) = service.collectGroupOffsets()
@@ -129,8 +127,8 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     TestUtils.createOffsetsTopic(zkUtils, servers)
     createOldConsumer()
     createOldConsumer()
-    val opts = new ConsumerGroupCommandOptions(Array("--zookeeper", zkConnect, "--describe", "--group", group))
-    val service = addConsumerGroupService(new ZkConsumerGroupService(opts))
+    val service = getConsumerGroupService(Array("--zookeeper", zkConnect, "--describe", "--group", group))
+
     TestUtils.waitUntilTrue(() => {
       val (_, assignments) = service.collectGroupOffsets()
       assignments.isDefined &&
@@ -145,13 +143,13 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     TestUtils.createOffsetsTopic(zkUtils, servers)
     val missingGroup = "missing.group"
 
+    // run one consumer in the group consuming from a single-partition topic
+    addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 1, group, topic))
+
     for (describeType <- describeTypes) {
-      // run one consumer in the group consuming from a single-partition topic
-      addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 1, group, topic))
       // note the group to be queried is a different (non-existing) group
       val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", missingGroup) ++ describeType
-      val opts = new ConsumerGroupCommandOptions(cgcArgs)
-      val service = addConsumerGroupService(new KafkaConsumerGroupService(opts))
+      val service = getConsumerGroupService(cgcArgs)
 
       val output = TestUtils.grabConsoleOutput(service.describeGroup())
       assertTrue(s"Expected error was not detected for describe option '${describeType.mkString(" ")}'",
@@ -167,8 +165,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 1, group, topic))
     // note the group to be queried is a different (non-existing) group
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", "missing.group")
-    val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val service = addConsumerGroupService(new KafkaConsumerGroupService(opts))
+    val service = getConsumerGroupService(cgcArgs)
 
     val (state, assignments) = service.collectGroupOffsets()
     assertTrue(s"Expected the state to be 'Dead', with no members in the group '$group'.",
@@ -183,8 +180,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 1, group, topic))
     // note the group to be queried is a different (non-existing) group
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", "missing.group")
-    val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val service = addConsumerGroupService(new KafkaConsumerGroupService(opts))
+    val service = getConsumerGroupService(cgcArgs)
 
     val (state, assignments) = service.collectGroupMembers(false)
     assertTrue(s"Expected the state to be 'Dead', with no members in the group '$group'.",
@@ -203,12 +199,11 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 1, group, topic))
     // note the group to be queried is a different (non-existing) group
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", "missing.group")
-    val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val service = addConsumerGroupService(new KafkaConsumerGroupService(opts))
+    val service = getConsumerGroupService(cgcArgs)
 
     val state = service.collectGroupState()
     assertTrue(s"Expected the state to be 'Dead', with no members in the group '$group'.",
-        state.isDefined && state.get.state == Some("Dead") && state.get.numMembers == Some(0))
+        state.isDefined && state.get.state == "Dead" && state.get.numMembers == 0)
   }
 
   @Test
@@ -220,8 +215,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
       // run one consumer in the group consuming from a single-partition topic
       addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 1, group, topic))
       val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group) ++ describeType
-      val opts = new ConsumerGroupCommandOptions(cgcArgs)
-      val service = addConsumerGroupService(new KafkaConsumerGroupService(opts))
+      val service = getConsumerGroupService(cgcArgs)
 
       TestUtils.waitUntilTrue(() => {
           val (output, error) = TestUtils.grabConsoleOutputAndError(service.describeGroup())
@@ -237,8 +231,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     // run one consumer in the group consuming from a single-partition topic
     addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 1, group, topic))
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
-    val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val service = addConsumerGroupService(new KafkaConsumerGroupService(opts))
+    val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
         val (state, assignments) = service.collectGroupOffsets()
@@ -258,25 +251,28 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     // run one consumer in the group consuming from a single-partition topic
     addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 1, group, topic))
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
-    val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val service = addConsumerGroupService(new KafkaConsumerGroupService(opts))
+    val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
         val (state, assignments) = service.collectGroupMembers(false)
         state == Some("Stable") &&
         assignments.isDefined &&
         assignments.get.count(_.group == group) == 1 &&
-        assignments.get.filter(_.group == group).head.consumerId.exists(_.trim != ConsumerGroupCommand.MISSING_COLUMN_VALUE) &&
-        assignments.get.filter(_.group == group).head.clientId.exists(_.trim != ConsumerGroupCommand.MISSING_COLUMN_VALUE) &&
-        assignments.get.filter(_.group == group).head.host.exists(_.trim != ConsumerGroupCommand.MISSING_COLUMN_VALUE)
+        assignments.get.filter(_.group == group).head.consumerId != ConsumerGroupCommand.MISSING_COLUMN_VALUE &&
+        assignments.get.filter(_.group == group).head.clientId != ConsumerGroupCommand.MISSING_COLUMN_VALUE &&
+        assignments.get.filter(_.group == group).head.host != ConsumerGroupCommand.MISSING_COLUMN_VALUE
     }, s"Expected a 'Stable' group status, rows and valid member information for group $group.")
 
     val (state, assignments) = service.collectGroupMembers(true)
-    assertTrue(s"Expected a topic partition assigned to the single group member for group $group",
-        assignments.isDefined &&
-        assignments.get.size == 1 &&
-        assignments.get.head.assignment.isDefined &&
-        assignments.get.head.assignment.get.size == 1)
+    assignments match {
+      case None =>
+        fail(s"Expected partition assignments for members of group $group")
+      case Some(memberAssignments) =>
+        assertTrue(s"Expected a topic partition assigned to the single group member for group $group",
+          memberAssignments.size == 1 &&
+          memberAssignments.head.assignment.isDefined &&
+          memberAssignments.head.assignment.get.size == 1)
+    }
   }
 
   @Test
@@ -286,15 +282,14 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     // run one consumer in the group consuming from a single-partition topic
     addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 1, group, topic, "org.apache.kafka.clients.consumer.RoundRobinAssignor"))
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
-    val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val service = addConsumerGroupService(new KafkaConsumerGroupService(opts))
+    val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
         val state = service.collectGroupState()
         state.isDefined &&
-        state.get.state == Some("Stable") &&
-        state.get.numMembers == Some(1) &&
-        state.get.assignmentStrategy == Some("roundrobin")
+        state.get.state == "Stable" &&
+        state.get.numMembers == 1 &&
+        state.get.assignmentStrategy == "roundrobin"
     }, s"Expected a 'Stable' group status, with one member and round robin assignment strategy for group $group.")
   }
 
@@ -307,8 +302,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
       // run one consumer in the group consuming from a single-partition topic
       val executor = addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 1, group, topic))
       val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group) ++ describeType
-      val opts = new ConsumerGroupCommandOptions(cgcArgs)
-      val service = addConsumerGroupService(new KafkaConsumerGroupService(opts))
+      val service = getConsumerGroupService(cgcArgs)
 
       TestUtils.waitUntilTrue(() => {
         val (output, error) = TestUtils.grabConsoleOutputAndError(service.describeGroup())
@@ -332,8 +326,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     val executor = addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 1, group, topic))
 
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
-    val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val service = addConsumerGroupService(new KafkaConsumerGroupService(opts))
+    val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
       val (state, assignments) = service.collectGroupOffsets()
@@ -366,8 +359,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     val executor = addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 1, group, topic))
 
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
-    val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val service = addConsumerGroupService(new KafkaConsumerGroupService(opts))
+    val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
       val (state, assignments) = service.collectGroupMembers(false)
@@ -391,21 +383,20 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     val executor = addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 1, group, topic))
 
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
-    val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val service = addConsumerGroupService(new KafkaConsumerGroupService(opts))
+    val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
       val state = service.collectGroupState()
-      state.isDefined && state.get.state == Some("Stable") && state.get.numMembers == Some(1)
-    }, "Expected the group '$group' to initially become stable, and have a single member.")
+      state.isDefined && state.get.state == "Stable" && state.get.numMembers == 1
+    }, s"Expected the group '$group' to initially become stable, and have a single member.")
 
     // stop the consumer so the group has no active member anymore
     executor.shutdown()
 
     TestUtils.waitUntilTrue(() => {
       val state = service.collectGroupState()
-      state.isDefined && state.get.state == Some("Empty") && state.get.numMembers == Some(0) && state.get.assignmentStrategy == Some("")
-    }, "Expected the group '$group' to become empty after the only member leaving.")
+      state.isDefined && state.get.state == "Empty" && state.get.numMembers == 0 && state.get.assignmentStrategy == ""
+    }, s"Expected the group '$group' to become empty after the only member leaving.")
   }
 
   @Test
@@ -417,8 +408,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
       // run one consumer in the group consuming from a single-partition topic
       val executor = addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 2, group, topic))
       val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group) ++ describeType
-      val opts = new ConsumerGroupCommandOptions(cgcArgs)
-      val service = addConsumerGroupService(new KafkaConsumerGroupService(opts))
+      val service = getConsumerGroupService(cgcArgs)
 
       TestUtils.waitUntilTrue(() => {
         val (output, error) = TestUtils.grabConsoleOutputAndError(service.describeGroup())
@@ -436,8 +426,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 2, group, topic))
 
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
-    val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val service = addConsumerGroupService(new KafkaConsumerGroupService(opts))
+    val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
       val (state, assignments) = service.collectGroupOffsets()
@@ -456,16 +445,15 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 2, group, topic))
 
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
-    val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val service = addConsumerGroupService(new KafkaConsumerGroupService(opts))
+    val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
       val (state, assignments) = service.collectGroupMembers(false)
       state == Some("Stable") &&
         assignments.isDefined &&
         assignments.get.count(_.group == group) == 2 &&
-        assignments.get.count { x => x.group == group && x.numPartitions.isDefined && x.numPartitions.get == 1 } == 1 &&
-        assignments.get.count { x => x.group == group && x.numPartitions.isDefined && x.numPartitions.get == 0 } == 1 &&
+        assignments.get.count { x => x.group == group && x.numPartitions == 1 } == 1 &&
+        assignments.get.count { x => x.group == group && x.numPartitions == 0 } == 1 &&
         assignments.get.count(_.assignment.isDefined) == 0
     }, "Expected rows for consumers with no assigned partitions in describe group results")
 
@@ -482,14 +470,13 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 2, group, topic))
 
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
-    val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val service = addConsumerGroupService(new KafkaConsumerGroupService(opts))
+    val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
       val state = service.collectGroupState()
       state.isDefined &&
-        state.get.state == Some("Stable") &&
-        state.get.numMembers == Some(2)
+        state.get.state == "Stable" &&
+        state.get.numMembers == 2
     }, "Expected two consumers in describe group results")
   }
 
@@ -504,8 +491,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
       // run two consumers in the group consuming from a two-partition topic
       addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 2, group, topic2))
       val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group) ++ describeType
-      val opts = new ConsumerGroupCommandOptions(cgcArgs)
-      val service = addConsumerGroupService(new KafkaConsumerGroupService(opts))
+      val service = getConsumerGroupService(cgcArgs)
 
       TestUtils.waitUntilTrue(() => {
         val (output, error) = TestUtils.grabConsoleOutputAndError(service.describeGroup())
@@ -525,8 +511,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 2, group, topic2))
 
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
-    val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val service = addConsumerGroupService(new KafkaConsumerGroupService(opts))
+    val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
       val (state, assignments) = service.collectGroupOffsets()
@@ -548,16 +533,15 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 2, group, topic2))
 
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
-    val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val service = addConsumerGroupService(new KafkaConsumerGroupService(opts))
+    val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
       val (state, assignments) = service.collectGroupMembers(false)
       state == Some("Stable") &&
         assignments.isDefined &&
         assignments.get.count(_.group == group) == 2 &&
-        assignments.get.count{ x => x.group == group && x.numPartitions.isDefined && x.numPartitions.get == 1 } == 2 &&
-        assignments.get.count{ x => x.group == group && x.numPartitions.isDefined && x.numPartitions.get == 0 } == 0
+        assignments.get.count{ x => x.group == group && x.numPartitions == 1 } == 2 &&
+        assignments.get.count{ x => x.group == group && x.numPartitions == 0 } == 0
     }, "Expected two rows (one row per consumer) in describe group members results.")
 
     val (state, assignments) = service.collectGroupMembers(true)
@@ -575,15 +559,14 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 2, group, topic2))
 
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
-    val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val service = addConsumerGroupService(new KafkaConsumerGroupService(opts))
+    val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
       val state = service.collectGroupState()
       state.isDefined &&
-        state.get.state == Some("Stable") &&
+        state.get.state == "Stable" &&
         state.get.group == group &&
-        state.get.numMembers == Some(2)
+        state.get.numMembers == 2
     }, "Expected a stable group with two members in describe group state result.")
   }
 
@@ -598,8 +581,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 1, group, topic))
     // set the group initialization timeout too low for the group to stabilize
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--timeout", "1", "--group", group) ++ describeType
-    val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val service = addConsumerGroupService(new KafkaConsumerGroupService(opts))
+    val service = getConsumerGroupService(cgcArgs)
 
     try {
       TestUtils.grabConsoleOutputAndError(service.describeGroup())
@@ -619,8 +601,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
     // set the group initialization timeout too low for the group to stabilize
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group, "--timeout", "1")
-    val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val service = addConsumerGroupService(new KafkaConsumerGroupService(opts))
+    val service = getConsumerGroupService(cgcArgs)
 
     try {
       service.collectGroupOffsets()
@@ -640,8 +621,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
     // set the group initialization timeout too low for the group to stabilize
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group, "--timeout", "1")
-    val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val service = addConsumerGroupService(new KafkaConsumerGroupService(opts))
+    val service = getConsumerGroupService(cgcArgs)
 
     try {
       service.collectGroupMembers(false)
@@ -667,8 +647,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
     // set the group initialization timeout too low for the group to stabilize
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group, "--timeout", "1")
-    val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val service = addConsumerGroupService(new KafkaConsumerGroupService(opts))
+    val service = getConsumerGroupService(cgcArgs)
 
     try {
       service.collectGroupState()
@@ -686,7 +665,9 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     oldConsumers += new OldConsumer(Whitelist(topic), consumerProps)
   }
 
-  def addConsumerGroupService(service: ConsumerGroupService): ConsumerGroupService = {
+  def getConsumerGroupService(args: Array[String]): ConsumerGroupService = {
+    val opts = new ConsumerGroupCommandOptions(args)
+    val service = if (opts.useOldConsumer) new ZkConsumerGroupService(opts) else new KafkaConsumerGroupService(opts)
     consumerGroupService = service :: consumerGroupService
     service
   }

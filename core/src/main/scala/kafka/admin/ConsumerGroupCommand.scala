@@ -63,10 +63,10 @@ object ConsumerGroupCommand extends Logging {
 
     val consumerGroupService = {
       if (opts.useOldConsumer) {
-        Console.err.println("Note: This will only show information about consumers that use ZooKeeper (not those using the Java consumer API).\n")
+        Console.err.println("Note: This will only show information about consumers that use ZooKeeper (not those using the Java consumer API).")
         new ZkConsumerGroupService(opts)
       } else {
-        Console.err.println("Note: This will not show information about old Zookeeper-based consumers.\n")
+        Console.err.println("Note: This will not show information about old Zookeeper-based consumers.")
         new KafkaConsumerGroupService(opts)
       }
     }
@@ -124,24 +124,25 @@ object ConsumerGroupCommand extends Logging {
                                                 consumerId: Option[String], host: Option[String],
                                                 clientId: Option[String], logEndOffset: Option[Long])
 
-  protected case class MemberAssignmentState(group: String, consumerId: Option[String], host: Option[String],
-                                             clientId: Option[String], numPartitions: Option[Int],
-                                             assignment: Option[List[TopicPartition]])
+  protected case class MemberAssignmentState(group: String, consumerId: String, host: String, clientId: String,
+                                             numPartitions: Int, assignment: Option[List[TopicPartition]])
 
-  protected case class GroupState(group: String, assignmentStrategy: Option[String], state: Option[String], numMembers: Option[Int])
+  protected case class GroupState(group: String, assignmentStrategy: String, state: String, numMembers: Int)
 
   sealed trait ConsumerGroupService {
 
     def listGroups(): List[String]
 
-    private def checkGroup(group: String, state: Option[String], numRows: Option[Int]): Boolean = {
+    private def dataExistsForGroup(group: String, state: Option[String], numRows: Option[Int]): Boolean = {
+      // numRows contains the number of data rows, if any, compiled from the API call in the caller method.
+      // if it's undefined or 0, there is no group metadata to display.
       var printList = true
-      numRows.isDefined match {
-        case false =>
+      numRows match {
+        case None =>
           // applies to both old and new consumer
           printError(s"The consumer group '$group' does not exist.")
           printList = false
-        case true =>
+        case Some(num) =>
           if (!opts.useOldConsumer) {
             state match {
               case Some("Dead") =>
@@ -149,7 +150,7 @@ object ConsumerGroupCommand extends Logging {
                 printList = false
               case Some("Empty") =>
                 Console.err.println(s"Consumer group '$group' has no active members.")
-                if (numRows.get == 0)
+                if (num == 0)
                   printList = false
               case Some("PreparingRebalance") | Some("CompletingRebalance") =>
                 Console.err.println(s"Warning: Consumer group '$group' is rebalancing.")
@@ -164,18 +165,21 @@ object ConsumerGroupCommand extends Logging {
       printList
     }
 
-    private def size(colOpt: Option[Seq[Object]]): Option[Int] =
-      colOpt.flatMap(col => Try(col.size).toOption)
+    private def size(colOpt: Option[Seq[Object]]): Option[Int] = colOpt.map(_.size)
 
     private def printOffsets(group: String, state: Option[String], assignments: Option[Seq[PartitionAssignmentState]]): Unit = {
-      if (checkGroup(group, state, size(assignments))) {
+      if (dataExistsForGroup(group, state, size(assignments))) {
         // find proper columns width
         var (maxTopicLen, maxConsumerIdLen, maxHostLen) = (15, 15, 15)
-        assignments.get.foreach { consumerAssignment =>
-          maxTopicLen = Math.max(maxTopicLen, consumerAssignment.topic.getOrElse(MISSING_COLUMN_VALUE).length)
-          maxConsumerIdLen = Math.max(maxConsumerIdLen, consumerAssignment.consumerId.getOrElse(MISSING_COLUMN_VALUE).length)
-          if (!opts.useOldConsumer)
-            maxHostLen = Math.max(maxHostLen, consumerAssignment.host.getOrElse(MISSING_COLUMN_VALUE).length)
+        assignments match {
+          case None => // do nothing
+          case Some(consumerAssignments) =>
+            consumerAssignments.foreach { consumerAssignment =>
+              maxTopicLen = Math.max(maxTopicLen, consumerAssignment.topic.getOrElse(MISSING_COLUMN_VALUE).length)
+              maxConsumerIdLen = Math.max(maxConsumerIdLen, consumerAssignment.consumerId.getOrElse(MISSING_COLUMN_VALUE).length)
+              if (!opts.useOldConsumer)
+                maxHostLen = Math.max(maxHostLen, consumerAssignment.host.getOrElse(MISSING_COLUMN_VALUE).length)
+            }
         }
 
         print(s"\n%${-maxTopicLen}s %-10s %-15s %-15s %-15s %${-maxConsumerIdLen}s "
@@ -185,27 +189,35 @@ object ConsumerGroupCommand extends Logging {
           print(s"%${-maxHostLen}s %s".format("HOST", "CLIENT-ID"))
         println()
 
-        assignments.get.foreach { consumerAssignment =>
-          print(s"%${-maxTopicLen}s %-10s %-15s %-15s %-15s %${-maxConsumerIdLen}s ".format(
-            consumerAssignment.topic.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.partition.getOrElse(MISSING_COLUMN_VALUE),
-            consumerAssignment.offset.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.logEndOffset.getOrElse(MISSING_COLUMN_VALUE),
-            consumerAssignment.lag.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.consumerId.getOrElse(MISSING_COLUMN_VALUE)))
-          if (!opts.useOldConsumer)
-            print(s"%${-maxHostLen}s %s".format(consumerAssignment.host.getOrElse(MISSING_COLUMN_VALUE),
-                                                consumerAssignment.clientId.getOrElse(MISSING_COLUMN_VALUE)))
-          println()
+        assignments match {
+          case None => // do nothing
+          case Some(consumerAssignments) =>
+            consumerAssignments.foreach { consumerAssignment =>
+              print(s"%${-maxTopicLen}s %-10s %-15s %-15s %-15s %${-maxConsumerIdLen}s ".format(
+                consumerAssignment.topic.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.partition.getOrElse(MISSING_COLUMN_VALUE),
+                consumerAssignment.offset.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.logEndOffset.getOrElse(MISSING_COLUMN_VALUE),
+                consumerAssignment.lag.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.consumerId.getOrElse(MISSING_COLUMN_VALUE)))
+              if (!opts.useOldConsumer)
+                print(s"%${-maxHostLen}s %s".format(consumerAssignment.host.getOrElse(MISSING_COLUMN_VALUE),
+                  consumerAssignment.clientId.getOrElse(MISSING_COLUMN_VALUE)))
+              println()
+            }
         }
       }
     }
 
     private def printMembers(group: String, state: Option[String], assignments: Option[Seq[MemberAssignmentState]], verbose: Boolean): Unit = {
-      if (checkGroup(group, state, size(assignments))) {
+      if (dataExistsForGroup(group, state, size(assignments))) {
         // find proper columns width
         var (maxConsumerIdLen, maxHostLen, maxClientIdLen) = (15, 15, 15)
-        assignments.get.foreach { consumerAssignment =>
-          maxConsumerIdLen = Math.max(maxConsumerIdLen, consumerAssignment.consumerId.getOrElse(MISSING_COLUMN_VALUE).length)
-          maxHostLen = Math.max(maxHostLen, consumerAssignment.host.getOrElse(MISSING_COLUMN_VALUE).length)
-          maxClientIdLen = Math.max(maxClientIdLen, consumerAssignment.clientId.getOrElse(MISSING_COLUMN_VALUE).length)
+        assignments match {
+          case None => // do nothing
+          case Some(memberAssignments) =>
+            memberAssignments.foreach { memberAssignment =>
+              maxConsumerIdLen = Math.max(maxConsumerIdLen, memberAssignment.consumerId.length)
+              maxHostLen = Math.max(maxHostLen, memberAssignment.host.length)
+              maxClientIdLen = Math.max(maxClientIdLen, memberAssignment.clientId.length)
+            }
         }
 
         print(s"\n%${-maxConsumerIdLen}s %${-maxHostLen}s %${-maxClientIdLen}s %-15s "
@@ -214,32 +226,33 @@ object ConsumerGroupCommand extends Logging {
           print("%s".format("ASSIGNMENT"))
         println()
 
-        assignments.get.foreach { assignment =>
-          print(s"%${-maxConsumerIdLen}s %${-maxHostLen}s %${-maxClientIdLen}s %-15s ".format(
-            assignment.consumerId.getOrElse(MISSING_COLUMN_VALUE), assignment.host.getOrElse(MISSING_COLUMN_VALUE),
-            assignment.clientId.getOrElse(MISSING_COLUMN_VALUE), assignment.numPartitions.getOrElse(MISSING_COLUMN_VALUE)))
-          if (verbose) {
-            val partitions = assignment.assignment match {
-              case None | Some(List()) => MISSING_COLUMN_VALUE
-              case Some(assignment) =>
-                assignment.groupBy(_.topic).map {
-                  case (topic, partitionList) => topic + partitionList.map(_.partition).sorted.mkString("(", ",", ")")
-                }.toList.sorted.mkString(", ")
+        assignments match {
+          case None => // do nothing
+          case Some(memberAssignments) =>
+            memberAssignments.foreach { memberAssignment =>
+              print(s"%${-maxConsumerIdLen}s %${-maxHostLen}s %${-maxClientIdLen}s %-15s ".format(
+                memberAssignment.consumerId, memberAssignment.host, memberAssignment.clientId, memberAssignment.numPartitions))
+              if (verbose) {
+                val partitions = memberAssignment.assignment match {
+                  case None | Some(List()) => MISSING_COLUMN_VALUE
+                  case Some(assignment) =>
+                    assignment.groupBy(_.topic).map {
+                      case (topic, partitionList) => topic + partitionList.map(_.partition).sorted.mkString("(", ",", ")")
+                    }.toList.sorted.mkString(", ")
+                }
+                print("%s".format(partitions))
+              }
+              println()
             }
-            print("%s".format(partitions))
-          }
-          println()
         }
       }
     }
 
     private def printState(group: String, state: Option[GroupState]): Unit = {
       // this method is reachable only for the new consumer option (where the given state is always defined)
-      if (checkGroup(group, state.get.state, Some(1))) {
+      if (dataExistsForGroup(group, Some(state.get.state), Some(1))) {
         print("\n%-25s %-20s %s".format("ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS"))
-        print("\n%-25s %-20s %s".format(state.get.assignmentStrategy.getOrElse(MISSING_COLUMN_VALUE),
-                                        state.get.state.getOrElse(MISSING_COLUMN_VALUE),
-                                        state.get.numMembers.getOrElse(MISSING_COLUMN_VALUE)))
+        print("\n%-25s %-20s %s".format(state.get.assignmentStrategy, state.get.state, state.get.numMembers))
         println()
       }
     }
@@ -560,22 +573,17 @@ object ConsumerGroupCommand extends Logging {
       val group = opts.options.valueOf(opts.groupOpt)
       val consumerGroupSummary = adminClient.describeConsumerGroup(group, opts.options.valueOf(opts.timeoutMsOpt))
       (Some(consumerGroupSummary.state),
-        consumerGroupSummary.consumers match {
-          case None =>
-            None
-          case Some(consumers) =>
-            Some(consumers.map { consumer =>
-              MemberAssignmentState(group, Some(consumer.consumerId), Some(consumer.host), Some(consumer.clientId),
-                                    Some(consumer.assignment.length),
-                                    if (verbose) Some(consumer.assignment) else None)
-            })
-      })
+        consumerGroupSummary.consumers.map(_.map {
+          consumer => MemberAssignmentState(group, consumer.consumerId, consumer.host, consumer.clientId, consumer.assignment.length,
+            if (verbose) Some(consumer.assignment) else None)
+        })
+      )
     }
 
     override def collectGroupState(): Option[GroupState] = {
       val group = opts.options.valueOf(opts.groupOpt)
       val consumerGroupSummary = adminClient.describeConsumerGroup(group, opts.options.valueOf(opts.timeoutMsOpt))
-      Some(GroupState(group, Some(consumerGroupSummary.assignmentStrategy), Some(consumerGroupSummary.state), Some(consumerGroupSummary.consumers.get.size)))
+      Some(GroupState(group, consumerGroupSummary.assignmentStrategy, consumerGroupSummary.state, consumerGroupSummary.consumers.get.size))
     }
 
     protected def getLogEndOffset(topicPartition: TopicPartition): LogOffsetResult = {
