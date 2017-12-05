@@ -17,6 +17,10 @@
 package org.apache.kafka.connect.connector;
 
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.header.ConnectHeaders;
+import org.apache.kafka.connect.header.Headers;
+
+import java.util.Objects;
 
 /**
  * <p>
@@ -34,11 +38,19 @@ public abstract class ConnectRecord<R extends ConnectRecord<R>> {
     private final Schema valueSchema;
     private final Object value;
     private final Long timestamp;
+    private final Headers headers;
 
     public ConnectRecord(String topic, Integer kafkaPartition,
                          Schema keySchema, Object key,
                          Schema valueSchema, Object value,
                          Long timestamp) {
+        this(topic, kafkaPartition, keySchema, key, valueSchema, value, timestamp, null);
+    }
+
+    public ConnectRecord(String topic, Integer kafkaPartition,
+                         Schema keySchema, Object key,
+                         Schema valueSchema, Object value,
+                         Long timestamp, Headers headers) {
         this.topic = topic;
         this.kafkaPartition = kafkaPartition;
         this.keySchema = keySchema;
@@ -46,6 +58,7 @@ public abstract class ConnectRecord<R extends ConnectRecord<R>> {
         this.valueSchema = valueSchema;
         this.value = value;
         this.timestamp = timestamp;
+        this.headers = headers != null ? headers : new ConnectHeaders();
     }
 
     public String topic() {
@@ -76,8 +89,45 @@ public abstract class ConnectRecord<R extends ConnectRecord<R>> {
         return timestamp;
     }
 
-    /** Generate a new record of the same type as itself, with the specified parameter values. **/
+    /**
+     * Get the headers for this record.
+     *
+     * @return the headers; never null
+     */
+    public Headers headers() {
+        return headers;
+    }
+
+    /**
+     * Create a new record of the same type as itself, with the specified parameter values. All other fields in this record will be copied
+     * over to the new record. Since the headers are mutable, the resulting record will have a copy of this record's headers.
+     *
+     * @param topic the name of the topic; may be null
+     * @param kafkaPartition the partition number for the Kafka topic; may be null
+     * @param keySchema the schema for the key; may be null
+     * @param key the key; may be null
+     * @param valueSchema the schema for the value; may be null
+     * @param value the value; may be null
+     * @param timestamp the timestamp; may be null
+     * @return the new record
+     */
     public abstract R newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value, Long timestamp);
+
+    /**
+     * Create a new record of the same type as itself, with the specified parameter values. All other fields in this record will be copied
+     * over to the new record.
+     *
+     * @param topic the name of the topic; may be null
+     * @param kafkaPartition the partition number for the Kafka topic; may be null
+     * @param keySchema the schema for the key; may be null
+     * @param key the key; may be null
+     * @param valueSchema the schema for the value; may be null
+     * @param value the value; may be null
+     * @param timestamp the timestamp; may be null
+     * @param headers the headers; may be null or empty
+     * @return the new record
+     */
+    public abstract R newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value, Long timestamp, Headers headers);
 
     @Override
     public String toString() {
@@ -87,6 +137,7 @@ public abstract class ConnectRecord<R extends ConnectRecord<R>> {
                 ", key=" + key +
                 ", value=" + value +
                 ", timestamp=" + timestamp +
+                ", headers=" + headers +
                 '}';
     }
 
@@ -113,6 +164,8 @@ public abstract class ConnectRecord<R extends ConnectRecord<R>> {
             return false;
         if (timestamp != null ? !timestamp.equals(that.timestamp) : that.timestamp != null)
             return false;
+        if (!Objects.equals(headers, that.headers))
+            return false;
 
         return true;
     }
@@ -126,6 +179,7 @@ public abstract class ConnectRecord<R extends ConnectRecord<R>> {
         result = 31 * result + (valueSchema != null ? valueSchema.hashCode() : 0);
         result = 31 * result + (value != null ? value.hashCode() : 0);
         result = 31 * result + (timestamp != null ? timestamp.hashCode() : 0);
+        result = 31 * result + headers.hashCode();
         return result;
     }
 }
