@@ -78,34 +78,34 @@ class EchoServer extends Thread {
                         final Socket socket = serverSocket.accept();
                         sockets.add(socket);
                         Thread thread = new Thread() {
-                          @Override
-                          public void run() {
-                              try {
-                                  DataInputStream input = new DataInputStream(socket.getInputStream());
-                                  DataOutputStream output = new DataOutputStream(socket.getOutputStream());
-                                  while (socket.isConnected() && !socket.isClosed()) {
-                                      int size = input.readInt();
-                                      if (renegotiate.get()) {
-                                          renegotiate.set(false);
-                                          ((SSLSocket) socket).startHandshake();
-                                      }
-                                      byte[] bytes = new byte[size];
-                                      input.readFully(bytes);
-                                      output.writeInt(size);
-                                      output.write(bytes);
-                                      output.flush();
-                                  }
-                              } catch (IOException e) {
-                                  // ignore
-                              } finally {
-                                  try {
-                                      socket.close();
-                                  } catch (IOException e) {
-                                      // ignore
-                                  }
-                              }
-                          }
-                      };
+                            @Override
+                            public void run() {
+                                try {
+                                    DataInputStream input = new DataInputStream(socket.getInputStream());
+                                    DataOutputStream output = new DataOutputStream(socket.getOutputStream());
+                                    while (socket.isConnected() && !socket.isClosed()) {
+                                        int size = input.readInt();
+                                        if (renegotiate.get()) {
+                                            renegotiate.set(false);
+                                            ((SSLSocket) socket).startHandshake();
+                                        }
+                                        byte[] bytes = new byte[size];
+                                        input.readFully(bytes);
+                                        output.writeInt(size);
+                                        output.write(bytes);
+                                        output.flush();
+                                    }
+                                } catch (IOException e) {
+                                    // ignore
+                                } finally {
+                                    try {
+                                        socket.close();
+                                    } catch (IOException e) {
+                                        // ignore
+                                    }
+                                }
+                            }
+                        };
                         thread.start();
                         threads.add(thread);
                     }
