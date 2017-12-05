@@ -604,15 +604,17 @@ public class NetworkClient implements KafkaClient {
         switch (disconnectState.state()) {
             case AUTHENTICATION_FAILED:
                 connectionStates.authenticationFailed(nodeId, now, disconnectState.exception());
-                log.error("Connection to node {} failed authentication due to: {}", nodeId, disconnectState.exception().getMessage());
+                log.error("Connection from client {} to node {} failed authentication due to: {}",
+                        clientId, nodeId, disconnectState.exception().getMessage());
                 break;
             case AUTHENTICATE:
                 // This warning applies to older brokers which dont provide feedback on authentication failures
-                log.warn("Connection to node {} terminated during authentication. This may indicate " +
-                        "that authentication failed due to invalid credentials.", nodeId);
+                log.warn("Connection from client {} to node {} terminated during authentication. This may indicate " +
+                        "that authentication failed due to invalid credentials.", clientId, nodeId);
                 break;
             case NOT_CONNECTED:
-                log.warn("Connection to node {} could not be established. Broker may not be available.", nodeId);
+                log.warn("Connection from client {} to node {} could not be established. Broker may not be available.",
+                        clientId, nodeId);
                 break;
             default:
                 break; // Disconnections in other states are logged at debug level in Selector
