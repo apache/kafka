@@ -102,9 +102,9 @@ class StreamsBrokerCompatibility(Test):
 
         processor.node.account.ssh(processor.start_cmd(processor.node))
         with processor.node.account.monitor_log(processor.STDERR_FILE) as monitor:
-            monitor.wait_until('FATAL: An unexpected exception org.apache.kafka.streams.errors.StreamsException: Could not create internal topics.',
+            monitor.wait_until('FATAL: An unexpected exception org.apache.kafka.streams.errors.StreamsException: Could not create topic kafka-streams-system-test-broker-compatibility-KSTREAM-AGGREGATE-STATE-STORE-0000000001-changelog.',
                         timeout_sec=60,
-                        err_msg="Never saw 'FATAL: An unexpected exception org.apache.kafka.streams.errors.StreamsException: Could not create internal topics.' error message " + str(processor.node.account))
+                        err_msg="Never saw 'FATAL: An unexpected exception org.apache.kafka.streams.errors.StreamsException: Could not create topic kafka-streams-system-test-broker-compatibility-KSTREAM-AGGREGATE-STATE-STORE-0000000001-changelog.' error message " + str(processor.node.account))
 
         self.kafka.stop()
 
