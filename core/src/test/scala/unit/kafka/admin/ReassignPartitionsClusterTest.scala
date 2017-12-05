@@ -50,7 +50,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   }
 
   def startBrokers(brokerIds: Seq[Int]) {
-    servers = brokerIds.map(i => createBrokerConfig(i, zkConnect, logDirCount = 3))
+    servers = brokerIds.map(i => createBrokerConfig(i, zkConnect, enableControlledShutdown = false, logDirCount = 3))
       .map(c => createServer(KafkaConfig.fromProps(c)))
   }
 
@@ -131,12 +131,12 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     val newAssignment = generateAssignment(zkUtils, brokers, json(topicName), true)._1
     // Find a partition in the new assignment on broker 102 and a random log directory on broker 102,
     // which currently does not have any partition for this topic
-    val partition1 = newAssignment.find { case (_, brokerIds) => brokerIds.contains(102)}.get._1.partition
+    val partition1 = newAssignment.find { case (_, brokerIds) => brokerIds.contains(102) }.get._1.partition
     val replica1 = new TopicPartitionReplica(topicName, partition1, 102)
     val expectedLogDir1 = getRandomLogDirAssignment(102)
     // Find a partition in the new assignment on broker 100 and a random log directory on broker 100,
     // which currently has partition for this topic
-    val partition2 = newAssignment.find { case (replica, brokerIds) => brokerIds.contains(100)}.get._1.partition
+    val partition2 = newAssignment.find { case (_, brokerIds) => brokerIds.contains(100) }.get._1.partition
     val replica2 = new TopicPartitionReplica(topicName, partition2, 100)
     val expectedLogDir2 = getRandomLogDirAssignment(100)
     // Generate a replica assignment to reassign replicas on broker 100 and 102 respectively to a random log directory on the same broker.
@@ -226,7 +226,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     assertEquals(Seq(100, 102), actual("topic2")(2))//changed
 
     // The replicas should be in the expected log directories
-    val replicaDirs = adminClient.describeReplicaLogDirs(List(replica1, replica2).asJavaCollection).all().get()
+    val replicaDirs = adminClient.describeReplicaLogDirs(List(replica1, replica2).asJava).all().get()
     assertEquals(proposedReplicaAssignment(replica1), replicaDirs.get(replica1).getCurrentReplicaLogDir)
     assertEquals(proposedReplicaAssignment(replica2), replicaDirs.get(replica2).getCurrentReplicaLogDir)
   }
