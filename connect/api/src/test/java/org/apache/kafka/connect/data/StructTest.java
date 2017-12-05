@@ -249,6 +249,7 @@ public class StructTest {
                 .put("boolean", true)
                 .put("string", "foobar")
                 .put("bytes", "foobar".getBytes());
+
         Struct struct2 = new Struct(FLAT_STRUCT_SCHEMA)
                 .put("int8", (byte) 12)
                 .put("int16", (short) 12)
@@ -259,6 +260,7 @@ public class StructTest {
                 .put("boolean", true)
                 .put("string", "foobar")
                 .put("bytes", "foobar".getBytes());
+
         Struct struct3 = new Struct(FLAT_STRUCT_SCHEMA)
                 .put("int8", (byte) 12)
                 .put("int16", (short) 12)
