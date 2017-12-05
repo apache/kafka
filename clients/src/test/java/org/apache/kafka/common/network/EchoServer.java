@@ -75,9 +75,9 @@ class EchoServer extends Thread {
             while (true) {
                 synchronized (sockets) {
                     if (!closing) {
-                      final Socket socket = serverSocket.accept();
-                      sockets.add(socket);
-                      Thread thread = new Thread() {
+                        final Socket socket = serverSocket.accept();
+                        sockets.add(socket);
+                        Thread thread = new Thread() {
                           @Override
                           public void run() {
                               try {
@@ -106,8 +106,8 @@ class EchoServer extends Thread {
                               }
                           }
                       };
-                      thread.start();
-                      threads.add(thread);
+                        thread.start();
+                        threads.add(thread);
                     }
                 }
             }
