@@ -1308,17 +1308,16 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       // the `path exists` check for free
       if (zkClient.registerZNodeChangeHandlerAndCheckExistence(partitionReassignmentHandler)) {
         val partitionReassignment = zkClient.getPartitionReassignment
-        val newPartitionsToReassign = partitionReassignment -- controllerContext.partitionsBeingReassigned.keys
 
         // Populate `partitionsBeingReassigned` with all partitions being reassigned before invoking
         // `maybeTriggerPartitionReassignment` (see method documentation for the reason)
-        newPartitionsToReassign.foreach { case (tp, newReplicas) =>
+        partitionReassignment.foreach { case (tp, newReplicas) =>
           val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(KafkaController.this, eventManager,
             tp)
           controllerContext.partitionsBeingReassigned.put(tp, ReassignedPartitionsContext(newReplicas, reassignIsrChangeHandler))
         }
 
-        maybeTriggerPartitionReassignment(newPartitionsToReassign.keySet)
+        maybeTriggerPartitionReassignment(partitionReassignment.keySet)
       }
     }
   }
