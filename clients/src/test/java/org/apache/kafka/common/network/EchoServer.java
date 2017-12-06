@@ -72,43 +72,41 @@ class EchoServer extends Thread {
     @Override
     public void run() {
         try {
-            while (true) {
+            while (!closing) {
+                final Socket socket = serverSocket.accept();
                 synchronized (sockets) {
-                    if (!closing) {
-                        final Socket socket = serverSocket.accept();
-                        sockets.add(socket);
-                        Thread thread = new Thread() {
-                            @Override
-                            public void run() {
-                                try {
-                                    DataInputStream input = new DataInputStream(socket.getInputStream());
-                                    DataOutputStream output = new DataOutputStream(socket.getOutputStream());
-                                    while (socket.isConnected() && !socket.isClosed()) {
-                                        int size = input.readInt();
-                                        if (renegotiate.get()) {
-                                            renegotiate.set(false);
-                                            ((SSLSocket) socket).startHandshake();
-                                        }
-                                        byte[] bytes = new byte[size];
-                                        input.readFully(bytes);
-                                        output.writeInt(size);
-                                        output.write(bytes);
-                                        output.flush();
+                    sockets.add(socket);
+                    Thread thread = new Thread() {
+                        @Override
+                        public void run() {
+                            try {
+                                DataInputStream input = new DataInputStream(socket.getInputStream());
+                                DataOutputStream output = new DataOutputStream(socket.getOutputStream());
+                                while (socket.isConnected() && !socket.isClosed()) {
+                                    int size = input.readInt();
+                                    if (renegotiate.get()) {
+                                        renegotiate.set(false);
+                                        ((SSLSocket) socket).startHandshake();
                                     }
+                                    byte[] bytes = new byte[size];
+                                    input.readFully(bytes);
+                                    output.writeInt(size);
+                                    output.write(bytes);
+                                    output.flush();
+                                }
+                            } catch (IOException e) {
+                                // ignore
+                            } finally {
+                                try {
+                                    socket.close();
                                 } catch (IOException e) {
                                     // ignore
-                                } finally {
-                                    try {
-                                        socket.close();
-                                    } catch (IOException e) {
-                                        // ignore
-                                    }
                                 }
                             }
-                        };
-                        thread.start();
-                        threads.add(thread);
-                    }
+                        }
+                    };
+                    thread.start();
+                    threads.add(thread);
                 }
             }
         } catch (IOException e) {
