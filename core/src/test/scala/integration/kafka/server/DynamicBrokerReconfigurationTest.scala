@@ -377,6 +377,58 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     stopAndVerifyProduceConsume(producerThread, consumerThread, mayFailRequests = false)
   }
 
+  @Test
+  def testThreadPoolResize(): Unit = {
+    def maybeVerifyThreadPoolSize(propName: String, size: Int, threadPrefix: String): Unit = {
+      propName match {
+        case KafkaConfig.NumIoThreadsProp => verifyThreads(threadPrefix, size)
+        case KafkaConfig.NumNetworkThreadsProp => verifyThreads(threadPrefix, size * 2) // 2 endpoints
+        case KafkaConfig.NumReplicaFetchersProp => verifyThreads(threadPrefix, size * (numServers - 1))
+        case _ => // Executor threads may not have been created, so not verifying
+      }
+    }
+    def reducePoolSize(propName: String, currentSize: => Int, threadPrefix: String): Int = {
+      val newSize = if (currentSize / 2 == 0) 1 else currentSize / 2
+      resizeThreadPool(propName, newSize, threadPrefix)
+      newSize
+    }
+    def increasePoolSize(propName: String, currentSize: => Int, threadPrefix: String): Int = {
+      resizeThreadPool(propName, currentSize * 2, threadPrefix)
+      currentSize * 2
+    }
+    def resizeThreadPool(propName: String, newSize: Int, threadPrefix: String): Unit = {
+      val props = new Properties
+      props.put(propName, newSize.toString)
+      reconfigureServers(props, perBrokerConfig = false, (propName, newSize.toString))
+      maybeVerifyThreadPoolSize(propName, newSize, threadPrefix)
+    }
+    def verifyThreadPoolResize(propName: String, currentSize: => Int, threadPrefix: String, mayFailRequests: Boolean): Unit = {
+      maybeVerifyThreadPoolSize(propName, currentSize, threadPrefix)
+      val numRetries = if (mayFailRequests) 100 else 0
+      val (producerThread, consumerThread) = startProduceConsume(numRetries)
+      var threadPoolSize = currentSize
+      (1 to 2).foreach { _ =>
+        threadPoolSize = reducePoolSize(propName, threadPoolSize, threadPrefix)
+        Thread.sleep(100)
+        threadPoolSize = increasePoolSize(propName, threadPoolSize, threadPrefix)
+        Thread.sleep(100)
+      }
+      stopAndVerifyProduceConsume(producerThread, consumerThread, mayFailRequests)
+    }
+
+    val config = servers.head.config
+    verifyThreadPoolResize(KafkaConfig.NumIoThreadsProp, config.numIoThreads,
+      "kafka-request-handler-", mayFailRequests = false)
+    verifyThreadPoolResize(KafkaConfig.NumNetworkThreadsProp, config.numNetworkThreads,
+      "kafka-network-thread-", mayFailRequests = true)
+    verifyThreadPoolResize(KafkaConfig.NumReplicaFetchersProp, config.numReplicaFetchers,
+      "ReplicaFetcherThread-", mayFailRequests = false)
+    verifyThreadPoolResize(KafkaConfig.BackgroundThreadsProp, config.backgroundThreads,
+      "kafka-scheduler-", mayFailRequests = false)
+    verifyThreadPoolResize(KafkaConfig.NumRecoveryThreadsPerDataDirProp, config.numRecoveryThreadsPerDataDir,
+      "", mayFailRequests = false)
+  }
+
   private def createProducer(trustStore: File, retries: Int,
                              clientId: String = "test-producer"): KafkaProducer[String, String] = {
     val bootstrapServers = TestUtils.bootstrapServers(servers, new ListenerName(SecureExternal))
@@ -568,7 +620,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     assertTrue(s"Invalid threads: expected $expectedCount, got ${threads.size}: $threads", resized)
   }
 
-
   private def startProduceConsume(retries: Int): (ProducerThread, ConsumerThread) = {
     val producerThread = new ProducerThread(retries)
     clientThreads += producerThread
@@ -576,11 +627,13 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     clientThreads += consumerThread
     consumerThread.start()
     producerThread.start()
+    TestUtils.waitUntilTrue(() => producerThread.sent >= 10, "Messages not sent")
     (producerThread, consumerThread)
   }
 
   private def stopAndVerifyProduceConsume(producerThread: ProducerThread, consumerThread: ConsumerThread,
                                                                                    mayFailRequests: Boolean): Unit = {
+    TestUtils.waitUntilTrue(() => producerThread.sent >= 10, "Messages not sent")
     producerThread.shutdown()
     consumerThread.initiateShutdown()
     consumerThread.awaitShutdown()

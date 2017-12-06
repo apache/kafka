@@ -21,10 +21,13 @@ import kafka.network._
 import kafka.utils._
 import kafka.metrics.KafkaMetricsGroup
 import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.concurrent.atomic.AtomicInteger
 
 import com.yammer.metrics.core.Meter
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.{KafkaThread, Time}
+
+import scala.collection.mutable
 
 /**
  * A thread that answers kafka requests.
@@ -32,15 +35,16 @@ import org.apache.kafka.common.utils.{KafkaThread, Time}
 class KafkaRequestHandler(id: Int,
                           brokerId: Int,
                           val aggregateIdleMeter: Meter,
-                          val totalHandlerThreads: Int,
+                          val totalHandlerThreads: AtomicInteger,
                           val requestChannel: RequestChannel,
                           apis: KafkaApis,
                           time: Time) extends Runnable with Logging {
   this.logIdent = "[Kafka Request Handler " + id + " on Broker " + brokerId + "], "
   private val latch = new CountDownLatch(1)
+  @volatile private var stopped = false
 
   def run() {
-    while(true) {
+    while (!stopped) {
       // We use a single meter for aggregate idle percentage for the thread pool.
       // Since meter is calculated as total_recorded_value / time_window and
       // time_window is independent of the number of threads, each recorded idle
@@ -50,7 +54,7 @@ class KafkaRequestHandler(id: Int,
       val req = requestChannel.receiveRequest(300)
       val endTime = time.nanoseconds
       val idleTime = endTime - startSelectTime
-      aggregateIdleMeter.mark(idleTime / totalHandlerThreads)
+      aggregateIdleMeter.mark(idleTime / totalHandlerThreads.get)
 
       req match {
         case RequestChannel.ShutdownRequest =>
@@ -69,12 +73,18 @@ class KafkaRequestHandler(id: Int,
               Exit.exit(e.statusCode)
             case e: Throwable => error("Exception when handling request", e)
           } finally {
-              request.releaseBuffer()
+            request.releaseBuffer()
           }
 
         case null => // continue
       }
     }
+    if (stopped)
+        latch.countDown()
+  }
+
+  def stop(): Unit = {
+    stopped = true
   }
 
   def initiateShutdown(): Unit = requestChannel.sendShutdownRequest()
@@ -89,14 +99,33 @@ class KafkaRequestHandlerPool(val brokerId: Int,
                               time: Time,
                               numThreads: Int) extends Logging with KafkaMetricsGroup {
 
+  private val threadPoolSize: AtomicInteger = new AtomicInteger(numThreads)
   /* a meter to track the average free capacity of the request handlers */
   private val aggregateIdleMeter = newMeter("RequestHandlerAvgIdlePercent", "percent", TimeUnit.NANOSECONDS)
 
   this.logIdent = "[Kafka Request Handler on Broker " + brokerId + "], "
-  val runnables = new Array[KafkaRequestHandler](numThreads)
+  val runnables = new mutable.ArrayBuffer[KafkaRequestHandler](numThreads)
   for(i <- 0 until numThreads) {
-    runnables(i) = new KafkaRequestHandler(i, brokerId, aggregateIdleMeter, numThreads, requestChannel, apis, time)
-    KafkaThread.daemon("kafka-request-handler-" + i, runnables(i)).start()
+    createHandler(i)
+  }
+
+  def createHandler(id: Int): Unit = {
+    runnables += new KafkaRequestHandler(id, brokerId, aggregateIdleMeter, threadPoolSize, requestChannel, apis, time)
+    KafkaThread.daemon("kafka-request-handler-" + id, runnables(id)).start()
+  }
+
+  def resizeThreadPool(newSize: Int): Unit = {
+    val currentSize = threadPoolSize.get
+    if (newSize > currentSize) {
+      for (i <- currentSize until newSize) {
+        createHandler(i)
+      }
+    } else if (newSize < currentSize) {
+      for (i <- 1 to (currentSize - newSize)) {
+        runnables.remove(currentSize - i).stop()
+      }
+    }
+    threadPoolSize.set(newSize)
   }
 
   def shutdown() {

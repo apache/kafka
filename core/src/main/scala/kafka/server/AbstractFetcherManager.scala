@@ -17,9 +17,6 @@
 
 package kafka.server
 
-import scala.collection.mutable
-import scala.collection.Set
-import scala.collection.Map
 import kafka.utils.Logging
 import kafka.cluster.BrokerEndPoint
 import kafka.metrics.KafkaMetricsGroup
@@ -27,12 +24,17 @@ import com.yammer.metrics.core.Gauge
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 
+import scala.collection.mutable
+import scala.collection.{Map, Set}
+import scala.collection.JavaConverters._
+
 abstract class AbstractFetcherManager(protected val name: String, clientId: String, numFetchers: Int = 1)
   extends Logging with KafkaMetricsGroup {
   // map of (source broker_id, fetcher_id per source broker) => fetcher.
   // package private for test
   private[server] val fetcherThreadMap = new mutable.HashMap[BrokerIdAndFetcherId, AbstractFetcherThread]
   private val mapLock = new Object
+  private var numFetchersPerBroker = numFetchers
   this.logIdent = "[" + name + "] "
 
   newGauge(
@@ -65,8 +67,37 @@ abstract class AbstractFetcherManager(protected val name: String, clientId: Stri
   Map("clientId" -> clientId)
   )
 
+  def resizeThreadPool(newSize: Int): Unit = {
+    def migratePartitions(fromThreads: Map[BrokerIdAndFetcherId, AbstractFetcherThread], shutdown: Boolean): Unit = {
+      fromThreads.foreach { case (id, thread) =>
+        val removedPartitions = thread.partitionStates.partitionStates.asScala.map { case state =>
+          state.topicPartition -> new BrokerAndInitialOffset(thread.sourceBroker, state.value.fetchOffset)
+        }.toMap
+        removeFetcherForPartitions(removedPartitions.keySet)
+        if (shutdown)
+          thread.shutdown()
+        addFetcherForPartitions(removedPartitions)
+      }
+    }
+    mapLock synchronized {
+      val currentSize = numFetchersPerBroker
+      numFetchersPerBroker = newSize
+      if (newSize > currentSize) {
+        // We could just migrate (newSize - currentSize)/newSize partitions explicitly to new threads
+        // But this is currently reassigning all partitions using the new thread size so that hash-based
+        // allocation works with partition add/delete as it did before.
+        migratePartitions(fetcherThreadMap, shutdown = false)
+      } else if (newSize < currentSize) {
+        migratePartitions(fetcherThreadMap.filterKeys(_.fetcherId >= newSize), shutdown = true)
+      }
+      shutdownIdleFetcherThreads()
+    }
+  }
+
   private def getFetcherId(topic: String, partitionId: Int) : Int = {
-    Utils.abs(31 * topic.hashCode() + partitionId) % numFetchers
+    mapLock synchronized {
+      Utils.abs(31 * topic.hashCode() + partitionId) % numFetchersPerBroker
+    }
   }
 
   // This method is only needed by ReplicaAlterDirManager

@@ -79,6 +79,7 @@ class LogManager(logDirs: Seq[File],
 
   private val _liveLogDirs: ConcurrentLinkedQueue[File] = createAndValidateLogDirs(logDirs, initialOfflineDirs)
   @volatile var currentDefaultConfig = initialDefaultConfig
+  @volatile private var numRecoveryThreadsPerDataDir = ioThreads
 
   def reconfigureDefaultLogConfig(logConfig: LogConfig): Unit = {
     this.currentDefaultConfig = logConfig
@@ -170,6 +171,10 @@ class LogManager(logDirs: Seq[File],
     }
 
     liveLogDirs
+  }
+
+  def resizeThreadPool(newSize: Int): Unit = {
+    numRecoveryThreadsPerDataDir = newSize
   }
 
   // dir should be an absolute path
@@ -286,7 +291,7 @@ class LogManager(logDirs: Seq[File],
 
     for (dir <- liveLogDirs) {
       try {
-        val pool = Executors.newFixedThreadPool(ioThreads)
+        val pool = Executors.newFixedThreadPool(numRecoveryThreadsPerDataDir)
         threadPools.append(pool)
 
         val cleanShutdownFile = new File(dir, Log.CleanShutdownFile)
@@ -423,7 +428,7 @@ class LogManager(logDirs: Seq[File],
     for (dir <- liveLogDirs) {
       debug("Flushing and closing logs at " + dir)
 
-      val pool = Executors.newFixedThreadPool(ioThreads)
+      val pool = Executors.newFixedThreadPool(numRecoveryThreadsPerDataDir)
       threadPools.append(pool)
 
       val logsInDir = logsByDir.getOrElse(dir.toString, Map()).values

@@ -80,6 +80,7 @@ object DynamicBrokerConfig {
   AllDynamicConfigs ++= DynamicSecurityConfigs
   AllDynamicConfigs ++= LogCleaner.ReconfigurableConfigs
   AllDynamicConfigs ++= DynamicLogConfig.ReconfigurableConfigs
+  AllDynamicConfigs ++= DynamicThreadPool.ReconfigurableConfigs
 
   private val PerBrokerConfigs = DynamicSecurityConfigs
 
@@ -132,6 +133,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     if (kafkaServer.logManager.cleaner != null)
       addBrokerReconfigurable(kafkaServer.logManager.cleaner)
     addReconfigurable(new DynamicLogConfig(kafkaServer.logManager))
+    addReconfigurable(new DynamicThreadPool(kafkaServer))
   }
 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = CoreUtils.inWriteLock(lock) {
@@ -446,6 +448,66 @@ class DynamicLogConfig(logManager: LogManager) extends Reconfigurable with Loggi
 
       val logConfig = LogConfig(props.asJava)
       log.updateConfig(newBrokerDefaults.asScala.keySet, logConfig)
+    }
+  }
+}
+
+object DynamicThreadPool {
+  val ReconfigurableConfigs = Set(
+    KafkaConfig.NumIoThreadsProp,
+    KafkaConfig.NumNetworkThreadsProp,
+    KafkaConfig.NumReplicaFetchersProp,
+    KafkaConfig.NumRecoveryThreadsPerDataDirProp,
+    KafkaConfig.BackgroundThreadsProp)
+}
+
+class DynamicThreadPool(server: KafkaServer) extends Reconfigurable {
+
+  override def configure(configs: util.Map[String, _]): Unit = {}
+
+  override def reconfigurableConfigs(): util.Set[String] = {
+    DynamicThreadPool.ReconfigurableConfigs.asJava
+  }
+
+  override def validateReconfiguration(configs: util.Map[String, _]): Boolean = {
+    configs.asScala.filterKeys(DynamicThreadPool.ReconfigurableConfigs.contains).forall { case (k, v) =>
+      val newValue = v.asInstanceOf[Int]
+      val oldValue = currentValue(k)
+      if (newValue != oldValue) {
+        val errorMsg = s"Dynamic thread count update validation failed for $k=$v"
+        if (newValue <= 0)
+          throw new ConfigException(s"$errorMsg, value should be at least 1")
+        if (newValue < oldValue / 2)
+          throw new ConfigException(s"$errorMsg, value should be at least half the current value $oldValue")
+        if (newValue > oldValue * 2)
+          throw new ConfigException(s"$errorMsg, value should not be greater than double the current value $oldValue")
+      }
+      true
+    }
+  }
+
+  override def reconfigure(configs: util.Map[String, _]): Unit = {
+    val updatedConfigs = configs.asScala.filterKeys(DynamicThreadPool.ReconfigurableConfigs.contains).filter {
+      case (k, v) => v.asInstanceOf[Int] != currentValue(k)
+    }.map { case (k, v) => (k, v.asInstanceOf[Int]) }
+    updatedConfigs.foreach {
+      case (KafkaConfig.NumIoThreadsProp, v) => server.requestHandlerPool.resizeThreadPool(v)
+      case (KafkaConfig.NumNetworkThreadsProp, v) => server.socketServer.resizeThreadPool(v)
+      case (KafkaConfig.NumReplicaFetchersProp, v) => server.replicaManager.replicaFetcherManager.resizeThreadPool(v)
+      case (KafkaConfig.NumRecoveryThreadsPerDataDirProp, v) => server.getLogManager.resizeThreadPool(v)
+      case (KafkaConfig.BackgroundThreadsProp, v) => server.kafkaScheduler.resizeThreadPool(v)
+      case (k, v) => throw new IllegalStateException(s"Unexpected key value pair ($k, $v)")
+    }
+  }
+
+  private def currentValue(name: String): Int = {
+    name match {
+      case KafkaConfig.NumIoThreadsProp => server.config.numIoThreads
+      case KafkaConfig.NumNetworkThreadsProp => server.config.numNetworkThreads
+      case KafkaConfig.NumReplicaFetchersProp => server.config.numReplicaFetchers
+      case KafkaConfig.NumRecoveryThreadsPerDataDirProp => server.config.numRecoveryThreadsPerDataDir
+      case KafkaConfig.BackgroundThreadsProp => server.config.backgroundThreads
+      case n => throw new IllegalStateException(s"Unexpected config $n")
     }
   }
 }
