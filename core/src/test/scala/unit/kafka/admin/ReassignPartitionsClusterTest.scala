@@ -90,7 +90,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     //When we move the replica on 100 to broker 101
     val topicJson: String = s"""{"version":1,"partitions":[{"topic":"$topicName","partition":0,"replicas":[101],"log_dirs":["$expectedLogDir"]}]}"""
     ReassignPartitionsCommand.executeAssignment(zkUtils, Some(adminClient), topicJson, NoThrottle)
-    waitForReassignmentToComplete()
+    waitForReassignmentToComplete(Map(new TopicPartition(topicName, 0) -> Seq(101)))
 
     //Then the replica should be on 101
     assertEquals(Seq(101), zkUtils.getPartitionAssignmentForTopics(Seq(topicName)).get(topicName).get(partition))
@@ -144,7 +144,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     val newReplicaAssignment = Map(replica1 -> expectedLogDir1, replica2 -> expectedLogDir2)
     ReassignPartitionsCommand.executeAssignment(zkUtils, Some(adminClient),
       ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, newReplicaAssignment), NoThrottle)
-    waitForReassignmentToComplete()
+    waitForReassignmentToComplete(convertMap(newAssignment))
 
     // Then the replicas should span all three brokers
     val actual = zkUtils.getPartitionAssignmentForTopics(Seq(topicName))(topicName)
@@ -173,7 +173,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     val newAssignment = generateAssignment(zkUtils, Array(100, 101), json(topicName), true)._1
     ReassignPartitionsCommand.executeAssignment(zkUtils, None,
       ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Map.empty), NoThrottle)
-    waitForReassignmentToComplete()
+    waitForReassignmentToComplete(convertMap(newAssignment))
 
     //Then replicas should only span the first two brokers
     val actual = zkUtils.getPartitionAssignmentForTopics(Seq(topicName))(topicName)
@@ -214,7 +214,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     //When rebalancing
     ReassignPartitionsCommand.executeAssignment(zkUtils, Some(adminClient),
       ReassignPartitionsCommand.formatAsReassignmentJson(proposed, proposedReplicaAssignment), NoThrottle)
-    waitForReassignmentToComplete()
+    waitForReassignmentToComplete(convertMap(proposed))
 
     //Then the proposed changes should have been made
     val actual = zkUtils.getPartitionAssignmentForTopics(Seq("topic1", "topic2"))
@@ -260,7 +260,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     checkThrottleConfigAddedToZK(initialThrottle.interBrokerLimit, servers, topicName, "0:100,0:101", "0:102")
 
     //Await completion
-    waitForReassignmentToComplete()
+    waitForReassignmentToComplete(convertMap(newAssignment))
     val took = System.currentTimeMillis() - start - delayMs
 
     //Check move occurred
@@ -358,7 +358,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     checkThrottleConfigAddedToZK(newThrottle, servers, topicName, "0:100,0:101", "0:102")
 
     //Await completion
-    waitForReassignmentToComplete()
+    waitForReassignmentToComplete(convertMap(newAssignment))
 
     //Verify should remove the throttle
     verifyAssignment(zkUtils, None, ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Map.empty))
@@ -452,7 +452,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     //When we run a throttled reassignment
     new ReassignPartitionsCommand(zkUtils, None, move).reassignPartitions(throttle)
 
-    waitForReassignmentToComplete()
+    waitForReassignmentToComplete(convertMap(move))
 
     //Check moved replicas did move
     assertEquals(Seq(0, 2, 3), zkUtils.getReplicasForPartition("orders", 0))
@@ -490,9 +490,12 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       TopicAndPartition("deliveries", 0) -> Seq(1, 2) //increase replication factor
     )
 
+    error("first move")
+
     new ReassignPartitionsCommand(zkUtils, None, firstMove).reassignPartitions()
+
     // Low pause to detect deletion of the reassign_partitions znode before the reassignment is complete
-    waitForReassignmentToComplete(pause = 1L)
+    waitForReassignmentToComplete(convertMap(firstMove), pause = 1L)
 
     // Check moved replicas did move
     assertEquals(Seq(0, 2, 3), zkUtils.getReplicasForPartition("orders", 0))
@@ -515,9 +518,11 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       TopicAndPartition("deliveries", 0) -> Seq(1, 2, 3) //increase replication factor
     )
 
+    error("second move")
+
     new ReassignPartitionsCommand(zkUtils, None, secondMove).reassignPartitions()
     // Low pause to detect deletion of the reassign_partitions znode before the reassignment is complete
-    waitForReassignmentToComplete(pause = 1L)
+    waitForReassignmentToComplete(convertMap(secondMove), pause = 1L)
 
     // Check moved replicas did move
     assertEquals(Seq(0, 2, 3), zkUtils.getReplicasForPartition("orders", 0))
@@ -551,7 +556,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     }.exists(identity)
 
     // Low pause to detect deletion of the reassign_partitions znode before the reassignment is complete
-    waitForReassignmentToComplete(pause = 1L)
+    waitForReassignmentToComplete(convertMap(fourthMove), pause = 1L)
 
     // Check moved replicas for thirdMove and fourthMove
     assertEquals(Seq(1, 2, 3), zkUtils.getReplicasForPartition("orders", 0))
@@ -565,6 +570,10 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     assertEquals(Seq(1), zkUtils.getReplicasForPartition("customers", 1))
     assertEquals(Seq(2), zkUtils.getReplicasForPartition("customers", 2))
     assertEquals(Seq(3), zkUtils.getReplicasForPartition("customers", 3))
+  }
+
+  private def convertMap(fourthMove: Map[TopicAndPartition, Seq[Int]]) = {
+    fourthMove.map { case (topicAndPartition, assignments) => new TopicPartition(topicAndPartition.topic, topicAndPartition.partition) -> assignments }.toMap
   }
 
   /**
@@ -587,16 +596,21 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     zkClient.setOrCreatePartitionReassignment(firstMove)
 
     servers.foreach(_.startup())
-    waitForReassignmentToComplete()
+    waitForReassignmentToComplete(firstMove)
 
     assertEquals(Seq(2, 1), zkUtils.getReplicasForPartition("orders", 0))
     assertEquals(Seq(1, 2), zkUtils.getReplicasForPartition("orders", 1))
     assertEquals(Seq.empty, zkUtils.getReplicasForPartition("customers", 0))
   }
 
-  def waitForReassignmentToComplete(pause: Long = 100L) {
+  def waitForReassignmentToComplete(partitions: Map[TopicPartition, Seq[Int]], pause: Long = 100L) {
     waitUntilTrue(() => !zkUtils.pathExists(ReassignPartitionsPath),
       s"Znode ${ZkUtils.ReassignPartitionsPath} wasn't deleted", pause = pause)
+    partitions.keySet.
+      foreach{ tp =>
+        assertTrue("/admin/reassignments/$topic-partition should be deleted",
+          zkClient.getReassignment(tp).isEmpty)
+      }
   }
 
   def json(topic: String*): String = {

@@ -64,6 +64,7 @@ object ZkUtils {
   val BrokerIdsPath = s"$BrokersPath/ids"
   val BrokerTopicsPath = s"$BrokersPath/topics"
   val ReassignPartitionsPath = s"$AdminPath/reassign_partitions"
+  val ReassignmentsPath = s"$AdminPath/reassignments"
   val DeleteTopicsPath = s"$AdminPath/delete_topics"
   val PreferredReplicaLeaderElectionPath = s"$AdminPath/preferred_replica_election"
   val BrokerSequenceIdPath = s"$BrokersPath/seqid"
@@ -269,7 +270,8 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
                               BrokerSequenceIdPath,
                               IsrChangeNotificationPath,
                               ProducerIdBlockPath,
-                              LogDirEventNotificationPath)
+                              LogDirEventNotificationPath,
+                              ReassignmentsPath)
 
   /** Present for compatibility */
   def this(zkClient: ZkClient, zkConnection: ZkConnection, isSecure: Boolean) =

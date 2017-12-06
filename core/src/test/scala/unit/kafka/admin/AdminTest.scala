@@ -212,6 +212,8 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
         Map(topicAndPartition -> newReplicas), partitionsBeingReassigned) == ReassignmentCompleted
       },
       "Partition reassignment should complete")
+    assertTrue("/admin/reassignments/$topic-partition should be deleted",
+      zkClient.getReassignment(new TopicPartition(topicAndPartition.topic, topicAndPartition.partition)).isEmpty)
     val assignedReplicas = zkUtils.getReplicasForPartition(topic, partitionToBeReassigned)
     // in sync replicas should not have any replica that is not in the new assigned replicas
     checkForPhantomInSyncReplicas(zkUtils, topic, partitionToBeReassigned, assignedReplicas)
@@ -242,6 +244,8 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
           Map(topicAndPartition -> newReplicas), partitionsBeingReassigned) == ReassignmentCompleted
       },
       "Partition reassignment should complete")
+    assertTrue("/admin/reassignments/$topic-partition should be deleted",
+      zkClient.getReassignment(new TopicPartition(topicAndPartition.topic, topicAndPartition.partition)).isEmpty)
     val assignedReplicas = zkUtils.getReplicasForPartition(topic, partitionToBeReassigned)
     assertEquals("Partition should have been reassigned to 0, 2, 3", newReplicas, assignedReplicas)
     checkForPhantomInSyncReplicas(zkUtils, topic, partitionToBeReassigned, assignedReplicas)
@@ -271,6 +275,8 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
           Map(topicAndPartition -> newReplicas), partitionsBeingReassigned) == ReassignmentCompleted
       },
       "Partition reassignment should complete")
+    assertTrue("/admin/reassignments/$topic-partition should be deleted",
+      zkClient.getReassignment(new TopicPartition(topicAndPartition.topic, topicAndPartition.partition)).isEmpty)
     val assignedReplicas = zkUtils.getReplicasForPartition(topic, partitionToBeReassigned)
     assertEquals("Partition should have been reassigned to 2, 3", newReplicas, assignedReplicas)
     checkForPhantomInSyncReplicas(zkUtils, topic, partitionToBeReassigned, assignedReplicas)

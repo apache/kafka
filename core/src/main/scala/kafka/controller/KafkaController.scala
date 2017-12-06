@@ -78,7 +78,8 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
   private val topicChangeHandler = new TopicChangeHandler(this, eventManager)
   private val topicDeletionHandler = new TopicDeletionHandler(this, eventManager)
   private val partitionModificationsHandlers: mutable.Map[String, PartitionModificationsHandler] = mutable.Map.empty
-  private val partitionReassignmentHandler = new PartitionReassignmentHandler(this, eventManager)
+  private val partitionBatchReassignmentHandler = new PartitionBatchReassignmentHandler(this, eventManager)
+  private val partitionReassignmentHandler = new ReassignmentHandler(this, eventManager)
   private val preferredReplicaElectionHandler = new PreferredReplicaElectionHandler(this, eventManager)
   private val isrChangeNotificationHandler = new IsrChangeNotificationHandler(this, eventManager)
   private val logDirEventNotificationHandler = new LogDirEventNotificationHandler(this, eventManager)
@@ -209,8 +210,10 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     val childChangeHandlers = Seq(brokerChangeHandler, topicChangeHandler, topicDeletionHandler, logDirEventNotificationHandler,
       isrChangeNotificationHandler)
     childChangeHandlers.foreach(zkClient.registerZNodeChildChangeHandler)
-    val nodeChangeHandlers = Seq(preferredReplicaElectionHandler, partitionReassignmentHandler)
+    val nodeChangeHandlers = Seq(preferredReplicaElectionHandler, partitionBatchReassignmentHandler)
     nodeChangeHandlers.foreach(zkClient.registerZNodeChangeHandlerAndCheckExistence)
+    zkClient.registerZNodeChildChangeHandler(partitionReassignmentHandler)
+    val topicPartitions = zkClient.getChildren(ReassignmentsZNode.path)
 
     info("Deleting log dir event notifications")
     zkClient.deleteLogDirEventNotifications()
@@ -258,7 +261,8 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     debug("Resigning")
     // de-register listeners
     zkClient.unregisterZNodeChildChangeHandler(isrChangeNotificationHandler.path)
-    zkClient.unregisterZNodeChangeHandler(partitionReassignmentHandler.path)
+    zkClient.unregisterZNodeChangeHandler(partitionBatchReassignmentHandler.path)
+    zkClient.unregisterZNodeChildChangeHandler(partitionReassignmentHandler.path)
     zkClient.unregisterZNodeChangeHandler(preferredReplicaElectionHandler.path)
     zkClient.unregisterZNodeChildChangeHandler(logDirEventNotificationHandler.path)
 
@@ -821,7 +825,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       info(s"No more partitions need to be reassigned. Deleting zk path ${ReassignPartitionsZNode.path}")
       zkClient.deletePartitionReassignment()
       // Ensure we detect future reassignments
-      eventManager.put(PartitionReassignment)
+      eventManager.put(PartitionBatchReassignment)
     } else {
       val reassignment = updatedPartitionsBeingReassigned.mapValues(_.newReplicas)
       try zkClient.setOrCreatePartitionReassignment(reassignment)
@@ -829,6 +833,8 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
         case e: KeeperException => throw new AdminOperationException(e)
       }
     }
+
+    zkClient.deleteReassignment(topicPartition)
 
     controllerContext.partitionsBeingReassigned.remove(topicPartition)
   }
@@ -1285,7 +1291,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     }
   }
 
-  case object PartitionReassignment extends ControllerEvent {
+  case object PartitionBatchReassignment extends ControllerEvent {
     override def state: ControllerState = ControllerState.PartitionReassignment
 
     override def process(): Unit = {
@@ -1293,22 +1299,46 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
       // We need to register the watcher if the path doesn't exist in order to detect future reassignments and we get
       // the `path exists` check for free
-      if (zkClient.registerZNodeChangeHandlerAndCheckExistence(partitionReassignmentHandler)) {
+      if (zkClient.registerZNodeChangeHandlerAndCheckExistence(partitionBatchReassignmentHandler)) {
         val partitionReassignment = zkClient.getPartitionReassignment
-
-        // Populate `partitionsBeingReassigned` with all partitions being reassigned before invoking
-        // `maybeTriggerPartitionReassignment` (see method documentation for the reason)
-        partitionReassignment.foreach { case (tp, newReplicas) =>
-          val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(KafkaController.this, eventManager,
-            tp)
-          controllerContext.partitionsBeingReassigned.put(tp, ReassignedPartitionsContext(newReplicas, reassignIsrChangeHandler))
-        }
-
-        maybeTriggerPartitionReassignment(partitionReassignment.keySet)
+        // Just create corresponding /admin/reassignment/$topic-$partition znodes
+        zkClient.createReassignment(partitionReassignment)
       }
     }
   }
 
+  case object PartitionReassignment extends ControllerEvent {
+    override def state: ControllerState = ControllerState.PartitionReassignment
+
+    override def process(): Unit = {
+      if (!isActive) return
+
+      // Register the child handler
+      zkClient.registerZNodeChildChangeHandler(partitionReassignmentHandler)
+
+      val topicPartitions = zkClient.getChildren(ReassignmentsZNode.path).
+        map(PartitionReassignmentZNode.fromName).
+        filterNot(controllerContext.partitionsBeingReassigned.contains)
+
+      // Populate `partitionsBeingReassigned` with all partitions being reassigned
+      zkClient.getReassignment(topicPartitions).foreach { case (tp, newReplicas) =>
+          if (topicDeletionManager.isTopicQueuedUpForDeletion(tp.topic)) {
+            error(s"Skipping reassignment of $tp since the topic is currently being deleted")
+            removePartitionFromReassignedPartitions(tp)
+          } else {
+            val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(KafkaController.this, eventManager,
+              tp)
+            controllerContext.partitionsBeingReassigned.put(tp, ReassignedPartitionsContext(newReplicas, reassignIsrChangeHandler))
+          }
+      }
+      // Then invoke `maybeTriggerPartitionReassignment` (see method documentation for the reason)
+      maybeTriggerPartitionReassignment(topicPartitions.toSet)
+    }
+  }
+
+  /**
+    * Called when /brokers/topics/$topic/partitions/$partition/state has changed.
+    */
   case class PartitionReassignmentIsrChange(partition: TopicPartition) extends ControllerEvent {
     override def state: ControllerState = ControllerState.PartitionReassignment
 
@@ -1463,15 +1493,30 @@ class TopicDeletionHandler(controller: KafkaController, eventManager: Controller
   override def handleChildChange(): Unit = eventManager.put(controller.TopicDeletion)
 }
 
-class PartitionReassignmentHandler(controller: KafkaController, eventManager: ControllerEventManager) extends ZNodeChangeHandler {
+class PartitionBatchReassignmentHandler(controller: KafkaController, eventManager: ControllerEventManager) extends ZNodeChangeHandler with Logging {
   override val path: String = ReassignPartitionsZNode.path
 
   // Note that the event is also enqueued when the znode is deleted, but we do it explicitly instead of relying on
   // handleDeletion(). This approach is more robust as it doesn't depend on the watcher being re-registered after
   // it's consumed during data changes (we ensure re-registration when the znode is deleted).
-  override def handleCreation(): Unit = eventManager.put(controller.PartitionReassignment)
+  override def handleCreation(): Unit = {
+    error(s"$path created, queuing PartitionBatchReassignment")
+    eventManager.put(controller.PartitionBatchReassignment)
+  }
 }
 
+class ReassignmentHandler(controller: KafkaController, eventManager: ControllerEventManager) extends ZNodeChildChangeHandler with Logging {
+  override val path: String = ReassignmentsZNode.path
+
+  override def handleChildChange(): Unit = {
+    error(s"children of $path changed, queuing PartitionReassignment")
+    eventManager.put(controller.PartitionReassignment)
+  }
+}
+
+/**
+  * Called when /brokers/topics/$topic/partitions/$partition/state changes,
+  */
 class PartitionReassignmentIsrChangeHandler(controller: KafkaController, eventManager: ControllerEventManager, partition: TopicPartition) extends ZNodeChangeHandler {
   override val path: String = TopicPartitionStateZNode.path(partition)
 

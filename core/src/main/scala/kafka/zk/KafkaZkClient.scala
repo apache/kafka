@@ -685,6 +685,76 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
   }
 
   /**
+    * Creates the {@code /admin/reassignment/$topic-$partition} znode
+    */
+  def createReassignment(tp: TopicPartition, assignment: Seq[Int]) = {
+    val createRequest = CreateRequest(PartitionReassignmentZNode.path(tp), PartitionReassignmentZNode.encode(assignment),
+      acls(ReassignPartitionsZNode.path), CreateMode.PERSISTENT)
+    val createResponse = retryRequestUntilConnected(createRequest)
+
+    if (createResponse.resultCode != Code.OK) {
+      throw createResponse.resultException.get
+    }
+  }
+
+  /**
+    * Creates the {@code /admin/reassignment/$topic-$partition} znode
+    */
+  def createReassignment(assignments: Map[TopicPartition, Seq[Int]]) = {
+    val createRequests = assignments.map { case (tp, assignment) =>
+      CreateRequest(PartitionReassignmentZNode.path(tp), PartitionReassignmentZNode.encode(assignment),
+        acls(ReassignPartitionsZNode.path), CreateMode.PERSISTENT)
+    }.toSeq
+
+    val createResponses = retryRequestsUntilConnected(createRequests)
+
+    createResponses.foreach { createResponse =>
+      if (createResponse.resultCode != Code.OK) {
+        throw createResponse.resultException.get
+      }
+    }
+  }
+
+  /**
+    * Returns assignment in the the {@code /admin/reassignment/$topic-$partition} znode, or empty if the not does not exist
+    */
+  def getReassignment(tp: TopicPartition): Seq[Int] = {
+    val getRequest = GetDataRequest(PartitionReassignmentZNode.path(tp))
+    val getResponse = retryRequestUntilConnected(getRequest)
+
+    getResponse.resultCode match {
+      case  Code.OK => PartitionReassignmentZNode.decode(getResponse.data)
+      case Code.NONODE => Seq.empty
+      case _ => throw getResponse.resultException.get
+    }
+  }
+
+  /**
+    * Returns assignment in the the {@code /admin/reassignment/$topic-$partition} znode, or empty if the not does not exist
+    */
+  def getReassignment(tps: Seq[TopicPartition]): Map[TopicPartition, Seq[Int]] = {
+    val getRequests = tps.map(tp => GetDataRequest(PartitionReassignmentZNode.path(tp)))
+    val getResponses = retryRequestsUntilConnected(getRequests)
+
+    getResponses.map { response =>
+      val tp = PartitionReassignmentZNode.fromPath(response.path)
+      response.resultCode match {
+        case  Code.OK => tp->PartitionReassignmentZNode.decode(response.data)
+        case Code.NONODE => tp->Seq.empty
+        case _ => throw response.resultException.get
+      }
+    }.toMap
+  }
+
+  /**
+    * Deletes the {@code /admin/reassignment/$topic-$partition} znode
+    */
+  def deleteReassignment(tp: TopicPartition): Unit = {
+    val deleteRequest = DeleteRequest(PartitionReassignmentZNode.path(tp), ZkVersion.NoVersion)
+    retryRequestUntilConnected(deleteRequest)
+  }
+
+  /**
    * Gets topic partition states for the given partitions.
    * @param partitions the partitions for which we want to get states.
    * @return map containing LeaderIsrAndControllerEpoch of each partition for we were able to lookup the partition state.

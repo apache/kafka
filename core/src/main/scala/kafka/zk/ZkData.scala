@@ -242,6 +242,35 @@ object ReassignPartitionsZNode {
   }.map(_.toMap).getOrElse(Map.empty)
 }
 
+/**
+  * {@code /admin/reassignments}
+  */
+object ReassignmentsZNode {
+  def path = s"${AdminZNode.path}/reassignments"
+}
+
+/**
+  * {@code /admin/reassignments/$topic-$partition}
+  */
+object PartitionReassignmentZNode {
+  def path(topicPartition: TopicPartition) = s"${ReassignmentsZNode.path}/${topicPartition.topic}-${topicPartition.partition}"
+  def fromName(path: String): TopicPartition = {
+    val index = path.lastIndexOf('-')
+    val topic = path.substring(0, index)
+    val partition = path.substring(index+1).toInt
+    new TopicPartition(topic, partition)
+  }
+  def fromPath(path: String): TopicPartition = {
+    fromName(path.substring(path.lastIndexOf('/')+1))
+  }
+  def encode(assignment: Seq[Int]): Array[Byte] = {
+    Json.encodeAsBytes(Map("version" -> 1, "assignment" -> assignment))
+  }
+  def decode(bytes: Array[Byte]): Seq[Int] = Json.parseBytes(bytes).flatMap { js =>
+    js.asJsonObject.get("assignment")
+  }.map(x=>x.to[Seq[Int]]).getOrElse(Seq.empty)
+}
+
 object PreferredReplicaElectionZNode {
   def path = s"${AdminZNode.path}/preferred_replica_election"
   def encode(partitions: Set[TopicPartition]): Array[Byte] = {
