@@ -519,8 +519,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
         }
         val newReplicas = reassignedPartitionContext.newReplicas
         val topic = tp.topic
-        val assignedReplicasOpt = controllerContext.partitionReplicaAssignment.get(tp)
-        assignedReplicasOpt match {
+        controllerContext.partitionReplicaAssignment.get(tp) match {
           case Some(assignedReplicas) =>
             if (assignedReplicas == newReplicas) {
               info(s"Partition $tp to be reassigned is already assigned to replicas " +
@@ -645,24 +644,12 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
   private def initializePartitionReassignment() {
     // read the partitions being reassigned from zookeeper path /admin/reassign_partitions
     val partitionsBeingReassigned = zkClient.getPartitionReassignment
-    // check if they are already completed or topic was deleted
-    val reassignedPartitions = partitionsBeingReassigned.filter { case (tp, reassignmentReplicas) =>
-      controllerContext.partitionReplicaAssignment.get(tp) match {
-        case None => true // topic deleted
-        case Some(currentReplicas) => currentReplicas == reassignmentReplicas // reassignment completed
-      }
-    }.keys
-    val partitionsToReassign = partitionsBeingReassigned -- reassignedPartitions
-    // Must populate `partitionsBeingReassigned` before invoking `removePartitionFromReassignedPartitions` (see method
-    // documentation for the explanation)
-    controllerContext.partitionsBeingReassigned ++= partitionsToReassign.map { case (tp, newReplicas) =>
+    info(s"Partitions being reassigned: $partitionsBeingReassigned")
+
+    controllerContext.partitionsBeingReassigned ++= partitionsBeingReassigned.iterator.map { case (tp, newReplicas) =>
       val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(this, eventManager, tp)
       tp -> new ReassignedPartitionsContext(newReplicas, reassignIsrChangeHandler)
     }
-    reassignedPartitions.foreach(removePartitionFromReassignedPartitions)
-    info(s"Partitions being reassigned: $partitionsBeingReassigned")
-    info(s"Partitions already reassigned: $reassignedPartitions")
-    info(s"Resuming reassignment of partitions: $partitionsToReassign")
   }
 
   private def fetchTopicDeletionsInProgress(): (Set[String], Set[String]) = {
