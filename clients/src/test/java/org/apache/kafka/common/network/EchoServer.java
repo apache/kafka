@@ -41,7 +41,7 @@ class EchoServer extends Thread {
     private final ServerSocket serverSocket;
     private final List<Thread> threads;
     private final List<Socket> sockets;
-    private boolean closing = false;
+    private volatile boolean closing = false;
     private final SslFactory sslFactory;
     private final AtomicBoolean renegotiate = new AtomicBoolean();
 
@@ -75,6 +75,9 @@ class EchoServer extends Thread {
             while (!closing) {
                 final Socket socket = serverSocket.accept();
                 synchronized (sockets) {
+                    if (closing) {
+                        break;
+                    }
                     sockets.add(socket);
                     Thread thread = new Thread() {
                         @Override

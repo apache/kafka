@@ -114,10 +114,6 @@ public class SelectorTest {
         this.server.closeConnections();
         while (!selector.disconnected().containsKey(node))
             selector.poll(1000L);
-
-        // reconnect and do another request
-        blockingConnect(node);
-        assertEquals("hello", blockingRequest(node, "hello"));
     }
 
     /**
