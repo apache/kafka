@@ -43,7 +43,6 @@ import org.apache.log4j.Level
 import org.junit.Assert._
 import org.junit._
 import org.scalatest.junit.JUnitSuite
-import org.slf4j.{Logger, LoggerFactory}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable

@@ -19,17 +19,19 @@ package kafka.zk
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.Properties
 
+import com.yammer.metrics.core.MetricName
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.log.LogConfig
+import kafka.metrics.KafkaMetricsGroup
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
 import kafka.security.auth.{Acl, Resource, ResourceType}
-
 import kafka.server.ConfigType
 import kafka.utils._
 import kafka.zookeeper._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException}
@@ -47,7 +49,14 @@ import scala.collection.{Seq, mutable}
  * easier to quickly migrate away from `ZkUtils`. We should revisit this once the migration is completed and tests are
  * in place. We should also consider whether a monolithic [[kafka.zk.ZkData]] is the way to go.
  */
-class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends Logging {
+class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: Time) extends Logging with KafkaMetricsGroup {
+
+  override def metricName(name: String, metricTags: scala.collection.Map[String, String]): MetricName = {
+    explicitMetricName("kafka.server", "ZooKeeperClientMetrics", name, metricTags)
+  }
+
+  private val latencyMetric = newHistogram("ZooKeeperRequestLatencyMs")
+
   import KafkaZkClient._
 
   def createSequentialPersistentPath(path: String, data: String = ""): String = {
@@ -1093,6 +1102,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
    * Close the underlying ZooKeeperClient.
    */
   def close(): Unit = {
+    removeMetric("ZooKeeperRequestLatencyMs")
     zooKeeperClient.close()
   }
 
@@ -1242,6 +1252,8 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
     val responses = new ArrayBuffer[Req#Response]
     while (remainingRequests.nonEmpty) {
       val batchResponses = zooKeeperClient.handleRequests(remainingRequests)
+
+      batchResponses.foreach(response => latencyMetric.update(response.metadata.responseTimeMs))
 
       // Only execute slow path if we find a response with CONNECTIONLOSS
       if (batchResponses.exists(_.resultCode == Code.CONNECTIONLOSS)) {
