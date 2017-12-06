@@ -270,7 +270,7 @@ public class StreamsResetter {
         }
         for (final String topic : intermediateTopics) {
             if (!allTopics.contains(topic)) {
-                    notFoundIntermediateTopics.add(topic);
+                notFoundIntermediateTopics.add(topic);
             } else {
                 topicsToSubscribe.add(topic);
             }
