@@ -180,7 +180,7 @@ abstract class AbstractResetIntegrationTest {
         // RESET
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfiguration);
         streams.cleanUp();
-        cleanGlobal(sslConfig, null, null);
+        cleanGlobal(sslConfig, false, null, null);
         TestUtils.waitForCondition(consumerGroupInactive, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
             "Reset Tool consumer group did not time out after " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
 
@@ -198,7 +198,7 @@ abstract class AbstractResetIntegrationTest {
 
         TestUtils.waitForCondition(consumerGroupInactive, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
             "Reset Tool consumer group did not time out after " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
-        cleanGlobal(sslConfig, null, null);
+        cleanGlobal(sslConfig, false, null, null);
     }
 
     void testReprocessingFromScratchAfterResetWithIntermediateUserTopic() throws Exception {
@@ -252,7 +252,7 @@ abstract class AbstractResetIntegrationTest {
         // RESET
         streams = new KafkaStreams(setupTopologyWithIntermediateUserTopic(OUTPUT_TOPIC_2_RERUN), streamsConfiguration);
         streams.cleanUp();
-        cleanGlobal(sslConfig, null, null);
+        cleanGlobal(sslConfig, true, null, null);
         TestUtils.waitForCondition(consumerGroupInactive, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
             "Reset Tool consumer group did not time out after " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
 
@@ -275,7 +275,7 @@ abstract class AbstractResetIntegrationTest {
 
         TestUtils.waitForCondition(consumerGroupInactive, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
             "Reset Tool consumer group did not time out after " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
-        cleanGlobal(sslConfig, null, null);
+        cleanGlobal(sslConfig, true, null, null);
 
         cluster.deleteTopicAndWait(INTERMEDIATE_USER_TOPIC);
     }
@@ -316,7 +316,7 @@ abstract class AbstractResetIntegrationTest {
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfiguration);
         streams.cleanUp();
 
-        cleanGlobal(sslConfig, "--from-file", resetFile.getAbsolutePath());
+        cleanGlobal(sslConfig, false, "--from-file", resetFile.getAbsolutePath());
         TestUtils.waitForCondition(consumerGroupInactive, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
             "Reset Tool consumer group did not time out after " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
 
@@ -337,7 +337,7 @@ abstract class AbstractResetIntegrationTest {
 
         TestUtils.waitForCondition(consumerGroupInactive, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
             "Reset Tool consumer group did not time out after " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
-        cleanGlobal(sslConfig, null, null);
+        cleanGlobal(sslConfig, false, null, null);
     }
 
     void testReprocessingFromDateTimeAfterResetWithoutIntermediateUserTopic() throws Exception {
@@ -381,7 +381,7 @@ abstract class AbstractResetIntegrationTest {
         final Calendar calendar = Calendar.getInstance();
         calendar.add(Calendar.DATE, -1);
 
-        cleanGlobal(sslConfig, "--to-datetime", format.format(calendar.getTime()));
+        cleanGlobal(sslConfig, false, "--to-datetime", format.format(calendar.getTime()));
         TestUtils.waitForCondition(consumerGroupInactive, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
             "Reset Tool consumer group did not time out after " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
 
@@ -401,7 +401,7 @@ abstract class AbstractResetIntegrationTest {
 
         TestUtils.waitForCondition(consumerGroupInactive, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
             "Reset Tool consumer group did not time out after " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
-        cleanGlobal(sslConfig, null, null);
+        cleanGlobal(sslConfig, false, null, null);
     }
 
     void testReprocessingByDurationAfterResetWithoutIntermediateUserTopic() throws Exception {
@@ -439,7 +439,7 @@ abstract class AbstractResetIntegrationTest {
 
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfiguration);
         streams.cleanUp();
-        cleanGlobal(sslConfig, "--by-duration", "PT1M");
+        cleanGlobal(sslConfig, false, "--by-duration", "PT1M");
 
         TestUtils.waitForCondition(consumerGroupInactive, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
             "Reset Tool consumer group did not time out after " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
@@ -460,7 +460,7 @@ abstract class AbstractResetIntegrationTest {
 
         TestUtils.waitForCondition(consumerGroupInactive, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
             "Reset Tool consumer group did not time out after " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
-        cleanGlobal(sslConfig, null, null);
+        cleanGlobal(sslConfig, false, null, null);
     }
 
     private Properties prepareTest() throws IOException {
@@ -570,14 +570,18 @@ abstract class AbstractResetIntegrationTest {
     }
 
     private void cleanGlobal(final Properties sslConfig,
+                             final boolean withIntermediateTopics,
                              final String resetScenario,
                              final String resetScenarioArg) throws Exception {
         // leaving --zookeeper arg here to ensure tool works if users add it
         final List<String> parameterList = new ArrayList<>(
             Arrays.asList("--application-id", APP_ID + testNo,
                 "--bootstrap-servers", bootstrapServers,
-                "--input-topics", INPUT_TOPIC,
-                "--intermediate-topics", INTERMEDIATE_USER_TOPIC));
+                "--input-topics", INPUT_TOPIC));
+        if (withIntermediateTopics) {
+            parameterList.add("--intermediate-topics");
+            parameterList.add(INTERMEDIATE_USER_TOPIC);
+        }
         if (sslConfig != null) {
             final File configFile = TestUtils.tempFile();
             final BufferedWriter writer = new BufferedWriter(new FileWriter(configFile));
