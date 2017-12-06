@@ -957,7 +957,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean) extends
 
     val deleteResponses = retryRequestsUntilConnected(deleteRequests)
     deleteResponses.foreach { deleteResponse =>
-      if (deleteResponse.resultCode != Code.OK && deleteResponse.resultCode != Code.NONODE) {
+      if (deleteResponse.resultCode != Code.NONODE) {
         deleteResponse.maybeThrow
       }
     }
