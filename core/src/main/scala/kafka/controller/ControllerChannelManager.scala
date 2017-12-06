@@ -207,6 +207,8 @@ class RequestSendThread(val controllerId: Int,
                         name: String)
   extends ShutdownableThread(name = name) {
 
+  logIdent = s"[RequestSendThread controllerId=$controllerId] "
+
   private val socketTimeoutMs = config.controllerSocketTimeoutMs
 
   override def doWork(): Unit = {
@@ -248,8 +250,9 @@ class RequestSendThread(val controllerId: Int,
 
         val response = clientResponse.responseBody
 
-        stateChangeLogger.withControllerEpoch(controllerContext.epoch).trace("Received response " +
-          s"${response.toString(requestHeader.apiVersion)} for a request sent to broker $brokerNode")
+        stateChangeLogger.withControllerEpoch(controllerContext.epoch).trace(s"Received response " +
+          s"${response.toString(requestHeader.apiVersion)} for request $api with correlation id " +
+          s"${requestHeader.correlationId} sent to broker $brokerNode")
 
         if (callback != null) {
           callback(response)

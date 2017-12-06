@@ -29,7 +29,7 @@ import scala.collection._
 object ControllerEventManager {
   val ControllerEventThreadName = "controller-event-thread"
 }
-class ControllerEventManager(rateAndTimeMetrics: Map[ControllerState, KafkaTimer],
+class ControllerEventManager(controllerId: Int, rateAndTimeMetrics: Map[ControllerState, KafkaTimer],
                              eventProcessedListener: ControllerEvent => Unit) {
 
   @volatile private var _state: ControllerState = ControllerState.Idle
@@ -56,6 +56,8 @@ class ControllerEventManager(rateAndTimeMetrics: Map[ControllerState, KafkaTimer
   }
 
   class ControllerEventThread(name: String) extends ShutdownableThread(name = name, isInterruptible = false) {
+    logIdent = s"[ControllerEventThread controllerId=$controllerId] "
+
     override def doWork(): Unit = {
       queue.take() match {
         case KafkaController.ShutdownEventThread => initiateShutdown()
