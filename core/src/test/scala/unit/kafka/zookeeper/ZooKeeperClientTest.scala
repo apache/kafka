@@ -25,7 +25,7 @@ import javax.security.auth.login.Configuration
 
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.security.JaasUtils
-import org.apache.zookeeper.KeeperException.Code
+import org.apache.zookeeper.KeeperException.{Code, NoNodeException}
 import org.apache.zookeeper.{CreateMode, ZooDefs}
 import org.junit.Assert.{assertArrayEquals, assertEquals, assertTrue}
 import org.junit.{After, Test}
@@ -60,6 +60,9 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
   def testDeleteNonExistentZNode(): Unit = {
     val deleteResponse = zooKeeperClient.handleRequest(DeleteRequest(mockPath, -1))
     assertEquals("Response code should be NONODE", Code.NONODE, deleteResponse.resultCode)
+    intercept[NoNodeException] {
+      deleteResponse.maybeThrow
+    }
   }
 
   @Test
