@@ -482,7 +482,8 @@ public class SslTransportLayer implements TransportLayer {
 
 
     /**
-    * Reads a sequence of bytes from this channel into the given buffer.
+    * Reads a sequence of bytes from this channel into the given buffer. Reads as much as possible
+    * until either the dst buffer is full or there is no more data in the socket.
     *
     * @param dst The buffer into which bytes are to be transferred
     * @return The number of bytes read, possible zero or -1 if the channel has reached end-of-stream
@@ -501,6 +502,7 @@ public class SslTransportLayer implements TransportLayer {
         }
 
         boolean isClosed = false;
+        // Each loop reads at most once from the socket.
         while (dst.remaining() > 0) {
             int netread = 0;
             netReadBuffer = Utils.ensureCapacity(netReadBuffer, netReadBufferSize());
