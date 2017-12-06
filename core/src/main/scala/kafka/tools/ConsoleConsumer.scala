@@ -23,6 +23,10 @@ import java.util.concurrent.CountDownLatch
 import java.util.{Locale, Properties, Random}
 
 import com.typesafe.scalalogging.LazyLogging
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient
+import io.confluent.kafka.serializers.KafkaAvroDeserializer
 import joptsimple._
 import kafka.api.OffsetRequest
 import kafka.common.{MessageFormatter, StreamEndException}
@@ -31,6 +35,7 @@ import kafka.message._
 import kafka.metrics.KafkaMetricsReporter
 import kafka.utils._
 import kafka.utils.Implicits._
+import org.apache.avro.generic.GenericRecord
 import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord}
 import org.apache.kafka.common.errors.{AuthenticationException, WakeupException}
 import org.apache.kafka.common.record.TimestampType
@@ -345,6 +350,11 @@ object ConsoleConsumer extends Logging {
       .describedAs("consumer group id")
       .ofType(classOf[String])
 
+    val confluentServerOpt = parser.accepts(AvroMessageFormatter.CONFLUENT_SERVER_CONFIG, "The Confluent Schema Registry server port:host, e.g. 192.168.0.2:8081.")
+      .withRequiredArg
+      .describedAs("confluent schema registry")
+      .ofType(classOf[String])
+
     if (args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "The console consumer is a tool that reads data from Kafka and outputs it to standard output.")
 
@@ -376,12 +386,16 @@ object ConsoleConsumer extends Logging {
     val valueDeserializer = options.valueOf(valueDeserializerOpt)
     val isolationLevel = options.valueOf(isolationLevelOpt).toString
     val formatter: MessageFormatter = messageFormatterClass.newInstance().asInstanceOf[MessageFormatter]
+    val confluentServer = options.valueOf(confluentServerOpt)
 
     if (keyDeserializer != null && !keyDeserializer.isEmpty) {
       formatterArgs.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer)
     }
     if (valueDeserializer != null && !valueDeserializer.isEmpty) {
       formatterArgs.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer)
+    }
+    if (confluentServer != null && !confluentServer.isEmpty) {
+      formatterArgs.setProperty(AvroMessageFormatter.CONFLUENT_SERVER_CONFIG, confluentServer)
     }
     formatter.init(formatterArgs)
 
@@ -608,4 +622,30 @@ class ChecksumMessageFormatter extends MessageFormatter {
         new Message(value, key, Message.NoTimestamp, Message.MagicValue_V0).checksum
     output.println(topicStr + "checksum:" + chksum)
   }
+}
+
+object AvroMessageFormatter {
+  def CONFLUENT_SERVER_CONFIG = "confluent-server"
+}
+
+class AvroMessageFormatter extends MessageFormatter {
+
+  private var kafkaAvroDeserializer: KafkaAvroDeserializer = _
+
+  override def init(props: Properties) {
+    val schemaRegistryStr = props.getProperty(AvroMessageFormatter.CONFLUENT_SERVER_CONFIG)
+    if (schemaRegistryStr == null) {
+      System.err.println("Missing property: please set '" + AvroMessageFormatter.CONFLUENT_SERVER_CONFIG + "' property to <host>:<port>")
+      Exit.exit(1)
+    }
+    val schemaRegistryUrl = "http://" + schemaRegistryStr
+    val schemaRegistry = new CachedSchemaRegistryClient(schemaRegistryUrl, 100)
+    kafkaAvroDeserializer = new KafkaAvroDeserializer(schemaRegistry)
+  }
+
+  def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
+    val value = kafkaAvroDeserializer.deserialize(null, consumerRecord.value()).asInstanceOf[GenericRecord]
+    output.println(value.toString)
+  }
+
 }
