@@ -94,7 +94,6 @@ public class KTableSourceTopicRestartIntegrationTest {
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, WallclockTimestampExtractor.class);
         STREAMS_CONFIG.put(ConsumerConfig.GROUP_ID_CONFIG, "ktable-group");
 
-
         PRODUCER_CONFIG.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         PRODUCER_CONFIG.put(ProducerConfig.ACKS_CONFIG, "all");
         PRODUCER_CONFIG.put(ProducerConfig.RETRIES_CONFIG, 0);
@@ -124,8 +123,8 @@ public class KTableSourceTopicRestartIntegrationTest {
 
             KTable<String, Long> countsTable = streamsBuilder.table(TABLE_SOURCE_TOPIC,
                                                                     Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>with(STRING_SERDE, LONG_SERDE)
-                .withLoggingEnabled(new HashMap<String, String>())
-                .withCachingDisabled());
+                                                                        .withLoggingEnabled(new HashMap<String, String>())
+                                                                        .withCachingDisabled());
 
             countsTable.toStream().foreach(new ForeachAction<String, Long>() {
                 @Override
@@ -141,7 +140,6 @@ public class KTableSourceTopicRestartIntegrationTest {
             streamsTwo = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
             streamsTwo.setGlobalStateRestoreListener(new TestingStateRestoreListener("streams-two"));
             streamsTwo.start();
-
 
             final List<KeyValue<String, String>> initialKeyValues = Arrays.asList(
                 new KeyValue<>("a", "A3"),
@@ -163,7 +161,6 @@ public class KTableSourceTopicRestartIntegrationTest {
             streamsTwo.close();
             streamsTwo.cleanUp();
 
-
             final List<KeyValue<String, String>> additionalValuesWritten = Arrays.asList(
                 new KeyValue<>("g", "G3"),
                 new KeyValue<>("i", "I5"),
@@ -173,10 +170,9 @@ public class KTableSourceTopicRestartIntegrationTest {
                 new KeyValue<>("n", "K6")
             );
 
-
             IntegrationTestUtils.produceKeyValuesSynchronously(SOURCE_TOPIC, additionalValuesWritten, PRODUCER_CONFIG, time);
 
-            final List<KeyValue<String,Long>> valuesToTableTopics = Arrays.asList(
+            final List<KeyValue<String, Long>> valuesToTableTopics = Arrays.asList(
                 new KeyValue<>("FOO", 10L),
                 new KeyValue<>("BAR", 20L),
                 new KeyValue<>("BAZ", 30L)
@@ -213,7 +209,9 @@ public class KTableSourceTopicRestartIntegrationTest {
 
         @Override
         public void onRestoreStart(TopicPartition topicPartition, String storeName, long startingOffset, long endingOffset) {
-            System.out.println("["+streamsInstance+"] recovering for TopicPartition " +topicPartition+" storeName " + storeName +" offset " +startingOffset + " ending offset "+ endingOffset);
+            System.out.println(
+                "[" + streamsInstance + "] recovering for TopicPartition " + topicPartition + " storeName " + storeName + " offset " + startingOffset
+                + " ending offset " + endingOffset);
         }
 
         @Override
@@ -223,7 +221,8 @@ public class KTableSourceTopicRestartIntegrationTest {
 
         @Override
         public void onRestoreEnd(TopicPartition topicPartition, String storeName, long totalRestored) {
-            System.out.println("["+streamsInstance+"] Done recovering for TopicPartition " + topicPartition +  " storeName " + storeName +" totalRestored " +totalRestored);
+            System.out.println("[" + streamsInstance + "] Done recovering for TopicPartition " + topicPartition + " storeName " + storeName + " totalRestored "
+                               + totalRestored);
         }
     }
 
