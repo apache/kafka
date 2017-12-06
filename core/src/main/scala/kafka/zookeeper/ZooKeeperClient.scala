@@ -388,7 +388,7 @@ case class GetChildrenRequest(path: String, ctx: Option[Any] = None) extends Asy
   type Response = GetChildrenResponse
 }
 
-sealed trait AsyncResponse {
+sealed abstract class AsyncResponse {
   def resultCode: Code
   def path: String
   def ctx: Option[Any]
@@ -396,6 +396,14 @@ sealed trait AsyncResponse {
   /** Return None if the result code is OK and KeeperException otherwise. */
   def resultException: Option[KeeperException] =
     if (resultCode == Code.OK) None else Some(KeeperException.create(resultCode, path))
+
+  /**
+   * Throw KeeperException if the result code is not OK.
+   */
+  def maybeThrow(): Unit = {
+    if (resultCode != Code.OK)
+      throw KeeperException.create(resultCode, path)
+  }
 }
 case class CreateResponse(resultCode: Code, path: String, ctx: Option[Any], name: String) extends AsyncResponse
 case class DeleteResponse(resultCode: Code, path: String, ctx: Option[Any]) extends AsyncResponse
