@@ -29,6 +29,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.errors.AlwaysContinueProductionExceptionHandler;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -144,7 +145,7 @@ public class RecordCollectorTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldThrowStreamsExceptionOnSubsequentCallIfASendFails() {
+    public void shouldThrowStreamsExceptionOnSubsequentCallIfASendFailsWithDefaultExceptionHandler() {
         final RecordCollector collector = new RecordCollectorImpl(
                 new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
                     @Override
@@ -166,7 +167,26 @@ public class RecordCollectorTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldThrowStreamsExceptionOnFlushIfASendFailed() {
+    public void shouldNotThrowStreamsExceptionOnSubsequentCallIfASendFailsWithContinueExceptionHandler() {
+        final RecordCollector collector = new RecordCollectorImpl(
+                new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+                    @Override
+                    public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
+                        callback.onCompletion(null, new Exception());
+                        return null;
+                    }
+                },
+                "test",
+                logContext,
+                new AlwaysContinueProductionExceptionHandler());
+        collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
+
+        collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldThrowStreamsExceptionOnFlushIfASendFailedWithDefaultExceptionHandler() {
         final RecordCollector collector = new RecordCollectorImpl(
                 new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
                     @Override
@@ -188,7 +208,26 @@ public class RecordCollectorTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldThrowStreamsExceptionOnCloseIfASendFailed() {
+    public void shouldNotThrowStreamsExceptionOnFlushIfASendFailedWithContinueExceptionHandler() {
+        final RecordCollector collector = new RecordCollectorImpl(
+                new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+                    @Override
+                    public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
+                        callback.onCompletion(null, new Exception());
+                        return null;
+                    }
+                },
+                "test",
+                logContext,
+                new AlwaysContinueProductionExceptionHandler());
+        collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
+
+        collector.flush();
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldThrowStreamsExceptionOnCloseIfASendFailedWithDefaultExceptionHandler() {
         final RecordCollector collector = new RecordCollectorImpl(
                 new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
                     @Override
@@ -209,8 +248,27 @@ public class RecordCollectorTest {
     }
 
     @SuppressWarnings("unchecked")
+    @Test
+    public void shouldNotThrowStreamsExceptionOnCloseIfASendFailedWithContinueExceptionHandler() {
+        final RecordCollector collector = new RecordCollectorImpl(
+                new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+                    @Override
+                    public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
+                        callback.onCompletion(null, new Exception());
+                        return null;
+                    }
+                },
+                "test",
+                logContext,
+                new AlwaysContinueProductionExceptionHandler());
+        collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
+
+        collector.close();
+    }
+
+    @SuppressWarnings("unchecked")
     @Test(expected = StreamsException.class)
-    public void shouldThrowIfTopicIsUnknown() {
+    public void shouldThrowIfTopicIsUnknownWithDefaultExceptionHandler() {
         final RecordCollector collector = new RecordCollectorImpl(
             new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
                 @Override
@@ -222,6 +280,23 @@ public class RecordCollectorTest {
             "test",
             logContext,
             new DefaultProductionExceptionHandler());
+        collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test(expected = StreamsException.class)
+    public void shouldThrowIfTopicIsUnknownWithContinueExceptionHandler() {
+        final RecordCollector collector = new RecordCollectorImpl(
+            new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+                @Override
+                public List<PartitionInfo> partitionsFor(final String topic) {
+                    return Collections.EMPTY_LIST;
+                }
+
+            },
+            "test",
+            logContext,
+            new AlwaysContinueProductionExceptionHandler());
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
     }
 }
