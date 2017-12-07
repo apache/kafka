@@ -179,11 +179,13 @@ public class FileRecords extends AbstractRecords implements Closeable {
 
     /**
      * Delete this message set from the filesystem
-     * @throws IOException if the delete fails
+     * @throws IOException if deletion fails due to an I/O error
+     * @return  {@code true} if the file was deleted by this method; {@code false} if the file could not be deleted
+     *          because it did not exist
      */
-    public void delete() throws IOException {
+    public boolean deleteIfExists() throws IOException {
         Utils.closeQuietly(channel, "FileChannel");
-        Files.delete(file.toPath());
+        return Files.deleteIfExists(file.toPath());
     }
 
     /**

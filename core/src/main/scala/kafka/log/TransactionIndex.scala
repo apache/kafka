@@ -64,12 +64,13 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
   /**
    * Delete this index.
    *
-   * @throws IOException if deletion fails
+   * @throws IOException if deletion fails due to an I/O error
+   * @return `true` if the file was deleted by this method; `false` if the file could not be deleted because it did
+   *         not exist
    */
-  def delete(): Unit = {
-    info(s"Deleting transaction index ${file.getAbsolutePath}")
+  def deleteIfExists(): Boolean = {
     close()
-    Files.delete(file.toPath)
+    Files.deleteIfExists(file.toPath)
   }
 
   private def channel: FileChannel = {
@@ -87,7 +88,10 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
     channel
   }
 
-  def truncate() = {
+  /**
+   * Remove all the entries from the index. Unlike `AbstractIndex`, this index is not resized ahead of time.
+   */
+  def reset(): Unit = {
     maybeChannel.foreach(_.truncate(0))
     lastOffset = None
   }

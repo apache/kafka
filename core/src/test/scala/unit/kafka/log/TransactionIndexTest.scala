@@ -134,7 +134,7 @@ class TransactionIndexTest extends JUnitSuite {
     index.truncateTo(50)
     assertEquals(abortedTransactions.take(3), index.collectAbortedTxns(0L, 100L).abortedTransactions)
 
-    index.truncate()
+    index.reset()
     assertEquals(List.empty[AbortedTransaction], index.collectAbortedTxns(0L, 100L).abortedTransactions)
   }
 

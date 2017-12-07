@@ -18,7 +18,7 @@
 package kafka.log
 
 import java.io.{File, IOException}
-import java.nio.file.Files
+import java.nio.file.{Files, NoSuchFileException}
 import java.text.NumberFormat
 import java.util.concurrent.atomic._
 import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap, TimeUnit}
@@ -310,47 +310,29 @@ class Log(@volatile var dir: File,
         val offset = offsetFromFile(file)
         val logFile = Log.logFile(dir, offset)
         if (!logFile.exists) {
-          warn("Found an orphaned index file, %s, with no corresponding log file.".format(file.getAbsolutePath))
+          warn(s"Found an orphaned index file ${file.getAbsolutePath}, with no corresponding log file.")
           Files.deleteIfExists(file.toPath)
         }
       } else if (isLogFile(file)) {
         // if it's a log file, load the corresponding log segment
-        val startOffset = offsetFromFile(file)
-        val segment = new LogSegment(dir = dir,
-          startOffset = startOffset,
-          indexIntervalBytes = config.indexInterval,
-          maxIndexSize = config.maxIndexSize,
-          rollJitterMs = config.randomSegmentJitter,
+        val baseOffset = offsetFromFile(file)
+        val timeIndexFileNewlyCreated = !Log.timeIndexFile(dir, baseOffset).exists()
+        val segment = LogSegment.open(dir = dir,
+          baseOffset = baseOffset,
+          config,
           time = time,
           fileAlreadyExists = true)
 
-        val offsetIndex = segment.index
-        val timeIndex = segment.timeIndex
-        val txnIndex = segment.txnIndex
-        if (offsetIndex.file.exists) {
-          try {
-            offsetIndex.sanityCheck()
-            // Resize the time index file to 0 if it is newly created.
-            if (!timeIndex.file.exists)
-              timeIndex.resize(0)
-            timeIndex.sanityCheck()
-            txnIndex.sanityCheck()
-          } catch {
-            case e: CorruptIndexException =>
-              warn(s"Found a corrupted index file due to ${e.getMessage}}. deleting ${timeIndex.file.getAbsolutePath}, " +
-                s"${offsetIndex.file.getAbsolutePath}, and ${txnIndex.file.getAbsolutePath} and rebuilding index files...")
-              if (timeIndex.file.exists)
-                timeIndex.delete()
-              offsetIndex.delete()
-              txnIndex.delete()
-              recoverSegment(segment)
-          }
-        } else {
-          error(s"Could not find offset index file corresponding to log file ${segment.log.file.getAbsolutePath}, rebuilding index files...")
-          if (timeIndex.file.exists)
-            timeIndex.delete()
-          txnIndex.delete()
-          recoverSegment(segment)
+        try segment.sanityCheck(timeIndexFileNewlyCreated)
+        catch {
+          case _: NoSuchFileException =>
+            error(s"Could not find offset index file corresponding to log file ${segment.log.file.getAbsolutePath}, " +
+              "recovering segment and rebuilding index files...")
+            recoverSegment(segment)
+          case e: CorruptIndexException =>
+            warn(s"Found a corrupted index file corresponding to log file ${segment.log.file.getAbsolutePath} due " +
+              s"to ${e.getMessage}}, recovering segment and rebuilding index files...")
+            recoverSegment(segment)
         }
         addSegment(segment)
       }
@@ -384,21 +366,12 @@ class Log(@volatile var dir: File,
   private def completeSwapOperations(swapFiles: Set[File]): Unit = {
     for (swapFile <- swapFiles) {
       val logFile = new File(CoreUtils.replaceSuffix(swapFile.getPath, SwapFileSuffix, ""))
-      val startOffset = offsetFromFile(logFile)
-      val indexFile = new File(CoreUtils.replaceSuffix(logFile.getPath, LogFileSuffix, IndexFileSuffix) + SwapFileSuffix)
-      val index =  new OffsetIndex(indexFile, baseOffset = startOffset, maxIndexSize = config.maxIndexSize)
-      val timeIndexFile = new File(CoreUtils.replaceSuffix(logFile.getPath, LogFileSuffix, TimeIndexFileSuffix) + SwapFileSuffix)
-      val timeIndex = new TimeIndex(timeIndexFile, baseOffset = startOffset, maxIndexSize = config.maxIndexSize)
-      val txnIndexFile = new File(CoreUtils.replaceSuffix(logFile.getPath, LogFileSuffix, TxnIndexFileSuffix) + SwapFileSuffix)
-      val txnIndex = new TransactionIndex(startOffset, txnIndexFile)
-      val swapSegment = new LogSegment(FileRecords.open(swapFile),
-        index = index,
-        timeIndex = timeIndex,
-        txnIndex = txnIndex,
-        baseOffset = startOffset,
-        indexIntervalBytes = config.indexInterval,
-        rollJitterMs = config.randomSegmentJitter,
-        time = time)
+      val baseOffset = offsetFromFile(logFile)
+      val swapSegment = LogSegment.open(swapFile.getParentFile,
+        baseOffset = baseOffset,
+        config,
+        time = time,
+        fileSuffix = SwapFileSuffix)
       info(s"Found log file ${swapFile.getPath} from interrupted swap operation, repairing.")
       recoverSegment(swapSegment)
       val oldSegments = logSegments(swapSegment.baseOffset)
@@ -423,11 +396,9 @@ class Log(@volatile var dir: File,
 
     if (logSegments.isEmpty) {
       // no existing segments, create a new mutable segment beginning at offset 0
-      addSegment(new LogSegment(dir = dir,
-        startOffset = 0,
-        indexIntervalBytes = config.indexInterval,
-        maxIndexSize = config.maxIndexSize,
-        rollJitterMs = config.randomSegmentJitter,
+      addSegment(LogSegment.open(dir = dir,
+        baseOffset = 0,
+        config,
         time = time,
         fileAlreadyExists = false,
         initFileSize = this.initFileSize,
@@ -436,8 +407,7 @@ class Log(@volatile var dir: File,
     } else if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
       val nextOffset = recoverLog()
       // reset the index size of the currently active log segment to allow more entries
-      activeSegment.index.resize(config.maxIndexSize)
-      activeSegment.timeIndex.resize(config.maxIndexSize)
+      activeSegment.resizeIndexes(config.maxIndexSize)
       nextOffset
     } else 0
   }
@@ -1299,12 +1269,9 @@ class Log(@volatile var dir: File,
   private def maybeRoll(messagesSize: Int, maxTimestampInMessages: Long, maxOffsetInMessages: Long): LogSegment = {
     val segment = activeSegment
     val now = time.milliseconds
-    val reachedRollMs = segment.timeWaitedForRoll(now, maxTimestampInMessages) > config.segmentMs - segment.rollJitterMs
-    if (segment.size > config.segmentSize - messagesSize ||
-        (segment.size > 0 && reachedRollMs) ||
-        segment.index.isFull || segment.timeIndex.isFull || !segment.canConvertToRelativeOffset(maxOffsetInMessages)) {
+    if (segment.shouldRoll(messagesSize, maxTimestampInMessages, maxOffsetInMessages, now)) {
       debug(s"Rolling new log segment in $name (log_size = ${segment.size}/${config.segmentSize}}, " +
-          s"index_size = ${segment.index.entries}/${segment.index.maxEntries}, " +
+          s"offset_index_size = ${segment.offsetIndex.entries}/${segment.offsetIndex.maxEntries}, " +
           s"time_index_size = ${segment.timeIndex.entries}/${segment.timeIndex.maxEntries}, " +
           s"inactive_time_ms = ${segment.timeWaitedForRoll(now, maxTimestampInMessages)}/${config.segmentMs - segment.rollJitterMs}).")
       /*
@@ -1331,7 +1298,7 @@ class Log(@volatile var dir: File,
    */
   def roll(expectedNextOffset: Long = 0): LogSegment = {
     maybeHandleIOException(s"Error while rolling log segment for $topicPartition in dir ${dir.getParent}") {
-      val start = time.nanoseconds
+      val start = time.hiResClockMs()
       lock synchronized {
         checkIfMemoryMappedBufferClosed()
         val newOffset = math.max(expectedNextOffset, logEndOffset)
@@ -1340,17 +1307,11 @@ class Log(@volatile var dir: File,
         val timeIdxFile = timeIndexFile(dir, newOffset)
         val txnIdxFile = transactionIndexFile(dir, newOffset)
         for (file <- List(logFile, offsetIdxFile, timeIdxFile, txnIdxFile) if file.exists) {
-          warn("Newly rolled segment file " + file.getName + " already exists; deleting it first")
-          file.delete()
+          warn(s"Newly rolled segment file ${file.getAbsolutePath} already exists; deleting it first")
+          Files.delete(file.toPath)
         }
 
-        Option(segments.lastEntry).foreach { entry =>
-          val seg = entry.getValue
-          seg.onBecomeInactiveSegment()
-          seg.index.trimToValidSize()
-          seg.timeIndex.trimToValidSize()
-          seg.log.trim()
-        }
+        Option(segments.lastEntry).foreach(_.getValue.onBecomeInactiveSegment())
 
         // take a snapshot of the producer state to facilitate recovery. It is useful to have the snapshot
         // offset align with the new segment offset since this ensures we can recover the segment by beginning
@@ -1360,11 +1321,9 @@ class Log(@volatile var dir: File,
         producerStateManager.updateMapEndOffset(newOffset)
         producerStateManager.takeSnapshot()
 
-        val segment = new LogSegment(dir,
-          startOffset = newOffset,
-          indexIntervalBytes = config.indexInterval,
-          maxIndexSize = config.maxIndexSize,
-          rollJitterMs = config.randomSegmentJitter,
+        val segment = LogSegment.open(dir,
+          baseOffset = newOffset,
+          config,
           time = time,
           fileAlreadyExists = false,
           initFileSize = initFileSize,
@@ -1378,7 +1337,7 @@ class Log(@volatile var dir: File,
         // schedule an asynchronous flush of the old segment
         scheduler.schedule("flush-log", () => flush(newOffset), delay = 0L)
 
-        info("Rolled new log segment for '" + name + "' in %.0f ms.".format((System.nanoTime - start) / (1000.0 * 1000.0)))
+        info(s"Rolled new log segment for '$name' in ${time.hiResClockMs() - start} ms.")
 
         segment
       }
@@ -1463,7 +1422,7 @@ class Log(@volatile var dir: File,
       lock synchronized {
         checkIfMemoryMappedBufferClosed()
         removeLogMetrics()
-        logSegments.foreach(_.delete())
+        logSegments.foreach(_.deleteIfExists())
         segments.clear()
         _leaderEpochCache.clear()
         Utils.delete(dir)
@@ -1541,11 +1500,9 @@ class Log(@volatile var dir: File,
         checkIfMemoryMappedBufferClosed()
         val segmentsToDelete = logSegments.toList
         segmentsToDelete.foreach(deleteSegment)
-        addSegment(new LogSegment(dir,
-          newOffset,
-          indexIntervalBytes = config.indexInterval,
-          maxIndexSize = config.maxIndexSize,
-          rollJitterMs = config.randomSegmentJitter,
+        addSegment(LogSegment.open(dir,
+          baseOffset = newOffset,
+          config = config,
           time = time,
           fileAlreadyExists = false,
           initFileSize = initFileSize,
@@ -1578,6 +1535,9 @@ class Log(@volatile var dir: File,
    */
   def logSegments: Iterable[LogSegment] = segments.values.asScala
 
+  /**
+   * Get all segments beginning with the segment that includes "from" and ending with the newest segment
+   */
   def logSegments(from: Long): Iterable[LogSegment] = {
     lock synchronized {
       Option(segments.floorKey(from)).map { floor =>
@@ -1635,9 +1595,9 @@ class Log(@volatile var dir: File,
   private def asyncDeleteSegment(segment: LogSegment) {
     segment.changeFileSuffixes("", Log.DeletedFileSuffix)
     def deleteSeg() {
-      info("Deleting segment %d from log %s.".format(segment.baseOffset, name))
+      info(s"Deleting segment ${segment.baseOffset} from log $name.")
       maybeHandleIOException(s"Error while deleting segments for $topicPartition in dir ${dir.getParent}") {
-        segment.delete()
+        segment.deleteIfExists()
       }
     }
     scheduler.schedule("delete-file", deleteSeg _, delay = config.fileDeleteDelayMs)
@@ -1804,8 +1764,8 @@ object Log {
    * @param dir The directory in which the log will reside
    * @param offset The base offset of the log file
    */
-  def logFile(dir: File, offset: Long): File =
-    new File(dir, filenamePrefixFromOffset(offset) + LogFileSuffix)
+  def logFile(dir: File, offset: Long, suffix: String = ""): File =
+    new File(dir, filenamePrefixFromOffset(offset) + LogFileSuffix + suffix)
 
   /**
     * Return a directory name to rename the log directory to for async deletion. The name will be in the following
@@ -1842,8 +1802,8 @@ object Log {
    * @param dir The directory in which the log will reside
    * @param offset The base offset of the log file
    */
-  def offsetIndexFile(dir: File, offset: Long): File =
-    new File(dir, filenamePrefixFromOffset(offset) + IndexFileSuffix)
+  def offsetIndexFile(dir: File, offset: Long, suffix: String = ""): File =
+    new File(dir, filenamePrefixFromOffset(offset) + IndexFileSuffix + suffix)
 
   /**
    * Construct a time index file name in the given dir using the given base offset
@@ -1851,8 +1811,8 @@ object Log {
    * @param dir The directory in which the log will reside
    * @param offset The base offset of the log file
    */
-  def timeIndexFile(dir: File, offset: Long): File =
-    new File(dir, filenamePrefixFromOffset(offset) + TimeIndexFileSuffix)
+  def timeIndexFile(dir: File, offset: Long, suffix: String = ""): File =
+    new File(dir, filenamePrefixFromOffset(offset) + TimeIndexFileSuffix + suffix)
 
   /**
    * Construct a producer id snapshot file using the given offset.
@@ -1863,8 +1823,8 @@ object Log {
   def producerSnapshotFile(dir: File, offset: Long): File =
     new File(dir, filenamePrefixFromOffset(offset) + ProducerSnapshotFileSuffix)
 
-  def transactionIndexFile(dir: File, offset: Long): File =
-    new File(dir, filenamePrefixFromOffset(offset) + TxnIndexFileSuffix)
+  def transactionIndexFile(dir: File, offset: Long, suffix: String = ""): File =
+    new File(dir, filenamePrefixFromOffset(offset) + TxnIndexFileSuffix + suffix)
 
   def offsetFromFile(file: File): Long = {
     val filename = file.getName
