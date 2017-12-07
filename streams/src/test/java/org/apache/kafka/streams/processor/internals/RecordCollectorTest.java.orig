@@ -29,7 +29,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
+import org.apache.kafka.streams.errors.AlwaysFailProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.junit.Test;
@@ -72,7 +72,9 @@ public class RecordCollectorTest {
 
         final RecordCollectorImpl collector = new RecordCollectorImpl(
                 new MockProducer<>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer),
-                "RecordCollectorTest-TestSpecificPartition", new LogContext("RecordCollectorTest-TestSpecificPartition "), new DefaultProductionExceptionHandler());
+                "RecordCollectorTest-TestSpecificPartition",
+                new LogContext("RecordCollectorTest-TestSpecificPartition "),
+                new AlwaysFailProductionExceptionHandler());
 
         collector.send("topic1", "999", "0", 0, null, stringSerializer, stringSerializer);
         collector.send("topic1", "999", "0", 0, null, stringSerializer, stringSerializer);
@@ -104,7 +106,9 @@ public class RecordCollectorTest {
 
         final RecordCollectorImpl collector = new RecordCollectorImpl(
                 new MockProducer<>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer),
-                "RecordCollectorTest-TestStreamPartitioner", new LogContext("RecordCollectorTest-TestStreamPartitioner "), new DefaultProductionExceptionHandler());
+                "RecordCollectorTest-TestStreamPartitioner",
+                new LogContext("RecordCollectorTest-TestStreamPartitioner "),
+                new AlwaysFailProductionExceptionHandler());
 
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
         collector.send("topic1", "9", "0", null, stringSerializer, stringSerializer, streamPartitioner);
@@ -126,6 +130,32 @@ public class RecordCollectorTest {
     }
 
     @SuppressWarnings("unchecked")
+<<<<<<< HEAD
+=======
+    @Test
+    public void shouldRetryWhenTimeoutExceptionOccursOnSend() {
+        final AtomicInteger attempt = new AtomicInteger(0);
+        final RecordCollectorImpl collector = new RecordCollectorImpl(
+                new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+                    @Override
+                    public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
+                        if (attempt.getAndIncrement() == 0) {
+                            throw new TimeoutException();
+                        }
+                        return super.send(record, callback);
+                    }
+                },
+                "test",
+                logContext,
+                new AlwaysFailProductionExceptionHandler());
+
+        collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
+        final Long offset = collector.offsets().get(new TopicPartition("topic1", 0));
+        assertEquals(Long.valueOf(0L), offset);
+    }
+
+    @SuppressWarnings("unchecked")
+>>>>>>> f3dc407bf... Correct compile errors in tests originating from signature changes
     @Test(expected = StreamsException.class)
     public void shouldThrowStreamsExceptionOnAnyExceptionButProducerFencedException() {
         final RecordCollector collector = new RecordCollectorImpl(
@@ -137,7 +167,7 @@ public class RecordCollectorTest {
                 },
                 "test",
                 logContext,
-                new DefaultProductionExceptionHandler());
+                new AlwaysFailProductionExceptionHandler());
 
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
     }
@@ -155,7 +185,7 @@ public class RecordCollectorTest {
                 },
                 "test",
                 logContext,
-                new DefaultProductionExceptionHandler());
+                new AlwaysFailProductionExceptionHandler());
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
 
         try {
@@ -177,7 +207,7 @@ public class RecordCollectorTest {
                 },
                 "test",
                 logContext,
-                new DefaultProductionExceptionHandler());
+                new AlwaysFailProductionExceptionHandler());
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
 
         try {
@@ -199,7 +229,7 @@ public class RecordCollectorTest {
                 },
                 "test",
                 logContext,
-                new DefaultProductionExceptionHandler());
+                new AlwaysFailProductionExceptionHandler());
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
 
         try {
@@ -221,7 +251,7 @@ public class RecordCollectorTest {
             },
             "test",
             logContext,
-            new DefaultProductionExceptionHandler());
+            new AlwaysFailProductionExceptionHandler());
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
     }
 }
