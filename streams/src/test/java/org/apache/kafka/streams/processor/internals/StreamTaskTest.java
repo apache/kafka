@@ -436,7 +436,7 @@ public class StreamTaskTest {
         task.initializeStateStores();
         task.initializeTopology();
         long now = time.milliseconds();
-        assertTrue(task.maybePunctuateSystemTime()); // first time we always punctuate
+        assertFalse(task.maybePunctuateSystemTime());
         time.sleep(9);
         assertFalse(task.maybePunctuateSystemTime());
         processorSystemTime.supplier.checkAndClearPunctuateResult(PunctuationType.WALL_CLOCK_TIME, now);
