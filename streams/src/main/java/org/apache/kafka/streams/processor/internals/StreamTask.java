@@ -588,7 +588,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             case STREAM_TIME:
                 return streamTimePunctuationQueue.schedule(schedule);
             case WALL_CLOCK_TIME:
-                return systemTimePunctuationQueue.schedule(schedule);
+                return systemTimePunctuationQueue.schedule(schedule.next(time.milliseconds()));
             default:
                 throw new IllegalArgumentException("Unrecognized PunctuationType: " + type);
         }
