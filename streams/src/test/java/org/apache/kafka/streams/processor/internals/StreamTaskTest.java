@@ -529,7 +529,8 @@ public class StreamTaskTest {
             changelogReader, config, streamsMetrics, stateDirectory, null, time, producer) {
 
             @Override
-            RecordCollector createRecordCollector(final LogContext logContext, final ProductionExceptionHandler exHandler) {
+            RecordCollector createRecordCollector(final LogContext logContext,
+                                                  final ProductionExceptionHandler exHandler) {
                 return new NoOpRecordCollector() {
                     @Override
                     public void flush() {

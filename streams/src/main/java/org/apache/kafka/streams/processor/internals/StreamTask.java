@@ -652,7 +652,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     // visible for testing only
-    RecordCollector createRecordCollector(final LogContext logContext, final ProductionExceptionHandler productionExceptionHandler) {
+    RecordCollector createRecordCollector(final LogContext logContext,
+                                          final ProductionExceptionHandler productionExceptionHandler) {
         return new RecordCollectorImpl(producer, id.toString(), logContext, productionExceptionHandler);
     }
 }

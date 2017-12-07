@@ -50,7 +50,8 @@ public interface ProductionExceptionHandler extends Configurable {
          */
         public final int id;
 
-        ProductionExceptionHandlerResponse(final int id, final String name) {
+        ProductionExceptionHandlerResponse(final int id,
+                                           final String name) {
             this.id = id;
             this.name = name;
         }
