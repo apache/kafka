@@ -506,11 +506,12 @@ class LogSegment private[log] (val log: FileRecords,
    * Delete this log segment from the filesystem.
    */
   def deleteIfExists() {
-    def delete(delete: () => Boolean, fileType: String, file: File): Unit = {
+    def delete(delete: () => Boolean, fileType: String, file: File, logIfMissing: Boolean): Unit = {
       try {
-        info(s"Deleting $fileType ${file.getAbsolutePath}.")
-        if (!delete())
-          info(s"Failed delete of $fileType ${file.getAbsolutePath} as it does not exist.")
+        if (delete())
+          info(s"Deleted $fileType ${file.getAbsolutePath}.")
+        else if (logIfMissing)
+          info(s"Failed to delete $fileType ${file.getAbsolutePath} because it does not exist.")
       }
       catch {
         case e: IOException => throw new IOException(s"Delete of $fileType ${file.getAbsolutePath} failed.", e)
@@ -518,10 +519,10 @@ class LogSegment private[log] (val log: FileRecords,
     }
 
     CoreUtils.tryAll(Seq(
-      () => delete(log.deleteIfExists _, "log", log.file),
-      () => delete(offsetIndex.deleteIfExists _, "offset index", offsetIndex.file),
-      () => delete(timeIndex.deleteIfExists _, "time index", timeIndex.file),
-      () => delete(txnIndex.deleteIfExists _, "transaction index", txnIndex.file)
+      () => delete(log.deleteIfExists _, "log", log.file, logIfMissing = true),
+      () => delete(offsetIndex.deleteIfExists _, "offset index", offsetIndex.file, logIfMissing = true),
+      () => delete(timeIndex.deleteIfExists _, "time index", timeIndex.file, logIfMissing = true),
+      () => delete(txnIndex.deleteIfExists _, "transaction index", txnIndex.file, logIfMissing = false)
     ))
   }
 
