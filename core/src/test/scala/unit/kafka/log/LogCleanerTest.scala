@@ -1009,6 +1009,8 @@ class LogCleanerTest extends JUnitSuite {
     // clean the log
     cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L, new CleanerStats())
     var cleanedKeys = keysInLog(log)
+    time.scheduler.clear()
+    log.close()
 
     // 1) Simulate recovery just after .cleaned file is created, before rename to .swap
     //    On recovery, clean operation is aborted. All messages should be present in the log
@@ -1020,7 +1022,9 @@ class LogCleanerTest extends JUnitSuite {
 
     // clean again
     cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L, new CleanerStats())
+    time.scheduler.clear()
     cleanedKeys = keysInLog(log)
+    log.close()
 
     // 2) Simulate recovery just after swap file is created, before old segment files are
     //    renamed to .deleted. Clean operation is resumed during recovery.
@@ -1053,11 +1057,14 @@ class LogCleanerTest extends JUnitSuite {
     for (k <- 1 until messageCount by 2)
       offsetMap.put(key(k), Long.MaxValue)
     cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L, new CleanerStats())
+    time.scheduler.clear()
     cleanedKeys = keysInLog(log)
+    log.close()
 
     // 4) Simulate recovery after swap is complete, but async deletion
     //    is not yet complete. Clean operation is resumed during recovery.
-    recoverAndCheck(config, cleanedKeys)
+    log = recoverAndCheck(config, cleanedKeys)
+    log.close()
   }
 
   @Test
