@@ -57,10 +57,7 @@ class TaskManager {
     private final StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator;
     private final StreamsMetadataState streamsMetadataState;
 
-    // TODO: this is going to be replaced by AdminClient
-    final StreamsKafkaClient streamsKafkaClient;
-
-    private final AdminClient adminClient;
+    final AdminClient adminClient;
     private DeleteRecordsResult deleteRecordsResult;
 
     // following information is updated during rebalance phase by the partition assignor
@@ -77,7 +74,6 @@ class TaskManager {
                 final StreamsMetadataState streamsMetadataState,
                 final StreamThread.AbstractTaskCreator<StreamTask> taskCreator,
                 final StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator,
-                final StreamsKafkaClient streamsKafkaClient,
                 final AdminClient adminClient,
                 final AssignedStreamsTasks active,
                 final AssignedStandbyTasks standby) {
@@ -95,7 +91,6 @@ class TaskManager {
 
         this.log = logContext.logger(getClass());
 
-        this.streamsKafkaClient = streamsKafkaClient;
         this.adminClient = adminClient;
     }
 
@@ -282,8 +277,6 @@ class TaskManager {
         restoreConsumer.unsubscribe();
         taskCreator.close();
         standbyTaskCreator.close();
-
-        streamsKafkaClient.close();
 
         final RuntimeException fatalException = firstException.get();
         if (fatalException != null) {
