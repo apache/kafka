@@ -23,12 +23,20 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
+import org.apache.kafka.streams.errors.ProductionExceptionHandler.ProductionExceptionHandlerResponse;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.slf4j.Logger;
@@ -48,6 +56,8 @@ public class RecordCollectorImpl implements RecordCollector {
         "No more records will be sent and no more offsets will be recorded for this task.";
     private final static String EXCEPTION_MESSAGE = "%sAbort sending since %s with a previous record (key %s value %s timestamp %d) to topic %s due to %s";
     private final static String PARAMETER_HINT = "\nYou can increase producer parameter `retries` and `retry.backoff.ms` to avoid this error.";
+    private final static String HANDLER_CONTINUED_MESSAGE = "Error sending records (key {} value {} timestamp {}) to topic {} due to {}; " +
+        "The exception handler chose to CONTINUE processing in spite of this error.";
     private volatile KafkaException sendException;
 
     public RecordCollectorImpl(final Producer<byte[], byte[]> producer,
@@ -82,6 +92,43 @@ public class RecordCollectorImpl implements RecordCollector {
         }
 
         send(topic, key, value, partition, timestamp, keySerializer, valueSerializer);
+    }
+
+    private boolean productionExceptionIsFatal(final Exception exception) {
+        return exception instanceof AuthenticationException ||
+            exception instanceof AuthorizationException ||
+            exception instanceof SecurityDisabledException ||
+            exception instanceof InvalidTopicException ||
+            exception instanceof UnknownServerException ||
+            exception instanceof IllegalStateException ||
+            exception instanceof OffsetMetadataTooLarge ||
+            exception instanceof SerializationException;
+    }
+
+    private <K, V> void recordSendError(
+        final K key,
+        final V value,
+        final Long timestamp,
+        final String topic,
+        final Exception exception
+    ) {
+        String errorLogMessage = LOG_MESSAGE;
+        String errorMessage = EXCEPTION_MESSAGE;
+        if (exception instanceof RetriableException) {
+            errorLogMessage += PARAMETER_HINT;
+            errorMessage += PARAMETER_HINT;
+        }
+        log.error(errorLogMessage, key, value, timestamp, topic, exception);
+        sendException = new StreamsException(
+            String.format(errorMessage,
+                          logPrefix,
+                          "an error caught",
+                          key,
+                          value,
+                          timestamp,
+                          topic,
+                          exception.getMessage()),
+            exception);
     }
 
     @Override
@@ -124,23 +171,13 @@ public class RecordCollectorImpl implements RecordCollector {
                                                   topic,
                                                   exception.getMessage()));
                             } else {
-                                String errorLogMessage = LOG_MESSAGE;
-                                String errorMessage = EXCEPTION_MESSAGE;
-                                if (exception instanceof RetriableException) {
-                                    errorLogMessage += PARAMETER_HINT;
-                                    errorMessage += PARAMETER_HINT;
+                                if (productionExceptionIsFatal(exception)) {
+                                    recordSendError(key, value, timestamp, topic, exception);
+                                } else if (productionExceptionHandler.handle(serializedRecord, exception) == ProductionExceptionHandlerResponse.FAIL) {
+                                    recordSendError(key, value, timestamp, topic, exception);
+                                } else {
+                                    log.debug(HANDLER_CONTINUED_MESSAGE, key, value, timestamp, topic, exception);
                                 }
-                                log.error(errorLogMessage, key, value, timestamp, topic, exception);
-                                sendException = new StreamsException(
-                                    String.format(errorMessage,
-                                                  logPrefix,
-                                                  "an error caught",
-                                                  key,
-                                                  value,
-                                                  timestamp,
-                                                  topic,
-                                                  exception.getMessage()),
-                                    exception);
                             }
                         }
                     }
