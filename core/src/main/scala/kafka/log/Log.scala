@@ -374,7 +374,7 @@ class Log(@volatile var dir: File,
         fileSuffix = SwapFileSuffix)
       info(s"Found log file ${swapFile.getPath} from interrupted swap operation, repairing.")
       recoverSegment(swapSegment)
-      val oldSegments = logSegments(swapSegment.baseOffset)
+      val oldSegments = logSegments(swapSegment.baseOffset, swapSegment.readNextOffset)
       replaceSegments(swapSegment, oldSegments.toSeq, isRecoveredSwapFile = true)
     }
   }
@@ -1534,17 +1534,6 @@ class Log(@volatile var dir: File,
    * All the log segments in this log ordered from oldest to newest
    */
   def logSegments: Iterable[LogSegment] = segments.values.asScala
-
-  /**
-   * Get all segments beginning with the segment that includes "from" and ending with the newest segment
-   */
-  def logSegments(from: Long): Iterable[LogSegment] = {
-    lock synchronized {
-      Option(segments.floorKey(from)).map { floor =>
-        segments.tailMap(floor).values.asScala
-      }.getOrElse(logSegments)
-    }
-  }
 
   /**
    * Get all segments beginning with the segment that includes "from" and ending with the segment
