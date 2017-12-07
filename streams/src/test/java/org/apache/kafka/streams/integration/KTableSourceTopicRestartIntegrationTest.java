@@ -208,7 +208,7 @@ public class KTableSourceTopicRestartIntegrationTest {
     private void produceKeyValues(String... keys) throws ExecutionException, InterruptedException {
         final List<KeyValue<String, String>> keyValueList = new ArrayList<>();
 
-        for (String key : keys) {
+        for (final String key : keys) {
             keyValueList.add(new KeyValue<>(key, key + "1"));
         }
 
@@ -221,7 +221,10 @@ public class KTableSourceTopicRestartIntegrationTest {
     private class UpdatingSourceTopicOnRestoreStartStateRestoreListener implements StateRestoreListener {
 
         @Override
-        public void onRestoreStart(TopicPartition topicPartition, String storeName, long startingOffset, long endingOffset) {
+        public void onRestoreStart(final TopicPartition topicPartition,
+                                   final String storeName,
+                                   final long startingOffset,
+                                   final long endingOffset) {
             try {
                 // need two values appended to log to trigger issue
                 produceKeyValues("d", "e");
@@ -231,11 +234,16 @@ public class KTableSourceTopicRestartIntegrationTest {
         }
 
         @Override
-        public void onBatchRestored(TopicPartition topicPartition, String storeName, long batchEndOffset, long numRestored) {
+        public void onBatchRestored(final TopicPartition topicPartition,
+                                    final String storeName,
+                                    final long batchEndOffset,
+                                    final long numRestored) {
         }
 
         @Override
-        public void onRestoreEnd(TopicPartition topicPartition, String storeName, long totalRestored) {
+        public void onRestoreEnd(final TopicPartition topicPartition,
+                                 final String storeName,
+                                 final long totalRestored) {
         }
     }
 
