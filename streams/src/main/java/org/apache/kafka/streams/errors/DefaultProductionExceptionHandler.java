@@ -23,7 +23,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
  * Production exception handler that always instructs streams to fail when an exception
  * happens while attempting to produce result records.
  */
-public class AlwaysFailProductionExceptionHandler implements ProductionExceptionHandler {
+public class DefaultProductionExceptionHandler implements ProductionExceptionHandler {
     @Override
     public ProductionExceptionHandlerResponse handle(final ProducerRecord<byte[], byte[]> record,
                                                      final Exception exception) {
