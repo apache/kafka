@@ -176,6 +176,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
       // non-threadsafe classes as described in KAFKA-4959.
       // The call to shutdownLatch.await() in ShutdownableThread.shutdown() serves as a synchronization barrier that
       // hands off the NetworkClient from the RequestSendThread to the ZkEventThread.
+      brokerState.requestSendThread.fastTimeout = true
       brokerState.requestSendThread.shutdown()
       brokerState.networkClient.close()
       brokerState.messageQueue.clear()
@@ -208,6 +209,7 @@ class RequestSendThread(val controllerId: Int,
   extends ShutdownableThread(name = name) {
 
   private val socketTimeoutMs = config.controllerSocketTimeoutMs
+  var fastTimeout: Boolean = false
 
   override def doWork(): Unit = {
 
@@ -266,7 +268,7 @@ class RequestSendThread(val controllerId: Int,
   private def brokerReady(): Boolean = {
     try {
       if (!NetworkClientUtils.isReady(networkClient, brokerNode, time.milliseconds())) {
-        if (!NetworkClientUtils.awaitReady(networkClient, brokerNode, time, socketTimeoutMs))
+        if (!NetworkClientUtils.awaitReady(networkClient, brokerNode, time, socketTimeoutMs, fastTimeout))
           throw new SocketTimeoutException(s"Failed to connect within $socketTimeoutMs ms")
 
         info(s"Controller $controllerId connected to $brokerNode for sending state change requests")
