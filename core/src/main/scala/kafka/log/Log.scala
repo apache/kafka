@@ -279,10 +279,10 @@ class Log(@volatile var dir: File,
 
     for (file <- dir.listFiles if file.isFile) {
       if (!file.canRead)
-        throw new IOException("Could not read file " + file)
+        throw new IOException(s"Could not read file $file")
       val filename = file.getName
       if (filename.endsWith(DeletedFileSuffix) || filename.endsWith(CleanedFileSuffix)) {
-        // if the file ends in .deleted or .cleaned, delete it
+        debug(s"Deleting stray temporary file ${file.getAbsolutePath}")
         Files.deleteIfExists(file.toPath)
       } else if (filename.endsWith(SwapFileSuffix)) {
         // we crashed in the middle of a swap operation, to recover:

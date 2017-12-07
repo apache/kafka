@@ -978,7 +978,7 @@ class LogCleanerTest extends JUnitSuite {
 
     val config = LogConfig.fromProps(logConfig.originals, logProps)
 
-    def recoverAndCheck(config: LogConfig, expectedKeys : Iterable[Int]) : Log = {
+    def recoverAndCheck(config: LogConfig, expectedKeys: Iterable[Int]): Log = {
       // Recover log file and check that after recovery, keys are as expected
       // and all temporary files have been deleted
       val recoveredLog = makeLog(config = config)
@@ -995,7 +995,7 @@ class LogCleanerTest extends JUnitSuite {
     // create a log and append some messages
     var log = makeLog(config = config)
     var messageCount = 0
-    while(log.numberOfSegments < 10) {
+    while (log.numberOfSegments < 10) {
       log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt), leaderEpoch = 0)
       messageCount += 1
     }
@@ -1008,8 +1008,9 @@ class LogCleanerTest extends JUnitSuite {
 
     // clean the log
     cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L, new CleanerStats())
-    var cleanedKeys = keysInLog(log)
+    // clear scheduler so that async deletes don't run
     time.scheduler.clear()
+    var cleanedKeys = keysInLog(log)
     log.close()
 
     // 1) Simulate recovery just after .cleaned file is created, before rename to .swap
@@ -1022,6 +1023,7 @@ class LogCleanerTest extends JUnitSuite {
 
     // clean again
     cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L, new CleanerStats())
+    // clear scheduler so that async deletes don't run
     time.scheduler.clear()
     cleanedKeys = keysInLog(log)
     log.close()
@@ -1035,13 +1037,15 @@ class LogCleanerTest extends JUnitSuite {
     log = recoverAndCheck(config, cleanedKeys)
 
     // add some more messages and clean the log again
-    while(log.numberOfSegments < 10) {
+    while (log.numberOfSegments < 10) {
       log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt), leaderEpoch = 0)
       messageCount += 1
     }
     for (k <- 1 until messageCount by 2)
       offsetMap.put(key(k), Long.MaxValue)
     cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L, new CleanerStats())
+    // clear scheduler so that async deletes don't run
+    time.scheduler.clear()
     cleanedKeys = keysInLog(log)
 
     // 3) Simulate recovery after swap file is created and old segments files are renamed
@@ -1050,13 +1054,14 @@ class LogCleanerTest extends JUnitSuite {
     log = recoverAndCheck(config, cleanedKeys)
 
     // add some more messages and clean the log again
-    while(log.numberOfSegments < 10) {
+    while (log.numberOfSegments < 10) {
       log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt), leaderEpoch = 0)
       messageCount += 1
     }
     for (k <- 1 until messageCount by 2)
       offsetMap.put(key(k), Long.MaxValue)
     cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L, new CleanerStats())
+    // clear scheduler so that async deletes don't run
     time.scheduler.clear()
     cleanedKeys = keysInLog(log)
     log.close()
@@ -1249,9 +1254,7 @@ class LogCleanerTest extends JUnitSuite {
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(10))
 
-  private def noOpCheckDone(topicPartition: TopicPartition) { /* do nothing */  }
-
-  private def makeCleaner(capacity: Int, checkDone: TopicPartition => Unit = noOpCheckDone, maxMessageSize: Int = 64*1024) =
+  private def makeCleaner(capacity: Int, checkDone: TopicPartition => Unit = _ => (), maxMessageSize: Int = 64*1024) =
     new Cleaner(id = 0,
                 offsetMap = new FakeOffsetMap(capacity),
                 ioBufferSize = maxMessageSize,
@@ -1262,8 +1265,7 @@ class LogCleanerTest extends JUnitSuite {
                 checkDone = checkDone)
 
   private def writeToLog(log: Log, seq: Iterable[(Int, Int)]): Iterable[Long] = {
-    for((key, value) <- seq)
-      yield log.appendAsLeader(record(key, value), leaderEpoch = 0).firstOffset
+    for ((key, value) <- seq) yield log.appendAsLeader(record(key, value), leaderEpoch = 0).firstOffset
   }
 
   private def key(id: Int) = ByteBuffer.wrap(id.toString.getBytes)
