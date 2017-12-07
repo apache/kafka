@@ -95,14 +95,17 @@ public class RecordCollectorImpl implements RecordCollector {
     }
 
     private boolean productionExceptionIsFatal(final Exception exception) {
-        return exception instanceof AuthenticationException ||
+        boolean securityException = exception instanceof AuthenticationException ||
             exception instanceof AuthorizationException ||
-            exception instanceof SecurityDisabledException ||
-            exception instanceof InvalidTopicException ||
+            exception instanceof SecurityDisabledException;
+
+        boolean communicationException = exception instanceof InvalidTopicException ||
             exception instanceof UnknownServerException ||
-            exception instanceof IllegalStateException ||
+            exception instanceof SerializationException ||
             exception instanceof OffsetMetadataTooLarge ||
-            exception instanceof SerializationException;
+            exception instanceof IllegalStateException;
+
+        return securityException || communicationException;
     }
 
     private <K, V> void recordSendError(
