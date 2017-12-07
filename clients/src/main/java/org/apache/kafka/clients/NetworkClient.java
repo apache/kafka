@@ -621,7 +621,6 @@ public class NetworkClient implements KafkaClient {
             log.trace("Cancelled request {} {} with correlation id {} due to node {} being disconnected",
                     request.header.apiKey(), request.request, request.header.correlationId(), nodeId);
             if (!request.isInternalRequest)
-
                 responses.add(request.disconnected(now));
             else if (request.header.apiKey() == ApiKeys.METADATA)
                 metadataUpdater.handleDisconnection(request.destination);

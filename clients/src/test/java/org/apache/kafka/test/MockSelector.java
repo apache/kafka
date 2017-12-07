@@ -82,7 +82,7 @@ public class MockSelector implements Selectable {
      * the next {@link #poll(long)}.
      */
     public void serverDisconnect(String id) {
-        this.disconnected.put(id, ChannelState.LOCAL_CLOSE);
+        this.disconnected.put(id, ChannelState.READY);
         close(id);
     }
 

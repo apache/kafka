@@ -194,7 +194,7 @@ public class NetworkClientTest {
         assertEquals(1, responses.size());
         ClientResponse clientResponse = responses.get(0);
         assertEquals(node.idString(), clientResponse.destination());
-        assertTrue(clientResponse.wasDisconnected());
+        assertTrue("Expected response to fail due to disconnection", clientResponse.wasDisconnected());
     }
 
     @Test
@@ -218,7 +218,6 @@ public class NetworkClientTest {
         assertFalse("After we forced the disconnection the client is no longer ready.", client.ready(node, time.milliseconds()));
         leastNode = client.leastLoadedNode(time.milliseconds());
         assertEquals("There should be NO leastloadednode", leastNode, null);
-        
     }
 
     @Test
@@ -373,10 +372,10 @@ public class NetworkClientTest {
     }
 
     private void awaitInFlightApiVersionRequest() throws Exception {
+        client.ready(node, time.milliseconds());
         TestUtils.waitForCondition(new TestCondition() {
             @Override
             public boolean conditionMet() {
-                client.ready(node, time.milliseconds());
                 client.poll(0, time.milliseconds());
                 return client.hasInFlightRequests(node.idString());
             }
