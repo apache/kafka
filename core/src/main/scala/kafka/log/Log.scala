@@ -290,9 +290,9 @@ class Log(@volatile var dir: File,
         // if an index just delete the index files, they will be rebuilt
         val baseFile = new File(CoreUtils.replaceSuffix(file.getPath, SwapFileSuffix, ""))
         if (isIndexFile(baseFile)) {
-          deleteIndicesIfExist(baseFile, file, "log")
-        } else if (isLogFile(baseFile)) {
           deleteIndicesIfExist(baseFile, file, "index")
+        } else if (isLogFile(baseFile)) {
+          deleteIndicesIfExist(baseFile, file, "log")
           swapFiles += file
         }
       }
