@@ -192,17 +192,22 @@ public class RecordCollectorImpl implements RecordCollector {
                 "its internal buffer fills up. " +
                 "You can increase producer parameter `max.block.ms` to increase this timeout.", topic);
             throw new StreamsException(String.format("%sFailed to send record to topic %s due to timeout.", logPrefix, topic));
-        } catch (final Exception fatalException) {
-            throw new StreamsException(
-                String.format(EXCEPTION_MESSAGE,
-                              logPrefix,
-                              "an error caught",
-                              key,
-                              value,
-                              timestamp,
-                              topic,
-                              fatalException.getMessage()),
-                fatalException);
+        } catch (final Exception uncaughtException) {
+            if (productionExceptionIsFatal(uncaughtException) ||
+                productionExceptionHandler.handle(serializedRecord, uncaughtException) == ProductionExceptionHandlerResponse.FAIL) {
+                throw new StreamsException(
+                    String.format(EXCEPTION_MESSAGE,
+                                  logPrefix,
+                                  "an error caught",
+                                  key,
+                                  value,
+                                  timestamp,
+                                  topic,
+                                  uncaughtException.getMessage()),
+                    uncaughtException);
+            } else {
+                log.debug(HANDLER_CONTINUED_MESSAGE, key, value, timestamp, topic, uncaughtException);
+            }
         }
     }
 
