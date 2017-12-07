@@ -46,8 +46,11 @@ public class InternalTopicManager {
 
     private static final Long WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
 
-    public static final String CLEANUP_POLICY_PROP = "cleanup.policy";
-    public static final String RETENTION_MS = "retention.ms";
+    public final static String CLEANUP_POLICY_PROP = "cleanup.policy";
+    public final static String RETENTION_MS = "retention.ms";
+
+    private final static String INTERRUPTED_ERROR_MESSAGE = "Thread got interrupted. This indicates a bug. " +
+        "Please report at https://issues.apache.org/jira/projects/KAFKA or dev-mailing list (https://kafka.apache.org/contact).";
 
     private final Logger log;
     private final long windowChangeLogAdditionalRetention;
@@ -61,16 +64,15 @@ public class InternalTopicManager {
     public InternalTopicManager(final AdminClient adminClient,
                                 final Map<String, ?> config) {
         this.adminClient = adminClient;
-        this.replicationFactor =  (short) (config.containsKey(StreamsConfig.REPLICATION_FACTOR_CONFIG) ? (Integer) config.get(StreamsConfig.REPLICATION_FACTOR_CONFIG) : 1);
-        this.windowChangeLogAdditionalRetention = config.containsKey(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG) ?
-            (Long) config.get(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG)
-            : WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT;
+        final StreamsConfig streamsConfig = new StreamsConfig(config);
 
         LogContext logContext = new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName()));
-        this.log = logContext.logger(getClass());
+        log = logContext.logger(getClass());
 
-        final StreamsConfig streamsConfig = new StreamsConfig(config);
+        replicationFactor = streamsConfig.getInt(StreamsConfig.REPLICATION_FACTOR_CONFIG).shortValue();
+        windowChangeLogAdditionalRetention = streamsConfig.getLong(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG);
         retries = new AdminClientConfig(streamsConfig.getAdminConfigs("dummy")).getInt(AdminClientConfig.RETRIES_CONFIG);
+
         log.debug("Configs:" + Utils.NL,
             "\t{} = {}" + Utils.NL,
             "\t{} = {}" + Utils.NL,
@@ -143,9 +145,9 @@ public class InternalTopicManager {
                                 couldNotCreateTopic);
                         }
                     } catch (final InterruptedException fatalException) {
-                        final String error = "Could not create internal topics.";
-                        log.error(error, fatalException);
-                        throw new StreamsException(error, fatalException);
+                        Thread.currentThread().interrupt();
+                        log.error(INTERRUPTED_ERROR_MESSAGE, fatalException);
+                        throw new IllegalStateException(INTERRUPTED_ERROR_MESSAGE, fatalException);
                     }
                 }
 
@@ -197,8 +199,8 @@ public class InternalTopicManager {
                         topicDescription.partitions().size());
                 } catch (final InterruptedException fatalException) {
                     Thread.currentThread().interrupt();
-                    log.error("Thread got interrupted.", fatalException);
-                    throw new StreamsException(fatalException);
+                    log.error(INTERRUPTED_ERROR_MESSAGE, fatalException);
+                    throw new IllegalStateException(INTERRUPTED_ERROR_MESSAGE, fatalException);
                 } catch (final ExecutionException couldNotDescribeTopicException) {
                     final Throwable cause = couldNotDescribeTopicException.getCause();
                     if (cause instanceof TimeoutException) {
