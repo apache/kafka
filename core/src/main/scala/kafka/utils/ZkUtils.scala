@@ -198,23 +198,23 @@ object ZkUtils {
   }
 
   def controllerZkData(brokerId: Int, timestamp: Long): String = {
-    Json.encodeToJsonString(Map("version" -> 1, "brokerid" -> brokerId, "timestamp" -> timestamp.toString))
+    Json.legacyEncodeAsString(Map("version" -> 1, "brokerid" -> brokerId, "timestamp" -> timestamp.toString))
   }
 
   def preferredReplicaLeaderElectionZkData(partitions: scala.collection.Set[TopicAndPartition]): String = {
-    Json.encodeToJsonString(Map("version" -> 1, "partitions" -> partitions.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition).asJava).asJava))
+    Json.legacyEncodeAsString(Map("version" -> 1, "partitions" -> partitions.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition))))
   }
 
   def formatAsReassignmentJson(partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]]): String = {
-    Json.encodeToJsonString(Map(
+    Json.legacyEncodeAsString(Map(
       "version" -> 1,
       "partitions" -> partitionsToBeReassigned.map { case (TopicAndPartition(topic, partition), replicas) =>
         Map(
           "topic" -> topic,
           "partition" -> partition,
-          "replicas" -> replicas.asJava
-        ).asJava
-      }.asJava
+          "replicas" -> replicas
+        )
+      }
     ))
   }
 
@@ -315,7 +315,7 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
   object ClusterId {
 
     def toJson(id: String) = {
-      Json.encodeToJsonString(Map("version" -> "1", "id" -> id))
+      Json.legacyEncodeAsString(Map("version" -> "1", "id" -> id))
     }
 
     def fromJson(clusterIdJson: String): String = {
@@ -485,15 +485,15 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
   }
 
   def leaderAndIsrZkData(leaderAndIsr: LeaderAndIsr, controllerEpoch: Int): String = {
-    Json.encodeToJsonString(Map("version" -> 1, "leader" -> leaderAndIsr.leader, "leader_epoch" -> leaderAndIsr.leaderEpoch,
-                    "controller_epoch" -> controllerEpoch, "isr" -> leaderAndIsr.isr.asJava))
+    Json.legacyEncodeAsString(Map("version" -> 1, "leader" -> leaderAndIsr.leader, "leader_epoch" -> leaderAndIsr.leaderEpoch,
+                    "controller_epoch" -> controllerEpoch, "isr" -> leaderAndIsr.isr))
   }
 
   /**
    * Get JSON partition to replica map from zookeeper.
    */
   def replicaAssignmentZkData(partitionMap: Map[Int, Seq[Int]]): String = {
-    Json.encodeToJsonString(Map("version" -> 1, "partitions" -> (partitionMap.map(e => e._1.toString -> e._2.asJava).asJava)))
+    Json.legacyEncodeAsString(Map("version" -> 1, "partitions" -> (partitionMap.map(e => e._1.toString -> e._2))))
   }
 
   /**

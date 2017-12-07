@@ -34,7 +34,7 @@ class ReplicationUtilsTest extends ZooKeeperTestHarness {
   private val controllerEpoch = 1
   private val isr = List(1, 2)
   private val topicPath = s"/brokers/topics/$topic/partitions/$partition/state"
-  private val topicData = Json.encode(Map("controller_epoch" -> controllerEpoch, "leader" -> leader,
+  private val topicData = Json.legacyEncodeAsString(Map("controller_epoch" -> controllerEpoch, "leader" -> leader,
     "versions" -> 1, "leader_epoch" -> leaderEpoch, "isr" -> isr))
 
   @Before

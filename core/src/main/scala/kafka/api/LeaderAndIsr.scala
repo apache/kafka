@@ -44,6 +44,7 @@ case class LeaderAndIsr(leader: Int,
   def newEpochAndZkVersion = newLeaderAndIsr(leader, isr)
 
   override def toString: String = {
-    Json.encodeToJsonString(Map("leader" -> leader, "leader_epoch" -> leaderEpoch, "isr" -> isr.asJava))
+    val isrList = if (isr.size !=0) isr else null
+    return "LeaderAndIsr(leader=" + leader + ", leader_epoch=" + leaderEpoch + ", isr=" + isrList + ", zk_version=" + zkVersion + ")"
   }
 }

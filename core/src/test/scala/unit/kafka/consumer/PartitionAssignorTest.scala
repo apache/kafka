@@ -153,7 +153,7 @@ private object PartitionAssignorTest extends Logging {
 
   private case class StaticSubscriptionInfo(streamCounts: Map[String, Int]) extends SubscriptionInfo {
     def registrationString =
-      Json.encode(Map("version" -> 1,
+      Json.legacyEncodeAsString(Map("version" -> 1,
                       "subscription" -> streamCounts,
                       "pattern" -> "static",
                       "timestamp" -> 1234.toString))
@@ -166,7 +166,7 @@ private object PartitionAssignorTest extends Logging {
   private case class WildcardSubscriptionInfo(streamCount: Int, regex: String, isWhitelist: Boolean)
           extends SubscriptionInfo {
     def registrationString =
-      Json.encode(Map("version" -> 1,
+      Json.legacyEncodeAsString(Map("version" -> 1,
                       "subscription" -> Map(regex -> streamCount),
                       "pattern" -> (if (isWhitelist) "white_list" else "black_list")))
 

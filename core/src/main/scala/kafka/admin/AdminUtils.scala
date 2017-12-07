@@ -628,7 +628,7 @@ object AdminUtils extends Logging with AdminUtilities {
 
     // create the change notification
     val seqNode = ZkUtils.ConfigChangesPath + "/" + EntityConfigChangeZnodePrefix
-    val content = Json.encodeToJsonString(getConfigChangeZnodeData(sanitizedEntityPath))
+    val content = Json.legacyEncodeAsString(getConfigChangeZnodeData(sanitizedEntityPath))
     zkUtils.createSequentialPersistentPath(seqNode, content)
   }
 
@@ -640,9 +640,12 @@ object AdminUtils extends Logging with AdminUtilities {
    * Write out the entity config to zk, if there is any
    */
   private def writeEntityConfig(zkUtils: ZkUtils, entityPath: String, config: Properties) {
-    val map = Map("version" -> 1, "config" -> config)
-
-    zkUtils.updatePersistentPath(entityPath, Json.encodeToJsonString(map))
+    val configMap: mutable.Map[String, String] = {
+      import JavaConversions._
+      config
+    }
+    val map = Map("version" -> 1, "config" -> configMap)
+    zkUtils.updatePersistentPath(entityPath, Json.legacyEncodeAsString(map))
   }
 
   /**

@@ -146,7 +146,7 @@ object Broker {
         endPoint.listenerName.value -> endPoint.securityProtocol.name
       }.toMap.asJava)
     }
-    Json.encodeToJsonString(jsonMap)
+    Json.encodeAsString(jsonMap.asJava)
   }
 }
 

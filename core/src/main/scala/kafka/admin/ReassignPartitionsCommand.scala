@@ -223,7 +223,7 @@ object ReassignPartitionsCommand extends Logging {
 
   def formatAsReassignmentJson(partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]],
                                replicaLogDirAssignment: Map[TopicPartitionReplica, String]): String = {
-    Json.encodeToJsonString(Map(
+    Json.encodeAsString(Map(
       "version" -> 1,
       "partitions" -> partitionsToBeReassigned.map { case (TopicAndPartition(topic, partition), replicas) =>
         Map(
@@ -233,7 +233,7 @@ object ReassignPartitionsCommand extends Logging {
           "log_dirs" -> replicas.map(r => replicaLogDirAssignment.getOrElse(new TopicPartitionReplica(topic, partition, r), AnyLogDir)).asJava
         ).asJava
       }.asJava
-    ))
+    ).asJava)
   }
 
   // Parses without deduplicating keys so the data can be checked before allowing reassignment to proceed

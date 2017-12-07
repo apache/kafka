@@ -53,7 +53,7 @@ object Json {
    * 
    * This method does not properly handle non-ascii characters. 
    */
-  def encode(obj: Any): String = {
+  def legacyEncodeAsString(obj: Any): String = {
     obj match {
       case null => "null"
       case b: Boolean => b.toString
@@ -61,11 +61,11 @@ object Json {
       case n: Number => n.toString
       case m: Map[_, _] => "{" +
         m.map {
-          case (k, v) => encode(k) + ":" + encode(v)
+          case (k, v) => legacyEncodeAsString(k) + ":" + legacyEncodeAsString(v)
           case elem => throw new IllegalArgumentException(s"Invalid map element '$elem' in $obj")
         }.mkString(",") + "}"
-      case a: Array[_] => encode(a.toSeq)
-      case i: Iterable[_] => "[" + i.map(encode).mkString(",") + "]"
+      case a: Array[_] => legacyEncodeAsString(a.toSeq)
+      case i: Iterable[_] => "[" + i.map(legacyEncodeAsString).mkString(",") + "]"
       case other: AnyRef => throw new IllegalArgumentException(s"Unknown argument of type ${other.getClass}: $other")
     }
   }
@@ -77,13 +77,13 @@ object Json {
    *
    * This method does not properly handle non-ascii characters.
    */
-  def encodeAsBytes(obj: Any): Array[Byte] = encode(obj).getBytes(StandardCharsets.UTF_8)
+  def legacyEncodeAsBytes(obj: Any): Array[Byte] = legacyEncodeAsString(obj).getBytes(StandardCharsets.UTF_8)
 
-  def encodeToJsonString(obj: Map[String,Any]): String = {
-     mapper.writeValueAsString(obj.asJava)
+  def encodeAsString(obj: Any): String = {
+     mapper.writeValueAsString(obj)
   }
 
-  def encodeToJsonBytes(obj: Map[String,Any]): Array[Byte] = {
-      mapper.writeValueAsString(obj.asJava).getBytes(StandardCharsets.UTF_8)
+  def encodeAsBytes(obj: Any): Array[Byte] = {
+      mapper.writeValueAsString(obj).getBytes(StandardCharsets.UTF_8)
   }
 }

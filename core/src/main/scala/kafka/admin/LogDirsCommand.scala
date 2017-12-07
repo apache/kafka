@@ -56,7 +56,7 @@ object LogDirsCommand {
     }
 
     private def formatAsJson(logDirInfosByBroker: Map[Integer, Map[String, LogDirInfo]], topicSet: Set[String]): String = {
-        Json.encodeToJsonString(Map(
+        Json.encodeAsString(Map(
             "version" -> 1,
             "brokers" -> logDirInfosByBroker.map { case (broker, logDirInfos) =>
                 Map(
@@ -79,7 +79,7 @@ object LogDirsCommand {
                     }.asJava
                 ).asJava
             }.asJava
-        ))
+        ).asJava)
     }
 
     private def createAdminClient(opts: LogDirsCommandOptions): JAdminClient = {
