@@ -616,6 +616,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
    * Returns all reassignments.
    * @return the reassignments for each partition.
    */
+  @deprecated
   def getPartitionReassignment: Map[TopicPartition, Seq[Int]] = {
     val getDataRequest = GetDataRequest(ReassignPartitionsZNode.path)
     val getDataResponse = retryRequestUntilConnected(getDataRequest)
@@ -633,6 +634,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
    * @param reassignment the reassignment to set on the reassignment znode
    * @throws KeeperException if there is an error while setting or creating the znode
    */
+  @deprecated
   def setOrCreatePartitionReassignment(reassignment: collection.Map[TopicPartition, Seq[Int]]): Unit = {
 
     def set(reassignmentData: Array[Byte]): SetDataResponse = {
@@ -661,6 +663,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
    * @param reassignment the reassignment to set on the reassignment znode.
    * @throws KeeperException if there is an error while setting or creating the znode
    */
+  @deprecated
   def createPartitionReassignment(reassignment: Map[TopicPartition, Seq[Int]])  = {
     val createRequest = CreateRequest(ReassignPartitionsZNode.path, ReassignPartitionsZNode.encode(reassignment),
       acls(ReassignPartitionsZNode.path), CreateMode.PERSISTENT)
@@ -671,6 +674,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
   /**
    * Deletes the partition reassignment znode.
    */
+  @deprecated
   def deletePartitionReassignment(): Unit = {
     val deleteRequest = DeleteRequest(ReassignPartitionsZNode.path, ZkVersion.NoVersion)
     retryRequestUntilConnected(deleteRequest)
@@ -687,6 +691,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
   /**
     * Creates the {@code /admin/reassignment/$topic-$partition} znode
     */
+  @deprecated
   def createReassignment(tp: TopicPartition, assignment: Seq[Int]) = {
     val createRequest = CreateRequest(PartitionReassignmentZNode.path(tp), PartitionReassignmentZNode.encode(assignment),
       acls(ReassignPartitionsZNode.path), CreateMode.PERSISTENT)
@@ -703,7 +708,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
   def createReassignment(assignments: Map[TopicPartition, Seq[Int]]) = {
     val createRequests = assignments.map { case (tp, assignment) =>
       CreateRequest(PartitionReassignmentZNode.path(tp), PartitionReassignmentZNode.encode(assignment),
-        acls(ReassignPartitionsZNode.path), CreateMode.PERSISTENT)
+        acls(PartitionReassignmentZNode.path(tp)), CreateMode.PERSISTENT)
     }.toSeq
 
     val createResponses = retryRequestsUntilConnected(createRequests)
@@ -723,7 +728,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
     val getResponse = retryRequestUntilConnected(getRequest)
 
     getResponse.resultCode match {
-      case  Code.OK => PartitionReassignmentZNode.decode(getResponse.data)
+      case Code.OK => PartitionReassignmentZNode.decode(getResponse.data)
       case Code.NONODE => Seq.empty
       case _ => throw getResponse.resultException.get
     }
@@ -739,11 +744,24 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
     getResponses.map { response =>
       val tp = PartitionReassignmentZNode.fromPath(response.path)
       response.resultCode match {
-        case  Code.OK => tp->PartitionReassignmentZNode.decode(response.data)
+        case Code.OK => tp->PartitionReassignmentZNode.decode(response.data)
         case Code.NONODE => tp->Seq.empty
         case _ => throw response.resultException.get
       }
     }.toMap
+  }
+
+  def getPartitionsBeingReassigned(): Seq[TopicPartition] = {
+    val childrenRequest = GetChildrenRequest(ReassignmentsZNode.path)
+    val childrenResponse = retryRequestUntilConnected(childrenRequest)
+    childrenResponse.resultCode match {
+      case Code.OK => childrenResponse.children.map(PartitionReassignmentZNode.fromName(_))
+      case _ => throw childrenResponse.resultException.get
+    }
+  }
+
+  def getReassignments(): Map[TopicPartition, Seq[Int]] = {
+    getReassignment(getPartitionsBeingReassigned())
   }
 
   /**

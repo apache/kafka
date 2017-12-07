@@ -219,6 +219,7 @@ object DeleteTopicsTopicZNode {
   def path(topic: String) = s"${DeleteTopicsZNode.path}/$topic"
 }
 
+@deprecated
 object ReassignPartitionsZNode {
   def path = s"${AdminZNode.path}/reassign_partitions"
   def encode(reassignment: collection.Map[TopicPartition, Seq[Int]]): Array[Byte] = {
