@@ -21,11 +21,8 @@ package org.apache.kafka.streams.integration;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.serialization.LongSerializer;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -35,52 +32,49 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.WallclockTimestampExtractor;
-import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
+import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import java.io.IOException;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 @Category({IntegrationTest.class})
 public class KTableSourceTopicRestartIntegrationTest {
 
 
-    private static final int NUM_BROKERS = 1;
+    private static final int NUM_BROKERS = 3;
     private static final String SOURCE_TOPIC = "source-topic";
-    private static final String TABLE_SOURCE_TOPIC = "table-source-topic";
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
     private final Time time = CLUSTER.time;
     private KafkaStreams streamsOne;
-    private KafkaStreams streamsTwo;
+    private final StreamsBuilder streamsBuilder = new StreamsBuilder();
+    private final Map<String, String> readKeyValues = new HashMap<>();
+
     private static final Properties PRODUCER_CONFIG = new Properties();
     private static final Properties STREAMS_CONFIG = new Properties();
-    private static final Serde<String> STRING_SERDE = Serdes.String();
-    private static final Serde<Long> LONG_SERDE = Serdes.Long();
 
 
     @BeforeClass
     public static void setUpBeforeAllTests() throws Exception {
 
-        CLUSTER.createTopic(SOURCE_TOPIC, 1, 1);
-        CLUSTER.createTopic(TABLE_SOURCE_TOPIC, 1, 1);
+        CLUSTER.createTopic(SOURCE_TOPIC);
 
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, "ktable-restore-from-source");
         STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -102,6 +96,17 @@ public class KTableSourceTopicRestartIntegrationTest {
 
     }
 
+    @Before
+    public void before() {
+
+        final KTable<String, String> kTable = streamsBuilder.table(SOURCE_TOPIC);
+        kTable.toStream().foreach(new ForeachAction<String, String>() {
+            @Override
+            public void apply(String key, String value) {
+                readKeyValues.put(key, value);
+            }
+        });
+    }
 
     @After
     public void after() throws IOException {
@@ -110,119 +115,127 @@ public class KTableSourceTopicRestartIntegrationTest {
 
 
     @Test
-    public void shouldRestoreOnlyToLastCommit() throws Exception {
+    public void shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationNoEOE() throws Exception {
+
         try {
-            final StreamsBuilder streamsBuilder = new StreamsBuilder();
-            final Map<String, Long> readKeyValues = new HashMap<>();
-
-            streamsBuilder.<String, String>stream(SOURCE_TOPIC)
-                .groupByKey()
-                .count()
-                .toStream()
-                .to(TABLE_SOURCE_TOPIC, Produced.with(STRING_SERDE, LONG_SERDE));
-
-            KTable<String, Long> countsTable = streamsBuilder.table(TABLE_SOURCE_TOPIC,
-                                                                    Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>with(STRING_SERDE, LONG_SERDE)
-                                                                        .withLoggingEnabled(new HashMap<String, String>())
-                                                                        .withCachingDisabled());
-
-            countsTable.toStream().foreach(new ForeachAction<String, Long>() {
-                @Override
-                public void apply(String key, Long value) {
-                    readKeyValues.put(key, value);
-                }
-            });
-
+            STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.AT_LEAST_ONCE);
             streamsOne = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
-            streamsOne.setGlobalStateRestoreListener(new TestingStateRestoreListener("streams-one"));
             streamsOne.start();
 
-            streamsTwo = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
-            streamsTwo.setGlobalStateRestoreListener(new TestingStateRestoreListener("streams-two"));
-            streamsTwo.start();
+            produceKeyValues("a", "b", "c");
 
-            final List<KeyValue<String, String>> initialKeyValues = Arrays.asList(
-                new KeyValue<>("a", "A3"),
-                new KeyValue<>("b", "B3"),
-                new KeyValue<>("c", "C3"),
-                new KeyValue<>("d", "D3"),
-                new KeyValue<>("e", "E3"),
-                new KeyValue<>("f", "F3")
-            );
-            IntegrationTestUtils.produceKeyValuesSynchronously(SOURCE_TOPIC, initialKeyValues, PRODUCER_CONFIG, time);
+            assertNumberValuesRead(readKeyValues, 3, "Table did not read all values");
 
-            TestUtils.waitForCondition(new TestCondition() {
-                @Override
-                public boolean conditionMet() {
-                    return readKeyValues.size() == 6;
-                }
-            }, "Table did not get all values");
+            streamsOne.close();
+            streamsOne = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
+            // the state restore listener will append two records to the log
+            streamsOne.setGlobalStateRestoreListener(new UpdatingSourceTopicOnRestoreStartStateRestoreListener());
+            streamsOne.start();
 
-            streamsTwo.close();
-            streamsTwo.cleanUp();
+            produceKeyValues("f", "g", "h");
 
-            final List<KeyValue<String, String>> additionalValuesWritten = Arrays.asList(
-                new KeyValue<>("g", "G3"),
-                new KeyValue<>("i", "I5"),
-                new KeyValue<>("j", "K6"),
-                new KeyValue<>("l", "K6"),
-                new KeyValue<>("m", "K6"),
-                new KeyValue<>("n", "K6")
-            );
-
-            IntegrationTestUtils.produceKeyValuesSynchronously(SOURCE_TOPIC, additionalValuesWritten, PRODUCER_CONFIG, time);
-
-            final List<KeyValue<String, Long>> valuesToTableTopics = Arrays.asList(
-                new KeyValue<>("FOO", 10L),
-                new KeyValue<>("BAR", 20L),
-                new KeyValue<>("BAZ", 30L)
-
-            );
-
-            PRODUCER_CONFIG.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
-            IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_SOURCE_TOPIC, valuesToTableTopics, PRODUCER_CONFIG, time);
-            // sleeps needed for forcing recovery
-            Thread.sleep(5000L);
-
-            streamsTwo = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
-            streamsTwo.setGlobalStateRestoreListener(new TestingStateRestoreListener("streams-two-restarted"));
-            // expecting this to fail as restoration
-            streamsTwo.start();
-            // sleep needed to for restoration
-            Thread.sleep(5000L);
-
+            assertNumberValuesRead(readKeyValues, 8, "Table did not get all values after restart");
 
         } finally {
             streamsOne.close(5, TimeUnit.SECONDS);
-            streamsTwo.close(5, TimeUnit.SECONDS);
         }
     }
 
+    @Test
+    public void shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEOS() throws Exception {
 
-    private static class TestingStateRestoreListener implements StateRestoreListener {
+        try {
+            STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+            streamsOne = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
+            streamsOne.start();
 
-        private String streamsInstance;
+            produceKeyValues("a", "b", "c");
 
-        public TestingStateRestoreListener(String streamsInstance) {
-            this.streamsInstance = streamsInstance;
+            assertNumberValuesRead(readKeyValues, 3, "Table did not read all values");
+
+            streamsOne.close();
+            streamsOne = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
+            // the state restore listener will append two records to the log
+            streamsOne.setGlobalStateRestoreListener(new UpdatingSourceTopicOnRestoreStartStateRestoreListener());
+            streamsOne.start();
+
+            produceKeyValues("f", "g", "h");
+
+            assertNumberValuesRead(readKeyValues, 8, "Table did not get all values after restart");
+
+        } finally {
+            streamsOne.close(5, TimeUnit.SECONDS);
         }
+    }
+
+    @Test
+    public void shouldRestoreAndProgressWhenTopicNotWrittenToDuringRestoration() throws Exception {
+
+        try {
+            streamsOne = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
+            streamsOne.start();
+
+            produceKeyValues("a", "b", "c");
+
+            assertNumberValuesRead(readKeyValues, 3, "Table did not read all values");
+
+            streamsOne.close();
+            streamsOne = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
+            streamsOne.start();
+
+            produceKeyValues("f", "g", "h");
+
+            assertNumberValuesRead(readKeyValues, 6, "Table did not get all values after restart");
+
+        } finally {
+            streamsOne.close(5, TimeUnit.SECONDS);
+        }
+    }
+
+    private void assertNumberValuesRead(final Map<String, String> valueMap,
+                                        final int expectedCount,
+                                        final String errorMessage) throws InterruptedException {
+
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return valueMap.size() == expectedCount;
+            }
+        }, errorMessage);
+
+    }
+
+    private void produceKeyValues(String... keys) throws ExecutionException, InterruptedException {
+        final List<KeyValue<String, String>> keyValueList = new ArrayList<>();
+
+        for (String key : keys) {
+            keyValueList.add(new KeyValue<>(key, key + "1"));
+        }
+
+        IntegrationTestUtils.produceKeyValuesSynchronously(SOURCE_TOPIC,
+                                                           keyValueList,
+                                                           PRODUCER_CONFIG,
+                                                           time);
+    }
+
+    private class UpdatingSourceTopicOnRestoreStartStateRestoreListener implements StateRestoreListener {
 
         @Override
         public void onRestoreStart(TopicPartition topicPartition, String storeName, long startingOffset, long endingOffset) {
-            System.out.println(
-                "[" + streamsInstance + "] recovering for TopicPartition " + topicPartition + " storeName " + storeName + " offset " + startingOffset
-                + " ending offset " + endingOffset);
+            try {
+                // need two values appended to log to trigger issue
+                produceKeyValues("d", "e");
+            } catch (ExecutionException | InterruptedException e) {
+                e.printStackTrace();
+            }
         }
 
         @Override
         public void onBatchRestored(TopicPartition topicPartition, String storeName, long batchEndOffset, long numRestored) {
-
         }
 
         @Override
         public void onRestoreEnd(TopicPartition topicPartition, String storeName, long totalRestored) {
-            System.out.println("[" + streamsInstance + "] Done recovering for TopicPartition " + topicPartition + " storeName " + storeName + " totalRestored "
-                               + totalRestored);
         }
     }
 
