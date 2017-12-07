@@ -29,4 +29,15 @@ import java.util.Collection;
 @InterfaceStability.Evolving
 public class DescribeTopicsOptions extends AbstractOptions<DescribeTopicsOptions> {
 
+    /**
+     * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
+     * AdminClient should be used.
+     *
+     */
+    // This method is retained to keep binary compatibility with 0.11
+    public DescribeTopicsOptions timeoutMs(Integer timeoutMs) {
+        this.timeoutMs = timeoutMs;
+        return this;
+    }
+
 }

@@ -672,18 +672,15 @@ class LogManager(logDirs: Seq[File],
           else
             currentLogs.put(topicPartition, log)
 
-          info("Created log for partition [%s,%d] in %s with properties {%s}."
-            .format(topicPartition.topic,
-              topicPartition.partition,
-              logDir,
-              config.originals.asScala.mkString(", ")))
+          info(s"Created log for partition $topicPartition in $logDir with properties " +
+            s"{${config.originals.asScala.mkString(", ")}}.")
           // Remove the preferred log dir since it has already been satisfied
           preferredLogDirs.remove(topicPartition)
 
           log
         } catch {
           case e: IOException =>
-            val msg = s"Error while creating log for $topicPartition in dir ${logDir}"
+            val msg = s"Error while creating log for $topicPartition in dir $logDir"
             logDirFailureChannel.maybeAddOfflineLogDir(logDir, msg, e)
             throw new KafkaStorageException(msg, e)
         }

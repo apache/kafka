@@ -139,7 +139,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         // no duplicates
         producerProps.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
         producerProps.put(ProducerConfig.ACKS_CONFIG, "all");
-        producerProps.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 45000);
+        producerProps.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 80000);
 
         KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
 

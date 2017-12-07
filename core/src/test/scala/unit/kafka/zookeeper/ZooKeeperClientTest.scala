@@ -25,13 +25,15 @@ import javax.security.auth.login.Configuration
 
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.security.JaasUtils
-import org.apache.zookeeper.KeeperException.Code
+import org.apache.zookeeper.KeeperException.{Code, NoNodeException}
+import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.{CreateMode, ZooDefs}
 import org.junit.Assert.{assertArrayEquals, assertEquals, assertTrue}
 import org.junit.{After, Test}
 
 class ZooKeeperClientTest extends ZooKeeperTestHarness {
   private val mockPath = "/foo"
+  private val time = Time.SYSTEM
 
   @After
   override def tearDown() {
@@ -42,24 +44,27 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
 
   @Test(expected = classOf[UnknownHostException])
   def testUnresolvableConnectString(): Unit = {
-    new ZooKeeperClient("some.invalid.hostname.foo.bar.local", -1, -1, Int.MaxValue)
+    new ZooKeeperClient("some.invalid.hostname.foo.bar.local", -1, -1, Int.MaxValue, time)
   }
 
   @Test(expected = classOf[ZooKeeperClientTimeoutException])
   def testConnectionTimeout(): Unit = {
     zookeeper.shutdown()
-    new ZooKeeperClient(zkConnect, zkSessionTimeout, connectionTimeoutMs = 100, Int.MaxValue)
+    new ZooKeeperClient(zkConnect, zkSessionTimeout, connectionTimeoutMs = 100, Int.MaxValue, time)
   }
 
   @Test
   def testConnection(): Unit = {
-    new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue)
+    new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue, time)
   }
 
   @Test
   def testDeleteNonExistentZNode(): Unit = {
     val deleteResponse = zooKeeperClient.handleRequest(DeleteRequest(mockPath, -1))
     assertEquals("Response code should be NONODE", Code.NONODE, deleteResponse.resultCode)
+    intercept[NoNodeException] {
+      deleteResponse.maybeThrow()
+    }
   }
 
   @Test
@@ -315,7 +320,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
       }
     }
 
-    val zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue)
+    val zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue, time)
     zooKeeperClient.registerStateChangeHandler(stateChangeHandler)
     zooKeeperClient.reinitialize()
 
@@ -325,7 +330,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
   @Test
   def testConnectionLossRequestTermination(): Unit = {
     val batchSize = 10
-    val zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, 2)
+    val zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, 2, time)
     zookeeper.shutdown()
     val requests = (1 to batchSize).map(i => GetDataRequest(s"/$i"))
     val countDownLatch = new CountDownLatch(1)

@@ -31,13 +31,6 @@ import scala.collection.JavaConverters._
 
 // This file contains objects for encoding/decoding data stored in ZooKeeper nodes (znodes).
 
-object LeaderAndIsrZNode {
-  def encode(leaderAndIsr: LeaderAndIsr, controllerEpoch: Int): String = {
-    Json.encodeToJsonString(Map("version" -> 1, "leader" -> leaderAndIsr.leader, "leader_epoch" -> leaderAndIsr.leaderEpoch,
-                "controller_epoch" -> controllerEpoch, "isr" -> leaderAndIsr.isr.asJava))
-  }
-}
-
 object ControllerZNode {
   def path = "/controller"
   def encode(brokerId: Int, timestamp: Long): Array[Byte] = {
@@ -175,7 +168,7 @@ object IsrChangeNotificationZNode {
 
 object IsrChangeNotificationSequenceZNode {
   val SequenceNumberPrefix = "isr_change_"
-  def path(sequenceNumber: String) = s"${IsrChangeNotificationZNode.path}/$SequenceNumberPrefix$sequenceNumber"
+  def path(sequenceNumber: String = "") = s"${IsrChangeNotificationZNode.path}/$SequenceNumberPrefix$sequenceNumber"
   def encode(partitions: Set[TopicPartition]): Array[Byte] = {
     val partitionsJson = partitions.map(partition => Map("topic" -> partition.topic, "partition" -> partition.partition).asJava)
     Json.encodeToJsonBytes(Map("version" -> IsrChangeNotificationHandler.Version, "partitions" -> partitionsJson.asJava))

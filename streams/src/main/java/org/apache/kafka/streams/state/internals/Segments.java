@@ -28,6 +28,7 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.SimpleTimeZone;
@@ -143,6 +144,21 @@ class Segments {
         return segments;
     }
 
+    List<Segment> allSegments() {
+        final List<Segment> segments = new ArrayList<>();
+        for (Segment segment : this.segments.values()) {
+            if (segment.isOpen()) {
+                try {
+                    segments.add(segment);
+                } catch (InvalidStateStoreException ise) {
+                    // segment may have been closed by streams thread;
+                }
+            }
+        }
+        Collections.sort(segments);
+        return segments;
+    }
+    
     void flush() {
         for (Segment segment : segments.values()) {
             segment.flush();

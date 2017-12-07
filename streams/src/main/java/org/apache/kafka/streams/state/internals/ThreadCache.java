@@ -195,8 +195,7 @@ public class ThreadCache {
         }
         return new MemoryLRUCacheBytesIterator(cache.allKeys(), cache);
     }
-
-
+    
     public long size() {
         long size = 0;
         for (NamedCache cache : caches.values()) {
