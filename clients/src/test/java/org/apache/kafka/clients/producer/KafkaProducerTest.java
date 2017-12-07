@@ -18,6 +18,7 @@ package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -25,9 +26,10 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
@@ -36,9 +38,11 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.MockMetricsReporter;
+import org.apache.kafka.test.MockPartitioner;
 import org.apache.kafka.test.MockProducerInterceptor;
 import org.apache.kafka.test.MockSerializer;
-import org.apache.kafka.test.MockPartitioner;
+import org.apache.kafka.test.TestCondition;
+import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Test;
@@ -55,6 +59,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -147,6 +156,7 @@ public class KafkaProducerTest {
         try {
             Properties props = new Properties();
             props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+            MockPartitioner.resetCounters();
             props.setProperty(ProducerConfig.PARTITIONER_CLASS_CONFIG, MockPartitioner.class.getName());
 
             KafkaProducer<String, String> producer = new KafkaProducer<String, String>(
@@ -161,6 +171,68 @@ public class KafkaProducerTest {
             // cleanup since we are using mutable static variables in MockPartitioner
             MockPartitioner.resetCounters();
         }
+    }
+
+    @Test
+    public void shouldCloseProperlyAndThrowIfInterrupted() throws Exception {
+        Properties props = new Properties();
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ProducerConfig.PARTITIONER_CLASS_CONFIG, MockPartitioner.class.getName());
+        props.setProperty(ProducerConfig.BATCH_SIZE_CONFIG, "1");
+
+        Time time = new MockTime();
+        Cluster cluster = TestUtils.singletonCluster("topic", 1);
+        Node node = cluster.nodes().get(0);
+
+        Metadata metadata = new Metadata(0, Long.MAX_VALUE, true);
+        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
+
+        MockClient client = new MockClient(time, metadata);
+        client.setNode(node);
+
+        final Producer<String, String> producer = new KafkaProducer<>(
+            new ProducerConfig(ProducerConfig.addSerializerToConfig(props, new StringSerializer(), new StringSerializer())),
+            new StringSerializer(), new StringSerializer(), metadata, client);
+
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        final AtomicReference<Exception> closeException = new AtomicReference<>();
+        try {
+            Future<?> future = executor.submit(new Runnable() {
+                @Override
+                public void run() {
+                    producer.send(new ProducerRecord<>("topic", "key", "value"));
+                    try {
+                        producer.close();
+                        fail("Close should block and throw.");
+                    } catch (Exception e) {
+                        closeException.set(e);
+                    }
+                }
+            });
+
+            // Close producer should not complete until send succeeds
+            try {
+                future.get(100, TimeUnit.MILLISECONDS);
+                fail("Close completed without waiting for send");
+            } catch (java.util.concurrent.TimeoutException expected) { /* ignore */ }
+
+            // Ensure send has started
+            client.waitForRequests(1, 1000);
+
+            assertTrue("Close terminated prematurely", future.cancel(true));
+
+            TestUtils.waitForCondition(new TestCondition() {
+                @Override
+                public boolean conditionMet() {
+                    return closeException.get() != null;
+                }
+            }, "InterruptException did not occur within timeout.");
+
+            assertTrue("Expected exception not thrown " + closeException, closeException.get() instanceof InterruptException);
+        } finally {
+            executor.shutdownNow();
+        }
+
     }
 
     @Test

@@ -20,7 +20,6 @@ package kafka.cluster
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import com.yammer.metrics.core.Gauge
-import kafka.admin.AdminUtils
 import kafka.api.LeaderAndIsr
 import kafka.api.Request
 import kafka.controller.KafkaController
@@ -29,6 +28,7 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.server._
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
+import kafka.zk.AdminZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{NotEnoughReplicasException, NotLeaderForPartitionException, PolicyViolationException}
 import org.apache.kafka.common.protocol.Errors
@@ -55,7 +55,7 @@ class Partition(val topic: String,
   // Do not use replicaManager if this partition is ReplicaManager.OfflinePartition
   private val localBrokerId = if (!isOffline) replicaManager.config.brokerId else -1
   private val logManager = if (!isOffline) replicaManager.logManager else null
-  private val zkUtils = if (!isOffline) replicaManager.zkUtils else null
+  private val zkClient = if (!isOffline) replicaManager.zkClient else null
   // allReplicasMap includes both assigned replicas and the future replica if there is ongoing replica movement
   private val allReplicasMap = new Pool[Int, Replica]
   // The read lock is only required when multiple reads are executed and needs to be in a consistent manner
@@ -171,8 +171,10 @@ class Partition(val topic: String,
   def getOrCreateReplica(replicaId: Int = localBrokerId, isNew: Boolean = false): Replica = {
     allReplicasMap.getAndMaybePut(replicaId, {
       if (isReplicaLocal(replicaId)) {
+        val adminZkClient = new AdminZkClient(zkClient)
+        val prop = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
         val config = LogConfig.fromProps(logManager.defaultConfig.originals,
-                                         AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic))
+                                         prop)
         val log = logManager.getOrCreateLog(topicPartition, config, isNew, replicaId == Request.FutureLocalReplicaId)
         val checkpoint = replicaManager.highWatermarkCheckpoints(log.dir.getParent)
         val offsetMap = checkpoint.read()
@@ -661,10 +663,10 @@ class Partition(val topic: String,
 
   private def updateIsr(newIsr: Set[Replica]) {
     val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, newIsr.map(_.brokerId).toList, zkVersion)
-    val (updateSucceeded,newVersion) = ReplicationUtils.updateLeaderAndIsr(zkUtils, topic, partitionId,
-      newLeaderAndIsr, controllerEpoch, zkVersion)
+    val (updateSucceeded, newVersion) = ReplicationUtils.updateLeaderAndIsr(zkClient, topicPartition, newLeaderAndIsr,
+      controllerEpoch)
 
-    if(updateSucceeded) {
+    if (updateSucceeded) {
       replicaManager.recordIsrChange(topicPartition)
       inSyncReplicas = newIsr
       zkVersion = newVersion

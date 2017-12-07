@@ -18,14 +18,44 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
+import org.apache.kafka.streams.kstream.internals.SessionWindow;
+import org.apache.kafka.test.KeyValueIteratorStub;
+import org.junit.Before;
 import org.junit.Test;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
 public class WindowKeySchemaTest {
 
     private final WindowKeySchema windowKeySchema = new WindowKeySchema();
+    private DelegatingPeekingKeyValueIterator<Bytes, Integer> iterator;
+
+    @Before
+    public void before() {
+        windowKeySchema.init("topic");
+        final List<KeyValue<Bytes, Integer>> keys = Arrays.asList(KeyValue.pair(SessionKeySerde.bytesToBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0}), new SessionWindow(0, 0))), 1),
+                                                                  KeyValue.pair(SessionKeySerde.bytesToBinary(new Windowed<>(Bytes.wrap(new byte[]{0}), new SessionWindow(0, 0))), 2),
+                                                                  KeyValue.pair(SessionKeySerde.bytesToBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0, 0}), new SessionWindow(0, 0))), 3),
+                                                                  KeyValue.pair(SessionKeySerde.bytesToBinary(new Windowed<>(Bytes.wrap(new byte[]{0}), new SessionWindow(10, 20))), 4),
+                                                                  KeyValue.pair(SessionKeySerde.bytesToBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0}), new SessionWindow(10, 20))), 5),
+                                                                  KeyValue.pair(SessionKeySerde.bytesToBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0, 0}), new SessionWindow(10, 20))), 6));
+        iterator = new DelegatingPeekingKeyValueIterator<>("foo", new KeyValueIteratorStub<>(keys.iterator()));
+    }
+    
+    @Test
+    public void testHasNextConditionUsingNullKeys() {
+        final HasNextCondition hasNextCondition = windowKeySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE);
+        final List<Integer> results = getValues(hasNextCondition);
+        assertThat(results, equalTo(Arrays.asList(1, 2, 3, 4, 5, 6)));
+    }
 
     @Test
     public void testUpperBoundWithLargeTimestamps() {
@@ -127,5 +157,13 @@ public class WindowKeySchemaTest {
         );
 
         assertThat(lower, equalTo(WindowStoreUtils.toBinaryKey(new byte[]{0xA, 0xB, 0xC}, 0, 0)));
+    }
+    
+    private List<Integer> getValues(final HasNextCondition hasNextCondition) {
+        final List<Integer> results = new ArrayList<>();
+        while (hasNextCondition.hasNext(iterator)) {
+            results.add(iterator.next().value);
+        }
+        return results;
     }
 }

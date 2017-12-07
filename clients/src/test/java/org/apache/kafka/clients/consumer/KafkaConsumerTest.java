@@ -68,6 +68,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.MockConsumerInterceptor;
 import org.apache.kafka.test.MockMetricsReporter;
+import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Assert;
 import org.junit.Rule;
@@ -1365,7 +1366,7 @@ public class KafkaConsumerTest {
         // Kafka consumer is single-threaded, but the implementation allows calls on a
         // different thread as long as the calls are not executed concurrently. So this is safe.
         ExecutorService executor = Executors.newSingleThreadExecutor();
-        final AtomicReference<Exception> closeException = new AtomicReference<Exception>();
+        final AtomicReference<Exception> closeException = new AtomicReference<>();
         try {
             Future<?> future = executor.submit(new Runnable() {
                 @Override
@@ -1409,21 +1410,21 @@ public class KafkaConsumerTest {
 
             if (waitMs > 0)
                 time.sleep(waitMs);
-            if (interrupt)
+            if (interrupt) {
                 assertTrue("Close terminated prematurely", future.cancel(true));
 
-            // Make sure that close task completes and another task can be run on the single threaded executor
-            executor.submit(new Runnable() {
-                @Override
-                public void run() {
-                }
-            }).get(500, TimeUnit.MILLISECONDS);
+                TestUtils.waitForCondition(new TestCondition() {
+                    @Override
+                    public boolean conditionMet() {
+                        return closeException.get() != null;
+                    }
+                }, "InterruptException did not occur within timeout.");
 
-            if (!interrupt) {
+                assertTrue("Expected exception not thrown " + closeException, closeException.get() instanceof InterruptException);
+            } else {
                 future.get(500, TimeUnit.MILLISECONDS); // Should succeed without TimeoutException or ExecutionException
                 assertNull("Unexpected exception during close", closeException.get());
-            } else
-                assertTrue("Expected exception not thrown " + closeException, closeException.get() instanceof InterruptException);
+            }
         } finally {
             executor.shutdownNow();
         }

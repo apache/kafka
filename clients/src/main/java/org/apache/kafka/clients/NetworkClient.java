@@ -618,8 +618,8 @@ public class NetworkClient implements KafkaClient {
                 break; // Disconnections in other states are logged at debug level in Selector
         }
         for (InFlightRequest request : this.inFlightRequests.clearAll(nodeId)) {
-            log.trace("Cancelled request {} with correlation id {} due to node {} being disconnected", request.request,
-                    request.header.correlationId(), nodeId);
+            log.trace("Cancelled request {} {} with correlation id {} due to node {} being disconnected",
+                    request.header.apiKey(), request.request, request.header.correlationId(), nodeId);
             if (request.isInternalRequest && request.header.apiKey() == ApiKeys.METADATA)
                 metadataUpdater.handleDisconnection(request.destination);
             else

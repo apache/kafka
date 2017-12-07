@@ -39,6 +39,7 @@ import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{AbstractRequest, ProduceRequest, RequestHeader}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.{LogContext, MockTime, Time}
+import org.apache.log4j.Level
 import org.junit.Assert._
 import org.junit._
 import org.scalatest.junit.JUnitSuite
@@ -70,6 +71,24 @@ class SocketServerTest extends JUnitSuite {
   val server = new SocketServer(config, metrics, Time.SYSTEM, credentialProvider)
   server.startup()
   val sockets = new ArrayBuffer[Socket]
+
+  private val kafkaLogger = org.apache.log4j.LogManager.getLogger("kafka")
+  private var logLevelToRestore: Level = _
+
+  @Before
+  def setUp(): Unit = {
+    // Run the tests with TRACE logging to exercise request logging path
+    logLevelToRestore = kafkaLogger.getLevel
+    kafkaLogger.setLevel(Level.TRACE)
+  }
+
+  @After
+  def tearDown() {
+    shutdownServerAndMetrics(server)
+    sockets.foreach(_.close())
+    sockets.clear()
+    kafkaLogger.setLevel(logLevelToRestore)
+  }
 
   def sendRequest(socket: Socket, request: Array[Byte], id: Option[Short] = None, flush: Boolean = true) {
     val outgoing = new DataOutputStream(socket.getOutputStream)
@@ -111,7 +130,7 @@ class SocketServerTest extends JUnitSuite {
     byteBuffer.rewind()
 
     val send = new NetworkSend(request.context.connectionId, byteBuffer)
-    channel.sendResponse(new RequestChannel.Response(request, Some(send), SendAction, None))
+    channel.sendResponse(new RequestChannel.Response(request, Some(send), SendAction, Some(request.header.toString)))
   }
 
   def connect(s: SocketServer = server, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT) = {
@@ -136,14 +155,6 @@ class SocketServerTest extends JUnitSuite {
   def shutdownServerAndMetrics(server: SocketServer): Unit = {
     server.shutdown()
     server.metrics.close()
-    server.requestChannel.metrics.close()
-  }
-
-  @After
-  def tearDown() {
-    shutdownServerAndMetrics(server)
-    sockets.foreach(_.close())
-    sockets.clear()
   }
 
   private def producerRequestBytes: Array[Byte] = {
@@ -201,6 +212,20 @@ class SocketServerTest extends JUnitSuite {
       sendRequest(plainSocket, serializedBytes)
     plainSocket.close()
     for (_ <- 0 until 10) {
+      val request = receiveRequest(server.requestChannel)
+      assertNotNull("receiveRequest timed out", request)
+      server.requestChannel.sendResponse(new RequestChannel.Response(request, None, RequestChannel.NoOpAction, None))
+    }
+  }
+
+  @Test
+  def testNoOpAction(): Unit = {
+    val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
+    val serializedBytes = producerRequestBytes
+
+    for (_ <- 0 until 3)
+      sendRequest(plainSocket, serializedBytes)
+    for (_ <- 0 until 3) {
       val request = receiveRequest(server.requestChannel)
       assertNotNull("receiveRequest timed out", request)
       server.requestChannel.sendResponse(new RequestChannel.Response(request, None, RequestChannel.NoOpAction, None))
@@ -576,8 +601,8 @@ class SocketServerTest extends JUnitSuite {
   }
 
   @Test
-  def testRequestMetricsAfterShutdown(): Unit = {
-    server.shutdown()
+  def testRequestMetricsAfterStop(): Unit = {
+    server.stopProcessingRequests()
 
     server.requestChannel.metrics(ApiKeys.PRODUCE.name).requestRate.mark()
     server.requestChannel.updateErrorMetrics(ApiKeys.PRODUCE, Map(Errors.NONE -> 1))
@@ -591,7 +616,7 @@ class SocketServerTest extends JUnitSuite {
       .collect { case (k, metric: Meter) => (k.toString, metric.count) }
 
     assertEquals(nonZeroMeters, requestMetricMeters.filter { case (_, value) => value != 0 })
-    server.requestChannel.metrics.close()
+    server.shutdown()
     assertEquals(Map.empty, requestMetricMeters)
   }
 

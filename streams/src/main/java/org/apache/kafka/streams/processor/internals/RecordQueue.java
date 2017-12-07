@@ -180,9 +180,20 @@ public class RecordQueue {
     }
 
     /**
-     * Clear the fifo queue of its elements
+     * Clear the fifo queue of its elements, also clear the time tracker's kept stamped elements
      */
     public void clear() {
         fifoQueue.clear();
+        timeTracker.clear();
+        partitionTime = TimestampTracker.NOT_KNOWN;
+    }
+
+    /*
+     * Returns the timestamp tracker of the record queue
+     *
+     * This is only used for testing
+     */
+    TimestampTracker<ConsumerRecord<Object, Object>> timeTracker() {
+        return timeTracker;
     }
 }

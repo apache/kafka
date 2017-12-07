@@ -184,10 +184,13 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
     }
   }
 
-  override def resize(newSize: Int) {
+  override def resize(newSize: Int): Boolean = {
     inLock(lock) {
-      super.resize(newSize)
-      _lastEntry = lastEntryFromIndexFile
+      if (super.resize(newSize)) {
+        _lastEntry = lastEntryFromIndexFile
+        true
+      } else
+        false
     }
   }
 
@@ -211,9 +214,8 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
     require(_entries == 0 || lastOffset >= baseOffset,
       s"Corrupt time index found, time index file (${file.getAbsolutePath}) has non-zero size but the last offset " +
           s"is $lastOffset which is smaller than the first offset $baseOffset")
-    val len = file.length()
-    require(len % entrySize == 0,
-      "Time index file " + file.getAbsolutePath + " is corrupt, found " + len +
+    require(length % entrySize == 0,
+      "Time index file " + file.getAbsolutePath + " is corrupt, found " + length +
           " bytes which is not positive or not a multiple of 12.")
   }
 }

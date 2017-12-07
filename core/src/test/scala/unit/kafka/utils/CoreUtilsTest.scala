@@ -18,30 +18,31 @@
 package kafka.utils
 
 import java.util.{Arrays, UUID}
-import java.util.concurrent.{ ConcurrentHashMap, Executors }
+import java.util.concurrent.{ConcurrentHashMap, Executors, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
 import java.nio.ByteBuffer
 import java.util.regex.Pattern
 
-import org.apache.log4j.Logger
 import org.scalatest.junit.JUnitSuite
 import org.junit.Assert._
 import kafka.common.KafkaException
 import kafka.utils.CoreUtils.inLock
 import org.junit.Test
 import org.apache.kafka.common.utils.{Base64, Utils}
+import org.slf4j.event.Level
 
 import scala.collection.JavaConverters._
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, ExecutionContext, Future}
 
-class UtilsTest extends JUnitSuite {
+class CoreUtilsTest extends JUnitSuite with Logging {
 
-  private val logger = Logger.getLogger(classOf[UtilsTest])
   val clusterIdPattern = Pattern.compile("[a-zA-Z0-9_\\-]+")
 
   @Test
   def testSwallow() {
-    CoreUtils.swallow(logger.info, throw new KafkaException("test"))
+    CoreUtils.swallow(throw new KafkaException("test"), this, Level.INFO)
   }
 
   @Test
@@ -183,31 +184,26 @@ class UtilsTest extends JUnitSuite {
   }
 
   @Test
-  def testGetOrElseUpdateAtomically(): Unit = {
+  def testAtomicGetOrUpdate(): Unit = {
     val count = 1000
     val nThreads = 5
     val createdCount = new AtomicInteger
     val map = new ConcurrentHashMap[Int, AtomicInteger]().asScala
-    val executor = Executors.newFixedThreadPool(nThreads)
+    implicit val executionContext = ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(nThreads))
     try {
-      for (i <- 1 to count) {
-        executor.submit(new Runnable() {
-          def run() {
-            CoreUtils.atomicGetOrUpdate(map, 0, {
-              createdCount.incrementAndGet
-              new AtomicInteger
-            }).incrementAndGet()
-          }
-        })
-      }
-      executor.shutdown()
-      executor.awaitTermination(1000, java.util.concurrent.TimeUnit.MILLISECONDS)
-
+      Await.result(Future.traverse(1 to count) { i =>
+        Future {
+          CoreUtils.atomicGetOrUpdate(map, 0, {
+            createdCount.incrementAndGet
+            new AtomicInteger
+          }).incrementAndGet()
+        }
+      }, Duration(1, TimeUnit.MINUTES))
       assertEquals(count, map(0).get)
       val created = createdCount.get
       assertTrue(s"Too many creations $created", created > 0 && created <= nThreads)
     } finally {
-      executor.shutdownNow()
+      executionContext.shutdownNow()
     }
   }
 }

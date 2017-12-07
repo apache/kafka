@@ -206,7 +206,7 @@ class LogManager(logDirs: Seq[File],
 
       info(s"Logs for partitions ${offlineCurrentTopicPartitions.mkString(",")} are offline and " +
            s"logs for future partitions ${offlineFutureTopicPartitions.mkString(",")} are offline due to failure on log directory $dir")
-      dirLocks.filter(_.file.getParent == dir).foreach(dir => CoreUtils.swallow(dir.destroy()))
+      dirLocks.filter(_.file.getParent == dir).foreach(dir => CoreUtils.swallow(dir.destroy(), this))
     }
   }
 
@@ -412,7 +412,7 @@ class LogManager(logDirs: Seq[File],
 
     // stop the cleaner first
     if (cleaner != null) {
-      CoreUtils.swallow(cleaner.shutdown())
+      CoreUtils.swallow(cleaner.shutdown(), this)
     }
 
     // close logs in each dir
@@ -448,7 +448,7 @@ class LogManager(logDirs: Seq[File],
 
         // mark that the shutdown was clean by creating marker file
         debug("Writing clean shutdown marker at " + dir)
-        CoreUtils.swallow(Files.createFile(new File(dir, Log.CleanShutdownFile).toPath))
+        CoreUtils.swallow(Files.createFile(new File(dir, Log.CleanShutdownFile).toPath), this)
       }
     } catch {
       case e: ExecutionException =>
@@ -672,18 +672,15 @@ class LogManager(logDirs: Seq[File],
           else
             currentLogs.put(topicPartition, log)
 
-          info("Created log for partition [%s,%d] in %s with properties {%s}."
-            .format(topicPartition.topic,
-              topicPartition.partition,
-              logDir,
-              config.originals.asScala.mkString(", ")))
+          info(s"Created log for partition $topicPartition in $logDir with properties " +
+            s"{${config.originals.asScala.mkString(", ")}}.")
           // Remove the preferred log dir since it has already been satisfied
           preferredLogDirs.remove(topicPartition)
 
           log
         } catch {
           case e: IOException =>
-            val msg = s"Error while creating log for $topicPartition in dir ${logDir}"
+            val msg = s"Error while creating log for $topicPartition in dir $logDir"
             logDirFailureChannel.maybeAddOfflineLogDir(logDir, msg, e)
             throw new KafkaStorageException(msg, e)
         }

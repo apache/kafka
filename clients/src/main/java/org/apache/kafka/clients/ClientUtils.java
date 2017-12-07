@@ -16,21 +16,21 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.network.ChannelBuilder;
+import org.apache.kafka.common.network.ChannelBuilders;
+import org.apache.kafka.common.security.JaasContext;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.Closeable;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
-
-import org.apache.kafka.common.config.AbstractConfig;
-import org.apache.kafka.common.network.ChannelBuilders;
-import org.apache.kafka.common.security.JaasContext;
-import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.network.ChannelBuilder;
-import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.config.SaslConfigs;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;

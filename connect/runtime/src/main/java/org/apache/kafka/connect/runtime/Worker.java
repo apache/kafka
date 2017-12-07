@@ -254,16 +254,17 @@ public class Worker {
      * Get a list of updated task properties for the tasks of this connector.
      *
      * @param connName the connector name.
-     * @param maxTasks the maxinum number of tasks.
-     * @param sinkTopics a list of sink topics.
      * @return a list of updated tasks properties.
      */
-    public List<Map<String, String>> connectorTaskConfigs(String connName, int maxTasks, List<String> sinkTopics) {
+    public List<Map<String, String>> connectorTaskConfigs(String connName, ConnectorConfig connConfig) {
         log.trace("Reconfiguring connector tasks for {}", connName);
 
         WorkerConnector workerConnector = connectors.get(connName);
         if (workerConnector == null)
             throw new ConnectException("Connector " + connName + " not found in this worker.");
+
+        int maxTasks = connConfig.getInt(ConnectorConfig.TASKS_MAX_CONFIG);
+        Map<String, String> connOriginals = connConfig.originalsStrings();
 
         Connector connector = workerConnector.connector();
         List<Map<String, String>> result = new ArrayList<>();
@@ -275,8 +276,11 @@ public class Worker {
                 // Ensure we don't modify the connector's copy of the config
                 Map<String, String> taskConfig = new HashMap<>(taskProps);
                 taskConfig.put(TaskConfig.TASK_CLASS_CONFIG, taskClassName);
-                if (sinkTopics != null) {
-                    taskConfig.put(SinkTask.TOPICS_CONFIG, Utils.join(sinkTopics, ","));
+                if (connOriginals.containsKey(SinkTask.TOPICS_CONFIG)) {
+                    taskConfig.put(SinkTask.TOPICS_CONFIG, connOriginals.get(SinkTask.TOPICS_CONFIG));
+                }
+                if (connOriginals.containsKey(SinkTask.TOPICS_REGEX_CONFIG)) {
+                    taskConfig.put(SinkTask.TOPICS_REGEX_CONFIG, connOriginals.get(SinkTask.TOPICS_REGEX_CONFIG));
                 }
                 result.add(taskConfig);
             }

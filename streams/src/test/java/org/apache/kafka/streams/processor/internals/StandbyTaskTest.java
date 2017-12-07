@@ -41,6 +41,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockRestoreConsumer;
 import org.apache.kafka.test.MockStateRestoreListener;
+import org.apache.kafka.test.MockStateStore;
 import org.apache.kafka.test.MockStateStoreSupplier;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
@@ -80,43 +81,31 @@ public class StandbyTaskTest {
     private final String storeName2 = "store2";
     private final String storeChangelogTopicName1 = ProcessorStateManager.storeChangelogTopic(applicationId, storeName1);
     private final String storeChangelogTopicName2 = ProcessorStateManager.storeChangelogTopic(applicationId, storeName2);
+    private final String globalStoreName = "ktable1";
 
     private final TopicPartition partition1 = new TopicPartition(storeChangelogTopicName1, 1);
     private final TopicPartition partition2 = new TopicPartition(storeChangelogTopicName2, 1);
     private final MockStateRestoreListener stateRestoreListener = new MockStateRestoreListener();
 
     private final Set<TopicPartition> topicPartitions = Collections.emptySet();
-    private final ProcessorTopology topology = new ProcessorTopology(
-            Collections.<ProcessorNode>emptyList(),
-            Collections.<String, SourceNode>emptyMap(),
-            Collections.<String, SinkNode>emptyMap(),
-            Utils.mkList(
-                    new MockStateStoreSupplier(storeName1, false).get(),
-                    new MockStateStoreSupplier(storeName2, true).get()
-            ),
+    private final ProcessorTopology topology = ProcessorTopology.withLocalStores(
+            Utils.mkList(new MockStateStoreSupplier(storeName1, false).get(), new MockStateStoreSupplier(storeName2, true).get()),
             new HashMap<String, String>() {
                 {
                     put(storeName1, storeChangelogTopicName1);
                     put(storeName2, storeChangelogTopicName2);
                 }
-            },
-            Collections.<StateStore>emptyList());
-
-    private final TopicPartition ktable = new TopicPartition("ktable1", 0);
-    private final Set<TopicPartition> ktablePartitions = Utils.mkSet(ktable);
-    private final ProcessorTopology ktableTopology = new ProcessorTopology(
-            Collections.<ProcessorNode>emptyList(),
-            Collections.<String, SourceNode>emptyMap(),
-            Collections.<String, SinkNode>emptyMap(),
-            Utils.mkList(
-                    new MockStateStoreSupplier(ktable.topic(), true, false).get()
-            ),
+            });
+    private final TopicPartition globalTopicPartition = new TopicPartition(globalStoreName, 0);
+    private final Set<TopicPartition> ktablePartitions = Utils.mkSet(globalTopicPartition);
+    private final ProcessorTopology ktableTopology = ProcessorTopology.withLocalStores(
+            Collections.<StateStore>singletonList(new MockStateStoreSupplier(globalTopicPartition.topic(), true, false).get()),
             new HashMap<String, String>() {
                 {
-                    put("ktable1", ktable.topic());
+                    put(globalStoreName, globalTopicPartition.topic());
                 }
-            },
-            Collections.<StateStore>emptyList());
+            });
+
     private File baseDir;
     private StateDirectory stateDirectory;
 
@@ -140,7 +129,7 @@ public class StandbyTaskTest {
     private final byte[] recordKey = intSerializer.serialize(null, 1);
 
     @Before
-    public void setup() {
+    public void setup() throws Exception {
         restoreStateConsumer.reset();
         restoreStateConsumer.updatePartitions(storeChangelogTopicName1, Utils.mkList(
                 new PartitionInfo(storeChangelogTopicName1, 0, Node.noNode(), new Node[0], new Node[0]),
@@ -154,7 +143,7 @@ public class StandbyTaskTest {
                 new PartitionInfo(storeChangelogTopicName2, 2, Node.noNode(), new Node[0], new Node[0])
         ));
         baseDir = TestUtils.tempDirectory();
-        stateDirectory = new StateDirectory(applicationId, baseDir.getPath(), new MockTime());
+        stateDirectory = new StateDirectory(createConfig(baseDir), new MockTime());
     }
 
     @After
@@ -165,17 +154,16 @@ public class StandbyTaskTest {
     @Test
     public void testStorePartitions() throws IOException {
         StreamsConfig config = createConfig(baseDir);
-        StandbyTask task = new StandbyTask(taskId, applicationId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
+        StandbyTask task = new StandbyTask(taskId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
         task.initialize();
-        assertEquals(Utils.mkSet(partition2), new HashSet<>(task.checkpointedOffsets().keySet()));
-
+        assertEquals(Utils.mkSet(partition2, partition1), new HashSet<>(task.checkpointedOffsets().keySet()));
     }
 
     @SuppressWarnings("unchecked")
     @Test(expected = ProcessorStateException.class)
     public void testUpdateNonPersistentStore() throws IOException {
         StreamsConfig config = createConfig(baseDir);
-        StandbyTask task = new StandbyTask(taskId, applicationId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
+        StandbyTask task = new StandbyTask(taskId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
 
         restoreStateConsumer.assign(new ArrayList<>(task.checkpointedOffsets().keySet()));
 
@@ -188,9 +176,10 @@ public class StandbyTaskTest {
     @Test
     public void testUpdate() throws IOException {
         StreamsConfig config = createConfig(baseDir);
-        StandbyTask task = new StandbyTask(taskId, applicationId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
+        StandbyTask task = new StandbyTask(taskId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
         task.initialize();
-        restoreStateConsumer.assign(new ArrayList<>(task.checkpointedOffsets().keySet()));
+        final Set<TopicPartition> partition = Collections.singleton(partition2);
+        restoreStateConsumer.assign(partition);
 
         for (ConsumerRecord<Integer, Integer> record : Arrays.asList(
                 new ConsumerRecord<>(partition2.topic(), partition2.partition(), 10, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, 1, 100),
@@ -199,23 +188,12 @@ public class StandbyTaskTest {
             restoreStateConsumer.bufferRecord(record);
         }
 
-        for (Map.Entry<TopicPartition, Long> entry : task.checkpointedOffsets().entrySet()) {
-            TopicPartition partition = entry.getKey();
-            long offset = entry.getValue();
-            if (offset >= 0) {
-                restoreStateConsumer.seek(partition, offset);
-            } else {
-                restoreStateConsumer.seekToBeginning(singleton(partition));
-            }
-        }
-
+        restoreStateConsumer.seekToBeginning(partition);
         task.update(partition2, restoreStateConsumer.poll(100).records(partition2));
 
         StandbyContextImpl context = (StandbyContextImpl) task.context();
-        MockStateStoreSupplier.MockStateStore store1 =
-                (MockStateStoreSupplier.MockStateStore) context.getStateMgr().getStore(storeName1);
-        MockStateStoreSupplier.MockStateStore store2 =
-                (MockStateStoreSupplier.MockStateStore) context.getStateMgr().getStore(storeName2);
+        MockStateStore store1 = (MockStateStore) context.getStateMgr().getStore(storeName1);
+        MockStateStore store2 = (MockStateStore) context.getStateMgr().getStore(storeName2);
 
         assertEquals(Collections.emptyList(), store1.keys);
         assertEquals(Utils.mkList(1, 2, 3), store2.keys);
@@ -228,33 +206,32 @@ public class StandbyTaskTest {
 
         assertEquals(1, offsets.size());
         assertEquals(new Long(30L + 1L), offsets.get(partition2));
-
     }
 
     @Test
     public void testUpdateKTable() throws IOException {
-        consumer.assign(Utils.mkList(ktable));
+        consumer.assign(Utils.mkList(globalTopicPartition));
         Map<TopicPartition, OffsetAndMetadata> committedOffsets = new HashMap<>();
-        committedOffsets.put(new TopicPartition(ktable.topic(), ktable.partition()), new OffsetAndMetadata(0L));
+        committedOffsets.put(new TopicPartition(globalTopicPartition.topic(), globalTopicPartition.partition()), new OffsetAndMetadata(0L));
         consumer.commitSync(committedOffsets);
 
-        restoreStateConsumer.updatePartitions("ktable1", Utils.mkList(
-                new PartitionInfo("ktable1", 0, Node.noNode(), new Node[0], new Node[0]),
-                new PartitionInfo("ktable1", 1, Node.noNode(), new Node[0], new Node[0]),
-                new PartitionInfo("ktable1", 2, Node.noNode(), new Node[0], new Node[0])
+        restoreStateConsumer.updatePartitions(globalStoreName, Utils.mkList(
+                new PartitionInfo(globalStoreName, 0, Node.noNode(), new Node[0], new Node[0]),
+                new PartitionInfo(globalStoreName, 1, Node.noNode(), new Node[0], new Node[0]),
+                new PartitionInfo(globalStoreName, 2, Node.noNode(), new Node[0], new Node[0])
         ));
 
         StreamsConfig config = createConfig(baseDir);
-        StandbyTask task = new StandbyTask(taskId, applicationId, ktablePartitions, ktableTopology, consumer, changelogReader, config, null, stateDirectory);
+        StandbyTask task = new StandbyTask(taskId, ktablePartitions, ktableTopology, consumer, changelogReader, config, null, stateDirectory);
         task.initialize();
         restoreStateConsumer.assign(new ArrayList<>(task.checkpointedOffsets().keySet()));
 
         for (ConsumerRecord<Integer, Integer> record : Arrays.asList(
-                new ConsumerRecord<>(ktable.topic(), ktable.partition(), 10, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, 1, 100),
-                new ConsumerRecord<>(ktable.topic(), ktable.partition(), 20, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, 2, 100),
-                new ConsumerRecord<>(ktable.topic(), ktable.partition(), 30, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, 3, 100),
-                new ConsumerRecord<>(ktable.topic(), ktable.partition(), 40, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, 4, 100),
-                new ConsumerRecord<>(ktable.topic(), ktable.partition(), 50, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, 5, 100))) {
+                new ConsumerRecord<>(globalTopicPartition.topic(), globalTopicPartition.partition(), 10, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, 1, 100),
+                new ConsumerRecord<>(globalTopicPartition.topic(), globalTopicPartition.partition(), 20, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, 2, 100),
+                new ConsumerRecord<>(globalTopicPartition.topic(), globalTopicPartition.partition(), 30, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, 3, 100),
+                new ConsumerRecord<>(globalTopicPartition.topic(), globalTopicPartition.partition(), 40, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, 4, 100),
+                new ConsumerRecord<>(globalTopicPartition.topic(), globalTopicPartition.partition(), 50, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, 5, 100))) {
             restoreStateConsumer.bufferRecord(record);
         }
 
@@ -269,47 +246,47 @@ public class StandbyTaskTest {
         }
 
         // The commit offset is at 0L. Records should not be processed
-        List<ConsumerRecord<byte[], byte[]>> remaining = task.update(ktable, restoreStateConsumer.poll(100).records(ktable));
+        List<ConsumerRecord<byte[], byte[]>> remaining = task.update(globalTopicPartition, restoreStateConsumer.poll(100).records(globalTopicPartition));
         assertEquals(5, remaining.size());
 
-        committedOffsets.put(new TopicPartition(ktable.topic(), ktable.partition()), new OffsetAndMetadata(10L));
+        committedOffsets.put(new TopicPartition(globalTopicPartition.topic(), globalTopicPartition.partition()), new OffsetAndMetadata(10L));
         consumer.commitSync(committedOffsets);
         task.commit(); // update offset limits
 
         // The commit offset has not reached, yet.
-        remaining = task.update(ktable, remaining);
+        remaining = task.update(globalTopicPartition, remaining);
         assertEquals(5, remaining.size());
 
-        committedOffsets.put(new TopicPartition(ktable.topic(), ktable.partition()), new OffsetAndMetadata(11L));
+        committedOffsets.put(new TopicPartition(globalTopicPartition.topic(), globalTopicPartition.partition()), new OffsetAndMetadata(11L));
         consumer.commitSync(committedOffsets);
         task.commit(); // update offset limits
 
         // one record should be processed.
-        remaining = task.update(ktable, remaining);
+        remaining = task.update(globalTopicPartition, remaining);
         assertEquals(4, remaining.size());
 
-        committedOffsets.put(new TopicPartition(ktable.topic(), ktable.partition()), new OffsetAndMetadata(45L));
+        committedOffsets.put(new TopicPartition(globalTopicPartition.topic(), globalTopicPartition.partition()), new OffsetAndMetadata(45L));
         consumer.commitSync(committedOffsets);
         task.commit(); // update offset limits
 
         // The commit offset is now 45. All record except for the last one should be processed.
-        remaining = task.update(ktable, remaining);
+        remaining = task.update(globalTopicPartition, remaining);
         assertEquals(1, remaining.size());
 
-        committedOffsets.put(new TopicPartition(ktable.topic(), ktable.partition()), new OffsetAndMetadata(50L));
+        committedOffsets.put(new TopicPartition(globalTopicPartition.topic(), globalTopicPartition.partition()), new OffsetAndMetadata(50L));
         consumer.commitSync(committedOffsets);
         task.commit(); // update offset limits
 
         // The commit offset is now 50. Still the last record remains.
-        remaining = task.update(ktable, remaining);
+        remaining = task.update(globalTopicPartition, remaining);
         assertEquals(1, remaining.size());
 
-        committedOffsets.put(new TopicPartition(ktable.topic(), ktable.partition()), new OffsetAndMetadata(60L));
+        committedOffsets.put(new TopicPartition(globalTopicPartition.topic(), globalTopicPartition.partition()), new OffsetAndMetadata(60L));
         consumer.commitSync(committedOffsets);
         task.commit(); // update offset limits
 
         // The commit offset is now 60. No record should be left.
-        remaining = task.update(ktable, remaining);
+        remaining = task.update(globalTopicPartition, remaining);
         assertNull(remaining);
 
         task.closeStateManager(true);
@@ -319,7 +296,7 @@ public class StandbyTaskTest {
         Map<TopicPartition, Long> offsets = checkpoint.read();
 
         assertEquals(1, offsets.size());
-        assertEquals(new Long(51L), offsets.get(ktable));
+        assertEquals(new Long(51L), offsets.get(globalTopicPartition));
 
     }
 
@@ -341,25 +318,24 @@ public class StandbyTaskTest {
         final InternalTopologyBuilder internalTopologyBuilder = InternalStreamsBuilderTest.internalTopologyBuilder(builder);
         final ProcessorTopology topology = internalTopologyBuilder.setApplicationId(applicationId).build(0);
 
-        new StandbyTask(taskId, applicationId, partitions, topology, consumer, changelogReader, config,
+        new StandbyTask(taskId, partitions, topology, consumer, changelogReader, config,
             new MockStreamsMetrics(new Metrics()), stateDirectory);
     }
 
     @Test
     public void shouldCheckpointStoreOffsetsOnCommit() throws IOException {
-        consumer.assign(Utils.mkList(ktable));
+        consumer.assign(Utils.mkList(globalTopicPartition));
         final Map<TopicPartition, OffsetAndMetadata> committedOffsets = new HashMap<>();
-        committedOffsets.put(new TopicPartition(ktable.topic(), ktable.partition()), new OffsetAndMetadata(100L));
+        committedOffsets.put(new TopicPartition(globalTopicPartition.topic(), globalTopicPartition.partition()), new OffsetAndMetadata(100L));
         consumer.commitSync(committedOffsets);
 
-        restoreStateConsumer.updatePartitions("ktable1", Utils.mkList(
-                new PartitionInfo("ktable1", 0, Node.noNode(), new Node[0], new Node[0])));
+        restoreStateConsumer.updatePartitions(globalStoreName, Utils.mkList(
+                new PartitionInfo(globalStoreName, 0, Node.noNode(), new Node[0], new Node[0])));
 
         final TaskId taskId = new TaskId(0, 0);
         final MockTime time = new MockTime();
         final StreamsConfig config = createConfig(baseDir);
         final StandbyTask task = new StandbyTask(taskId,
-                                                 applicationId,
                                                  ktablePartitions,
                                                  ktableTopology,
                                                  consumer,
@@ -374,8 +350,8 @@ public class StandbyTaskTest {
         restoreStateConsumer.assign(new ArrayList<>(task.checkpointedOffsets().keySet()));
 
         final byte[] serializedValue = Serdes.Integer().serializer().serialize("", 1);
-        task.update(ktable, Collections.singletonList(new ConsumerRecord<>(ktable.topic(),
-                                                                           ktable.partition(),
+        task.update(globalTopicPartition, Collections.singletonList(new ConsumerRecord<>(globalTopicPartition.topic(),
+                                                                           globalTopicPartition.partition(),
                                                                            50L,
                                                                            serializedValue,
                                                                            serializedValue)));
@@ -385,24 +361,23 @@ public class StandbyTaskTest {
 
         final Map<TopicPartition, Long> checkpoint = new OffsetCheckpoint(new File(stateDirectory.directoryForTask(taskId),
                                                                                    ProcessorStateManager.CHECKPOINT_FILE_NAME)).read();
-        assertThat(checkpoint, equalTo(Collections.singletonMap(ktable, 51L)));
+        assertThat(checkpoint, equalTo(Collections.singletonMap(globalTopicPartition, 51L)));
 
     }
 
     @Test
     public void shouldCloseStateMangerOnTaskCloseWhenCommitFailed() throws Exception {
-        consumer.assign(Utils.mkList(ktable));
+        consumer.assign(Utils.mkList(globalTopicPartition));
         final Map<TopicPartition, OffsetAndMetadata> committedOffsets = new HashMap<>();
-        committedOffsets.put(new TopicPartition(ktable.topic(), ktable.partition()), new OffsetAndMetadata(100L));
+        committedOffsets.put(new TopicPartition(globalTopicPartition.topic(), globalTopicPartition.partition()), new OffsetAndMetadata(100L));
         consumer.commitSync(committedOffsets);
 
-        restoreStateConsumer.updatePartitions("ktable1", Utils.mkList(
-                new PartitionInfo("ktable1", 0, Node.noNode(), new Node[0], new Node[0])));
+        restoreStateConsumer.updatePartitions(globalStoreName, Utils.mkList(
+                new PartitionInfo(globalStoreName, 0, Node.noNode(), new Node[0], new Node[0])));
 
         final StreamsConfig config = createConfig(baseDir);
         final AtomicBoolean closedStateManager = new AtomicBoolean(false);
         final StandbyTask task = new StandbyTask(taskId,
-                                                 applicationId,
                                                  ktablePartitions,
                                                  ktableTopology,
                                                  consumer,

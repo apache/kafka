@@ -21,16 +21,18 @@ import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
-import org.apache.kafka.test.MockProcessorNode;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.NoOpProcessorContext;
 import org.apache.kafka.test.NoOpReadOnlyStore;
@@ -43,12 +45,14 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_BATCH;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_END;
@@ -71,7 +75,7 @@ public class GlobalStateManagerImplTest {
     private GlobalStateManagerImpl stateManager;
     private NoOpProcessorContext context;
     private StateDirectory stateDirectory;
-    private String stateDirPath;
+    private StreamsConfig config;
     private NoOpReadOnlyStore<Object, Object> store1;
     private NoOpReadOnlyStore store2;
     private MockConsumer<byte[], byte[]> consumer;
@@ -81,26 +85,30 @@ public class GlobalStateManagerImplTest {
     @Before
     public void before() throws IOException {
         final Map<String, String> storeToTopic = new HashMap<>();
+        store1 = new NoOpReadOnlyStore<>("t1-store");
+        store2 = new NoOpReadOnlyStore("t2-store");
         storeToTopic.put("t1-store", "t1");
         storeToTopic.put("t2-store", "t2");
 
-        final Map<StateStore, ProcessorNode> storeToProcessorNode = new HashMap<>();
-        store1 = new NoOpReadOnlyStore<>("t1-store");
-        storeToProcessorNode.put(store1, new MockProcessorNode(-1));
-        store2 = new NoOpReadOnlyStore("t2-store");
-        storeToProcessorNode.put(store2, new MockProcessorNode(-1));
-        topology = new ProcessorTopology(Collections.<ProcessorNode>emptyList(),
-                                         Collections.<String, SourceNode>emptyMap(),
-                                         Collections.<String, SinkNode>emptyMap(),
-                                         Collections.<StateStore>emptyList(),
-                                         storeToTopic,
-                                         Arrays.<StateStore>asList(store1, store2));
+        topology = ProcessorTopology.withGlobalStores(Utils.<StateStore>mkList(store1, store2), storeToTopic);
 
         context = new NoOpProcessorContext();
-        stateDirPath = TestUtils.tempDirectory().getPath();
-        stateDirectory = new StateDirectory("appId", stateDirPath, time);
+        config = new StreamsConfig(new Properties() {
+            {
+                put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
+                put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+                put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+            }
+        });
+        stateDirectory = new StateDirectory(config, time);
         consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
-        stateManager = new GlobalStateManagerImpl(topology, consumer, stateDirectory, stateRestoreListener);
+        stateManager = new GlobalStateManagerImpl(
+            new LogContext("mock"),
+            topology,
+            consumer,
+            stateDirectory,
+            stateRestoreListener,
+            config);
         checkpointFile = new File(stateManager.baseDir(), ProcessorStateManager.CHECKPOINT_FILE_NAME);
     }
 
@@ -117,9 +125,9 @@ public class GlobalStateManagerImplTest {
 
     @Test(expected = LockException.class)
     public void shouldThrowLockExceptionIfCantGetLock() throws IOException {
-        final StateDirectory stateDir = new StateDirectory("appId", stateDirPath, time);
+        final StateDirectory stateDir = new StateDirectory(config, time);
         try {
-            stateDir.lockGlobalState(1);
+            stateDir.lockGlobalState();
             stateManager.initialize(context);
         } finally {
             stateDir.unlockGlobalState();
@@ -328,10 +336,10 @@ public class GlobalStateManagerImplTest {
     public void shouldUnlockGlobalStateDirectoryOnClose() throws IOException {
         stateManager.initialize(context);
         stateManager.close(Collections.<TopicPartition, Long>emptyMap());
-        final StateDirectory stateDir = new StateDirectory("appId", stateDirPath, new MockTime());
+        final StateDirectory stateDir = new StateDirectory(config, new MockTime());
         try {
             // should be able to get the lock now as it should've been released in close
-            assertTrue(stateDir.lockGlobalState(1));
+            assertTrue(stateDir.lockGlobalState());
         } finally {
             stateDir.unlockGlobalState();
         }
@@ -389,10 +397,10 @@ public class GlobalStateManagerImplTest {
         } catch (StreamsException e) {
             // expected
         }
-        final StateDirectory stateDir = new StateDirectory("appId", stateDirPath, new MockTime());
+        final StateDirectory stateDir = new StateDirectory(config, new MockTime());
         try {
             // should be able to get the lock now as it should've been released
-            assertTrue(stateDir.lockGlobalState(1));
+            assertTrue(stateDir.lockGlobalState());
         } finally {
             stateDir.unlockGlobalState();
         }
@@ -470,18 +478,84 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldThrowLockExceptionIfIOExceptionCaughtWhenTryingToLockStateDir() {
-        stateManager = new GlobalStateManagerImpl(topology, consumer, new StateDirectory("appId", stateDirPath, time) {
+        stateManager = new GlobalStateManagerImpl(new LogContext("mock"), topology, consumer, new StateDirectory(config, time) {
             @Override
-            public boolean lockGlobalState(final int retry) throws IOException {
+            public boolean lockGlobalState() throws IOException {
                 throw new IOException("KABOOM!");
             }
-        }, stateRestoreListener);
+        }, stateRestoreListener, config);
 
         try {
             stateManager.initialize(context);
             fail("Should have thrown LockException");
         } catch (final LockException e) {
             // pass
+        }
+    }
+
+    @Test
+    public void shouldRetryWhenEndOffsetsThrowsTimeoutException() {
+        final int retries = 2;
+        final AtomicInteger numberOfCalls = new AtomicInteger(0);
+        consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
+            @Override
+            public synchronized Map<TopicPartition, Long> endOffsets(Collection<org.apache.kafka.common.TopicPartition> partitions) {
+                numberOfCalls.incrementAndGet();
+                throw new TimeoutException();
+            }
+        };
+        config = new StreamsConfig(new Properties() {
+            {
+                put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
+                put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+                put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+                put(StreamsConfig.RETRIES_CONFIG, retries);
+            }
+        });
+
+        try {
+            new GlobalStateManagerImpl(
+                new LogContext("mock"),
+                topology,
+                consumer,
+                stateDirectory,
+                stateRestoreListener,
+                config);
+        } catch (final StreamsException expected) {
+            assertEquals(numberOfCalls.get(), retries);
+        }
+    }
+
+    @Test
+    public void shouldRetryWhenPartitionsForThrowsTimeoutException() {
+        final int retries = 2;
+        final AtomicInteger numberOfCalls = new AtomicInteger(0);
+        consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
+            @Override
+            public synchronized List<PartitionInfo> partitionsFor(String topic) {
+                numberOfCalls.incrementAndGet();
+                throw new TimeoutException();
+            }
+        };
+        config = new StreamsConfig(new Properties() {
+            {
+                put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
+                put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+                put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+                put(StreamsConfig.RETRIES_CONFIG, retries);
+            }
+        });
+
+        try {
+            new GlobalStateManagerImpl(
+                new LogContext("mock"),
+                topology,
+                consumer,
+                stateDirectory,
+                stateRestoreListener,
+                config);
+        } catch (final StreamsException expected) {
+            assertEquals(numberOfCalls.get(), retries);
         }
     }
 

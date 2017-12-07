@@ -17,7 +17,6 @@ package kafka.api
 import java.io.File
 import java.util.Properties
 
-import kafka.admin.AdminUtils
 import kafka.server.{ConfigEntityName, KafkaConfig, QuotaId}
 import kafka.utils.JaasTestUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -45,7 +44,7 @@ class UserQuotaTest extends BaseQuotaTest with SaslSetup {
     this.serverConfig.setProperty(KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp, Long.MaxValue.toString)
     super.setUp()
     val defaultProps = quotaProperties(defaultProducerQuota, defaultConsumerQuota, defaultRequestQuota)
-    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, ConfigEntityName.Default, defaultProps)
+    adminZkClient.changeUserOrUserClientIdConfig(ConfigEntityName.Default, defaultProps)
     waitForQuotaUpdate(defaultProducerQuota, defaultConsumerQuota, defaultRequestQuota)
   }
 
@@ -67,6 +66,6 @@ class UserQuotaTest extends BaseQuotaTest with SaslSetup {
   }
 
   private def updateQuotaOverride(properties: Properties) {
-    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, Sanitizer.sanitize(userPrincipal), properties)
+    adminZkClient.changeUserOrUserClientIdConfig(Sanitizer.sanitize(userPrincipal), properties)
   }
 }

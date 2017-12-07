@@ -26,6 +26,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -175,6 +176,7 @@ public class GlobalStreamThread extends Thread {
                               final StreamsConfig config,
                               final Consumer<byte[], byte[]> globalConsumer,
                               final StateDirectory stateDirectory,
+                              final long cacheSizeBytes,
                               final Metrics metrics,
                               final Time time,
                               final String threadClientId,
@@ -185,8 +187,6 @@ public class GlobalStreamThread extends Thread {
         this.topology = topology;
         this.globalConsumer = globalConsumer;
         this.stateDirectory = stateDirectory;
-        long cacheSizeBytes = Math.max(0, config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) /
-                (config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG) + 1));
         this.streamsMetrics = new StreamsMetricsImpl(metrics, threadClientId, Collections.singletonMap("client-id", threadClientId));
         this.logPrefix = String.format("global-stream-thread [%s] ", threadClientId);
         this.logContext = new LogContext(logPrefix);
@@ -302,10 +302,12 @@ public class GlobalStreamThread extends Thread {
 
     private StateConsumer initialize() {
         try {
-            final GlobalStateManager stateMgr = new GlobalStateManagerImpl(topology,
+            final GlobalStateManager stateMgr = new GlobalStateManagerImpl(logContext,
+                                                                           topology,
                                                                            globalConsumer,
                                                                            stateDirectory,
-                                                                           stateRestoreListener);
+                                                                           stateRestoreListener,
+                                                                           config);
             final StateConsumer stateConsumer
                     = new StateConsumer(this.logContext,
                                         globalConsumer,
@@ -323,10 +325,15 @@ public class GlobalStreamThread extends Thread {
                                         config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));
             stateConsumer.initialize();
             return stateConsumer;
-        } catch (final StreamsException e) {
-            startupException = e;
-        } catch (final Exception e) {
-            startupException = new StreamsException("Exception caught during initialization of GlobalStreamThread", e);
+        } catch (final LockException fatalException) {
+            final String errorMsg = "Could not lock global state directory. This could happen if multiple KafkaStreams " +
+                "instances are running on the same host using the same state directory.";
+            log.error(errorMsg, fatalException);
+            startupException = new StreamsException(errorMsg, fatalException);
+        } catch (final StreamsException fatalException) {
+            startupException = fatalException;
+        } catch (final Exception fatalException) {
+            startupException = new StreamsException("Exception caught during initialization of GlobalStreamThread", fatalException);
         }
         return null;
     }

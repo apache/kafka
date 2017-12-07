@@ -17,7 +17,6 @@
 
 package kafka.integration
 
-import kafka.admin.AdminUtils
 import kafka.api.TopicMetadataResponse
 import kafka.client.ClientUtils
 import kafka.cluster.BrokerEndPoint
@@ -219,7 +218,7 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
 
     // create topic
     val topic: String = "test"
-    AdminUtils.createTopic(zkUtils, topic, 1, numBrokers)
+    adminZkClient.createTopic(topic, 1, numBrokers)
 
     // shutdown a broker
     adHocServers.last.shutdown()

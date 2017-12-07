@@ -205,7 +205,7 @@ public class ProcessorTopologyTestDriver {
 
         consumer.assign(offsetsByTopicPartition.keySet());
 
-        final StateDirectory stateDirectory = new StateDirectory(APPLICATION_ID, TestUtils.tempDirectory().getPath(), Time.SYSTEM);
+        final StateDirectory stateDirectory = new StateDirectory(config, Time.SYSTEM);
         final StreamsMetrics streamsMetrics = new MockStreamsMetrics(new Metrics());
         final ThreadCache cache = new ThreadCache(new LogContext("mock "), 1024 * 1024, streamsMetrics);
 
@@ -221,10 +221,12 @@ public class ProcessorTopologyTestDriver {
                 globalPartitionsByTopic.put(topicName, partition);
                 offsetsByTopicPartition.put(partition, new AtomicLong());
             }
-            final GlobalStateManagerImpl stateManager = new GlobalStateManagerImpl(globalTopology,
+            final GlobalStateManagerImpl stateManager = new GlobalStateManagerImpl(new LogContext("mock "),
+                                                                                   globalTopology,
                                                                                    globalConsumer,
                                                                                    stateDirectory,
-                                                                                   stateRestoreListener);
+                                                                                   stateRestoreListener,
+                                                                                   config);
             globalStateTask = new GlobalStateUpdateTask(globalTopology,
                                                         new GlobalProcessorContextImpl(config, stateManager, streamsMetrics, cache),
                                                         stateManager,
@@ -235,7 +237,6 @@ public class ProcessorTopologyTestDriver {
 
         if (!partitionsByTopic.isEmpty()) {
             task = new StreamTask(TASK_ID,
-                                  APPLICATION_ID,
                                   partitionsByTopic.values(),
                                   topology,
                                   consumer,

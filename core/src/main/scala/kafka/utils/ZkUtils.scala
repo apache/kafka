@@ -28,7 +28,6 @@ import kafka.controller.{LeaderIsrAndControllerEpoch, ReassignedPartitionsContex
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.ConfigType
 import kafka.utils.ZkUtils._
-
 import com.yammer.metrics.core.MetricName
 import org.I0Itec.zkclient.exception.{ZkBadVersionException, ZkException, ZkMarshallingError, ZkNoNodeException, ZkNodeExistsException}
 import org.I0Itec.zkclient.serialize.ZkSerializer
@@ -231,7 +230,7 @@ class ZooKeeperClientWrapper(val zkClient: ZkClient) {
 
 class ZooKeeperClientMetrics(zkClient: ZkClient, val time: Time)
     extends ZooKeeperClientWrapper(zkClient) with KafkaMetricsGroup {
-  val latencyMetric = newHistogram("ZooKeeperRequestLatencyMs")
+  private val latencyMetric = newHistogram("ZooKeeperRequestLatencyMs")
 
   override def metricName(name: String, metricTags: scala.collection.Map[String, String]): MetricName = {
     explicitMetricName("kafka.server", "ZooKeeperClientMetrics", name, metricTags)
@@ -348,8 +347,23 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
     brokerIds.map(_.toInt).map(getBrokerInfo(_)).filter(_.isDefined).map(_.get)
   }
 
-  def getLeaderAndIsrForPartition(topic: String, partition: Int):Option[LeaderAndIsr] = {
-    ReplicationUtils.getLeaderIsrAndEpochForPartition(this, topic, partition).map(_.leaderAndIsr)
+  def getLeaderAndIsrForPartition(topic: String, partition: Int): Option[LeaderAndIsr] = {
+    val leaderAndIsrPath = getTopicPartitionLeaderAndIsrPath(topic, partition)
+    val (leaderAndIsrOpt, stat) = readDataMaybeNull(leaderAndIsrPath)
+    debug(s"Read leaderISR $leaderAndIsrOpt for $topic-$partition")
+    leaderAndIsrOpt.flatMap(leaderAndIsrStr => parseLeaderAndIsr(leaderAndIsrStr, leaderAndIsrPath, stat).map(_.leaderAndIsr))
+  }
+
+  private def parseLeaderAndIsr(leaderAndIsrStr: String, path: String, stat: Stat): Option[LeaderIsrAndControllerEpoch] = {
+    Json.parseFull(leaderAndIsrStr).flatMap { js =>
+      val leaderIsrAndEpochInfo = js.asJsonObject
+      val leader = leaderIsrAndEpochInfo("leader").to[Int]
+      val epoch = leaderIsrAndEpochInfo("leader_epoch").to[Int]
+      val isr = leaderIsrAndEpochInfo("isr").to[List[Int]]
+      val controllerEpoch = leaderIsrAndEpochInfo("controller_epoch").to[Int]
+      val zkPathVersion = stat.getVersion
+      trace(s"Leader $leader, Epoch $epoch, Isr $isr, Zk path version $zkPathVersion for leaderAndIsrPath $path")
+      Some(LeaderIsrAndControllerEpoch(LeaderAndIsr(leader, epoch, isr, zkPathVersion), controllerEpoch))}
   }
 
   def setupCommonPaths() {
@@ -759,13 +773,20 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
   def getPartitionLeaderAndIsrForTopics(topicAndPartitions: Set[TopicAndPartition]): mutable.Map[TopicAndPartition, LeaderIsrAndControllerEpoch] = {
     val ret = new mutable.HashMap[TopicAndPartition, LeaderIsrAndControllerEpoch]
     for(topicAndPartition <- topicAndPartitions) {
-      ReplicationUtils.getLeaderIsrAndEpochForPartition(this, topicAndPartition.topic, topicAndPartition.partition).foreach { leaderIsrAndControllerEpoch =>
+      getLeaderIsrAndEpochForPartition(topicAndPartition.topic, topicAndPartition.partition).foreach { leaderIsrAndControllerEpoch =>
         ret.put(topicAndPartition, leaderIsrAndControllerEpoch)
       }
     }
     ret
   }
 
+  private[utils] def getLeaderIsrAndEpochForPartition(topic: String, partition: Int): Option[LeaderIsrAndControllerEpoch] = {
+    val leaderAndIsrPath = getTopicPartitionLeaderAndIsrPath(topic, partition)
+    val (leaderAndIsrOpt, stat) = readDataMaybeNull(leaderAndIsrPath)
+    debug(s"Read leaderISR $leaderAndIsrOpt for $topic-$partition")
+    leaderAndIsrOpt.flatMap(leaderAndIsrStr => parseLeaderAndIsr(leaderAndIsrStr, leaderAndIsrPath, stat))
+  }
+  
   def getReplicaAssignmentForTopics(topics: Seq[String]): mutable.Map[TopicAndPartition, Seq[Int]] = {
     val ret = new mutable.HashMap[TopicAndPartition, Seq[Int]]
     topics.foreach { topic =>
@@ -821,7 +842,9 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
     jsonPartitionMapOpt match {
       case Some(jsonPartitionMap) =>
         val reassignedPartitions = parsePartitionReassignmentData(jsonPartitionMap)
-        reassignedPartitions.map(p => p._1 -> new ReassignedPartitionsContext(p._2))
+        reassignedPartitions.map { case (tp, newReplicas) =>
+          tp -> new ReassignedPartitionsContext(newReplicas, null)
+        }
       case None => Map.empty[TopicAndPartition, ReassignedPartitionsContext]
     }
   }

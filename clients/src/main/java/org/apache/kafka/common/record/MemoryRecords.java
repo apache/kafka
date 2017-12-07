@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
@@ -280,20 +281,34 @@ public class MemoryRecords extends AbstractRecords {
 
     @Override
     public String toString() {
-        Iterator<Record> iter = records().iterator();
         StringBuilder builder = new StringBuilder();
         builder.append('[');
-        while (iter.hasNext()) {
-            Record record = iter.next();
-            builder.append('(');
-            builder.append("record=");
-            builder.append(record);
-            builder.append(")");
-            if (iter.hasNext())
+
+        Iterator<MutableRecordBatch> batchIterator = batches.iterator();
+        while (batchIterator.hasNext()) {
+            RecordBatch batch = batchIterator.next();
+            try (CloseableIterator<Record> recordsIterator = batch.streamingIterator(BufferSupplier.create())) {
+                while (recordsIterator.hasNext()) {
+                    Record record = recordsIterator.next();
+                    appendRecordToStringBuilder(builder, record.toString());
+                    if (recordsIterator.hasNext())
+                        builder.append(", ");
+                }
+            } catch (KafkaException e) {
+                appendRecordToStringBuilder(builder, "CORRUPTED");
+            }
+            if (batchIterator.hasNext())
                 builder.append(", ");
         }
         builder.append(']');
         return builder.toString();
+    }
+
+    private void appendRecordToStringBuilder(StringBuilder builder, String recordAsString) {
+        builder.append('(')
+            .append("record=")
+            .append(recordAsString)
+            .append(")");
     }
 
     @Override

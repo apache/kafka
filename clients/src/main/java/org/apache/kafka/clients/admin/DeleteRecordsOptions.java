@@ -14,23 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.state.HostInfo;
+package org.apache.kafka.clients.admin;
+
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Map;
-import java.util.Set;
 
 /**
- * Interface used by a <code>StreamThread</code> to get metadata from the <code>StreamPartitionAssignor</code>
+ * Options for {@link AdminClient#deleteRecords(Map, DeleteRecordsOptions)}.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
  */
-public interface ThreadMetadataProvider {
-    Map<TaskId, Set<TopicPartition>> standbyTasks();
-    Map<TaskId, Set<TopicPartition>> activeTasks();
-    Map<HostInfo, Set<TopicPartition>> getPartitionsByHostState();
-    Cluster clusterMetadata();
-    void close();
+@InterfaceStability.Evolving
+public class DeleteRecordsOptions extends AbstractOptions<DeleteRecordsOptions> {
+
 }

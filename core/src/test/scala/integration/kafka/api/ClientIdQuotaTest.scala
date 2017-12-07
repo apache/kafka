@@ -16,7 +16,6 @@ package kafka.api
 
 import java.util.Properties
 
-import kafka.admin.AdminUtils
 import kafka.server.{DynamicConfig, KafkaConfig, QuotaId}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Sanitizer
@@ -54,6 +53,6 @@ class ClientIdQuotaTest extends BaseQuotaTest {
   }
 
   private def updateQuotaOverride(clientId: String, properties: Properties) {
-    AdminUtils.changeClientIdConfig(zkUtils, Sanitizer.sanitize(clientId), properties)
+    adminZkClient.changeClientIdConfig(Sanitizer.sanitize(clientId), properties)
   }
 }

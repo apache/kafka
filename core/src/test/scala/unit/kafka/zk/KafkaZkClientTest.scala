@@ -16,32 +16,21 @@
 */
 package kafka.zk
 
-import kafka.server.Defaults
-import kafka.zookeeper.ZooKeeperClient
+import java.util.{Properties, UUID}
+import java.nio.charset.StandardCharsets.UTF_8
+
+import kafka.log.LogConfig
+import kafka.security.auth._
+import kafka.server.ConfigType
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
-import org.junit.{After, Before, Test}
+import org.junit.Test
 
 class KafkaZkClientTest extends ZooKeeperTestHarness {
 
-  private var zooKeeperClient: ZooKeeperClient = null
-  private var zkClient: KafkaZkClient = null
-
   private val group = "my-group"
   private val topicPartition = new TopicPartition("topic", 0)
-
-  @Before
-  override def setUp() {
-    super.setUp()
-    zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Defaults.ZkMaxInFlightRequests, null)
-    zkClient = new KafkaZkClient(zooKeeperClient, false)
-  }
-
-  @After
-  override def tearDown() {
-    zkClient.close()
-    super.tearDown()
-  }
 
   @Test
   def testSetAndGetConsumerOffset() {
@@ -84,53 +73,80 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
     zkClient.createRecursive("/create/some/random/long/path")
     assertTrue(zkClient.pathExists("/create/some/random/long/path"))
-    zkClient.createRecursive("/create/some/random/long/path") // no errors if path already exists
+    zkClient.createRecursive("/create/some/random/long/path", throwIfPathExists = false) // no errors if path already exists
 
     intercept[IllegalArgumentException](zkClient.createRecursive("create-invalid-path"))
   }
 
   @Test
-  def testGetTopicPartitionCount() {
-    val topic = "mytest"
+  def testTopicAssignmentMethods() {
+    val topic1 = "topic1"
+    val topic2 = "topic2"
 
     // test with non-existing topic
-    assertTrue(zkClient.getTopicPartitionCount(topic).isEmpty)
-
-    // create a topic path
-    zkClient.createRecursive(TopicZNode.path(topic))
+    assertTrue(zkClient.getTopicPartitionCount(topic1).isEmpty)
+    assertTrue(zkClient.getPartitionAssignmentForTopics(Set(topic1)).isEmpty)
+    assertTrue(zkClient.getPartitionsForTopics(Set(topic1)).isEmpty)
+    assertTrue(zkClient.getReplicasForPartition(new TopicPartition(topic1, 2)).isEmpty)
 
     val assignment = Map(
-      new TopicPartition(topic, 0) -> Seq(0, 1),
-      new TopicPartition(topic, 1) -> Seq(0, 1)
+      new TopicPartition(topic1, 0) -> Seq(0, 1),
+      new TopicPartition(topic1, 1) -> Seq(0, 1),
+      new TopicPartition(topic1, 2) -> Seq(1, 2, 3)
     )
-    zkClient.setTopicAssignmentRaw(topic, assignment)
 
-    assertEquals(2, zkClient.getTopicPartitionCount(topic).get)
+    // create a topic assignment
+    zkClient.createTopicAssignment(topic1, assignment)
+
+    val expectedAssignment = assignment map { topicAssignment =>
+      val partition = topicAssignment._1.partition
+      val assignment = topicAssignment._2
+      partition -> assignment
+    }
+
+    assertEquals(assignment.size, zkClient.getTopicPartitionCount(topic1).get)
+    assertEquals(expectedAssignment, zkClient.getPartitionAssignmentForTopics(Set(topic1)).get(topic1).get)
+    assertEquals(Set(0, 1, 2), zkClient.getPartitionsForTopics(Set(topic1)).get(topic1).get.toSet)
+    assertEquals(Set(1, 2, 3), zkClient.getReplicasForPartition(new TopicPartition(topic1, 2)).toSet)
+
+    val updatedAssignment = assignment - new TopicPartition(topic1, 2)
+
+    zkClient.setTopicAssignment(topic1, updatedAssignment)
+    assertEquals(updatedAssignment.size, zkClient.getTopicPartitionCount(topic1).get)
+
+    // add second topic
+    val secondAssignment = Map(
+      new TopicPartition(topic2, 0) -> Seq(0, 1),
+      new TopicPartition(topic2, 1) -> Seq(0, 1)
+    )
+
+    zkClient.createTopicAssignment(topic2, secondAssignment)
+
+    assertEquals(Set(topic1, topic2), zkClient.getAllTopicsInCluster.toSet)
   }
-
 
   @Test
   def testGetDataAndVersion() {
     val path = "/testpath"
 
     // test with non-existing path
-    var dataAndVersion = zkClient.getDataAndVersion(path)
-    assertTrue(dataAndVersion._1.isEmpty)
-    assertEquals(-1, dataAndVersion._2)
+    val (data0, version0) = zkClient.getDataAndVersion(path)
+    assertTrue(data0.isEmpty)
+    assertEquals(-1, version0)
 
     // create a test path
     zkClient.createRecursive(path)
-    zkClient.conditionalUpdatePath(path, "version1", 0)
+    zkClient.conditionalUpdatePath(path, "version1".getBytes(UTF_8), 0)
 
     // test with existing path
-    dataAndVersion = zkClient.getDataAndVersion(path)
-    assertEquals("version1", dataAndVersion._1.get)
-    assertEquals(1, dataAndVersion._2)
+    val (data1, version1) = zkClient.getDataAndVersion(path)
+    assertEquals("version1", new String(data1.get, UTF_8))
+    assertEquals(1, version1)
 
-    zkClient.conditionalUpdatePath(path, "version2", 1)
-    dataAndVersion = zkClient.getDataAndVersion(path)
-    assertEquals("version2", dataAndVersion._1.get)
-    assertEquals(2, dataAndVersion._2)
+    zkClient.conditionalUpdatePath(path, "version2".getBytes(UTF_8), 1)
+    val (data2, version2) = zkClient.getDataAndVersion(path)
+    assertEquals("version2", new String(data2.get, UTF_8))
+    assertEquals(2, version2)
   }
 
   @Test
@@ -138,7 +154,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     val path = "/testconditionalpath"
 
     // test with non-existing path
-    var statusAndVersion = zkClient.conditionalUpdatePath(path, "version0", 0)
+    var statusAndVersion = zkClient.conditionalUpdatePath(path, "version0".getBytes(UTF_8), 0)
     assertFalse(statusAndVersion._1)
     assertEquals(-1, statusAndVersion._2)
 
@@ -146,14 +162,69 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     zkClient.createRecursive(path)
 
     // test with valid expected version
-    statusAndVersion = zkClient.conditionalUpdatePath(path, "version1", 0)
+    statusAndVersion = zkClient.conditionalUpdatePath(path, "version1".getBytes(UTF_8), 0)
     assertTrue(statusAndVersion._1)
     assertEquals(1, statusAndVersion._2)
 
     // test with invalid expected version
-    statusAndVersion = zkClient.conditionalUpdatePath(path, "version2", 2)
+    statusAndVersion = zkClient.conditionalUpdatePath(path, "version2".getBytes(UTF_8), 2)
     assertFalse(statusAndVersion._1)
     assertEquals(-1, statusAndVersion._2)
+  }
+
+  @Test
+  def testCreateSequentialPersistentPath(): Unit = {
+    val path = "/testpath"
+    zkClient.createRecursive(path)
+
+    var result = zkClient.createSequentialPersistentPath(path + "/sequence_", null)
+    assertEquals(s"$path/sequence_0000000000", result)
+    assertTrue(zkClient.pathExists(s"$path/sequence_0000000000"))
+    assertEquals(None, dataAsString(s"$path/sequence_0000000000"))
+
+    result = zkClient.createSequentialPersistentPath(path + "/sequence_", "some value".getBytes(UTF_8))
+    assertEquals(s"$path/sequence_0000000001", result)
+    assertTrue(zkClient.pathExists(s"$path/sequence_0000000001"))
+    assertEquals(Some("some value"), dataAsString(s"$path/sequence_0000000001"))
+  }
+
+  @Test
+  def testPropagateIsrChanges(): Unit = {
+    zkClient.createRecursive("/isr_change_notification")
+
+    zkClient.propagateIsrChanges(Set(new TopicPartition("topic-a", 0), new TopicPartition("topic-b", 0)))
+    var expectedPath = "/isr_change_notification/isr_change_0000000000"
+    assertTrue(zkClient.pathExists(expectedPath))
+    assertEquals(Some("""{"version":1,"partitions":[{"topic":"topic-a","partition":0},{"topic":"topic-b","partition":0}]}"""),
+      dataAsString(expectedPath))
+
+    zkClient.propagateIsrChanges(Set(new TopicPartition("topic-b", 0)))
+    expectedPath = "/isr_change_notification/isr_change_0000000001"
+    assertTrue(zkClient.pathExists(expectedPath))
+    assertEquals(Some("""{"version":1,"partitions":[{"topic":"topic-b","partition":0}]}"""), dataAsString(expectedPath))
+  }
+
+  @Test
+  def testPropagateLogDir(): Unit = {
+    zkClient.createRecursive("/log_dir_event_notification")
+
+    val brokerId = 3
+
+    zkClient.propagateLogDirEvent(brokerId)
+    var expectedPath = "/log_dir_event_notification/log_dir_event_0000000000"
+    assertTrue(zkClient.pathExists(expectedPath))
+    assertEquals(Some("""{"version":1,"broker":3,"event":1}"""), dataAsString(expectedPath))
+
+    zkClient.propagateLogDirEvent(brokerId)
+    expectedPath = "/log_dir_event_notification/log_dir_event_0000000001"
+    assertTrue(zkClient.pathExists(expectedPath))
+    assertEquals(Some("""{"version":1,"broker":3,"event":1}"""), dataAsString(expectedPath))
+
+    val anotherBrokerId = 4
+    zkClient.propagateLogDirEvent(anotherBrokerId)
+    expectedPath = "/log_dir_event_notification/log_dir_event_0000000002"
+    assertTrue(zkClient.pathExists(expectedPath))
+    assertEquals(Some("""{"version":1,"broker":4,"event":1}"""), dataAsString(expectedPath))
   }
 
   @Test
@@ -177,6 +248,171 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
     zkClient.deletePartitionReassignment()
     assertEquals(Map.empty, zkClient.getPartitionReassignment)
+
+    zkClient.createPartitionReassignment(reassignment)
+    assertEquals(reassignment, zkClient.getPartitionReassignment)
+  }
+
+  @Test
+  def testGetDataAndStat() {
+    val path = "/testpath"
+
+    // test with non-existing path
+    val (data0, version0) = zkClient.getDataAndStat(path)
+    assertTrue(data0.isEmpty)
+    assertEquals(0, version0.getVersion)
+
+    // create a test path
+    zkClient.createRecursive(path)
+    zkClient.conditionalUpdatePath(path, "version1".getBytes(UTF_8), 0)
+
+    // test with existing path
+    val (data1, version1) = zkClient.getDataAndStat(path)
+    assertEquals("version1", new String(data1.get, UTF_8))
+    assertEquals(1, version1.getVersion)
+
+    zkClient.conditionalUpdatePath(path, "version2".getBytes(UTF_8), 1)
+    val (data2, version2) = zkClient.getDataAndStat(path)
+    assertEquals("version2", new String(data2.get, UTF_8))
+    assertEquals(2, version2.getVersion)
+  }
+
+  @Test
+  def testGetChildren() {
+    val path = "/testpath"
+
+    // test with non-existing path
+    assertTrue(zkClient.getChildren(path).isEmpty)
+
+    // create child nodes
+    zkClient.createRecursive( "/testpath/child1")
+    zkClient.createRecursive( "/testpath/child2")
+    zkClient.createRecursive( "/testpath/child3")
+
+    val children = zkClient.getChildren(path)
+
+    assertEquals(3, children.size)
+    assertEquals(Set("child1","child2","child3"), children.toSet)
+  }
+
+  @Test
+  def testAclManagementMethods() {
+
+    assertFalse(zkClient.pathExists(AclZNode.path))
+    assertFalse(zkClient.pathExists(AclChangeNotificationZNode.path))
+    ResourceType.values.foreach(resource => assertFalse(zkClient.pathExists(ResourceTypeZNode.path(resource.name))))
+
+    // create acl paths
+    zkClient.createAclPaths
+
+    assertTrue(zkClient.pathExists(AclZNode.path))
+    assertTrue(zkClient.pathExists(AclChangeNotificationZNode.path))
+    ResourceType.values.foreach(resource => assertTrue(zkClient.pathExists(ResourceTypeZNode.path(resource.name))))
+
+    val resource1 = new Resource(Topic, UUID.randomUUID().toString)
+    val resource2 = new Resource(Topic, UUID.randomUUID().toString)
+
+    // try getting acls for non-existing resource
+    var versionedAcls = zkClient.getVersionedAclsForResource(resource1)
+    assertTrue(versionedAcls.acls.isEmpty)
+    assertEquals(-1, versionedAcls.zkVersion)
+    assertFalse(zkClient.resourceExists(resource1))
+
+
+    val acl1 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice"), Deny, "host1" , Read)
+    val acl2 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), Allow, "*", Read)
+    val acl3 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), Deny, "host1", Read)
+
+    //create acls for resources
+    zkClient.conditionalSetOrCreateAclsForResource(resource1, Set(acl1, acl2), 0)
+    zkClient.conditionalSetOrCreateAclsForResource(resource2, Set(acl1, acl3), 0)
+
+    versionedAcls = zkClient.getVersionedAclsForResource(resource1)
+    assertEquals(Set(acl1, acl2), versionedAcls.acls)
+    assertEquals(0, versionedAcls.zkVersion)
+    assertTrue(zkClient.resourceExists(resource1))
+
+    //update acls for resource
+    zkClient.conditionalSetOrCreateAclsForResource(resource1, Set(acl1, acl3), 0)
+
+    versionedAcls = zkClient.getVersionedAclsForResource(resource1)
+    assertEquals(Set(acl1, acl3), versionedAcls.acls)
+    assertEquals(1, versionedAcls.zkVersion)
+
+    //get resource Types
+    assertTrue(ResourceType.values.map( rt => rt.name).toSet == zkClient.getResourceTypes().toSet)
+
+    //get resource name
+    val resourceNames = zkClient.getResourceNames(Topic.name)
+    assertEquals(2, resourceNames.size)
+    assertTrue(Set(resource1.name,resource2.name) == resourceNames.toSet)
+
+    //delete resource
+    assertTrue(zkClient.deleteResource(resource1))
+    assertFalse(zkClient.resourceExists(resource1))
+
+    //delete with invalid expected zk version
+    assertFalse(zkClient.conditionalDelete(resource2, 10))
+    //delete with valid expected zk version
+    assertTrue(zkClient.conditionalDelete(resource2, 0))
+
+
+    zkClient.createAclChangeNotification("resource1")
+    zkClient.createAclChangeNotification("resource2")
+
+    assertEquals(2, zkClient.getChildren(AclChangeNotificationZNode.path).size)
+
+    zkClient.deleteAclChangeNotifications()
+    assertTrue(zkClient.getChildren(AclChangeNotificationZNode.path).isEmpty)
+  }
+
+  @Test
+  def testDeleteTopicPathMethods() {
+    val topic1 = "topic1"
+    val topic2 = "topic2"
+
+    assertFalse(zkClient.isTopicMarkedForDeletion(topic1))
+    assertTrue(zkClient.getTopicDeletions.isEmpty)
+
+    zkClient.createDeleteTopicPath(topic1)
+    zkClient.createDeleteTopicPath(topic2)
+
+    assertTrue(zkClient.isTopicMarkedForDeletion(topic1))
+    assertEquals(Set(topic1, topic2), zkClient.getTopicDeletions.toSet)
+
+    zkClient.deleteTopicDeletions(Seq(topic1, topic2))
+    assertTrue(zkClient.getTopicDeletions.isEmpty)
+  }
+
+  @Test
+  def testEntityConfigManagementMethods() {
+    val topic1 = "topic1"
+    val topic2 = "topic2"
+
+    assertTrue(zkClient.getEntityConfigs(ConfigType.Topic, topic1).isEmpty)
+
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, "1024")
+    logProps.put(LogConfig.SegmentIndexBytesProp, "1024")
+    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
+
+    zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic1, logProps)
+    assertEquals(logProps, zkClient.getEntityConfigs(ConfigType.Topic, topic1))
+
+    logProps.remove(LogConfig.CleanupPolicyProp)
+    zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic1, logProps)
+    assertEquals(logProps, zkClient.getEntityConfigs(ConfigType.Topic, topic1))
+
+    zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic2, logProps)
+    assertEquals(Set(topic1, topic2), zkClient.getAllEntitiesWithConfig(ConfigType.Topic).toSet)
+
+    zkClient.deleteTopicConfigs(Seq(topic1, topic2))
+    assertTrue(zkClient.getEntityConfigs(ConfigType.Topic, topic1).isEmpty)
+  }
+
+  private def dataAsString(path: String): Option[String] = {
+    val (data, _) = zkClient.getDataAndStat(path)
+    data.map(new String(_, UTF_8))
   }
 
 }
