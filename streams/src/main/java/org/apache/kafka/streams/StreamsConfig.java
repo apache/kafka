@@ -363,16 +363,16 @@ public class StreamsConfig extends AbstractConfig {
                     LogAndFailExceptionHandler.class.getName(),
                     Importance.MEDIUM,
                     DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC)
-            .define(DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG,
-                    Type.CLASS,
-                    DefaultProductionExceptionHandler.class.getName(),
-                    Importance.MEDIUM,
-                    DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_DOC)
             .define(DEFAULT_KEY_SERDE_CLASS_CONFIG,
                     Type.CLASS,
                     Serdes.ByteArraySerde.class.getName(),
                     Importance.MEDIUM,
                     DEFAULT_KEY_SERDE_CLASS_DOC)
+            .define(DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG,
+                    Type.CLASS,
+                    DefaultProductionExceptionHandler.class.getName(),
+                    Importance.MEDIUM,
+                    DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_DOC)
             .define(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
                     Type.CLASS,
                     FailOnInvalidTimestamp.class.getName(),
