@@ -651,7 +651,7 @@ public class KafkaStreams {
         }
 
         // use client id instead of thread client id since this admin client may be shared among threads
-        this.adminClient = clientSupplier.getAdminClient(config.getAdminConfigs(clientId));
+        adminClient = clientSupplier.getAdminClient(config.getAdminConfigs(clientId));
 
         final Map<Long, StreamThread.State> threadState = new HashMap<>(threads.length);
         final ArrayList<StateStoreProvider> storeProviders = new ArrayList<>();

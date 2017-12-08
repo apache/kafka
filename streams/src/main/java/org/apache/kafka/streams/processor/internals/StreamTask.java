@@ -97,6 +97,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * @param config                the {@link StreamsConfig} specified by the user
      * @param metrics               the {@link StreamsMetrics} created by the thread
      * @param stateDirectory        the {@link StateDirectory} created by the thread
+     * @param cache                 the {@link ThreadCache} created by the thread
+     * @param time                  the system {@link Time} of the thread
      * @param producer              the instance of {@link Producer} used to produce records
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */

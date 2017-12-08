@@ -82,4 +82,26 @@ public class TopicPartitionInfo {
         return "(partition=" + partition + ", leader=" + leader + ", replicas=" +
             Utils.join(replicas, ", ") + ", isr=" + Utils.join(isr, ", ") + ")";
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        TopicPartitionInfo that = (TopicPartitionInfo) o;
+
+        if (partition != that.partition) return false;
+        if (leader != null ? !leader.equals(that.leader) : that.leader != null) return false;
+        if (replicas != null ? !replicas.equals(that.replicas) : that.replicas != null) return false;
+        return isr != null ? isr.equals(that.isr) : that.isr == null;
+    }
+
+    @Override
+    public int hashCode() {
+        int result = partition;
+        result = 31 * result + (leader != null ? leader.hashCode() : 0);
+        result = 31 * result + (replicas != null ? replicas.hashCode() : 0);
+        result = 31 * result + (isr != null ? isr.hashCode() : 0);
+        return result;
+    }
 }

@@ -560,8 +560,6 @@ public class StreamThread extends Thread {
     private final Object stateLock;
     private final Logger log;
     private final String logPrefix;
-    // TODO: adminClient will be passeed to taskManager to be accessed in StreamPartitionAssignor
-    private final AdminClient adminClient;
     private final TaskManager taskManager;
     private final StreamsMetricsThreadImpl streamsMetrics;
 
@@ -620,8 +618,6 @@ public class StreamThread extends Thread {
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
 
-        final StreamsKafkaClient streamsKafkaClient = StreamsKafkaClient.create(config.originals());
-
         final AbstractTaskCreator<StreamTask> activeTaskCreator = new TaskCreator(builder,
                                                                                   config,
                                                                                   streamsMetrics,
@@ -649,7 +645,6 @@ public class StreamThread extends Thread {
                                                   streamsMetadataState,
                                                   activeTaskCreator,
                                                   standbyTaskCreator,
-                                                  streamsKafkaClient,
                                                   adminClient,
                                                   new AssignedStreamsTasks(logContext),
                                                   new AssignedStandbyTasks(logContext));
@@ -671,7 +666,6 @@ public class StreamThread extends Thread {
                 restoreConsumer,
                 consumer,
                 originalReset,
-                adminClient,
                 taskManager,
                 streamsMetrics,
                 builder,
@@ -684,7 +678,6 @@ public class StreamThread extends Thread {
                         final Consumer<byte[], byte[]> restoreConsumer,
                         final Consumer<byte[], byte[]> consumer,
                         final String originalReset,
-                        final AdminClient adminClient,
                         final TaskManager taskManager,
                         final StreamsMetricsThreadImpl streamsMetrics,
                         final InternalTopologyBuilder builder,
@@ -705,7 +698,6 @@ public class StreamThread extends Thread {
         this.restoreConsumer = restoreConsumer;
         this.consumer = consumer;
         this.originalReset = originalReset;
-        this.adminClient = adminClient;
 
         this.pollTimeMs = config.getLong(StreamsConfig.POLL_MS_CONFIG);
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
@@ -716,8 +708,8 @@ public class StreamThread extends Thread {
     /**
      * Execute the stream processors
      *
-     * @throws KafkaException for any Kafka-related exceptions
-     * @throws Exception      for any other non-Kafka exceptions
+     * @throws KafkaException    for any Kafka-related exceptions
+     * @throws RuntimeException  for any other non-Kafka exceptions
      */
     @Override
     public void run() {

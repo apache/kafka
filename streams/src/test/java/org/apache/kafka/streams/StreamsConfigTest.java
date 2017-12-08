@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams;
 
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -28,6 +29,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor;
 import org.hamcrest.CoreMatchers;
 import org.junit.Before;
 import org.junit.Test;
@@ -99,6 +101,40 @@ public class StreamsConfigTest {
         assertEquals(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG), groupId);
         assertEquals(returnedProps.get(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "1000");
         assertNull(returnedProps.get("DUMMY"));
+    }
+
+    @Test
+    public void consumerConfigMustContainStreamPartitionAssignorConfig() {
+        props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 42);
+        props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
+        props.put(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, 7L);
+        props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "dummy:host");
+        props.put(StreamsConfig.RETRIES_CONFIG, 10);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+        final String groupId = "example-application";
+        final String clientId = "client";
+        final Map<String, Object> returnedProps = streamsConfig.getConsumerConfigs(groupId, clientId);
+
+        assertEquals(42, returnedProps.get(StreamsConfig.REPLICATION_FACTOR_CONFIG));
+        assertEquals(1, returnedProps.get(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG));
+        assertEquals(StreamPartitionAssignor.class.getName(), returnedProps.get(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG));
+        assertEquals(7L, returnedProps.get(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG));
+        assertEquals("dummy:host", returnedProps.get(StreamsConfig.APPLICATION_SERVER_CONFIG));
+        assertEquals(10, returnedProps.get(StreamsConfig.adminClientPrefix(StreamsConfig.RETRIES_CONFIG)));
+    }
+
+    @Test
+    public void consumerConfigMustUseAdminClientConfigForRetries() {
+        props.put(StreamsConfig.adminClientPrefix(StreamsConfig.RETRIES_CONFIG), 20);
+        props.put(StreamsConfig.RETRIES_CONFIG, 10);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+        final String groupId = "example-application";
+        final String clientId = "client";
+        final Map<String, Object> returnedProps = streamsConfig.getConsumerConfigs(groupId, clientId);
+
+        assertEquals(20, returnedProps.get(StreamsConfig.adminClientPrefix(StreamsConfig.RETRIES_CONFIG)));
     }
 
     @Test
@@ -227,7 +263,13 @@ public class StreamsConfigTest {
         assertEquals(1, configs.get(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG));
     }
 
-
+    @Test
+    public void shouldSupportNonPrefixedAdminConfigs() {
+        props.put(AdminClientConfig.RETRIES_CONFIG, 10);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final Map<String, Object> configs = streamsConfig.getAdminConfigs("clientId");
+        assertEquals(10, configs.get(AdminClientConfig.RETRIES_CONFIG));
+    }
 
     @Test(expected = StreamsException.class)
     public void shouldThrowStreamsExceptionIfKeySerdeConfigFails() {
