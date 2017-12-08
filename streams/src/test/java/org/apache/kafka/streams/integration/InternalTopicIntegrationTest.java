@@ -26,6 +26,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -96,8 +97,8 @@ public class InternalTopicIntegrationTest {
                 CLUSTER.zKConnectString(),
                 DEFAULT_ZK_SESSION_TIMEOUT_MS,
                 DEFAULT_ZK_CONNECTION_TIMEOUT_MS,
-                Integer.MAX_VALUE);
-        final KafkaZkClient kafkaZkClient = new KafkaZkClient(zkClient, false);
+                Integer.MAX_VALUE, Time.SYSTEM);
+        final KafkaZkClient kafkaZkClient = new KafkaZkClient(zkClient, false, Time.SYSTEM);
         try {
             final AdminZkClient adminZkClient = new AdminZkClient(kafkaZkClient);
 

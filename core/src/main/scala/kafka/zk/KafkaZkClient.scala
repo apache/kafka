@@ -493,7 +493,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
 
   /**
    * Gets all partitions in the cluster
-   * @return
+   * @return all partitions in the cluster
    */
   def getAllPartitions(): Set[TopicPartition] = {
     val topics = getChildren(TopicsZNode.path)
@@ -685,11 +685,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
    * @throws KeeperException if there is an error while creating the znode
    */
   def createPartitionReassignment(reassignment: Map[TopicPartition, Seq[Int]])  = {
-    createRecursive(AdminZNode.path, throwIfPathExists = false)
-    val createRequest = CreateRequest(ReassignPartitionsZNode.path, ReassignPartitionsZNode.encode(reassignment),
-      acls(ReassignPartitionsZNode.path), CreateMode.PERSISTENT)
-    val createResponse = retryRequestUntilConnected(createRequest)
-    createResponse.maybeThrow
+    createRecursive(ReassignPartitionsZNode.path, ReassignPartitionsZNode.encode(reassignment))
   }
 
   /**

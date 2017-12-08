@@ -27,6 +27,7 @@ import kafka.zk.AdminZkClient;
 import kafka.zk.KafkaZkClient;
 import kafka.zookeeper.ZooKeeperClient;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.utils.Time;
 import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -175,8 +176,9 @@ public class KafkaEmbedded {
                 zookeeperConnect(),
                 DEFAULT_ZK_SESSION_TIMEOUT_MS,
                 DEFAULT_ZK_CONNECTION_TIMEOUT_MS,
-                Integer.MAX_VALUE);
-        final KafkaZkClient kafkaZkClient = new KafkaZkClient(zkClient, false);
+                Integer.MAX_VALUE,
+                Time.SYSTEM);
+        final KafkaZkClient kafkaZkClient = new KafkaZkClient(zkClient, false, Time.SYSTEM);
         final AdminZkClient adminZkClient = new AdminZkClient(kafkaZkClient);
         adminZkClient.createTopic(topic, partitions, replication, topicConfig, RackAwareMode.Enforced$.MODULE$);
         kafkaZkClient.close();
@@ -189,8 +191,9 @@ public class KafkaEmbedded {
                 zookeeperConnect(),
                 DEFAULT_ZK_SESSION_TIMEOUT_MS,
                 DEFAULT_ZK_CONNECTION_TIMEOUT_MS,
-                Integer.MAX_VALUE);
-        final KafkaZkClient kafkaZkClient = new KafkaZkClient(zkClient, false);
+                Integer.MAX_VALUE,
+                Time.SYSTEM);
+        final KafkaZkClient kafkaZkClient = new KafkaZkClient(zkClient, false, Time.SYSTEM);
         final AdminZkClient adminZkClient = new AdminZkClient(kafkaZkClient);
         adminZkClient.deleteTopic(topic);
         kafkaZkClient.close();

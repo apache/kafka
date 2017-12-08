@@ -33,7 +33,7 @@ import org.apache.kafka.clients.admin.{AdminClientConfig, AlterReplicaLogDirsOpt
 import org.apache.kafka.common.TopicPartitionReplica
 import org.apache.kafka.common.errors.ReplicaNotAvailableException
 import org.apache.kafka.common.security.JaasUtils
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.zookeeper.KeeperException.NodeExistsException
 import org.apache.kafka.common.TopicPartition
 
@@ -50,8 +50,9 @@ object ReassignPartitionsCommand extends Logging {
   def main(args: Array[String]): Unit = {
     val opts = validateAndParseArgs(args)
     val zkConnect = opts.options.valueOf(opts.zkConnectOpt)
-    val zooKeeperClient = new ZooKeeperClient(zkConnect, 30000, 30000, Int.MaxValue)
-    val zkClient = new KafkaZkClient(zooKeeperClient, JaasUtils.isZkSecurityEnabled())
+    val time = Time.SYSTEM
+    val zooKeeperClient = new ZooKeeperClient(zkConnect, 30000, 30000, Int.MaxValue, time)
+    val zkClient = new KafkaZkClient(zooKeeperClient, JaasUtils.isZkSecurityEnabled, time)
 
     val adminClientOpt = createAdminClient(opts)
 
@@ -310,8 +311,7 @@ object ReassignPartitionsCommand extends Logging {
 
   private def checkIfPartitionReassignmentSucceeded(zkClient: KafkaZkClient, partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]])
   :Map[TopicAndPartition, ReassignmentStatus] = {
-    val partitionsBeingReassigned = getPartitionReassignment(zkClient).mapValues(replicas => ReassignedPartitionsContext(replicas)).
-      mapValues(_.newReplicas)
+    val partitionsBeingReassigned = getPartitionReassignment(zkClient)
 
     partitionsToBeReassigned.keys.map { topicAndPartition =>
       (topicAndPartition, checkIfPartitionReassignmentSucceeded(zkClient, topicAndPartition, partitionsToBeReassigned,
@@ -628,7 +628,7 @@ class ReassignPartitionsCommand(zkClient: KafkaZkClient,
       }
     } catch {
       case _: NodeExistsException =>
-        val partitionsBeingReassigned = zkClient.getPartitionsBeingReassigned()
+        val partitionsBeingReassigned = zkClient.getPartitionReassignment
         throw new AdminCommandFailedException("Partition reassignment currently in " +
           "progress for %s. Aborting operation".format(partitionsBeingReassigned))
     }

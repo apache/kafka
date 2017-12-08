@@ -23,7 +23,7 @@ import kafka.zk.KafkaZkClient
 import kafka.zookeeper.ZooKeeperClient
 
 import collection._
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.zookeeper.KeeperException.NodeExistsException
@@ -57,8 +57,9 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
     var zooKeeperClient: ZooKeeperClient = null
     var zkClient: KafkaZkClient = null
     try {
-      zooKeeperClient = new ZooKeeperClient(zkConnect, 30000, 30000, Int.MaxValue)
-      zkClient = new KafkaZkClient(zooKeeperClient, JaasUtils.isZkSecurityEnabled())
+      val time = Time.SYSTEM
+      zooKeeperClient = new ZooKeeperClient(zkConnect, 30000, 30000, Int.MaxValue, time)
+      zkClient = new KafkaZkClient(zooKeeperClient, JaasUtils.isZkSecurityEnabled, time)
 
       val partitionsForPreferredReplicaElection =
         if (!options.has(jsonFileOpt))
