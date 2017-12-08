@@ -42,12 +42,14 @@ import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
+import static org.easymock.EasyMock.expect;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -62,29 +64,30 @@ public class AbstractTaskTest {
     private final TopicPartition storeTopicPartition4 = new TopicPartition("t4", 0);
     private final Collection<TopicPartition> storeTopicPartitions
         = Utils.mkSet(storeTopicPartition1, storeTopicPartition2, storeTopicPartition3, storeTopicPartition4);
+
     @Before
     public void before() {
-        EasyMock.expect(stateDirectory.directoryForTask(id)).andReturn(TestUtils.tempDirectory());
+        expect(stateDirectory.directoryForTask(id)).andReturn(TestUtils.tempDirectory());
     }
 
     @Test(expected = ProcessorStateException.class)
     public void shouldThrowProcessorStateExceptionOnInitializeOffsetsWhenAuthorizationException() {
         final Consumer consumer = mockConsumer(new AuthorizationException("blah"));
-        final AbstractTask task = createTask(consumer, Collections.<StateStore>emptyList());
+        final AbstractTask task = createTask(consumer, Collections.<StateStore, String>emptyMap());
         task.updateOffsetLimits();
     }
 
     @Test(expected = ProcessorStateException.class)
     public void shouldThrowProcessorStateExceptionOnInitializeOffsetsWhenKafkaException() {
         final Consumer consumer = mockConsumer(new KafkaException("blah"));
-        final AbstractTask task = createTask(consumer, Collections.<StateStore>emptyList());
+        final AbstractTask task = createTask(consumer, Collections.<StateStore, String>emptyMap());
         task.updateOffsetLimits();
     }
 
     @Test(expected = WakeupException.class)
     public void shouldThrowWakeupExceptionOnInitializeOffsetsWhenWakeupException() {
         final Consumer consumer = mockConsumer(new WakeupException());
-        final AbstractTask task = createTask(consumer, Collections.<StateStore>emptyList());
+        final AbstractTask task = createTask(consumer, Collections.<StateStore, String>emptyMap());
         task.updateOffsetLimits();
     }
 
@@ -92,10 +95,10 @@ public class AbstractTaskTest {
     public void shouldThrowLockExceptionIfFailedToLockStateDirectoryWhenTopologyHasStores() throws IOException {
         final Consumer consumer = EasyMock.createNiceMock(Consumer.class);
         final StateStore store = EasyMock.createNiceMock(StateStore.class);
-        EasyMock.expect(stateDirectory.lock(id)).andReturn(false);
+        expect(stateDirectory.lock(id)).andReturn(false);
         EasyMock.replay(stateDirectory);
 
-        final AbstractTask task = createTask(consumer, Collections.singletonList(store));
+        final AbstractTask task = createTask(consumer, Collections.singletonMap(store, "dummy"));
 
         try {
             task.initializeStateStores();
@@ -107,11 +110,11 @@ public class AbstractTaskTest {
     }
 
     @Test
-    public void shouldNotAttemptToLockIfNoStores() throws IOException {
+    public void shouldNotAttemptToLockIfNoStores() {
         final Consumer consumer = EasyMock.createNiceMock(Consumer.class);
         EasyMock.replay(stateDirectory);
 
-        final AbstractTask task = createTask(consumer, Collections.<StateStore>emptyList());
+        final AbstractTask task = createTask(consumer, Collections.<StateStore, String>emptyMap());
 
         task.initializeStateStores();
 
@@ -139,17 +142,27 @@ public class AbstractTaskTest {
         final String storeName3 = "storeName3";
         final String storeName4 = "storeName4";
 
-        EasyMock.expect(store1.name()).andReturn(storeName1).andReturn(storeName1);
+        expect(store1.name()).andReturn(storeName1).anyTimes();
         EasyMock.replay(store1);
-        EasyMock.expect(store2.name()).andReturn(storeName2).andReturn(storeName2);
+        expect(store2.name()).andReturn(storeName2).anyTimes();
         EasyMock.replay(store2);
-        EasyMock.expect(store3.name()).andReturn(storeName3).andReturn(storeName3);
+        expect(store3.name()).andReturn(storeName3).anyTimes();
         EasyMock.replay(store3);
-        EasyMock.expect(store4.name()).andReturn(storeName4).andReturn(storeName4);
+        expect(store4.name()).andReturn(storeName4).anyTimes();
         EasyMock.replay(store4);
 
         final StateDirectory stateDirectory = new StateDirectory(streamsConfig, new MockTime());
-        final AbstractTask task = createTask(consumer, Utils.mkList(store1, store2, store3, store4), stateDirectory);
+        final AbstractTask task = createTask(
+            consumer,
+            new HashMap<StateStore, String>() {
+                {
+                    put(store1, storeTopicPartition1.topic());
+                    put(store2, storeTopicPartition2.topic());
+                    put(store3, storeTopicPartition3.topic());
+                    put(store4, storeTopicPartition4.topic());
+                }
+            },
+            stateDirectory);
 
         final String taskDir = stateDirectory.directoryForTask(task.id).getAbsolutePath();
         final File storeDirectory1 = new File(taskDir
@@ -197,24 +210,30 @@ public class AbstractTaskTest {
         assertTrue(testFile4.exists());
     }
 
-    @SuppressWarnings("unchecked")
     private AbstractTask createTask(final Consumer consumer,
-                                    final List<StateStore> stateStores) {
-        return createTask(consumer, stateStores, stateDirectory);
+                                    final Map<StateStore, String> stateStoresToChangelogTopics) {
+        return createTask(consumer, stateStoresToChangelogTopics, stateDirectory);
     }
 
+    @SuppressWarnings("unchecked")
     private AbstractTask createTask(final Consumer consumer,
-                                    final List<StateStore> stateStores,
+                                    final Map<StateStore, String> stateStoresToChangelogTopics,
                                     final StateDirectory stateDirectory) {
         final Properties properties = new Properties();
         properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "app");
         properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummyhost:9092");
         final StreamsConfig config = new StreamsConfig(properties);
+
+        final Map<String, String> storeNamesToChangelogTopics = new HashMap<>(stateStoresToChangelogTopics.size());
+        for (final Map.Entry<StateStore, String> e : stateStoresToChangelogTopics.entrySet()) {
+            storeNamesToChangelogTopics.put(e.getKey().name(), e.getValue());
+        }
+
         return new AbstractTask(id,
                                 storeTopicPartitions,
-                                ProcessorTopology.withLocalStores(stateStores, Collections.<String, String>emptyMap()),
-                                (Consumer<byte[], byte[]>) consumer,
-                                new StoreChangelogReader((Consumer<byte[], byte[]>) consumer, new MockStateRestoreListener(), new LogContext("stream-task-test ")),
+                                ProcessorTopology.withLocalStores(new ArrayList<>(stateStoresToChangelogTopics.keySet()), storeNamesToChangelogTopics),
+                                consumer,
+                                new StoreChangelogReader(consumer, new MockStateRestoreListener(), new LogContext("stream-task-test ")),
                                 false,
                                 stateDirectory,
                                 config) {
