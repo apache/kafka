@@ -109,6 +109,12 @@ public abstract class KafkaFuture<T> implements Future<T> {
     /**
      * Returns a new KafkaFuture that, when this future completes normally, is executed with this
      * futures's result as the argument to the supplied function.
+     *
+     * The function may be called by the thread that calls {@code thenApply} or it may be called
+     * by the thread that completes this future.
+     *
+     * Exceptions thrown by the function will cause the resulting future to complete exceptionally,
+     * with the exception thrown by the function.
      */
     public abstract <R> KafkaFuture<R> thenApply(FunctionInterface<T, R> function);
 
@@ -123,6 +129,12 @@ public abstract class KafkaFuture<T> implements Future<T> {
     /**
      * When this future is done, the given action is invoked with the result (or null if none)
      * and the exception (or null if none) of this future as arguments.
+     *
+     * The action may be invoked by the thread that calls {@code addWaiter} or it may be invoked
+     * by the thread that completes the future.
+     *
+     * Exceptions thrown by the action will be caught and logged to prevent them from affecting
+     * other actions waiting on this future or the calling thread.
      *
      * @param action the action to perform
      */

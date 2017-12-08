@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.internals;
 
+import org.apache.kafka.common.KafkaFuture;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CancellationException;
@@ -23,13 +27,13 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import org.apache.kafka.common.KafkaFuture;
-
 /**
  * A flexible future which supports call chaining and other asynchronous programming patterns.
  * This will eventually become a thin shim on top of Java 8's CompletableFuture.
  */
 public class KafkaFutureImpl<T> extends KafkaFuture<T> {
+    private static final Logger log = LoggerFactory.getLogger(KafkaFutureImpl.class);
+
     /**
      * A convenience method that throws the current exception, wrapping it if needed.
      *
@@ -158,9 +162,9 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
     @Override
     public synchronized void addWaiter(BiConsumer<? super T, ? super Throwable> action) {
         if (exception != null) {
-            action.accept(null, exception);
+            invokeWaiter(action, null, exception);
         } else if (done) {
-            action.accept(value, null);
+            invokeWaiter(action, value, null);
         } else {
             waiters.add(action);
         }
@@ -178,7 +182,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
             waiters = null;
         }
         for (BiConsumer<? super T, ? super Throwable> waiter : oldWaiters) {
-            waiter.accept(newValue, null);
+            invokeWaiter(waiter, newValue, null);
         }
         return true;
     }
@@ -195,9 +199,21 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
             waiters = null;
         }
         for (BiConsumer<? super T, ? super Throwable> waiter : oldWaiters) {
-            waiter.accept(null, newException);
+            invokeWaiter(waiter, null, newException);
         }
         return true;
+    }
+
+    private void invokeWaiter(
+        BiConsumer<? super T, ? super Throwable> waiter,
+        T value,
+        Throwable exception
+    ) {
+        try {
+            waiter.accept(value, exception);
+        } catch (Exception e) {
+            log.error("Exception when invoking action on future completion {}", waiter, e);
+        }
     }
 
     /**
