@@ -354,7 +354,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     }
 
     try {
-      TestUtils.waitUntilTrue(() => numMessages.get > 100, "timed out waiting for message produce", 6000L)
+      TestUtils.waitUntilTrue(() => numMessages.get > 10, s"only $numMessages messages are produced before timeout", 6000L)
       client.alterReplicaLogDirs(firstReplicaAssignment.asJava, new AlterReplicaLogDirsOptions).all.get
       servers.foreach { server =>
         TestUtils.waitUntilTrue(() => {
@@ -362,6 +362,10 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
           firstReplicaAssignment(new TopicPartitionReplica(topic, 0, server.config.brokerId)) == logDir
         }, "timed out waiting for replica movement", 6000L)
       }
+
+      val currentMessagesNum = numMessages.get
+      TestUtils.waitUntilTrue(() => numMessages.get - currentMessagesNum > 10,
+        s"only ${numMessages.get - currentMessagesNum} messages are produced within timeout after replica movement", 6000L)
     } finally running.set(false)
 
     val finalNumMessages = Await.result(producerFuture, Duration(20, TimeUnit.SECONDS))
