@@ -130,7 +130,7 @@ public class StreamsResetter {
 
             final HashMap<Object, Object> consumerConfig = new HashMap<>(config);
             consumerConfig.putAll(properties);
-            maybeResetInputAndSeekToEndIntermediateTopicOffsets(consumerConfig, dryRun);
+            exitCode = maybeResetInputAndSeekToEndIntermediateTopicOffsets(consumerConfig, dryRun);
             maybeDeleteInternalTopics(kafkaAdminClient, dryRun);
 
         } catch (final Throwable e) {
@@ -237,9 +237,10 @@ public class StreamsResetter {
         CommandLineUtils.checkInvalidArgs(optionParser, options, shiftByOption, allScenarioOptions.$minus(shiftByOption));
     }
 
-    private void maybeResetInputAndSeekToEndIntermediateTopicOffsets(final Map consumerConfig, final boolean dryRun) throws Exception {
+    private int maybeResetInputAndSeekToEndIntermediateTopicOffsets(final Map consumerConfig, final boolean dryRun) throws Exception {
         final List<String> inputTopics = options.valuesOf(inputTopicsOption);
         final List<String> intermediateTopics = options.valuesOf(intermediateTopicsOption);
+        int topicNotFound = 0;
 
         final List<String> notFoundInputTopics = new ArrayList<>();
         final List<String> notFoundIntermediateTopics = new ArrayList<>();
@@ -248,7 +249,7 @@ public class StreamsResetter {
 
         if (inputTopics.size() == 0 && intermediateTopics.size() == 0) {
             System.out.println("No input or intermediate topics specified. Skipping seek.");
-            return;
+            return 0;
         }
 
         if (inputTopics.size() != 0) {
@@ -316,6 +317,7 @@ public class StreamsResetter {
                 for (final String topic : notFoundInputTopics) {
                     System.out.println("Topic: " + topic);
                 }
+                topicNotFound = 1;
             }
 
             if (notFoundIntermediateTopics.size() > 0) {
@@ -326,10 +328,13 @@ public class StreamsResetter {
             }
 
         } catch (final Exception e) {
+
             System.err.println("ERROR: Resetting offsets failed.");
             throw e;
         }
         System.out.println("Done.");
+        return topicNotFound;
+
     }
 
     // visible for testing
