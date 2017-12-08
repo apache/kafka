@@ -94,6 +94,7 @@ public class BrokerCompatibilityTest {
             @Override
             public void uncaughtException(final Thread t, final Throwable e) {
                 System.err.println("FATAL: An unexpected exception " + e);
+                e.printStackTrace(System.err);
                 System.err.flush();
                 streams.close(30, TimeUnit.SECONDS);
             }
