@@ -276,7 +276,7 @@ public class StoreChangelogReader implements ChangelogReader {
         final Iterator<ConsumerRecord<byte[], byte[]>> consumerRecordIterator = records.iterator();
 
         while (consumerRecordIterator.hasNext()) {
-            ConsumerRecord<byte[], byte[]> record = consumerRecordIterator.next();
+            final ConsumerRecord<byte[], byte[]> record = consumerRecordIterator.next();
             offset = record.offset();
             if (restorer.hasCompleted(offset, endOffset)) {
                 break;

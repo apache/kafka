@@ -18,7 +18,6 @@
 package org.apache.kafka.streams.integration;
 
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
@@ -46,10 +45,10 @@ import org.junit.experimental.categories.Category;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
@@ -65,7 +64,7 @@ public class KTableSourceTopicRestartIntegrationTest {
     private final Time time = CLUSTER.time;
     private KafkaStreams streamsOne;
     private final StreamsBuilder streamsBuilder = new StreamsBuilder();
-    private final Map<String, String> readKeyValues = new HashMap<>();
+    private final Map<String, String> readKeyValues = new ConcurrentHashMap<>();
 
     private static final Properties PRODUCER_CONFIG = new Properties();
     private static final Properties STREAMS_CONFIG = new Properties();
@@ -80,17 +79,15 @@ public class KTableSourceTopicRestartIntegrationTest {
         STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        STREAMS_CONFIG.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         STREAMS_CONFIG.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         STREAMS_CONFIG.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         STREAMS_CONFIG.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
         STREAMS_CONFIG.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 5);
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, WallclockTimestampExtractor.class);
-        STREAMS_CONFIG.put(ConsumerConfig.GROUP_ID_CONFIG, "ktable-group");
+
 
         PRODUCER_CONFIG.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         PRODUCER_CONFIG.put(ProducerConfig.ACKS_CONFIG, "all");
-        PRODUCER_CONFIG.put(ProducerConfig.RETRIES_CONFIG, 0);
         PRODUCER_CONFIG.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         PRODUCER_CONFIG.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
@@ -102,7 +99,7 @@ public class KTableSourceTopicRestartIntegrationTest {
         final KTable<String, String> kTable = streamsBuilder.table(SOURCE_TOPIC);
         kTable.toStream().foreach(new ForeachAction<String, String>() {
             @Override
-            public void apply(String key, String value) {
+            public void apply(final String key, final String value) {
                 readKeyValues.put(key, value);
             }
         });
@@ -115,10 +112,9 @@ public class KTableSourceTopicRestartIntegrationTest {
 
 
     @Test
-    public void shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationNoEOE() throws Exception {
+    public void shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosDisabled() throws Exception {
 
         try {
-            STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.AT_LEAST_ONCE);
             streamsOne = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
             streamsOne.start();
 
@@ -142,7 +138,7 @@ public class KTableSourceTopicRestartIntegrationTest {
     }
 
     @Test
-    public void shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEOS() throws Exception {
+    public void shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosEnabled() throws Exception {
 
         try {
             STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
@@ -205,7 +201,7 @@ public class KTableSourceTopicRestartIntegrationTest {
 
     }
 
-    private void produceKeyValues(String... keys) throws ExecutionException, InterruptedException {
+    private void produceKeyValues(final String... keys) throws ExecutionException, InterruptedException {
         final List<KeyValue<String, String>> keyValueList = new ArrayList<>();
 
         for (final String key : keys) {
@@ -229,7 +225,7 @@ public class KTableSourceTopicRestartIntegrationTest {
                 // need two values appended to log to trigger issue
                 produceKeyValues("d", "e");
             } catch (ExecutionException | InterruptedException e) {
-                e.printStackTrace();
+                  throw new RuntimeException(e);
             }
         }
 
