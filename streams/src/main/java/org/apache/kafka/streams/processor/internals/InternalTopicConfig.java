@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.internals.Topic;
 
 import java.util.Map;
@@ -29,6 +30,8 @@ import java.util.Set;
  */
 public class InternalTopicConfig {
     public enum CleanupPolicy { compact, delete }
+
+    public enum InternalTopicType { REPARTITION, WINDOWED_STORE_CHANGELOG, UNWINDOWED_STORE_CHANGELOG }
 
     private final String name;
     private int numberOfPartitions = -1;
@@ -73,17 +76,17 @@ public class InternalTopicConfig {
             result.put(configEntry.getKey(), configEntry.getValue());
         }
         if (retentionMs != null && isCompactDelete()) {
-            result.put(InternalTopicManager.RETENTION_MS, String.valueOf(retentionMs + additionalRetentionMs));
+            result.put(TopicConfig.RETENTION_MS_CONFIG, String.valueOf(retentionMs + additionalRetentionMs));
         }
 
-        if (!logConfig.containsKey(InternalTopicManager.CLEANUP_POLICY_PROP)) {
+        if (!logConfig.containsKey(TopicConfig.CLEANUP_POLICY_CONFIG)) {
             final StringBuilder builder = new StringBuilder();
             for (CleanupPolicy cleanupPolicy : cleanupPolicies) {
                 builder.append(cleanupPolicy.name()).append(",");
             }
             builder.deleteCharAt(builder.length() - 1);
 
-            result.put(InternalTopicManager.CLEANUP_POLICY_PROP, builder.toString());
+            result.put(TopicConfig.CLEANUP_POLICY_CONFIG, builder.toString());
         }
 
 
@@ -109,7 +112,7 @@ public class InternalTopicConfig {
     }
 
     void setRetentionMs(final long retentionMs) {
-        if (!logConfig.containsKey(InternalTopicManager.RETENTION_MS)) {
+        if (!logConfig.containsKey(TopicConfig.RETENTION_MS_CONFIG)) {
             this.retentionMs = retentionMs;
         }
     }
