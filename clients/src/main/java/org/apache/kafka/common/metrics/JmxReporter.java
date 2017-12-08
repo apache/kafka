@@ -100,6 +100,7 @@ public class JmxReporter implements MetricsReporter {
         MetricName metricName = metric.metricName();
         String mBeanName = getMBeanName(prefix, metricName);
         KafkaMbean mbean = this.mbeans.get(mBeanName);
+        mbeans.remove(mBeanName);
         if (mbean != null)
             mbean.removeAttribute(metricName.name());
         return mbean;
