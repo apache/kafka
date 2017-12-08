@@ -13,7 +13,19 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-PIDS=$(ps ax | grep java | grep -i QuorumPeerMain | grep -v grep | awk '{print $1}')
+
+# Which jps to use
+if [ -z "$JAVA_HOME" ]; then
+  JPS="$(which jps)"
+else
+  JPS="$JAVA_HOME/bin/jps"
+fi
+
+if [ -x "$JPS" ]; then
+  PIDS=$(${JPS} -vl | grep -i QuorumPeerMain | awk '{print $1}')
+else
+  PIDS=$(ps ax | grep java | grep -i QuorumPeerMain | grep -v grep | awk '{print $1}')
+fi
 
 if [ -z "$PIDS" ]; then
   echo "No zookeeper server to stop"
