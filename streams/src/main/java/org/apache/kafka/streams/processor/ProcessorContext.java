@@ -108,6 +108,8 @@ public interface ProcessorContext {
      *   independent of whether new messages arrive. <b>NOTE:</b> This is best effort only as its granularity is limited
      *   by how long an iteration of the processing loop takes to complete</li>
      * </ul>
+     * <b>NOTE:</b> the first punctuation will be called immediately, followed by calls at every interval
+     * according to the punctuation type.
      *
      * @param interval the time interval between punctuations
      * @param type one of: {@link PunctuationType#STREAM_TIME}, {@link PunctuationType#WALL_CLOCK_TIME}
