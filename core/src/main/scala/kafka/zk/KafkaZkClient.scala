@@ -811,11 +811,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
    * @throws KeeperException if there is an error while creating the znode
    */
   def createPreferredReplicaElection(partitions: Set[TopicPartition]): Unit  = {
-    createRecursive(AdminZNode.path, throwIfPathExists = false)
-    val createRequest = CreateRequest(PreferredReplicaElectionZNode.path, PreferredReplicaElectionZNode.encode(partitions),
-      acls(ReassignPartitionsZNode.path), CreateMode.PERSISTENT)
-    val createResponse = retryRequestUntilConnected(createRequest)
-    createResponse.resultException.foreach(e => throw e)
+    createRecursive(PreferredReplicaElectionZNode.path, PreferredReplicaElectionZNode.encode(partitions))
   }
 
   /**

@@ -16,7 +16,7 @@ import java.util.Collections
 import java.util.Properties
 
 import kafka.admin.ReassignPartitionsCommand._
-import kafka.common.{AdminCommandFailedException, TopicAndPartition}
+import kafka.common.AdminCommandFailedException
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils._
 import kafka.utils.ZkUtils._
@@ -197,11 +197,11 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       2 -> Seq(102, 100)
     ), servers = servers)
 
-    val proposed: Map[TopicAndPartition, Seq[Int]] = Map(
-      TopicAndPartition("topic1", 0) -> Seq(100, 102),
-      TopicAndPartition("topic1", 2) -> Seq(100, 102),
-      TopicAndPartition("topic2", 1) -> Seq(101, 100),
-      TopicAndPartition("topic2", 2) -> Seq(100, 102)
+    val proposed: Map[TopicPartition, Seq[Int]] = Map(
+      new TopicPartition("topic1", 0) -> Seq(100, 102),
+      new TopicPartition("topic1", 2) -> Seq(100, 102),
+      new TopicPartition("topic2", 1) -> Seq(101, 100),
+      new TopicPartition("topic2", 2) -> Seq(100, 102)
     )
 
     val replica1 = new TopicPartitionReplica("topic1", 0, 102)
@@ -257,7 +257,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Map.empty), initialThrottle)
 
     //Check throttle config. Should be throttling replica 0 on 100 and 102 only.
-    checkThrottleConfigAddedToZK(adminZkClient, initialThrottle.interBrokerLimit, servers, topicName, "0:100,0:101", "0:102")
+    checkThrottleConfigAddedToZK(adminZkClient, initialThrottle.interBrokerLimit, servers, topicName, Set("0:100","0:101"), Set("0:102"))
 
     //Await completion
     waitForReassignmentToComplete()
@@ -299,24 +299,24 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     //Start rebalance
     val newAssignment = Map(
-      TopicAndPartition("topic1", 0) -> Seq(100, 102),//moved 101=>102
-      TopicAndPartition("topic1", 1) -> Seq(100, 102),//moved 101=>102
-      TopicAndPartition("topic2", 0) -> Seq(103, 105),//moved 104=>103
-      TopicAndPartition("topic2", 1) -> Seq(103, 105),//moved 104=>103
-      TopicAndPartition("topic1", 2) -> Seq(103, 104), //didn't move
-      TopicAndPartition("topic2", 2) -> Seq(103, 104)  //didn't move
+      new TopicPartition("topic1", 0) -> Seq(100, 102),//moved 101=>102
+      new TopicPartition("topic1", 1) -> Seq(100, 102),//moved 101=>102
+      new TopicPartition("topic2", 0) -> Seq(103, 105),//moved 104=>103
+      new TopicPartition("topic2", 1) -> Seq(103, 105),//moved 104=>103
+      new TopicPartition("topic1", 2) -> Seq(103, 104), //didn't move
+      new TopicPartition("topic2", 2) -> Seq(103, 104)  //didn't move
     )
     ReassignPartitionsCommand.executeAssignment(zkClient, None,
       ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Map.empty), Throttle(throttle))
 
     //Check throttle config. Should be throttling specific replicas for each topic.
     checkThrottleConfigAddedToZK(adminZkClient, throttle, servers, "topic1",
-      "1:100,1:101,0:100,0:101", //All replicas for moving partitions should be leader-throttled
-      "1:102,0:102" //Move destinations should be follower throttled.
+      Set("1:100","1:101","0:100","0:101"), //All replicas for moving partitions should be leader-throttled
+      Set("1:102","0:102") //Move destinations should be follower throttled.
     )
     checkThrottleConfigAddedToZK(adminZkClient, throttle, servers, "topic2",
-      "1:104,1:105,0:104,0:105", //All replicas for moving partitions should be leader-throttled
-      "1:103,0:103" //Move destinations should be follower throttled.
+      Set("1:104","1:105","0:104","0:105"), //All replicas for moving partitions should be leader-throttled
+      Set("1:103","0:103") //Move destinations should be follower throttled.
     )
   }
 
@@ -340,13 +340,13 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Map.empty), Throttle(initialThrottle))
 
     //Check throttle config
-    checkThrottleConfigAddedToZK(adminZkClient, initialThrottle, servers, topicName, "0:100,0:101", "0:102")
+    checkThrottleConfigAddedToZK(adminZkClient, initialThrottle, servers, topicName, Set("0:100","0:101"), Set("0:102"))
 
     //Ensure that running Verify, whilst the command is executing, should have no effect
     verifyAssignment(zkClient, None, ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Map.empty))
 
     //Check throttle config again
-    checkThrottleConfigAddedToZK(adminZkClient, initialThrottle, servers, topicName, "0:100,0:101", "0:102")
+    checkThrottleConfigAddedToZK(adminZkClient, initialThrottle, servers, topicName, Set("0:100","0:101"), Set("0:102"))
 
     //Now re-run the same assignment with a larger throttle, which should only act to increase the throttle and make progress
     val newThrottle = initialThrottle * 1000
@@ -355,7 +355,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Map.empty), Throttle(newThrottle))
 
     //Check throttle was changed
-    checkThrottleConfigAddedToZK(adminZkClient, newThrottle, servers, topicName, "0:100,0:101", "0:102")
+    checkThrottleConfigAddedToZK(adminZkClient, newThrottle, servers, topicName, Set("0:100","0:101"), Set("0:102"))
 
     //Await completion
     waitForReassignmentToComplete()
@@ -443,10 +443,10 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     //Define a move for some of them
     val move = Map(
-      TopicAndPartition("orders", 0) -> Seq(0, 2, 3),//moves
-      TopicAndPartition("orders", 1) -> Seq(0, 1, 2),//stays
-      TopicAndPartition("payments", 1) -> Seq(1, 2), //only define one partition as moving
-      TopicAndPartition("deliveries", 0) -> Seq(1, 2) //increase replication factor
+      new TopicPartition("orders", 0) -> Seq(0, 2, 3),//moves
+      new TopicPartition("orders", 1) -> Seq(0, 1, 2),//stays
+      new TopicPartition("payments", 1) -> Seq(1, 2), //only define one partition as moving
+      new TopicPartition("deliveries", 0) -> Seq(1, 2) //increase replication factor
     )
 
     //When we run a throttled reassignment
@@ -484,10 +484,10 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     createTopic(zkUtils, "customers", Map(0 -> List(0), 1 -> List(1), 2 -> List(2), 3 -> List(3)), servers)
 
     val firstMove = Map(
-      TopicAndPartition("orders", 0) -> Seq(0, 2, 3), //moves
-      TopicAndPartition("orders", 1) -> Seq(0, 1, 2), //stays
-      TopicAndPartition("payments", 1) -> Seq(1, 2), //only define one partition as moving
-      TopicAndPartition("deliveries", 0) -> Seq(1, 2) //increase replication factor
+      new TopicPartition("orders", 0) -> Seq(0, 2, 3), //moves
+      new TopicPartition("orders", 1) -> Seq(0, 1, 2), //stays
+      new TopicPartition("payments", 1) -> Seq(1, 2), //only define one partition as moving
+      new TopicPartition("deliveries", 0) -> Seq(1, 2) //increase replication factor
     )
 
     new ReassignPartitionsCommand(zkClient, None, firstMove, adminZkClient = adminZkClient).reassignPartitions()
@@ -509,10 +509,10 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     // Define a move for some of them
     val secondMove = Map(
-      TopicAndPartition("orders", 0) -> Seq(0, 2, 3), // stays
-      TopicAndPartition("orders", 1) -> Seq(3, 1, 2), // moves
-      TopicAndPartition("payments", 1) -> Seq(2, 1), // changed preferred leader
-      TopicAndPartition("deliveries", 0) -> Seq(1, 2, 3) //increase replication factor
+      new TopicPartition("orders", 0) -> Seq(0, 2, 3), // stays
+      new TopicPartition("orders", 1) -> Seq(3, 1, 2), // moves
+      new TopicPartition("payments", 1) -> Seq(2, 1), // changed preferred leader
+      new TopicPartition("deliveries", 0) -> Seq(1, 2, 3) //increase replication factor
     )
 
     new ReassignPartitionsCommand(zkClient, None, secondMove, adminZkClient = adminZkClient).reassignPartitions()
@@ -535,11 +535,11 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     // We set the znode and then continuously attempt to set it again to exercise the case where the znode is set
     // immediately after deletion (i.e. before we set the watcher again)
 
-    val thirdMove = Map(TopicAndPartition("orders", 0) -> Seq(1, 2, 3))
+    val thirdMove = Map(new TopicPartition("orders", 0) -> Seq(1, 2, 3))
 
     new ReassignPartitionsCommand(zkClient, None, thirdMove, adminZkClient = adminZkClient).reassignPartitions()
 
-    val fourthMove = Map(TopicAndPartition("payments", 1) -> Seq(2, 3))
+    val fourthMove = Map(new TopicPartition("payments", 1) -> Seq(2, 3))
 
     // Continuously attempt to set the reassignment znode with `fourthMove` until it succeeds. It will only succeed
     // after `thirdMove` completes.

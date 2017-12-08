@@ -35,7 +35,7 @@ object ReplicationQuotaUtils {
     }, "Throttle limit/replicas was not unset")
   }
 
-  def checkThrottleConfigAddedToZK(adminZkClient: AdminZkClient, expectedThrottleRate: Long, servers: Seq[KafkaServer], topic: String, throttledLeaders: String, throttledFollowers: String): Unit = {
+  def checkThrottleConfigAddedToZK(adminZkClient: AdminZkClient, expectedThrottleRate: Long, servers: Seq[KafkaServer], topic: String, throttledLeaders: Set[String], throttledFollowers: Set[String]): Unit = {
     TestUtils.waitUntilTrue(() => {
       //Check for limit in ZK
       val brokerConfigAvailable = servers.forall { server =>
@@ -47,8 +47,8 @@ object ReplicationQuotaUtils {
       }
       //Check replicas assigned
       val topicConfig = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
-      val leader = topicConfig.getProperty(LogConfig.LeaderReplicationThrottledReplicasProp)
-      val follower = topicConfig.getProperty(LogConfig.FollowerReplicationThrottledReplicasProp)
+      val leader = topicConfig.getProperty(LogConfig.LeaderReplicationThrottledReplicasProp).split(",").toSet
+      val follower = topicConfig.getProperty(LogConfig.FollowerReplicationThrottledReplicasProp).split(",").toSet
       val topicConfigAvailable = leader == throttledLeaders && follower == throttledFollowers
       brokerConfigAvailable && topicConfigAvailable
     }, "throttle limit/replicas was not set")
