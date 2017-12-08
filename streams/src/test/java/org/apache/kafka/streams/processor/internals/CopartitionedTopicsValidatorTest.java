@@ -123,7 +123,7 @@ public class CopartitionedTopicsValidatorTest {
                                                                               final int partitions) {
         final InternalTopicConfig repartitionTopicConfig
                 = new InternalTopicConfig(repartitionTopic,
-                                          Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
+                                          InternalTopicConfig.InternalTopicType.UNWINDOWED_STORE_CHANGELOG,
                                           Collections.<String, String>emptyMap());
 
 

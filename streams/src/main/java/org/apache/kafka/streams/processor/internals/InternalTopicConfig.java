@@ -19,48 +19,35 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.internals.Topic;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Properties;
-import java.util.Set;
 
 /**
  * InternalTopicConfig captures the properties required for configuring
  * the internal topics we create for change-logs and repartitioning etc.
  */
 public class InternalTopicConfig {
-    public enum CleanupPolicy { compact, delete }
 
+    // we need to distinguish windowed and un-windowed store changelog since their cleanup policy may be different
     public enum InternalTopicType { REPARTITION, WINDOWED_STORE_CHANGELOG, UNWINDOWED_STORE_CHANGELOG }
 
     private final String name;
     private int numberOfPartitions = -1;
-    private final Map<String, String> logConfig;
-    private final Set<CleanupPolicy> cleanupPolicies;
+    private final InternalTopicType topicType;
+    private final Map<String, String> topicConfigs;
 
     private Long retentionMs;
 
     public InternalTopicConfig(final String name,
-                               final Set<CleanupPolicy> defaultCleanupPolicies,
-                               final Map<String, String> logConfig) {
+                               final InternalTopicType topicType,
+                               final Map<String, String> topicConfigs) {
         Objects.requireNonNull(name, "name can't be null");
         Topic.validate(name);
 
-        if (defaultCleanupPolicies.isEmpty()) {
-            throw new IllegalArgumentException("Must provide at least one cleanup policy.");
-        }
         this.name = name;
-        this.cleanupPolicies = defaultCleanupPolicies;
-        this.logConfig = logConfig;
-    }
-
-    /* for test use only */
-    boolean isCompacted() {
-        return cleanupPolicies.contains(CleanupPolicy.compact);
-    }
-
-    private boolean isCompactDelete() {
-        return cleanupPolicies.contains(CleanupPolicy.compact) && cleanupPolicies.contains(CleanupPolicy.delete);
+        this.topicType = topicType;
+        this.topicConfigs = topicConfigs;
     }
 
     /**
@@ -70,31 +57,22 @@ public class InternalTopicConfig {
      * @param additionalRetentionMs - added to retention to allow for clock drift etc
      * @return Properties to be used when creating the topic
      */
-    public Properties toProperties(final long additionalRetentionMs) {
-        final Properties result = new Properties();
-        for (Map.Entry<String, String> configEntry : logConfig.entrySet()) {
-            result.put(configEntry.getKey(), configEntry.getValue());
-        }
-        if (retentionMs != null && isCompactDelete()) {
-            result.put(TopicConfig.RETENTION_MS_CONFIG, String.valueOf(retentionMs + additionalRetentionMs));
+    public Map<String, String> toProperties(final long additionalRetentionMs) {
+        final Map<String, String> finalTopicConfigs = new HashMap<>(topicConfigs);
+
+        if (retentionMs != null && topicType == InternalTopicType.WINDOWED_STORE_CHANGELOG) {
+            finalTopicConfigs.put(TopicConfig.RETENTION_MS_CONFIG, String.valueOf(retentionMs + additionalRetentionMs));
         }
 
-        if (!logConfig.containsKey(TopicConfig.CLEANUP_POLICY_CONFIG)) {
-            final StringBuilder builder = new StringBuilder();
-            for (CleanupPolicy cleanupPolicy : cleanupPolicies) {
-                builder.append(cleanupPolicy.name()).append(",");
-            }
-            builder.deleteCharAt(builder.length() - 1);
-
-            result.put(TopicConfig.CLEANUP_POLICY_CONFIG, builder.toString());
-        }
-
-
-        return result;
+        return finalTopicConfigs;
     }
 
     public String name() {
         return name;
+    }
+
+    public InternalTopicType type() {
+        return topicType;
     }
 
     public int numberOfPartitions() {
@@ -112,7 +90,11 @@ public class InternalTopicConfig {
     }
 
     void setRetentionMs(final long retentionMs) {
-        if (!logConfig.containsKey(TopicConfig.RETENTION_MS_CONFIG)) {
+        if (topicType != InternalTopicType.WINDOWED_STORE_CHANGELOG) {
+            throw new IllegalStateException("Setting retention.ms called for not windowed store changelog topics: " + this.toString());
+        }
+
+        if (!topicConfigs.containsKey(TopicConfig.RETENTION_MS_CONFIG)) {
             this.retentionMs = retentionMs;
         }
     }
@@ -123,22 +105,22 @@ public class InternalTopicConfig {
         if (o == null || getClass() != o.getClass()) return false;
         final InternalTopicConfig that = (InternalTopicConfig) o;
         return Objects.equals(name, that.name) &&
-                Objects.equals(logConfig, that.logConfig) &&
-                Objects.equals(retentionMs, that.retentionMs) &&
-                Objects.equals(cleanupPolicies, that.cleanupPolicies);
+               Objects.equals(topicType, that.topicType) &&
+               Objects.equals(topicConfigs, that.topicConfigs) &&
+               Objects.equals(retentionMs, that.retentionMs);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, logConfig, retentionMs, cleanupPolicies);
+        return Objects.hash(name, topicType, topicConfigs, retentionMs);
     }
 
     @Override
     public String toString() {
         return "InternalTopicConfig(" +
                 "name=" + name +
-                ", logConfig=" + logConfig +
-                ", cleanupPolicies=" + cleanupPolicies +
+                ", topicType=" + topicType +
+                ", topicConfigs=" + topicConfigs +
                 ", retentionMs=" + retentionMs +
                 ")";
     }

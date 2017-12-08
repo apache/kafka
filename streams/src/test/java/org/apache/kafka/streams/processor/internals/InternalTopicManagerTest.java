@@ -125,7 +125,7 @@ public class InternalTopicManagerTest {
 
     @Test
     public void shouldCreateRequiredTopics() throws Exception {
-        final InternalTopicConfig topicConfig = new InternalTopicConfig(topic,  Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), Collections.<String, String>emptyMap());
+        final InternalTopicConfig topicConfig = new InternalTopicConfig(topic, InternalTopicConfig.InternalTopicType.REPARTITION, Collections.<String, String>emptyMap());
         topicConfig.setNumberOfPartitions(1);
         internalTopicManager.makeReady(Collections.singletonMap(topic, topicConfig));
 
@@ -151,7 +151,7 @@ public class InternalTopicManagerTest {
             null);
 
         try {
-            final InternalTopicConfig internalTopicConfig = new InternalTopicConfig(topic, Collections.singleton(InternalTopicConfig.CleanupPolicy.delete), Collections.<String, String>emptyMap());
+            final InternalTopicConfig internalTopicConfig = new InternalTopicConfig(topic, InternalTopicConfig.InternalTopicType.REPARTITION, Collections.<String, String>emptyMap());
             internalTopicConfig.setNumberOfPartitions(1);
             internalTopicManager.makeReady(Collections.singletonMap(topic, internalTopicConfig));
             fail("Should have thrown StreamsException");
@@ -171,7 +171,7 @@ public class InternalTopicManagerTest {
             mockAdminClient,
             config);
 
-        final InternalTopicConfig internalTopicConfig = new InternalTopicConfig(topic, Collections.singleton(InternalTopicConfig.CleanupPolicy.delete), Collections.<String, String>emptyMap());
+        final InternalTopicConfig internalTopicConfig = new InternalTopicConfig(topic, InternalTopicConfig.InternalTopicType.REPARTITION, Collections.<String, String>emptyMap());
         internalTopicConfig.setNumberOfPartitions(1);
         internalTopicManager2.makeReady(Collections.singletonMap(topic, internalTopicConfig));
     }
@@ -185,7 +185,7 @@ public class InternalTopicManagerTest {
     public void shouldExhaustRetriesOnTimeoutExceptionForMakeReady() {
         mockAdminClient.timeoutNextRequest(4);
 
-        final InternalTopicConfig internalTopicConfig = new InternalTopicConfig(topic, Collections.singleton(InternalTopicConfig.CleanupPolicy.delete), Collections.<String, String>emptyMap());
+        final InternalTopicConfig internalTopicConfig = new InternalTopicConfig(topic, InternalTopicConfig.InternalTopicType.REPARTITION, Collections.<String, String>emptyMap());
         internalTopicConfig.setNumberOfPartitions(1);
         try {
             internalTopicManager.makeReady(Collections.singletonMap(topic, internalTopicConfig));

@@ -23,6 +23,7 @@ import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.utils.LogContext;
@@ -37,17 +38,37 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 
 public class InternalTopicManager {
+    private final static String INTERRUPTED_ERROR_MESSAGE = "Thread got interrupted. This indicates a bug. " +
+        "Please report at https://issues.apache.org/jira/projects/KAFKA or dev-mailing list (https://kafka.apache.org/contact).";
 
-    private static final Long WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
+    private static final Map<String, String> REPARTITION_TOPIC_DEFAULT_OVERRIDES;
+    static {
+        final Map<String, String> tempTopicDefaultOverrides = new HashMap<>();
+        tempTopicDefaultOverrides.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
+        tempTopicDefaultOverrides.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, "52428800");     // 50 MB
+        tempTopicDefaultOverrides.put(TopicConfig.SEGMENT_BYTES_CONFIG, "52428800");           // 50 MB
+        tempTopicDefaultOverrides.put(TopicConfig.SEGMENT_MS_CONFIG, "600000");                // 10 min
+        REPARTITION_TOPIC_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempTopicDefaultOverrides);
+    }
 
-    public static final String CLEANUP_POLICY_PROP = "cleanup.policy";
-    public static final String RETENTION_MS = "retention.ms";
+    private static final Map<String, String> UNWINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES;
+    static {
+        final Map<String, String> tempTopicDefaultOverrides = new HashMap<>();
+        tempTopicDefaultOverrides.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);
+        UNWINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempTopicDefaultOverrides);
+    }
+
+    private static final Map<String, String> WINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES;
+    static {
+        final Map<String, String> tempTopicDefaultOverrides = new HashMap<>();
+        tempTopicDefaultOverrides.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE);
+        WINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempTopicDefaultOverrides);
+    }
+
 
     private final Logger log;
     private final long windowChangeLogAdditionalRetention;
@@ -61,16 +82,15 @@ public class InternalTopicManager {
     public InternalTopicManager(final AdminClient adminClient,
                                 final Map<String, ?> config) {
         this.adminClient = adminClient;
-        this.replicationFactor =  (short) (config.containsKey(StreamsConfig.REPLICATION_FACTOR_CONFIG) ? (Integer) config.get(StreamsConfig.REPLICATION_FACTOR_CONFIG) : 1);
-        this.windowChangeLogAdditionalRetention = config.containsKey(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG) ?
-            (Long) config.get(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG)
-            : WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT;
+        final StreamsConfig streamsConfig = new StreamsConfig(config);
 
         LogContext logContext = new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName()));
-        this.log = logContext.logger(getClass());
+        log = logContext.logger(getClass());
 
-        final StreamsConfig streamsConfig = new StreamsConfig(config);
+        replicationFactor = streamsConfig.getInt(StreamsConfig.REPLICATION_FACTOR_CONFIG).shortValue();
+        windowChangeLogAdditionalRetention = streamsConfig.getLong(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG);
         retries = new AdminClientConfig(streamsConfig.getAdminConfigs("dummy")).getInt(AdminClientConfig.RETRIES_CONFIG);
+
         log.debug("Configs:" + Utils.NL,
             "\t{} = {}" + Utils.NL,
             "\t{} = {}" + Utils.NL,
@@ -100,11 +120,27 @@ public class InternalTopicManager {
             final Set<NewTopic> newTopics = new HashSet<>();
 
             for (final InternalTopicConfig internalTopicConfig : topicsToBeCreated) {
-                final Properties topicProperties = internalTopicConfig.toProperties(windowChangeLogAdditionalRetention);
-                final Map<String, String> topicConfig = new HashMap<>(defaultTopicConfigs);
-                for (final String key : topicProperties.stringPropertyNames()) {
-                    topicConfig.put(key, topicProperties.getProperty(key));
+                // internal topic config overriden rule: library overrides < global config overrides < per-topic config overrides
+                final Map<String, String> topicConfig = new HashMap<>();
+
+                switch (internalTopicConfig.type()) {
+                    case REPARTITION:
+                        topicConfig.putAll(REPARTITION_TOPIC_DEFAULT_OVERRIDES);
+                        break;
+
+                    case UNWINDOWED_STORE_CHANGELOG:
+                        topicConfig.putAll(UNWINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES);
+                        break;
+
+                    case WINDOWED_STORE_CHANGELOG:
+                        topicConfig.putAll(WINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES);
+                        break;
                 }
+
+                topicConfig.putAll(defaultTopicConfigs);
+
+                topicConfig.putAll(internalTopicConfig.toProperties(windowChangeLogAdditionalRetention));
+
                 newTopics.add(
                     new NewTopic(
                         internalTopicConfig.name(),
@@ -143,9 +179,9 @@ public class InternalTopicManager {
                                 couldNotCreateTopic);
                         }
                     } catch (final InterruptedException fatalException) {
-                        final String error = "Could not create internal topics.";
-                        log.error(error, fatalException);
-                        throw new StreamsException(error, fatalException);
+                        Thread.currentThread().interrupt();
+                        log.error(INTERRUPTED_ERROR_MESSAGE, fatalException);
+                        throw new IllegalStateException(INTERRUPTED_ERROR_MESSAGE, fatalException);
                     }
                 }
 
@@ -197,8 +233,8 @@ public class InternalTopicManager {
                         topicDescription.partitions().size());
                 } catch (final InterruptedException fatalException) {
                     Thread.currentThread().interrupt();
-                    log.error("Thread got interrupted.", fatalException);
-                    throw new StreamsException(fatalException);
+                    log.error(INTERRUPTED_ERROR_MESSAGE, fatalException);
+                    throw new IllegalStateException(INTERRUPTED_ERROR_MESSAGE, fatalException);
                 } catch (final ExecutionException couldNotDescribeTopicException) {
                     final Throwable cause = couldNotDescribeTopicException.getCause();
                     if (cause instanceof TimeoutException) {

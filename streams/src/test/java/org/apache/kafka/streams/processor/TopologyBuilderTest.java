@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsConfig;
@@ -410,21 +411,21 @@ public class TopologyBuilderTest {
                                                   Collections.singletonMap(store1,
                                                                            new InternalTopicConfig(
                                                                                    store1,
-                                                                                   Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
+                                                                                   InternalTopicConfig.InternalTopicType.UNWINDOWED_STORE_CHANGELOG,
                                                                                    Collections.<String, String>emptyMap()))));
         expectedTopicGroups.put(1, new TopicsInfo(Collections.<String>emptySet(), mkSet("topic-3", "topic-4"),
                                                   Collections.<String, InternalTopicConfig>emptyMap(),
                                                   Collections.singletonMap(store2,
                                                                            new InternalTopicConfig(
                                                                                    store2,
-                                                                                   Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
+                                                                                   InternalTopicConfig.InternalTopicType.UNWINDOWED_STORE_CHANGELOG,
                                                                                    Collections.<String, String>emptyMap()))));
         expectedTopicGroups.put(2, new TopicsInfo(Collections.<String>emptySet(), mkSet("topic-5"),
                                                   Collections.<String, InternalTopicConfig>emptyMap(),
                                                   Collections.singletonMap(store3,
                                                                            new InternalTopicConfig(
                                                                                    store3,
-                                                                                   Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
+                                                                                   InternalTopicConfig.InternalTopicType.UNWINDOWED_STORE_CHANGELOG,
                                                                                    Collections.<String, String>emptyMap()))));
 
 
@@ -570,13 +571,13 @@ public class TopologyBuilderTest {
         final Map<Integer, TopicsInfo> topicGroups = builder.topicGroups();
         final TopicsInfo topicsInfo = topicGroups.values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-store-changelog");
-        final Properties properties = topicConfig.toProperties(0);
-        final List<String> policies = Arrays.asList(properties.getProperty(InternalTopicManager.CLEANUP_POLICY_PROP).split(","));
+        final Map<String, String> properties = topicConfig.toProperties(0);
+        final List<String> policies = Arrays.asList(properties.get(TopicConfig.CLEANUP_POLICY_CONFIG).split(","));
         assertEquals("appId-store-changelog", topicConfig.name());
         assertTrue(policies.contains("compact"));
         assertTrue(policies.contains("delete"));
         assertEquals(2, policies.size());
-        assertEquals("30000", properties.getProperty(InternalTopicManager.RETENTION_MS));
+        assertEquals("30000", properties.get(TopicConfig.RETENTION_MS_CONFIG));
         assertEquals(2, properties.size());
     }
 
@@ -590,9 +591,9 @@ public class TopologyBuilderTest {
         final Map<Integer, TopicsInfo> topicGroups = builder.topicGroups();
         final TopicsInfo topicsInfo = topicGroups.values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-name-changelog");
-        final Properties properties = topicConfig.toProperties(0);
+        final Map<String, String> properties = topicConfig.toProperties(0);
         assertEquals("appId-name-changelog", topicConfig.name());
-        assertEquals("compact", properties.getProperty(InternalTopicManager.CLEANUP_POLICY_PROP));
+        assertEquals("compact", properties.get(TopicConfig.CLEANUP_POLICY_CONFIG));
         assertEquals(1, properties.size());
     }
 
@@ -604,9 +605,9 @@ public class TopologyBuilderTest {
         builder.addSource("source", "foo");
         final TopicsInfo topicsInfo = builder.topicGroups().values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.repartitionSourceTopics.get("appId-foo");
-        final Properties properties = topicConfig.toProperties(0);
+        final Map<String, String> properties = topicConfig.toProperties(0);
         assertEquals("appId-foo", topicConfig.name());
-        assertEquals("delete", properties.getProperty(InternalTopicManager.CLEANUP_POLICY_PROP));
+        assertEquals("delete", properties.get(TopicConfig.CLEANUP_POLICY_CONFIG));
         assertEquals(1, properties.size());
     }
 
