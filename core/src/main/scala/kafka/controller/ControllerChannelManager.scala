@@ -177,6 +177,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
       // The call to shutdownLatch.await() in ShutdownableThread.shutdown() serves as a synchronization barrier that
       // hands off the NetworkClient from the RequestSendThread to the ZkEventThread.
       brokerState.requestSendThread.fastTimeout = true
+      brokerState.requestSendThread.networkClient.wakeup();
       brokerState.requestSendThread.shutdown()
       brokerState.networkClient.close()
       brokerState.messageQueue.clear()
@@ -209,7 +210,7 @@ class RequestSendThread(val controllerId: Int,
   extends ShutdownableThread(name = name) {
 
   private val socketTimeoutMs = config.controllerSocketTimeoutMs
-  var fastTimeout: Boolean = false
+  @volatile var fastTimeout: Boolean = false
 
   override def doWork(): Unit = {
 
