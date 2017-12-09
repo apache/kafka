@@ -37,17 +37,10 @@ class LogSegmentTest {
 
   /* create a segment with the given base offset */
   def createSegment(offset: Long, indexIntervalBytes: Int = 10): LogSegment = {
-    val msFile = TestUtils.tempFile()
-    val ms = FileRecords.open(msFile)
-    val idxFile = TestUtils.tempFile()
-    val timeIdxFile = TestUtils.tempFile()
-    val txnIdxFile = TestUtils.tempFile()
-    idxFile.delete()
-    timeIdxFile.delete()
-    txnIdxFile.delete()
-    val idx = new OffsetIndex(idxFile, offset, 1000)
-    val timeIdx = new TimeIndex(timeIdxFile, offset, 1500)
-    val txnIndex = new TransactionIndex(offset, txnIdxFile)
+    val ms = FileRecords.open(Log.logFile(logDir, offset))
+    val idx = new OffsetIndex(Log.offsetIndexFile(logDir, offset), offset, maxIndexSize = 1000)
+    val timeIdx = new TimeIndex(Log.timeIndexFile(logDir, offset), offset, maxIndexSize = 1500)
+    val txnIndex = new TransactionIndex(offset, Log.transactionIndexFile(logDir, offset))
     val seg = new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, maxSegmentMs = Int.MaxValue,
       maxSegmentBytes = Int.MaxValue, Time.SYSTEM)
     segments += seg
