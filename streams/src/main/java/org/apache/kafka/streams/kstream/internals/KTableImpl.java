@@ -31,6 +31,7 @@ import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -248,7 +249,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @SuppressWarnings("deprecation")
-    private <V1> KTable<K, V1> doMapValues(final ValueMapper<? super V, ? extends V1> mapper,
+    private <V1> KTable<K, V1> doMapValues(final ValueMapperWithKey<? super K, ? super V, ? extends V1> mapper,
                                            final Serde<V1> valueSerde,
                                            final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier) {
         Objects.requireNonNull(mapper);
@@ -269,11 +270,22 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     @Override
     public <V1> KTable<K, V1> mapValues(final ValueMapper<? super V, ? extends V1> mapper) {
+        return mapValues(withKey(mapper), null, (String) null);
+    }
+
+    @Override
+    public <VR> KTable<K, VR> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> mapper) {
         return mapValues(mapper, null, (String) null);
     }
 
     @Override
     public <VR> KTable<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper,
+                                        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        return mapValues(withKey(mapper), materialized);
+    }
+
+    @Override
+    public <VR> KTable<K, VR> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> mapper,
                                         final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(mapper, "mapper can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
@@ -281,12 +293,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                 = new MaterializedInternal<>(materialized, builder, MAPVALUES_NAME);
         final String name = builder.newProcessorName(MAPVALUES_NAME);
         final KTableProcessorSupplier<K, V, VR> processorSupplier = new KTableMapValues<>(this,
-                                                                                          mapper,
-                                                                                          materializedInternal.storeName());
+                mapper,
+                materializedInternal.storeName());
         builder.internalTopologyBuilder.addProcessor(name, processorSupplier, this.name);
         builder.internalTopologyBuilder.addStateStore(new KeyValueStoreMaterializer<>(materializedInternal)
-                                                              .materialize(),
-                                                      name);
+                        .materialize(),
+                name);
         return new KTableImpl<>(builder, name, processorSupplier, sourceNodes, this.queryableStoreName, true);
     }
 
@@ -294,6 +306,13 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     @Override
     public <V1> KTable<K, V1> mapValues(final ValueMapper<? super V, ? extends V1> mapper,
                                         final Serde<V1> valueSerde,
+                                        final String queryableStoreName) {
+        return mapValues(withKey(mapper), valueSerde, queryableStoreName);
+    }
+
+    @Override
+    public <VR> KTable<K, VR> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> mapper,
+                                        final Serde<VR> valueSerde,
                                         final String queryableStoreName) {
         org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier = null;
         if (queryableStoreName != null) {
@@ -308,7 +327,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                          final Serde<V1> valueSerde,
                                          final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier) {
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
-        return doMapValues(mapper, valueSerde, storeSupplier);
+        return doMapValues(withKey(mapper), valueSerde, storeSupplier);
     }
 
     @SuppressWarnings("deprecation")
@@ -543,9 +562,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     public KStream<K, V> toStream() {
         String name = builder.newProcessorName(TOSTREAM_NAME);
 
-        builder.internalTopologyBuilder.addProcessor(name, new KStreamMapValues<K, Change<V>, V>(new ValueMapper<Change<V>, V>() {
+        builder.internalTopologyBuilder.addProcessor(name, new KStreamMapValues<K, Change<V>, V>(new ValueMapperWithKey<K, Change<V>, V>() {
             @Override
-            public V apply(Change<V> change) {
+            public V apply(K key, Change<V> change) {
                 return change.newValue;
             }
         }), this.name);

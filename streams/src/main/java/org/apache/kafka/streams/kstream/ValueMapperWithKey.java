@@ -16,15 +16,16 @@
  */
 package org.apache.kafka.streams.kstream;
 
-
 /**
- * The {@code ValueMapper} interface for mapping a value to a new value of arbitrary type.
- * This is a stateless record-by-record operation, i.e, {@link #apply(Object)} is invoked individually for each record
- * of a stream (cf. {@link ValueTransformer} for stateful value transformation).
- * If {@code ValueMapper} is applied to a {@link org.apache.kafka.streams.KeyValue key-value pair} record the record's
- * key is preserved.
+ * The {@code ValueMapperWithKey} interface for mapping a value to a new value of arbitrary type.
+ * This is a stateless record-by-record operation, i.e, {@link #apply(Object, Object)} is invoked individually for each
+ * record of a stream (cf. {@link ValueTransformer} for stateful value transformation).
+ * If {@code ValueMapperWithKey} is applied to a {@link org.apache.kafka.streams.KeyValue key-value pair} record the
+ * record's key is preserved.
+ * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
  * If a record's key and value should be modified {@link KeyValueMapper} can be used.
  *
+ * @param <K>  key type
  * @param <V>  value type
  * @param <VR> mapped value type
  * @see KeyValueMapper
@@ -37,13 +38,15 @@ package org.apache.kafka.streams.kstream;
  * @see KTable#mapValues(ValueMapper)
  * @see KTable#mapValues(ValueMapperWithKey)
  */
-public interface ValueMapper<V, VR> {
+
+public interface ValueMapperWithKey<K, V, VR> {
 
     /**
      * Map the given value to a new value.
      *
+     * @param key the read-only key
      * @param value the value to be mapped
      * @return the new value
      */
-    VR apply(final V value);
+    VR apply(final K key, final V value);
 }

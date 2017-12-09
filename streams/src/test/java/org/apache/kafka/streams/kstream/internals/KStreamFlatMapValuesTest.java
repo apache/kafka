@@ -21,6 +21,7 @@ import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Rule;
@@ -69,6 +70,45 @@ public class KStreamFlatMapValuesTest {
         assertEquals(8, processor.processed.size());
 
         String[] expected = {"0:v0", "0:V0", "1:v1", "1:V1", "2:v2", "2:V2", "3:v3", "3:V3"};
+
+        for (int i = 0; i < expected.length; i++) {
+            assertEquals(expected[i], processor.processed.get(i));
+        }
+    }
+
+
+    @Test
+    public void testFlatMapValuesWithKeys() {
+        StreamsBuilder builder = new StreamsBuilder();
+
+        ValueMapperWithKey<Integer, Number, Iterable<String>> mapper =
+                new ValueMapperWithKey<Integer, Number, Iterable<String>>() {
+                    @Override
+                    public Iterable<String> apply(Integer key, Number value) {
+                        ArrayList<String> result = new ArrayList<>();
+                        result.add("v" + value);
+                        result.add("k" + key);
+                        return result;
+                    }
+                };
+
+        final int[] expectedKeys = {0, 1, 2, 3};
+
+        KStream<Integer, Integer> stream;
+        MockProcessorSupplier<Integer, String> processor;
+
+        processor = new MockProcessorSupplier<>();
+        stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.Integer()));
+        stream.flatMapValues(mapper).process(processor);
+
+        driver.setUp(builder);
+        for (int expectedKey : expectedKeys) {
+            driver.process(topicName, expectedKey, expectedKey);
+        }
+
+        assertEquals(8, processor.processed.size());
+
+        String[] expected = {"0:v0", "0:k0", "1:v1", "1:k1", "2:v2", "2:k2", "3:v3", "3:k3"};
 
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], processor.processed.get(i));
