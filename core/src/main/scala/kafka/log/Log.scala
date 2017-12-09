@@ -1748,10 +1748,11 @@ object Log {
   }
 
   /**
-   * Construct a log file name in the given dir with the given base offset
+   * Construct a log file name in the given dir with the given base offset and the given suffix
    *
    * @param dir The directory in which the log will reside
    * @param offset The base offset of the log file
+   * @param suffix The suffix to be appended to the file name (e.g. "", ".deleted", ".cleaned", ".swap", etc.)
    */
   def logFile(dir: File, offset: Long, suffix: String = ""): File =
     new File(dir, filenamePrefixFromOffset(offset) + LogFileSuffix + suffix)
@@ -1786,19 +1787,21 @@ object Log {
   }
 
   /**
-   * Construct an index file name in the given dir using the given base offset
+   * Construct an index file name in the given dir using the given base offset and the given suffix
    *
    * @param dir The directory in which the log will reside
    * @param offset The base offset of the log file
+   * @param suffix The suffix to be appended to the file name ("", ".deleted", ".cleaned", ".swap", etc.)
    */
   def offsetIndexFile(dir: File, offset: Long, suffix: String = ""): File =
     new File(dir, filenamePrefixFromOffset(offset) + IndexFileSuffix + suffix)
 
   /**
-   * Construct a time index file name in the given dir using the given base offset
+   * Construct a time index file name in the given dir using the given base offset and the given suffix
    *
    * @param dir The directory in which the log will reside
    * @param offset The base offset of the log file
+   * @param suffix The suffix to be appended to the file name ("", ".deleted", ".cleaned", ".swap", etc.)
    */
   def timeIndexFile(dir: File, offset: Long, suffix: String = ""): File =
     new File(dir, filenamePrefixFromOffset(offset) + TimeIndexFileSuffix + suffix)
@@ -1812,6 +1815,13 @@ object Log {
   def producerSnapshotFile(dir: File, offset: Long): File =
     new File(dir, filenamePrefixFromOffset(offset) + ProducerSnapshotFileSuffix)
 
+  /**
+   * Construct a transaction index file name in the given dir using the given base offset and the given suffix
+   *
+   * @param dir The directory in which the log will reside
+   * @param offset The base offset of the log file
+   * @param suffix The suffix to be appended to the file name ("", ".deleted", ".cleaned", ".swap", etc.)
+   */
   def transactionIndexFile(dir: File, offset: Long, suffix: String = ""): File =
     new File(dir, filenamePrefixFromOffset(offset) + TxnIndexFileSuffix + suffix)
 

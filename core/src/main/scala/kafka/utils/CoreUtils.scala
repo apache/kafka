@@ -103,10 +103,10 @@ object CoreUtils extends Logging {
   /**
    * Invokes every function in `all` even if one or more functions throws an exception.
    *
-   * If any of the functions throws an exception, the first one will be rethrown with subsequent exceptions
+   * If any of the functions throws an exception, the first one will be rethrown at the end with subsequent exceptions
    * added as suppressed exceptions.
    */
-  // Note that this is a generalised version if `Utils.closeAll`. We could potentially make it more general by
+  // Note that this is a generalised version of `Utils.closeAll`. We could potentially make it more general by
   // changing the signature to `def tryAll[R](all: Seq[() => R]): Seq[R]`
   def tryAll(all: Seq[() => Unit]): Unit = {
     var exception: Throwable = null
