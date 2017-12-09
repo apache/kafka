@@ -19,8 +19,8 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.kstream.ValueTransformer;
-import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -36,9 +36,9 @@ import java.util.Map;
 
 public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> {
 
-    private final ValueTransformerSupplier<V, R> valueTransformerSupplier;
+    private final ValueTransformerWithKeySupplier<K, V, R> valueTransformerSupplier;
 
-    public KStreamTransformValues(ValueTransformerSupplier<V, R> valueTransformerSupplier) {
+    public KStreamTransformValues(ValueTransformerWithKeySupplier<K, V, R> valueTransformerSupplier) {
         this.valueTransformerSupplier = valueTransformerSupplier;
     }
 
@@ -49,10 +49,10 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
 
     public static class KStreamTransformValuesProcessor<K, V, R> implements Processor<K, V> {
 
-        private final ValueTransformer<V, R> valueTransformer;
+        private final ValueTransformerWithKey<K, V, R> valueTransformer;
         private ProcessorContext context;
 
-        public KStreamTransformValuesProcessor(ValueTransformer<V, R> valueTransformer) {
+        public KStreamTransformValuesProcessor(ValueTransformerWithKey<K, V, R> valueTransformer) {
             this.valueTransformer = valueTransformer;
         }
 
@@ -168,16 +168,12 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
 
         @Override
         public void process(K key, V value) {
-            context.forward(key, valueTransformer.transform(value));
+            context.forward(key, valueTransformer.transform(key, value));
         }
 
         @SuppressWarnings("deprecation")
         @Override
-        public void punctuate(long timestamp) {
-            if (valueTransformer.punctuate(timestamp) != null) {
-                throw new StreamsException("ValueTransformer#punctuate must return null.");
-            }
-        }
+        public void punctuate(long timestamp) {}
 
         @Override
         public void close() {
