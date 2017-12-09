@@ -23,7 +23,9 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.ValueTransformer;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.test.KStreamTestDriver;
@@ -98,9 +100,9 @@ public class KStreamTransformValuesTest {
 
     @Test
     public void shouldNotAllowValueTransformerToCallInternalProcessorContextMethods() {
-        final KStreamTransformValues<Integer, Integer, Integer> transformValue = new KStreamTransformValues<>(new ValueTransformerSupplier<Integer, Integer>() {
+        final KStreamTransformValues<Integer, Integer, Integer> transformValue = new KStreamTransformValues<>(new ValueTransformerWithKeySupplier<Integer, Integer, Integer>() {
             @Override
-            public ValueTransformer<Integer, Integer> get() {
+            public ValueTransformerWithKey<Integer, Integer, Integer> get() {
                 return new BadValueTransformer();
             }
         });
@@ -128,16 +130,9 @@ public class KStreamTransformValuesTest {
         } catch (final StreamsException e) {
             // expected
         }
-
-        try {
-            transformValueProcessor.punctuate(0);
-            fail("should not allow ValueTransformer#puntuate() to return not-null value");
-        } catch (final StreamsException e) {
-            // expected
-        }
     }
 
-    private static final class BadValueTransformer implements ValueTransformer<Integer, Integer> {
+    private static final class BadValueTransformer implements ValueTransformerWithKey<Integer, Integer, Integer> {
         private ProcessorContext context;
 
         @Override
@@ -146,7 +141,7 @@ public class KStreamTransformValuesTest {
         }
 
         @Override
-        public Integer transform(Integer value) {
+        public Integer transform(Integer key, Integer value) {
             if (value == 0) {
                 context.forward(null, null);
             }
@@ -157,11 +152,6 @@ public class KStreamTransformValuesTest {
                 context.forward(null, null, 0);
             }
             throw new RuntimeException("Should never happen in this test");
-        }
-
-        @Override
-        public Integer punctuate(long timestamp) {
-            return 1; // any not-null falue
         }
 
         @Override
