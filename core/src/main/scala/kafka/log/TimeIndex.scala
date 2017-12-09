@@ -210,9 +210,9 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
     val lastOffset = lastEntry.offset
     if (_entries != 0 && lastTimestamp < timestamp(mmap, 0))
       throw new CorruptIndexException(s"Corrupt time index found, time index file (${file.getAbsolutePath}) has " +
-        s"non-zero size but the last timestamp is $lastTimestamp which is no greater than the first timestamp " +
+        s"non-zero size but the last timestamp is $lastTimestamp which is less than the first timestamp " +
         s"${timestamp(mmap, 0)}")
-    if (_entries == 0 && lastOffset < baseOffset)
+    if (_entries != 0 && lastOffset < baseOffset)
       throw new CorruptIndexException(s"Corrupt time index found, time index file (${file.getAbsolutePath}) has " +
         s"non-zero size but the last offset is $lastOffset which is less than the first offset $baseOffset")
     if (length % entrySize != 0)
