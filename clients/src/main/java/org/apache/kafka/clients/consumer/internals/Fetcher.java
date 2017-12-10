@@ -38,7 +38,6 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
@@ -125,7 +124,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                    Deserializer<V> valueDeserializer,
                    Metadata metadata,
                    SubscriptionState subscriptions,
-                   Metrics metrics,
                    FetcherMetricsRegistry metricsRegistry,
                    Time time,
                    long retryBackoffMs,
@@ -144,7 +142,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         this.keyDeserializer = ensureExtended(keyDeserializer);
         this.valueDeserializer = ensureExtended(valueDeserializer);
         this.completedFetches = new ConcurrentLinkedQueue<>();
-        this.sensors = new FetchManagerMetrics(metrics, metricsRegistry);
+        this.sensors = new FetchManagerMetrics(metricsRegistry);
         this.retryBackoffMs = retryBackoffMs;
         this.isolationLevel = isolationLevel;
 
@@ -937,11 +935,11 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         sensors.updatePartitionLagSensors(assignment);
     }
 
-    public static Sensor throttleTimeSensor(Metrics metrics, FetcherMetricsRegistry metricsRegistry) {
+    public static Sensor throttleTimeSensor(FetcherMetricsRegistry metrics) {
         Sensor fetchThrottleTimeSensor = metrics.sensor("fetch-throttle-time");
-        fetchThrottleTimeSensor.add(metrics.metricInstance(metricsRegistry.fetchThrottleTimeAvg), new Avg());
+        fetchThrottleTimeSensor.add(metrics.fetchThrottleTimeAvg, new Avg());
 
-        fetchThrottleTimeSensor.add(metrics.metricInstance(metricsRegistry.fetchThrottleTimeMax), new Max());
+        fetchThrottleTimeSensor.add(metrics.fetchThrottleTimeMax, new Max());
 
         return fetchThrottleTimeSensor;
     }
@@ -1244,8 +1242,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     }
 
     private static class FetchManagerMetrics {
-        private final Metrics metrics;
-        private FetcherMetricsRegistry metricsRegistry;
+        private FetcherMetricsRegistry metrics;
         private final Sensor bytesFetched;
         private final Sensor recordsFetched;
         private final Sensor fetchLatency;
@@ -1253,29 +1250,28 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
         private Set<TopicPartition> assignedPartitions;
 
-        private FetchManagerMetrics(Metrics metrics, FetcherMetricsRegistry metricsRegistry) {
+        private FetchManagerMetrics(FetcherMetricsRegistry metrics) {
             this.metrics = metrics;
-            this.metricsRegistry = metricsRegistry;
 
             this.bytesFetched = metrics.sensor("bytes-fetched");
-            this.bytesFetched.add(metrics.metricInstance(metricsRegistry.fetchSizeAvg), new Avg());
-            this.bytesFetched.add(metrics.metricInstance(metricsRegistry.fetchSizeMax), new Max());
-            this.bytesFetched.add(new Meter(metrics.metricInstance(metricsRegistry.bytesConsumedRate),
-                    metrics.metricInstance(metricsRegistry.bytesConsumedTotal)));
+            this.bytesFetched.add(metrics.fetchSizeAvg, new Avg());
+            this.bytesFetched.add(metrics.fetchSizeMax, new Max());
+            this.bytesFetched.add(new Meter(metrics.bytesConsumedRate,
+                    metrics.bytesConsumedTotal));
 
             this.recordsFetched = metrics.sensor("records-fetched");
-            this.recordsFetched.add(metrics.metricInstance(metricsRegistry.recordsPerRequestAvg), new Avg());
-            this.recordsFetched.add(new Meter(metrics.metricInstance(metricsRegistry.recordsConsumedRate),
-                    metrics.metricInstance(metricsRegistry.recordsConsumedTotal)));
+            this.recordsFetched.add(metrics.recordsPerRequestAvg, new Avg());
+            this.recordsFetched.add(new Meter(metrics.recordsConsumedRate,
+                    metrics.recordsConsumedTotal));
 
             this.fetchLatency = metrics.sensor("fetch-latency");
-            this.fetchLatency.add(metrics.metricInstance(metricsRegistry.fetchLatencyAvg), new Avg());
-            this.fetchLatency.add(metrics.metricInstance(metricsRegistry.fetchLatencyMax), new Max());
-            this.fetchLatency.add(new Meter(new Count(), metrics.metricInstance(metricsRegistry.fetchRequestRate),
-                    metrics.metricInstance(metricsRegistry.fetchRequestTotal)));
+            this.fetchLatency.add(metrics.fetchLatencyAvg, new Avg());
+            this.fetchLatency.add(metrics.fetchLatencyMax, new Max());
+            this.fetchLatency.add(new Meter(new Count(), metrics.fetchRequestRate,
+                    metrics.fetchRequestTotal));
 
             this.recordsFetchLag = metrics.sensor("records-lag");
-            this.recordsFetchLag.add(metrics.metricInstance(metricsRegistry.recordsLagMax), new Max());
+            this.recordsFetchLag.add(metrics.recordsLagMax, new Max());
         }
 
         private void recordTopicFetchMetrics(String topic, int bytes, int records) {
@@ -1286,12 +1282,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 Map<String, String> metricTags = Collections.singletonMap("topic", topic.replace('.', '_'));
 
                 bytesFetched = this.metrics.sensor(name);
-                bytesFetched.add(this.metrics.metricInstance(metricsRegistry.topicFetchSizeAvg,
-                        metricTags), new Avg());
-                bytesFetched.add(this.metrics.metricInstance(metricsRegistry.topicFetchSizeMax,
-                        metricTags), new Max());
-                bytesFetched.add(new Meter(this.metrics.metricInstance(metricsRegistry.topicBytesConsumedRate, metricTags),
-                        this.metrics.metricInstance(metricsRegistry.topicBytesConsumedTotal, metricTags)));
+                bytesFetched.add(metrics.topicFetchSizeAvg(metricTags), new Avg());
+                bytesFetched.add(metrics.topicFetchSizeMax(metricTags), new Max());
+                bytesFetched.add(new Meter(metrics.topicBytesConsumedRate(metricTags),
+                        metrics.topicBytesConsumedTotal(metricTags)));
             }
             bytesFetched.record(bytes);
 
@@ -1303,10 +1297,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 metricTags.put("topic", topic.replace('.', '_'));
 
                 recordsFetched = this.metrics.sensor(name);
-                recordsFetched.add(this.metrics.metricInstance(metricsRegistry.topicRecordsPerRequestAvg,
-                        metricTags), new Avg());
-                recordsFetched.add(new Meter(this.metrics.metricInstance(metricsRegistry.topicRecordsConsumedRate, metricTags),
-                        this.metrics.metricInstance(metricsRegistry.topicRecordsConsumedTotal, metricTags)));
+                recordsFetched.add(metrics.topicRecordsPerRequestAvg(metricTags), new Avg());
+                recordsFetched.add(new Meter(metrics.topicRecordsConsumedRate(metricTags),
+                        metrics.topicRecordsConsumedTotal(metricTags)));
             }
             recordsFetched.record(records);
         }
@@ -1328,15 +1321,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             Sensor recordsLag = this.metrics.getSensor(name);
             if (recordsLag == null) {
                 recordsLag = this.metrics.sensor(name);
-                recordsLag.add(this.metrics.metricName(name,
-                        metricsRegistry.partitionRecordsLag.group(),
-                        metricsRegistry.partitionRecordsLag.description()), new Value());
-                recordsLag.add(this.metrics.metricName(name + "-max",
-                        metricsRegistry.partitionRecordsLagMax.group(),
-                        metricsRegistry.partitionRecordsLagMax.description()), new Max());
-                recordsLag.add(this.metrics.metricName(name + "-avg",
-                        metricsRegistry.partitionRecordsLagAvg.group(),
-                        metricsRegistry.partitionRecordsLagAvg.description()), new Avg());
+                recordsLag.add(metrics.partitionRecordsLag(name), new Value());
+                recordsLag.add(metrics.partitionRecordsLagMax(name), new Max());
+                recordsLag.add(metrics.partitionRecordsLagAvg(name), new Avg());
             }
             recordsLag.record(lag);
         }

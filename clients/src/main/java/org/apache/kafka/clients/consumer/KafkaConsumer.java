@@ -698,12 +698,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG));
             this.metadata.update(Cluster.bootstrap(addresses), Collections.<String>emptySet(), 0);
             String metricGrpPrefix = "consumer";
-            ConsumerMetrics metricsRegistry = new ConsumerMetrics(metricsTags.keySet(), "consumer");
+            ConsumerMetrics metricsRegistry = new ConsumerMetrics(this.metrics);
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config);
 
             IsolationLevel isolationLevel = IsolationLevel.valueOf(
                     config.getString(ConsumerConfig.ISOLATION_LEVEL_CONFIG).toUpperCase(Locale.ROOT));
-            Sensor throttleTimeSensor = Fetcher.throttleTimeSensor(metrics, metricsRegistry.fetcherMetrics);
+            Sensor throttleTimeSensor = Fetcher.throttleTimeSensor(metricsRegistry.fetcherMetrics);
 
             int heartbeatIntervalMs = config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
 
@@ -766,7 +766,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     this.valueDeserializer,
                     this.metadata,
                     this.subscriptions,
-                    metrics,
                     metricsRegistry.fetcherMetrics,
                     this.time,
                     this.retryBackoffMs,
