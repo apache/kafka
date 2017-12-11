@@ -24,13 +24,15 @@ import org.junit.rules.Timeout;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 /**
  * A unit test for KafkaFuture.
@@ -122,6 +124,51 @@ public class KafkaFutureTest {
         futureFail.completeExceptionally(new RuntimeException());
         assertTrue(futureFail.isCompletedExceptionally());
         assertTrue(futureAppliedFail.isCompletedExceptionally());
+    }
+
+    @Test
+    public void testAddWaiterWithExceptions() {
+        final CountDownLatch allDone = new CountDownLatch(3);
+
+        KafkaFutureImpl<Integer> future = new KafkaFutureImpl<>();
+        future.addWaiter(new KafkaFuture.BiConsumer<Integer, Throwable>() {
+            @Override
+            public void accept(Integer integer, Throwable throwable) {
+                allDone.countDown();
+            }
+        });
+        assertFalse(future.isDone());
+        future.addWaiter(new KafkaFuture.BiConsumer<Integer, Throwable>() {
+            @Override
+            public void accept(Integer integer, Throwable throwable) {
+                allDone.countDown();
+                throw new RuntimeException("test bad waiter");
+            }
+        });
+        assertFalse(future.isDone());
+        future.addWaiter(new KafkaFuture.BiConsumer<Integer, Throwable>() {
+            @Override
+            public void accept(Integer integer, Throwable throwable) {
+                allDone.countDown();
+            }
+        });
+        assertEquals(3, allDone.getCount());
+        future.complete(21);
+        assertEquals(0, allDone.getCount());
+
+        final AtomicBoolean invokeOnFailure = new AtomicBoolean(false);
+        KafkaFutureImpl<Integer> futureFail = new KafkaFutureImpl<>();
+        futureFail.addWaiter(
+            new KafkaFuture.BiConsumer<Integer, Throwable>() {
+                @Override
+                public void accept(Integer integer, Throwable throwable) {
+                    invokeOnFailure.set(true);
+                }
+            }
+        );
+        futureFail.completeExceptionally(new RuntimeException());
+        assertTrue(futureFail.isCompletedExceptionally());
+        assertTrue(invokeOnFailure.get());
     }
 
     private static class CompleterThread<T> extends Thread {
