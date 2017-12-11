@@ -43,7 +43,7 @@ public class ScramSaslServerTest {
         CredentialCache.Cache<ScramCredential> credentialCache = new CredentialCache().createCache(mechanism.mechanismName(), ScramCredential.class);
         credentialCache.put(USER_A, formatter.generateCredential("passwordA", 4096));
         credentialCache.put(USER_B, formatter.generateCredential("passwordB", 4096));
-        ScramServerCallbackHandler callbackHandler = new ScramServerCallbackHandler(credentialCache);
+        ScramServerCallbackHandler callbackHandler = new ScramServerCallbackHandler(credentialCache, null);
         saslServer = new ScramSaslServer(mechanism, new HashMap<String, Object>(), callbackHandler);
     }
 

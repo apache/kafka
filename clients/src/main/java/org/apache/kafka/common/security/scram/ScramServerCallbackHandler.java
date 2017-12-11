@@ -25,15 +25,22 @@ import javax.security.auth.callback.NameCallback;
 import javax.security.auth.callback.UnsupportedCallbackException;
 
 import org.apache.kafka.common.network.Mode;
+import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.authenticator.AuthCallbackHandler;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 
 public class ScramServerCallbackHandler implements AuthCallbackHandler {
 
     private final CredentialCache.Cache<ScramCredential> credentialCache;
+    private final JaasContext jaasContext;
 
-    public ScramServerCallbackHandler(CredentialCache.Cache<ScramCredential> credentialCache) {
+    public ScramServerCallbackHandler(CredentialCache.Cache<ScramCredential> credentialCache, JaasContext jaasContext) {
         this.credentialCache = credentialCache;
+        this.jaasContext = jaasContext;
+    }
+
+    public JaasContext jaasContext() {
+        return jaasContext;
     }
 
     @Override

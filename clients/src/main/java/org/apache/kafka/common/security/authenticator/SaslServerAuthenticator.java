@@ -162,7 +162,7 @@ public class SaslServerAuthenticator implements Authenticator {
         if (!ScramMechanism.isScram(mechanism))
             callbackHandler = new SaslServerCallbackHandler(jaasContext);
         else
-            callbackHandler = new ScramServerCallbackHandler(credentialCache.cache(mechanism, ScramCredential.class));
+            callbackHandler = new ScramServerCallbackHandler(credentialCache.cache(mechanism, ScramCredential.class), jaasContext);
         callbackHandler.configure(configs, Mode.SERVER, subject, saslMechanism);
         if (mechanism.equals(SaslConfigs.GSSAPI_MECHANISM)) {
             saslServer = createSaslKerberosServer(callbackHandler, configs, subject);
