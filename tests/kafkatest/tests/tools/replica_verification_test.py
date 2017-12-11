@@ -84,7 +84,7 @@ class ReplicaVerificationToolTest(Test):
                    err_msg="Timed out waiting to reach zero replica lags.")
         self.stop_producer()
 
-        self.start_producer(max_messages=1000, acks=0, timeout=5)
+        self.start_producer(max_messages=10000, acks=0, timeout=5)
         # Verify that there is lag in replicas and is correctly reported by ReplicaVerificationTool
         wait_until(lambda: self.replica_verifier.get_lag_for_partition(TOPIC, 0) > 0, timeout_sec=10,
                    err_msg="Timed out waiting to reach non-zero number of replica lags.")
