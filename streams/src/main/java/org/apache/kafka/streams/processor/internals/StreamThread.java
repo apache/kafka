@@ -560,8 +560,6 @@ public class StreamThread extends Thread {
     private final Object stateLock;
     private final Logger log;
     private final String logPrefix;
-    // TODO: adminClient will be passeed to taskManager to be accessed in StreamPartitionAssignor
-    private final AdminClient adminClient;
     private final TaskManager taskManager;
     private final StreamsMetricsThreadImpl streamsMetrics;
 
@@ -620,8 +618,6 @@ public class StreamThread extends Thread {
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
 
-        final StreamsKafkaClient streamsKafkaClient = StreamsKafkaClient.create(config.originals());
-
         final AbstractTaskCreator<StreamTask> activeTaskCreator = new TaskCreator(builder,
                                                                                   config,
                                                                                   streamsMetrics,
@@ -649,7 +645,7 @@ public class StreamThread extends Thread {
                                                   streamsMetadataState,
                                                   activeTaskCreator,
                                                   standbyTaskCreator,
-                                                  streamsKafkaClient,
+                                                  adminClient,
                                                   new AssignedStreamsTasks(logContext),
                                                   new AssignedStandbyTasks(logContext));
 
@@ -670,7 +666,6 @@ public class StreamThread extends Thread {
                 restoreConsumer,
                 consumer,
                 originalReset,
-                adminClient,
                 taskManager,
                 streamsMetrics,
                 builder,
@@ -683,7 +678,6 @@ public class StreamThread extends Thread {
                         final Consumer<byte[], byte[]> restoreConsumer,
                         final Consumer<byte[], byte[]> consumer,
                         final String originalReset,
-                        final AdminClient adminClient,
                         final TaskManager taskManager,
                         final StreamsMetricsThreadImpl streamsMetrics,
                         final InternalTopologyBuilder builder,
@@ -704,7 +698,6 @@ public class StreamThread extends Thread {
         this.restoreConsumer = restoreConsumer;
         this.consumer = consumer;
         this.originalReset = originalReset;
-        this.adminClient = adminClient;
 
         this.pollTimeMs = config.getLong(StreamsConfig.POLL_MS_CONFIG);
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
@@ -715,8 +708,8 @@ public class StreamThread extends Thread {
     /**
      * Execute the stream processors
      *
-     * @throws KafkaException for any Kafka-related exceptions
-     * @throws Exception      for any other non-Kafka exceptions
+     * @throws KafkaException    for any Kafka-related exceptions
+     * @throws RuntimeException  for any other non-Kafka exceptions
      */
     @Override
     public void run() {
@@ -1001,6 +994,9 @@ public class StreamThread extends Thread {
             int committed = taskManager.commitAll();
             if (committed > 0) {
                 streamsMetrics.commitTimeSensor.record(computeLatency() / (double) committed, timerStartedMs);
+
+                // try to purge the committed records for repartition topics if possible
+                taskManager.maybePurgeCommitedRecords();
             }
             if (log.isDebugEnabled()) {
                 log.debug("Committed all active tasks {} and standby tasks {} in {}ms",
@@ -1040,22 +1036,33 @@ public class StreamThread extends Thread {
                 processStandbyRecords = false;
             }
 
-            final ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(0);
+            try {
+                final ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(0);
 
-            if (!records.isEmpty()) {
-                for (final TopicPartition partition : records.partitions()) {
-                    final StandbyTask task = taskManager.standbyTask(partition);
+                if (!records.isEmpty()) {
+                    for (final TopicPartition partition : records.partitions()) {
+                        final StandbyTask task = taskManager.standbyTask(partition);
 
-                    if (task == null) {
-                        throw new StreamsException(logPrefix + "Missing standby task for partition " + partition);
-                    }
+                        if (task == null) {
+                            throw new StreamsException(logPrefix + "Missing standby task for partition " + partition);
+                        }
 
-                    final List<ConsumerRecord<byte[], byte[]>> remaining = task.update(partition, records.records(partition));
-                    if (remaining != null) {
-                        restoreConsumer.pause(singleton(partition));
-                        standbyRecords.put(partition, remaining);
+                        final List<ConsumerRecord<byte[], byte[]>> remaining = task.update(partition, records.records(partition));
+                        if (remaining != null) {
+                            restoreConsumer.pause(singleton(partition));
+                            standbyRecords.put(partition, remaining);
+                        }
                     }
                 }
+            } catch (final InvalidOffsetException recoverableException) {
+                log.warn("Updating StandbyTasks failed. Deleting StandbyTasks stores to recreate from scratch.", recoverableException);
+                final Set<TopicPartition> partitions = recoverableException.partitions();
+                for (final TopicPartition partition : partitions) {
+                    final StandbyTask task = taskManager.standbyTask(partition);
+                    log.info("Reinitializing StandbyTask {}", task);
+                    task.reinitializeStateStoresForPartitions(recoverableException.partitions());
+                }
+                restoreConsumer.seekToBeginning(partitions);
             }
         }
     }

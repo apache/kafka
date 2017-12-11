@@ -17,12 +17,17 @@
 
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.DeleteRecordsResult;
+import org.apache.kafka.clients.admin.DeletedRecords;
+import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
-
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
@@ -82,7 +87,7 @@ public class TaskManagerTest {
     @Mock(type = MockType.NICE)
     private StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator;
     @Mock(type = MockType.NICE)
-    private StreamsKafkaClient streamsKafkaClient;
+    private AdminClient adminClient;
     @Mock(type = MockType.NICE)
     private StreamTask streamTask;
     @Mock(type = MockType.NICE)
@@ -120,7 +125,7 @@ public class TaskManagerTest {
                                       streamsMetadataState,
                                       activeTaskCreator,
                                       standbyTaskCreator,
-                                      streamsKafkaClient,
+                                      adminClient,
                                       active,
                                       standby);
         taskManager.setConsumer(consumer);
@@ -133,7 +138,8 @@ public class TaskManagerTest {
                         activeTaskCreator,
                         standbyTaskCreator,
                         active,
-                        standby);
+                        standby,
+                        adminClient);
     }
 
     @Test
@@ -540,6 +546,56 @@ public class TaskManagerTest {
             // ok
         }
         verify(standby);
+    }
+
+    @Test
+    public void shouldSendPurgeData() {
+        final KafkaFutureImpl<DeletedRecords> futureDeletedRecords = new KafkaFutureImpl<>();
+        final Map<TopicPartition, RecordsToDelete> recordsToDelete = Collections.singletonMap(t1p1, RecordsToDelete.beforeOffset(5L));
+        final DeleteRecordsResult deleteRecordsResult = new DeleteRecordsResult(Collections.singletonMap(t1p1, (KafkaFuture<DeletedRecords>) futureDeletedRecords));
+
+        futureDeletedRecords.complete(null);
+
+        EasyMock.expect(active.recordsToDelete()).andReturn(Collections.singletonMap(t1p1, 5L)).times(2);
+        EasyMock.expect(adminClient.deleteRecords(recordsToDelete)).andReturn(deleteRecordsResult).times(2);
+        replay();
+
+        taskManager.maybePurgeCommitedRecords();
+        taskManager.maybePurgeCommitedRecords();
+        verify(active, adminClient);
+    }
+
+    @Test
+    public void shouldNotSendPurgeDataIfPreviousNotDone() {
+        final KafkaFuture<DeletedRecords> futureDeletedRecords = new KafkaFutureImpl<>();
+        final Map<TopicPartition, RecordsToDelete> recordsToDelete = Collections.singletonMap(t1p1, RecordsToDelete.beforeOffset(5L));
+        final DeleteRecordsResult deleteRecordsResult = new DeleteRecordsResult(Collections.singletonMap(t1p1, futureDeletedRecords));
+
+        EasyMock.expect(active.recordsToDelete()).andReturn(Collections.singletonMap(t1p1, 5L)).once();
+        EasyMock.expect(adminClient.deleteRecords(recordsToDelete)).andReturn(deleteRecordsResult).once();
+        replay();
+
+        taskManager.maybePurgeCommitedRecords();
+        // second call should be no-op as the previous one is not done yet
+        taskManager.maybePurgeCommitedRecords();
+        verify(active, adminClient);
+    }
+
+    @Test
+    public void shouldIgnorePurgeDataErrors() {
+        final KafkaFutureImpl<DeletedRecords> futureDeletedRecords = new KafkaFutureImpl<>();
+        final Map<TopicPartition, RecordsToDelete> recordsToDelete = Collections.singletonMap(t1p1, RecordsToDelete.beforeOffset(5L));
+        final DeleteRecordsResult deleteRecordsResult = new DeleteRecordsResult(Collections.singletonMap(t1p1, (KafkaFuture<DeletedRecords>) futureDeletedRecords));
+
+        futureDeletedRecords.completeExceptionally(new Exception("KABOOM!"));
+
+        EasyMock.expect(active.recordsToDelete()).andReturn(Collections.singletonMap(t1p1, 5L)).times(2);
+        EasyMock.expect(adminClient.deleteRecords(recordsToDelete)).andReturn(deleteRecordsResult).times(2);
+        replay();
+
+        taskManager.maybePurgeCommitedRecords();
+        taskManager.maybePurgeCommitedRecords();
+        verify(active, adminClient);
     }
 
     @Test

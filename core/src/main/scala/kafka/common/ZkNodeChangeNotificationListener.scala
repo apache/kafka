@@ -28,7 +28,7 @@ import org.apache.kafka.common.utils.Time
  * Handle the notificationMessage.
  */
 trait NotificationHandler {
-  def processNotification(notificationMessage: String)
+  def processNotification(notificationMessage: Array[Byte])
 }
 
 /**

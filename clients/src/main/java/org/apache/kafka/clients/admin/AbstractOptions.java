@@ -23,7 +23,7 @@ package org.apache.kafka.clients.admin;
  */
 public abstract class AbstractOptions<T extends AbstractOptions> {
 
-    private Integer timeoutMs = null;
+    protected Integer timeoutMs = null;
 
     /**
      * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the

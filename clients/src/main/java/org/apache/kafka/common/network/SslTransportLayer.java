@@ -131,6 +131,11 @@ public class SslTransportLayer implements TransportLayer {
     }
 
     @Override
+    public SelectionKey selectionKey() {
+        return key;
+    }
+
+    @Override
     public boolean isOpen() {
         return socketChannel.isOpen();
     }
@@ -169,13 +174,8 @@ public class SslTransportLayer implements TransportLayer {
         } catch (IOException ie) {
             log.warn("Failed to send SSL Close message ", ie);
         } finally {
-            try {
-                socketChannel.socket().close();
-                socketChannel.close();
-            } finally {
-                key.attach(null);
-                key.cancel();
-            }
+            socketChannel.socket().close();
+            socketChannel.close();
         }
     }
 

@@ -261,4 +261,9 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
     public synchronized boolean isDone() {
         return done;
     }
+
+    @Override
+    public String toString() {
+        return String.format("KafkaFuture{value=%s,exception=%s,done=%b}", value, exception, done);
+    }
 }

@@ -16,14 +16,9 @@
  */
 package org.apache.kafka.test;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.IntegerDeserializer;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Map;
 
@@ -64,64 +59,5 @@ public class MockStateStoreSupplier implements StateStoreSupplier {
     @Override
     public boolean loggingEnabled() {
         return loggingEnabled;
-    }
-
-    public static class MockStateStore implements StateStore {
-        private final String name;
-        private final boolean persistent;
-
-        public boolean initialized = false;
-        public boolean flushed = false;
-        public boolean closed = true;
-        public final ArrayList<Integer> keys = new ArrayList<>();
-
-        public MockStateStore(final String name,
-                              final boolean persistent) {
-            this.name = name;
-            this.persistent = persistent;
-        }
-
-        @Override
-        public String name() {
-            return name;
-        }
-
-        @Override
-        public void init(final ProcessorContext context,
-                         final StateStore root) {
-            context.register(root, false, stateRestoreCallback);
-            initialized = true;
-            closed = false;
-        }
-
-        @Override
-        public void flush() {
-            flushed = true;
-        }
-
-        @Override
-        public void close() {
-            closed = true;
-        }
-
-        @Override
-        public boolean persistent() {
-            return persistent;
-        }
-
-        @Override
-        public boolean isOpen() {
-            return !closed;
-        }
-
-        public final StateRestoreCallback stateRestoreCallback = new StateRestoreCallback() {
-            private final Deserializer<Integer> deserializer = new IntegerDeserializer();
-
-            @Override
-            public void restore(final byte[] key,
-                                final byte[] value) {
-                keys.add(deserializer.deserialize("", key));
-            }
-        };
     }
 }

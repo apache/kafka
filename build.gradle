@@ -549,6 +549,7 @@ project(':core') {
     compile libs.joptSimple
     compile libs.metrics
     compile libs.scala
+    compile libs.slf4jApi
     compile libs.slf4jlog4j
     compile libs.scalaLogging
     compile libs.zkclient
