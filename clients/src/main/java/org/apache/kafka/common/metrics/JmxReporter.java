@@ -88,8 +88,12 @@ public class JmxReporter implements MetricsReporter {
         synchronized (LOCK) {
             KafkaMbean mbean = removeAttribute(metric);
             if (mbean != null) {
-                if (mbean.metrics.isEmpty())
+                if (mbean.metrics.isEmpty()) {
                     unregister(mbean);
+                    MetricName metricName = metric.metricName();
+                    String mBeanName = getMBeanName(prefix, metricName);
+                    mbeans.remove(mBeanName);
+                }
                 else
                     reregister(mbean);
             }
@@ -100,7 +104,6 @@ public class JmxReporter implements MetricsReporter {
         MetricName metricName = metric.metricName();
         String mBeanName = getMBeanName(prefix, metricName);
         KafkaMbean mbean = this.mbeans.get(mBeanName);
-        mbeans.remove(mBeanName);
         if (mbean != null)
             mbean.removeAttribute(metricName.name());
         return mbean;
