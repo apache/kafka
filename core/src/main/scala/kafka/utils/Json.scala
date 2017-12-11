@@ -19,7 +19,6 @@ package kafka.utils
 import java.nio.charset.StandardCharsets
 
 import com.fasterxml.jackson.core.JsonProcessingException
-import com.fasterxml.jackson.core.io.JsonStringEncoder
 import com.fasterxml.jackson.databind.ObjectMapper
 import kafka.utils.json.JsonValue
 
@@ -39,7 +38,7 @@ object Json {
     try Option(mapper.readTree(input)).map(JsonValue(_))
     catch {
       case _: JsonProcessingException =>
-        // In 1.0, Json#encode did not escape backslash or any other special characters. SSL principals
+        // Before 1.0.1, Json#encode did not escape backslash or any other special characters. SSL principals
         // stored in ACLs may contain backslash as an escape char, making the JSON generated in 1.0 invalid.
         // Escape backslash and retry to handle these strings which may have been persisted in ZK.
         // Note that this does not handle all special characters (e.g. non-escaped double quotes are not supported)

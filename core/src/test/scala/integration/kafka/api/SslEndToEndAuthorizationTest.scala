@@ -63,7 +63,7 @@ class SslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   //
   // Leading and trailing spaces in Kafka principal dont work with ACLs, but we can workaround by using
   // a PrincipalBuilder that removes/replaces them.
-  private val clientCn = "\\#A client with special chars in CN : (\\, \\+ \\\" \\\\ \\< \\> \\; ')"
+  private val clientCn = """\#A client with special chars in CN : (\, \+ \" \\ \< \> \; ')"""
   override val clientPrincipal = s"O=A client,CN=$clientCn"
   override val kafkaPrincipal = "server"
   @Before

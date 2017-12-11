@@ -46,26 +46,14 @@ class JsonTest {
     assertEquals(Json.parseFull("[1, 2, 3]"), Some(JsonValue(arrayNode)))
 
     // Test with encoder that properly escapes backslash and quotes
-    val map = Map("foo1" -> "bar1\\,bar2", "foo2" -> "\\bar")
+    val map = Map("foo1" -> """bar1\,bar2""", "foo2" -> """\bar""")
     val encoded = Json.encode(map)
     val decoded = Json.parseFull(encoded)
     assertEquals(Json.parseFull("""{"foo1":"bar1\\,bar2", "foo2":"\\bar"}"""), decoded)
 
     // Test strings with non-escaped backslash and quotes. This is to verify that ACLs
     // containing non-escaped chars persisted using 1.0 can be parsed.
-    def encodeWithoutEscaping(obj: Any): String = {
-      obj match {
-        case s: String => "\"" + s + "\""
-        case m: Map[_, _] => "{" +
-          m.map {
-            case (k, v) => encodeWithoutEscaping(k) + ":" + encodeWithoutEscaping(v)
-            case elem => throw new IllegalArgumentException(s"Invalid map element '$elem' in $obj")
-          }.mkString(",") + "}"
-        case o => Json.encode(o)
-      }
-    }
-    val oldEncoded = encodeWithoutEscaping(map)
-    assertEquals(decoded, Json.parseFull(oldEncoded))
+    assertEquals(decoded, Json.parseFull("""{"foo1":"bar1\,bar2", "foo2":"\bar"}"""))
   }
 
   @Test
@@ -85,8 +73,8 @@ class JsonTest {
     assertEquals("{}", Json.encode(Map()))
     assertEquals("{\"a\":1,\"b\":2}", Json.encode(Map("a" -> 1, "b" -> 2)))
     assertEquals("{\"a\":[1,2],\"c\":[3,4]}", Json.encode(Map("a" -> Seq(1,2), "c" -> Seq(3,4))))
-    assertEquals("\"str1\\\\,str2\"", Json.encode("str1\\,str2"))
-    assertEquals("\"\\\"quoted\\\"\"", Json.encode("\"quoted\""))
+    assertEquals(""""str1\\,str2"""", Json.encode("""str1\,str2"""))
+    assertEquals(""""\"quoted\""""", Json.encode(""""quoted""""))
   }
   
 }
