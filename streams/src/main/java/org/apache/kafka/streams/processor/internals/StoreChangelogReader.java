@@ -252,7 +252,7 @@ public class StoreChangelogReader implements ChangelogReader {
         final long pos = processNext(allRecords.records(topicPartition), restorer, endOffset);
         restorer.setRestoredOffset(pos);
         if (restorer.hasCompleted(pos, endOffset)) {
-            if (pos > endOffset + 1) {
+            if (pos > endOffset) {
                 throw new TaskMigratedException(task, topicPartition, endOffset, pos);
             }
 

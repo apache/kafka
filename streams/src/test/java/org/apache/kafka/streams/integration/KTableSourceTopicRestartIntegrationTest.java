@@ -85,7 +85,6 @@ public class KTableSourceTopicRestartIntegrationTest {
         STREAMS_CONFIG.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 5);
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, WallclockTimestampExtractor.class);
 
-
         PRODUCER_CONFIG.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         PRODUCER_CONFIG.put(ProducerConfig.ACKS_CONFIG, "all");
         PRODUCER_CONFIG.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
@@ -130,7 +129,7 @@ public class KTableSourceTopicRestartIntegrationTest {
 
             produceKeyValues("f", "g", "h");
 
-            assertNumberValuesRead(readKeyValues, 8, "Table did not get all values after restart");
+            assertNumberValuesRead(readKeyValues, 7, "Table did not get all values after restart");
 
         } finally {
             streamsOne.close(5, TimeUnit.SECONDS);
@@ -157,7 +156,7 @@ public class KTableSourceTopicRestartIntegrationTest {
 
             produceKeyValues("f", "g", "h");
 
-            assertNumberValuesRead(readKeyValues, 8, "Table did not get all values after restart");
+            assertNumberValuesRead(readKeyValues, 7, "Table did not get all values after restart");
 
         } finally {
             streamsOne.close(5, TimeUnit.SECONDS);
@@ -223,9 +222,9 @@ public class KTableSourceTopicRestartIntegrationTest {
                                    final long endingOffset) {
             try {
                 // need two values appended to log to trigger issue
-                produceKeyValues("d", "e");
+                produceKeyValues("d");
             } catch (ExecutionException | InterruptedException e) {
-                  throw new RuntimeException(e);
+                throw new RuntimeException(e);
             }
         }
 
