@@ -52,7 +52,7 @@ public abstract class AbstractTask implements Task {
     final Logger log;
     final LogContext logContext;
     boolean taskInitialized;
-    private final StateDirectory stateDirectory;
+    final StateDirectory stateDirectory;
 
     InternalProcessorContext processorContext;
 
@@ -220,10 +220,14 @@ public abstract class AbstractTask implements Task {
 
         for (final StateStore store : topology.stateStores()) {
             log.trace("Initializing store {}", store.name());
+            processorContext.uninitialize();
             store.init(processorContext, store);
         }
     }
 
+    void reinitializeStateStoresForPartitions(final Collection<TopicPartition> partitions) {
+        stateMgr.reinitializeStateStoresForPartitions(partitions, processorContext);
+    }
 
     /**
      * @throws ProcessorStateException if there is an error while closing the state manager

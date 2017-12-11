@@ -33,7 +33,6 @@ import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.Cancellable;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.TaskId;
@@ -638,11 +637,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      */
     boolean commitNeeded() {
         return commitRequested;
-    }
-
-    // visible for testing only
-    ProcessorContext processorContext() {
-        return processorContext;
     }
 
     // visible for testing only
