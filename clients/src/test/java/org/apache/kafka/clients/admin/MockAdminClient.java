@@ -38,13 +38,25 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 public class MockAdminClient extends AdminClient {
+    public static final String CLUSTER_ID = "I4ZmrWqfT2e-upky_4fdPA";
+
     private final List<Node> brokers;
     private final Map<String, TopicMetadata> allTopics = new HashMap<>();
 
+    private Node controller;
     private int timeoutNextRequests = 0;
 
+    /**
+     * Creates the
+     * @param brokers
+     */
     public MockAdminClient(List<Node> brokers) {
         this.brokers = brokers;
+        this.controller = brokers.get(0);
+    }
+
+    public void controller(Node controller) {
+        this.controller = controller;
     }
 
     public void addTopic(boolean internal,
@@ -82,7 +94,22 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     public DescribeClusterResult describeCluster(DescribeClusterOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        KafkaFutureImpl<Collection<Node>> nodesFuture = new KafkaFutureImpl<>();
+        KafkaFutureImpl<Node> controllerFuture = new KafkaFutureImpl<>();
+        KafkaFutureImpl<String> brokerIdFuture = new KafkaFutureImpl<>();
+
+        if (timeoutNextRequests > 0) {
+            nodesFuture.completeExceptionally(new TimeoutException());
+            controllerFuture.completeExceptionally(new TimeoutException());
+            brokerIdFuture.completeExceptionally(new TimeoutException());
+            --timeoutNextRequests;
+        } else {
+            nodesFuture.complete(brokers);
+            controllerFuture.complete(controller);
+            brokerIdFuture.complete(CLUSTER_ID);
+        }
+
+        return new DescribeClusterResult(nodesFuture, controllerFuture, brokerIdFuture);
     }
 
     @Override

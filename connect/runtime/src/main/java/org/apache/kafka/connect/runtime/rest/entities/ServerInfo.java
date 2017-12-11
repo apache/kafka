@@ -22,10 +22,12 @@ import org.apache.kafka.common.utils.AppInfoParser;
 public class ServerInfo {
     private String version;
     private String commit;
+    private String kafkaClusterId;
 
-    public ServerInfo() {
+    public ServerInfo(String kafkaClusterId) {
         version = AppInfoParser.getVersion();
         commit = AppInfoParser.getCommitId();
+        this.kafkaClusterId = kafkaClusterId;
     }
 
     @JsonProperty
@@ -36,5 +38,10 @@ public class ServerInfo {
     @JsonProperty
     public String commit() {
         return commit;
+    }
+
+    @JsonProperty("kafka_cluster_id")
+    public String clusterId() {
+        return kafkaClusterId;
     }
 }

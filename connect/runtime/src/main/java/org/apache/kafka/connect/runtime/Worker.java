@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.MetricName;
@@ -53,6 +54,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -80,6 +82,7 @@ public class Worker {
     private final Converter internalValueConverter;
     private final OffsetBackingStore offsetBackingStore;
     private final Map<String, Object> producerProps;
+    private final String kafkaClusterId;
 
     private final ConcurrentMap<String, WorkerConnector> connectors = new ConcurrentHashMap<>();
     private final ConcurrentMap<ConnectorTaskId, WorkerTask> tasks = new ConcurrentHashMap<>();
@@ -91,6 +94,18 @@ public class Worker {
             Plugins plugins,
             WorkerConfig config,
             OffsetBackingStore offsetBackingStore
+    ) {
+        this(workerId, time, plugins, config, offsetBackingStore, null);
+    }
+
+    // package private for unit testing without performing cluster ID lookup
+    Worker(
+            String workerId,
+            Time time,
+            Plugins plugins,
+            WorkerConfig config,
+            OffsetBackingStore offsetBackingStore,
+            String kafkaClusterId
     ) {
         this.metrics = new ConnectMetrics(workerId, config, time);
         this.executor = Executors.newCachedThreadPool();
@@ -133,6 +148,33 @@ public class Worker {
         producerProps.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1");
         // User-specified overrides
         producerProps.putAll(config.originalsWithPrefix("producer."));
+
+        if (kafkaClusterId != null) {
+            this.kafkaClusterId = kafkaClusterId;
+        } else {
+            try (AdminClient adminClient = AdminClient.create(config.originals())) {
+                this.kafkaClusterId = lookupKafkaClusterId(adminClient);
+            }
+        }
+    }
+
+    public String kafkaClusterId() {
+        return kafkaClusterId;
+    }
+
+    static String lookupKafkaClusterId(AdminClient adminClient) {
+        log.debug("Looking up Kafka cluster ID");
+        try {
+            return adminClient.describeCluster().clusterId().get();
+        } catch (InterruptedException e) {
+            final String msg = "Unexpectedly interrupted when looking up Kafka cluster info";
+            log.error(msg, e);
+            throw new ConnectException(msg, e);
+        } catch (ExecutionException e) {
+            final String msg = "Failed to connect to and describe Kafka cluster";
+            log.error(msg, e);
+            throw new ConnectException(msg, e);
+        }
     }
 
     /**

@@ -94,6 +94,11 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         this.configBackingStore = configBackingStore;
     }
 
+    @Override
+    public String kafkaClusterId() {
+        return worker.kafkaClusterId();
+    }
+
     protected abstract int generation();
 
     protected void startServices() {
