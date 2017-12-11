@@ -492,8 +492,8 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
   /**
    * Get JSON partition to replica map from zookeeper.
    */
-  def replicaAssignmentZkData(partitionMap: Map[Int, Seq[Int]]): String = {
-    Json.legacyEncodeAsString(Map("version" -> 1, "partitions" -> (partitionMap.map(e => e._1.toString -> e._2))))
+  def replicaAssignmentZkData(map: Map[String, Seq[Int]]): String = {
+    Json.legacyEncodeAsString(Map("version" -> 1, "partitions" -> map))
   }
 
   /**

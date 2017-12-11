@@ -204,9 +204,9 @@ private object PartitionAssignorTest extends Logging {
     }
 
     scenario.topicPartitionCounts.foreach { case(topic, partitionCount) =>
-      val replicaAssignment = Map((0 until partitionCount).map(partition => (partition, Seq(0))):_*)
+      val replicaAssignment = Map((0 until partitionCount).map(partition => (partition.toString, Seq(0))):_*)
       EasyMock.expect(zkClient.readData("/brokers/topics/%s".format(topic), new Stat()))
-              .andReturn(zkUtils.replicaAssignmentZkData(replicaAssignment))
+        .andReturn(zkUtils.replicaAssignmentZkData(replicaAssignment))
       EasyMock.expectLastCall().anyTimes()
     }
 

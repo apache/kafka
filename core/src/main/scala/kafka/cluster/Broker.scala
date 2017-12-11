@@ -135,7 +135,7 @@ object Broker {
     val jsonMap = collection.mutable.Map(VersionKey -> version,
       HostKey -> host,
       PortKey -> port,
-      EndpointsKey -> advertisedEndpoints.map(_.connectionString).toList.asJava,
+      EndpointsKey -> advertisedEndpoints.map(_.connectionString).toBuffer.asJava,
       JmxPortKey -> jmxPort,
       TimestampKey -> Time.SYSTEM.milliseconds().toString
     )

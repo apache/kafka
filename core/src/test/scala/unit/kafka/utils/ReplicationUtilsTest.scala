@@ -24,6 +24,7 @@ import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
 import org.junit.{Before, Test}
 import org.easymock.EasyMock
+import scala.collection.JavaConverters._
 
 class ReplicationUtilsTest extends ZooKeeperTestHarness {
   private val zkVersion = 1
@@ -34,8 +35,8 @@ class ReplicationUtilsTest extends ZooKeeperTestHarness {
   private val controllerEpoch = 1
   private val isr = List(1, 2)
   private val topicPath = s"/brokers/topics/$topic/partitions/$partition/state"
-  private val topicData = Json.legacyEncodeAsString(Map("controller_epoch" -> controllerEpoch, "leader" -> leader,
-    "versions" -> 1, "leader_epoch" -> leaderEpoch, "isr" -> isr))
+  private val topicData = Json.encodeAsString(Map("controller_epoch" -> controllerEpoch, "leader" -> leader,
+    "versions" -> 1, "leader_epoch" -> leaderEpoch, "isr" -> isr).asJava)
 
   @Before
   override def setUp() {

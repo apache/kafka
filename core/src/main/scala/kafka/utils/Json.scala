@@ -51,7 +51,7 @@ object Json {
    *   T => null | Boolean | String | Number | Map[String, T] | Array[T] | Iterable[T]
    * Any other type will result in an exception.
    * 
-   * This method does not properly handle non-ascii characters. 
+   * This method does not properly handle non-ascii characters hence it is getting replaced by Json.encodeAsString
    */
   def legacyEncodeAsString(obj: Any): String = {
     obj match {
@@ -75,14 +75,26 @@ object Json {
    *   T => null | Boolean | String | Number | Map[String, T] | Array[T] | Iterable[T]
    * Any other type will result in an exception.
    *
-   * This method does not properly handle non-ascii characters.
+   * This method does not properly handle non-ascii characters hence it is getting replaced by Json.encodeAsBytes
    */
   def legacyEncodeAsBytes(obj: Any): Array[Byte] = legacyEncodeAsString(obj).getBytes(StandardCharsets.UTF_8)
 
+  /**
+    * Encode an object into JSON string.
+    * @param obj of any Scala type however this method expects the Scala collections to be converted to corresponding
+    *   Java type beforehand and it can be done by calling 'asJava' on Scala collections/nested collections
+    * @return JSON string
+    */
   def encodeAsString(obj: Any): String = {
      mapper.writeValueAsString(obj)
   }
 
+  /**
+    * Encode an object into JSON value in bytes.
+    * @param obj of any Scala type however this method expects the Scala collections to be converted to corresponding
+    *   Java type beforehand and it can be done by calling 'asJava' on Scala collections/nested collections
+    * @return JSON byte array
+    */
   def encodeAsBytes(obj: Any): Array[Byte] = {
       mapper.writeValueAsString(obj).getBytes(StandardCharsets.UTF_8)
   }

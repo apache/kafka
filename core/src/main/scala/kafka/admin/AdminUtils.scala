@@ -528,7 +528,7 @@ object AdminUtils extends Logging with AdminUtilities {
   private def writeTopicPartitionAssignment(zkUtils: ZkUtils, topic: String, replicaAssignment: Map[Int, Seq[Int]], update: Boolean) {
     try {
       val zkPath = getTopicPath(topic)
-      val jsonPartitionData = zkUtils.replicaAssignmentZkData(replicaAssignment)
+      val jsonPartitionData = zkUtils.replicaAssignmentZkData(replicaAssignment.map(e => e._1.toString -> e._2))
 
       if (!update) {
         info("Topic creation " + jsonPartitionData.toString)
@@ -640,11 +640,7 @@ object AdminUtils extends Logging with AdminUtilities {
    * Write out the entity config to zk, if there is any
    */
   private def writeEntityConfig(zkUtils: ZkUtils, entityPath: String, config: Properties) {
-    val configMap: mutable.Map[String, String] = {
-      import JavaConversions._
-      config
-    }
-    val map = Map("version" -> 1, "config" -> configMap)
+    val map = Map("version" -> 1, "config" -> config.asScala)
     zkUtils.updatePersistentPath(entityPath, Json.legacyEncodeAsString(map))
   }
 

@@ -17,9 +17,6 @@
 
 package kafka.api
 
-import kafka.utils.Json
-import scala.collection.JavaConverters._
-
 object LeaderAndIsr {
   val initialLeaderEpoch: Int = 0
   val initialZKVersion: Int = 0
@@ -44,7 +41,6 @@ case class LeaderAndIsr(leader: Int,
   def newEpochAndZkVersion = newLeaderAndIsr(leader, isr)
 
   override def toString: String = {
-    val isrList = if (isr.size !=0) isr else null
-    return "LeaderAndIsr(leader=" + leader + ", leader_epoch=" + leaderEpoch + ", isr=" + isrList + ", zk_version=" + zkVersion + ")"
+    s"LeaderAndIsr(leader=$leader, leaderEpoch=$leaderEpoch, isr=$isr, zkVersion=$zkVersion)"
   }
 }
