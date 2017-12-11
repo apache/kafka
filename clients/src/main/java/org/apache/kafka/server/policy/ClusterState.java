@@ -15,29 +15,26 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.clients.admin;
+package org.apache.kafka.server.policy;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
+import java.util.Set;
 
-import java.util.Map;
+/** The current state of the topics in the cluster, before the request takes effect. */
+public interface ClusterState {
+    /**
+     * Returns the current state of the given topic, or null if the topic does not exist.
+     */
+    TopicState topicState(String topicName);
 
-/**
- * Options for {@link AdminClient#deleteRecords(Map, DeleteRecordsOptions)}.
- *
- * The API of this class is evolving, see {@link AdminClient} for details.
- */
-@InterfaceStability.Evolving
-public class DeleteRecordsOptions extends AbstractOptions<DeleteRecordsOptions> {
+    /**
+     * Returns all the topics in the cluster, including internal topics if
+     * {@code includeInternal} is true, and including those marked for deletion
+     * if {@code includeMarkedForDeletion} is true.
+     */
+    Set<String> topics(boolean includeInternal, boolean includeMarkedForDeletion);
 
-    private boolean validateOnly;
-
-    public DeleteRecordsOptions validateOnly(boolean validateOnly) {
-        this.validateOnly = validateOnly;
-        return this;
-    }
-
-    public boolean validateOnly() {
-        return validateOnly;
-    }
-
+    /**
+     * The number of brokers in the cluster.
+     */
+    int clusterSize();
 }

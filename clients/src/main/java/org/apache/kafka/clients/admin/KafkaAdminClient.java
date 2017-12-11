@@ -1134,7 +1134,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DeleteTopicsResult deleteTopics(final Collection<String> topicNames,
-                                           DeleteTopicsOptions options) {
+                                           final DeleteTopicsOptions options) {
         final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(topicNames.size());
         for (String topicName : topicNames) {
             if (topicFutures.get(topicName) == null) {
@@ -1147,14 +1147,14 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new DeleteTopicsRequest.Builder(new HashSet<>(topicNames), timeoutMs);
+                return new DeleteTopicsRequest.Builder(new HashSet<>(topicNames), timeoutMs, options.validateOnly());
             }
 
             @Override
             void handleResponse(AbstractResponse abstractResponse) {
                 DeleteTopicsResponse response = (DeleteTopicsResponse) abstractResponse;
                 // Handle server responses for particular topics.
-                for (Map.Entry<String, Errors> entry : response.errors().entrySet()) {
+                for (Map.Entry<String, ApiError> entry : response.apiErrors().entrySet()) {
                     KafkaFutureImpl<Void> future = topicFutures.get(entry.getKey());
                     if (future == null) {
                         log.warn("Server response mentioned unknown topic {}", entry.getKey());
@@ -1948,7 +1948,7 @@ public class KafkaAdminClient extends AdminClient {
 
                         @Override
                         AbstractRequest.Builder createRequest(int timeoutMs) {
-                            return new DeleteRecordsRequest.Builder(timeoutMs, entry.getValue());
+                            return new DeleteRecordsRequest.Builder(timeoutMs, entry.getValue(), options.validateOnly());
                         }
 
                         @Override
@@ -1957,7 +1957,7 @@ public class KafkaAdminClient extends AdminClient {
                             for (Map.Entry<TopicPartition, DeleteRecordsResponse.PartitionResponse> result: response.responses().entrySet()) {
 
                                 KafkaFutureImpl<DeletedRecords> future = futures.get(result.getKey());
-                                if (result.getValue().error == Errors.NONE) {
+                                if (result.getValue().error.error() == Errors.NONE) {
                                     future.complete(new DeletedRecords(result.getValue().lowWatermark));
                                 } else {
                                     future.completeExceptionally(result.getValue().error.exception());

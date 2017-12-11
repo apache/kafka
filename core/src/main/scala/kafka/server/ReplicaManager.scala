@@ -35,6 +35,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION
 import org.apache.kafka.common.protocol.Errors.KAFKA_STORAGE_ERROR
@@ -45,7 +46,9 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
+import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.policy.TopicManagementPolicy
 
 import scala.collection.JavaConverters._
 import scala.collection._
@@ -61,9 +64,9 @@ case class LogAppendResult(info: LogAppendInfo, exception: Option[Throwable] = N
 }
 
 case class LogDeleteRecordsResult(requestedOffset: Long, lowWatermark: Long, exception: Option[Throwable] = None) {
-  def error: Errors = exception match {
-    case None => Errors.NONE
-    case Some(e) => Errors.forException(e)
+  def error: ApiError = exception match {
+    case None => ApiError.NONE
+    case Some(e) => ApiError.fromThrowable(e)
   }
 }
 
@@ -144,7 +147,8 @@ class ReplicaManager(val config: KafkaConfig,
                      val delayedProducePurgatory: DelayedOperationPurgatory[DelayedProduce],
                      val delayedFetchPurgatory: DelayedOperationPurgatory[DelayedFetch],
                      val delayedDeleteRecordsPurgatory: DelayedOperationPurgatory[DelayedDeleteRecords],
-                     threadNamePrefix: Option[String]) extends Logging with KafkaMetricsGroup {
+                     threadNamePrefix: Option[String],
+                     topicManagementPolicy: Option[TopicManagementPolicy]) extends Logging with KafkaMetricsGroup {
 
   def this(config: KafkaConfig,
            metrics: Metrics,
@@ -157,7 +161,8 @@ class ReplicaManager(val config: KafkaConfig,
            brokerTopicStats: BrokerTopicStats,
            metadataCache: MetadataCache,
            logDirFailureChannel: LogDirFailureChannel,
-           threadNamePrefix: Option[String] = None) {
+           threadNamePrefix: Option[String] = None,
+           topicManagementPolicy: Option[TopicManagementPolicy] = None) {
     this(config, metrics, time, zkClient, scheduler, logManager, isShuttingDown,
       quotaManagers, brokerTopicStats, metadataCache, logDirFailureChannel,
       DelayedOperationPurgatory[DelayedProduce](
@@ -169,7 +174,8 @@ class ReplicaManager(val config: KafkaConfig,
       DelayedOperationPurgatory[DelayedDeleteRecords](
         purgatoryName = "DeleteRecords", brokerId = config.brokerId,
         purgeInterval = config.deleteRecordsPurgatoryPurgeIntervalRequests),
-      threadNamePrefix)
+      threadNamePrefix,
+      topicManagementPolicy)
   }
 
   /* epoch of the controller that last changed the leader */
@@ -512,35 +518,77 @@ class ReplicaManager(val config: KafkaConfig,
    * Delete records on leader replicas of the partition, and wait for delete records operation be propagated to other replicas;
    * the callback function will be triggered either when timeout or logStartOffset of all live replicas have reached the specified offset
    */
-  private def deleteRecordsOnLocalLog(offsetPerPartition: Map[TopicPartition, Long]): Map[TopicPartition, LogDeleteRecordsResult] = {
+  private def deleteRecordsOnLocalLog(offsetPerPartition: Map[TopicPartition, Long],
+                                      validateOnly: Boolean,
+                                      listenerName: ListenerName,
+                                      requestPrincipal: KafkaPrincipal): Map[TopicPartition, LogDeleteRecordsResult] = {
+
+    val groupedByTopic = offsetPerPartition.groupBy { case (x, y) => x.topic }
+    val clusterState = new ClusterStateImpl(metadataCache, zkClient, listenerName, config)
+    val perTopicErrors = groupedByTopic.map { case (requestTopic, offsetsByPartition) =>
+      requestTopic -> (
+      if (Topic.isInternal(requestTopic)) {
+        Some(new InvalidTopicException(s"Cannot delete records of internal topic ${requestTopic}"))
+      } else {
+        topicManagementPolicy.flatMap { case (policy) =>
+          try {
+            policy.validateDeleteRecords(new TopicManagementPolicy.DeleteRecordsRequest {
+
+              override def topic() = requestTopic
+
+              override def principal() = requestPrincipal
+
+              override def deletedMessageOffsets(): java.util.Map[Integer, java.lang.Long] = {
+                offsetsByPartition.map { case (tp, offset) =>
+                  new Integer(tp.partition) -> new java.lang.Long(offset)
+                }.toMap.asJava
+              }
+            }, clusterState)
+            None
+          } catch {
+            case e: PolicyViolationException =>
+              Some(e)
+          }
+        }
+      })
+    }
+
     trace("Delete records on local logs to offsets [%s]".format(offsetPerPartition))
     offsetPerPartition.map { case (topicPartition, requestedOffset) =>
       // reject delete records operation on internal topics
       if (Topic.isInternal(topicPartition.topic)) {
         (topicPartition, LogDeleteRecordsResult(-1L, -1L, Some(new InvalidTopicException(s"Cannot delete records of internal topic ${topicPartition.topic}"))))
       } else {
-        try {
-          val (partition, replica) = getPartitionAndLeaderReplicaIfLocal(topicPartition)
-          val convertedOffset =
-            if (requestedOffset == DeleteRecordsRequest.HIGH_WATERMARK) {
-              replica.highWatermark.messageOffset
-            } else
-              requestedOffset
-          if (convertedOffset < 0)
-            throw new OffsetOutOfRangeException(s"The offset $convertedOffset for partition $topicPartition is not valid")
-
-          val lowWatermark = partition.deleteRecordsOnLeader(convertedOffset)
-          (topicPartition, LogDeleteRecordsResult(convertedOffset, lowWatermark))
-        } catch {
-          case e@ (_: UnknownTopicOrPartitionException |
-                   _: NotLeaderForPartitionException |
-                   _: OffsetOutOfRangeException |
-                   _: PolicyViolationException |
-                   _: KafkaStorageException) =>
-            (topicPartition, LogDeleteRecordsResult(-1L, -1L, Some(e)))
-          case t: Throwable =>
-            error("Error processing delete records operation on partition %s".format(topicPartition), t)
-            (topicPartition, LogDeleteRecordsResult(-1L, -1L, Some(t)))
+        perTopicErrors(topicPartition.topic) match {
+          case Some(violation) =>
+            (topicPartition, LogDeleteRecordsResult(-1L, -1L, Some(violation)))
+          case None =>
+            try {
+              val (partition, replica) = getPartitionAndLeaderReplicaIfLocal(topicPartition)
+              val convertedOffset =
+                if (requestedOffset == DeleteRecordsRequest.HIGH_WATERMARK) {
+                  replica.highWatermark.messageOffset
+                } else
+                  requestedOffset
+              if (convertedOffset < 0)
+                throw new OffsetOutOfRangeException(s"The offset $convertedOffset for partition $topicPartition is not valid")
+              val lowWatermark = partition.deleteRecordsOnLeader(convertedOffset, validateOnly)
+              (topicPartition, LogDeleteRecordsResult(convertedOffset, lowWatermark))
+            } catch {
+              // NOTE: Failed produce requests metric is not incremented for known exceptions
+              // it is supposed to indicate un-expected failures of a broker in handling a produce request
+              case e@(_: UnknownTopicOrPartitionException |
+                      _: NotLeaderForPartitionException |
+                      _: OffsetOutOfRangeException |
+                      _: PolicyViolationException |
+                      _: KafkaStorageException |
+                      _: NotEnoughReplicasException) =>
+                (topicPartition, LogDeleteRecordsResult(-1L, -1L, Some(e)))
+              case t: Throwable =>
+                t.printStackTrace()
+                error("Error processing delete records operation on partition %s".format(topicPartition), t)
+                (topicPartition, LogDeleteRecordsResult(-1L, -1L, Some(t)))
+            }
         }
       }
     }
@@ -670,9 +718,13 @@ class ReplicaManager(val config: KafkaConfig,
 
   def deleteRecords(timeout: Long,
                     offsetPerPartition: Map[TopicPartition, Long],
+                    validateOnly: Boolean,
+                    listenerName: ListenerName,
+                    requestPrincipal: KafkaPrincipal,
                     responseCallback: Map[TopicPartition, DeleteRecordsResponse.PartitionResponse] => Unit) {
     val timeBeforeLocalDeleteRecords = time.milliseconds
-    val localDeleteRecordsResults = deleteRecordsOnLocalLog(offsetPerPartition)
+
+    val localDeleteRecordsResults = deleteRecordsOnLocalLog(offsetPerPartition, validateOnly, listenerName, requestPrincipal)
     debug("Delete records on local log in %d ms".format(time.milliseconds - timeBeforeLocalDeleteRecords))
 
     val deleteRecordsStatus = localDeleteRecordsResults.map { case (topicPartition, result) =>
@@ -682,7 +734,7 @@ class ReplicaManager(val config: KafkaConfig,
           new DeleteRecordsResponse.PartitionResponse(result.lowWatermark, result.error)) // response status
     }
 
-    if (delayedDeleteRecordsRequired(localDeleteRecordsResults)) {
+    if (!validateOnly && delayedDeleteRecordsRequired(localDeleteRecordsResults)) {
       // create delayed delete records operation
       val delayedDeleteRecords = new DelayedDeleteRecords(timeout, deleteRecordsStatus, this, responseCallback)
 

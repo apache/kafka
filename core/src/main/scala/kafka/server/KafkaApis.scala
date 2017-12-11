@@ -1334,6 +1334,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         createTopicsRequest.timeout,
         createTopicsRequest.validateOnly,
         validTopics,
+        request.session.principal,
+        request.context.listenerName,
         sendResponseWithDuplicatesCallback
       )
     }
@@ -1381,22 +1383,37 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleDeleteTopicsRequest(request: RequestChannel.Request) {
     val deleteTopicRequest = request.body[DeleteTopicsRequest]
 
-    val unauthorizedTopicErrors = mutable.Map[String, Errors]()
-    val nonExistingTopicErrors = mutable.Map[String, Errors]()
+    val unauthorizedTopicErrors = mutable.Map[String, ApiError]()
+    val nonExistingTopicErrors = mutable.Map[String, ApiError]()
     val authorizedForDeleteTopics =  mutable.Set[String]()
 
     for (topic <- deleteTopicRequest.topics.asScala) {
       if (!authorize(request.session, Delete, new Resource(Topic, topic)))
-        unauthorizedTopicErrors += topic -> Errors.TOPIC_AUTHORIZATION_FAILED
+        unauthorizedTopicErrors += topic -> new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, null)
       else if (!metadataCache.contains(topic))
-        nonExistingTopicErrors += topic -> Errors.UNKNOWN_TOPIC_OR_PARTITION
+        nonExistingTopicErrors += topic -> new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, null)
       else
         authorizedForDeleteTopics.add(topic)
     }
 
-    def sendResponseCallback(authorizedTopicErrors: Map[String, Errors]): Unit = {
+    def sendResponseCallback(authorizedTopicErrors: Map[String, ApiError]): Unit = {
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
-        val completeResults = unauthorizedTopicErrors ++ nonExistingTopicErrors ++ authorizedTopicErrors
+        val mappedResults = if (deleteTopicRequest.version() >= 2) {
+          authorizedTopicErrors
+        } else {
+          // before version 2 the API didn't return POLICY_VIOLATION
+          authorizedTopicErrors.map { case (topic, error) =>
+            val mappedError = if (error.error == Errors.POLICY_VIOLATION) {
+              info(s"DeleteTopicsResponse(version < 2) with error_code=POLICY_VIOLATION, error_message='${error.message}', using error code UNKNOWN_SERVER_ERROR")
+              // no point adding a message since version < 2 doesn't support message
+              new ApiError(Errors.UNKNOWN_SERVER_ERROR, null)
+            } else
+              error
+            topic -> mappedError
+          }
+        }
+        val completeResults = nonExistingTopicErrors ++
+          unauthorizedTopicErrors ++ mappedResults
         val responseBody = new DeleteTopicsResponse(requestThrottleMs, completeResults.asJava)
         trace(s"Sending delete topics response $responseBody for correlation id ${request.header.correlationId} to client ${request.header.clientId}.")
         responseBody
@@ -1406,7 +1423,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     if (!controller.isActive) {
       val results = deleteTopicRequest.topics.asScala.map { topic =>
-        (topic, Errors.NOT_CONTROLLER)
+        (topic, new ApiError(Errors.NOT_CONTROLLER, null))
       }.toMap
       sendResponseCallback(results)
     } else {
@@ -1417,6 +1434,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         adminManager.deleteTopics(
           deleteTopicRequest.timeout.toInt,
           authorizedForDeleteTopics,
+          deleteTopicRequest.validateOnly,
+          request.context.listenerName,
+          request.session.principal,
           sendResponseCallback
         )
       }
@@ -1433,24 +1453,46 @@ class KafkaApis(val requestChannel: RequestChannel,
     for ((topicPartition, offset) <- deleteRecordsRequest.partitionOffsets.asScala) {
       if (!authorize(request.session, Delete, new Resource(Topic, topicPartition.topic)))
         unauthorizedTopicResponses += topicPartition -> new DeleteRecordsResponse.PartitionResponse(
-          DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.TOPIC_AUTHORIZATION_FAILED)
+          DeleteRecordsResponse.INVALID_LOW_WATERMARK, new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, null))
       else if (!metadataCache.contains(topicPartition.topic))
         nonExistingTopicResponses += topicPartition -> new DeleteRecordsResponse.PartitionResponse(
-          DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.UNKNOWN_TOPIC_OR_PARTITION)
+          DeleteRecordsResponse.INVALID_LOW_WATERMARK, new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, null))
       else
         authorizedForDeleteTopicOffsets += (topicPartition -> offset)
     }
 
     // the callback for sending a DeleteRecordsResponse
+
     def sendResponseCallback(authorizedTopicResponses: Map[TopicPartition, DeleteRecordsResponse.PartitionResponse]) {
-      val mergedResponseStatus = authorizedTopicResponses ++ unauthorizedTopicResponses ++ nonExistingTopicResponses
+
+      val mappedStatus = if (deleteRecordsRequest.version() >= 1) {
+        authorizedTopicResponses
+      } else {
+        // before version 1 the API didn't return POLICY_VIOLATION
+        authorizedTopicResponses.map { case (topicPartition, partitionResponse) =>
+          val mappedPartitionResponse = if (partitionResponse.error.error == Errors.POLICY_VIOLATION) {
+            info(s"DeleteRecordsResponse(version < 1) with error_code=POLICY_VIOLATION, error_message='${partitionResponse.error.error.message}', using error code UNKNOWN_SERVER_ERROR")
+            // no point adding a message since version < 1 doesn't support message
+            new DeleteRecordsResponse.PartitionResponse(partitionResponse.lowWatermark, new ApiError(Errors.UNKNOWN_SERVER_ERROR, null))
+          } else
+            partitionResponse
+          topicPartition -> mappedPartitionResponse
+        }
+      }
+
+      val mergedResponseStatus = mappedStatus ++
+        unauthorizedTopicResponses.mapValues(_ =>
+          new DeleteRecordsResponse.PartitionResponse(DeleteRecordsResponse.INVALID_LOW_WATERMARK, new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, null))) ++
+        nonExistingTopicResponses.mapValues(_ =>
+          new DeleteRecordsResponse.PartitionResponse(DeleteRecordsResponse.INVALID_LOW_WATERMARK, new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, null)))
+
       mergedResponseStatus.foreach { case (topicPartition, status) =>
-        if (status.error != Errors.NONE) {
+        if (status.error.isFailure) {
           debug("DeleteRecordsRequest with correlation id %d from client %s on partition %s failed due to %s".format(
             request.header.correlationId,
             request.header.clientId,
             topicPartition,
-            status.error.exceptionName))
+            status.error))
         }
       }
 
@@ -1461,10 +1503,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (authorizedForDeleteTopicOffsets.isEmpty)
       sendResponseCallback(Map.empty)
     else {
-      // call the replica manager to append messages to the replicas
+      // call the replica manager to delete messages from the replicas
       replicaManager.deleteRecords(
         deleteRecordsRequest.timeout.toLong,
         authorizedForDeleteTopicOffsets,
+        deleteRecordsRequest.validateOnly,
+        request.context.listenerName,
+        request.session.principal,
         sendResponseCallback)
     }
   }
@@ -1917,7 +1962,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         case rt => throw new InvalidRequestException(s"Unexpected resource type $rt")
       }
     }
-    val authorizedResult = adminManager.alterConfigs(authorizedResources, alterConfigsRequest.validateOnly)
+
+    val authorizedResult = adminManager.alterConfigs(authorizedResources, alterConfigsRequest.validateOnly, request.session.principal, request.context.listenerName)
     val unauthorizedResult = unauthorizedResources.keys.map { resource =>
       resource -> configsAuthorizationApiError(request.session, resource)
     }

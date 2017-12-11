@@ -32,7 +32,10 @@ import java.util.Map;
  * If <code>create.topic.policy.class.name</code> is defined, Kafka will create an instance of the specified class
  * using the default constructor and will then pass the broker configs to its <code>configure()</code> method. During
  * broker shutdown, the <code>close()</code> method will be invoked so that resources can be released (if necessary).
+ *
+ * @deprecated Use {@link TopicManagementPolicy} instead
  */
+@Deprecated
 public interface CreateTopicPolicy extends Configurable, AutoCloseable {
 
     /**

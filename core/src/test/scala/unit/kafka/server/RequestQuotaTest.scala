@@ -244,10 +244,10 @@ class RequestQuotaTest extends BaseRequestTest {
           new CreateTopicsRequest.Builder(Map("topic-2" -> new CreateTopicsRequest.TopicDetails(1, 1.toShort)).asJava, 0)
 
         case ApiKeys.DELETE_TOPICS =>
-          new DeleteTopicsRequest.Builder(Set("topic-2").asJava, 5000)
+          new DeleteTopicsRequest.Builder(Set("topic-2").asJava, 5000, false)
 
         case ApiKeys.DELETE_RECORDS =>
-          new DeleteRecordsRequest.Builder(5000, Map(tp -> (0L: java.lang.Long)).asJava)
+          new DeleteRecordsRequest.Builder(5000, Map(tp -> (0L: java.lang.Long)).asJava, false)
 
         case ApiKeys.INIT_PRODUCER_ID =>
           new InitProducerIdRequest.Builder("abc")
