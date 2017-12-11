@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
@@ -234,14 +235,20 @@ public class GlobalStreamThread extends Thread {
         }
 
         void pollAndUpdate() {
-            final ConsumerRecords<byte[], byte[]> received = globalConsumer.poll(pollMs);
-            for (ConsumerRecord<byte[], byte[]> record : received) {
-                stateMaintainer.update(record);
-            }
-            final long now = time.milliseconds();
-            if (flushInterval >= 0 && now >= lastFlush + flushInterval) {
-                stateMaintainer.flushState();
-                lastFlush = now;
+            try {
+                final ConsumerRecords<byte[], byte[]> received = globalConsumer.poll(pollMs);
+                for (ConsumerRecord<byte[], byte[]> record : received) {
+                    stateMaintainer.update(record);
+                }
+                final long now = time.milliseconds();
+                if (flushInterval >= 0 && now >= lastFlush + flushInterval) {
+                    stateMaintainer.flushState();
+                    lastFlush = now;
+                }
+            } catch (final InvalidOffsetException recoverableException) {
+                log.error("Updating global state failed. You can restart KafkaStreams to recover from this error.", recoverableException);
+                throw new StreamsException("Updating global state failed. " +
+                    "You can restart KafkaStreams to recover from this error.", recoverableException);
             }
         }
 
@@ -308,15 +315,19 @@ public class GlobalStreamThread extends Thread {
                                                                            stateDirectory,
                                                                            stateRestoreListener,
                                                                            config);
+
+            final GlobalProcessorContextImpl globalProcessorContext = new GlobalProcessorContextImpl(
+                config,
+                stateMgr,
+                streamsMetrics,
+                cache);
+            stateMgr.setGlobalProcessorContext(globalProcessorContext);
+
             final StateConsumer stateConsumer
                     = new StateConsumer(this.logContext,
                                         globalConsumer,
                                         new GlobalStateUpdateTask(topology,
-                                                                  new GlobalProcessorContextImpl(
-                                                                          config,
-                                                                          stateMgr,
-                                                                          streamsMetrics,
-                                                                          cache),
+                                                                  globalProcessorContext,
                                                                   stateMgr,
                                                                   config.defaultDeserializationExceptionHandler(),
                                                                   logContext),
@@ -324,6 +335,7 @@ public class GlobalStreamThread extends Thread {
                                         config.getLong(StreamsConfig.POLL_MS_CONFIG),
                                         config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));
             stateConsumer.initialize();
+
             return stateConsumer;
         } catch (final LockException fatalException) {
             final String errorMsg = "Could not lock global state directory. This could happen if multiple KafkaStreams " +

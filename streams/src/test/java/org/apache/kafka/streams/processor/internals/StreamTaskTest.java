@@ -35,9 +35,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -49,7 +46,6 @@ import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.MockStateStore;
 import org.apache.kafka.test.MockTimestampExtractor;
-import org.apache.kafka.test.NoOpProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -465,12 +461,12 @@ public class StreamTaskTest {
             task.process();
             fail("Should've thrown StreamsException");
         } catch (final Exception e) {
-            assertThat(((ProcessorContextImpl) task.processorContext()).currentNode(), nullValue());
+            assertThat(task.processorContext.currentNode(), nullValue());
         }
     }
 
     @Test
-    public void shouldWrapKafkaExceptionsWithStreamsExceptionAndAddContextWhenPunctuating() {
+    public void shouldWrapKafkaExceptionsWithStreamsExceptionAndAddContextWhenPunctuatingStreamTime() {
         task = createStatelessTask(false);
         task.initialize();
 
@@ -483,32 +479,19 @@ public class StreamTaskTest {
             });
             fail("Should've thrown StreamsException");
         } catch (final StreamsException e) {
-            assertThat(((ProcessorContextImpl) task.processorContext()).currentNode(), nullValue());
+            final String message = e.getMessage();
+            assertTrue("message=" + message + " should contain processor", message.contains("processor '" + processorStreamTime.name() + "'"));
+            assertThat(task.processorContext.currentNode(), nullValue());
         }
     }
 
     @Test
-    public void shouldWrapKafkaExceptionsWithStreamsExceptionAndAddContextWhenPunctuatingStreamTime() {
-        final Processor<Object, Object> processor = new AbstractProcessor<Object, Object>() {
-            @Override
-            public void init(final ProcessorContext context) {
-            }
-
-            @Override
-            public void process(final Object key, final Object value) {}
-
-            @Override
-            public void punctuate(final long timestamp) {}
-        };
-
-        final ProcessorNode<Object, Object> punctuator = new ProcessorNode<>("test", processor, Collections.<String>emptySet());
-        punctuator.init(new NoOpProcessorContext());
-
+    public void shouldWrapKafkaExceptionsWithStreamsExceptionAndAddContextWhenPunctuatingWallClockTimeTime() {
         task = createStatelessTask(false);
         task.initialize();
 
         try {
-            task.punctuate(punctuator, 1, PunctuationType.STREAM_TIME, new Punctuator() {
+            task.punctuate(processorSystemTime, 1, PunctuationType.WALL_CLOCK_TIME, new Punctuator() {
                 @Override
                 public void punctuate(long timestamp) {
                     throw new KafkaException("KABOOM!");
@@ -516,7 +499,9 @@ public class StreamTaskTest {
             });
             fail("Should've thrown StreamsException");
         } catch (final StreamsException e) {
-            assertThat(((ProcessorContextImpl) task.processorContext()).currentNode(), nullValue());
+            final String message = e.getMessage();
+            assertTrue("message=" + message + " should contain processor", message.contains("processor '" + processorSystemTime.name() + "'"));
+            assertThat(task.processorContext.currentNode(), nullValue());
         }
     }
 
@@ -567,7 +552,7 @@ public class StreamTaskTest {
     public void shouldThrowIllegalStateExceptionIfCurrentNodeIsNotNullWhenPunctuateCalled() {
         task = createStatelessTask(false);
         task.initialize();
-        ((ProcessorContextImpl) task.processorContext()).setCurrentNode(processorStreamTime);
+        task.processorContext.setCurrentNode(processorStreamTime);
         try {
             task.punctuate(processorStreamTime, 10, PunctuationType.STREAM_TIME, punctuator);
             fail("Should throw illegal state exception as current node is not null");
@@ -591,7 +576,7 @@ public class StreamTaskTest {
         task = createStatelessTask(false);
         task.initialize();
         task.punctuate(processorStreamTime, 5, PunctuationType.STREAM_TIME, punctuator);
-        assertThat(((ProcessorContextImpl) task.processorContext()).currentNode(), nullValue());
+        assertThat(((ProcessorContextImpl) task.context()).currentNode(), nullValue());
     }
 
     @Test(expected = IllegalStateException.class)
@@ -608,7 +593,7 @@ public class StreamTaskTest {
     @Test
     public void shouldNotThrowExceptionOnScheduleIfCurrentNodeIsNotNull() {
         task = createStatelessTask(false);
-        ((ProcessorContextImpl) task.processorContext()).setCurrentNode(processorStreamTime);
+        task.processorContext.setCurrentNode(processorStreamTime);
         task.schedule(1, PunctuationType.STREAM_TIME, new Punctuator() {
             @Override
             public void punctuate(long timestamp) {
@@ -744,7 +729,7 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldNotAbortTransactionOnZombieClosedIfEosEnabled() throws Exception {
+    public void shouldNotAbortTransactionOnZombieClosedIfEosEnabled() {
         task = createStatelessTask(true);
         task.close(false, true);
         task = null;
