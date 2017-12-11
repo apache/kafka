@@ -93,8 +93,7 @@ public class JmxReporter implements MetricsReporter {
                     MetricName metricName = metric.metricName();
                     String mBeanName = getMBeanName(prefix, metricName);
                     mbeans.remove(mBeanName);
-                }
-                else
+                } else
                     reregister(mbean);
             }
         }
