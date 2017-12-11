@@ -28,6 +28,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.DeleteTopicsResponse;
 import org.junit.Before;
 import org.junit.Test;
@@ -241,7 +242,7 @@ public class StreamsResetterTest {
             env.kafkaClient().setNode(cluster.controller());
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
-            env.kafkaClient().prepareResponse(new DeleteTopicsResponse(Collections.singletonMap(TOPIC, Errors.NONE)));
+            env.kafkaClient().prepareResponse(new DeleteTopicsResponse(Collections.singletonMap(TOPIC, ApiError.NONE)));
             streamsResetter.doDelete(Collections.singletonList(topicPartition.topic()), env.adminClient());
         }
     }

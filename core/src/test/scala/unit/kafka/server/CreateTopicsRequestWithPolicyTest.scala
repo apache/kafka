@@ -21,6 +21,7 @@ import java.util
 import java.util.Properties
 
 import kafka.log.LogConfig
+import kafka.server.CreateTopicsRequestWithPolicyTest.Policy
 import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.PolicyViolationException
 import org.apache.kafka.common.protocol.Errors
@@ -162,7 +163,8 @@ class CreateTopicsRequestWithCreateTopicPolicyTest extends CreateTopicsRequestWi
 
   override def propertyOverrides(properties: Properties): Unit = {
     super.propertyOverrides(properties)
-    properties.put(KafkaConfig.CreateTopicPolicyClassNameProp, classOf[Policy].getName)
+    properties.remove(KafkaConfig.TopicManagementPolicyClassNameProp)
+    properties.put(KafkaConfig.CreateTopicPolicyClassNameProp, classOf[CreateTopicsRequestWithCreateTopicPolicyTest.Policy].getName)
   }
 }
 
