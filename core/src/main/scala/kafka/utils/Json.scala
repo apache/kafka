@@ -59,9 +59,11 @@ object Json {
    *   T => null | Boolean | String | Number | Map[String, T] | Array[T] | Iterable[T]
    * Any other type will result in an exception.
    * 
-   * This method does not properly handle non-ascii characters. 
+   * This implementation is inefficient, so we recommend `encodeAsString` or `encodeAsBytes` (the latter is preferred
+   * if possible). This method supports scala Map implementations while the other two do not. Once this functionality
+   * is no longer required, we can remove this method.
    */
-  def encode(obj: Any): String = {
+  def legacyEncodeAsString(obj: Any): String = {
     obj match {
       case null => "null"
       case b: Boolean => b.toString
@@ -69,22 +71,26 @@ object Json {
       case n: Number => n.toString
       case m: Map[_, _] => "{" +
         m.map {
-          case (k, v) => encode(k) + ":" + encode(v)
+          case (k, v) => legacyEncodeAsString(k) + ":" + legacyEncodeAsString(v)
           case elem => throw new IllegalArgumentException(s"Invalid map element '$elem' in $obj")
         }.mkString(",") + "}"
-      case a: Array[_] => encode(a.toSeq)
-      case i: Iterable[_] => "[" + i.map(encode).mkString(",") + "]"
+      case a: Array[_] => legacyEncodeAsString(a.toSeq)
+      case i: Iterable[_] => "[" + i.map(legacyEncodeAsString).mkString(",") + "]"
       case other: AnyRef => throw new IllegalArgumentException(s"Unknown argument of type ${other.getClass}: $other")
     }
   }
 
   /**
-   * Encode an object into a JSON value in bytes. This method accepts any type T where
-   *   T => null | Boolean | String | Number | Map[String, T] | Array[T] | Iterable[T]
-   * Any other type will result in an exception.
-   *
-   * This method does not properly handle non-ascii characters.
-   */
-  def encodeAsBytes(obj: Any): Array[Byte] = encode(obj).getBytes(StandardCharsets.UTF_8)
+    * Encode an object into a JSON string. This method accepts any type supported by Jackson's ObjectMapper in
+   * the default configuration. That is, Java collections are supported, but Scala collections are not (to avoid
+   * a jackson-scala dependency).
+    */
+  def encodeAsString(obj: Any): String = mapper.writeValueAsString(obj)
 
+  /**
+   * Encode an object into a JSON value in bytes. This method accepts any type supported by Jackson's ObjectMapper in
+   * the default configuration. That is, Java collections are supported, but Scala collections are not (to avoid
+   * a jackson-scala dependency).
+   */
+  def encodeAsBytes(obj: Any): Array[Byte] = mapper.writeValueAsBytes(obj)
 }

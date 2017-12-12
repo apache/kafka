@@ -96,7 +96,7 @@ class ZkUtilsTest extends ZooKeeperTestHarness {
     val controllerEpoch = 1
     val isr = List(1, 2)
     val topicPath = s"/brokers/topics/$topic/partitions/$partition/state"
-    val topicData = Json.encode(Map("controller_epoch" -> controllerEpoch, "leader" -> leader,
+    val topicData = Json.legacyEncodeAsString(Map("controller_epoch" -> controllerEpoch, "leader" -> leader,
       "versions" -> 1, "leader_epoch" -> leaderEpoch, "isr" -> isr))
     zkUtils.createPersistentPath(topicPath, topicData)
 
