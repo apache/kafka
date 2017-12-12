@@ -154,6 +154,14 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     }
   }
 
+  @Test(expected = classOf[joptsimple.OptionException])
+  def testDescribeWithMultipleSubActions() {
+    TestUtils.createOffsetsTopic(zkUtils, servers)
+    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group, "--members", "--state")
+    getConsumerGroupService(cgcArgs)
+    fail("Expected an error due to presence of mutually exclusive options")
+  }
+
   @Test
   def testDescribeOffsetsOfNonExistingGroup() {
     TestUtils.createOffsetsTopic(zkUtils, servers)

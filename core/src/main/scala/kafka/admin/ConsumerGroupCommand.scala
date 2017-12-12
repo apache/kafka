@@ -276,9 +276,9 @@ object ConsumerGroupCommand extends Logging {
 
     def collectGroupOffsets(): (Option[String], Option[Seq[PartitionAssignmentState]])
 
-    def collectGroupMembers(verbose: Boolean): (Option[String], Option[Seq[MemberAssignmentState]]) = (None, None)
+    def collectGroupMembers(verbose: Boolean): (Option[String], Option[Seq[MemberAssignmentState]]) = throw new UnsupportedOperationException
 
-    def collectGroupState(): Option[GroupState] = None
+    def collectGroupState(): Option[GroupState] = throw new UnsupportedOperationException
 
     protected def collectConsumerAssignment(group: String,
                                             coordinator: Option[Node],
@@ -919,6 +919,8 @@ object ConsumerGroupCommand extends Logging {
     val verboseOpt = parser.accepts("verbose", VerboseDoc)
     val offsetsOpt = parser.accepts("offsets", OffsetsDoc)
     val stateOpt = parser.accepts("state", StateDoc)
+    parser.mutuallyExclusive(membersOpt, offsetsOpt, stateOpt)
+
     val options = parser.parse(args : _*)
 
     val useOldConsumer = options.has(zkConnectOpt)
@@ -967,9 +969,6 @@ object ConsumerGroupCommand extends Logging {
         if (!describeOptPresent)
           CommandLineUtils.printUsageAndDie(parser,
               s"Options $membersOpt, $offsetsOpt, and $stateOpt may only be used with $describeOpt.")
-        if (subActions > 1)
-          CommandLineUtils.printUsageAndDie(parser,
-              s"Command may include exactly one $describeOpt sub-action: $membersOpt, $offsetsOpt, $stateOpt.")
       }
 
       if (options.has(deleteOpt) && !options.has(groupOpt) && !options.has(topicOpt))
