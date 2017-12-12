@@ -39,9 +39,9 @@ public class StreamsBrokerDownResilienceTest {
     private static final int KEY = 0;
     private static final int VALUE = 1;
 
-    private static String SOURCE_TOPIC_1 = "streamsResilienceSource";
+    private static final String SOURCE_TOPIC_1 = "streamsResilienceSource";
 
-    private static String SINK_TOPIC = "streamsResilienceSink";
+    private static final String SINK_TOPIC = "streamsResilienceSink";
 
     public static void main(String[] args) {
 
@@ -61,7 +61,7 @@ public class StreamsBrokerDownResilienceTest {
         streamsProperties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
 
         final int timeout = 15000;
-        // when setting Producer Retries and Request timeout Consumer max.poll.interval > min(max.block.ms, (retries * request.timeout)
+        // when setting Producer Retries and Request timeout Consumer max.poll.interval > min(max.block.ms, (retries + 1 * request.timeout)
         streamsProperties.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG), timeout * 3);
         streamsProperties.put(StreamsConfig.producerPrefix(ProducerConfig.RETRIES_CONFIG), 2);
         streamsProperties.put(StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG), timeout);
