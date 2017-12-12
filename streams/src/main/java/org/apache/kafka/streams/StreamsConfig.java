@@ -743,6 +743,7 @@ public class StreamsConfig extends AbstractConfig {
         consumerProps.put(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, getLong(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG));
 
         // add admin and topic configs required for creating topics
+        consumerProps.put(adminClientPrefix(RETRIES_CONFIG), getInt(RETRIES_CONFIG));
         consumerProps.putAll(originalsWithPrefix(TOPIC_PREFIX, false));
         consumerProps.putAll(originalsWithPrefix(ADMIN_CLIENT_PREFIX, false));
 

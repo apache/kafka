@@ -16,11 +16,16 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.junit.After;
@@ -52,6 +57,7 @@ public class InternalTopicManagerTest {
     };
     private final String topic = "test_topic";
     private final String topic2 = "test_topic_2";
+    private final String topic3 = "test_topic_3";
     private final List<Node> singleReplica = Collections.singletonList(broker1);
 
     private MockAdminClient mockAdminClient;
@@ -127,14 +133,40 @@ public class InternalTopicManagerTest {
     public void shouldCreateRequiredTopics() throws Exception {
         final InternalTopicConfig topicConfig = new InternalTopicConfig(topic, InternalTopicConfig.InternalTopicType.REPARTITION, Collections.<String, String>emptyMap());
         topicConfig.setNumberOfPartitions(1);
-        internalTopicManager.makeReady(Collections.singletonMap(topic, topicConfig));
+        final InternalTopicConfig topicConfig2 = new InternalTopicConfig(topic2, InternalTopicConfig.InternalTopicType.UNWINDOWED_STORE_CHANGELOG, Collections.<String, String>emptyMap());
+        topicConfig2.setNumberOfPartitions(1);
+        final InternalTopicConfig topicConfig3 = new InternalTopicConfig(topic3, InternalTopicConfig.InternalTopicType.WINDOWED_STORE_CHANGELOG, Collections.<String, String>emptyMap());
+        topicConfig3.setNumberOfPartitions(1);
 
-        assertEquals(Collections.singleton(topic), mockAdminClient.listTopics().names().get());
+        internalTopicManager.makeReady(Collections.singletonMap(topic, topicConfig));
+        internalTopicManager.makeReady(Collections.singletonMap(topic2, topicConfig2));
+        internalTopicManager.makeReady(Collections.singletonMap(topic3, topicConfig3));
+
+        assertEquals(Utils.mkSet(topic, topic2, topic3), mockAdminClient.listTopics().names().get());
         assertEquals(new TopicDescription(topic, false, new ArrayList<TopicPartitionInfo>() {
             {
                 add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.<Node>emptyList()));
             }
         }), mockAdminClient.describeTopics(Collections.singleton(topic)).values().get(topic).get());
+        assertEquals(new TopicDescription(topic2, false, new ArrayList<TopicPartitionInfo>() {
+            {
+                add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.<Node>emptyList()));
+            }
+        }), mockAdminClient.describeTopics(Collections.singleton(topic2)).values().get(topic2).get());
+        assertEquals(new TopicDescription(topic3, false, new ArrayList<TopicPartitionInfo>() {
+            {
+                add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.<Node>emptyList()));
+            }
+        }), mockAdminClient.describeTopics(Collections.singleton(topic3)).values().get(topic3).get());
+
+        ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
+        ConfigResource resource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2);
+        ConfigResource resource3 = new ConfigResource(ConfigResource.Type.TOPIC, topic3);
+
+        assertEquals(new ConfigEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE), mockAdminClient.describeConfigs(Collections.singleton(resource)).values().get(resource).get().get(TopicConfig.CLEANUP_POLICY_CONFIG));
+        assertEquals(new ConfigEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT), mockAdminClient.describeConfigs(Collections.singleton(resource2)).values().get(resource2).get().get(TopicConfig.CLEANUP_POLICY_CONFIG));
+        assertEquals(new ConfigEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE), mockAdminClient.describeConfigs(Collections.singleton(resource3)).values().get(resource3).get().get(TopicConfig.CLEANUP_POLICY_CONFIG));
+
     }
 
     @Test

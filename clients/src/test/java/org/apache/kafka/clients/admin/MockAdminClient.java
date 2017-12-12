@@ -28,6 +28,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.utils.Utils;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -121,7 +122,7 @@ public class MockAdminClient extends AdminClient {
             for (int p = 0; p < numberOfPartitions; ++p) {
                 partitions.add(new TopicPartitionInfo(p, brokers.get(0), replicas, Collections.<Node>emptyList()));
             }
-            allTopics.put(topicName, new TopicMetadata(false, partitions, newTopic.convertToTopicDetails().configs));
+            allTopics.put(topicName, new TopicMetadata(false, partitions, newTopic.configs()));
             future.complete(null);
             createTopicResult.put(topicName, future);
         }
@@ -220,7 +221,24 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     public DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        Map<ConfigResource, KafkaFuture<Config>> configescriptions = new HashMap<>();
+
+        for (ConfigResource resource : resources) {
+            if (resource.type() == ConfigResource.Type.TOPIC) {
+                Map<String, String> configs = allTopics.get(resource.name()).configs;
+                List<ConfigEntry> configEntries = new ArrayList<>();
+                for (Map.Entry<String, String> entry : configs.entrySet()) {
+                    configEntries.add(new ConfigEntry(entry.getKey(), entry.getValue()));
+                }
+                KafkaFutureImpl<Config> future = new KafkaFutureImpl<>();
+                future.complete(new Config(configEntries));
+                configescriptions.put(resource, future);
+            } else {
+                throw new UnsupportedOperationException("Not implemented yet");
+            }
+        }
+
+        return new DescribeConfigsResult(configescriptions);
     }
 
     @Override

@@ -1212,8 +1212,6 @@ class Log(@volatile var dir: File,
         else
           (null, logEndOffset, segment.size == 0)
 
-        info(s"high watermark $highWatermark, upperBoundOffset $upperBoundOffset, segment ${segment.baseOffset}, isLastSegmentAndEmpty $isLastSegmentAndEmpty")
-
         if (highWatermark >= upperBoundOffset && predicate(segment, Option(nextSegment)) && !isLastSegmentAndEmpty) {
           deletable += segment
           segmentEntry = nextSegmentEntry
@@ -1237,7 +1235,6 @@ class Log(@volatile var dir: File,
   private def deleteRetentionMsBreachedSegments(): Int = {
     if (config.retentionMs < 0) return 0
     val startMs = time.milliseconds
-    warn(s"checking retention time ${config.retentionMs}ms breach")
     deleteOldSegments((segment, _) => startMs - segment.largestTimestamp > config.retentionMs,
       reason = s"retention time ${config.retentionMs}ms breach")
   }
@@ -1254,7 +1251,6 @@ class Log(@volatile var dir: File,
       }
     }
 
-    warn(s"checking retention size in bytes ${config.retentionSize} breach")
     deleteOldSegments(shouldDelete, reason = s"retention size in bytes ${config.retentionSize} breach")
   }
 
@@ -1262,7 +1258,6 @@ class Log(@volatile var dir: File,
     def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]) =
       nextSegmentOpt.exists(_.baseOffset <= logStartOffset)
 
-    warn(s"checking log start offset $logStartOffset breach")
     deleteOldSegments(shouldDelete, reason = s"log start offset $logStartOffset breach")
   }
 
@@ -1611,7 +1606,7 @@ class Log(@volatile var dir: File,
    * @param segment The log segment to schedule for deletion
    */
   private def deleteSegment(segment: LogSegment) {
-    info("Scheduling log segment [%d, %d] for log %s for deletion.".format(segment.baseOffset, segment.size, name))
+    info(s"Scheduling log segment [baseOffset ${segment.baseOffset}, size ${segment.size}] for log $name for deletion.")
     lock synchronized {
       segments.remove(segment.baseOffset)
       asyncDeleteSegment(segment)

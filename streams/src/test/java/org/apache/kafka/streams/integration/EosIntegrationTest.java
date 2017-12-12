@@ -672,7 +672,6 @@ public class EosIntegrationTest {
                         put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
                         put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath() + File.separator + appDir);
                         put(StreamsConfig.APPLICATION_SERVER_CONFIG, "dummy:2142");
-                        put(StreamsConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
                     }
                 }));
 

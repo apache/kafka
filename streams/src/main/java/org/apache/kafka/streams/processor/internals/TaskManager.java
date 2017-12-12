@@ -448,7 +448,7 @@ class TaskManager {
             }
             deleteRecordsResult = adminClient.deleteRecords(recordsToDelete);
 
-            log.warn("Sent delete-records request: {}", recordsToDelete);
+            log.trace("Sent delete-records request: {}", recordsToDelete);
         }
     }
 
