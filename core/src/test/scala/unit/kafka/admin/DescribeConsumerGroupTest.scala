@@ -271,8 +271,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
       case Some(memberAssignments) =>
         assertTrue(s"Expected a topic partition assigned to the single group member for group $group",
           memberAssignments.size == 1 &&
-          memberAssignments.head.assignment.isDefined &&
-          memberAssignments.head.assignment.get.size == 1)
+          memberAssignments.head.assignment.size == 1)
     }
   }
 
@@ -473,12 +472,12 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
         assignments.get.count(_.group == group) == 2 &&
         assignments.get.count { x => x.group == group && x.numPartitions == 1 } == 1 &&
         assignments.get.count { x => x.group == group && x.numPartitions == 0 } == 1 &&
-        assignments.get.count(_.assignment.isDefined) == 0
+        assignments.get.count(_.assignment.size > 0) == 0
     }, "Expected rows for consumers with no assigned partitions in describe group results")
 
     val (state, assignments) = service.collectGroupMembers(true)
     assertTrue("Expected additional columns in verbose vesion of describe members",
-        state == Some("Stable") && assignments.get.count(_.assignment.isEmpty) == 0)
+        state == Some("Stable") && assignments.get.count(_.assignment.nonEmpty) > 0)
   }
 
   @Test

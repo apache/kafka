@@ -44,7 +44,6 @@ import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConverters._
 import scala.collection.{Seq, Set, mutable}
-import scala.util.Try
 
 object ConsumerGroupCommand extends Logging {
 
@@ -125,7 +124,7 @@ object ConsumerGroupCommand extends Logging {
                                                 clientId: Option[String], logEndOffset: Option[Long])
 
   protected case class MemberAssignmentState(group: String, consumerId: String, host: String, clientId: String,
-                                             numPartitions: Int, assignment: Option[List[TopicPartition]])
+                                             numPartitions: Int, assignment: List[TopicPartition])
 
   protected case class GroupState(group: String, assignmentStrategy: String, state: String, numMembers: Int)
 
@@ -133,25 +132,21 @@ object ConsumerGroupCommand extends Logging {
 
     def listGroups(): List[String]
 
-    private def dataExistsForGroup(group: String, state: Option[String], numRows: Option[Int]): Boolean = {
+    private def shouldPrintMemberState(group: String, state: Option[String], numRows: Option[Int]): Boolean = {
       // numRows contains the number of data rows, if any, compiled from the API call in the caller method.
-      // if it's undefined or 0, there is no group metadata to display.
-      var printList = true
+      // if it's undefined or 0, there is no relevant group information to display.
       numRows match {
         case None =>
           // applies to both old and new consumer
           printError(s"The consumer group '$group' does not exist.")
-          printList = false
+          false
         case Some(num) =>
-          if (!opts.useOldConsumer) {
+          opts.useOldConsumer || {
             state match {
               case Some("Dead") =>
                 printError(s"Consumer group '$group' does not exist.")
-                printList = false
               case Some("Empty") =>
                 Console.err.println(s"Consumer group '$group' has no active members.")
-                if (num == 0)
-                  printList = false
               case Some("PreparingRebalance") | Some("CompletingRebalance") =>
                 Console.err.println(s"Warning: Consumer group '$group' is rebalancing.")
               case Some("Stable") =>
@@ -159,16 +154,15 @@ object ConsumerGroupCommand extends Logging {
                 // the control should never reach here
                 throw new KafkaException(s"Expected a valid consumer group state, but found '${other.getOrElse("NONE")}'.")
             }
+            num > 0
           }
       }
-
-      printList
     }
 
     private def size(colOpt: Option[Seq[Object]]): Option[Int] = colOpt.map(_.size)
 
     private def printOffsets(group: String, state: Option[String], assignments: Option[Seq[PartitionAssignmentState]]): Unit = {
-      if (dataExistsForGroup(group, state, size(assignments))) {
+      if (shouldPrintMemberState(group, state, size(assignments))) {
         // find proper columns width
         var (maxTopicLen, maxConsumerIdLen, maxHostLen) = (15, 15, 15)
         assignments match {
@@ -207,7 +201,7 @@ object ConsumerGroupCommand extends Logging {
     }
 
     private def printMembers(group: String, state: Option[String], assignments: Option[Seq[MemberAssignmentState]], verbose: Boolean): Unit = {
-      if (dataExistsForGroup(group, state, size(assignments))) {
+      if (shouldPrintMemberState(group, state, size(assignments))) {
         // find proper columns width
         var (maxConsumerIdLen, maxHostLen, maxClientIdLen) = (15, 15, 15)
         assignments match {
@@ -234,8 +228,8 @@ object ConsumerGroupCommand extends Logging {
                 memberAssignment.consumerId, memberAssignment.host, memberAssignment.clientId, memberAssignment.numPartitions))
               if (verbose) {
                 val partitions = memberAssignment.assignment match {
-                  case None | Some(List()) => MISSING_COLUMN_VALUE
-                  case Some(assignment) =>
+                  case List() => MISSING_COLUMN_VALUE
+                  case assignment =>
                     assignment.groupBy(_.topic).map {
                       case (topic, partitionList) => topic + partitionList.map(_.partition).sorted.mkString("(", ",", ")")
                     }.toList.sorted.mkString(", ")
@@ -250,7 +244,7 @@ object ConsumerGroupCommand extends Logging {
 
     private def printState(group: String, state: Option[GroupState]): Unit = {
       // this method is reachable only for the new consumer option (where the given state is always defined)
-      if (dataExistsForGroup(group, Some(state.get.state), Some(1))) {
+      if (shouldPrintMemberState(group, Some(state.get.state), Some(1))) {
         print("\n%-25s %-20s %s".format("ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS"))
         print("\n%-25s %-20s %s".format(state.get.assignmentStrategy, state.get.state, state.get.numMembers))
         println()
@@ -575,7 +569,7 @@ object ConsumerGroupCommand extends Logging {
       (Some(consumerGroupSummary.state),
         consumerGroupSummary.consumers.map(_.map {
           consumer => MemberAssignmentState(group, consumer.consumerId, consumer.host, consumer.clientId, consumer.assignment.length,
-            if (verbose) Some(consumer.assignment) else None)
+            if (verbose) consumer.assignment else List())
         })
       )
     }
@@ -977,8 +971,6 @@ object ConsumerGroupCommand extends Logging {
           CommandLineUtils.printUsageAndDie(parser,
               s"Command may include exactly one $describeOpt sub-action: $membersOpt, $offsetsOpt, $stateOpt.")
       }
-      if (options.has(verboseOpt) && !membersOptPresent)
-        CommandLineUtils.printUsageAndDie(parser, s"The $verboseOpt option may only be used with $membersOpt.")
 
       if (options.has(deleteOpt) && !options.has(groupOpt) && !options.has(topicOpt))
         CommandLineUtils.printUsageAndDie(parser, "Option %s either takes %s, %s, or both".format(deleteOpt, groupOpt, topicOpt))
