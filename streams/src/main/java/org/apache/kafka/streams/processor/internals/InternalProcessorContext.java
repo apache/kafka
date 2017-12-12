@@ -50,7 +50,12 @@ public interface InternalProcessorContext extends ProcessorContext {
     ThreadCache getCache();
 
     /**
-     * Mark this contex as being initialized
+     * Mark this context as being initialized
      */
     void initialized();
+
+    /**
+     * Mark this context as being uninitialized
+     */
+    void uninitialize();
 }
