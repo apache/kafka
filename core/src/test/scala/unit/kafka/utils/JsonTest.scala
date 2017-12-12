@@ -17,7 +17,6 @@
 package kafka.utils
 
 import java.nio.charset.StandardCharsets
-import java.util
 
 import org.junit.Assert._
 import org.junit.Test
@@ -50,7 +49,7 @@ class JsonTest {
 
     // Test with encoder that properly escapes backslash and quotes
     val map = Map("foo1" -> """bar1\,bar2""", "foo2" -> """\bar""")
-    val encoded = Json.encode(map)
+    val encoded = Json.legacyEncodeAsString(map)
     val decoded = Json.parseFull(encoded)
     assertEquals(Json.parseFull("""{"foo1":"bar1\\,bar2", "foo2":"\\bar"}"""), decoded)
 
@@ -100,6 +99,8 @@ class JsonTest {
     assertEquals("""{"a":1,"b":2,"c":null}""", Json.encodeAsString(Map("a" -> 1, "b" -> 2, "c" -> null).asJava))
     assertEquals("""{"a":[1,2],"c":[3,4]}""", Json.encodeAsString(Map("a" -> Seq(1,2).asJava, "c" -> Seq(3,4).asJava).asJava))
     assertEquals("""{"a":[1,2],"b":[3,4],"c":null}""", Json.encodeAsString(Map("a" -> Seq(1,2).asJava, "b" -> Seq(3,4).asJava, "c" -> null).asJava))
+    assertEquals(""""str1\\,str2"""", Json.encodeAsString("""str1\,str2"""))
+    assertEquals(""""\"quoted\""""", Json.encodeAsString(""""quoted""""))
   }
 
   @Test
@@ -121,6 +122,8 @@ class JsonTest {
     assertEquals("""{"a":1,"b":2,"c":null}""", new String(Json.encodeAsBytes(Map("a" -> 1, "b" -> 2, "c" -> null).asJava), StandardCharsets.UTF_8))
     assertEquals("""{"a":[1,2],"c":[3,4]}""", new String(Json.encodeAsBytes(Map("a" -> Seq(1,2).asJava, "c" -> Seq(3,4).asJava).asJava), StandardCharsets.UTF_8))
     assertEquals("""{"a":[1,2],"b":[3,4],"c":null}""", new String(Json.encodeAsBytes(Map("a" -> Seq(1,2).asJava, "b" -> Seq(3,4).asJava, "c" -> null).asJava), StandardCharsets.UTF_8))
+    assertEquals(""""str1\\,str2"""", new String(Json.encodeAsBytes("""str1\,str2"""), StandardCharsets.UTF_8))
+    assertEquals(""""\"quoted\""""", new String(Json.encodeAsBytes(""""quoted""""), StandardCharsets.UTF_8))
   }
   
 }

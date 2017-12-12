@@ -23,7 +23,6 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import kafka.utils.json.JsonValue
 
 import scala.collection._
-import scala.collection.JavaConverters._
 
 /**
  * Provides methods for parsing JSON with Jackson and encoding to JSON with a simple and naive custom implementation.
@@ -78,15 +77,6 @@ object Json {
       case other: AnyRef => throw new IllegalArgumentException(s"Unknown argument of type ${other.getClass}: $other")
     }
   }
-
-  /**
-   * Encode an object into a JSON value in bytes. This method accepts any type T where
-   *   T => null | Boolean | String | Number | Map[String, T] | Array[T] | Iterable[T]
-   * Any other type will result in an exception.
-   *
-   * This method does not properly handle non-ascii characters hence it is getting replaced by Json.encodeAsBytes
-   */
-  def legacyEncodeAsBytes(obj: Any): Array[Byte] = legacyEncodeAsString(obj).getBytes(StandardCharsets.UTF_8)
 
   /**
     * Encode an object into JSON string.
