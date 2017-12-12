@@ -40,7 +40,6 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import java.lang.reflect.Field;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -521,7 +520,7 @@ public class InternalTopologyBuilderTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldAddInternalTopicConfigWithCompactAndDeleteSetForWindowStores() throws Exception {
+    public void shouldAddInternalTopicConfigForWindowStores() throws Exception {
         builder.setApplicationId("appId");
         builder.addSource(null, "source", null, null, null, "topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
@@ -529,44 +528,41 @@ public class InternalTopologyBuilderTest {
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
         final InternalTopologyBuilder.TopicsInfo topicsInfo = topicGroups.values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-store-changelog");
-        final Map<String, String> properties = topicConfig.toProperties(0);
-        final List<String> policies = Arrays.asList(properties.get(TopicConfig.CLEANUP_POLICY_CONFIG).split(","));
+        final Map<String, String> properties = topicConfig.toProperties(10000);
+        assertEquals(1, properties.size());
+        assertEquals("40000", properties.get(TopicConfig.RETENTION_MS_CONFIG));
         assertEquals("appId-store-changelog", topicConfig.name());
-        assertTrue(policies.contains("compact"));
-        assertTrue(policies.contains("delete"));
-        assertEquals(2, policies.size());
-        assertEquals("30000", properties.get(TopicConfig.RETENTION_MS_CONFIG));
-        assertEquals(2, properties.size());
+        assertEquals(InternalTopicConfig.InternalTopicType.WINDOWED_STORE_CHANGELOG, topicConfig.type());
     }
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldAddInternalTopicConfigWithCompactForNonWindowStores() throws Exception {
+    public void shouldAddInternalTopicConfigForNonWindowStores() throws Exception {
         builder.setApplicationId("appId");
         builder.addSource(null, "source", null, null, null, "topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
-        builder.addStateStore(new MockStateStoreSupplier("name", true), "processor");
+        builder.addStateStore(new MockStateStoreSupplier("store", true), "processor");
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
         final InternalTopologyBuilder.TopicsInfo topicsInfo = topicGroups.values().iterator().next();
-        final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-name-changelog");
-        final Map<String, String> properties = topicConfig.toProperties(0);
-        assertEquals("appId-name-changelog", topicConfig.name());
-        assertEquals("compact", properties.get(TopicConfig.CLEANUP_POLICY_CONFIG));
-        assertEquals(1, properties.size());
+        final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-store-changelog");
+        final Map<String, String> properties = topicConfig.toProperties(10000);
+        assertEquals(0, properties.size());
+        assertEquals("appId-store-changelog", topicConfig.name());
+        assertEquals(InternalTopicConfig.InternalTopicType.UNWINDOWED_STORE_CHANGELOG, topicConfig.type());
     }
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldAddInternalTopicConfigWithCleanupPolicyDeleteForInternalTopics() throws Exception {
+    public void shouldAddInternalTopicConfigForRepartitionTopics() throws Exception {
         builder.setApplicationId("appId");
         builder.addInternalTopic("foo");
         builder.addSource(null, "source", null, null, null, "foo");
         final InternalTopologyBuilder.TopicsInfo topicsInfo = builder.topicGroups().values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.repartitionSourceTopics.get("appId-foo");
-        final Map<String, String> properties = topicConfig.toProperties(0);
+        final Map<String, String> properties = topicConfig.toProperties(10000);
+        assertEquals(0, properties.size());
         assertEquals("appId-foo", topicConfig.name());
-        assertEquals("delete", properties.get(TopicConfig.CLEANUP_POLICY_CONFIG));
-        assertEquals(1, properties.size());
+        assertEquals(InternalTopicConfig.InternalTopicType.REPARTITION, topicConfig.type());
     }
 
     @SuppressWarnings("deprecation")

@@ -120,7 +120,7 @@ public class InternalTopicManager {
             final Set<NewTopic> newTopics = new HashSet<>();
 
             for (final InternalTopicConfig internalTopicConfig : topicsToBeCreated) {
-                // internal topic config overriden rule: library overrides < global config overrides < per-topic config overrides
+                // internal topic config overridden rule: library overrides < global config overrides < per-topic config overrides
                 final Map<String, String> topicConfig = new HashMap<>();
 
                 switch (internalTopicConfig.type()) {
@@ -140,6 +140,8 @@ public class InternalTopicManager {
                 topicConfig.putAll(defaultTopicConfigs);
 
                 topicConfig.putAll(internalTopicConfig.toProperties(windowChangeLogAdditionalRetention));
+
+                System.out.println("\nCREATE topic " + internalTopicConfig.name() + " with partitions " +  internalTopicConfig.numberOfPartitions() + ": config " + topicConfig + "\n");
 
                 newTopics.add(
                     new NewTopic(

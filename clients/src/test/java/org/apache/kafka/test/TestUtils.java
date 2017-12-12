@@ -265,7 +265,7 @@ public class TestUtils {
 
         boolean testConditionMet;
         while (!(testConditionMet = testCondition.conditionMet()) && ((System.currentTimeMillis() - startTime) < maxWaitMs)) {
-            Thread.sleep(Math.min(maxWaitMs, 100L));
+            Thread.sleep(Math.min(maxWaitMs, 1000L));
         }
 
         // don't re-evaluate testCondition.conditionMet() because this might slow down some tests significantly (this

@@ -48,7 +48,7 @@ public class InternalTopicConfigTest {
         assertEquals("30", topicConfig.toProperties(20).get(TopicConfig.RETENTION_MS_CONFIG));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test(expected = IllegalStateException.class)
     public void shouldThrowWhenSetRetentionMsWithUnWindowedChangelog() {
         final InternalTopicConfig topicConfig = new InternalTopicConfig("name",
                                                                         InternalTopicType.UNWINDOWED_STORE_CHANGELOG,
@@ -56,7 +56,7 @@ public class InternalTopicConfigTest {
         topicConfig.setRetentionMs(10);
     }
 
-    @Test
+    @Test(expected = IllegalStateException.class)
     public void shouldThrowWhenSetRetentionMsWithRepartition() {
         final InternalTopicConfig topicConfig = new InternalTopicConfig("name",
                                                                         InternalTopicType.REPARTITION,
