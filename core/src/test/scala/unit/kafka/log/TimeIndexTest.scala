@@ -93,5 +93,46 @@ class TimeIndexTest extends JUnitSuite {
     file.delete()
     file
   }
+
+  @Test
+  def testSanityCheck(): Unit = {
+    idx.sanityCheck()
+    appendEntries(5)
+    val firstEntry = idx.entry(0)
+    idx.sanityCheck()
+    idx.close()
+
+    var shouldCorruptOffset = false
+    var shouldCorruptTimestamp = false
+    var shouldCorruptLength = false
+    idx = new TimeIndex(idx.file, baseOffset = baseOffset, maxIndexSize = maxEntries * 12) {
+      override def lastEntry = {
+        val superLastEntry = super.lastEntry
+        val offset = if (shouldCorruptOffset) baseOffset - 1 else superLastEntry.offset
+        val timestamp = if (shouldCorruptTimestamp) firstEntry.timestamp - 1 else superLastEntry.timestamp
+        new TimestampOffset(timestamp, offset)
+      }
+      override def length = {
+        val superLength = super.length
+        if (shouldCorruptLength) superLength - 1 else superLength
+      }
+    }
+
+    shouldCorruptOffset = true
+    intercept[CorruptIndexException](idx.sanityCheck())
+    shouldCorruptOffset = false
+
+    shouldCorruptTimestamp = true
+    intercept[CorruptIndexException](idx.sanityCheck())
+    shouldCorruptTimestamp = false
+
+    shouldCorruptLength = true
+    intercept[CorruptIndexException](idx.sanityCheck())
+    shouldCorruptLength = false
+
+    idx.sanityCheck()
+    idx.close()
+  }
+
 }
 
