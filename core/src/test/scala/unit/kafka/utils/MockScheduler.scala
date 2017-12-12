@@ -37,7 +37,7 @@ import org.apache.kafka.common.utils.Time
 class MockScheduler(val time: Time) extends Scheduler {
   
   /* a priority queue of tasks ordered by next execution time */
-  var tasks = new PriorityQueue[MockTask]()
+  private val tasks = new PriorityQueue[MockTask]()
   
   def isStarted = true
 
@@ -75,6 +75,12 @@ class MockScheduler(val time: Time) extends Scheduler {
     this synchronized {
       tasks += MockTask(name, fun, time.milliseconds + delay, period = period)
       tick()
+    }
+  }
+
+  def clear(): Unit = {
+    this synchronized {
+      tasks.clear()
     }
   }
   
