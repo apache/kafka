@@ -36,7 +36,16 @@ object Json {
    */
   def parseFull(input: String): Option[JsonValue] =
     try Option(mapper.readTree(input)).map(JsonValue(_))
-    catch { case _: JsonProcessingException => None }
+    catch {
+      case _: JsonProcessingException =>
+        // Before 1.0.1, Json#encode did not escape backslash or any other special characters. SSL principals
+        // stored in ACLs may contain backslash as an escape char, making the JSON generated in earlier versions invalid.
+        // Escape backslash and retry to handle these strings which may have been persisted in ZK.
+        // Note that this does not handle all special characters (e.g. non-escaped double quotes are not supported)
+        val escapedInput = input.replaceAll("\\\\", "\\\\\\\\")
+        try Option(mapper.readTree(escapedInput)).map(JsonValue(_))
+        catch { case _: JsonProcessingException => None }
+    }
 
   /**
    * Parse a JSON byte array into a JsonValue if possible. `None` is returned if `input` is not valid JSON.
@@ -56,7 +65,7 @@ object Json {
     obj match {
       case null => "null"
       case b: Boolean => b.toString
-      case s: String => "\"" + s + "\""
+      case s: String => mapper.writeValueAsString(s)
       case n: Number => n.toString
       case m: Map[_, _] => "{" +
         m.map {
