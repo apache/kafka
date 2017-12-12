@@ -22,6 +22,8 @@ import kafka.common.KafkaException
 import kafka.utils.{Json, Logging, ZkUtils}
 import kafka.zk.KafkaZkClient
 
+import scala.collection.JavaConverters._
+
 /**
  * ProducerIdManager is the part of the transaction coordinator that provides ProducerIds in a unique way
  * such that the same producerId will not be assigned twice across multiple transaction coordinators.
@@ -37,7 +39,7 @@ object ProducerIdManager extends Logging {
     Json.encodeAsBytes(Map("version" -> CurrentVersion,
       "broker" -> producerIdBlock.brokerId,
       "block_start" -> producerIdBlock.blockStartId.toString,
-      "block_end" -> producerIdBlock.blockEndId.toString)
+      "block_end" -> producerIdBlock.blockEndId.toString).asJava
     )
   }
 

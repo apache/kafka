@@ -59,9 +59,9 @@ object Json {
    *   T => null | Boolean | String | Number | Map[String, T] | Array[T] | Iterable[T]
    * Any other type will result in an exception.
    * 
-   * This method does not properly handle non-ascii characters. 
+   * This method does not properly handle non-ascii characters hence it is getting replaced by Json.encodeAsString
    */
-  def encode(obj: Any): String = {
+  def legacyEncodeAsString(obj: Any): String = {
     obj match {
       case null => "null"
       case b: Boolean => b.toString
@@ -69,22 +69,32 @@ object Json {
       case n: Number => n.toString
       case m: Map[_, _] => "{" +
         m.map {
-          case (k, v) => encode(k) + ":" + encode(v)
+          case (k, v) => legacyEncodeAsString(k) + ":" + legacyEncodeAsString(v)
           case elem => throw new IllegalArgumentException(s"Invalid map element '$elem' in $obj")
         }.mkString(",") + "}"
-      case a: Array[_] => encode(a.toSeq)
-      case i: Iterable[_] => "[" + i.map(encode).mkString(",") + "]"
+      case a: Array[_] => legacyEncodeAsString(a.toSeq)
+      case i: Iterable[_] => "[" + i.map(legacyEncodeAsString).mkString(",") + "]"
       case other: AnyRef => throw new IllegalArgumentException(s"Unknown argument of type ${other.getClass}: $other")
     }
   }
 
   /**
-   * Encode an object into a JSON value in bytes. This method accepts any type T where
-   *   T => null | Boolean | String | Number | Map[String, T] | Array[T] | Iterable[T]
-   * Any other type will result in an exception.
-   *
-   * This method does not properly handle non-ascii characters.
-   */
-  def encodeAsBytes(obj: Any): Array[Byte] = encode(obj).getBytes(StandardCharsets.UTF_8)
+    * Encode an object into JSON string.
+    * @param obj of any Scala type however this method expects the Scala collections to be converted to corresponding
+    *   Java type beforehand and it can be done by calling 'asJava' on Scala collections/nested collections
+    * @return JSON string
+    */
+  def encodeAsString(obj: Any): String = {
+     mapper.writeValueAsString(obj)
+  }
 
+  /**
+    * Encode an object into JSON value in bytes.
+    * @param obj of any Scala type however this method expects the Scala collections to be converted to corresponding
+    *   Java type beforehand and it can be done by calling 'asJava' on Scala collections/nested collections
+    * @return JSON byte array
+    */
+  def encodeAsBytes(obj: Any): Array[Byte] = {
+      mapper.writeValueAsString(obj).getBytes(StandardCharsets.UTF_8)
+  }
 }

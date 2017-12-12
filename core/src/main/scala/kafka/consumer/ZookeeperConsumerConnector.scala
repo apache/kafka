@@ -45,6 +45,7 @@ import org.apache.zookeeper.Watcher.Event.KeeperState
 import scala.collection._
 import scala.collection.JavaConverters._
 
+
 /**
  * This class handles the consumers interaction with zookeeper
  *
@@ -272,8 +273,10 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   private def registerConsumerInZK(dirs: ZKGroupDirs, consumerIdString: String, topicCount: TopicCount) {
     info("begin registering consumer " + consumerIdString + " in ZK")
     val timestamp = Time.SYSTEM.milliseconds.toString
-    val consumerRegistrationInfo = Json.encode(Map("version" -> 1, "subscription" -> topicCount.getTopicCountMap, "pattern" -> topicCount.pattern,
-                                                  "timestamp" -> timestamp))
+
+    val consumerRegistrationInfo = Json.encodeAsString(Map("version" -> 1, "subscription" -> topicCount.getTopicCountMap.asJava, "pattern" -> topicCount.pattern,
+      "timestamp" -> timestamp).asJava);
+
     val zkWatchedEphemeral = new ZKCheckedEphemeral(dirs.
                                                     consumerRegistryDir + "/" + consumerIdString,
                                                     consumerRegistrationInfo,

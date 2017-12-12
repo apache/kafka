@@ -27,13 +27,15 @@ import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
 import kafka.utils.Json
 import org.apache.kafka.common.TopicPartition
 import org.apache.zookeeper.data.Stat
+import scala.collection.JavaConverters._
 
 // This file contains objects for encoding/decoding data stored in ZooKeeper nodes (znodes).
 
 object ControllerZNode {
   def path = "/controller"
-  def encode(brokerId: Int, timestamp: Long): Array[Byte] =
-    Json.encodeAsBytes(Map("version" -> 1, "brokerid" -> brokerId, "timestamp" -> timestamp.toString))
+  def encode(brokerId: Int, timestamp: Long): Array[Byte] = {
+    Json.encodeAsBytes(Map("version" -> 1, "brokerid" -> brokerId, "timestamp" -> timestamp.toString).asJava)
+  }
   def decode(bytes: Array[Byte]): Option[Int] = Json.parseBytes(bytes).map { js =>
     js.asJsonObject("brokerid").to[Int]
   }
@@ -83,8 +85,8 @@ object TopicsZNode {
 object TopicZNode {
   def path(topic: String) = s"${TopicsZNode.path}/$topic"
   def encode(assignment: collection.Map[TopicPartition, Seq[Int]]): Array[Byte] = {
-    val assignmentJson = assignment.map { case (partition, replicas) => partition.partition.toString -> replicas }
-    Json.encodeAsBytes(Map("version" -> 1, "partitions" -> assignmentJson))
+    val assignmentJson = assignment.map { case (partition, replicas) => partition.partition.toString -> replicas.asJava }
+    Json.encodeAsBytes(Map("version" -> 1, "partitions" -> assignmentJson.asJava).asJava)
   }
   def decode(topic: String, bytes: Array[Byte]): Map[TopicPartition, Seq[Int]] = {
     Json.parseBytes(bytes).flatMap { js =>
@@ -113,7 +115,7 @@ object TopicPartitionStateZNode {
     val leaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
     val controllerEpoch = leaderIsrAndControllerEpoch.controllerEpoch
     Json.encodeAsBytes(Map("version" -> 1, "leader" -> leaderAndIsr.leader, "leader_epoch" -> leaderAndIsr.leaderEpoch,
-      "controller_epoch" -> controllerEpoch, "isr" -> leaderAndIsr.isr))
+      "controller_epoch" -> controllerEpoch, "isr" -> leaderAndIsr.isr.asJava).asJava)
   }
   def decode(bytes: Array[Byte], stat: Stat): Option[LeaderIsrAndControllerEpoch] = {
     Json.parseBytes(bytes).map { js =>
@@ -135,8 +137,7 @@ object ConfigEntityTypeZNode {
 object ConfigEntityZNode {
   def path(entityType: String, entityName: String) = s"${ConfigEntityTypeZNode.path(entityType)}/$entityName"
   def encode(config: Properties): Array[Byte] = {
-    import scala.collection.JavaConverters._
-    Json.encodeAsBytes(Map("version" -> 1, "config" -> config.asScala))
+    Json.encodeAsBytes(Map("version" -> 1, "config" -> config).asJava)
   }
   def decode(bytes: Array[Byte]): Properties = {
     val props = new Properties()
@@ -157,7 +158,7 @@ object ConfigEntityChangeNotificationZNode {
 object ConfigEntityChangeNotificationSequenceZNode {
   val SequenceNumberPrefix = "config_change_"
   def createPath = s"${ConfigEntityChangeNotificationZNode.path}/$SequenceNumberPrefix"
-  def encode(sanitizedEntityPath : String): Array[Byte] = Json.encodeAsBytes(Map("version" -> 2, "entity_path" -> sanitizedEntityPath))
+  def encode(sanitizedEntityPath : String): Array[Byte] = Json.encodeAsBytes(Map("version" -> 2, "entity_path" -> sanitizedEntityPath).asJava)
   def decode(bytes: Array[Byte]): String = new String(bytes, UTF_8)
 }
 
@@ -169,8 +170,8 @@ object IsrChangeNotificationSequenceZNode {
   val SequenceNumberPrefix = "isr_change_"
   def path(sequenceNumber: String = "") = s"${IsrChangeNotificationZNode.path}/$SequenceNumberPrefix$sequenceNumber"
   def encode(partitions: collection.Set[TopicPartition]): Array[Byte] = {
-    val partitionsJson = partitions.map(partition => Map("topic" -> partition.topic, "partition" -> partition.partition))
-    Json.encodeAsBytes(Map("version" -> IsrChangeNotificationHandler.Version, "partitions" -> partitionsJson))
+    val partitionsJson = partitions.map(partition => Map("topic" -> partition.topic, "partition" -> partition.partition).asJava)
+    Json.encodeAsBytes(Map("version" -> IsrChangeNotificationHandler.Version, "partitions" -> partitionsJson.asJava).asJava)
   }
 
   def decode(bytes: Array[Byte]): Set[TopicPartition] = {
@@ -195,8 +196,9 @@ object LogDirEventNotificationSequenceZNode {
   val SequenceNumberPrefix = "log_dir_event_"
   val LogDirFailureEvent = 1
   def path(sequenceNumber: String) = s"${LogDirEventNotificationZNode.path}/$SequenceNumberPrefix$sequenceNumber"
-  def encode(brokerId: Int) =
-    Json.encodeAsBytes(Map("version" -> 1, "broker" -> brokerId, "event" -> LogDirFailureEvent))
+  def encode(brokerId: Int) = {
+    Json.encodeAsBytes(Map("version" -> 1, "broker" -> brokerId, "event" -> LogDirFailureEvent).asJava)
+  }
   def decode(bytes: Array[Byte]): Option[Int] = Json.parseBytes(bytes).map { js =>
     js.asJsonObject("broker").to[Int]
   }
@@ -219,9 +221,9 @@ object ReassignPartitionsZNode {
   def path = s"${AdminZNode.path}/reassign_partitions"
   def encode(reassignment: collection.Map[TopicPartition, Seq[Int]]): Array[Byte] = {
     val reassignmentJson = reassignment.map { case (tp, replicas) =>
-      Map("topic" -> tp.topic, "partition" -> tp.partition, "replicas" -> replicas)
-    }
-    Json.encodeAsBytes(Map("version" -> 1, "partitions" -> reassignmentJson))
+      Map("topic" -> tp.topic, "partition" -> tp.partition, "replicas" -> replicas.asJava).asJava
+    }.asJava
+    Json.encodeAsBytes(Map("version" -> 1, "partitions" -> reassignmentJson).asJava)
   }
   def decode(bytes: Array[Byte]): Map[TopicPartition, Seq[Int]] = Json.parseBytes(bytes).flatMap { js =>
     val reassignmentJson = js.asJsonObject
@@ -242,8 +244,8 @@ object PreferredReplicaElectionZNode {
   def path = s"${AdminZNode.path}/preferred_replica_election"
   def encode(partitions: Set[TopicPartition]): Array[Byte] = {
     val jsonMap = Map("version" -> 1,
-      "partitions" -> partitions.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition)))
-    Json.encodeAsBytes(jsonMap)
+      "partitions" -> partitions.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition).asJava).asJava)
+    Json.encodeAsBytes(jsonMap.asJava)
   }
   def decode(bytes: Array[Byte]): Set[TopicPartition] = Json.parseBytes(bytes).map { js =>
     val partitionsJson = js.asJsonObject("partitions").asJsonArray
@@ -296,7 +298,9 @@ object ResourceTypeZNode {
 
 object ResourceZNode {
   def path(resource: Resource) = s"${AclZNode.path}/${resource.resourceType}/${resource.name}"
-  def encode(acls: Set[Acl]): Array[Byte] = Json.encodeAsBytes(Acl.toJsonCompatibleMap(acls))
+  def encode(acls: Set[Acl]): Array[Byte] = {
+    Json.encodeAsBytes(Acl.toJsonCompatibleMap(acls).asJava)
+  }
   def decode(bytes: Array[Byte], stat: Stat): VersionedAcls = VersionedAcls(Acl.fromBytes(bytes), stat.getVersion)
 }
 
