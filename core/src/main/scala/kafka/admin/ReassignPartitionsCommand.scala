@@ -43,7 +43,6 @@ object ReassignPartitionsCommand extends Logging {
   private[admin] val AnyLogDir = "any"
 
   def main(args: Array[String]): Unit = {
-
     val opts = validateAndParseArgs(args)
     val zkConnect = opts.options.valueOf(opts.zkConnectOpt)
     val zkUtils = ZkUtils(zkConnect,
@@ -224,17 +223,17 @@ object ReassignPartitionsCommand extends Logging {
 
   def formatAsReassignmentJson(partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]],
                                replicaLogDirAssignment: Map[TopicPartitionReplica, String]): String = {
-    Json.encode(Map(
+    Json.encodeAsString(Map(
       "version" -> 1,
       "partitions" -> partitionsToBeReassigned.map { case (TopicAndPartition(topic, partition), replicas) =>
         Map(
           "topic" -> topic,
           "partition" -> partition,
-          "replicas" -> replicas,
-          "log_dirs" -> replicas.map(r => replicaLogDirAssignment.getOrElse(new TopicPartitionReplica(topic, partition, r), AnyLogDir))
-        )
-      }
-    ))
+          "replicas" -> replicas.asJava,
+          "log_dirs" -> replicas.map(r => replicaLogDirAssignment.getOrElse(new TopicPartitionReplica(topic, partition, r), AnyLogDir)).asJava
+        ).asJava
+      }.asJava
+    ).asJava)
   }
 
   // Parses without deduplicating keys so the data can be checked before allowing reassignment to proceed

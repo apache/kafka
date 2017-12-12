@@ -17,8 +17,6 @@
 
 package kafka.api
 
-import kafka.utils._
-
 object LeaderAndIsr {
   val initialLeaderEpoch: Int = 0
   val initialZKVersion: Int = 0
@@ -43,6 +41,6 @@ case class LeaderAndIsr(leader: Int,
   def newEpochAndZkVersion = newLeaderAndIsr(leader, isr)
 
   override def toString: String = {
-    Json.encode(Map("leader" -> leader, "leader_epoch" -> leaderEpoch, "isr" -> isr))
+    s"LeaderAndIsr(leader=$leader, leaderEpoch=$leaderEpoch, isr=$isr, zkVersion=$zkVersion)"
   }
 }
