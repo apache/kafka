@@ -46,7 +46,7 @@ import org.slf4j.LoggerFactory;
 public class SslTransportLayer implements TransportLayer {
     private static final Logger log = LoggerFactory.getLogger(SslTransportLayer.class);
 
-    private enum State {
+    protected enum State {
         HANDSHAKE,
         HANDSHAKE_FAILED,
         READY,
@@ -60,7 +60,7 @@ public class SslTransportLayer implements TransportLayer {
 
     private HandshakeStatus handshakeStatus;
     private SSLEngineResult handshakeResult;
-    private State state;
+    protected State state;
     private SslAuthenticationException handshakeException;
     private ByteBuffer netReadBuffer;
     private ByteBuffer netWriteBuffer;
