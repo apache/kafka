@@ -607,6 +607,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
      *
      * @param topicPartitions Map that contains the topic names to be created with the number of partitions
      */
+    @SuppressWarnings("deprecation")
     private void prepareTopic(final Map<String, InternalTopicMetadata> topicPartitions) {
         log.debug("Starting to validate internal topics in partition assignor.");
 
@@ -621,7 +622,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 continue;
             }
             if (numPartitions < 0) {
-                throw new IllegalStateException(String.format("%sTopic [%s] number of partitions not defined", logPrefix, topic.name()));
+                throw new org.apache.kafka.streams.errors.TopologyBuilderException(String.format("%sTopic [%s] number of partitions not defined", logPrefix, topic.name()));
             }
 
             topic.setNumberOfPartitions(numPartitions);

@@ -141,7 +141,10 @@ public class InternalTopicManager {
 
                 topicConfig.putAll(internalTopicConfig.toProperties(windowChangeLogAdditionalRetention));
 
-                System.out.println("\nCREATE topic " + internalTopicConfig.name() + " with partitions " +  internalTopicConfig.numberOfPartitions() + ": config " + topicConfig + "\n");
+                log.debug("Going to create topic {} with {} partitions and config {}.",
+                        internalTopicConfig.name(),
+                        internalTopicConfig.numberOfPartitions(),
+                        topicConfig);
 
                 newTopics.add(
                     new NewTopic(

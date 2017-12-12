@@ -28,7 +28,6 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
-import org.apache.kafka.common.utils.Utils;
 
 import java.util.ArrayList;
 import java.util.Collection;

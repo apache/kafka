@@ -18,9 +18,7 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.Config;
-import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
@@ -29,9 +27,11 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
+import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.TestCondition;
@@ -44,10 +44,13 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 @Category({IntegrationTest.class})
@@ -74,16 +77,16 @@ public class PurgeRepartitionTopicIntegrationTest {
 
     private Time time = CLUSTER.time;
 
-    private class RepartitionTopicCreated implements TestCondition {
+    private class RepartitionTopicCreatedWithExpectedConfigs implements TestCondition {
         @Override
-        public boolean conditionMet() {
+        final public boolean conditionMet() {
             try {
                 Set<String> topics = adminClient.listTopics().names().get();
 
                 if (!topics.contains(REPARTITION_TOPIC)) {
                     return false;
                 }
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 return false;
             }
 
@@ -94,7 +97,7 @@ public class PurgeRepartitionTopicIntegrationTest {
                 return config.get(TopicConfig.CLEANUP_POLICY_CONFIG).value().equals(TopicConfig.CLEANUP_POLICY_DELETE)
                         && config.get(TopicConfig.SEGMENT_MS_CONFIG).value().equals(purgeIntervalMs.toString())
                         && config.get(TopicConfig.SEGMENT_BYTES_CONFIG).value().equals(purgeSegmentBytes.toString());
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 return false;
             }
         }
@@ -105,34 +108,32 @@ public class PurgeRepartitionTopicIntegrationTest {
         boolean verify(long currentSize);
     }
 
-    private class RepartitionTopicPurged implements TestCondition {
-        private TopicSizeVerifier verifier;
+    private class RepartitionTopicVerified implements TestCondition {
+        private final TopicSizeVerifier verifier;
 
-        RepartitionTopicPurged(TopicSizeVerifier verifier) {
+        RepartitionTopicVerified(TopicSizeVerifier verifier) {
             this.verifier = verifier;
         }
 
         @Override
-        public boolean conditionMet() {
+        public final boolean conditionMet() {
             time.sleep(purgeIntervalMs);
 
             try {
-                Collection<DescribeLogDirsResponse.LogDirInfo> logDirInfo = adminClient.describeLogDirs(Collections.singleton(0)).values().get(0).get().values();
+                final Collection<DescribeLogDirsResponse.LogDirInfo> logDirInfo = adminClient.describeLogDirs(Collections.singleton(0)).values().get(0).get().values();
 
-                if (logDirInfo.isEmpty()) {
-                    return false;
-                } else {
-                    for (DescribeLogDirsResponse.LogDirInfo partitionInfo : logDirInfo) {
-                        DescribeLogDirsResponse.ReplicaInfo replicaInfo = partitionInfo.replicaInfos.get(new TopicPartition(REPARTITION_TOPIC, 0));
-                        if (replicaInfo != null && verifier.verify(replicaInfo.size)) {
-                            return true;
-                        }
+                for (final DescribeLogDirsResponse.LogDirInfo partitionInfo : logDirInfo) {
+                    final DescribeLogDirsResponse.ReplicaInfo replicaInfo = partitionInfo.replicaInfos.get(new TopicPartition(REPARTITION_TOPIC, 0));
+                    if (replicaInfo != null && verifier.verify(replicaInfo.size)) {
+                        return true;
                     }
                 }
-                return false;
-            } catch (Exception e) {
-                return false;
+
+            } catch (final Exception e) {
+                // swallow
             }
+
+            return false;
         }
     }
 
@@ -165,8 +166,6 @@ public class PurgeRepartitionTopicIntegrationTest {
                .groupBy(MockKeyValueMapper.SelectKeyKeyValueMapper())
                .count();
 
-        System.out.println(builder.build().describe());
-
         kafkaStreams = new KafkaStreams(builder.build(), new StreamsConfig(streamsConfiguration), time);
     }
 
@@ -179,26 +178,26 @@ public class PurgeRepartitionTopicIntegrationTest {
 
 
     @Test
-    public void shouldRestoreState() throws InterruptedException {
+    public void shouldRestoreState() throws InterruptedException, ExecutionException {
         // produce some data to input topic
-        final Properties producerConfig = new Properties();
-        producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-
-        try (final KafkaProducer<Integer, Integer> producer =
-                     new KafkaProducer<>(producerConfig, new IntegerSerializer(), new IntegerSerializer())) {
-
-            for (int i = 0; i < 1000; i++) {
-                producer.send(new ProducerRecord<>(INPUT_TOPIC, i, i));
-            }
+        final List<KeyValue<Integer, Integer>> messages = new ArrayList<>();
+        for (int i = 0; i < 1000; i++) {
+            messages.add(new KeyValue<>(i, i));
         }
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC,
+                messages,
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(),
+                        IntegerSerializer.class,
+                        IntegerSerializer.class),
+                time.milliseconds());
 
         kafkaStreams.start();
 
-        TestUtils.waitForCondition(new RepartitionTopicCreated(), 60000,
+        TestUtils.waitForCondition(new RepartitionTopicCreatedWithExpectedConfigs(), 60000,
                 "Repartition topic " + REPARTITION_TOPIC + " not created with the expected configs after 60000 ms.");
 
         TestUtils.waitForCondition(
-                new RepartitionTopicPurged(new TopicSizeVerifier() {
+                new RepartitionTopicVerified(new TopicSizeVerifier() {
                     @Override
                     public boolean verify(long currentSize) {
                         return currentSize > 0;
@@ -210,7 +209,7 @@ public class PurgeRepartitionTopicIntegrationTest {
 
         // we need long enough timeout to by-pass the log manager's InitialTaskDelayMs, which is hard-coded on server side
         TestUtils.waitForCondition(
-                new RepartitionTopicPurged(new TopicSizeVerifier() {
+                new RepartitionTopicVerified(new TopicSizeVerifier() {
                     @Override
                     public boolean verify(long currentSize) {
                         return currentSize <= purgeSegmentBytes;

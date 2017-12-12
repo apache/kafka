@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
 public class InternalTopicConfigTest {
 
@@ -48,20 +49,32 @@ public class InternalTopicConfigTest {
         assertEquals("30", topicConfig.toProperties(20).get(TopicConfig.RETENTION_MS_CONFIG));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void shouldThrowWhenSetRetentionMsWithUnWindowedChangelog() {
         final InternalTopicConfig topicConfig = new InternalTopicConfig("name",
                                                                         InternalTopicType.UNWINDOWED_STORE_CHANGELOG,
                                                                         Collections.<String, String>emptyMap());
-        topicConfig.setRetentionMs(10);
+        try {
+            topicConfig.setRetentionMs(10);
+
+            fail("We should have thrown the IllegalStateException.");
+        } catch (final IllegalStateException e) {
+            // this is good
+        }
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void shouldThrowWhenSetRetentionMsWithRepartition() {
         final InternalTopicConfig topicConfig = new InternalTopicConfig("name",
                                                                         InternalTopicType.REPARTITION,
                                                                         Collections.<String, String>emptyMap());
-        topicConfig.setRetentionMs(10);
+        try {
+            topicConfig.setRetentionMs(10);
+
+            fail("We should have thrown the IllegalStateException.");
+        } catch (final IllegalStateException e) {
+            // this is good
+        }
     }
 
 
