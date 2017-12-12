@@ -76,6 +76,8 @@ object TestUtils extends Logging {
   val MockZkPort = 1
   /** Zookeeper connection string to use for unit tests that mock/don't require a real ZK server. */
   val MockZkConnect = "127.0.0.1:" + MockZkPort
+  // CN in SSL certificates - this is used for endpoint validation when enabled
+  val SslCertificateCn = "localhost"
 
   private val transactionStatusKey = "transactionStatus"
   private val committedValue : Array[Byte] = "committed".getBytes(StandardCharsets.UTF_8)
@@ -519,14 +521,15 @@ object TestUtils extends Logging {
     new Producer[K, V](new kafka.producer.ProducerConfig(props))
   }
 
-  private def securityConfigs(mode: Mode,
+  def securityConfigs(mode: Mode,
                               securityProtocol: SecurityProtocol,
                               trustStoreFile: Option[File],
                               certAlias: String,
+                              certCn: String,
                               saslProperties: Option[Properties]): Properties = {
     val props = new Properties
     if (usesSslTransportLayer(securityProtocol))
-      props ++= sslConfigs(mode, securityProtocol == SecurityProtocol.SSL, trustStoreFile, certAlias)
+      props ++= sslConfigs(mode, securityProtocol == SecurityProtocol.SSL, trustStoreFile, certAlias, certCn)
 
     if (usesSaslAuthentication(securityProtocol))
       props ++= JaasTestUtils.saslConfigs(saslProperties)
@@ -535,7 +538,7 @@ object TestUtils extends Logging {
   }
 
   def producerSecurityConfigs(securityProtocol: SecurityProtocol, trustStoreFile: Option[File], saslProperties: Option[Properties]): Properties =
-    securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, "producer", saslProperties)
+    securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, "producer", SslCertificateCn, saslProperties)
 
   /**
    * Create a (new) producer with a few pre-configured properties.
@@ -596,10 +599,10 @@ object TestUtils extends Logging {
   }
 
   def consumerSecurityConfigs(securityProtocol: SecurityProtocol, trustStoreFile: Option[File], saslProperties: Option[Properties]): Properties =
-    securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, "consumer", saslProperties)
+    securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, "consumer", SslCertificateCn, saslProperties)
 
   def adminClientSecurityConfigs(securityProtocol: SecurityProtocol, trustStoreFile: Option[File], saslProperties: Option[Properties]): Properties =
-    securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, "admin-client", saslProperties)
+    securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, "admin-client", SslCertificateCn, saslProperties)
 
   /**
    * Create a new consumer with a few pre-configured properties.
@@ -1220,12 +1223,13 @@ object TestUtils extends Logging {
     copy
   }
 
-  def sslConfigs(mode: Mode, clientCert: Boolean, trustStoreFile: Option[File], certAlias: String): Properties = {
+  def sslConfigs(mode: Mode, clientCert: Boolean, trustStoreFile: Option[File], certAlias: String,
+                 certCn: String = SslCertificateCn): Properties = {
     val trustStore = trustStoreFile.getOrElse {
       throw new Exception("SSL enabled but no trustStoreFile provided")
     }
 
-    val sslConfigs = TestSslUtils.createSslConfig(clientCert, true, mode, trustStore, certAlias)
+    val sslConfigs = TestSslUtils.createSslConfig(clientCert, true, mode, trustStore, certAlias, certCn)
 
     val sslProps = new Properties()
     sslConfigs.asScala.foreach { case (k, v) => sslProps.put(k, v) }
