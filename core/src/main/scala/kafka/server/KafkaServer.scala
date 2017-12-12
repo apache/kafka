@@ -18,14 +18,14 @@
 package kafka.server
 
 import java.io.{File, IOException}
-import java.net.SocketTimeoutException
+import java.net.{InetAddress, SocketTimeoutException}
 import java.util
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 
 import com.yammer.metrics.core.Gauge
 import kafka.api.KAFKA_0_9_0
-import kafka.cluster.Broker
+import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException}
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinator
@@ -36,7 +36,7 @@ import kafka.network.SocketServer
 import kafka.security.CredentialProvider
 import kafka.security.auth.Authorizer
 import kafka.utils._
-import kafka.zk.KafkaZkClient
+import kafka.zk.{BrokerInfo, KafkaZkClient}
 import kafka.zookeeper.ZooKeeperClient
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClient, NetworkClientUtils}
 import org.apache.kafka.common.internals.ClusterResourceListeners
@@ -44,6 +44,7 @@ import org.apache.kafka.common.metrics.{JmxReporter, Metrics, _}
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ControlledShutdownRequest, ControlledShutdownResponse}
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, Node}
@@ -147,6 +148,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   private var _clusterId: String = null
   private var _brokerTopicStats: BrokerTopicStats = null
+
 
   def clusterId: String = _clusterId
 
@@ -295,12 +297,30 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           else
             endpoint
         }
-        kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, listeners, zkClient, config.rack,
-          config.interBrokerProtocolVersion, this.handleZKStateChanges)
-        kafkaHealthcheck.startup()
+
+
+        val updatedEndpoints = listeners.map(endpoint =>
+          if (endpoint.host == null || endpoint.host.trim.isEmpty)
+            endpoint.copy(host = InetAddress.getLocalHost.getCanonicalHostName)
+          else
+            endpoint
+        )
+
+        // the default host and port are here for compatibility with older clients that only support PLAINTEXT
+        // we choose the first plaintext port, if there is one
+        // or we register an empty endpoint, which means that older clients will not be able to connect
+        val plaintextEndpoint = updatedEndpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).getOrElse(
+          new EndPoint(null, -1, null, null))
+
+        val jmxPort = System.getProperty("com.sun.management.jmxremote.port", "-1").toInt
+        val brokerInfo = new BrokerInfo(config.brokerId,
+          plaintextEndpoint.host, plaintextEndpoint.port,
+          listeners, jmxPort, config.rack, config.interBrokerProtocolVersion)
+        zkClient.registerBrokerInZk(brokerInfo)
 
         // Now that the broker id is successfully registered via KafkaHealthcheck, checkpoint it
         checkpointBrokerId(config.brokerId)
+        kafkaController.setBrokerInfo(brokerInfo)
 
         brokerState.newState(RunningAsBroker)
         shutdownLatch = new CountDownLatch(1)
@@ -592,60 +612,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         isShuttingDown.set(false)
         throw e
     }
-  }
-
-  // ZKStateChecker is started
-  class ZKStateChecker extends Thread {
-
-    override def run(): Unit = {
-      val startTimeMillis = System.currentTimeMillis()
-      while(true) {
-        var currentTimeMillis = System.currentTimeMillis()
-        if (zkState != null && zkState != "SessionEstablishmentError"){
-          info("Zookeeper session set to %s, exiting the ZKStateChecker".format(zkState))
-          isWaitingForZKReconnect.set(false)
-          // this is a hack to re-register the broker-id
-          // until I re-implement the corresponding the changes to KafkaZKClient to do the same on reconnect
-          // this has to be handled by ZKClient so that there's no race conditions too
-          kafkaHealthcheck.register()
-        }
-
-        // watch it frequently but not too frequently
-        // I don't want to run an executorService too frequently and all the time
-        // without enough gain.
-        // if the server is already saturated without CPU that led to the ZK Disconnects
-        // and there's no hope,
-        Thread.sleep(100L);
-      }
-    }
-  }
-
-  var zKStateChecker: ZKStateChecker= null
-
-
-  private def handleZKStateChanges(state: ZKState.Value, error: Throwable): Unit = {
-    if (isShuttingDown.get()){ // if already shutting down, let it continue
-      this.error("received zookeeper session error: %s, but already shutting down".format(error))
-      return
-    }
-    state match {
-      case ZKState.SessionEstablishmentError => {
-        if (isWaitingForZKReconnect.get()){
-          // already waiting for zkReconnect
-          return
-        }
-        if (zKStateChecker == null){
-          isWaitingForZKReconnect.set(true)
-          zKStateChecker = new ZKStateChecker()
-          zKStateChecker.start()
-        }
-      }
-      case _ => {
-        zkState = state
-      }
-    }
-    // TODO: set the state to reconnecting and recreate the ZKUtils
-    // TODO: upon running into a session timeout, give it time to recover
   }
 
   /**

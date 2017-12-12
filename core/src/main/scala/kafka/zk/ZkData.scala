@@ -58,6 +58,30 @@ object BrokerIdsZNode {
   def encode: Array[Byte] = null
 }
 
+class BrokerInfo(id: Int,
+                 host: String,
+                 port: Int,
+                 advertisedEndpoints: Seq[EndPoint],
+                 jmxPort: Int,
+                 rack: Option[String],
+                 apiVersion: ApiVersion) {
+
+  def ID(): Int = {
+    id
+  }
+
+  def path(): String = {
+    BrokerIdZNode.path(id)
+  }
+
+  def endpoints(): String = {
+    advertisedEndpoints.mkString(",")
+  }
+  def getBytes(): Array[Byte] = {
+    BrokerIdZNode.encode(id, host, port, advertisedEndpoints, jmxPort, rack, apiVersion)
+  }
+}
+
 object BrokerIdZNode {
   def path(id: Int) = s"${BrokerIdsZNode.path}/$id"
   def encode(id: Int,

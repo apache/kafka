@@ -26,7 +26,7 @@ import kafka.cluster.EndPoint
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
 import com.yammer.metrics.core.Gauge
-import kafka.zk.KafkaZkClient
+import kafka.zk.{BrokerInfo, KafkaZkClient}
 import org.I0Itec.zkclient.IZkStateListener
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.zookeeper.Watcher.Event.KeeperState
@@ -46,14 +46,11 @@ import scala.collection.mutable.Set
 class KafkaHealthcheck(brokerId: Int,
                        advertisedEndpoints: Seq[EndPoint],
                        zkClient: KafkaZkClient,
-                       rack: Option[String],
-                       interBrokerProtocolVersion: ApiVersion,
-                       stateChangeCallback: (ZKState.Value, Throwable)=> Unit) extends Logging {
+                       brokerInfo: BrokerInfo
+                      ) extends Logging {
 
-  private[server] val sessionExpireListener = new SessionExpireListener
 
   def startup() {
-    //zkUtils.subscribeStateChanges(sessionExpireListener)
     register()
   }
 
@@ -61,93 +58,9 @@ class KafkaHealthcheck(brokerId: Int,
    * Register this broker as "alive" in zookeeper
    */
   def register() {
-    val jmxPort = System.getProperty("com.sun.management.jmxremote.port", "-1").toInt
-    val updatedEndpoints = advertisedEndpoints.map(endpoint =>
-      if (endpoint.host == null || endpoint.host.trim.isEmpty)
-        endpoint.copy(host = InetAddress.getLocalHost.getCanonicalHostName)
-      else
-        endpoint
-    )
-
-    // the default host and port are here for compatibility with older clients that only support PLAINTEXT
-    // we choose the first plaintext port, if there is one
-    // or we register an empty endpoint, which means that older clients will not be able to connect
-    val plaintextEndpoint = updatedEndpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).getOrElse(
-      new EndPoint(null, -1, null, null))
-
-    zkClient.registerBrokerInZk(brokerId, plaintextEndpoint.host, plaintextEndpoint.port, updatedEndpoints, jmxPort, rack,
-      interBrokerProtocolVersion)
+    zkClient.registerBrokerInZk(brokerInfo)
   }
 
-  def shutdown(): Unit = sessionExpireListener.shutdown()
-
-  /**
-   *  When we get a SessionExpired event, it means that we have lost all ephemeral nodes and ZKClient has re-established
-   *  a connection for us. We need to re-register this broker in the broker registry. We rely on `handleStateChanged`
-   *  to record ZooKeeper connection state metrics.
-   */
-  class SessionExpireListener extends IZkStateListener with KafkaMetricsGroup {
-
-    private val metricNames = Set[String]()
-
-    private var zkReconnectStartMs = null
-
-    private[server] val stateToMeterMap = {
-      import KeeperState._
-      val stateToEventTypeMap = Map(
-        Disconnected -> "Disconnects",
-        SyncConnected -> "SyncConnects",
-        AuthFailed -> "AuthFailures",
-        ConnectedReadOnly -> "ReadOnlyConnects",
-        SaslAuthenticated -> "SaslAuthentications",
-        Expired -> "Expires"
-      )
-      stateToEventTypeMap.map { case (state, eventType) =>
-        val name = s"ZooKeeper${eventType}PerSec"
-        metricNames += name
-        state -> newMeter(name, eventType.toLowerCase(Locale.ROOT), TimeUnit.SECONDS)
-      }
-    }
-
-    private[server] val sessionStateGauge =
-      newGauge("SessionState", new Gauge[String] {
-        override def value: String = "NOT_IMPLEMENTED_YET"
-          //Option(zkUtils.zkConnection.getZookeeperState.toString).getOrElse("DISCONNECTED")
-      })
-
-    metricNames += "SessionState"
-
-    @throws[Exception]
-    override def handleStateChanged(state: KeeperState) {
-      stateToMeterMap.get(state).foreach(_.mark())
-      if (stateChangeCallback != null){
-        stateChangeCallback(ZKState.withName(state.toString), null)
-      }
-    }
-
-    @throws[Exception]
-    override def handleNewSession() {
-      info("re-registering broker info in ZK for broker " + brokerId)
-      register()
-      if (stateChangeCallback != null){
-        stateChangeCallback(ZKState.NewSession, null)
-      }
-      info("done re-registering broker")
-      info("Subscribing to %s path to watch for new topics".format(ZkUtils.BrokerTopicsPath))
-    }
-
-    override def handleSessionEstablishmentError(error: Throwable) {
-      this.error("Session Establishment Error: %s".format(error))
-      if (stateChangeCallback == null){
-        // this is a check for the callers (library writers)
-        // ideally should never see it any errors
-        this.fatal("Session Establishment Error: No callback configured to cleanly exit, exiting without a callback")
-      }
-      stateChangeCallback(ZKState.SessionEstablishmentError, error)
-    }
-
-    def shutdown(): Unit = metricNames.foreach(removeMetric(_))
-
-  }
+  def shutdown(): Unit = ???
 
 }

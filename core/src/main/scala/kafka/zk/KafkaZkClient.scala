@@ -79,6 +79,13 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
   private var brokerInfo: Array[Byte] = null;
   private var brokerId: Int = -1;
 
+
+  def registerBrokerInZk(brokerInfo: BrokerInfo): Unit ={
+    val brokerIdPath = brokerInfo.path()
+    checkedEphemeralCreate(brokerIdPath, brokerInfo.getBytes())
+    info("Registered broker %d at path %s with addresses: %s".format(brokerInfo.ID(), brokerIdPath, brokerInfo.endpoints()))
+  }
+
   def registerBrokerInZk(id: Int,
                          host: String,
                          port: Int,
@@ -95,15 +102,6 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
     checkedEphemeralCreate(brokerIdPath, brokerInfo)
 
     info("Registered broker %d at path %s with addresses: %s".format(id, brokerIdPath, advertisedEndpoints.mkString(",")))
-  }
-
-
-  def reRegisterBrokerInZk(): Unit ={
-    if (brokerInfo == null || brokerId == -1){
-      throw new RuntimeException("Broker information isn't set yet, to re-register the broker")
-    }
-    val brokerIdPath = BrokerIdsPath + "/" + brokerId
-    checkedEphemeralCreate(brokerIdPath, brokerInfo)
   }
 
 
