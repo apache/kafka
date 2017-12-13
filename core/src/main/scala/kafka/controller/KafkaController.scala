@@ -54,13 +54,7 @@ object KafkaController extends Logging {
 
 }
 
-class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Time, metrics: Metrics, threadNamePrefix: Option[String] = None) extends Logging with KafkaMetricsGroup {
-  def setBrokerInfo(_brokerInfo: BrokerInfo) = {
-    brokerInfo = _brokerInfo
-  }
-
-  var brokerInfo: BrokerInfo = null
-
+class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Time, metrics: Metrics, brokerInfo: BrokerInfo, threadNamePrefix: Option[String] = None) extends Logging with KafkaMetricsGroup {
   this.logIdent = s"[Controller id=${config.brokerId}] "
 
   private val stateChangeLogger = new StateChangeLogger(config.brokerId, inControllerContext = true, None)

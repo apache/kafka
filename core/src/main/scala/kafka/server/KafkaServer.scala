@@ -244,8 +244,44 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         replicaManager = createReplicaManager(isShuttingDown)
         replicaManager.startup()
 
+        /* tell everyone we are alive */
+        val listeners = config.advertisedListeners.map { endpoint =>
+          if (endpoint.port == 0)
+            endpoint.copy(port = socketServer.boundPort(endpoint.listenerName))
+          else
+            endpoint
+        }
+
+        // to be cleaned up in KAFKA-6320
+        kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, listeners, zkUtils, config.rack,
+          config.interBrokerProtocolVersion)
+        kafkaHealthcheck.startup()
+        // KAFKA-6320
+
+        val updatedEndpoints = listeners.map(endpoint =>
+          if (endpoint.host == null || endpoint.host.trim.isEmpty)
+            endpoint.copy(host = InetAddress.getLocalHost.getCanonicalHostName)
+          else
+            endpoint
+        )
+
+        // the default host and port are here for compatibility with older clients that only support PLAINTEXT
+        // we choose the first plaintext port, if there is one
+        // or we register an empty endpoint, which means that older clients will not be able to connect
+        val plaintextEndpoint = updatedEndpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).getOrElse(
+          new EndPoint(null, -1, null, null))
+
+        val jmxPort = System.getProperty("com.sun.management.jmxremote.port", "-1").toInt
+        val brokerInfo = new BrokerInfo(config.brokerId,
+          plaintextEndpoint.host, plaintextEndpoint.port,
+          updatedEndpoints, jmxPort, config.rack, config.interBrokerProtocolVersion)
+        zkClient.registerBrokerInZk(brokerInfo)
+
+        // Now that the broker id is successfully registered via KafkaHealthcheck, checkpoint it
+        checkpointBrokerId(config.brokerId)
+
         /* start kafka controller */
-        kafkaController = new KafkaController(config, zkClient, time, metrics, threadNamePrefix)
+        kafkaController = new KafkaController(config, zkClient, time, metrics, brokerInfo, threadNamePrefix)
         kafkaController.startup()
 
         adminManager = new AdminManager(config, metrics, metadataCache, zkClient)
@@ -287,42 +323,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         dynamicConfigManager = new DynamicConfigManager(zkClient, dynamicConfigHandlers)
         dynamicConfigManager.startup()
 
-        /* tell everyone we are alive */
-        val listeners = config.advertisedListeners.map { endpoint =>
-          if (endpoint.port == 0)
-            endpoint.copy(port = socketServer.boundPort(endpoint.listenerName))
-          else
-            endpoint
-        }
-
-        // to be cleaned up in KAFKA-6320
-        kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, listeners, zkUtils, config.rack,
-          config.interBrokerProtocolVersion)
-        kafkaHealthcheck.startup()
-        // KAFKA-6320
-
-        val updatedEndpoints = listeners.map(endpoint =>
-          if (endpoint.host == null || endpoint.host.trim.isEmpty)
-            endpoint.copy(host = InetAddress.getLocalHost.getCanonicalHostName)
-          else
-            endpoint
-        )
-
-        // the default host and port are here for compatibility with older clients that only support PLAINTEXT
-        // we choose the first plaintext port, if there is one
-        // or we register an empty endpoint, which means that older clients will not be able to connect
-        val plaintextEndpoint = updatedEndpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).getOrElse(
-          new EndPoint(null, -1, null, null))
-
-        val jmxPort = System.getProperty("com.sun.management.jmxremote.port", "-1").toInt
-        val brokerInfo = new BrokerInfo(config.brokerId,
-          plaintextEndpoint.host, plaintextEndpoint.port,
-          updatedEndpoints, jmxPort, config.rack, config.interBrokerProtocolVersion)
-        zkClient.registerBrokerInZk(brokerInfo)
-
-        // Now that the broker id is successfully registered via KafkaHealthcheck, checkpoint it
-        checkpointBrokerId(config.brokerId)
-        kafkaController.setBrokerInfo(brokerInfo)
 
         brokerState.newState(RunningAsBroker)
         shutdownLatch = new CountDownLatch(1)
