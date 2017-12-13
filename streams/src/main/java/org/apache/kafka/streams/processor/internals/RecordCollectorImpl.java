@@ -107,7 +107,7 @@ public class RecordCollectorImpl implements RecordCollector {
                     } else {
                         if (sendException == null) {
                             if (exception instanceof ProducerFencedException) {
-                                log.warn(LOG_MESSAGE, key, value, timestamp, topic, exception);
+                                log.warn(LOG_MESSAGE, key, value, timestamp, topic, exception.getMessage());
                                 sendException = new ProducerFencedException(
                                     String.format(EXCEPTION_MESSAGE,
                                                   logPrefix,
