@@ -173,7 +173,7 @@ class Partition(val topic: String,
       if (isReplicaLocal(replicaId)) {
         val adminZkClient = new AdminZkClient(zkClient)
         val prop = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
-        val config = LogConfig.fromProps(logManager.defaultConfig.originals,
+        val config = LogConfig.fromProps(logManager.currentDefaultConfig.originals,
                                          prop)
         val log = logManager.getOrCreateLog(topicPartition, config, isNew, replicaId == Request.FutureLocalReplicaId)
         val checkpoint = replicaManager.highWatermarkCheckpoints(log.dir.getParent)

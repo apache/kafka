@@ -56,11 +56,10 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
     if (logs.nonEmpty) {
       /* combine the default properties with the overrides in zk to create the new LogConfig */
       val props = new Properties()
-      props ++= logManager.defaultConfig.originals.asScala
       topicConfig.asScala.foreach { case (key, value) =>
         if (!configNamesToExclude.contains(key)) props.put(key, value)
       }
-      val logConfig = LogConfig(props)
+      val logConfig = LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
       if ((topicConfig.containsKey(LogConfig.RetentionMsProp)
         || topicConfig.containsKey(LogConfig.MessageTimestampDifferenceMaxMsProp))
         && logConfig.retentionMs < logConfig.messageTimestampDifferenceMaxMs)
