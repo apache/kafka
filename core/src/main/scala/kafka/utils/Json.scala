@@ -31,9 +31,18 @@ object Json {
   private val mapper = new ObjectMapper()
 
   /**
-   * Parse a JSON string into a JsonValue if possible. `None` is returned if `input` is not valid JSON.
-   */
+    * Parse a JSON string into a JsonValue if possible. `None` is returned if `input` is not valid JSON.
+    */
   def parseFull(input: String): Option[JsonValue] =
+    try Option(mapper.readTree(input)).map(JsonValue(_))
+    catch { case _: JsonProcessingException => None }
+
+
+  /**
+   * Parse a JSON string into a JsonValue if possible. `None` is returned if `input` is not valid JSON. This method is currently used
+    * to read the already stored invalid ACLs JSON which was persisted using older versions of Kafka (prior to Kafka 1.1.0). KAFKA-6319
+   */
+  def parseFullIncludingACLs(input: String): Option[JsonValue] =
     try Option(mapper.readTree(input)).map(JsonValue(_))
     catch {
       case _: JsonProcessingException =>
