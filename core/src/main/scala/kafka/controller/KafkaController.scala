@@ -653,61 +653,44 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       tp -> new ReassignedPartitionsContext(reassignment._1, reassignIsrChangeHandler, reassignment._2)
     }
 
+    def maybeAddToContext(tp: TopicPartition, reassignment: Seq[Int], isLegacy: Boolean) = {
+      val other = controllerContext.partitionsBeingReassigned.get(tp)
+      val add = other match {
+        case Some(other) =>
+          if (other.legacy != isLegacy) {
+            warn("")
+          }
+          other.legacy == isLegacy
+        case None =>
+          true
+      }
+      if (add) {
+        val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(this, eventManager, tp)
+        controllerContext.partitionsBeingReassigned +=
+          tp -> new ReassignedPartitionsContext(reassignment, reassignIsrChangeHandler, isLegacy)
+      }
+    }
+
     // Requests made while there was no controller
-    val requests: Seq[(Map[TopicPartition, Seq[Int]], Boolean, String)] = zkClient.getPartitionReassignmentRequests()
-    requests.foreach{ case(assignment, legacy , znode) =>
-        controllerContext.partitionsBeingReassigned ++= assignment.map{ case (tp, reassignment) =>
-          val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(this, eventManager, tp)
-          tp -> new ReassignedPartitionsContext(reassignment, reassignIsrChangeHandler, legacy)
-        }
-        // create znode in /admin/reassignments
-        zkClient.createReassignments(assignment.toMap, legacy)
-        // remove the znode
-        zkClient.deletePartitionReassignmentRequest(znode)
+    val requests = zkClient.getPartitionReassignmentRequests()
+    requests.foreach{ case(assignment, isLegacy, znode) =>
+      assignment.foreach{ case (tp, reassignment) =>
+        maybeAddToContext(tp, reassignment, isLegacy)
+      }
+      // create znode in /admin/reassignments
+      zkClient.createReassignments(assignment, isLegacy)
+      // remove the znode
+      zkClient.deletePartitionReassignmentRequest(znode)
     }
     // in case /admin/reassign_partitions was written while there was no controller,
     // read the partitions being reassigned from zookeeper path /admin/reassign_partitions
-    val legacy: Map[TopicPartition, Seq[Int]] = zkClient.getPartitionReassignment
-    controllerContext.partitionsBeingReassigned ++= legacy.map{ case (tp, reassignment) =>
-      val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(this, eventManager, tp)
-      tp -> new ReassignedPartitionsContext(reassignment, reassignIsrChangeHandler, true)
-
-    }
-    // TODO the above addAll could overwrite some reassignments added by requests: We need to warn about those
+    val legacy = zkClient.getPartitionReassignment
+    legacy.foreach{ case (tp, reassignment) => maybeAddToContext(tp, reassignment, true) }
     // create znode in /admin/reassignments
-    zkClient.createReassignments(legacy.toMap, true)
+    zkClient.createReassignments(legacy, true)
 
     // Finally, trigger those reassignments
     maybeTriggerPartitionReassignment(controllerContext.partitionsBeingReassigned.keySet)
-
-    /*
-    // TODO This is wrong, we should actually create the /admin/reassignments children here
-    controllerContext.partitionsBeingReassigned ++= legacyPartitionsBeingAssigned.iterator.map { case (tp, newReplicas) =>
-      val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(this, eventManager, tp)
-      tp -> new ReassignedPartitionsContext(newReplicas, reassignIsrChangeHandler, true)
-    }
-
-    maybeTriggerPartitionReassignment(controllerContext.partitionsBeingReassigned.keySet)
-
-    // read the partitions being reassigned from zookeeper path /admin/reassignments
-    val partitionsBeingReassigned = zkClient.getReassignments()
-    info(s"Partitions being reassigned: $partitionsBeingReassigned")
-
-    // check if they are already completed or topic was deleted
-    val reassignedPartitions = partitionsBeingReassigned.filter { case (tp, reassignmentReplicas) =>
-      controllerContext.partitionReplicaAssignment.get(tp) match {
-        case None => true // topic deleted
-        case Some(currentReplicas) => currentReplicas == reassignmentReplicas // reassignment completed
-      }
-    }.keys
-    reassignedPartitions.foreach(removePartitionFromReassignedPartitions)
-    val partitionsToReassign = partitionsBeingReassigned -- reassignedPartitions
-    controllerContext.partitionsBeingReassigned ++= partitionsToReassign.map { case (tp, newReplicas) =>
-      val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(this, eventManager, tp)
-      val reassignmentChangedHandler = new PartitionReassignmentRequestHandler(KafkaController.this, eventManager)
-      tp -> new ReassignedPartitionsContext(newReplicas, reassignIsrChangeHandler)
-    }*/
-
   }
 
   private def fetchTopicDeletionsInProgress(): (Set[String], Set[String]) = {
