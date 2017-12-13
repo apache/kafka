@@ -742,10 +742,12 @@ public class StreamsConfig extends AbstractConfig {
         consumerProps.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, StreamPartitionAssignor.class.getName());
         consumerProps.put(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, getLong(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG));
 
+        // add admin retries configs for creating topics
+        final AdminClientConfig config = new AdminClientConfig(getClientPropsWithPrefix(ADMIN_CLIENT_PREFIX, AdminClientConfig.configNames()));
+        consumerProps.put(adminClientPrefix(AdminClientConfig.RETRIES_CONFIG), config.getInt(AdminClientConfig.RETRIES_CONFIG));
+
         // add admin and topic configs required for creating topics
-        consumerProps.put(adminClientPrefix(RETRIES_CONFIG), getInt(RETRIES_CONFIG));
         consumerProps.putAll(originalsWithPrefix(TOPIC_PREFIX, false));
-        consumerProps.putAll(originalsWithPrefix(ADMIN_CLIENT_PREFIX, false));
 
         return consumerProps;
     }
