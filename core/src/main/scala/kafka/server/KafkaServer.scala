@@ -98,9 +98,6 @@ object KafkaServer {
 class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNamePrefix: Option[String] = None, kafkaMetricsReporters: Seq[KafkaMetricsReporter] = List()) extends Logging with KafkaMetricsGroup {
   private val startupComplete = new AtomicBoolean(false)
   private val isShuttingDown = new AtomicBoolean(false)
-  // this is set to true if the zookeeper client dies
-  private val isWaitingForZKReconnect = new AtomicBoolean(false)
-  private var zkState = ZKState.Unknown
   private val isStartingUp = new AtomicBoolean(false)
 
   private var shutdownLatch = new CountDownLatch(1)
@@ -298,6 +295,11 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
             endpoint
         }
 
+        // to be cleaned up in KAFKA-6320
+        kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, listeners, zkUtils, config.rack,
+          config.interBrokerProtocolVersion)
+        kafkaHealthcheck.startup()
+        // KAFKA-6320
 
         val updatedEndpoints = listeners.map(endpoint =>
           if (endpoint.host == null || endpoint.host.trim.isEmpty)
@@ -315,7 +317,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         val jmxPort = System.getProperty("com.sun.management.jmxremote.port", "-1").toInt
         val brokerInfo = new BrokerInfo(config.brokerId,
           plaintextEndpoint.host, plaintextEndpoint.port,
-          listeners, jmxPort, config.rack, config.interBrokerProtocolVersion)
+          updatedEndpoints, jmxPort, config.rack, config.interBrokerProtocolVersion)
         zkClient.registerBrokerInZk(brokerInfo)
 
         // Now that the broker id is successfully registered via KafkaHealthcheck, checkpoint it

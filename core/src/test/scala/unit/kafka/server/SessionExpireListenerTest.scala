@@ -54,20 +54,20 @@ class SessionExpireListenerTest {
     val zkClient = EasyMock.mock(classOf[ZkClient])
     val zkUtils = ZkUtils(zkClient, isZkSecurityEnabled = false)
     import Watcher._
-//    val healthcheck = new KafkaHealthcheck(brokerId, Seq.empty, zkUtils, None, ApiVersion.latestVersion, null)
-//
-//    val expiresPerSecName = "ZooKeeperExpiresPerSec"
-//    val disconnectsPerSecName = "ZooKeeperDisconnectsPerSec"
-//    checkMeterCount(expiresPerSecName, 0)
-//    checkMeterCount(disconnectsPerSecName, 0)
-//
-//    healthcheck.sessionExpireListener.handleStateChanged(Event.KeeperState.Expired)
-//    checkMeterCount(expiresPerSecName, 1)
-//    checkMeterCount(disconnectsPerSecName, 0)
-//
-//    healthcheck.sessionExpireListener.handleStateChanged(Event.KeeperState.Disconnected)
-//    checkMeterCount(expiresPerSecName, 1)
-//    checkMeterCount(disconnectsPerSecName, 1)
+    val healthcheck = new KafkaHealthcheck(brokerId, Seq.empty, zkUtils, None, ApiVersion.latestVersion, null)
+
+    val expiresPerSecName = "ZooKeeperExpiresPerSec"
+    val disconnectsPerSecName = "ZooKeeperDisconnectsPerSec"
+    checkMeterCount(expiresPerSecName, 0)
+    checkMeterCount(disconnectsPerSecName, 0)
+
+    healthcheck.sessionExpireListener.handleStateChanged(Event.KeeperState.Expired)
+    checkMeterCount(expiresPerSecName, 1)
+    checkMeterCount(disconnectsPerSecName, 0)
+
+    healthcheck.sessionExpireListener.handleStateChanged(Event.KeeperState.Disconnected)
+    checkMeterCount(expiresPerSecName, 1)
+    checkMeterCount(disconnectsPerSecName, 1)
   }
 
 }
