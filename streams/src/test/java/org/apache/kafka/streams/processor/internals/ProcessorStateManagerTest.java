@@ -25,10 +25,13 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockBatchingStateRestoreListener;
 import org.apache.kafka.test.MockStateStore;
+import org.apache.kafka.test.NoOpProcessorContext;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Assert;
@@ -38,8 +41,10 @@ import org.junit.Test;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -646,6 +651,49 @@ public class ProcessorStateManagerTest {
                 stateManager.close(null);
             }
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldSuccessfullyReInitializeStateStores() throws IOException {
+        final String store2Name = "store2";
+        final String store2Changelog = "store2-changelog";
+        final TopicPartition store2Partition = new TopicPartition(store2Changelog, 0);
+        final List<TopicPartition> changelogPartitions = Arrays.asList(changelogTopicPartition, store2Partition);
+        Map<String, String> storeToChangelog = new HashMap() {
+            {
+                put(storeName, changelogTopic);
+                put(store2Name, store2Changelog);
+            }
+        };
+        final ProcessorStateManager stateManager = new ProcessorStateManager(
+                taskId,
+                changelogPartitions,
+                false,
+                stateDirectory,
+                storeToChangelog,
+                changelogReader,
+                false,
+                logContext);
+
+        final MockStateStore stateStore = new MockStateStore(storeName, true);
+        final MockStateStore stateStore2 = new MockStateStore(store2Name, true);
+
+        stateManager.register(stateStore, stateStore.stateRestoreCallback);
+        stateManager.register(stateStore2, stateStore2.stateRestoreCallback);
+
+        stateStore.initialized = false;
+        stateStore2.initialized = false;
+
+        stateManager.reinitializeStateStoresForPartitions(changelogPartitions, new NoOpProcessorContext() {
+            @Override
+            public void register(final StateStore store, final boolean deprecatedAndIgnoredLoggingEnabled, final StateRestoreCallback stateRestoreCallback) {
+                stateManager.register(store, stateRestoreCallback);
+            }
+        });
+
+        assertTrue(stateStore.initialized);
+        assertTrue(stateStore2.initialized);
     }
 
     private ProcessorStateManager getStandByStateManager(TaskId taskId) throws IOException {

@@ -73,7 +73,7 @@ versions += [
   zkclient: "0.10",
   zookeeper: "3.4.10",
   jfreechart: "1.0.0",
-  mavenArtifact: "3.5.0",
+  mavenArtifact: "3.5.0"
 ]
 
 libs += [
