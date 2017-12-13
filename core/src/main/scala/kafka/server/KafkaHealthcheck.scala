@@ -50,28 +50,7 @@ class KafkaHealthcheck(brokerId: Int,
 
   def startup() {
     zkUtils.subscribeStateChanges(sessionExpireListener)
-    register()
-  }
-
-  /**
-    * Register this broker as "alive" in zookeeper
-    */
-  def register() {
-    val jmxPort = System.getProperty("com.sun.management.jmxremote.port", "-1").toInt
-    val updatedEndpoints = advertisedEndpoints.map(endpoint =>
-      if (endpoint.host == null || endpoint.host.trim.isEmpty)
-        endpoint.copy(host = InetAddress.getLocalHost.getCanonicalHostName)
-      else
-        endpoint
-    )
-
-    // the default host and port are here for compatibility with older clients that only support PLAINTEXT
-    // we choose the first plaintext port, if there is one
-    // or we register an empty endpoint, which means that older clients will not be able to connect
-    val plaintextEndpoint = updatedEndpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).getOrElse(
-      new EndPoint(null, -1, null, null))
-    zkUtils.registerBrokerInZk(brokerId, plaintextEndpoint.host, plaintextEndpoint.port, updatedEndpoints, jmxPort, rack,
-      interBrokerProtocolVersion)
+    // registration is done in KafkaServer now
   }
 
   def shutdown(): Unit = sessionExpireListener.shutdown()
@@ -117,14 +96,14 @@ class KafkaHealthcheck(brokerId: Int,
 
     @throws[Exception]
     override def handleNewSession() {
-      info("re-registering broker info in ZK for broker " + brokerId)
-      register()
-      info("done re-registering broker")
-      info("Subscribing to %s path to watch for new topics".format(ZkUtils.BrokerTopicsPath))
+      //info("re-registering broker info in ZK for broker " + brokerId)
+      //register()
+      //info("done re-registering broker")
+      //info("Subscribing to %s path to watch for new topics".format(ZkUtils.BrokerTopicsPath))
     }
 
-    override def handleSessionEstablishmentError(error: Throwable) {
-      fatal("Could not establish session with zookeeper", error)
+    override def handleSessionEstablishmentError(err: Throwable) {
+      error("Could not establish session with zookeeper", err)
     }
 
     def shutdown(): Unit = metricNames.foreach(removeMetric(_))

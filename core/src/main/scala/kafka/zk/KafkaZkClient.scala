@@ -76,7 +76,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
     createResponse.name
   }
 
-  def registerBrokerInZk(brokerInfo: BrokerInfo): Unit ={
+  def registerBrokerInZk(brokerInfo: BrokerInfo): Unit = {
     val brokerIdPath = brokerInfo.path()
     checkedEphemeralCreate(brokerIdPath, brokerInfo.encode())
     info("Registered broker %d at path %s with addresses: %s".format(brokerInfo.id, brokerIdPath, brokerInfo.endpoints()))
