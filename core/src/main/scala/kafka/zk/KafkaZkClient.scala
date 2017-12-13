@@ -76,32 +76,10 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
     createResponse.name
   }
 
-  private var brokerInfo: Array[Byte] = null;
-  private var brokerId: Int = -1;
-
-
   def registerBrokerInZk(brokerInfo: BrokerInfo): Unit ={
     val brokerIdPath = brokerInfo.path()
-    checkedEphemeralCreate(brokerIdPath, brokerInfo.getBytes())
-    info("Registered broker %d at path %s with addresses: %s".format(brokerInfo.ID(), brokerIdPath, brokerInfo.endpoints()))
-  }
-
-  def registerBrokerInZk(id: Int,
-                         host: String,
-                         port: Int,
-                         advertisedEndpoints: Seq[EndPoint],
-                         jmxPort: Int,
-                         rack: Option[String],
-                         apiVersion: ApiVersion) {
-    val brokerIdPath = BrokerIdsPath + "/" + id
-    // see method documentation for reason why we do this
-    val version = if (apiVersion >= KAFKA_0_10_0_IV1) 4 else 2
-    val json = Broker.toJson(version, id, host, port, advertisedEndpoints, jmxPort, rack)
-    brokerInfo = json.getBytes()
-    brokerId = id
-    checkedEphemeralCreate(brokerIdPath, brokerInfo)
-
-    info("Registered broker %d at path %s with addresses: %s".format(id, brokerIdPath, advertisedEndpoints.mkString(",")))
+    checkedEphemeralCreate(brokerIdPath, brokerInfo.encode())
+    info("Registered broker %d at path %s with addresses: %s".format(brokerInfo.id, brokerIdPath, brokerInfo.endpoints()))
   }
 
 

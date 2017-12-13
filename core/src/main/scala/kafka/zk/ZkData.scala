@@ -58,17 +58,13 @@ object BrokerIdsZNode {
   def encode: Array[Byte] = null
 }
 
-class BrokerInfo(id: Int,
+class BrokerInfo(val id: Int,
                  host: String,
                  port: Int,
                  advertisedEndpoints: Seq[EndPoint],
                  jmxPort: Int,
                  rack: Option[String],
                  apiVersion: ApiVersion) {
-
-  def ID(): Int = {
-    id
-  }
 
   def path(): String = {
     BrokerIdZNode.path(id)
@@ -77,7 +73,7 @@ class BrokerInfo(id: Int,
   def endpoints(): String = {
     advertisedEndpoints.mkString(",")
   }
-  def getBytes(): Array[Byte] = {
+  def encode(): Array[Byte] = {
     BrokerIdZNode.encode(id, host, port, advertisedEndpoints, jmxPort, rack, apiVersion)
   }
 }
