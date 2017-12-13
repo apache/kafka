@@ -946,6 +946,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     @Override
     public void onAssignment(Set<TopicPartition> assignment) {
         sensors.updatePartitionLagSensors(assignment);
+        sensors.updatePartitionLeadSensors();
     }
 
     public static Sensor throttleTimeSensor(Metrics metrics, FetcherMetricsRegistry metricsRegistry) {
@@ -1335,16 +1336,19 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         metrics.removeSensor(partitionLagMetricName(tp));
                     }
                 }
-                metrics.removeSensor(partitionLeadSensorName());
             }
-            this.leadMetricAddedPartitions.clear();
             this.assignedPartitions = assignedPartitions;
+        }
+
+        private void updatePartitionLeadSensors() {
+            metrics.removeSensor(partitionLeadSensorName());
+            this.leadMetricAddedPartitions.clear();
         }
 
         private void recordPartitionLead(TopicPartition tp, long lead) {
             this.recordsFetchLead.record(lead);
 
-            Sensor recordsLead = this.metrics.sensor(partitionLeadSensorName());
+            Sensor recordsLead = this.metrics.sensor(partitionLeadSensorName(), this.recordsFetchLead);
             if (!this.leadMetricAddedPartitions.contains(tp)) {
                 this.leadMetricAddedPartitions.add(tp);
                 Map<String, String> tags = new HashMap<>(2);
