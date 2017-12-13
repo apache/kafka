@@ -631,30 +631,9 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
         if (!topicsToMakeReady.isEmpty()) {
             internalTopicManager.makeReady(topicsToMakeReady);
-
-            // wait until each one of the topic metadata has been propagated to at least one broker
-            while (!allTopicsCreated(topicsToMakeReady)) {
-                try {
-                    Thread.sleep(50L);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    // ignore
-                }
-            }
         }
 
         log.debug("Completed validating internal topics in partition assignor.");
-    }
-
-    private boolean allTopicsCreated(final Map<String, InternalTopicConfig> topicsToMakeReady) {
-        final Map<String, Integer> partitions = internalTopicManager.getNumPartitions(topicsToMakeReady.keySet());
-        for (final InternalTopicConfig topic : topicsToMakeReady.values()) {
-            final Integer numPartitions = partitions.get(topic.name());
-            if (numPartitions == null || !numPartitions.equals(topic.numberOfPartitions())) {
-                return false;
-            }
-        }
-        return true;
     }
 
     private void ensureCopartitioning(Collection<Set<String>> copartitionGroups,
