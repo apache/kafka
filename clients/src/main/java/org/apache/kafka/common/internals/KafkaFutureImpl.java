@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.internals;
 
+import org.apache.kafka.common.KafkaFuture;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CancellationException;
@@ -23,13 +27,13 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import org.apache.kafka.common.KafkaFuture;
-
 /**
  * A flexible future which supports call chaining and other asynchronous programming patterns.
  * This will eventually become a thin shim on top of Java 8's CompletableFuture.
  */
 public class KafkaFutureImpl<T> extends KafkaFuture<T> {
+    private static final Logger log = LoggerFactory.getLogger(KafkaFutureImpl.class);
+
     /**
      * A convenience method that throws the current exception, wrapping it if needed.
      *
@@ -46,11 +50,11 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
         }
     }
 
-    private static class Applicant<A, B> extends BiConsumer<A, Throwable> {
-        private final Function<A, B> function;
+    private static class Applicant<A, B> implements BiConsumer<A, Throwable> {
+        private final FunctionInterface<A, B> function;
         private final KafkaFutureImpl<B> future;
 
-        Applicant(Function<A, B> function, KafkaFutureImpl<B> future) {
+        Applicant(FunctionInterface<A, B> function, KafkaFutureImpl<B> future) {
             this.function = function;
             this.future = future;
         }
@@ -70,7 +74,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
         }
     }
 
-    private static class SingleWaiter<R> extends BiConsumer<R, Throwable> {
+    private static class SingleWaiter<R> implements BiConsumer<R, Throwable> {
         private R value = null;
         private Throwable exception = null;
         private boolean done = false;
@@ -140,18 +144,27 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
      * futures's result as the argument to the supplied function.
      */
     @Override
-    public <R> KafkaFuture<R> thenApply(Function<T, R> function) {
+    public <R> KafkaFuture<R> thenApply(FunctionInterface<T, R> function) {
         KafkaFutureImpl<R> future = new KafkaFutureImpl<R>();
         addWaiter(new Applicant<>(function, future));
         return future;
     }
 
+    /**
+     * @See KafkaFutureImpl#thenApply(FunctionInterface)
+     */
+    @Deprecated
     @Override
-    protected synchronized void addWaiter(BiConsumer<? super T, ? super Throwable> action) {
+    public <R> KafkaFuture<R> thenApply(Function<T, R> function) {
+        return thenApply((FunctionInterface<T, R>) function);
+    }
+
+    @Override
+    public synchronized void addWaiter(BiConsumer<? super T, ? super Throwable> action) {
         if (exception != null) {
-            action.accept(null, exception);
+            invokeWaiter(action, null, exception);
         } else if (done) {
-            action.accept(value, null);
+            invokeWaiter(action, value, null);
         } else {
             waiters.add(action);
         }
@@ -169,7 +182,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
             waiters = null;
         }
         for (BiConsumer<? super T, ? super Throwable> waiter : oldWaiters) {
-            waiter.accept(newValue, null);
+            invokeWaiter(waiter, newValue, null);
         }
         return true;
     }
@@ -186,9 +199,21 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
             waiters = null;
         }
         for (BiConsumer<? super T, ? super Throwable> waiter : oldWaiters) {
-            waiter.accept(null, newException);
+            invokeWaiter(waiter, null, newException);
         }
         return true;
+    }
+
+    private void invokeWaiter(
+        BiConsumer<? super T, ? super Throwable> waiter,
+        T value,
+        Throwable exception
+    ) {
+        try {
+            waiter.accept(value, exception);
+        } catch (Exception e) {
+            log.error("Exception when invoking action on future completion {}", waiter, e);
+        }
     }
 
     /**
