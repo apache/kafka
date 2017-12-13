@@ -112,6 +112,8 @@ public class StreamsConfig extends AbstractConfig {
      * These should be valid properties from {@link org.apache.kafka.common.config.TopicConfig TopicConfig}.
      * It is recommended to use {@link #topicPrefix(String)}.
      */
+    // TODO: currently we cannot get the full topic configurations and hence cannot allow topic configs without the prefix,
+    //       this can be lifted once kafka.log.LogConfig is completely deprecated by org.apache.kafka.common.config.TopicConfig
     public static final String TOPIC_PREFIX = "topic.";
 
     /**
@@ -746,7 +748,9 @@ public class StreamsConfig extends AbstractConfig {
         final AdminClientConfig config = new AdminClientConfig(getClientPropsWithPrefix(ADMIN_CLIENT_PREFIX, AdminClientConfig.configNames()));
         consumerProps.put(adminClientPrefix(AdminClientConfig.RETRIES_CONFIG), config.getInt(AdminClientConfig.RETRIES_CONFIG));
 
-        // add admin and topic configs required for creating topics
+        // add admin and topic configs required for creating topics, also add batch size of producer for verification
+        final Map<String, Object> producerProps = getClientPropsWithPrefix(PRODUCER_PREFIX, ProducerConfig.configNames());
+        consumerProps.put(producerPrefix(ProducerConfig.BATCH_SIZE_CONFIG), producerProps.containsKey(ProducerConfig.BATCH_SIZE_CONFIG) ? (Integer) producerProps.get(ProducerConfig.BATCH_SIZE_CONFIG) : 16384);
         consumerProps.putAll(originalsWithPrefix(TOPIC_PREFIX, false));
 
         return consumerProps;

@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.internals.Topic;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -31,6 +32,30 @@ public class InternalTopicConfig {
 
     // we need to distinguish windowed and un-windowed store changelog since their cleanup policy may be different
     public enum InternalTopicType { REPARTITION, WINDOWED_STORE_CHANGELOG, UNWINDOWED_STORE_CHANGELOG }
+
+    private static final Map<String, String> REPARTITION_TOPIC_DEFAULT_OVERRIDES;
+    static {
+        final Map<String, String> tempTopicDefaultOverrides = new HashMap<>();
+        tempTopicDefaultOverrides.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
+        tempTopicDefaultOverrides.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, "52428800");     // 50 MB
+        tempTopicDefaultOverrides.put(TopicConfig.SEGMENT_BYTES_CONFIG, "52428800");           // 50 MB
+        tempTopicDefaultOverrides.put(TopicConfig.SEGMENT_MS_CONFIG, "600000");                // 10 min
+        REPARTITION_TOPIC_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempTopicDefaultOverrides);
+    }
+
+    private static final Map<String, String> UNWINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES;
+    static {
+        final Map<String, String> tempTopicDefaultOverrides = new HashMap<>();
+        tempTopicDefaultOverrides.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);
+        UNWINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempTopicDefaultOverrides);
+    }
+
+    private static final Map<String, String> WINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES;
+    static {
+        final Map<String, String> tempTopicDefaultOverrides = new HashMap<>();
+        tempTopicDefaultOverrides.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE);
+        WINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempTopicDefaultOverrides);
+    }
 
     private final String name;
     private int numberOfPartitions = -1;
@@ -57,14 +82,33 @@ public class InternalTopicConfig {
      * @param additionalRetentionMs - added to retention to allow for clock drift etc
      * @return Properties to be used when creating the topic
      */
-    public Map<String, String> toProperties(final long additionalRetentionMs) {
-        final Map<String, String> finalTopicConfigs = new HashMap<>(topicConfigs);
+    public Map<String, String> getProperties(final Map<String, String> defaultProperties, final long additionalRetentionMs) {
+        // internal topic config overridden rule: library overrides < global config overrides < per-topic config overrides
+        final Map<String, String> topicConfig = new HashMap<>();
 
-        if (retentionMs != null && topicType == InternalTopicType.WINDOWED_STORE_CHANGELOG) {
-            finalTopicConfigs.put(TopicConfig.RETENTION_MS_CONFIG, String.valueOf(retentionMs + additionalRetentionMs));
+        switch (topicType) {
+            case REPARTITION:
+                topicConfig.putAll(REPARTITION_TOPIC_DEFAULT_OVERRIDES);
+                break;
+
+            case UNWINDOWED_STORE_CHANGELOG:
+                topicConfig.putAll(UNWINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES);
+                break;
+
+            case WINDOWED_STORE_CHANGELOG:
+                topicConfig.putAll(WINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES);
+                break;
         }
 
-        return finalTopicConfigs;
+        topicConfig.putAll(defaultProperties);
+
+        topicConfig.putAll(topicConfigs);
+
+        if (retentionMs != null && topicType == InternalTopicType.WINDOWED_STORE_CHANGELOG) {
+            topicConfig.put(TopicConfig.RETENTION_MS_CONFIG, String.valueOf(retentionMs + additionalRetentionMs));
+        }
+
+        return topicConfig;
     }
 
     public String name() {

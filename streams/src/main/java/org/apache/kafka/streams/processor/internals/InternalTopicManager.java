@@ -22,6 +22,7 @@ import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -45,32 +46,8 @@ public class InternalTopicManager {
     private final static String INTERRUPTED_ERROR_MESSAGE = "Thread got interrupted. This indicates a bug. " +
         "Please report at https://issues.apache.org/jira/projects/KAFKA or dev-mailing list (https://kafka.apache.org/contact).";
 
-    private static final Map<String, String> REPARTITION_TOPIC_DEFAULT_OVERRIDES;
-    static {
-        final Map<String, String> tempTopicDefaultOverrides = new HashMap<>();
-        tempTopicDefaultOverrides.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
-        tempTopicDefaultOverrides.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, "52428800");     // 50 MB
-        tempTopicDefaultOverrides.put(TopicConfig.SEGMENT_BYTES_CONFIG, "52428800");           // 50 MB
-        tempTopicDefaultOverrides.put(TopicConfig.SEGMENT_MS_CONFIG, "600000");                // 10 min
-        REPARTITION_TOPIC_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempTopicDefaultOverrides);
-    }
-
-    private static final Map<String, String> UNWINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES;
-    static {
-        final Map<String, String> tempTopicDefaultOverrides = new HashMap<>();
-        tempTopicDefaultOverrides.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);
-        UNWINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempTopicDefaultOverrides);
-    }
-
-    private static final Map<String, String> WINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES;
-    static {
-        final Map<String, String> tempTopicDefaultOverrides = new HashMap<>();
-        tempTopicDefaultOverrides.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE);
-        WINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempTopicDefaultOverrides);
-    }
-
-
     private final Logger log;
+    private final StreamsConfig config;
     private final long windowChangeLogAdditionalRetention;
     private final Map<String, String> defaultTopicConfigs = new HashMap<>();
 
@@ -80,9 +57,9 @@ public class InternalTopicManager {
     private final int retries;
 
     public InternalTopicManager(final AdminClient adminClient,
-                                final Map<String, ?> config) {
+                                final StreamsConfig streamsConfig) {
+        this.config = streamsConfig;
         this.adminClient = adminClient;
-        final StreamsConfig streamsConfig = new StreamsConfig(config);
 
         LogContext logContext = new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName()));
         log = logContext.logger(getClass());
@@ -120,26 +97,15 @@ public class InternalTopicManager {
             final Set<NewTopic> newTopics = new HashSet<>();
 
             for (final InternalTopicConfig internalTopicConfig : topicsToBeCreated) {
-                // internal topic config overridden rule: library overrides < global config overrides < per-topic config overrides
-                final Map<String, String> topicConfig = new HashMap<>();
+                final Map<String, String> topicConfig = internalTopicConfig.getProperties(defaultTopicConfigs, windowChangeLogAdditionalRetention);
 
-                switch (internalTopicConfig.type()) {
-                    case REPARTITION:
-                        topicConfig.putAll(REPARTITION_TOPIC_DEFAULT_OVERRIDES);
-                        break;
-
-                    case UNWINDOWED_STORE_CHANGELOG:
-                        topicConfig.putAll(UNWINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES);
-                        break;
-
-                    case WINDOWED_STORE_CHANGELOG:
-                        topicConfig.putAll(WINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES);
-                        break;
+                if (topicConfig.containsKey(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG) &&
+                        Integer.parseInt(topicConfig.get(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG)) < (Integer) config.getProducerConfigs("dummy").get(ProducerConfig.BATCH_SIZE_CONFIG)) {
+                    throw new IllegalArgumentException(String.format("Cannot create topic %s since its segment size %d is smaller than the configured producer batch size %d",
+                            internalTopicConfig.name(),
+                            Integer.parseInt(topicConfig.get(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG)),
+                            config.getInt(StreamsConfig.producerPrefix(ProducerConfig.BATCH_SIZE_CONFIG))));
                 }
-
-                topicConfig.putAll(defaultTopicConfigs);
-
-                topicConfig.putAll(internalTopicConfig.toProperties(windowChangeLogAdditionalRetention));
 
                 log.debug("Going to create topic {} with {} partitions and config {}.",
                         internalTopicConfig.name(),

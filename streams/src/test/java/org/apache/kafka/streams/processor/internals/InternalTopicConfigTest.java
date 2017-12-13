@@ -46,7 +46,7 @@ public class InternalTopicConfigTest {
                                                                         InternalTopicType.WINDOWED_STORE_CHANGELOG,
                                                                         Collections.<String, String>emptyMap());
         topicConfig.setRetentionMs(10);
-        assertEquals("30", topicConfig.toProperties(20).get(TopicConfig.RETENTION_MS_CONFIG));
+        assertEquals("30", topicConfig.getProperties(Collections.<String, String>emptyMap(), 20).get(TopicConfig.RETENTION_MS_CONFIG));
     }
 
     @Test
@@ -88,7 +88,7 @@ public class InternalTopicConfigTest {
                                                                         InternalTopicType.UNWINDOWED_STORE_CHANGELOG,
                                                                         configs);
 
-        final Map<String, String> properties = topicConfig.toProperties(0);
+        final Map<String, String> properties = topicConfig.getProperties(Collections.<String, String>emptyMap(), 0);
         assertEquals("1000", properties.get("retention.ms"));
         assertEquals("10000", properties.get("retention.bytes"));
     }

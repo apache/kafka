@@ -569,8 +569,8 @@ public class TopologyBuilderTest {
         final Map<Integer, TopicsInfo> topicGroups = builder.topicGroups();
         final TopicsInfo topicsInfo = topicGroups.values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-store-changelog");
-        final Map<String, String> properties = topicConfig.toProperties(10000);
-        assertEquals(1, properties.size());
+        final Map<String, String> properties = topicConfig.getProperties(Collections.<String, String>emptyMap(), 10000);
+        assertEquals(2, properties.size());
         assertEquals("40000", properties.get(TopicConfig.RETENTION_MS_CONFIG));
         assertEquals("appId-store-changelog", topicConfig.name());
         assertEquals(InternalTopicConfig.InternalTopicType.WINDOWED_STORE_CHANGELOG, topicConfig.type());
@@ -586,8 +586,8 @@ public class TopologyBuilderTest {
         final Map<Integer, TopicsInfo> topicGroups = builder.topicGroups();
         final TopicsInfo topicsInfo = topicGroups.values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-store-changelog");
-        final Map<String, String> properties = topicConfig.toProperties(10000);
-        assertEquals(0, properties.size());
+        final Map<String, String> properties = topicConfig.getProperties(Collections.<String, String>emptyMap(), 10000);
+        assertEquals(1, properties.size());
         assertEquals("appId-store-changelog", topicConfig.name());
         assertEquals(InternalTopicConfig.InternalTopicType.UNWINDOWED_STORE_CHANGELOG, topicConfig.type());
     }
@@ -600,8 +600,8 @@ public class TopologyBuilderTest {
         builder.addSource("source", "foo");
         final TopicsInfo topicsInfo = builder.topicGroups().values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.repartitionSourceTopics.get("appId-foo");
-        final Map<String, String> properties = topicConfig.toProperties(10000);
-        assertEquals(0, properties.size());
+        final Map<String, String> properties = topicConfig.getProperties(Collections.<String, String>emptyMap(), 10000);
+        assertEquals(4, properties.size());
         assertEquals("appId-foo", topicConfig.name());
         assertEquals(InternalTopicConfig.InternalTopicType.REPARTITION, topicConfig.type());
     }

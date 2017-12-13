@@ -180,7 +180,7 @@ public class AbstractConfig {
     }
 
     /**
-     * Gets all original settings with the given prefix, stripping the prefix before adding it to the output.
+     * Gets all original settings with the given prefix.
      *
      * @param prefix the prefix to use as a filter
      * @param strip strip the prefix before adding to the output if set true

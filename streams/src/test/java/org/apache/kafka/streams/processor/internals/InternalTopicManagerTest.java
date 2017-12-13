@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.config.ConfigResource;
@@ -68,6 +69,7 @@ public class InternalTopicManagerTest {
             put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, broker1.host() + ":" + broker1.port());
             put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 1);
             put(StreamsConfig.adminClientPrefix(StreamsConfig.RETRIES_CONFIG), 1);
+            put(StreamsConfig.producerPrefix(ProducerConfig.BATCH_SIZE_CONFIG), 16384);
         }
     };
 
@@ -76,7 +78,7 @@ public class InternalTopicManagerTest {
         mockAdminClient = new MockAdminClient(cluster);
         internalTopicManager = new InternalTopicManager(
             mockAdminClient,
-            config);
+            new StreamsConfig(config));
     }
 
     @After
@@ -200,7 +202,7 @@ public class InternalTopicManagerTest {
         // attempt to create it again with replication 1
         final InternalTopicManager internalTopicManager2 = new InternalTopicManager(
             mockAdminClient,
-            config);
+            new StreamsConfig(config));
 
         final InternalTopicConfig internalTopicConfig = new InternalTopicConfig(topic, InternalTopicConfig.InternalTopicType.REPARTITION, Collections.<String, String>emptyMap());
         internalTopicConfig.setNumberOfPartitions(1);
