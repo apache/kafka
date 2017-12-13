@@ -28,7 +28,6 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -57,6 +56,7 @@ abstract class AbstractStateManager implements StateManager {
                                                      final InternalProcessorContext processorContext) {
         final Map<String, String> changelogTopicToStore = inverseOneToOneMap(storeToChangelogTopic);
         final Set<String> storeToBeReinitialized = new HashSet<>();
+        final Map<String, StateStore> storesCopy = new HashMap<>(stateStores);
 
         for (final TopicPartition topicPartition : partitions) {
             checkpointableOffsets.remove(topicPartition);
@@ -69,16 +69,15 @@ abstract class AbstractStateManager implements StateManager {
             throw new StreamsException("Failed to reinitialize global store.", fatalException);
         }
 
-        final Iterator<Map.Entry<String, StateStore>> it = stateStores.entrySet().iterator();
-        while (it.hasNext()) {
-            final StateStore stateStore = it.next().getValue();
+        for (final Map.Entry<String, StateStore> entry : storesCopy.entrySet()) {
+            final StateStore stateStore = entry.getValue();
             final String storeName = stateStore.name();
             if (storeToBeReinitialized.contains(storeName)) {
                 try {
                     stateStore.close();
                 } catch (final RuntimeException ignoreAndSwallow) { /* ignore */ }
                 processorContext.uninitialize();
-                it.remove();
+                stateStores.remove(entry.getKey());
 
                 // TODO remove this eventually
                 // -> (only after we are sure, we don't need it for backward compatibility reasons anymore; maybe 2.0 release?)
