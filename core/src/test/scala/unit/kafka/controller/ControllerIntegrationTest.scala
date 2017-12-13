@@ -174,11 +174,11 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     val changedReassignment = Map(tp -> Seq(otherBrokerId2))
     TestUtils.createTopic(zkUtils, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
     val reassignmentPath = ZkUtils.ReassignmentsPath + "/t-0"
-    zkUtils.createPersistentPath(reassignmentPath, new String(PartitionReassignmentZNode.encode(reassignment.head._2), "UTF-8"))
+    zkUtils.createPersistentPath(reassignmentPath, new String(PartitionReassignmentZNode.encode(reassignment.head._2, false), "UTF-8"))
     Thread.sleep(100)
     /*waitForPartitionState(tp, KafkaController.InitialControllerEpoch, otherBrokerId, LeaderAndIsr.initialLeaderEpoch + 1,
       "failed to get expected partition state after partition reassignment")*/
-    zkUtils.updatePersistentPath(reassignmentPath, new String(PartitionReassignmentZNode.encode(changedReassignment.head._2), "UTF-8"))
+    zkUtils.updatePersistentPath(reassignmentPath, new String(PartitionReassignmentZNode.encode(changedReassignment.head._2, false), "UTF-8"))
 
     //waitForPartitionState(tp, KafkaController.InitialControllerEpoch, otherBrokerId, LeaderAndIsr.initialLeaderEpoch + 3,
     //  "failed to get expected partition state after partition reassignment")

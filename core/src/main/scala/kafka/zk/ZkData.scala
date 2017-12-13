@@ -220,7 +220,7 @@ object DeleteTopicsTopicZNode {
 }
 
 @deprecated
-object ReassignPartitionsZNode {
+object LegacyReassignPartitionsZNode {
   def path = s"${AdminZNode.path}/reassign_partitions"
   def encode(reassignment: collection.Map[TopicPartition, Seq[Int]]): Array[Byte] = {
     val reassignmentJson = reassignment.map { case (tp, replicas) =>
@@ -244,14 +244,14 @@ object ReassignPartitionsZNode {
 }
 
 /**
-  * {@code /admin/reassignments}
+  * {@code /admin/reassignments} Parent for inidvidual reassignments
   */
 object ReassignmentsZNode {
   def path = s"${AdminZNode.path}/reassignments"
 }
 
 /**
-  * {@code /admin/reassignments/$topic-$partition}
+  * {@code /admin/reassignments/$topic-$partition} Individual reassignment
   */
 object PartitionReassignmentZNode {
   def path(topicPartition: TopicPartition) = s"${ReassignmentsZNode.path}/${topicPartition.topic}-${topicPartition.partition}"
@@ -264,12 +264,12 @@ object PartitionReassignmentZNode {
   def fromPath(path: String): TopicPartition = {
     fromName(path.substring(path.lastIndexOf('/')+1))
   }
-  def encode(assignment: Seq[Int]): Array[Byte] = {
-    Json.encodeAsBytes(Map("version" -> 1, "assignment" -> assignment))
+  def encode(assignment: Seq[Int], legacy: Boolean): Array[Byte] = {
+    Json.encodeAsBytes(Map("version" -> 1, "assignment" -> assignment, "legacy" -> legacy))
   }
-  def decode(bytes: Array[Byte]): Seq[Int] = Json.parseBytes(bytes).flatMap { js =>
-    js.asJsonObject.get("assignment")
-  }.map(x=>x.to[Seq[Int]]).getOrElse(Seq.empty)
+  def decode(bytes: Array[Byte]): (Seq[Int], Boolean) = Json.parseBytes(bytes).map { js =>
+    js.asJsonObject("assignment").asJsonArray.iterator.map(x=>x.to[Int]).toSeq -> js.asJsonObject("legacy").to[Boolean]
+  }.getOrElse(Seq.empty -> false)
 }
 
 object PreferredReplicaElectionZNode {
@@ -288,6 +288,58 @@ object PreferredReplicaElectionZNode {
       new TopicPartition(topic, partition)
     }
   }.map(_.toSet).getOrElse(Set.empty)
+}
+
+/**
+  * {@code /admin/reassignment_changes} parent of changes znode
+  */
+object ReassignmentRequestsZNode {
+  def path = s"${AdminZNode.path}/reassignment_changes"
+}
+
+/**
+  * {@code /admin/reassignment_changes/change_XXX} notification of changes to reassignments.
+  * If a {@code /admin/reassignments/$topic-$partition} needs to be changed
+  * the client creates a {@code /admin/reassignment_changes/change_XXX} node, the controler is watching the children of
+  * {@code /admin/reassignment_changes} and updates then {@code /admin/reassignments/$topic-$partition}.
+  *
+  * This avoids the need for the controller to watch each
+  * {@code /admin/reassignments/$topic-$partition}.
+  */
+object ReassignmentRequestZNode {
+  def prefix = s"${ReassignmentRequestsZNode.path}/change_"
+  def path(changeZnode: String) = s"${ReassignmentRequestsZNode.path}/$changeZnode"
+
+  def encode(assignments: Map[TopicPartition,Seq[Int]], legacy: Boolean): Array[Byte] = {
+
+    var jsonMap = Map("version" -> 1,
+      "assignments" -> assignments.groupBy{
+        case (tp, assignment) => tp.topic()
+      }.map {
+        case (topic, assigmentMap) =>
+          topic -> assigmentMap.map {
+            case (tp, assignment) => tp.partition.toString -> assignment
+          }
+      })
+    if (legacy) {
+      jsonMap += "legacy" -> true
+    }
+    Json.encodeAsBytes(jsonMap)
+  }
+
+  def decode(bytes: Array[Byte]): Option[(Map[TopicPartition, Seq[Int]], Boolean)] = {
+    val s = new String(bytes, "UTF-8")
+    Json.parseBytes(bytes).flatMap { js =>
+      val legacy = js.asJsonObject("legacy").to[Boolean]
+      val assignments = js.asJsonObject("assignments").to[Map[String,Map[String,Seq[Int]]]].flatMap{
+        case (topic, partitionAssignments) =>
+          partitionAssignments.map { case (partition, assignment) =>
+            new TopicPartition(topic, partition.toInt) -> assignment
+          }
+      }
+      Some(assignments->legacy)
+    }
+  }
 }
 
 object ConsumerOffset {

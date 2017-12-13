@@ -39,7 +39,7 @@ import org.apache.kafka.common.utils.Time
 abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
 
   val zkConnectionTimeout = 10000
-  val zkSessionTimeout = 6000
+  val zkSessionTimeout = 600000
   val zkMaxInFlightRequests = Int.MaxValue
 
   protected val zkAclsEnabled: Option[Boolean] = None

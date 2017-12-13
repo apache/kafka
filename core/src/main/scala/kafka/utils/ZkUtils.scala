@@ -65,6 +65,7 @@ object ZkUtils {
   val BrokerTopicsPath = s"$BrokersPath/topics"
   val ReassignPartitionsPath = s"$AdminPath/reassign_partitions"
   val ReassignmentsPath = s"$AdminPath/reassignments"
+  val ReassignmentsRequestsPath = s"$AdminPath/reassignment_changes"
   val DeleteTopicsPath = s"$AdminPath/delete_topics"
   val PreferredReplicaLeaderElectionPath = s"$AdminPath/preferred_replica_election"
   val BrokerSequenceIdPath = s"$BrokersPath/seqid"
@@ -271,7 +272,8 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
                               IsrChangeNotificationPath,
                               ProducerIdBlockPath,
                               LogDirEventNotificationPath,
-                              ReassignmentsPath)
+                              ReassignmentsPath,
+                              ReassignmentsRequestsPath)
 
   /** Present for compatibility */
   def this(zkClient: ZkClient, zkConnection: ZkConnection, isSecure: Boolean) =
@@ -846,7 +848,7 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
       case Some(jsonPartitionMap) =>
         val reassignedPartitions = parsePartitionReassignmentData(jsonPartitionMap)
         reassignedPartitions.map { case (tp, newReplicas) =>
-          tp -> new ReassignedPartitionsContext(newReplicas, null, null)
+          tp -> new ReassignedPartitionsContext(newReplicas, null, true)
         }
       case None => Map.empty[TopicAndPartition, ReassignedPartitionsContext]
     }

@@ -609,7 +609,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     partitions.keySet.
       foreach{ tp =>
         assertTrue("/admin/reassignments/$topic-partition should be deleted",
-          zkClient.getReassignment(tp).isEmpty)
+          zkClient.getReassignment(tp)._1.isEmpty)
       }
   }
 
