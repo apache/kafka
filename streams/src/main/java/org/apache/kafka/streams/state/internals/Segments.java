@@ -149,6 +149,7 @@ class Segments {
         for (Segment segment : segments.values()) {
             segment.close();
         }
+        segments.clear();
     }
 
     private Segment getSegment(long segmentId) {

@@ -147,6 +147,16 @@ public class RocksDBSegmentedBytesStoreTest {
 
     }
 
+    @Test
+    public void shouldBeAbleToWriteToReInitializedStore() {
+        final String key = "a";
+        // need to create a segment so we can attempt to write to it again.
+        bytesStore.put(serializeKey(new Windowed<>(key, new SessionWindow(0L, 0L))), serializeValue(50L));
+        bytesStore.close();
+        bytesStore.init(context, bytesStore);
+        bytesStore.put(serializeKey(new Windowed<>(key, new SessionWindow(0L, 0L))), serializeValue(50L));
+    }
+
     private Set<String> segmentDirs() {
         File windowDir = new File(stateDir, storeName);
 
