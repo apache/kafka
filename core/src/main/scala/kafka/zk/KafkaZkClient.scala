@@ -18,8 +18,7 @@ package kafka.zk
 
 import java.util.Properties
 
-import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, LeaderAndIsr}
-import kafka.cluster.{Broker, EndPoint}
+
 import com.yammer.metrics.core.MetricName
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
@@ -29,7 +28,6 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
 import kafka.security.auth.{Acl, Resource, ResourceType}
 import kafka.server.ConfigType
-import kafka.utils.ZkUtils.BrokerIdsPath
 import kafka.utils._
 import kafka.zookeeper._
 import org.apache.kafka.common.TopicPartition

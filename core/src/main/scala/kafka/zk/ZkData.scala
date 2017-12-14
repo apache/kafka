@@ -75,6 +75,7 @@ class BrokerInfo(val id: Int,
   def endpoints(): String = {
     advertisedEndpoints.mkString(",")
   }
+  
   def encode(): Array[Byte] = {
     BrokerIdZNode.encode(id, host, port, advertisedEndpoints, jmxPort, rack, apiVersion)
   }
