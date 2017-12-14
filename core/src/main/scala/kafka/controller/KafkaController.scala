@@ -651,17 +651,17 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     info(s"Inflight reassignments: ${inflight.keySet.mkString(",")}")
     controllerContext.partitionsBeingReassigned ++= inflight.map{ case (tp, reassignment) =>
       val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(this, eventManager, tp)
-      tp -> new ReassignedPartitionsContext(reassignment._1, reassignIsrChangeHandler, reassignment._2)
+      tp -> new ReassignedPartitionsContext(reassignment.originalAssignment, reassignment.newAssignments, reassignment.legacy, reassignIsrChangeHandler)
     }
 
-    def maybeAddToContext(tp: TopicPartition, reassignment: Seq[Int], isLegacy: Boolean, via: String) = {
+    def maybeAddToContext(tp: TopicPartition, reassignment: PartitionReassignment, via: String) = {
       val other = controllerContext.partitionsBeingReassigned.get(tp)
       val add = other match {
         case Some(other) =>
-          if (other.legacy != isLegacy) {
+          if (other.legacy != reassignment.legacy) {
             warn(s"Ignoring reassignment request for partition $tp via $via because its legacy flag conflicts with an inflight request")
           }
-          other.legacy == isLegacy
+          other.legacy == reassignment.legacy
         case None =>
           true
       }
@@ -669,27 +669,37 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
         warn(s"Adding reassignment request for partition $tp via $via")
         val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(this, eventManager, tp)
         controllerContext.partitionsBeingReassigned +=
-          tp -> new ReassignedPartitionsContext(reassignment, reassignIsrChangeHandler, isLegacy)
+          tp -> new ReassignedPartitionsContext(reassignment.originalAssignment, reassignment.newAssignments, reassignment.legacy, reassignIsrChangeHandler)
       }
     }
 
     // Requests made while there was no controller
     val requests = zkClient.getPartitionReassignmentRequests()
     requests.foreach{ case(assignment, isLegacy, znode) =>
-      assignment.foreach{ case (tp, reassignment) =>
-        maybeAddToContext(tp, reassignment, isLegacy, ReassignmentRequestsZNode.path+"/"+znode)
-      }
+      val reassignments = assignment.map{
+        case (tp, newAssignment) =>
+          val original = controllerContext.partitionReplicaAssignment(tp)
+          val reassignment = PartitionReassignment(original, newAssignment, isLegacy)
+          maybeAddToContext(tp, reassignment, ReassignmentRequestsZNode.path+"/"+znode)
+          tp-> reassignment
+      }.toMap
       // create znode in /admin/reassignments
-      zkClient.createOrUpdateReassignments(assignment, isLegacy)
+      zkClient.createOrUpdateReassignments(reassignments)
       // remove the znode
       zkClient.deletePartitionReassignmentRequest(znode)
     }
     // in case /admin/reassign_partitions was written while there was no controller,
     // read the partitions being reassigned from zookeeper path /admin/reassign_partitions
     val legacy = zkClient.getPartitionReassignment
-    legacy.foreach{ case (tp, reassignment) => maybeAddToContext(tp, reassignment, true, LegacyReassignPartitionsZNode.path) }
+    val reassignments = legacy.map{
+      case (tp, newAssignment) =>
+        val original = controllerContext.partitionReplicaAssignment(tp)
+        val reassignment = PartitionReassignment(original, newAssignment, true)
+        maybeAddToContext(tp, reassignment, LegacyReassignPartitionsZNode.path)
+        tp-> reassignment
+    }.toMap
     // create znode in /admin/reassignments
-    zkClient.createOrUpdateReassignments(legacy, true)
+    zkClient.createOrUpdateReassignments(reassignments)
 
     // Finally, trigger those reassignments
     maybeTriggerPartitionReassignment(controllerContext.partitionsBeingReassigned.keySet)
@@ -1369,12 +1379,10 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       requests.foreach { case (assignments, legacy, znodePath) =>
         info(s"Processing ${if (legacy) "legacy " else "non-legacy "}partition reassignment request " +
           s"${assignments}, request via $znodePath")
+        // filter out those whose legacy clashes with inflight assignment's legacy flag
         val accepted = assignments.filter { case (tp, newReplicas) =>
-          val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(KafkaController.this, eventManager,
-            tp)
-          val context = ReassignedPartitionsContext(newReplicas, reassignIsrChangeHandler, legacy)
           val currentRequest = controllerContext.partitionsBeingReassigned.get(tp)
-          val accept = currentRequest match {
+          currentRequest match {
             case Some(currentRequest) =>
               if (currentRequest.legacy != legacy) {
                 if (currentRequest.legacy) {
@@ -1393,15 +1401,24 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
             case None =>
               true
           }
-          if (accept) {
-            controllerContext.partitionsBeingReassigned.put(tp, context)
+        }.map { case (tp, newReplicas) =>
+          val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(KafkaController.this, eventManager,
+            tp)
+          val currentRequest = controllerContext.partitionsBeingReassigned.get(tp)
+          val originalReplicas = currentRequest match {
+            case Some(currentRequest) =>
+              currentRequest.originalReplicas
+            case None =>
+              controllerContext.partitionReplicaAssignment(tp)
           }
-          accept
-        }
+          val context = ReassignedPartitionsContext(originalReplicas, newReplicas, legacy, reassignIsrChangeHandler)
+          controllerContext.partitionsBeingReassigned.put(tp, context)
+          tp -> PartitionReassignment(originalReplicas, newReplicas, legacy)
+        }.toMap
 
         // 3. Create/update child /admin/reassignments
         info(s"Creating/updating Reassignments for ${assignments.keySet.mkString(", ")}, request via $znodePath")
-        zkClient.createOrUpdateReassignments(accepted, legacy)
+        zkClient.createOrUpdateReassignments(accepted)
 
         // 4. Invoke `maybeTriggerPartitionReassignment` (see method documentation for the reason)
         maybeTriggerPartitionReassignment(accepted.keySet)
@@ -1626,9 +1643,10 @@ class ControllerChangeHandler(controller: KafkaController, eventManager: Control
   * Register/unregister ZK node changed handler for the
   * reassignIsrChangeHandler.path (/brokers/topics/$topic/partitions/$partition/state)
   */
-case class ReassignedPartitionsContext(var newReplicas: Seq[Int] = Seq.empty,
-                                       val reassignIsrChangeHandler: PartitionReassignmentIsrChangeHandler,
-                                       val legacy: Boolean) {
+case class ReassignedPartitionsContext(val originalReplicas: Seq[Int],
+                                       val newReplicas: Seq[Int],
+                                       val legacy: Boolean,
+                                       val reassignIsrChangeHandler: PartitionReassignmentIsrChangeHandler) {
 
   def registerReassignIsrChangeHandler(zkClient: KafkaZkClient): Unit =
     zkClient.registerZNodeChangeHandler(reassignIsrChangeHandler)

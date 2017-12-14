@@ -21,6 +21,7 @@ import java.util.Properties
 
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
+import kafka.common.PartitionReassignment
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch}
 import kafka.security.auth.{Acl, Resource}
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
@@ -260,18 +261,28 @@ object PartitionReassignmentZNode {
   def fromName(path: String): TopicPartition = {
     val index = path.lastIndexOf('-')
     val topic = path.substring(0, index)
-    val partition = path.substring(index+1).toInt
+    val partition = path.substring(index + 1).toInt
     new TopicPartition(topic, partition)
   }
   def fromPath(path: String): TopicPartition = {
-    fromName(path.substring(path.lastIndexOf('/')+1))
+    fromName(path.substring(path.lastIndexOf('/') + 1))
   }
-  def encode(assignment: Seq[Int], legacy: Boolean): Array[Byte] = {
-    Json.encodeAsBytes(Map("version" -> 1, "assignment" -> assignment, "legacy" -> legacy).asJava)
+
+  def encode(reassignment: PartitionReassignment): Array[Byte] = {
+    Json.encodeAsBytes(Map("version" -> 1,
+      "original"-> reassignment.originalAssignment.asJava,
+      "assignment" -> reassignment.newAssignments.asJava,
+      "legacy" -> reassignment.legacy).asJava)
   }
-  def decode(bytes: Array[Byte]): (Seq[Int], Boolean) = Json.parseBytes(bytes).map { js =>
-    js.asJsonObject("assignment").asJsonArray.iterator.map(x=>x.to[Int]).toSeq -> js.asJsonObject("legacy").to[Boolean]
-  }.getOrElse(Seq.empty -> false)
+  def decode(bytes: Array[Byte]): Option[PartitionReassignment] = Json.parseBytes(bytes).flatMap { js =>
+    val jsObj = js.asJsonObject
+    Some(PartitionReassignment(
+      jsObj("original").asJsonArray.iterator.map(_.to[Int]).toSeq,
+      jsObj("assignment").asJsonArray.iterator.map(_.to[Int]).toSeq,
+      jsObj("legacy").to[Boolean]
+      )
+    )
+  }
 }
 
 object PreferredReplicaElectionZNode {

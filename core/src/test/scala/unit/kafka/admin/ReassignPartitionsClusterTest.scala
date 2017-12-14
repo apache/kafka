@@ -21,8 +21,8 @@ import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils._
 import kafka.utils.ZkUtils._
 import kafka.utils.{Logging, TestUtils, ZkUtils}
-import kafka.zk.ZooKeeperTestHarness
-import org.junit.Assert.{assertEquals, assertTrue}
+import kafka.zk.{PartitionReassignmentZNode, ZooKeeperTestHarness}
+import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.{After, Before, Test}
 import kafka.admin.ReplicationQuotaUtils._
 import org.apache.kafka.clients.admin.AdminClientConfig
@@ -490,8 +490,6 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       TopicAndPartition("deliveries", 0) -> Seq(1, 2) //increase replication factor
     )
 
-    error("first move")
-
     new ReassignPartitionsCommand(zkUtils, None, firstMove).reassignPartitions()
 
     // Low pause to detect deletion of the reassign_partitions znode before the reassignment is complete
@@ -499,6 +497,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     // Check moved replicas did move
     assertEquals(Seq(0, 2, 3), zkUtils.getReplicasForPartition("orders", 0))
+
     assertEquals(Seq(0, 1, 2), zkUtils.getReplicasForPartition("orders", 1))
     assertEquals(Seq(1, 2), zkUtils.getReplicasForPartition("payments", 1))
     assertEquals(Seq(1, 2), zkUtils.getReplicasForPartition("deliveries", 0))
@@ -517,8 +516,6 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       TopicAndPartition("payments", 1) -> Seq(2, 1), // changed preferred leader
       TopicAndPartition("deliveries", 0) -> Seq(1, 2, 3) //increase replication factor
     )
-
-    error("second move")
 
     new ReassignPartitionsCommand(zkUtils, None, secondMove).reassignPartitions()
     // Low pause to detect deletion of the reassign_partitions znode before the reassignment is complete
@@ -608,8 +605,8 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       s"Znode ${ZkUtils.ReassignPartitionsPath} wasn't deleted", pause = pause)
     partitions.keySet.
       foreach{ tp =>
-        assertTrue("/admin/reassignments/$topic-partition should be deleted",
-          zkClient.getReassignment(tp)._1.isEmpty)
+        waitUntilTrue(() => !zkClient.getReassignment(tp).isDefined,
+          s"${PartitionReassignmentZNode.path(tp)} should be deleted")
       }
   }
 

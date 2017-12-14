@@ -20,7 +20,7 @@ package kafka.controller
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Timer
 import kafka.api.LeaderAndIsr
-import kafka.common.TopicAndPartition
+import kafka.common.{PartitionReassignment, TopicAndPartition}
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{TestUtils, ZkUtils}
 import kafka.zk.{PartitionReassignmentZNode, ReassignmentsZNode, ZooKeeperTestHarness}
@@ -174,11 +174,13 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     val changedReassignment = Map(tp -> Seq(otherBrokerId2))
     TestUtils.createTopic(zkUtils, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
     val reassignmentPath = ZkUtils.ReassignmentsPath + "/t-0"
-    zkUtils.createPersistentPath(reassignmentPath, new String(PartitionReassignmentZNode.encode(reassignment.head._2, false), "UTF-8"))
+    val reassignment1 = PartitionReassignment(Seq(controllerId), Seq(otherBrokerId), false)
+    zkUtils.createPersistentPath(reassignmentPath, new String(PartitionReassignmentZNode.encode(reassignment1), "UTF-8"))
     Thread.sleep(100)
     /*waitForPartitionState(tp, KafkaController.InitialControllerEpoch, otherBrokerId, LeaderAndIsr.initialLeaderEpoch + 1,
       "failed to get expected partition state after partition reassignment")*/
-    zkUtils.updatePersistentPath(reassignmentPath, new String(PartitionReassignmentZNode.encode(changedReassignment.head._2, false), "UTF-8"))
+    val reassignment2 = PartitionReassignment(Seq(controllerId), Seq(otherBrokerId2), false)
+    zkUtils.updatePersistentPath(reassignmentPath, new String(PartitionReassignmentZNode.encode(reassignment2), "UTF-8"))
 
     //waitForPartitionState(tp, KafkaController.InitialControllerEpoch, otherBrokerId, LeaderAndIsr.initialLeaderEpoch + 3,
     //  "failed to get expected partition state after partition reassignment")
