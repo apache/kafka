@@ -271,14 +271,12 @@ public class StoreChangelogReader implements ChangelogReader {
                              final StateRestorer restorer,
                              final Long endOffset) {
         final List<KeyValue<byte[], byte[]>> restoreRecords = new ArrayList<>();
-        long offset = -1;
+        long nextPosition = -1;
 
-        final Iterator<ConsumerRecord<byte[], byte[]>> consumerRecordIterator = records.iterator();
-
-        while (consumerRecordIterator.hasNext()) {
-            final ConsumerRecord<byte[], byte[]> record = consumerRecordIterator.next();
-            offset = record.offset();
+        for (final ConsumerRecord<byte[], byte[]> record : records) {
+            final long offset = record.offset();
             if (restorer.hasCompleted(offset, endOffset)) {
+                nextPosition = record.offset();
                 break;
             }
             if (record.key() != null) {
@@ -286,16 +284,17 @@ public class StoreChangelogReader implements ChangelogReader {
             }
         }
 
-        if (offset == -1) {
-            offset = restoreConsumer.position(restorer.partition());
+        if (nextPosition == -1) {
+            nextPosition = restoreConsumer.position(restorer.partition());
         }
 
         if (!restoreRecords.isEmpty()) {
             restorer.restore(restoreRecords);
-            restorer.restoreBatchCompleted(offset + 1, records.size());
+            restorer.restoreBatchCompleted(nextPosition, records.size());
+
         }
 
-        return consumerRecordIterator.hasNext() ? consumerRecordIterator.next().offset() : restoreConsumer.position(restorer.partition());
+        return nextPosition;
     }
 
     private boolean hasPartition(final TopicPartition topicPartition) {
