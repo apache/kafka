@@ -738,7 +738,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
   }
 
   /**
-    * Creates or updates the {@code /admin/reassignment/$topic-$partition} znode for each partition in the map
+    * Creates or updates the {@code /admin/reassignment/$topic/$partition} znode for each partition in the map
     */
   def createOrUpdateReassignments(assignments: Map[TopicPartition, Seq[Int]], legacy: Boolean) = {
     // First check the topic nodes exists
@@ -774,7 +774,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
   }
 
   /**
-    * Returns assignment in the given {@code /admin/reassignment/$topic-$partition} znode, and whether the request was
+    * Returns assignment in the given {@code /admin/reassignment/$topic/$partition} znode, and whether the request was
     * a legacy one
     */
   def getReassignment(tp: TopicPartition): (Seq[Int], Boolean) = {
@@ -789,8 +789,8 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
   }
 
   /**
-    * Returns assignment in the the {@code /admin/reassignment/$topic-$partition} znode, and whether the request
-    * was a legacy one.
+    * Returns the assignment in the {@code /admin/reassignment/$topic/$partition} znode for each of the
+    * given partitions together with whether each requests was a legacy one.
     */
   def getReassignments(tps: Seq[TopicPartition]): Map[TopicPartition, (Seq[Int], Boolean)] = {
     val getRequests = tps.map(tp => GetDataRequest(PartitionReassignmentZNode.path(tp)))
@@ -816,20 +816,20 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
     childrenResponse.children.map(PartitionReassignmentZNode.fromName(_))
   }
 
-  def getReassignments(): Map[TopicPartition, (Seq[Int], Boolean)] = {
+  def getAllReassignments(): Map[TopicPartition, (Seq[Int], Boolean)] = {
     getReassignments(getPartitionsBeingReassigned())
   }
 
   /**
-    * Deletes the {@code /admin/reassignment/$topic-$partition} znode
+    * Deletes the {@code /admin/reassignment/$topic/$partition} znode
     */
   def deleteReassignment(tp: TopicPartition): Unit = {
     val deleteRequest = DeleteRequest(PartitionReassignmentZNode.path(tp), ZkVersion.NoVersion)
     retryRequestUntilConnected(deleteRequest)
 
-    val deleteParentRequest = DeleteRequest(PartitionReassignmentZNode.topicPath(tp), ZkVersion.NoVersion)
+    // delete /admin/reassignment/$topic too
+    val deleteParentRequest = DeleteRequest(PartitionReassignmentZNode.topicPath(tp.topic), ZkVersion.NoVersion)
     retryRequestUntilConnected(deleteParentRequest)
-
   }
 
   /**

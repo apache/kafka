@@ -296,7 +296,7 @@ object PreferredReplicaElectionZNode {
   * {@code /admin/reassignment_changes} parent of changes znode
   */
 object ReassignmentRequestsZNode {
-  def path = s"${AdminZNode.path}/reassignment_changes"
+  def path = s"${AdminZNode.path}/reassignment_requests"
 }
 
 /**
@@ -309,7 +309,7 @@ object ReassignmentRequestsZNode {
   * {@code /admin/reassignments/$topic-$partition}.
   */
 object ReassignmentRequestZNode extends Logging {
-  def prefix = s"${ReassignmentRequestsZNode.path}/change_"
+  def prefix = s"${ReassignmentRequestsZNode.path}/request_"
   def path(changeZnode: String) = s"${ReassignmentRequestsZNode.path}/$changeZnode"
 
   def encode(assignments: Map[TopicPartition,Seq[Int]], legacy: Boolean): Array[Byte] = {

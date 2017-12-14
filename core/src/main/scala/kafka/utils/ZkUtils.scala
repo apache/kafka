@@ -65,7 +65,7 @@ object ZkUtils {
   val BrokerTopicsPath = s"$BrokersPath/topics"
   val ReassignPartitionsPath = s"$AdminPath/reassign_partitions"
   val ReassignmentsPath = s"$AdminPath/reassignments"
-  val ReassignmentsRequestsPath = s"$AdminPath/reassignment_changes"
+  val ReassignmentsRequestsPath = s"$AdminPath/reassignment_requests"
   val DeleteTopicsPath = s"$AdminPath/delete_topics"
   val PreferredReplicaLeaderElectionPath = s"$AdminPath/preferred_replica_election"
   val BrokerSequenceIdPath = s"$BrokersPath/seqid"

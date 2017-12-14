@@ -647,7 +647,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
   private def initializePartitionReassignment() {
 
     // Reassignments started by the last controller
-    val inflight = zkClient.getReassignments()
+    val inflight = zkClient.getAllReassignments()
     info(s"Inflight reassignments: ${inflight.keySet.mkString(",")}")
     controllerContext.partitionsBeingReassigned ++= inflight.map{ case (tp, reassignment) =>
       val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(this, eventManager, tp)
