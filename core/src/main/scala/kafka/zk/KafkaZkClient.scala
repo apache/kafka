@@ -731,7 +731,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
   /**
     * Creates or updates the {@code /admin/reassignment/$topic/$partition} znode for each partition in the map
     */
-  def createOrUpdateReassignments(assignments: Map[TopicPartition, PartitionReassignment]) = {
+  def setOrCreateReassignments(assignments: Map[TopicPartition, PartitionReassignment]) = {
     // First check the topic nodes exists
     val createParentRequests = assignments.keySet.map(_.topic).map { topic =>
       val path = PartitionReassignmentZNode.topicPath(topic)
