@@ -245,8 +245,10 @@ object ConsumerGroupCommand extends Logging {
     private def printState(group: String, state: Option[GroupState]): Unit = {
       // this method is reachable only for the new consumer option (where the given state is always defined)
       if (shouldPrintMemberState(group, Some(state.get.state), Some(1))) {
-        print("\n%-20s %-25s %-20s %s".format("COORDINATOR", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS"))
-        print("\n%-20s %-25s %-20s %s".format(state.get.coordinator.id, state.get.assignmentStrategy, state.get.state, state.get.numMembers))
+        val coordinator = state.get.coordinator.host + ":" + state.get.coordinator.port + " (" + state.get.coordinator.idString + ")"
+        val coordinatorColLen = Math.max(25, coordinator.length)
+        print(s"\n%${-coordinatorColLen}s %-25s %-20s %s".format("COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS"))
+        print(s"\n%${-coordinatorColLen}s %-25s %-20s %s".format(coordinator, state.get.assignmentStrategy, state.get.state, state.get.numMembers))
         println()
       }
     }
