@@ -129,7 +129,7 @@ public class StoreChangelogReaderTest {
     @Test
     public void shouldRecoverFromInvalidOffsetExceptionAndFinishRestore() {
         final int messages = 10;
-        setupConsumer(messages, topicPartition);
+        setupConsumer(messages, topicPartition, 0);
         consumer.setException(new InvalidOffsetException("Try Again!") {
             @Override
             public Set<TopicPartition> partitions() {
