@@ -39,31 +39,11 @@ import org.apache.zookeeper.AsyncCallback.{DataCallback, StringCallback}
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException, ZooDefs, ZooKeeper}
-import kafka.utils.Json._
-import org.apache.zookeeper.Watcher.Event.KeeperState
-
 
 import scala.collection._
 import scala.collection.JavaConverters._
 
-// This is copy of the KeeperState with addition
-// of SessionEstablishmentError and NewSession
-object ZKState extends Enumeration{
-  type String = Value;
-  val Unknown = Value("Unknown")
-  val SessionEstablishmentError = Value("SessionEstablishmentError")
-  val NewSession = Value("NewSession")
-  val Disconnected = Value("Disconnected")
-  val SyncConnected = Value("SyncConnected")
-  val AuthFailed = Value("AuthFailed")
-  val ConnectedReadOnly = Value("ConnectedReadOnly")
-  val SaslAuthenticated = Value("SaslAuthenticated")
-  val Expired = Value("Expired")
-}
-
 object ZkUtils {
-
-
 
   private val UseDefaultAcls = new java.util.ArrayList[ACL]
 
@@ -271,7 +251,6 @@ class ZooKeeperClientMetrics(zkClient: ZkClient, val time: Time)
     super.close()
   }
 }
-
 
 /**
  * Legacy class for interacting with ZooKeeper. Whenever possible, ``KafkaZkClient`` should be used instead.
