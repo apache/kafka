@@ -695,11 +695,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
   def createReassignment(tp: TopicPartition, assignment: Seq[Int], internal: Boolean) = {
     val createRequest = CreateRequest(PartitionReassignmentZNode.path(tp), PartitionReassignmentZNode.encode(assignment, internal),
       acls(LegacyReassignPartitionsZNode.path), CreateMode.PERSISTENT)
-    val createResponse = retryRequestUntilConnected(createRequest)
-
-    if (createResponse.resultCode != Code.OK) {
-      throw createResponse.resultException.get
-    }
+    retryRequestUntilConnected(createRequest).maybeThrow()
   }
 
   /**
@@ -715,13 +711,10 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
 
   /**
     * Return all the partition reassignment requests (i.e. children of
-    * {@code /admin/reassignment_requests}), in sequence order, as a tuple with lecacy-ness of the request and
+    * {@code /admin/reassignment_requests}), in sequence order, as a tuple with the legacy-ness of the request and
     * the (relative) znode name they originated from.
     */
   def getPartitionReassignmentRequests(): Seq[(Map[TopicPartition, Seq[Int]], Boolean, String)] = {
-    // What exactly is the protocol here?
-    // Should each change_ be for a single partition (in which case, why do we need a sequence?)
-    // Or should it be for a bunch of partitions (in which case what we we g
     val childrenRequest = GetChildrenRequest(ReassignmentRequestsZNode.path)
     val childrenResponse = retryRequestUntilConnected(childrenRequest)
     childrenResponse.maybeThrow()
@@ -745,25 +738,43 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
   }
 
   /**
-    * Creates the {@code /admin/reassignment/$topic-$partition} znode
+    * Creates or updates the {@code /admin/reassignment/$topic-$partition} znode for each partition in the map
     */
-  def createReassignments(assignments: Map[TopicPartition, Seq[Int]], legacy: Boolean) = {
-    val createRequests = assignments.map { case (tp, assignment) =>
-      CreateRequest(PartitionReassignmentZNode.path(tp), PartitionReassignmentZNode.encode(assignment, legacy),
-        acls(PartitionReassignmentZNode.path(tp)), CreateMode.PERSISTENT)
-    }.toSeq
-
-    val createResponses = retryRequestsUntilConnected(createRequests)
-
-    createResponses.foreach { createResponse =>
-      if (createResponse.resultCode != Code.OK) {
-        throw createResponse.resultException.get
+  def createOrUpdateReassignments(assignments: Map[TopicPartition, Seq[Int]], legacy: Boolean) = {
+    // First check the topic nodes exists
+    val createParentRequests = assignments.keySet.map(_.topic).map { topic =>
+      val path = PartitionReassignmentZNode.topicPath(topic)
+      CreateRequest(path, null, acls(path), CreateMode.PERSISTENT)}
+    val createParentResponses = retryRequestsUntilConnected(createParentRequests.toSeq)
+    createParentResponses.foreach(resp =>
+      resp.resultCode match {
+        case Code.OK =>
+        case Code.NODEEXISTS =>
+        case _ => throw resp.resultException.get
       }
+    )
+
+    // Then try creating the partition nodes
+    val createRequests = assignments.map { case (tp, assignment) =>
+      val path = PartitionReassignmentZNode.path(tp)
+      val data = PartitionReassignmentZNode.encode(assignment, legacy)
+      CreateRequest(path, data,
+        acls(path), CreateMode.PERSISTENT, Some(data))
+    }.toSeq
+    val createResponses = retryRequestsUntilConnected(createRequests)
+    // And update those that failed create because the node existed
+    val (exists, error) = createResponses.filter (_.resultCode != Code.OK).partition(_.resultCode == Code.NODEEXISTS)
+    if (error.nonEmpty) {
+      throw error.head.resultException.get
     }
+    val updateResponses = retryRequestsUntilConnected(exists.map { resp =>
+      SetDataRequest(resp.path, resp.ctx.get.asInstanceOf[Array[Byte]], ZkVersion.NoVersion)
+    })
+    updateResponses.foreach (_.maybeThrow())
   }
 
   /**
-    * Returns assignment in the the {@code /admin/reassignment/$topic-$partition} znode, and whether the request was
+    * Returns assignment in the given {@code /admin/reassignment/$topic-$partition} znode, and whether the request was
     * a legacy one
     */
   def getReassignment(tp: TopicPartition): (Seq[Int], Boolean) = {
@@ -781,7 +792,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
     * Returns assignment in the the {@code /admin/reassignment/$topic-$partition} znode, and whether the request
     * was a legacy one.
     */
-  def getReassignment(tps: Seq[TopicPartition]): Map[TopicPartition, (Seq[Int], Boolean)] = {
+  def getReassignments(tps: Seq[TopicPartition]): Map[TopicPartition, (Seq[Int], Boolean)] = {
     val getRequests = tps.map(tp => GetDataRequest(PartitionReassignmentZNode.path(tp)))
     val getResponses = retryRequestsUntilConnected(getRequests)
 
@@ -806,7 +817,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
   }
 
   def getReassignments(): Map[TopicPartition, (Seq[Int], Boolean)] = {
-    getReassignment(getPartitionsBeingReassigned())
+    getReassignments(getPartitionsBeingReassigned())
   }
 
   /**
@@ -815,6 +826,10 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
   def deleteReassignment(tp: TopicPartition): Unit = {
     val deleteRequest = DeleteRequest(PartitionReassignmentZNode.path(tp), ZkVersion.NoVersion)
     retryRequestUntilConnected(deleteRequest)
+
+    val deleteParentRequest = DeleteRequest(PartitionReassignmentZNode.topicPath(tp), ZkVersion.NoVersion)
+    retryRequestUntilConnected(deleteParentRequest)
+
   }
 
   /**

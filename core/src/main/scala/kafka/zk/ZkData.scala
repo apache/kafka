@@ -24,9 +24,10 @@ import kafka.cluster.{Broker, EndPoint}
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch}
 import kafka.security.auth.{Acl, Resource}
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
-import kafka.utils.Json
+import kafka.utils.{Json, Logging}
 import org.apache.kafka.common.TopicPartition
 import org.apache.zookeeper.data.Stat
+
 import scala.collection.JavaConverters._
 
 // This file contains objects for encoding/decoding data stored in ZooKeeper nodes (znodes).
@@ -244,17 +245,18 @@ object LegacyReassignPartitionsZNode {
 }
 
 /**
-  * {@code /admin/reassignments} Parent for inidvidual reassignments
+  * {@code /admin/reassignments} Parent for individual reassignments
   */
 object ReassignmentsZNode {
   def path = s"${AdminZNode.path}/reassignments"
 }
 
 /**
-  * {@code /admin/reassignments/$topic-$partition} Individual reassignment
+  * {@code /admin/reassignments/$topic/$partition} Individual reassignment
   */
 object PartitionReassignmentZNode {
-  def path(topicPartition: TopicPartition) = s"${ReassignmentsZNode.path}/${topicPartition.topic}-${topicPartition.partition}"
+  def path(topicPartition: TopicPartition) = s"${ReassignmentsZNode.path}/${topicPartition.topic}/${topicPartition.partition}"
+  def topicPath(topic: String) = s"${ReassignmentsZNode.path}/${topic}"
   def fromName(path: String): TopicPartition = {
     val index = path.lastIndexOf('-')
     val topic = path.substring(0, index)
@@ -265,7 +267,7 @@ object PartitionReassignmentZNode {
     fromName(path.substring(path.lastIndexOf('/')+1))
   }
   def encode(assignment: Seq[Int], legacy: Boolean): Array[Byte] = {
-    Json.encodeAsBytes(Map("version" -> 1, "assignment" -> assignment, "legacy" -> legacy))
+    Json.encodeAsBytes(Map("version" -> 1, "assignment" -> assignment, "legacy" -> legacy).asJava)
   }
   def decode(bytes: Array[Byte]): (Seq[Int], Boolean) = Json.parseBytes(bytes).map { js =>
     js.asJsonObject("assignment").asJsonArray.iterator.map(x=>x.to[Int]).toSeq -> js.asJsonObject("legacy").to[Boolean]
@@ -306,31 +308,29 @@ object ReassignmentRequestsZNode {
   * This avoids the need for the controller to watch each
   * {@code /admin/reassignments/$topic-$partition}.
   */
-object ReassignmentRequestZNode {
+object ReassignmentRequestZNode extends Logging {
   def prefix = s"${ReassignmentRequestsZNode.path}/change_"
   def path(changeZnode: String) = s"${ReassignmentRequestsZNode.path}/$changeZnode"
 
   def encode(assignments: Map[TopicPartition,Seq[Int]], legacy: Boolean): Array[Byte] = {
-
     var jsonMap = Map("version" -> 1,
       "assignments" -> assignments.groupBy{
         case (tp, assignment) => tp.topic()
       }.map {
         case (topic, assigmentMap) =>
           topic -> assigmentMap.map {
-            case (tp, assignment) => tp.partition.toString -> assignment
-          }
-      })
+            case (tp, assignment) => tp.partition.toString -> assignment.asJava
+          }.asJava
+      }.asJava)
     if (legacy) {
       jsonMap += "legacy" -> true
     }
-    Json.encodeAsBytes(jsonMap)
+    Json.encodeAsBytes(jsonMap.asJava)
   }
 
   def decode(bytes: Array[Byte]): Option[(Map[TopicPartition, Seq[Int]], Boolean)] = {
-    val s = new String(bytes, "UTF-8")
     Json.parseBytes(bytes).flatMap { js =>
-      val legacy = js.asJsonObject("legacy").to[Boolean]
+      val legacy = js.asJsonObject.get("legacy").map(_.to[Boolean]).getOrElse(false)
       val assignments = js.asJsonObject("assignments").to[Map[String,Map[String,Seq[Int]]]].flatMap{
         case (topic, partitionAssignments) =>
           partitionAssignments.map { case (partition, assignment) =>
