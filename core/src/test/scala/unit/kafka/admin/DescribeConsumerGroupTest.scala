@@ -208,7 +208,9 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
     val state = service.collectGroupState()
     assertTrue(s"Expected the state to be 'Dead', with no members in the group '$group'.",
-        state.isDefined && state.get.state == "Dead" && state.get.numMembers == 0)
+        state.isDefined && state.get.state == "Dead" && state.get.numMembers == 0 &&
+        state.get.coordinator != null && servers.map(_.config.brokerId).toList.contains(state.get.coordinator.id)
+    )
   }
 
   @Test
@@ -223,8 +225,8 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
       val service = getConsumerGroupService(cgcArgs)
 
       TestUtils.waitUntilTrue(() => {
-          val (output, error) = TestUtils.grabConsoleOutputAndError(service.describeGroup())
-          output.trim.split("\n").length == 2 && error.isEmpty
+        val (output, error) = TestUtils.grabConsoleOutputAndError(service.describeGroup())
+        output.trim.split("\n").length == 2 && error.isEmpty
       }, s"Expected a data row and no error in describe results with describe type ${describeType.mkString(" ")}.")
     }
   }
@@ -239,8 +241,8 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
-        val (state, assignments) = service.collectGroupOffsets()
-        state == Some("Stable") &&
+      val (state, assignments) = service.collectGroupOffsets()
+      state == Some("Stable") &&
         assignments.isDefined &&
         assignments.get.count(_.group == group) == 1 &&
         assignments.get.filter(_.group == group).head.consumerId.exists(_.trim != ConsumerGroupCommand.MISSING_COLUMN_VALUE) &&
@@ -297,7 +299,9 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
       state.isDefined &&
         state.get.state == "Stable" &&
         state.get.numMembers == 1 &&
-        state.get.assignmentStrategy == "range"
+        state.get.assignmentStrategy == "range" &&
+        state.get.coordinator != null &&
+        servers.map(_.config.brokerId).toList.contains(state.get.coordinator.id)
     }, s"Expected a 'Stable' group status, with one member and round robin assignment strategy for group $group.")
   }
 
@@ -311,11 +315,13 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
-        val state = service.collectGroupState()
-        state.isDefined &&
+      val state = service.collectGroupState()
+      state.isDefined &&
         state.get.state == "Stable" &&
         state.get.numMembers == 1 &&
-        state.get.assignmentStrategy == "roundrobin"
+        state.get.assignmentStrategy == "roundrobin" &&
+        state.get.coordinator != null &&
+        servers.map(_.config.brokerId).toList.contains(state.get.coordinator.id)
     }, s"Expected a 'Stable' group status, with one member and round robin assignment strategy for group $group.")
   }
 
@@ -413,7 +419,11 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
     TestUtils.waitUntilTrue(() => {
       val state = service.collectGroupState()
-      state.isDefined && state.get.state == "Stable" && state.get.numMembers == 1
+      state.isDefined &&
+        state.get.state == "Stable" &&
+        state.get.numMembers == 1 &&
+        state.get.coordinator != null &&
+        servers.map(_.config.brokerId).toList.contains(state.get.coordinator.id)
     }, s"Expected the group '$group' to initially become stable, and have a single member.")
 
     // stop the consumer so the group has no active member anymore

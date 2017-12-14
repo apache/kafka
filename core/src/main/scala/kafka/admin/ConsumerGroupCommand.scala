@@ -126,7 +126,7 @@ object ConsumerGroupCommand extends Logging {
   protected case class MemberAssignmentState(group: String, consumerId: String, host: String, clientId: String,
                                              numPartitions: Int, assignment: List[TopicPartition])
 
-  protected case class GroupState(group: String, assignmentStrategy: String, state: String, numMembers: Int)
+  protected case class GroupState(group: String, coordinator: Node, assignmentStrategy: String, state: String, numMembers: Int)
 
   sealed trait ConsumerGroupService {
 
@@ -245,8 +245,8 @@ object ConsumerGroupCommand extends Logging {
     private def printState(group: String, state: Option[GroupState]): Unit = {
       // this method is reachable only for the new consumer option (where the given state is always defined)
       if (shouldPrintMemberState(group, Some(state.get.state), Some(1))) {
-        print("\n%-25s %-20s %s".format("ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS"))
-        print("\n%-25s %-20s %s".format(state.get.assignmentStrategy, state.get.state, state.get.numMembers))
+        print("\n%-20s %-25s %-20s %s".format("COORDINATOR", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS"))
+        print("\n%-20s %-25s %-20s %s".format(state.get.coordinator.id, state.get.assignmentStrategy, state.get.state, state.get.numMembers))
         println()
       }
     }
@@ -577,7 +577,8 @@ object ConsumerGroupCommand extends Logging {
     override def collectGroupState(): Option[GroupState] = {
       val group = opts.options.valueOf(opts.groupOpt)
       val consumerGroupSummary = adminClient.describeConsumerGroup(group, opts.options.valueOf(opts.timeoutMsOpt))
-      Some(GroupState(group, consumerGroupSummary.assignmentStrategy, consumerGroupSummary.state, consumerGroupSummary.consumers.get.size))
+      Some(GroupState(group, consumerGroupSummary.coordinator, consumerGroupSummary.assignmentStrategy,
+        consumerGroupSummary.state, consumerGroupSummary.consumers.get.size))
     }
 
     protected def getLogEndOffset(topicPartition: TopicPartition): LogOffsetResult = {
@@ -851,12 +852,15 @@ object ConsumerGroupCommand extends Logging {
     val ResetToLatestDoc = "Reset offsets to latest offset."
     val ResetToCurrentDoc = "Reset offsets to current offset."
     val ResetShiftByDoc = "Reset offsets shifting current offset by 'n', where 'n' can be positive or negative."
-    val MembersDoc = "Describe members of the group. This option may be used with '--describe' and '--bootstrap-server' options only."
-    val VerboseDoc = "Provide additional member information when describing members of the group. This option may be used " +
-      "with '--members' and '--bootstrap-server' options only."
+    val MembersDoc = "Describe members of the group. This option may be used with '--describe' and '--bootstrap-server' options only." + nl +
+      "Example: --bootstrap-server localhost:9092 --describe --group group1 --members"
+    val VerboseDoc = "Provide additional information, if any, when describing the group. This option may be used " +
+      "with '--offsets'/'--members'/'--state' and '--bootstrap-server' options only." + nl + "Example: --bootstrap-server localhost:9092 --describe --group group1 --members --verbose"
     val OffsetsDoc = "Describe the group and list all topic partitions in the group along with their offset lag. " +
-      "This is the default sub-action of and may be used with '--describe' and '--bootstrap-server' options only."
-    val StateDoc = "Describe the group state. This option may be used with '--describe' and '--bootstrap-server' options only."
+      "This is the default sub-action of and may be used with '--describe' and '--bootstrap-server' options only." + nl +
+      "Example: --bootstrap-server localhost:9092 --describe --group group1 --offsets"
+    val StateDoc = "Describe the group state. This option may be used with '--describe' and '--bootstrap-server' options only." + nl +
+      "Example: --bootstrap-server localhost:9092 --describe --group group1 --state"
 
     val parser = new OptionParser(false)
     val zkConnectOpt = parser.accepts("zookeeper", ZkConnectDoc)
@@ -916,9 +920,17 @@ object ConsumerGroupCommand extends Logging {
                              .describedAs("number-of-offsets")
                              .ofType(classOf[Long])
     val membersOpt = parser.accepts("members", MembersDoc)
+                           .availableIf(describeOpt)
+                           .availableUnless(zkConnectOpt)
     val verboseOpt = parser.accepts("verbose", VerboseDoc)
+                           .availableIf(describeOpt)
+                           .availableUnless(zkConnectOpt)
     val offsetsOpt = parser.accepts("offsets", OffsetsDoc)
+                           .availableIf(describeOpt)
+                           .availableUnless(zkConnectOpt)
     val stateOpt = parser.accepts("state", StateDoc)
+                         .availableIf(describeOpt)
+                         .availableUnless(zkConnectOpt)
     parser.mutuallyExclusive(membersOpt, offsetsOpt, stateOpt)
 
     val options = parser.parse(args : _*)
@@ -956,20 +968,6 @@ object ConsumerGroupCommand extends Logging {
 
       if (describeOptPresent)
         CommandLineUtils.checkRequiredArgs(parser, options, groupOpt)
-
-      val membersOptPresent = options.has(membersOpt)
-      val offsetsOptPresent = options.has(offsetsOpt)
-      val stateOptPresent = options.has(stateOpt)
-      val subActions = Seq(membersOptPresent, offsetsOptPresent, stateOptPresent).count(_ == true)
-      if (subActions > 0) {
-        if (useOldConsumer)
-          CommandLineUtils.printUsageAndDie(parser, s"Options $membersOpt, $offsetsOpt, and $stateOpt may only be used " +
-              s"when $bootstrapServerOpt is present. They do not support ZooKeeper-based consumer group management.")
-
-        if (!describeOptPresent)
-          CommandLineUtils.printUsageAndDie(parser,
-              s"Options $membersOpt, $offsetsOpt, and $stateOpt may only be used with $describeOpt.")
-      }
 
       if (options.has(deleteOpt) && !options.has(groupOpt) && !options.has(topicOpt))
         CommandLineUtils.printUsageAndDie(parser, "Option %s either takes %s, %s, or both".format(deleteOpt, groupOpt, topicOpt))
