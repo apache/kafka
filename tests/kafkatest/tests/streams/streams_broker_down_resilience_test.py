@@ -31,7 +31,7 @@ class StreamsBrokerDownResilience(Test):
 
     inputTopic = "streamsResilienceSource"
     outputTopic = "streamsResilienceSink"
-    num_messages = 10
+    num_messages = 5
 
     def __init__(self, test_context):
         super(StreamsBrokerDownResilience, self).__init__(test_context=test_context)
@@ -84,6 +84,8 @@ class StreamsBrokerDownResilience(Test):
         processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, "none")
         processor.start()
 
+        # until KIP-91 is merged we'll only send 5 messages to assert Kafka Streams is running before taking the broker down
+        # After KIP-91 is merged we'll continue to send messages the duration of the test
         self.assert_produce_consume("before_broker_stop")
 
         node = self.kafka.leader(self.inputTopic)
