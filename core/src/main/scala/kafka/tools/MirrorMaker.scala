@@ -429,7 +429,12 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
           try {
             while (!exitingOnSendFailure && !shuttingDown && mirrorMakerConsumer.hasData) {
               val data = mirrorMakerConsumer.receive()
-              trace("Sending message with value size %d and offset %d".format(data.value.length, data.offset))
+              if (data.value != null) {
+                trace("Sending message with value size %d and offset %d".format(data.value.length, data.offset))
+              } else {
+                trace("Sending message with null value and offset %d".format(data.offset))
+
+              }
               val records = messageHandler.handle(data)
               records.asScala.foreach(producer.send)
               maybeFlushAndCommitOffsets()
@@ -739,12 +744,21 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
    */
   trait MirrorMakerMessageHandler {
     def handle(record: BaseConsumerRecord): util.List[ProducerRecord[Array[Byte], Array[Byte]]]
+    def run(record: BaseConsumerRecord): String
   }
 
   private[tools] object defaultMirrorMakerMessageHandler extends MirrorMakerMessageHandler {
     override def handle(record: BaseConsumerRecord): util.List[ProducerRecord[Array[Byte], Array[Byte]]] = {
       val timestamp: java.lang.Long = if (record.timestamp == Record.NO_TIMESTAMP) null else record.timestamp
       Collections.singletonList(new ProducerRecord[Array[Byte], Array[Byte]](record.topic, null, timestamp, record.key, record.value))
+    }
+
+    override def run(record: BaseConsumerRecord): String = {
+      if (record.value != null) {
+        new String("Sending message with value size %d and offset %d".format(record.value.length, record.offset))
+      } else {
+        new String("Sending message with null value and offset %d".format(record.offset))
+      }
     }
   }
 

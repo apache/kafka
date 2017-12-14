@@ -55,4 +55,16 @@ class MirrorMakerTest {
     assertEquals("value", new String(producerRecord.value))
   }
 
+  @Test
+  def TestDefaultMirrorMakerMessageHandlerWithNullValue()
+  {
+    val consumerRecordWithNullValue = BaseConsumerRecord("topic", 0, 1L, Record.NO_TIMESTAMP, TimestampType.CREATE_TIME, "key".getBytes, null)
+    val consumerRecord = BaseConsumerRecord("topic", 0, 1L, Record.NO_TIMESTAMP, TimestampType.CREATE_TIME, "key".getBytes, "value".getBytes)
+
+    val logWithNullValue = MirrorMaker.defaultMirrorMakerMessageHandler.run(consumerRecordWithNullValue)
+    val log = MirrorMaker.defaultMirrorMakerMessageHandler.run(consumerRecord)
+
+    assertEquals("Sending message with null value and offset 1", logWithNullValue)
+    assertEquals("Sending message with value size 5 and offset 1", log)
+  }
 }
