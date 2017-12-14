@@ -123,7 +123,7 @@ public class KTableSourceTopicRestartIntegrationTest {
 
             streamsOne.close();
             streamsOne = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
-            // the state restore listener will append two records to the log
+            // the state restore listener will append one record to the log
             streamsOne.setGlobalStateRestoreListener(new UpdatingSourceTopicOnRestoreStartStateRestoreListener());
             streamsOne.start();
 
