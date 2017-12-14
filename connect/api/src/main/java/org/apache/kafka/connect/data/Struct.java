@@ -238,12 +238,12 @@ public class Struct {
         if (o == null || getClass() != o.getClass()) return false;
         Struct struct = (Struct) o;
         return Objects.equals(schema, struct.schema) &&
-                Arrays.equals(values, struct.values);
+                Arrays.deepEquals(values, struct.values);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(schema, Arrays.hashCode(values));
+        return Objects.hash(schema, Arrays.deepHashCode(values));
     }
 
     private Field lookupField(String fieldName) {
