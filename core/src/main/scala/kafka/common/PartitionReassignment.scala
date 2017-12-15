@@ -17,6 +17,6 @@
 
 package kafka.common
 
-case class PartitionReassignment(originalAssignment: Seq[Int], newAssignments: Seq[Int], legacy: Boolean) {
+case class PartitionReassignment(top: Int, newAssignments: Seq[Int], legacy: Boolean) {
 
 }

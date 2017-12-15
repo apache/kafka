@@ -38,7 +38,7 @@ import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.{Code, NodeExistsException}
 import org.apache.zookeeper.data.Stat
 
-import scala.collection._
+import scala.collection.{mutable, _}
 import scala.util.Try
 
 object KafkaController extends Logging {
@@ -460,6 +460,24 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
    */
   private def onPartitionReassignment(topicPartition: TopicPartition, reassignedPartitionContext: ReassignedPartitionsContext) {
     val reassignedReplicas = reassignedPartitionContext.newReplicas
+
+    def computeDrop() = {
+      val top = reassignedPartitionContext.top
+      info(s"top $top")
+      val assigned = controllerContext.partitionReplicaAssignment(topicPartition)
+      info(s"assigned $assigned")
+      val isr = controllerContext.partitionLeadershipInfo(topicPartition).leaderAndIsr.isr
+      info(s"isr $isr")
+      val osr = assigned.toSet -- isr // we could sort this by lag, if only the controller knew the lag!
+      info(s"osr $osr")
+      val existing = new mutable.LinkedHashSet() ++ Seq(controllerContext.partitionLeadershipInfo(topicPartition).leaderAndIsr.leader) ++ isr ++ osr
+      info(s"existing $existing")
+      val retainFromExisting = reassignedReplicas ++ existing.slice(0, top)
+      info(s"retainFromExisting $retainFromExisting")
+      val drop = assigned.toSet -- retainFromExisting
+      drop
+    }
+
     if (!areReplicasInIsr(topicPartition, reassignedReplicas)) {
       info(s"New replicas ${reassignedReplicas.mkString(",")} for partition $topicPartition being reassigned not yet " +
         "caught up with the leader")
@@ -475,17 +493,13 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       info(s"Waiting for new replicas ${reassignedReplicas.mkString(",")} for partition ${topicPartition} being " +
         "reassigned to catch up with the leader")
 
-      var dropped = newAndOldReplicas -- reassignedPartitionContext.originalReplicas
-      dropped --= reassignedPartitionContext.newReplicas
-      info(s"I can now drop ${dropped.mkString(",")}, because those are not needed now")
-      // TODO We need to elect a new leader if dropped includes the leader
-      stopOldReplicasOfReassignedPartition(topicPartition, reassignedPartitionContext, dropped)
+      val drop = computeDrop
+      info(s"Dropping replicas ${drop.mkString(",")}")
+      stopOldReplicasOfReassignedPartition(topicPartition, reassignedPartitionContext, drop)
       // update controller context and ZK
-      // TODO this is wrong, because it loses information about the preferred leader
+      updateAssignedReplicasForPartition(topicPartition, controllerContext.partitionReplicaAssignment(topicPartition).filterNot(drop.contains))
 
-      updateAssignedReplicasForPartition(topicPartition, (controllerContext.partitionReplicaAssignment(topicPartition).toSet--dropped).toSeq)
-
-      info(s"Dropped ${dropped.mkString(",")}")
+      info(s"Dropped replicas ${drop.mkString(",")}")
     } else {
       //4. Wait until all replicas in RAR are in sync with the leader.
       val oldReplicas = controllerContext.partitionReplicaAssignment(topicPartition).toSet -- reassignedReplicas.toSet
@@ -537,7 +551,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
         controllerContext.partitionReplicaAssignment.get(tp) match {
           case Some(assignedReplicas) =>
             def sameAssignments(a: Seq[Int], b: Seq[Int]) = {
-              a.head == b.head && a.toSet == b.toSet
+              a.isEmpty && b.isEmpty || a.isEmpty != b.isEmpty || a.head == b.head && a.toSet == b.toSet
             }
             if (sameAssignments(assignedReplicas, newReplicas)) {
               info(s"Partition $tp to be reassigned is already assigned to replicas " +
@@ -666,7 +680,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     info(s"Inflight reassignments: ${inflight.keySet.mkString(",")}")
     controllerContext.partitionsBeingReassigned ++= inflight.map{ case (tp, reassignment) =>
       val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(this, eventManager, tp)
-      tp -> new ReassignedPartitionsContext(reassignment.originalAssignment, reassignment.newAssignments, reassignment.legacy, reassignIsrChangeHandler)
+      tp -> new ReassignedPartitionsContext(reassignment.top, reassignment.newAssignments, reassignment.legacy, reassignIsrChangeHandler)
     }
 
     def maybeAddToContext(tp: TopicPartition, reassignment: PartitionReassignment, via: String) = {
@@ -684,7 +698,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
         info(s"Adding reassignment request for partition $tp via $via")
         val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(this, eventManager, tp)
         controllerContext.partitionsBeingReassigned +=
-          tp -> new ReassignedPartitionsContext(reassignment.originalAssignment, reassignment.newAssignments, reassignment.legacy, reassignIsrChangeHandler)
+          tp -> new ReassignedPartitionsContext(reassignment.top, reassignment.newAssignments, reassignment.legacy, reassignIsrChangeHandler)
       }
     }
 
@@ -694,7 +708,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       val reassignments = assignment.map{
         case (tp, newAssignment) =>
           val original = controllerContext.partitionReplicaAssignment.get(tp).getOrElse(Seq.empty)
-          val reassignment = PartitionReassignment(original, newAssignment, isLegacy)
+          val reassignment = PartitionReassignment(original.size, newAssignment, isLegacy)
           maybeAddToContext(tp, reassignment, ReassignmentRequestsZNode.path+"/"+znode)
           tp-> reassignment
       }.toMap
@@ -709,7 +723,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     val reassignments = legacy.map{
       case (tp, newAssignment) =>
         val original = controllerContext.partitionReplicaAssignment.get(tp).getOrElse(Seq.empty)
-        val reassignment = PartitionReassignment(original, newAssignment, true)
+        val reassignment = PartitionReassignment(original.size, newAssignment, true)
         maybeAddToContext(tp, reassignment, LegacyReassignPartitionsZNode.path)
         tp-> reassignment
     }.toMap
@@ -1420,15 +1434,15 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
           val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(KafkaController.this, eventManager,
             tp)
           val currentRequest = controllerContext.partitionsBeingReassigned.get(tp)
-          val originalReplicas = currentRequest match {
+          val top = currentRequest match {
             case Some(currentRequest) =>
-              currentRequest.originalReplicas
+              currentRequest.top
             case None =>
-              controllerContext.partitionReplicaAssignment(tp)
+              controllerContext.partitionReplicaAssignment(tp).size
           }
-          val context = ReassignedPartitionsContext(originalReplicas, newReplicas, legacy, reassignIsrChangeHandler)
+          val context = ReassignedPartitionsContext(top, newReplicas, legacy, reassignIsrChangeHandler)
           controllerContext.partitionsBeingReassigned.put(tp, context)
-          tp -> PartitionReassignment(originalReplicas, newReplicas, legacy)
+          tp -> PartitionReassignment(top, newReplicas, legacy)
         }.toMap
 
         // 3. Create/update child /admin/reassignments
@@ -1658,7 +1672,7 @@ class ControllerChangeHandler(controller: KafkaController, eventManager: Control
   * Register/unregister ZK node changed handler for the
   * reassignIsrChangeHandler.path (/brokers/topics/$topic/partitions/$partition/state)
   */
-case class ReassignedPartitionsContext(val originalReplicas: Seq[Int],
+case class ReassignedPartitionsContext(val top: Int,
                                        val newReplicas: Seq[Int],
                                        val legacy: Boolean,
                                        val reassignIsrChangeHandler: PartitionReassignmentIsrChangeHandler) {

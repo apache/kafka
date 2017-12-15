@@ -276,14 +276,14 @@ object PartitionReassignmentZNode {
 
   def encode(reassignment: PartitionReassignment): Array[Byte] = {
     Json.encodeAsBytes(Map("version" -> 1,
-      "original"-> reassignment.originalAssignment.asJava,
+      "top"-> reassignment.top,
       "assignment" -> reassignment.newAssignments.asJava,
       "legacy" -> reassignment.legacy).asJava)
   }
   def decode(bytes: Array[Byte]): Option[PartitionReassignment] = Json.parseBytes(bytes).flatMap { js =>
     val jsObj = js.asJsonObject
     Some(PartitionReassignment(
-      jsObj("original").asJsonArray.iterator.map(_.to[Int]).toSeq,
+      jsObj("top").to[Int],
       jsObj("assignment").asJsonArray.iterator.map(_.to[Int]).toSeq,
       jsObj("legacy").to[Boolean]
       )

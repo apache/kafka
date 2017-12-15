@@ -26,7 +26,7 @@ import kafka.utils.{TestUtils, ZkUtils}
 import kafka.zk.{PartitionReassignmentZNode, ReassignmentRequestZNode, ReassignmentsZNode, ZooKeeperTestHarness}
 import org.apache.kafka.common.TopicPartition
 import org.junit.{After, Before, Test}
-import org.junit.Assert.assertTrue
+import org.junit.Assert.{assertTrue, assertFalse, assertEquals}
 
 import scala.collection.JavaConverters._
 
@@ -156,74 +156,83 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     assertTrue(s"Timer count $updatedTimerCount should be greater than $timerCount", updatedTimerCount > timerCount)
   }
 
-  private def changeReassignment(controllerId: Int, tp: TopicPartition, initialReassignment: Map[TopicPartition, Seq[Int]], changedReassignment: Map[TopicPartition, Seq[Int]]) = {
+  private def changeReassignment(controllerId: Int,
+                                 tp: TopicPartition,
+                                 reassignments: Seq[Map[TopicPartition, Seq[Int]]],
+                                 interReassignmentCallback: (Int, Map[TopicPartition, Seq[Int]])=>Unit = (_,_)=>()) = {
     val metricName = s"kafka.controller:type=ControllerStats,name=${ControllerState.PartitionReassignment.rateAndTimeMetricName.get}"
     val timerCount = timer(metricName).count
 
     val initialAssignment = Map(tp.partition -> Seq(controllerId))
     info(s"Controller is $controllerId")
     info(s"Initial assignment is to ${initialAssignment.mkString(",")}")
-    info(s"Initial reassignment will be to ${initialReassignment.mkString(",")}")
-    info(s"Changed reassignment will be to ${changedReassignment.mkString(",")}")
+
     val reassignmentPath = ZkUtils.ReassignmentsPath + s"/${tp.topic}/${tp.partition}"
     TestUtils.createTopic(zkUtils, tp.topic, partitionReplicaAssignment = initialAssignment, servers = servers)
 
-    val initialRequest = new String(ReassignmentRequestZNode.encode(initialReassignment, false), "UTF-8")
-    val initialRequestPath = ReassignmentRequestZNode.path("request_0000000000")
-
-    val changedRequest = new String(ReassignmentRequestZNode.encode(changedReassignment, false), "UTF-8")
-    val changedRequestPath = ReassignmentRequestZNode.path("request_0000000001")
-
-    zkUtils.createPersistentPath(initialRequestPath, initialRequest)
-    // Low pause so that we change the existing initialReassignment, not create a new one
-    TestUtils.waitUntilTrue(() => !zkUtils.pathExists(initialRequestPath),
-      "failed to remove reassign partitions path after completion", pause = 1L)
-    zkUtils.createPersistentPath(changedRequestPath, changedRequest)
+    reassignments.zipWithIndex.map{ case (reassignment, i) =>
+      info(s"Next assignment will be to ${reassignment.mkString(",")}")
+      val request = new String(ReassignmentRequestZNode.encode(reassignment, false), "UTF-8")
+      val requestPath = ReassignmentRequestZNode.path("request_" + "%010d".format(i))
+      (i, reassignment, request, requestPath)
+    }.foreach{ case (i, reassignment, toRequest, toRequestPath) =>
+      info(s"Assigning to $toRequest")
+      zkUtils.createPersistentPath(toRequestPath, toRequest)
+      // Low pause so that we change the existing initialReassignment, not create a new one
+      TestUtils.waitUntilTrue(() => !zkUtils.pathExists(toRequestPath),
+        s"failed to remove path ${toRequestPath} after completion", pause = 1L)
+        // TODO execute a callback here, e.g. to check that a broker does or doesn't have a replica
+      interReassignmentCallback(i, reassignment)
+    }
 
     TestUtils.waitUntilTrue(() => {
-      zkUtils.getReplicaAssignmentForTopics(Seq(tp.topic)).map { case (tap, assignment) =>
-        new TopicPartition(tap.topic, tap.partition) -> assignment
-      }.toMap == changedReassignment
-    },
-      "failed to get updated partition initialAssignment on topic znode after partition initialReassignment")
+        zkUtils.getReplicaAssignmentForTopics(Seq(tp.topic)).map { case (tap, assignment) =>
+          new TopicPartition(tap.topic, tap.partition) -> assignment
+        }.toMap == reassignments.last
+      },
+      "failed to get updated partition assignment on topic znode after partition reassignment")
     TestUtils.waitUntilTrue(() => !zkUtils.pathExists(reassignmentPath),
       s"failed to remove path $reassignmentPath after completion")
-    TestUtils.waitUntilTrue(() => !zkUtils.pathExists(changedRequestPath),
-      s"failed to remove path $changedRequestPath after completion")
     val updatedTimerCount = timer(metricName).count
     assertTrue(s"Timer count $updatedTimerCount should be greater than $timerCount", updatedTimerCount > timerCount)
   }
 
   @Test
   def testPartitionReassignmentCancellation(): Unit = {
-    // bijective with the initialReassignment [1] -> [2] -> [1] with 1 the controller throughout
+    // bijective with the sequence of assignments [0] -> [1] -> [0] with 0 the controller throughout
+    // "bijective" because we don't know which broker will be elected controller
     servers = makeServers(2)
     val controllerId = TestUtils.waitUntilControllerElected(zkUtils)
     val nonControllers = servers.map(_.config.brokerId).filter(_ != controllerId)
     val tp = new TopicPartition("t", 0)
-    val initialOtherBroker = nonControllers.head
-    val initialReassignment = Map(tp -> Seq(initialOtherBroker))
-
+    val initialReassignment = Map(tp -> Seq(nonControllers.head))
     val changedReassignment = Map(tp -> Seq(controllerId))
-
-    changeReassignment(controllerId, tp, initialReassignment, changedReassignment)
+    changeReassignment(controllerId, tp, Seq(initialReassignment, changedReassignment))
   }
 
   @Test
   def testPartitionReassignmentChangeWithDrop(): Unit = {
-    // bijective with the initialReassignment [1] -> [2] -> [3] with 1 the controller throughout
-    // on the 2nd reassignment broker 2 can (and should) drop it's replica (before the reassignment completes)
-    servers = makeServers(3)
+    // bijective with the initialReassignment [0] -> [1] -> [2] -> [3] with 0 the controller throughout
+    // "bijective" because we don't know which broker will be elected controller
+    // on the 2nd reassignment broker 1 can (and should) drop it's replica (before the reassignment completes)
+    // on the 3rd reassignment broker 2 can (and should) drop it's replica (before the reassignment completes)
+    servers = makeServers(4)
     val controllerId = TestUtils.waitUntilControllerElected(zkUtils)
     val nonControllers = servers.map(_.config.brokerId).filter(_ != controllerId)
     val tp = new TopicPartition("t", 0)
-    val initialOtherBroker = nonControllers(0)
-    val initialReassignment = Map(tp -> Seq(initialOtherBroker))
-
-    val changedOtherBroker = nonControllers(1)
-    val changedReassignment = Map(tp -> Seq(changedOtherBroker))
-
-    changeReassignment(controllerId, tp, initialReassignment, changedReassignment)
+    val initialReassignment = Map(tp -> Seq(nonControllers(0)))
+    val changedReassignment = Map(tp -> Seq(nonControllers(1)))
+    val changedReassignment2 = Map(tp -> Seq(nonControllers(2)))
+    changeReassignment(controllerId, tp, Seq(initialReassignment, changedReassignment, changedReassignment2),
+      { case (i, r) =>
+        if (i == 2) {
+          // [1] should have deleted its replica by now
+          assertFalse(s"After reassignment to ${r(tp)}, at step $i, broker ${nonControllers(0)} is replicating $tp",
+            servers(nonControllers(0)).replicaManager.getPartition(tp).isDefined)
+          assertTrue(s"After reassignment to ${r(tp)}, at step $i, broker ${nonControllers(2)} is not replicating $tp",
+            servers(nonControllers(2)).replicaManager.getPartition(tp).isDefined)
+        }
+    })
   }
 
   @Test
