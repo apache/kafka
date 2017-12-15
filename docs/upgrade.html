@@ -30,7 +30,7 @@
     <li> Update server.properties on all brokers and add the following properties. CURRENT_KAFKA_VERSION refers to the version you
         are upgrading from. CURRENT_MESSAGE_FORMAT_VERSION refers to the message format version currently in use. If you have previously
         overridden the message format version, you should keep its current value. Alternatively, if you are upgrading from a version prior
-        to 0.11.0.x, then CURRENT_MESSAGE_FORMAT_VERSION should be set to match CURRENT_KAFKA_VERSION. 
+        to 0.11.0.x, then CURRENT_MESSAGE_FORMAT_VERSION should be set to match CURRENT_KAFKA_VERSION.
         <ul>
             <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. 0.8.2, 0.9.0, 0.10.0, 0.10.1, 0.10.2, 0.11.0).</li>
             <li>log.message.format.version=CURRENT_MESSAGE_FORMAT_VERSION  (See <a href="#upgrade_10_performance_impact">potential performance impact
@@ -47,7 +47,7 @@
     <li> Restart the brokers one by one for the new protocol version to take effect. </li>
     <li> If you have overridden the message format version as instructed above, then you need to do one more rolling restart to
         upgrade it to its latest version. Once all (or most) consumers have been upgraded to 0.11.0 or later,
-        change log.message.format.version to 1.0 on each broker and restart them one by one. Note that the older Scala consumer 
+        change log.message.format.version to 1.0 on each broker and restart them one by one. Note that the older Scala consumer
         does not support the new message format introduced in 0.11, so to avoid the performance cost of down-conversion (or to
         take advantage of <a href="#upgrade_11_exactly_once_semantics">exactly once semantics</a>), the newer Java consumer must be used.</li>
 </ol>
@@ -60,6 +60,12 @@
     <li>Bumping the protocol version and restarting can be done any time after the brokers are upgraded. It does not have to be immediately after.
         Similarly for the message format version.</li>
 </ol>
+
+<h5><a id="upgrade_101_notable" href="#upgrade_101_notable">Notable changes in 1.0.1</a></h5>
+<ul>
+    <li>Restored binary compatibility of AdminClient's Options classes (e.g. CreateTopicsOptions, DeleteTopicsOptions, etc.) with
+        0.11.0.x. Binary (but not source) compatibility had been broken inadvertently in 1.0.0.</li>
+</ul>
 
 <h5><a id="upgrade_100_notable" href="#upgrade_100_notable">Notable changes in 1.0.0</a></h5>
 <ul>
@@ -287,7 +293,7 @@
   is already not possible in that case. In order to avoid the cost of down-conversion, you should ensure that consumer applications
   are upgraded to the latest 0.11.0 client. Significantly, since the old consumer has been deprecated in 0.11.0.0, it does not support
   the new message format. You must upgrade to use the new consumer to use the new message format without the cost of down-conversion.
-  Note that 0.11.0 consumers support backwards compatibility with brokers 0.10.0 brokers and upward, so it is possible to upgrade the
+  Note that 0.11.0 consumers support backwards compatibility with 0.10.0 brokers and upward, so it is possible to upgrade the
   clients first before the brokers.
 </p>
 

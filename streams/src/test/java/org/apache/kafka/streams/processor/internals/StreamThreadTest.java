@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -26,17 +27,20 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilderTest;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.ThreadMetadata;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.MockTimestampExtractor;
@@ -249,7 +253,6 @@ public class StreamThreadTest {
                 consumer,
                 consumer,
                 null,
-                clientSupplier.getAdminClient(config.getAdminConfigs(clientId)),
                 taskManager,
                 streamsMetrics,
                 internalTopologyBuilder,
@@ -281,7 +284,6 @@ public class StreamThreadTest {
                 consumer,
                 consumer,
                 null,
-                clientSupplier.getAdminClient(config.getAdminConfigs(clientId)),
                 taskManager,
                 streamsMetrics,
                 internalTopologyBuilder,
@@ -313,7 +315,6 @@ public class StreamThreadTest {
                 consumer,
                 consumer,
                 null,
-                clientSupplier.getAdminClient(config.getAdminConfigs(clientId)),
                 taskManager,
                 streamsMetrics,
                 internalTopologyBuilder,
@@ -328,7 +329,7 @@ public class StreamThreadTest {
 
     @SuppressWarnings({"ThrowableNotThrown", "unchecked"})
     private TaskManager mockTaskManagerCommit(final Consumer<byte[], byte[]> consumer, final int numberOfCommits, final int commits) {
-        final TaskManager taskManager = EasyMock.createMock(TaskManager.class);
+        final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
         EasyMock.expect(taskManager.commitAll()).andReturn(commits).times(numberOfCommits);
         EasyMock.replay(taskManager, consumer);
         return taskManager;
@@ -443,7 +444,6 @@ public class StreamThreadTest {
                 consumer,
                 consumer,
                 null,
-                clientSupplier.getAdminClient(config.getAdminConfigs(clientId)),
                 taskManager,
                 streamsMetrics,
                 internalTopologyBuilder,
@@ -635,7 +635,8 @@ public class StreamThreadTest {
 
     @Test
     public void shouldReturnStandbyTaskMetadataWhileRunningState() throws InterruptedException {
-        internalStreamsBuilder.stream(Collections.singleton(topic1), consumed).groupByKey().count("count-one");
+        internalStreamsBuilder.stream(Collections.singleton(topic1), consumed)
+            .groupByKey().count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("count-one"));
 
         final StreamThread thread = createStreamThread(clientId, config, false);
         final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
@@ -685,7 +686,8 @@ public class StreamThreadTest {
 
     @Test
     public void shouldAlwaysReturnEmptyTasksMetadataWhileRebalancingStateAndTasksNotRunning() throws InterruptedException {
-        internalStreamsBuilder.stream(Collections.singleton(topic1), consumed).groupByKey().count("count-one");
+        internalStreamsBuilder.stream(Collections.singleton(topic1), consumed)
+            .groupByKey().count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("count-one"));
 
         final StreamThread thread = createStreamThread(clientId, config, false);
         final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
@@ -730,6 +732,97 @@ public class StreamThreadTest {
         thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
         assertThreadMetadataHasEmptyTasksWithState(thread.threadMetadata(), StreamThread.State.PARTITIONS_ASSIGNED);
+    }
+
+    @Test
+    public void shouldRecoverFromInvalidOffsetExceptionOnRestoreAndFinishRestore() throws Exception {
+        internalStreamsBuilder.stream(Collections.singleton("topic"), consumed)
+            .groupByKey().count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("count"));
+
+        final StreamThread thread = createStreamThread("cliendId", config, false);
+        final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
+        final MockConsumer<byte[], byte[]> mockRestoreConsumer = (MockConsumer<byte[], byte[]>) thread.restoreConsumer;
+
+        final TopicPartition topicPartition = new TopicPartition("topic", 0);
+        final Set<TopicPartition> topicPartitionSet = Collections.singleton(topicPartition);
+
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+        activeTasks.put(new TaskId(0, 0), topicPartitionSet);
+        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.<TaskId, Set<TopicPartition>>emptyMap());
+
+        mockConsumer.updatePartitions("topic", new ArrayList<PartitionInfo>() {
+            {
+                add(new PartitionInfo("topic",
+                    0,
+                    null,
+                    new Node[0],
+                    new Node[0]));
+            }
+        });
+        mockConsumer.updateBeginningOffsets(Collections.singletonMap(topicPartition, 0L));
+
+        mockRestoreConsumer.updatePartitions("stream-thread-test-count-changelog", new ArrayList<PartitionInfo>() {
+            {
+                add(new PartitionInfo("stream-thread-test-count-changelog",
+                    0,
+                    null,
+                    new Node[0],
+                    new Node[0]));
+            }
+        });
+        final TopicPartition changelogPartition = new TopicPartition("stream-thread-test-count-changelog", 0);
+        final Set<TopicPartition> changelogPartitionSet = Collections.singleton(changelogPartition);
+        mockRestoreConsumer.updateBeginningOffsets(Collections.singletonMap(changelogPartition, 0L));
+        mockRestoreConsumer.updateEndOffsets(Collections.singletonMap(changelogPartition, 2L));
+
+        mockConsumer.schedulePollTask(new Runnable() {
+            @Override
+            public void run() {
+                thread.setState(StreamThread.State.PARTITIONS_REVOKED);
+                thread.rebalanceListener.onPartitionsAssigned(topicPartitionSet);
+            }
+        });
+
+        try {
+            thread.start();
+
+            TestUtils.waitForCondition(new TestCondition() {
+                @Override
+                public boolean conditionMet() {
+                    return mockRestoreConsumer.assignment().size() == 1;
+                }
+            }, "Never restore first record");
+
+            mockRestoreConsumer.addRecord(new ConsumerRecord<>("stream-thread-test-count-changelog", 0, 0L, "K1".getBytes(), "V1".getBytes()));
+
+            TestUtils.waitForCondition(new TestCondition() {
+                @Override
+                public boolean conditionMet() {
+                    return mockRestoreConsumer.position(changelogPartition) == 1L;
+                }
+            }, "Never restore first record");
+
+            mockRestoreConsumer.setException(new InvalidOffsetException("Try Again!") {
+                @Override
+                public Set<TopicPartition> partitions() {
+                    return changelogPartitionSet;
+                }
+            });
+
+            mockRestoreConsumer.addRecord(new ConsumerRecord<>("stream-thread-test-count-changelog", 0, 0L, "K1".getBytes(), "V1".getBytes()));
+            mockRestoreConsumer.addRecord(new ConsumerRecord<>("stream-thread-test-count-changelog", 0, 1L, "K2".getBytes(), "V2".getBytes()));
+
+            TestUtils.waitForCondition(new TestCondition() {
+                @Override
+                public boolean conditionMet() {
+                    mockRestoreConsumer.assign(changelogPartitionSet);
+                    return mockRestoreConsumer.position(changelogPartition) == 2L;
+                }
+            }, "Never finished restore");
+        } finally {
+            thread.shutdown();
+            thread.join(10000);
+        }
     }
 
     private void assertThreadMetadataHasEmptyTasksWithState(ThreadMetadata metadata, StreamThread.State state) {

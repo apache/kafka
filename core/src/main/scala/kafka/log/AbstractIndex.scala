@@ -20,6 +20,7 @@ package kafka.log
 import java.io.{File, RandomAccessFile}
 import java.nio.{ByteBuffer, MappedByteBuffer}
 import java.nio.channels.FileChannel
+import java.nio.file.Files
 import java.util.concurrent.locks.{Lock, ReentrantLock}
 
 import kafka.log.IndexSearchType.IndexSearchEntity
@@ -156,10 +157,13 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   }
 
   /**
-   * Delete this index file
+   * Delete this index file.
+   *
+   * @throws IOException if deletion fails due to an I/O error
+   * @return `true` if the file was deleted by this method; `false` if the file could not be deleted because it did
+   *         not exist
    */
-  def delete(): Boolean = {
-    info(s"Deleting index ${file.getAbsolutePath}")
+  def deleteIfExists(): Boolean = {
     inLock(lock) {
       // On JVM, a memory mapping is typically unmapped by garbage collector.
       // However, in some cases it can pause application threads(STW) for a long moment reading metadata from a physical disk.
@@ -167,7 +171,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
       // See https://issues.apache.org/jira/browse/KAFKA-4614 for the details.
       safeForceUnmap()
     }
-    file.delete()
+    Files.deleteIfExists(file.toPath)
   }
 
   /**
@@ -199,20 +203,28 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   /**
    * Do a basic sanity check on this index to detect obvious problems
    *
-   * @throws IllegalArgumentException if any problems are found
+   * @throws CorruptIndexException if any problems are found
    */
   def sanityCheck(): Unit
 
   /**
    * Remove all the entries from the index.
    */
-  def truncate(): Unit
+  protected def truncate(): Unit
 
   /**
    * Remove all entries from the index which have an offset greater than or equal to the given offset.
    * Truncating to an offset larger than the largest in the index has no effect.
    */
   def truncateTo(offset: Long): Unit
+
+  /**
+   * Remove all the entries from the index and resize the index to the max index size.
+   */
+  def reset(): Unit = {
+    truncate()
+    resize(maxIndexSize)
+  }
 
   protected def safeForceUnmap(): Unit = {
     try forceUnmap()

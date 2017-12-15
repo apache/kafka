@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -78,11 +79,23 @@ public class StoreChangelogReader implements ChangelogReader {
             return completed();
         }
 
-        final Set<TopicPartition> partitions = new HashSet<>(needsRestoring.keySet());
-        final ConsumerRecords<byte[], byte[]> allRecords = restoreConsumer.poll(10);
-        for (final TopicPartition partition : partitions) {
-            restorePartition(allRecords, partition, active.restoringTaskFor(partition));
+        final Set<TopicPartition> restoringPartitions = new HashSet<>(needsRestoring.keySet());
+        try {
+            final ConsumerRecords<byte[], byte[]> allRecords = restoreConsumer.poll(10);
+            for (final TopicPartition partition : restoringPartitions) {
+                restorePartition(allRecords, partition, active.restoringTaskFor(partition));
+            }
+        } catch (final InvalidOffsetException recoverableException) {
+            log.warn("Restoring StreamTasks failed. Deleting StreamTasks stores to recreate from scratch.", recoverableException);
+            final Set<TopicPartition> partitions = recoverableException.partitions();
+            for (final TopicPartition partition : partitions) {
+                final StreamTask task = active.restoringTaskFor(partition);
+                log.info("Reinitializing StreamTask {}", task);
+                task.reinitializeStateStoresForPartitions(recoverableException.partitions());
+            }
+            restoreConsumer.seekToBeginning(partitions);
         }
+
 
         if (needsRestoring.isEmpty()) {
             restoreConsumer.unsubscribe();

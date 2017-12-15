@@ -34,17 +34,17 @@ class ProducerIdManagerTest {
   @Test
   def testGetProducerId() {
     var zkVersion: Option[Int] = None
-    var data: String = null
-    EasyMock.expect(zkClient.getDataAndVersion(EasyMock.anyString)).andAnswer(new IAnswer[(Option[String], Int)] {
-      override def answer(): (Option[String], Int) = zkVersion.map(Some(data) -> _).getOrElse(None, 0)
+    var data: Array[Byte] = null
+    EasyMock.expect(zkClient.getDataAndVersion(EasyMock.anyString)).andAnswer(new IAnswer[(Option[Array[Byte]], Int)] {
+      override def answer(): (Option[Array[Byte]], Int) = zkVersion.map(Some(data) -> _).getOrElse(None, 0)
     }).anyTimes()
 
     val capturedVersion: Capture[Int] = EasyMock.newCapture()
-    val capturedData: Capture[String] = EasyMock.newCapture()
+    val capturedData: Capture[Array[Byte]] = EasyMock.newCapture()
     EasyMock.expect(zkClient.conditionalUpdatePath(EasyMock.anyString(),
       EasyMock.capture(capturedData),
       EasyMock.capture(capturedVersion),
-      EasyMock.anyObject[Option[(KafkaZkClient, String, String) => (Boolean, Int)]])).andAnswer(new IAnswer[(Boolean, Int)] {
+      EasyMock.anyObject[Option[(KafkaZkClient, String, Array[Byte]) => (Boolean, Int)]])).andAnswer(new IAnswer[(Boolean, Int)] {
         override def answer(): (Boolean, Int) = {
           val newZkVersion = capturedVersion.getValue + 1
           zkVersion = Some(newZkVersion)
@@ -76,8 +76,8 @@ class ProducerIdManagerTest {
 
   @Test(expected = classOf[KafkaException])
   def testExceedProducerIdLimit() {
-    EasyMock.expect(zkClient.getDataAndVersion(EasyMock.anyString)).andAnswer(new IAnswer[(Option[String], Int)] {
-      override def answer(): (Option[String], Int) = {
+    EasyMock.expect(zkClient.getDataAndVersion(EasyMock.anyString)).andAnswer(new IAnswer[(Option[Array[Byte]], Int)] {
+      override def answer(): (Option[Array[Byte]], Int) = {
         val json = ProducerIdManager.generateProducerIdBlockJson(
           ProducerIdBlock(0, Long.MaxValue - ProducerIdManager.PidBlockSize, Long.MaxValue))
         (Some(json), 0)

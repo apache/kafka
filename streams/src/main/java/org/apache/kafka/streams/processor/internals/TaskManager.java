@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.DeleteRecordsResult;
+import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
@@ -54,14 +57,13 @@ class TaskManager {
     private final StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator;
     private final StreamsMetadataState streamsMetadataState;
 
-    // TODO: this is going to be replaced by AdminClient
-    final StreamsKafkaClient streamsKafkaClient;
+    final AdminClient adminClient;
+    private DeleteRecordsResult deleteRecordsResult;
 
     // following information is updated during rebalance phase by the partition assignor
     private Cluster cluster;
     private Map<TaskId, Set<TopicPartition>> assignedActiveTasks;
     private Map<TaskId, Set<TopicPartition>> assignedStandbyTasks;
-    private Map<HostInfo, Set<TopicPartition>> partitionsByHostState;
 
     private Consumer<byte[], byte[]> consumer;
 
@@ -72,7 +74,7 @@ class TaskManager {
                 final StreamsMetadataState streamsMetadataState,
                 final StreamThread.AbstractTaskCreator<StreamTask> taskCreator,
                 final StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator,
-                final StreamsKafkaClient streamsKafkaClient,
+                final AdminClient adminClient,
                 final AssignedStreamsTasks active,
                 final AssignedStandbyTasks standby) {
         this.changelogReader = changelogReader;
@@ -89,7 +91,7 @@ class TaskManager {
 
         this.log = logContext.logger(getClass());
 
-        this.streamsKafkaClient = streamsKafkaClient;
+        this.adminClient = adminClient;
     }
 
     /**
@@ -108,7 +110,7 @@ class TaskManager {
         addStreamTasks(assignment);
         addStandbyTasks();
         final Set<TopicPartition> partitions = active.uninitializedPartitions();
-        log.trace("pausing partitions: {}", partitions);
+        log.trace("Pausing partitions: {}", partitions);
         consumer.pause(partitions);
     }
 
@@ -276,8 +278,6 @@ class TaskManager {
         taskCreator.close();
         standbyTaskCreator.close();
 
-        streamsKafkaClient.close();
-
         final RuntimeException fatalException = firstException.get();
         if (fatalException != null) {
             throw fatalException;
@@ -326,7 +326,7 @@ class TaskManager {
         resumed.addAll(active.updateRestored(restored));
 
         if (!resumed.isEmpty()) {
-            log.trace("resuming partitions {}", resumed);
+            log.trace("Resuming partitions {}", resumed);
             consumer.resume(resumed);
         }
         if (active.allTasksRunning()) {
@@ -368,7 +368,6 @@ class TaskManager {
     }
 
     void setPartitionsByHostState(final Map<HostInfo, Set<TopicPartition>> partitionsByHostState) {
-        this.partitionsByHostState = partitionsByHostState;
         this.streamsMetadataState.onChange(partitionsByHostState, cluster);
     }
 
@@ -431,6 +430,26 @@ class TaskManager {
      */
     int maybeCommitActiveTasks() {
         return active.maybeCommit();
+    }
+
+    void maybePurgeCommitedRecords() {
+        // we do not check any possible exceptions since none of them are fatal
+        // that should cause the application to fail, and we will try delete with
+        // newer offsets anyways.
+        if (deleteRecordsResult == null || deleteRecordsResult.all().isDone()) {
+
+            if (deleteRecordsResult != null && deleteRecordsResult.all().isCompletedExceptionally()) {
+                log.debug("Previous delete-records request has failed: {}. Try sending the new request now", deleteRecordsResult.lowWatermarks());
+            }
+
+            final Map<TopicPartition, RecordsToDelete> recordsToDelete = new HashMap<>();
+            for (final Map.Entry<TopicPartition, Long> entry : active.recordsToDelete().entrySet()) {
+                recordsToDelete.put(entry.getKey(), RecordsToDelete.beforeOffset(entry.getValue()));
+            }
+            deleteRecordsResult = adminClient.deleteRecords(recordsToDelete);
+
+            log.trace("Sent delete-records request: {}", recordsToDelete);
+        }
     }
 
     public String toString(final String indent) {

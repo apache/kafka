@@ -108,6 +108,14 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         }
         ensureNotClosed();
         this.subscriptions.subscribeFromPattern(topicsToSubscribe);
+        final Set<TopicPartition> assignedPartitions = new HashSet<>();
+        for (final String topic : topicsToSubscribe) {
+            for (final PartitionInfo info : this.partitions.get(topic)) {
+                assignedPartitions.add(new TopicPartition(topic, info.partition()));
+            }
+
+        }
+        subscriptions.assignFromSubscribed(assignedPartitions);
     }
 
     @Override

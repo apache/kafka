@@ -33,7 +33,7 @@ public class DeleteRecordsResult {
 
     private final Map<TopicPartition, KafkaFuture<DeletedRecords>> futures;
 
-    DeleteRecordsResult(Map<TopicPartition, KafkaFuture<DeletedRecords>> futures) {
+    public DeleteRecordsResult(Map<TopicPartition, KafkaFuture<DeletedRecords>> futures) {
         this.futures = futures;
     }
 

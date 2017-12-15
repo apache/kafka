@@ -17,7 +17,9 @@
 
 package kafka.utils
 
+import kafka.api.LeaderAndIsr
 import kafka.common.TopicAndPartition
+import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.zk.ZooKeeperTestHarness
 import org.junit.Assert._
 import org.junit.Test
@@ -84,4 +86,25 @@ class ZkUtilsTest extends ZooKeeperTestHarness {
 
     assertEquals(Set(TopicAndPartition(topic, 0)), zkUtils.getAllPartitions())
   }
+
+  @Test
+  def testGetLeaderIsrAndEpochForPartition() {
+    val topic = "my-topic-test"
+    val partition = 0
+    val leader = 1
+    val leaderEpoch = 1
+    val controllerEpoch = 1
+    val isr = List(1, 2)
+    val topicPath = s"/brokers/topics/$topic/partitions/$partition/state"
+    val topicData = Json.legacyEncodeAsString(Map("controller_epoch" -> controllerEpoch, "leader" -> leader,
+      "versions" -> 1, "leader_epoch" -> leaderEpoch, "isr" -> isr))
+    zkUtils.createPersistentPath(topicPath, topicData)
+
+    val leaderIsrAndControllerEpoch = zkUtils.getLeaderIsrAndEpochForPartition(topic, partition)
+    val topicDataLeaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(leader, leaderEpoch, isr, 0),
+      controllerEpoch)
+    assertEquals(topicDataLeaderIsrAndControllerEpoch, leaderIsrAndControllerEpoch.get)
+    assertEquals(None, zkUtils.getLeaderIsrAndEpochForPartition(topic, partition + 1))
+  }
+
 }

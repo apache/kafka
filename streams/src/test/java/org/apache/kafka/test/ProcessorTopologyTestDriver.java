@@ -37,7 +37,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
-import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.GlobalProcessorContextImpl;
@@ -155,10 +154,8 @@ public class ProcessorTopologyTestDriver {
     private final Map<String, Queue<ProducerRecord<byte[], byte[]>>> outputRecordsByTopic = new HashMap<>();
     private final Set<String> internalTopics = new HashSet<>();
     private final Map<String, TopicPartition> globalPartitionsByTopic = new HashMap<>();
-    private final StateRestoreListener stateRestoreListener = new MockStateRestoreListener();
     private StreamTask task;
     private GlobalStateUpdateTask globalStateTask;
-
 
     /**
      * Create a new test diver instance
@@ -227,8 +224,10 @@ public class ProcessorTopologyTestDriver {
                                                                                    stateDirectory,
                                                                                    stateRestoreListener,
                                                                                    config);
+            final GlobalProcessorContextImpl globalProcessorContext = new GlobalProcessorContextImpl(config, stateManager, streamsMetrics, cache);
+            stateManager.setGlobalProcessorContext(globalProcessorContext);
             globalStateTask = new GlobalStateUpdateTask(globalTopology,
-                                                        new GlobalProcessorContextImpl(config, stateManager, streamsMetrics, cache),
+                                                        globalProcessorContext,
                                                         stateManager,
                                                         new LogAndContinueExceptionHandler(),
                                                         new LogContext());
@@ -242,8 +241,8 @@ public class ProcessorTopologyTestDriver {
                                   consumer,
                                   new StoreChangelogReader(
                                       createRestoreConsumer(topology.storeToChangelogTopic()),
-                                      stateRestoreListener,
-                                          new LogContext("topology-test-driver ")),
+                                      new MockStateRestoreListener(),
+                                      new LogContext("topology-test-driver ")),
                                   config,
                                   streamsMetrics, stateDirectory,
                                   cache,
