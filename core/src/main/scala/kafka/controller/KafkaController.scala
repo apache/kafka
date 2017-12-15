@@ -524,7 +524,10 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
         val topic = tp.topic
         controllerContext.partitionReplicaAssignment.get(tp) match {
           case Some(assignedReplicas) =>
-            if (assignedReplicas == newReplicas) {
+            def sameAssignments(a: Seq[Int], b: Seq[Int]) = {
+              a.head == b.head && a.toSet == b.toSet
+            }
+            if (sameAssignments(assignedReplicas, newReplicas)) {
               info(s"Partition $tp to be reassigned is already assigned to replicas " +
                 s"${newReplicas.mkString(",")}. Ignoring request for partition reassignment.")
               removePartitionFromReassignedPartitions(tp)
