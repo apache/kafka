@@ -45,8 +45,8 @@ case class FetchMetadata(fetchMinBytes: Int,
                          fetchPartitionStatus: Seq[(TopicPartition, FetchPartitionStatus)]) {
 
   override def toString = "[minBytes: " + fetchMinBytes + ", " +
-                          "onlyLeader:" + fetchOnlyLeader + ", "
-                          "onlyCommitted: " + fetchOnlyCommitted + ", "
+                          "onlyLeader:" + fetchOnlyLeader + ", " +
+                          "onlyCommitted: " + fetchOnlyCommitted + ", " +
                           "partitionStatus: " + fetchPartitionStatus + "]"
 }
 /**
