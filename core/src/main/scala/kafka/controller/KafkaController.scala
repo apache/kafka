@@ -474,6 +474,18 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       startNewReplicasForReassignedPartition(topicPartition, reassignedPartitionContext, newReplicasNotInOldReplicaList)
       info(s"Waiting for new replicas ${reassignedReplicas.mkString(",")} for partition ${topicPartition} being " +
         "reassigned to catch up with the leader")
+
+      var dropped = newAndOldReplicas -- reassignedPartitionContext.originalReplicas
+      dropped --= reassignedPartitionContext.newReplicas
+      info(s"I can now drop ${dropped.mkString(",")}, because those are not needed now")
+      // TODO We need to elect a new leader if dropped includes the leader
+      stopOldReplicasOfReassignedPartition(topicPartition, reassignedPartitionContext, dropped)
+      // update controller context and ZK
+      // TODO this is wrong, because it loses information about the preferred leader
+
+      updateAssignedReplicasForPartition(topicPartition, (controllerContext.partitionReplicaAssignment(topicPartition).toSet--dropped).toSeq)
+
+      info(s"Dropped ${dropped.mkString(",")}")
     } else {
       //4. Wait until all replicas in RAR are in sync with the leader.
       val oldReplicas = controllerContext.partitionReplicaAssignment(topicPartition).toSet -- reassignedReplicas.toSet
