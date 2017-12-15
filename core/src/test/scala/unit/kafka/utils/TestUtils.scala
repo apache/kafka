@@ -1503,8 +1503,32 @@ object TestUtils extends Logging {
   def grabConsoleOutput(f: => Unit) : String = {
     val out = new ByteArrayOutputStream
     try scala.Console.withOut(out)(f)
-    finally scala.Console.out.flush
+    finally scala.Console.out.flush()
     out.toString
+  }
+
+  /**
+   * Capture the console error during the execution of the provided function.
+   */
+  def grabConsoleError(f: => Unit) : String = {
+    val err = new ByteArrayOutputStream
+    try scala.Console.withErr(err)(f)
+    finally scala.Console.err.flush()
+    err.toString
+  }
+
+  /**
+   * Capture both the console output and console error during the execution of the provided function.
+   */
+  def grabConsoleOutputAndError(f: => Unit) : (String, String) = {
+    val out = new ByteArrayOutputStream
+    val err = new ByteArrayOutputStream
+    try scala.Console.withOut(out)(scala.Console.withErr(err)(f))
+    finally {
+      scala.Console.out.flush()
+      scala.Console.err.flush()
+    }
+    (out.toString, err.toString)
   }
 
 }
