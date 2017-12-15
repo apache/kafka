@@ -22,9 +22,7 @@ import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.utils.LogContext;
@@ -47,7 +45,6 @@ public class InternalTopicManager {
         "Please report at https://issues.apache.org/jira/projects/KAFKA or dev-mailing list (https://kafka.apache.org/contact).";
 
     private final Logger log;
-    private final StreamsConfig config;
     private final long windowChangeLogAdditionalRetention;
     private final Map<String, String> defaultTopicConfigs = new HashMap<>();
 
@@ -58,7 +55,6 @@ public class InternalTopicManager {
 
     public InternalTopicManager(final AdminClient adminClient,
                                 final StreamsConfig streamsConfig) {
-        this.config = streamsConfig;
         this.adminClient = adminClient;
 
         LogContext logContext = new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName()));
@@ -98,14 +94,6 @@ public class InternalTopicManager {
 
             for (final InternalTopicConfig internalTopicConfig : topicsToBeCreated) {
                 final Map<String, String> topicConfig = internalTopicConfig.getProperties(defaultTopicConfigs, windowChangeLogAdditionalRetention);
-
-                if (topicConfig.containsKey(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG) &&
-                        Integer.parseInt(topicConfig.get(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG)) < (Integer) config.getProducerConfigs("dummy").get(ProducerConfig.BATCH_SIZE_CONFIG)) {
-                    throw new IllegalArgumentException(String.format("Cannot create topic %s since its segment size %d is smaller than the configured producer batch size %d",
-                            internalTopicConfig.name(),
-                            Integer.parseInt(topicConfig.get(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG)),
-                            config.getInt(StreamsConfig.producerPrefix(ProducerConfig.BATCH_SIZE_CONFIG))));
-                }
 
                 log.debug("Going to create topic {} with {} partitions and config {}.",
                         internalTopicConfig.name(),
