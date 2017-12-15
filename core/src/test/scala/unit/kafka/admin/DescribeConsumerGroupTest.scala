@@ -208,8 +208,8 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
     val state = service.collectGroupState()
     assertTrue(s"Expected the state to be 'Dead', with no members in the group '$group'.",
-        state.isDefined && state.get.state == "Dead" && state.get.numMembers == 0 &&
-        state.get.coordinator != null && servers.map(_.config.brokerId).toList.contains(state.get.coordinator.id)
+        state.state == "Dead" && state.numMembers == 0 &&
+        state.coordinator != null && servers.map(_.config.brokerId).toList.contains(state.coordinator.id)
     )
   }
 
@@ -296,12 +296,11 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
     TestUtils.waitUntilTrue(() => {
       val state = service.collectGroupState()
-      state.isDefined &&
-        state.get.state == "Stable" &&
-        state.get.numMembers == 1 &&
-        state.get.assignmentStrategy == "range" &&
-        state.get.coordinator != null &&
-        servers.map(_.config.brokerId).toList.contains(state.get.coordinator.id)
+      state.state == "Stable" &&
+        state.numMembers == 1 &&
+        state.assignmentStrategy == "range" &&
+        state.coordinator != null &&
+        servers.map(_.config.brokerId).toList.contains(state.coordinator.id)
     }, s"Expected a 'Stable' group status, with one member and round robin assignment strategy for group $group.")
   }
 
@@ -316,12 +315,11 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
     TestUtils.waitUntilTrue(() => {
       val state = service.collectGroupState()
-      state.isDefined &&
-        state.get.state == "Stable" &&
-        state.get.numMembers == 1 &&
-        state.get.assignmentStrategy == "roundrobin" &&
-        state.get.coordinator != null &&
-        servers.map(_.config.brokerId).toList.contains(state.get.coordinator.id)
+      state.state == "Stable" &&
+        state.numMembers == 1 &&
+        state.assignmentStrategy == "roundrobin" &&
+        state.coordinator != null &&
+        servers.map(_.config.brokerId).toList.contains(state.coordinator.id)
     }, s"Expected a 'Stable' group status, with one member and round robin assignment strategy for group $group.")
   }
 
@@ -419,11 +417,10 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
     TestUtils.waitUntilTrue(() => {
       val state = service.collectGroupState()
-      state.isDefined &&
-        state.get.state == "Stable" &&
-        state.get.numMembers == 1 &&
-        state.get.coordinator != null &&
-        servers.map(_.config.brokerId).toList.contains(state.get.coordinator.id)
+      state.state == "Stable" &&
+        state.numMembers == 1 &&
+        state.coordinator != null &&
+        servers.map(_.config.brokerId).toList.contains(state.coordinator.id)
     }, s"Expected the group '$group' to initially become stable, and have a single member.")
 
     // stop the consumer so the group has no active member anymore
@@ -431,7 +428,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
     TestUtils.waitUntilTrue(() => {
       val state = service.collectGroupState()
-      state.isDefined && state.get.state == "Empty" && state.get.numMembers == 0 && state.get.assignmentStrategy == ""
+      state.state == "Empty" && state.numMembers == 0 && state.assignmentStrategy == ""
     }, s"Expected the group '$group' to become empty after the only member leaving.")
   }
 
@@ -510,9 +507,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
     TestUtils.waitUntilTrue(() => {
       val state = service.collectGroupState()
-      state.isDefined &&
-        state.get.state == "Stable" &&
-        state.get.numMembers == 2
+      state.state == "Stable" && state.numMembers == 2
     }, "Expected two consumers in describe group results")
   }
 
@@ -599,10 +594,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
     TestUtils.waitUntilTrue(() => {
       val state = service.collectGroupState()
-      state.isDefined &&
-        state.get.state == "Stable" &&
-        state.get.group == group &&
-        state.get.numMembers == 2
+      state.state == "Stable" && state.group == group && state.numMembers == 2
     }, "Expected a stable group with two members in describe group state result.")
   }
 

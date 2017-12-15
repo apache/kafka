@@ -154,7 +154,7 @@ object ConsumerGroupCommand extends Logging {
                 // the control should never reach here
                 throw new KafkaException(s"Expected a valid consumer group state, but found '${other.getOrElse("NONE")}'.")
             }
-            num > 0
+            state != Some("Dead") && num > 0
           }
       }
     }
@@ -242,13 +242,13 @@ object ConsumerGroupCommand extends Logging {
       }
     }
 
-    private def printState(group: String, state: Option[GroupState]): Unit = {
+    private def printState(group: String, state: GroupState): Unit = {
       // this method is reachable only for the new consumer option (where the given state is always defined)
-      if (shouldPrintMemberState(group, Some(state.get.state), Some(1))) {
-        val coordinator = state.get.coordinator.host + ":" + state.get.coordinator.port + " (" + state.get.coordinator.idString + ")"
+      if (shouldPrintMemberState(group, Some(state.state), Some(1))) {
+        val coordinator = s"${state.coordinator.host}:${state.coordinator.port} (${state.coordinator.idString})"
         val coordinatorColLen = Math.max(25, coordinator.length)
         print(s"\n%${-coordinatorColLen}s %-25s %-20s %s".format("COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS"))
-        print(s"\n%${-coordinatorColLen}s %-25s %-20s %s".format(coordinator, state.get.assignmentStrategy, state.get.state, state.get.numMembers))
+        print(s"\n%${-coordinatorColLen}s %-25s %-20s %s".format(coordinator, state.assignmentStrategy, state.state, state.numMembers))
         println()
       }
     }
@@ -280,7 +280,7 @@ object ConsumerGroupCommand extends Logging {
 
     def collectGroupMembers(verbose: Boolean): (Option[String], Option[Seq[MemberAssignmentState]]) = throw new UnsupportedOperationException
 
-    def collectGroupState(): Option[GroupState] = throw new UnsupportedOperationException
+    def collectGroupState(): GroupState = throw new UnsupportedOperationException
 
     protected def collectConsumerAssignment(group: String,
                                             coordinator: Option[Node],
@@ -576,11 +576,11 @@ object ConsumerGroupCommand extends Logging {
       )
     }
 
-    override def collectGroupState(): Option[GroupState] = {
+    override def collectGroupState(): GroupState = {
       val group = opts.options.valueOf(opts.groupOpt)
       val consumerGroupSummary = adminClient.describeConsumerGroup(group, opts.options.valueOf(opts.timeoutMsOpt))
-      Some(GroupState(group, consumerGroupSummary.coordinator, consumerGroupSummary.assignmentStrategy,
-        consumerGroupSummary.state, consumerGroupSummary.consumers.get.size))
+      GroupState(group, consumerGroupSummary.coordinator, consumerGroupSummary.assignmentStrategy,
+        consumerGroupSummary.state, consumerGroupSummary.consumers.get.size)
     }
 
     protected def getLogEndOffset(topicPartition: TopicPartition): LogOffsetResult = {
