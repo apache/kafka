@@ -138,7 +138,7 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * This operation is not transactional so it may succeed for some topics while fail for others.
      *
-     * It may take several seconds after AdminClient#deleteTopics returns
+     * It may take several seconds after the {@code DeleteTopicsResult} returns
      * success for all the brokers to become aware that the topics are gone.
      * During this time, AdminClient#listTopics and AdminClient#describeTopics
      * may continue to return information about the deleted topics.
