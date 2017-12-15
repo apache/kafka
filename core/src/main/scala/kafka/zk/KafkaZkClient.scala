@@ -710,13 +710,13 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
     val childrenResponse = retryRequestUntilConnected(childrenRequest)
     childrenResponse.maybeThrow()
     val dataRequests = childrenResponse.children.map{ znode =>
-      GetDataRequest(ReassignmentRequestZNode.path(znode))
+      GetDataRequest(ReassignmentRequestZNode.path(znode), Some(znode))
     }
     val dataResponses = retryRequestsUntilConnected(dataRequests)
     dataResponses.flatMap{ response =>
       response.maybeThrow()
       ReassignmentRequestZNode.decode(response.data).map { case (assignments,legacy) =>
-        (assignments,legacy,response.path.substring(response.path.lastIndexOf('/')+1))
+        (assignments, legacy, response.ctx.get.asInstanceOf[String])
       }
     }.sortWith{
       case (a, b) => a._3 < b._3
@@ -788,10 +788,11 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
     val getResponses = retryRequestsUntilConnected(getRequests)
 
     getResponses.flatMap { response =>
-      val tp = PartitionReassignmentZNode.fromPath(response.path)
       response.resultCode match {
         case Code.OK => PartitionReassignmentZNode.decode(response.data) match {
-          case Some(reassignment) => Some(tp-> reassignment)
+          case Some(reassignment) =>
+            val tp = PartitionReassignmentZNode.fromPath(response.path)
+            Some(tp-> reassignment)
           case None => None
         }
         case Code.NONODE => None
@@ -807,7 +808,12 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
     val childrenRequest = GetChildrenRequest(ReassignmentsZNode.path)
     val childrenResponse = retryRequestUntilConnected(childrenRequest)
     childrenResponse.maybeThrow()
-    childrenResponse.children.map(PartitionReassignmentZNode.fromName(_))
+    retryRequestsUntilConnected(childrenResponse.children.
+      map(topic => GetChildrenRequest(ReassignmentsTopicZNode.path(topic)))).
+      flatMap { result =>
+        result.maybeThrow()
+        result.children.map{ partition => ReassignmentsTopicZNode.fromPath(result.path, partition.toInt) }
+      }
   }
 
   def getAllReassignments(): Map[TopicPartition, PartitionReassignment] = {

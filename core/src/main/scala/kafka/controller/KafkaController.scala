@@ -1376,7 +1376,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       // 1. re-register the child handler
       zkClient.registerZNodeChildChangeHandler(partitionReassignmentRequestHandler)
 
-      // 2. Find out all the change_XXX
+      // 2. Find out all the request_XXX
       val requests = zkClient.getPartitionReassignmentRequests()
 
       requests.foreach { case (assignments, legacy, znodePath) =>

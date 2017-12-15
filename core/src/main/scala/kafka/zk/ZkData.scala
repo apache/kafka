@@ -252,20 +252,26 @@ object ReassignmentsZNode {
   def path = s"${AdminZNode.path}/reassignments"
 }
 
+object ReassignmentsTopicZNode {
+  def path(topic: String) = s"${ReassignmentsZNode.path}/$topic"
+  def fromPath(path: String, partition: Int): TopicPartition = {
+    val index = path.lastIndexOf('/')
+    val topic = path.substring(index + 1)
+    new TopicPartition(topic, partition)
+  }
+}
+
 /**
   * {@code /admin/reassignments/$topic/$partition} Individual reassignment
   */
 object PartitionReassignmentZNode {
-  def path(topicPartition: TopicPartition) = s"${ReassignmentsZNode.path}/${topicPartition.topic}/${topicPartition.partition}"
+  def path(topicPartition: TopicPartition) = s"${ReassignmentsTopicZNode.path(topicPartition.topic)}/${topicPartition.partition}"
   def topicPath(topic: String) = s"${ReassignmentsZNode.path}/${topic}"
-  def fromName(path: String): TopicPartition = {
-    val index = path.lastIndexOf('-')
-    val topic = path.substring(0, index)
-    val partition = path.substring(index + 1).toInt
-    new TopicPartition(topic, partition)
-  }
+
   def fromPath(path: String): TopicPartition = {
-    fromName(path.substring(path.lastIndexOf('/') + 1))
+    val index = path.lastIndexOf('/')
+    val partition = path.substring(index + 1).toInt
+    ReassignmentsTopicZNode.fromPath(path.substring(0, index), partition)
   }
 
   def encode(reassignment: PartitionReassignment): Array[Byte] = {

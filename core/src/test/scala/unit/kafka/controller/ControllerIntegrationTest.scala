@@ -23,7 +23,8 @@ import kafka.api.LeaderAndIsr
 import kafka.common.{PartitionReassignment, TopicAndPartition}
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{TestUtils, ZkUtils}
-import kafka.zk.{PartitionReassignmentZNode, ReassignmentsZNode, ZooKeeperTestHarness}
+import kafka.zk.{PartitionReassignmentZNode, ReassignmentRequestZNode, ReassignmentsZNode, ZooKeeperTestHarness}
+import org.apache.kafka.common.TopicPartition
 import org.junit.{After, Before, Test}
 import org.junit.Assert.assertTrue
 
@@ -166,25 +167,27 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     val nonControllers = servers.map(_.config.brokerId).filter(_ != controllerId)
     val otherBrokerId = nonControllers.head
     val otherBrokerId2 = nonControllers.seq(1)
-    error(s"initial reassignment to $otherBrokerId")
-    error(s"changed reassignment to $otherBrokerId2")
-    val tp = TopicAndPartition("t", 0)
+    info(s"initial reassignment to $otherBrokerId")
+    info(s"changed reassignment to $otherBrokerId2")
+    val tp = new TopicPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(controllerId))
     val reassignment = Map(tp -> Seq(otherBrokerId))
     val changedReassignment = Map(tp -> Seq(otherBrokerId2))
     TestUtils.createTopic(zkUtils, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
-    val reassignmentPath = ZkUtils.ReassignmentsPath + "/t-0"
-    val reassignment1 = PartitionReassignment(Seq(controllerId), Seq(otherBrokerId), false)
-    zkUtils.createPersistentPath(reassignmentPath, new String(PartitionReassignmentZNode.encode(reassignment1), "UTF-8"))
-    Thread.sleep(100)
+    val reassignmentPath = ZkUtils.ReassignmentsPath + "/t/0"
+    zkUtils.createPersistentPath(ReassignmentRequestZNode.path("request_0000000000"), new String(ReassignmentRequestZNode.encode(reassignment, false), "UTF-8"))
+    Thread.sleep(50)
     /*waitForPartitionState(tp, KafkaController.InitialControllerEpoch, otherBrokerId, LeaderAndIsr.initialLeaderEpoch + 1,
       "failed to get expected partition state after partition reassignment")*/
-    val reassignment2 = PartitionReassignment(Seq(controllerId), Seq(otherBrokerId2), false)
-    zkUtils.updatePersistentPath(reassignmentPath, new String(PartitionReassignmentZNode.encode(reassignment2), "UTF-8"))
+    zkUtils.createPersistentPath(ReassignmentRequestZNode.path("request_0000000001"), new String(ReassignmentRequestZNode.encode(changedReassignment, false), "UTF-8"))
 
     //waitForPartitionState(tp, KafkaController.InitialControllerEpoch, otherBrokerId, LeaderAndIsr.initialLeaderEpoch + 3,
     //  "failed to get expected partition state after partition reassignment")
-    TestUtils.waitUntilTrue(() => zkUtils.getReplicaAssignmentForTopics(Seq(tp.topic)) == changedReassignment,
+    TestUtils.waitUntilTrue(() => {
+      val partitionToInts = zkUtils.getReplicaAssignmentForTopics(Seq(tp.topic))
+      info(s"Replica assignment is ${partitionToInts.mkString(",")}")
+      partitionToInts.map{case (tap, ass) => new TopicPartition(tap.topic, tap.partition) -> ass}.toMap == changedReassignment
+    },
       "failed to get updated partition assignment on topic znode after partition reassignment")
     TestUtils.waitUntilTrue(() => !zkUtils.pathExists(reassignmentPath),
       "failed to remove reassign partitions path after completion")
