@@ -18,6 +18,7 @@ package kafka.zk
 
 import java.util.Properties
 
+
 import com.yammer.metrics.core.MetricName
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
@@ -72,6 +73,13 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
     createResponse.maybeThrow
     createResponse.name
   }
+
+  def registerBrokerInZk(brokerInfo: BrokerInfo): Unit = {
+    val brokerIdPath = brokerInfo.path()
+    checkedEphemeralCreate(brokerIdPath, brokerInfo.encode())
+    info("Registered broker %d at path %s with addresses: %s".format(brokerInfo.id, brokerIdPath, brokerInfo.endpoints()))
+  }
+
 
   /**
    * Gets topic partition states for the given partitions.
