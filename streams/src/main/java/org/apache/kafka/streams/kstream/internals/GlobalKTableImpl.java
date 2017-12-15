@@ -30,4 +30,9 @@ public class GlobalKTableImpl<K, V> implements GlobalKTable<K, V> {
         return valueGetterSupplier;
     }
 
+    @Override
+    public String queryableStoreName() {
+        return valueGetterSupplier.storeNames()[0];
+    }
+
 }
