@@ -19,6 +19,7 @@ package kafka.server
 
 import java.net.BindException
 
+import kafka.common.KafkaException
 import kafka.utils.{TestUtils, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.zookeeper.KeeperException.NodeExistsException
@@ -65,7 +66,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
       TestUtils.createServer(KafkaConfig.fromProps(props2))
       fail("Starting a broker with the same port should fail")
     } catch {
-      case _: BindException | NodeExistsException => // expected
+      case _: KafkaException => // expected
     }
   }
 
