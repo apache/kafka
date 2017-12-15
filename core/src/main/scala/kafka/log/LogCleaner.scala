@@ -20,17 +20,18 @@ package kafka.log
 import java.io.{File, IOException}
 import java.nio._
 import java.nio.file.Files
+import java.util
 import java.util.Date
 import java.util.concurrent.TimeUnit
 
 import com.yammer.metrics.core.Gauge
 import kafka.common._
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.LogDirFailureChannel
+import kafka.server.{KafkaConfig, LogDirFailureChannel}
 import kafka.utils._
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{Reconfigurable, TopicPartition}
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
@@ -83,16 +84,19 @@ import scala.collection.JavaConverters._
  *    data from the transaction prior to reaching the offset of the marker. This follows the same logic used for
  *    tombstone deletion.
  *
- * @param config Configuration parameters for the cleaner
+ * @param initialConfig Initial configuration parameters for the cleaner. Actual config may be dynamically updated.
  * @param logDirs The directories where offset checkpoints reside
  * @param logs The pool of logs
  * @param time A way to control the passage of time
  */
-class LogCleaner(val config: CleanerConfig,
+class LogCleaner(initialConfig: CleanerConfig,
                  val logDirs: Seq[File],
                  val logs: Pool[TopicPartition, Log],
                  val logDirFailureChannel: LogDirFailureChannel,
-                 time: Time = Time.SYSTEM) extends Logging with KafkaMetricsGroup {
+                 time: Time = Time.SYSTEM) extends Logging with KafkaMetricsGroup with Reconfigurable {
+
+  /* Log cleaner configuration which may be dynamically updated */
+  @volatile private var config = initialConfig
 
   /* for managing the state of partitions being cleaned. package-private to allow access in tests */
   private[log] val cleanerManager = new LogCleanerManager(logDirs, logs, logDirFailureChannel)
@@ -106,7 +110,7 @@ class LogCleaner(val config: CleanerConfig,
                                         time = time)
 
   /* the threads */
-  private val cleaners = (0 until config.numThreads).map(new CleanerThread(_))
+  private val cleaners = mutable.ArrayBuffer[CleanerThread]()
 
   /* a metric to track the maximum utilization of any thread's buffer in the last cleaning */
   newGauge("max-buffer-utilization-percent",
@@ -133,7 +137,11 @@ class LogCleaner(val config: CleanerConfig,
    */
   def startup() {
     info("Starting the log cleaner")
-    cleaners.foreach(_.start())
+    (0 until config.numThreads).foreach { i =>
+      val cleaner = new CleanerThread(i)
+      cleaners += cleaner
+      cleaner.start()
+    }
   }
 
   /**
@@ -142,6 +150,40 @@ class LogCleaner(val config: CleanerConfig,
   def shutdown() {
     info("Shutting down the log cleaner.")
     cleaners.foreach(_.shutdown())
+  }
+
+  override def configure(configs: util.Map[String, _]): Unit = {}
+
+  override def reconfigurableConfigs(): util.Set[String] = {
+    LogManager.LogCleanerReconfigurableConfigs.asJava
+  }
+
+  override def validateReconfiguration(configs: util.Map[String, _]): Boolean = {
+    val newConfig = logCleanerConfig(configs)
+    val numThreads = newConfig.numThreads
+    numThreads >= 1 && numThreads >= config.numThreads / 2 && numThreads <= config.numThreads * 2
+  }
+
+  /**
+    * Reconfigure log clean config. This simply stops current log cleaners and creates new ones.
+    * That ensures that if any of the cleaners had failed, new cleaners are created to match the new config.
+    */
+  override def reconfigure(configs: util.Map[String, _]): Unit = {
+    config = logCleanerConfig(configs)
+    shutdown()
+    startup()
+  }
+
+  private def logCleanerConfig(configs: util.Map[String, _]): CleanerConfig = {
+    CleanerConfig(numThreads = configs.get(KafkaConfig.LogCleanerThreadsProp).asInstanceOf[Int],
+      dedupeBufferSize = configs.get(KafkaConfig.LogCleanerDedupeBufferSizeProp).asInstanceOf[Long],
+      dedupeBufferLoadFactor = configs.get(KafkaConfig.LogCleanerDedupeBufferLoadFactorProp).asInstanceOf[Double],
+      ioBufferSize = configs.get(KafkaConfig.LogCleanerIoBufferSizeProp).asInstanceOf[Int],
+      maxMessageSize = configs.get(KafkaConfig.MessageMaxBytesProp).asInstanceOf[Int],
+      maxIoBytesPerSecond = configs.get(KafkaConfig.LogCleanerIoMaxBytesPerSecondProp).asInstanceOf[Double],
+      backOffMs = configs.get(KafkaConfig.LogCleanerBackoffMsProp).asInstanceOf[Long],
+      enableCleaner = configs.get(KafkaConfig.LogCleanerEnableProp).asInstanceOf[Boolean],
+      hashAlgorithm = config.hashAlgorithm)
   }
 
   /**
@@ -209,6 +251,9 @@ class LogCleaner(val config: CleanerConfig,
     }
     isCleaned
   }
+
+  // Only for testing
+  private[kafka] def currentConfig = config
 
   /**
    * The cleaner threads do the actual log cleaning. Each thread processes does its cleaning repeatedly by

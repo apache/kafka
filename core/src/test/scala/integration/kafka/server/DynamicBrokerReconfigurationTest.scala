@@ -242,6 +242,46 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     stopAndVerifyProduceConsume(producerThread, consumerThread, mayFailRequests = false)
   }
 
+  @Test
+  def testLogCleanerConfig(): Unit = {
+    val (producerThread, consumerThread) = startProduceConsume(0)
+
+    verifyThreads("kafka-log-cleaner-thread-", countPerBroker = 1)
+
+    val props = new Properties
+    props.put(KafkaConfig.LogCleanerThreadsProp, "2")
+    props.put(KafkaConfig.LogCleanerDedupeBufferSizeProp, "20000000")
+    props.put(KafkaConfig.LogCleanerDedupeBufferLoadFactorProp, "0.8")
+    props.put(KafkaConfig.LogCleanerIoBufferSizeProp, "300000")
+    props.put(KafkaConfig.MessageMaxBytesProp, "40000")
+    props.put(KafkaConfig.LogCleanerIoMaxBytesPerSecondProp, "50000000")
+    props.put(KafkaConfig.LogCleanerBackoffMsProp, "6000")
+    reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.LogCleanerThreadsProp, "2"))
+
+    // Verify cleaner config was updated
+    val newCleanerConfig = servers.head.logManager.cleaner.currentConfig
+    assertEquals(2, newCleanerConfig.numThreads)
+    assertEquals(20000000, newCleanerConfig.dedupeBufferSize)
+    assertEquals(0.8, newCleanerConfig.dedupeBufferLoadFactor, 0.001)
+    assertEquals(300000, newCleanerConfig.ioBufferSize)
+    assertEquals(40000, newCleanerConfig.maxMessageSize)
+    assertEquals(50000000, newCleanerConfig.maxIoBytesPerSecond, 50000000)
+    assertEquals(6000, newCleanerConfig.backOffMs)
+
+    // Verify thread count
+    verifyThreads("kafka-log-cleaner-thread-", countPerBroker = 2)
+
+    // Stop a couple of threads and verify they are recreated if any config is updated
+    def cleanerThreads = Thread.getAllStackTraces.keySet.asScala.filter(_.getName.startsWith("kafka-log-cleaner-thread-"))
+    cleanerThreads.take(2).foreach(_.interrupt())
+    TestUtils.waitUntilTrue(() => cleanerThreads.size == (2 * numServers) - 2, "Threads did not exit")
+    props.put(KafkaConfig.LogCleanerBackoffMsProp, "8000")
+    reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.LogCleanerBackoffMsProp, "8000"))
+    verifyThreads("kafka-log-cleaner-thread-", countPerBroker = 2)
+
+    stopAndVerifyProduceConsume(producerThread, consumerThread, mayFailRequests = false)
+  }
+
   private def createProducer(trustStore: File, retries: Int,
                              clientId: String = "test-producer"): KafkaProducer[String, String] = {
     val bootstrapServers = TestUtils.bootstrapServers(servers, new ListenerName(SecureExternal))
@@ -410,6 +450,19 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     props.put(SSL_KEYSTORE_TYPE_CONFIG, "PKCS12")
     props
   }
+
+  private def currentThreads: List[String] = {
+    Thread.getAllStackTraces.keySet.asScala.toList.map(_.getName)
+  }
+
+  private def verifyThreads(threadPrefix: String, countPerBroker: Int): Unit = {
+    val expectedCount = countPerBroker * servers.size
+    val (threads, resized) = TestUtils.computeUntilTrue(currentThreads.filter(_.startsWith(threadPrefix))) {
+      _.size == expectedCount
+    }
+    assertTrue(s"Invalid threads: expected $expectedCount, got ${threads.size}: $threads", resized)
+  }
+
 
   private def startProduceConsume(retries: Int): (ProducerThread, ConsumerThread) = {
     val producerThread = new ProducerThread(retries)
