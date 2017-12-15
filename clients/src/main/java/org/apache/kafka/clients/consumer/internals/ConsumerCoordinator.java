@@ -624,10 +624,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private void maybeAutoCommitOffsetsAsync(long now) {
         if (autoCommitEnabled) {
-            if (coordinatorUnknown()) {
-                this.nextAutoCommitDeadline = now + retryBackoffMs;
-            } else if (now >= nextAutoCommitDeadline) {
-                this.nextAutoCommitDeadline = now + autoCommitIntervalMs;
+            if (now >= nextAutoCommitDeadline) {
+                this.nextAutoCommitDeadline = now + (coordinatorUnknown() ? retryBackoffMs : autoCommitIntervalMs);
                 doAutoCommitOffsetsAsync();
             }
         }
