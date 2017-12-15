@@ -518,6 +518,19 @@ public class Metrics implements Closeable {
         return metric;
     }
 
+    /*
+     * @param metric Kafka metric for which the count is computed
+     * @return count of occurrence of metric across reporters
+     */
+    int getCount(KafkaMetric metric) {
+        int count = 0;
+        if (metric != null) {
+            for (MetricsReporter reporter : reporters)
+                count += ((JmxReporter) reporter).countOfMetric(metric);
+        }
+        return count;
+    }
+
     /**
      * Add a MetricReporter
      */

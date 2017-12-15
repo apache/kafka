@@ -83,6 +83,12 @@ public class JmxReporter implements MetricsReporter {
         }
     }
 
+    int countOfMetric(KafkaMetric metric) {
+        MetricName metricName = metric.metricName();
+        String mBeanName = getMBeanName(prefix, metricName);
+        return mbeans.containsKey(mBeanName) ? 1 : 0;
+    }
+
     @Override
     public void metricRemoval(KafkaMetric metric) {
         synchronized (LOCK) {

@@ -48,7 +48,8 @@ public class JmxReporterTest {
             assertTrue(server.isRegistered(new ObjectName(":type=grp2")));
             assertEquals(0.0, server.getAttribute(new ObjectName(":type=grp2"), "pack.bean2.total"));
 
-            metrics.removeMetric(metrics.metricName("pack.bean1.avg", "grp1"));
+            KafkaMetric metric = metrics.removeMetric(metrics.metricName("pack.bean1.avg", "grp1"));
+            assertEquals(0, metrics.getCount(metric));
 
             assertFalse(server.isRegistered(new ObjectName(":type=grp1")));
             assertTrue(server.isRegistered(new ObjectName(":type=grp2")));
