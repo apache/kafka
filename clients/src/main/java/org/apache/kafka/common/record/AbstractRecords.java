@@ -65,8 +65,10 @@ public abstract class AbstractRecords implements Records {
      * only load records into the heap when down converting), but it's not for the producer. However, down converting
      * in the producer is very uncommon and the extra complexity to handle that case is not worth it.
      */
-    protected ConvertedRecords<MemoryRecords> downConvert(Iterable<? extends RecordBatch> batches, byte toMagic,
-            long firstOffset, Time time) {
+    protected ConvertedRecords<MemoryRecords> downConvert(Iterable<? extends RecordBatch> batches,
+                                                          byte toMagic,
+                                                          long firstOffset,
+                                                          Time time) {
         // maintain the batch along with the decompressed records to avoid the need to decompress again
         List<RecordBatchAndRecords> recordBatchAndRecordsList = new ArrayList<>();
         int totalSizeEstimate = 0;
@@ -118,7 +120,6 @@ public abstract class AbstractRecords implements Records {
                 time.nanoseconds() - startNanos);
         return new ConvertedRecords<>(MemoryRecords.readableRecords(buffer), stats);
     }
-
     /**
      * Return a buffer containing the converted record batches. The returned buffer may not be the same as the received
      * one (e.g. it may require expansion).
@@ -144,6 +145,11 @@ public abstract class AbstractRecords implements Records {
     @Override
     public Iterable<Record> records() {
         return records;
+    }
+
+    @Override
+    public RecordsSend toSend(String destination) {
+        return new RecordsSend(destination, this, RecordsProcessingStats.EMPTY);
     }
 
     private Iterator<Record> recordsIterator() {

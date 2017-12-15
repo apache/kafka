@@ -34,7 +34,6 @@ import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.log.{Log, LogManager, TimestampOffset}
 import kafka.network.RequestChannel
-import kafka.network.RequestChannel.{CloseConnectionAction, NoOpAction, SendAction}
 import kafka.security.SecurityUtils
 import kafka.security.auth.{Resource, _}
 import kafka.utils.{CoreUtils, Logging}
@@ -43,9 +42,9 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, MemoryRecords, RecordBatch, RecordsProcessingStats}
+import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse
 import org.apache.kafka.common.requests.DeleteAclsResponse.{AclDeletionResult, AclFilterResponse}
 import org.apache.kafka.common.requests.{Resource => RResource, ResourceType => RResourceType, _}
@@ -489,7 +488,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val nonExistingTopicResponseData = mutable.ArrayBuffer[(TopicPartition, FetchResponse.PartitionData)]()
     val authorizedRequestInfo = mutable.ArrayBuffer[(TopicPartition, FetchRequest.PartitionData)]()
 
-    if (fetchRequest.isFromFollower() && !authorize(request.session, ClusterAction, Resource.ClusterResource))
+    if (fetchRequest.isFromFollower && !authorize(request.session, ClusterAction, Resource.ClusterResource))
       for (topicPartition <- fetchRequest.fetchData.asScala.keys)
         unauthorizedTopicResponseData += topicPartition -> new FetchResponse.PartitionData(Errors.CLUSTER_AUTHORIZATION_FAILED,
           FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
@@ -509,7 +508,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
     def convertedPartitionData(tp: TopicPartition, data: FetchResponse.PartitionData) = {
-
       // Down-conversion of the fetched records is needed when the stored magic version is
       // greater than that supported by the client (as indicated by the fetch request version). If the
       // configured magic version for the topic is less than or equal to that supported by the version of the
@@ -528,13 +526,17 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
 
         downConvertMagic.map { magic =>
-          trace(s"Down converting records from partition $tp to message format version $magic for fetch request from $clientId")
-          val converted = data.records.downConvert(magic, fetchRequest.fetchData.get(tp).fetchOffset, time)
-          updateRecordsProcessingStats(request, tp, converted.recordsProcessingStats)
-          new FetchResponse.PartitionData(data.error, data.highWatermark, FetchResponse.INVALID_LAST_STABLE_OFFSET,
-            data.logStartOffset, data.abortedTransactions, converted.records)
-        }
+          trace(s"Fetch for records from partition $tp from clientId $clientId requires down-conversion " +
+            s"to message format version $magic.")
 
+          // Note that we delay down-conversion until the last possible moment (when it is dequeued by
+          // the network processor for sending) in order to minimize the time that the converted records
+          // are retained in memory.
+          val fetchOffset = fetchRequest.fetchData.get(tp).fetchOffset
+          val lazyConvertedRecords = new LazyDownConvertingRecords(data.records, magic, fetchOffset, time)
+          new FetchResponse.PartitionData(data.error, data.highWatermark, FetchResponse.INVALID_LAST_STABLE_OFFSET,
+            data.logStartOffset, data.abortedTransactions, lazyConvertedRecords)
+        }
       }.getOrElse(data)
     }
 
@@ -575,10 +577,19 @@ class KafkaApis(val requestChannel: RequestChannel,
           response
         }
 
+        def updateConversionStats(send: Send): Unit = send match {
+          case multiSend: MultiRecordsSend =>
+            multiSend.processingStats.asScala.foreach { case (tp, stats) =>
+              updateRecordsProcessingStats(request, tp, stats)
+            }
+          case _ =>
+        }
+
         if (fetchRequest.isFromFollower)
-          sendResponseExemptThrottle(request, createResponse(0))
+          sendResponseExemptThrottle(request, createResponse(0), Some(updateConversionStats))
         else
-          sendResponseMaybeThrottle(request, requestThrottleMs => createResponse(requestThrottleMs))
+          sendResponseMaybeThrottle(request, requestThrottleMs => createResponse(requestThrottleMs),
+            Some(updateConversionStats))
       }
 
       // When this callback is triggered, the remote API call has completed.
@@ -2179,7 +2190,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendErrorResponseExemptThrottle(request, e)
   }
 
-  private def sendResponseMaybeThrottle(request: RequestChannel.Request, createResponse: Int => AbstractResponse): Unit = {
+  private def sendResponseMaybeThrottle(request: RequestChannel.Request, createResponse: Int => AbstractResponse,
+                                        onSendCallback: Option[Send => Unit] = None): Unit = {
     quotas.request.maybeRecordAndThrottle(request,
       throttleTimeMs => sendResponse(request, Some(createResponse(throttleTimeMs))))
   }
@@ -2188,7 +2200,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     quotas.request.maybeRecordAndThrottle(request, sendErrorOrCloseConnection(request, error))
   }
 
-  private def sendResponseExemptThrottle(request: RequestChannel.Request, response: AbstractResponse): Unit = {
+  private def sendResponseExemptThrottle(request: RequestChannel.Request, response: AbstractResponse,
+                                         onSendCallback: Option[Send => Unit] = None): Unit = {
     quotas.request.maybeRecordExempt(request)
     sendResponse(request, Some(response))
   }
@@ -2216,23 +2229,20 @@ class KafkaApis(val requestChannel: RequestChannel,
     // This case is used when the request handler has encountered an error, but the client
     // does not expect a response (e.g. when produce request has acks set to 0)
     requestChannel.updateErrorMetrics(request.header.apiKey, errorCounts.asScala)
-    requestChannel.sendResponse(new RequestChannel.Response(request, None, CloseConnectionAction, None))
+    requestChannel.sendResponse(new RequestChannel.CloseConnectionResponse(request))
   }
 
-  private def sendResponse(request: RequestChannel.Request, responseOpt: Option[AbstractResponse]): Unit = {
-    // Update error metrics for each error code in the response including Errors.NONE
-    responseOpt.foreach(response => requestChannel.updateErrorMetrics(request.header.apiKey, response.errorCounts.asScala))
-
-    responseOpt match {
+  private def sendResponse(request: RequestChannel.Request, responseOpt: Option[AbstractResponse],
+                           onSendBuildCallback: Option[Send => Unit] = None): Unit = {
+    val channelResponse = responseOpt match {
       case Some(response) =>
-        val responseSend = request.context.buildResponse(response)
-        val responseString =
-          if (RequestChannel.isRequestLoggingEnabled) Some(response.toString(request.context.apiVersion))
-          else None
-        requestChannel.sendResponse(new RequestChannel.Response(request, Some(responseSend), SendAction, responseString))
+        // Update error metrics for each error code in the response including Errors.NONE
+        requestChannel.updateErrorMetrics(request.header.apiKey, response.errorCounts.asScala)
+        new RequestChannel.SendResponse(request, response, onSendBuildCallback)
       case None =>
-        requestChannel.sendResponse(new RequestChannel.Response(request, None, NoOpAction, None))
+        new RequestChannel.NoOpResponse(request)
     }
+    requestChannel.sendResponse(channelResponse)
   }
 
 }

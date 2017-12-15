@@ -28,11 +28,12 @@ import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.{Log, TimestampOffset}
 import kafka.network.RequestChannel
+import kafka.network.RequestChannel.AbstractSendResponse
 import kafka.security.auth.Authorizer
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.{MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, network}
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.Metrics
@@ -470,9 +471,12 @@ class KafkaApisTest {
       MemoryPool.NONE, buffer, requestChannelMetrics))
   }
 
-  private def readResponse(api: ApiKeys, request: AbstractRequest, capturedResponse: Capture[RequestChannel.Response]): AbstractResponse = {
-    val send = capturedResponse.getValue.responseSend.get
-    val channel = new ByteBufferChannel(send.size)
+  private def readResponse(api: ApiKeys, request: AbstractRequest,
+                           capturedResponse: Capture[RequestChannel.Response]): AbstractResponse = {
+    assertTrue(s"Unexpected response type: ${capturedResponse.getValue.getClass}",
+      capturedResponse.getValue.isInstanceOf[AbstractSendResponse])
+    val send = capturedResponse.getValue.asInstanceOf[AbstractSendResponse].buildSend()
+    val channel = new network.ByteBufferChannel(send.size)
     send.writeTo(channel)
     channel.close()
     channel.buffer.getInt() // read the size

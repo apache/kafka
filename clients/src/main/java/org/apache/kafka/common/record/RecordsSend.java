@@ -14,11 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.requests;
+package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.network.TransportLayers;
-import org.apache.kafka.common.record.Records;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -30,12 +29,14 @@ public class RecordsSend implements Send {
 
     private final String destination;
     private final Records records;
+    private final RecordsProcessingStats stats;
     private int remaining;
     private boolean pending = false;
 
-    public RecordsSend(String destination, Records records) {
+    public RecordsSend(String destination, Records records, RecordsProcessingStats stats) {
         this.destination = destination;
         this.records = records;
+        this.stats = stats;
         this.remaining = records.sizeInBytes();
     }
 
@@ -70,5 +71,9 @@ public class RecordsSend implements Send {
     @Override
     public long size() {
         return records.sizeInBytes();
+    }
+
+    public RecordsProcessingStats stats() {
+        return stats;
     }
 }

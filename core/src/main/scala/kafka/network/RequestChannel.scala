@@ -24,7 +24,6 @@ import java.util.concurrent._
 import com.typesafe.scalalogging.Logger
 import com.yammer.metrics.core.{Gauge, Meter}
 import kafka.metrics.KafkaMetricsGroup
-import kafka.network.RequestChannel.{BaseRequest, SendAction, ShutdownRequest, NoOpAction, CloseConnectionAction}
 import kafka.utils.{Logging, NotNothing}
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.network.Send
@@ -85,15 +84,18 @@ object RequestChannel extends Logging {
     val session = Session(context.principal, context.clientAddress)
     private val bodyAndSize: RequestAndSize = context.parseRequest(buffer)
 
-    def header: RequestHeader = context.header
-    def sizeOfBodyInBytes: Int = bodyAndSize.size
-
     //most request types are parsed entirely into objects at this point. for those we can release the underlying buffer.
     //some (like produce, or any time the schema contains fields of types BYTES or NULLABLE_BYTES) retain a reference
     //to the buffer. for those requests we cannot release the buffer early, but only when request processing is done.
     if (!header.apiKey.requiresDelayedAllocation) {
       releaseBuffer()
     }
+
+    trace(s"Processor $processor received request: ${requestDesc(true)}")
+
+    def header: RequestHeader = context.header
+
+    def sizeOfBodyInBytes: Int = bodyAndSize.size
 
     def requestDesc(details: Boolean): String = s"$header -- ${body[AbstractRequest].toString(details)}"
 
@@ -104,8 +106,6 @@ object RequestChannel extends Logging {
           throw new ClassCastException(s"Expected request with type ${classTag.runtimeClass}, but found ${r.getClass}")
       }
     }
-
-    trace(s"Processor $processor received request: ${requestDesc(true)}")
 
     def requestThreadTimeNanos = {
       if (apiLocalCompleteTimeNanos == -1L) apiLocalCompleteTimeNanos = Time.SYSTEM.nanoseconds
@@ -178,11 +178,7 @@ object RequestChannel extends Logging {
 
       if (isRequestLoggingEnabled) {
         val detailsEnabled = requestLogger.underlying.isTraceEnabled
-        val responseString =
-          if (response.responseSend.isDefined)
-            response.responseAsString.getOrElse(
-              throw new IllegalStateException("responseAsString should always be defined if request logging is enabled"))
-          else ""
+        val responseString = response.responseString.getOrElse("")
 
         val builder = new StringBuilder(256)
         builder.append("Completed request:").append(requestDesc(detailsEnabled))
@@ -222,25 +218,53 @@ object RequestChannel extends Logging {
 
   }
 
-  /** responseAsString should only be defined if request logging is enabled */
-  class Response(val request: Request, val responseSend: Option[Send], val responseAction: ResponseAction,
-                 val responseAsString: Option[String]) {
+  abstract class Response(val request: Request) {
     request.responseCompleteTimeNanos = Time.SYSTEM.nanoseconds
     if (request.apiLocalCompleteTimeNanos == -1L) request.apiLocalCompleteTimeNanos = Time.SYSTEM.nanoseconds
 
     def processor: Int = request.processor
 
-    override def toString =
-      s"Response(request=$request, responseSend=$responseSend, responseAction=$responseAction), responseAsString=$responseAsString"
+    def responseString: Option[String] = None
   }
 
-  sealed trait ResponseAction
-  case object SendAction extends ResponseAction
-  case object NoOpAction extends ResponseAction
-  case object CloseConnectionAction extends ResponseAction
+  class CloseConnectionResponse(request: Request) extends Response(request) {
+    override def toString = s"Response(request=$request, action=Close)"
+  }
+
+  class NoOpResponse(request: Request) extends Response(request) {
+    override def toString = s"Response(request=$request, action=NoOp)"
+  }
+
+  abstract class AbstractSendResponse(request: Request) extends Response(request) {
+    def buildSend(): Send
+  }
+
+  class SendResponse(request: Request,
+                         val response: AbstractResponse,
+                         val onSendBuildCallback: Option[Send => Unit]) extends AbstractSendResponse(request) {
+
+    override def responseString: Option[String] = {
+      if (RequestChannel.isRequestLoggingEnabled)
+        Some(response.toString(request.context.apiVersion))
+      else None
+    }
+
+    override def buildSend(): Send = {
+      val send = request.context.buildResponse(response)
+      onSendBuildCallback.foreach { callback =>
+        callback(send)
+      }
+      send
+    }
+
+    override def toString =
+      s"Response(request=$request, responseAsString=$responseString)"
+  }
 }
 
 class RequestChannel(val queueSize: Int) extends KafkaMetricsGroup {
+  import RequestChannel._
+
   val metrics = new RequestChannel.Metrics
   private var responseListeners: List[(Int) => Unit] = Nil
   private val requestQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
@@ -283,13 +307,13 @@ class RequestChannel(val queueSize: Int) extends KafkaMetricsGroup {
   def sendResponse(response: RequestChannel.Response) {
     if (isTraceEnabled) {
       val requestHeader = response.request.header
-      val message = response.responseAction match {
-        case SendAction =>
-          s"Sending ${requestHeader.apiKey} response to client ${requestHeader.clientId} of ${response.responseSend.get.size} bytes."
-        case NoOpAction =>
-          s"Not sending ${requestHeader.apiKey} response to client ${requestHeader.clientId} as it's not required."
-        case CloseConnectionAction =>
+      val message = response match {
+        case _: CloseConnectionResponse =>
           s"Closing connection for client ${requestHeader.clientId} due to error during ${requestHeader.apiKey}."
+        case _: NoOpResponse =>
+          s"Not sending ${requestHeader.apiKey} response to client ${requestHeader.clientId} as it's not required."
+        case _: AbstractSendResponse =>
+          s"Sending ${requestHeader.apiKey} response to client ${requestHeader.clientId}."
       }
       trace(message)
     }

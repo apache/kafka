@@ -18,7 +18,8 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.network.ByteBufferSend;
-import org.apache.kafka.common.network.MultiSend;
+import org.apache.kafka.common.record.MultiRecordsSend;
+import org.apache.kafka.common.record.RecordsSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -27,6 +28,7 @@ import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.RecordsProcessingStats;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -330,7 +332,7 @@ public class FetchResponse extends AbstractResponse {
     }
 
     @Override
-    protected Send toSend(String dest, ResponseHeader responseHeader, short apiVersion) {
+    protected MultiRecordsSend toSend(String dest, ResponseHeader responseHeader, short apiVersion) {
         Struct responseHeaderStruct = responseHeader.toStruct();
         Struct responseBodyStruct = toStruct(apiVersion);
 
@@ -342,8 +344,10 @@ public class FetchResponse extends AbstractResponse {
 
         List<Send> sends = new ArrayList<>();
         sends.add(new ByteBufferSend(dest, buffer));
-        addResponseData(responseBodyStruct, throttleTimeMs, dest, sends);
-        return new MultiSend(dest, sends);
+
+        Map<TopicPartition, RecordsProcessingStats> processingStats = new HashMap<>(responseData.size());
+        addResponseData(responseBodyStruct, throttleTimeMs, dest, sends, processingStats);
+        return new MultiRecordsSend(dest, sends, processingStats);
     }
 
     public LinkedHashMap<TopicPartition, PartitionData> responseData() {
@@ -366,7 +370,8 @@ public class FetchResponse extends AbstractResponse {
         return new FetchResponse(ApiKeys.FETCH.responseSchema(version).read(buffer));
     }
 
-    private static void addResponseData(Struct struct, int throttleTimeMs, String dest, List<Send> sends) {
+    private static void addResponseData(Struct struct, int throttleTimeMs, String dest,
+                                        List<Send> sends, Map<TopicPartition, RecordsProcessingStats> stats) {
         Object[] allTopicData = struct.getArray(RESPONSES_KEY_NAME);
 
         if (struct.hasField(THROTTLE_TIME_MS)) {
@@ -383,10 +388,11 @@ public class FetchResponse extends AbstractResponse {
         }
 
         for (Object topicData : allTopicData)
-            addTopicData(dest, sends, (Struct) topicData);
+            addTopicData(dest, sends, (Struct) topicData, stats);
     }
 
-    private static void addTopicData(String dest, List<Send> sends, Struct topicData) {
+    private static void addTopicData(String dest, List<Send> sends, Struct topicData,
+                                     Map<TopicPartition, RecordsProcessingStats> stats) {
         String topic = topicData.get(TOPIC_NAME);
         Object[] allPartitionData = topicData.getArray(PARTITIONS_KEY_NAME);
 
@@ -397,11 +403,17 @@ public class FetchResponse extends AbstractResponse {
         buffer.rewind();
         sends.add(new ByteBufferSend(dest, buffer));
 
-        for (Object partitionData : allPartitionData)
-            addPartitionData(dest, sends, (Struct) partitionData);
+        for (Object partitionData : allPartitionData) {
+            Struct partitionStruct = (Struct) partitionData;
+            Struct partitionResponseHeader = partitionStruct.getStruct(PARTITION_HEADER_KEY_NAME);
+            int partition = partitionResponseHeader.get(PARTITION_ID);
+            RecordsProcessingStats partitionStats = addPartitionData(dest, sends, partitionStruct);
+            if (partitionStats != RecordsProcessingStats.EMPTY)
+                stats.put(new TopicPartition(topic, partition), partitionStats);
+        }
     }
 
-    private static void addPartitionData(String dest, List<Send> sends, Struct partitionData) {
+    private static RecordsProcessingStats addPartitionData(String dest, List<Send> sends, Struct partitionData) {
         Struct header = partitionData.getStruct(PARTITION_HEADER_KEY_NAME);
         Records records = partitionData.getRecords(RECORD_SET_KEY_NAME);
 
@@ -413,7 +425,9 @@ public class FetchResponse extends AbstractResponse {
         sends.add(new ByteBufferSend(dest, buffer));
 
         // finally the send for the record set itself
-        sends.add(new RecordsSend(dest, records));
+        RecordsSend recordsSend = records.toSend(dest);
+        sends.add(recordsSend);
+        return recordsSend.stats();
     }
 
     private static Struct toStruct(short version, LinkedHashMap<TopicPartition, PartitionData> responseData, int throttleTimeMs) {
