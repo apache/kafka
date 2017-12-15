@@ -284,8 +284,8 @@ object ConsumerGroupCommand extends Logging {
 
     protected def collectConsumerAssignment(group: String,
                                             coordinator: Option[Node],
-                                            topicPartitions: Seq[TopicAndPartition],
-                                            getPartitionOffset: TopicAndPartition => Option[Long],
+                                            topicPartitions: Seq[TopicPartition],
+                                            getPartitionOffset: TopicPartition => Option[Long],
                                             consumerIdOpt: Option[String],
                                             hostOpt: Option[String],
                                             clientIdOpt: Option[String]): Array[PartitionAssignmentState] = {
@@ -327,7 +327,6 @@ object ConsumerGroupCommand extends Logging {
         case LogOffsetResult.Ignore => null
       }
     }
-
 
     def resetOffsets(): Map[TopicPartition, OffsetAndMetadata] = throw new UnsupportedOperationException
 
@@ -396,18 +395,18 @@ object ConsumerGroupCommand extends Logging {
         topicsByConsumerId(consumerId).flatMap { _ =>
           // since consumers with no topic partitions are processed here, we pass empty for topic partitions and offsets
           // since consumer id is repeated in client id, leave host and client id empty
-          collectConsumerAssignment(group, None, Array[TopicAndPartition](), Map[TopicAndPartition, Option[Long]](), Some(consumerId), None, None)
+          collectConsumerAssignment(group, None, Array[TopicPartition](), Map[TopicPartition, Option[Long]](), Some(consumerId), None, None)
         }
       }
 
       (None, Some(assignmentRows))
     }
 
-    private def getAllTopicPartitions(topics: Seq[String]): Seq[TopicAndPartition] = {
+    private def getAllTopicPartitions(topics: Seq[String]): Seq[TopicPartition] = {
       val topicPartitionMap = zkUtils.getPartitionsForTopics(topics)
       topics.flatMap { topic =>
         val partitions = topicPartitionMap.getOrElse(topic, Seq.empty)
-        partitions.map(TopicAndPartition(topic, _))
+        partitions.map(new TopicPartition(topic, _))
       }
     }
 
@@ -416,7 +415,7 @@ object ConsumerGroupCommand extends Logging {
         case Some(-1) => LogOffsetResult.Unknown
         case Some(brokerId) =>
           getZkConsumer(brokerId).map { consumer =>
-            val topicAndPartition = TopicAndPartition(topicPartition.topic, topicPartition.partition)
+            val topicAndPartition = new TopicAndPartition(topicPartition)
             val request = OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 1)))
             val logEndOffset = consumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
             consumer.close()
@@ -429,12 +428,12 @@ object ConsumerGroupCommand extends Logging {
     }
 
     private def getPartitionOffsets(group: String,
-                                    topicPartitions: Seq[TopicAndPartition],
+                                    topicPartitions: Seq[TopicPartition],
                                     channelSocketTimeoutMs: Int,
-                                    channelRetryBackoffMs: Int): Map[TopicAndPartition, Long] = {
-      val offsetMap = mutable.Map[TopicAndPartition, Long]()
+                                    channelRetryBackoffMs: Int): Map[TopicPartition, Long] = {
+      val offsetMap = mutable.Map[TopicPartition, Long]()
       val channel = ClientUtils.channelToOffsetManager(group, zkUtils, channelSocketTimeoutMs, channelRetryBackoffMs)
-      channel.send(OffsetFetchRequest(group, topicPartitions))
+      channel.send(OffsetFetchRequest(group, topicPartitions.map(new TopicAndPartition(_))))
       val offsetFetchResponse = OffsetFetchResponse.readFrom(channel.receive().payload())
 
       offsetFetchResponse.requestInfo.foreach { case (topicAndPartition, offsetAndMetadata) =>
@@ -445,13 +444,13 @@ object ConsumerGroupCommand extends Logging {
             // (meaning the lag may be off until all the consumers in the group have the same setting for offsets storage)
             try {
               val offset = zkUtils.readData(topicDirs.consumerOffsetDir + "/" + topicAndPartition.partition)._1.toLong
-              offsetMap.put(topicAndPartition, offset)
+              offsetMap.put(new TopicPartition(topicAndPartition.topic, topicAndPartition.partition), offset)
             } catch {
               case z: ZkNoNodeException =>
                 printError(s"Could not fetch offset from zookeeper for group '$group' partition '$topicAndPartition' due to missing offset data in zookeeper.", Some(z))
             }
           case offsetAndMetaData if offsetAndMetaData.error == Errors.NONE =>
-            offsetMap.put(topicAndPartition, offsetAndMetadata.offset)
+            offsetMap.put(new TopicPartition(topicAndPartition.topic, topicAndPartition.partition), offsetAndMetadata.offset)
           case _ =>
             printError(s"Could not fetch offset from kafka for group '$group' partition '$topicAndPartition' due to ${offsetAndMetadata.error.message}.")
         }
@@ -541,10 +540,10 @@ object ConsumerGroupCommand extends Logging {
                 List[PartitionAssignmentState]()
               else {
                 consumers.filter(_.assignment.nonEmpty).sortWith(_.assignment.size > _.assignment.size).flatMap { consumerSummary =>
-                  val topicPartitions = consumerSummary.assignment.map(tp => TopicAndPartition(tp.topic, tp.partition))
+                  val topicPartitions = consumerSummary.assignment
                   assignedTopicPartitions = assignedTopicPartitions ++ consumerSummary.assignment
-                  val partitionOffsets: Map[TopicAndPartition, Option[Long]] = consumerSummary.assignment.map { topicPartition =>
-                    new TopicAndPartition(topicPartition) -> offsets.get(topicPartition)
+                  val partitionOffsets: Map[TopicPartition, Option[Long]] = consumerSummary.assignment.map { topicPartition =>
+                    new TopicPartition(topicPartition.topic, topicPartition.partition) -> offsets.get(topicPartition)
                   }.toMap
                   collectConsumerAssignment(group, Some(consumerGroupSummary.coordinator), topicPartitions,
                     partitionOffsets, Some(s"${consumerSummary.consumerId}"), Some(s"${consumerSummary.host}"),
@@ -554,9 +553,8 @@ object ConsumerGroupCommand extends Logging {
 
             val rowsWithoutConsumer = offsets.filterKeys(!assignedTopicPartitions.contains(_)).flatMap {
               case (topicPartition, offset) =>
-                val topicAndPartition = new TopicAndPartition(topicPartition)
-                collectConsumerAssignment(group, Some(consumerGroupSummary.coordinator), Seq(topicAndPartition),
-                    Map(topicAndPartition -> Some(offset)), Some(MISSING_COLUMN_VALUE),
+                collectConsumerAssignment(group, Some(consumerGroupSummary.coordinator), Seq(topicPartition),
+                    Map(topicPartition -> Some(offset)), Some(MISSING_COLUMN_VALUE),
                     Some(MISSING_COLUMN_VALUE), Some(MISSING_COLUMN_VALUE))
             }
 
@@ -658,9 +656,9 @@ object ConsumerGroupCommand extends Logging {
 
     private def parseTopicPartitionsToReset(topicArgs: Seq[String]): Seq[TopicPartition] = topicArgs.flatMap {
       case topicArg if topicArg.contains(":") =>
-        val topicAndPartitions = topicArg.split(":")
-        val topic = topicAndPartitions(0)
-        topicAndPartitions(1).split(",").map(partition => new TopicPartition(topic, partition.toInt))
+        val topicPartitions = topicArg.split(":")
+        val topic = topicPartitions(0)
+        topicPartitions(1).split(",").map(partition => new TopicPartition(topic, partition.toInt))
       case topic => getConsumer.partitionsFor(topic).asScala
         .map(partitionInfo => new TopicPartition(topic, partitionInfo.partition))
     }
