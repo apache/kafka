@@ -581,7 +581,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * <p>
      * Valid configuration strings are documented at {@link ConsumerConfig}.
      * <p>
-     * Note: after using the {@code KafkaConsumer} you must always {@link #close()} it to avoid resource leaks.
+     * Note: after creating a {@code KafkaConsumer} you must always {@link #close()} it to avoid resource leaks.
      *
      * @param configs The consumer configs
      */
@@ -594,7 +594,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * <p>
      * Valid configuration strings are documented at {@link ConsumerConfig}.
      * <p>
-     * Note: after using the {@code KafkaConsumer} you must always {@link #close()} it to avoid resource leaks.
+     * Note: after creating a {@code KafkaConsumer} you must always {@link #close()} it to avoid resource leaks.
      *
      * @param configs The consumer configs
      * @param keyDeserializer The deserializer for key that implements {@link Deserializer}. The configure() method
@@ -615,7 +615,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * <p>
      * Valid configuration strings are documented at {@link ConsumerConfig}.
      * <p>
-     * Note: after using the {@code KafkaConsumer} you must always {@link #close()} it to avoid resource leaks.
+     * Note: after creating a {@code KafkaConsumer} you must always {@link #close()} it to avoid resource leaks.
      *
      * @param properties The consumer configuration properties
      */
@@ -629,7 +629,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * <p>
      * Valid configuration strings are documented at {@link ConsumerConfig}.
      * <p>
-     * Note: after using the {@code KafkaConsumer} you must always {@link #close()} it to avoid resource leaks.
+     * Note: after creating a {@code KafkaConsumer} you must always {@link #close()} it to avoid resource leaks.
      *
      * @param properties The consumer configuration properties
      * @param keyDeserializer The deserializer for key that implements {@link Deserializer}. The configure() method
