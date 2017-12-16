@@ -2829,8 +2829,8 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
     import java.util.Properties;
     import org.apache.kafka.streams.StreamsConfig;
     import org.apache.kafka.common.errors.RecordTooLargeException;
-    import org.apache.kafka.streams.error.ProductionExceptionHandler;
-    import org.apache.kafka.streams.error.ProductionExceptionHandler.ProductionExceptionHandlerResponse;
+    import org.apache.kafka.streams.errors.ProductionExceptionHandler;
+    import org.apache.kafka.streams.errors.ProductionExceptionHandler.ProductionExceptionHandlerResponse;
 
     class IgnoreRecordTooLargeHandler implements ProductionExceptionHandler {
         public void configure(Map<String, Object> config) {}
