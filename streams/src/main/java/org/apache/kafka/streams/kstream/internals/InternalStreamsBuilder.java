@@ -158,8 +158,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                topic,
                                                processorName,
                                                tableSource);
-        String name = materialized.isQueryable() ? storeBuilder.name() : null;
-        return new GlobalKTableImpl<>(new KTableSourceValueGetterSupplier<K, V>(name));
+        return new GlobalKTableImpl<>(new KTableSourceValueGetterSupplier<K, V>(storeBuilder.name(), materialized.isQueryable()));
     }
 
     @Override

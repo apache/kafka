@@ -68,9 +68,9 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 @InterfaceStability.Evolving
 public interface GlobalKTable<K, V> {
     /**
-     * Get the name of the local state store used that can be used to query this {@code KTable}.
+     * Get the name of the local state store that can be used to query this {@code GlobalKTable}.
      *
-     * @return the underlying state store name, or {@code null} if this {@code KTable} cannot be queried.
+     * @return the underlying state store name, or {@code null} if this {@code GlobalKTable} cannot be queried.
      */
     String queryableStoreName();
 }
