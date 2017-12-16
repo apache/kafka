@@ -22,16 +22,9 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 public class KTableSourceValueGetterSupplier<K, V> implements KTableValueGetterSupplier<K, V> {
 
     private final String storeName;
-    private final boolean queryable;
 
     public KTableSourceValueGetterSupplier(String storeName) {
         this.storeName = storeName;
-        this.queryable = true;
-    }
-    
-    public KTableSourceValueGetterSupplier(String storeName, boolean queryable) {
-        this.storeName = storeName;
-        this.queryable = queryable;
     }
 
     public KTableValueGetter<K, V> get() {
@@ -40,7 +33,6 @@ public class KTableSourceValueGetterSupplier<K, V> implements KTableValueGetterS
 
     @Override
     public String[] storeNames() {
-        if (!queryable) return new String[]{null};
         return new String[]{storeName};
     }
 
