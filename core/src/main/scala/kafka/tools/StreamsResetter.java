@@ -317,7 +317,7 @@ public class StreamsResetter {
                 for (final String topic : notFoundInputTopics) {
                     System.out.println("Topic: " + topic);
                 }
-                topicNotFound = 1;
+                topicNotFound = EXIT_CODE_ERROR;
             }
 
             if (notFoundIntermediateTopics.size() > 0) {
